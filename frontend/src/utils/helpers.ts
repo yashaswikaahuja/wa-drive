@@ -4,6 +4,7 @@
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+export const BACKEND_BASE_URL = new URL(API_BASE_URL).origin;
 
 /**
  * Format file size for display
@@ -43,5 +44,9 @@ export function isImageFile(fileName: string): boolean {
  * Generate preview URL for file
  */
 export function getPreviewUrl(fileUrl: string): string {
-  return fileUrl.startsWith('/') ? fileUrl : `/${fileUrl}`;
+  if (/^https?:\/\//i.test(fileUrl)) {
+    return fileUrl;
+  }
+
+  return new URL(fileUrl, BACKEND_BASE_URL).toString();
 }

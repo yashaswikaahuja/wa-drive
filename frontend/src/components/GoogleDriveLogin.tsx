@@ -4,13 +4,14 @@ import { Button, Avatar, Space, Typography } from 'antd';
 import { GoogleOutlined, LogoutOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
+import { API_BASE_URL } from '../utils/helpers';
 
 export default function GoogleDriveLogin() {
   const { accessToken, setAccessToken } = useAuthStore();
 
   // Sync token to backend on mount and whenever it changes
   useEffect(() => {
-    const sync = () => axios.post('/api/drive/token', { accessToken }).catch(console.error);
+    const sync = () => axios.post(`${API_BASE_URL}/drive/token`, { accessToken }).catch(console.error);
     sync();
     // Retry after 3s in case backend wasn't ready
     const t = setTimeout(sync, 3000);

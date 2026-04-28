@@ -12,5 +12,4 @@ build/
 *.swo
 *~
 .wwebjs_auth/
-uploads/whatsapp/*
-!uploads/whatsapp/.gitkeep
+uploads/

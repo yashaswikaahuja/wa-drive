@@ -16,6 +16,7 @@ import { useWhatsAppStore } from '../stores/whatsappStore';
 import type { WhatsAppFile } from '../types/whatsapp';
 import { fetchWhatsAppFiles, fetchWhatsAppStatus, deleteWhatsAppFile } from '../services/whatsapp.api';
 import GoogleDriveLogin from '../components/GoogleDriveLogin';
+import { SOCKET_URL, getPreviewUrl } from '../utils/helpers';
 
 dayjs.extend(relativeTime);
 
@@ -57,7 +58,7 @@ export default function WhatsAppInboxPage() {
   const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
 
   useEffect(() => {
-    const socket = io('http://localhost:3000');
+    const socket = io(SOCKET_URL);
     socket.on('connection:status', (s: { connected: boolean }) => setConnected(s.connected));
     socket.on('new_whatsapp_file', (file: WhatsAppFile) => {
       newIds.current.add(file.id);
@@ -95,7 +96,7 @@ export default function WhatsAppInboxPage() {
   }
 
   function handlePrint(fileUrl: string) {
-    const win = window.open(fileUrl, '_blank');
+    const win = window.open(getPreviewUrl(fileUrl), '_blank');
     win?.addEventListener('load', () => win.print());
   }
 
@@ -156,6 +157,7 @@ export default function WhatsAppInboxPage() {
             renderItem={(file) => {
               const isImg = IMAGE_EXTS.has(fileExt(file.fileName));
               const isNew = newIds.current.has(file.id);
+              const previewUrl = getPreviewUrl(file.fileUrl);
               return (
                 <List.Item style={{ padding: '12px 0' }}>
                   <Card
@@ -174,11 +176,11 @@ export default function WhatsAppInboxPage() {
                         }}>
                           {isImg ? (
                             <Image
-                              src={file.fileUrl}
+                              src={previewUrl}
                               width={80}
                               height={80}
                               style={{ objectFit: 'cover' }}
-                              preview={{ src: file.fileUrl }}
+                              preview={{ src: previewUrl }}
                               fallback="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
                             />
                           ) : (
@@ -210,7 +212,7 @@ export default function WhatsAppInboxPage() {
                       {/* Actions */}
                       <Col flex="none">
                         <Space size={6} wrap>
-                          <a href={file.fileUrl} download={file.fileName}>
+                          <a href={previewUrl} download={file.fileName}>
                             <Button size="small" icon={<DownloadOutlined />}>Download</Button>
                           </a>
                           <Button

@@ -9,10 +9,33 @@ import driveRoutes from './api/routes/drive.routes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPLOADS_ROOT = resolve(__dirname, '../uploads');
+const allowedOrigins = (process.env['CORS_ORIGINS'] ?? 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 const app = express();
 
 // Middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
+
+  res.header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+
+  next();
+});
+
 app.use(express.json());
 app.use('/uploads', express.static(UPLOADS_ROOT));
 
@@ -41,7 +64,7 @@ const httpServer = app.listen(PORT, async () => {
 
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: 'http://localhost:5173',
+      origin: allowedOrigins,
       methods: ['GET', 'POST'],
     },
   });
