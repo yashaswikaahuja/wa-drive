@@ -1,0 +1,67 @@
+You are an expert full-stack developer building CyberControl, a cybercafe management dashboard.
+
+**Tech Stack:**
+- Backend: Express.js + TypeScript, Socket.IO, whatsapp-web.js, node-cron, fs, path, uuid.
+- Frontend: React 18 + TypeScript, Vite, Ant Design 5.x, Socket.IO client, Zustand.
+
+We need a **WhatsApp Inbox** feature that receives files sent by customers to the cafe’s WhatsApp number, saves them on the server, maps the sender to a customer record, and pushes real‑time notifications to the operator dashboard.
+
+### Backend Requirements
+
+1. Create a service `whatsapp.service.ts` that:
+   - Initialises a WhatsApp client using `whatsapp-web.js` with `LocalAuth` (clientId: `cybercafe_main`).
+   - Prints the QR code to the terminal using `qrcode-terminal` for first‑time scan.
+   - Emits `connection:status` events via Socket.IO: `{ connected: true/false, qrCode?: string }`. (For now you can just log QR to terminal, but let's also emit the QR as a base64 PNG string using `qrcode` package if possible, or just a placeholder. Opt for showing a simple "scan QR" message in the UI with instructions.)
+   - On `ready`, sets a flag and logs success.
+   - On `disconnected`, logs and updates flag.
+   - Listens for incoming messages. If a message has media, download the file, save it to `uploads/whatsapp/` with a unique name, and then:
+     - Extract the sender’s phone number from `message.from` (remove `@c.us`).
+     - Look up a customer in the PostgreSQL `customers` table by `whatsapp` column. If not found, create a new guest customer with name `Guest XXXX` (last 4 digits of phone). This mapping should be done via a function `findOrCreateCustomer(waId: string)`. For now, you can mock this function to return a dummy customer object (id, name, whatsapp), but the code should be ready to swap with actual DB query.
+     - Insert a record into the `files` table (type = `whatsapp_image`, path, customer_id, etc.). Again, mock the DB call with a `files.push(...)` array if you like, but structure it cleanly.
+     - Emit a Socket.IO event `new_whatsapp_file` to all connected clients with payload: `{ customerId, customerName, fileName, fileUrl, timestamp }`.
+
+2. Add an API endpoint `GET /api/whatsapp/status` that returns `{ connected: boolean }`.
+
+3. In the main Express app:
+   - Create an HTTP server, attach Socket.IO, and pass the `io` instance to the WhatsApp service using a `setSocketIO` function.
+   - Call `initWhatsApp()` after the server starts (in `server.listen()` callback).
+
+### Frontend Requirements
+
+Create a page component `WhatsAppInboxPage` (route `/whatsapp-inbox`) that:
+
+- Displays a connection status badge at the top: green "Connected" or red "Disconnected – scan QR code". (If disconnected, show a static instruction: "Open WhatsApp on your phone → Settings → Linked Devices → Link a Device, then scan the QR code shown in the server terminal.")
+- Shows a real‑time table of incoming files (Ant Design `Table`) with columns: Thumbnail (small image), Filename, Customer Name, Time Received, Actions (Open in Photo Stitch, Print, Delete).
+  - `Open in Photo Stitch` navigates to `/photo-stitch` (you can just use `history.push` without passing the file for now).
+  - `Print` calls a placeholder `handlePrint(fileId)` that logs to console.
+  - `Delete` calls `DELETE /api/files/:id` (you can mock for now).
+- The table data comes from a Zustand store `useWhatsAppStore` that listens to Socket.IO events `new_whatsapp_file` and adds new entries to an array. The store should have actions: `addFile`, `removeFile`, `clearFiles`.
+- Use React `useEffect` to connect to Socket.IO, listen for events, and update the store. Disconnect on unmount.
+- Also fetch recent WhatsApp files from `GET /api/files?type=whatsapp_image` when the page mounts (stub the API call, but include it). Show a loading spinner while fetching.
+- The page should have a manual "Refresh" button to re‑fetch files.
+- Use Ant Design components: `PageHeader` or just a title, `Badge` for status, `Table`, `Button`, `Image` for thumbnails, `Space`, `notification` for errors.
+
+### Zustand Store `whatsappStore.ts`
+```typescript
+import { create } from 'zustand';
+
+interface WhatsAppFile {
+  id: string;
+  customerId: string;
+  customerName: string;
+  fileName: string;
+  fileUrl: string;
+  timestamp: string;
+}
+
+interface WhatsAppState {
+  files: WhatsAppFile[];
+  connected: boolean;
+  setConnected: (status: boolean) => void;
+  addFile: (file: WhatsAppFile) => void;
+  removeFile: (id: string) => void;
+  setFiles: (files: WhatsAppFile[]) => void;
+  clearFiles: () => void;
+}
+
+// implement…

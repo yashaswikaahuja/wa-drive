@@ -1,0 +1,252 @@
+import { useEffect, useRef } from 'react';
+import {
+  Alert, Avatar, Badge, Button, Card, Col, Empty,
+  Image, Input, List, Popconfirm, Row, Space, Typography, notification,
+} from 'antd';
+import {
+  DeleteOutlined, DownloadOutlined, FileOutlined, FilePdfOutlined,
+  PlayCircleOutlined, PrinterOutlined, ReloadOutlined,
+  ScissorOutlined, SearchOutlined, SoundOutlined, UserOutlined,
+} from '@ant-design/icons';
+import { io } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+import { useWhatsAppStore } from '../stores/whatsappStore';
+import type { WhatsAppFile } from '../types/whatsapp';
+import { fetchWhatsAppFiles, fetchWhatsAppStatus, deleteWhatsAppFile } from '../services/whatsapp.api';
+import GoogleDriveLogin from '../components/GoogleDriveLogin';
+
+dayjs.extend(relativeTime);
+
+const { Text, Title } = Typography;
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
+
+function fileExt(name: string) {
+  return name.split('.').pop()?.toLowerCase() ?? '';
+}
+
+function FileIcon({ fileName }: { fileName: string }) {
+  const ext = fileExt(fileName);
+  if (IMAGE_EXTS.has(ext)) return null; // handled by Image component
+  if (ext === 'pdf') return <FilePdfOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />;
+  if (['mp4', '3gp', 'mov', 'avi'].includes(ext)) return <PlayCircleOutlined style={{ fontSize: 48, color: '#1677ff' }} />;
+  if (['mp3', 'ogg', 'wav', 'aac'].includes(ext)) return <SoundOutlined style={{ fontSize: 48, color: '#fa8c16' }} />;
+  return <FileOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />;
+}
+
+function formatTime(ts: string) {
+  const d = dayjs(ts);
+  return dayjs().diff(d, 'hour') < 24
+    ? d.format('h:mm A')
+    : d.format('MMM D, h:mm A');
+}
+
+const SLIDE_IN_CSS = `
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-16px); background: #f6ffed; }
+  to   { opacity: 1; transform: translateY(0);     background: transparent; }
+}
+.new-file-card { animation: slideIn 0.6s ease-out; }
+`;
+
+export default function WhatsAppInboxPage() {
+  const navigate = useNavigate();
+  const newIds = useRef<Set<string>>(new Set());
+  const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
+
+  useEffect(() => {
+    const socket = io('http://localhost:3000');
+    socket.on('connection:status', (s: { connected: boolean }) => setConnected(s.connected));
+    socket.on('new_whatsapp_file', (file: WhatsAppFile) => {
+      newIds.current.add(file.id);
+      addFile(file);
+      notification.success({
+        message: 'New file received',
+        description: `${file.customerName}: ${file.fileName}`,
+        placement: 'topRight',
+        duration: 4,
+      });
+      setTimeout(() => newIds.current.delete(file.id), 3000);
+    });
+    load();
+    return () => { socket.disconnect(); };
+  }, []);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [f, c] = await Promise.all([fetchWhatsAppFiles(), fetchWhatsAppStatus()]);
+      setFiles(f);
+      setConnected(c);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    await deleteWhatsAppFile(id);
+    removeFile(id);
+    notification.success({ message: 'File deleted', placement: 'topRight' });
+  }
+
+  function handlePrint(fileUrl: string) {
+    const win = window.open(fileUrl, '_blank');
+    win?.addEventListener('load', () => win.print());
+  }
+
+  return (
+    <>
+      <style>{SLIDE_IN_CSS}</style>
+      <div style={{ padding: 24, background: '#f5f5f5', minHeight: '100vh' }}>
+        <Card
+          variant="outlined"
+          style={{ borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
+        >
+          {/* Header */}
+          <Row justify="space-between" align="middle" style={{ marginBottom: 8 }}>
+            <Col>
+              <Space align="center" size={12}>
+                <Title level={3} style={{ margin: 0 }}>WhatsApp Inbox</Title>
+                <Badge status={connected ? 'success' : 'error'} />
+              </Space>
+              <Text type="secondary" style={{ display: 'block', marginTop: 2 }}>
+                Real-time customer files from WhatsApp
+              </Text>
+            </Col>
+            <Col>
+              <Space>
+                <Text type="secondary">{files.length} file{files.length !== 1 ? 's' : ''}</Text>
+                <Input prefix={<SearchOutlined />} placeholder="Search…" style={{ width: 180 }} disabled />
+                <GoogleDriveLogin />
+                <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
+              </Space>
+            </Col>
+          </Row>
+
+          {/* Status bar */}
+          <Alert
+            type={connected ? 'success' : 'warning'}
+            message={connected ? 'Connected – receiving files' : 'Disconnected. Scan QR code in the server terminal.'}
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 8 }}
+          />
+
+          {error && (
+            <Alert type="error" message={error} showIcon style={{ marginBottom: 16, borderRadius: 8 }} />
+          )}
+
+          {/* File list */}
+          <List
+            loading={loading}
+            dataSource={files}
+            locale={{ emptyText: (
+              <Empty
+                description={
+                  <Text type="secondary">
+                    No files received yet.<br />Ask customers to send files via WhatsApp.
+                  </Text>
+                }
+              />
+            )}}
+            renderItem={(file) => {
+              const isImg = IMAGE_EXTS.has(fileExt(file.fileName));
+              const isNew = newIds.current.has(file.id);
+              return (
+                <List.Item style={{ padding: '12px 0' }}>
+                  <Card
+                    hoverable
+                    className={isNew ? 'new-file-card' : ''}
+                    style={{ width: '100%', borderRadius: 10 }}
+                    styles={{ body: { padding: '12px 16px' } }}
+                  >
+                    <Row align="middle" gutter={16} wrap={false}>
+                      {/* Thumbnail */}
+                      <Col flex="88px">
+                        <div style={{
+                          width: 80, height: 80, borderRadius: 8, overflow: 'hidden',
+                          background: '#fafafa', border: '1px solid #f0f0f0',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {isImg ? (
+                            <Image
+                              src={file.fileUrl}
+                              width={80}
+                              height={80}
+                              style={{ objectFit: 'cover' }}
+                              preview={{ src: file.fileUrl }}
+                              fallback="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
+                            />
+                          ) : (
+                            <FileIcon fileName={file.fileName} />
+                          )}
+                        </div>
+                      </Col>
+
+                      {/* Info */}
+                      <Col flex="auto" style={{ minWidth: 0 }}>
+                        <Text strong style={{ fontSize: 15, display: 'block' }} ellipsis>
+                          {file.fileName}
+                        </Text>
+                        <Space size={8} style={{ marginTop: 4 }}>
+                          <Avatar
+                            src={file.profilePicUrl ?? undefined}
+                            icon={!file.profilePicUrl && <UserOutlined />}
+                            size={22}
+                          />
+                          <Text type="secondary" style={{ fontSize: 13 }}>{file.customerName}</Text>
+                          <Text type="secondary" style={{ fontSize: 13 }}>·</Text>
+                          <Text type="secondary" style={{ fontSize: 13 }}>{file.customerId}</Text>
+                        </Space>
+                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                          {formatTime(file.timestamp)}
+                        </Text>
+                      </Col>
+
+                      {/* Actions */}
+                      <Col flex="none">
+                        <Space size={6} wrap>
+                          <a href={file.fileUrl} download={file.fileName}>
+                            <Button size="small" icon={<DownloadOutlined />}>Download</Button>
+                          </a>
+                          <Button
+                            size="small"
+                            type="primary"
+                            ghost
+                            icon={<ScissorOutlined />}
+                            onClick={() => navigate('/photo-stitch', { state: { file } })}
+                          >
+                            Photo Stitch
+                          </Button>
+                          <Button
+                            size="small"
+                            icon={<PrinterOutlined />}
+                            onClick={() => handlePrint(file.fileUrl)}
+                          >
+                            Print
+                          </Button>
+                          <Popconfirm
+                            title="Delete this file?"
+                            okText="Delete"
+                            okType="danger"
+                            onConfirm={() => handleDelete(file.id)}
+                          >
+                            <Button size="small" danger icon={<DeleteOutlined />}>Delete</Button>
+                          </Popconfirm>
+                        </Space>
+                      </Col>
+                    </Row>
+                  </Card>
+                </List.Item>
+              );
+            }}
+          />
+        </Card>
+      </div>
+    </>
+  );
+}

@@ -1,0 +1,21 @@
+{
+  "name": "cybercontrol-whatsapp-inbox",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Workspace root for the CyberControl WhatsApp Inbox backend and frontend",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "install:all": "npm install --workspaces",
+    "dev:backend": "npm run dev --workspace cybercontrol-backend",
+    "dev:frontend": "npm run dev --workspace cybercontrol-frontend",
+    "build": "npm run build --workspaces --if-present",
+    "build:backend": "npm run build --workspace cybercontrol-backend",
+    "build:frontend": "npm run build --workspace cybercontrol-frontend"
+  },
+  "dependencies": {
+    "whatsapp-web.js": "^1.34.7"
+  }
+}

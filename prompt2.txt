@@ -1,0 +1,51 @@
+You are an expert full‑stack developer. I need you to integrate **Google Drive as the storage layer** for the WhatsApp Inbox feature. The goal: whenever a customer sends a file via WhatsApp, it is uploaded to a Google Drive folder, and the file URL points to the Drive file (or a direct download link). The frontend inbox component must display those files and allow download/print/photo‑stitch from Drive URLs.
+
+---
+
+## 1. Backend – Google Drive Upload Service
+
+### Setup (you must describe this in the code comments)
+- Use the `googleapis` npm package (Drive v3).
+- Create a Google Cloud service account, enable the Drive API, download the JSON key file.
+- Place the key file securely (e.g., `server/config/google-drive-key.json`).
+- The service must authenticate using the service account (JWT).
+
+### New file: `src/services/googleDrive.service.ts`
+It must export:
+- `initDrive()` – authenticates and returns a drive client
+- `uploadFile(filePath: string, fileName: string, mimeType: string, parentFolderId: string): Promise<string>` – uploads a file, returns the **webViewLink** or a direct `https://drive.google.com/uc?export=view&id=FILE_ID` link.
+- `deleteFile(fileId: string): Promise<void>` – optional for future use.
+- `getThumbnailLink(fileId: string): string` – returns a thumbnail URL (e.g., `https://drive.google.com/thumbnail?sz=w200&id=FILE_ID`) for image/video files.
+
+### Modified `whatsapp.service.ts`:
+- After downloading the media from WhatsApp, **do not write to local disk**. Instead:
+  1. Convert the base64 media to a Buffer (already done).
+  2. Upload the Buffer directly to Google Drive using a stream (or save a temp file then upload, then delete temp). Use `googleDriveService.uploadFile()`.
+  3. Obtain the Drive file ID and the web view / direct link.
+  4. Use the Drive link as `fileUrl` in the `new_whatsapp_file` Socket.IO event.
+- Keep the same filename format (`{phoneNumber}_{originalName}.{ext}`) – use it as the Drive file name.
+- Log the Drive file ID.
+- The customer mock store and the event payload remain unchanged (just the `fileUrl` is a Drive URL).
+
+### Example Drive upload function:
+```ts
+async function uploadFile(fileBuffer: Buffer, fileName: string, mimeType: string): Promise<{ fileId: string; webViewLink: string; thumbnailLink: string }> {
+  const drive = await getDriveClient();
+  const response = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      mimeType: mimeType,
+      parents: [GOOGLE_DRIVE_FOLDER_ID], // from env
+    },
+    media: {
+      mimeType: mimeType,
+      body: Readable.from(fileBuffer),
+    },
+    fields: 'id, webViewLink, thumbnailLink',
+  });
+  return {
+    fileId: response.data.id!,
+    webViewLink: response.data.webViewLink!,
+    thumbnailLink: response.data.thumbnailLink,
+  };
+}
