@@ -23,7 +23,7 @@ export default function GoogleDriveLogin() {
     onError: () => console.error('[Google] Login failed'),
   });
 
-  // Sync token to backend; auto-refresh 5 min before expiry
+  // Sync token to backend; retry until backend is ready
   const syncAndSchedule = useCallback(() => {
     if (!accessToken) { syncToken(null); return; }
 
@@ -31,17 +31,23 @@ export default function GoogleDriveLogin() {
     const timeLeft = (expiresAt ?? 0) - now;
 
     if (timeLeft < 5 * 60 * 1000) {
-      // Token expired or about to — re-login silently
       login();
       return;
     }
 
-    syncToken(accessToken);
+    // Retry syncing every 5s for up to 60s (in case backend just restarted)
+    let attempts = 0;
+    const interval = setInterval(() => {
+      syncToken(accessToken);
+      attempts++;
+      if (attempts >= 12) clearInterval(interval);
+    }, 5000);
+    syncToken(accessToken); // immediate first attempt
 
     // Schedule refresh 5 min before expiry
     const refreshIn = timeLeft - 5 * 60 * 1000;
     const t = setTimeout(() => login(), refreshIn);
-    return () => clearTimeout(t);
+    return () => { clearInterval(interval); clearTimeout(t); };
   }, [accessToken, expiresAt]);
 
   useEffect(() => {

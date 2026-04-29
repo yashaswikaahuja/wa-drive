@@ -50,7 +50,7 @@ app.use('/api/drive', driveRoutes);
 // Set Google Drive token from frontend
 app.post('/api/drive/token', (req, res) => {
   const { accessToken } = req.body as { accessToken: string | null };
-  console.log(`[Drive] Token received: ${accessToken ? 'SET' : 'CLEARED'}`);
+  console.log(`[Drive] Token received: ${accessToken ? `SET (length: ${accessToken.length}, prefix: ${accessToken.substring(0, 10)}...)` : 'CLEARED'}`);
   whatsappService.setDriveToken(accessToken ?? null);
   res.json({ ok: true });
 });
@@ -74,6 +74,8 @@ const httpServer = app.listen(PORT, async () => {
 
   io.on('connection', (socket) => {
     console.log(`[Socket.IO] Client connected: ${socket.id}`);
+    // Send current WhatsApp status to newly connected client
+    socket.emit('connection:status', { connected: whatsappService.getStatus() });
     socket.on('disconnect', () => {
       console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
     });

@@ -118,6 +118,7 @@ export class WhatsAppService {
 
     this.client.on('message_create', async (message) => {
       if (message.fromMe) return;
+      console.log(`[WhatsApp] message_create: from=${message.from} hasMedia=${message.hasMedia} type=${message.type}`);
       if (message.hasMedia) {
         try { await this.handleMedia(message); }
         catch (e) { console.error('[WhatsApp] Media error:', e); }
@@ -183,6 +184,7 @@ export class WhatsAppService {
     let fileUrl: string;
 
     if (this.driveAccessToken) {
+      console.log('[Drive] Uploading to Google Drive...');
       const auth = new google.auth.OAuth2();
       auth.setCredentials({ access_token: this.driveAccessToken });
       const drive = google.drive({ version: 'v3', auth });
