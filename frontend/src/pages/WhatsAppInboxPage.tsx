@@ -130,21 +130,27 @@ export default function WhatsAppInboxPage() {
   async function loadDriveFiles() {
     try {
       const { data } = await axios.get<unknown[]>(`${API_BASE_URL}/drive/files`);
-      const normalized = data
+      const incoming = data
         .map((file) => normalizeWhatsAppFile(file as Parameters<typeof normalizeWhatsAppFile>[0]))
         .filter((file): file is WhatsAppFile => file !== null);
-      if (normalized.length > 0) {
-        // Preserve profilePicUrl from existing store entries
-        const existing = new Map(useWhatsAppStore.getState().files.map(f => [f.id, f]));
-        const merged = normalized.map(f => ({
-          ...f,
-          profilePicUrl: f.profilePicUrl ?? existing.get(f.id)?.profilePicUrl ?? null,
-          customerName: (f.customerName && !f.customerName.startsWith('Guest'))
-            ? f.customerName
-            : existing.get(f.id)?.customerName ?? f.customerName,
-        }));
-        setFiles(merged);
+      if (!incoming.length) return;
+
+      const current = useWhatsAppStore.getState().files;
+      const mergedMap = new Map<string, WhatsAppFile>();
+      for (const f of current) mergedMap.set(f.id, { ...f });
+      for (const f of incoming) {
+        const ex = mergedMap.get(f.id);
+        mergedMap.set(f.id, ex ? {
+          ...ex,
+          fileUrl: f.fileUrl,
+          fileName: f.fileName,
+          timestamp: f.timestamp,
+          customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : (f.customerName || ex.customerName),
+          profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null,
+        } : f);
       }
+      useWhatsAppStore.getState().setFiles(Array.from(mergedMap.values())
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
     } catch { /* ignore */ }
   }
 
