@@ -13,3 +13,4 @@ build/
 *~
 .wwebjs_auth/
 uploads/
+.github/
