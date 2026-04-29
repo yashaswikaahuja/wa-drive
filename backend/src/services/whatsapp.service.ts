@@ -79,12 +79,12 @@ export class WhatsAppService {
       }
       if (connection === 'close') {
         const code = (lastDisconnect?.error as Boom)?.output?.statusCode;
-        const shouldReconnect = code !== DisconnectReason.loggedOut;
+        const shouldReconnect = code !== DisconnectReason.loggedOut && code !== 405;
         console.log('[WhatsApp] Disconnected, code:', code, 'reconnect:', shouldReconnect);
         this.isConnected = false;
         this.io?.emit('connection:status', { connected: false });
         if (shouldReconnect) {
-          setTimeout(() => this.init(), 3000);
+          setTimeout(() => this.init(), 5000);
         }
       }
     });
