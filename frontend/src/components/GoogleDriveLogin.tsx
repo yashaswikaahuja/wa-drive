@@ -1,35 +1,59 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { Button, Avatar, Space, Typography } from 'antd';
 import { GoogleOutlined, LogoutOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
-import { API_BASE_URL } from '../utils/helpers';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+function syncToken(token: string | null) {
+  axios.post(`${API_BASE_URL}/drive/token`, { accessToken: token }).catch(console.error);
+}
 
 export default function GoogleDriveLogin() {
-  const { accessToken, setAccessToken } = useAuthStore();
-
-  // Sync token to backend on mount and whenever it changes
-  useEffect(() => {
-    const sync = () => axios.post(`${API_BASE_URL}/drive/token`, { accessToken }).catch(console.error);
-    sync();
-    // Retry after 3s in case backend wasn't ready
-    const t = setTimeout(sync, 3000);
-    return () => clearTimeout(t);
-  }, [accessToken]);
+  const { accessToken, expiresAt, setAccessToken } = useAuthStore();
 
   const login = useGoogleLogin({
     scope: 'https://www.googleapis.com/auth/drive.file',
-    onSuccess: (res) => setAccessToken(res.access_token),
+    onSuccess: (res) => {
+      const exp = Date.now() + (res.expires_in ?? 3600) * 1000;
+      setAccessToken(res.access_token, exp);
+    },
     onError: () => console.error('[Google] Login failed'),
   });
 
-  if (accessToken) {
+  // Sync token to backend; auto-refresh 5 min before expiry
+  const syncAndSchedule = useCallback(() => {
+    if (!accessToken) { syncToken(null); return; }
+
+    const now = Date.now();
+    const timeLeft = (expiresAt ?? 0) - now;
+
+    if (timeLeft < 5 * 60 * 1000) {
+      // Token expired or about to — re-login silently
+      login();
+      return;
+    }
+
+    syncToken(accessToken);
+
+    // Schedule refresh 5 min before expiry
+    const refreshIn = timeLeft - 5 * 60 * 1000;
+    const t = setTimeout(() => login(), refreshIn);
+    return () => clearTimeout(t);
+  }, [accessToken, expiresAt]);
+
+  useEffect(() => {
+    return syncAndSchedule();
+  }, [syncAndSchedule]);
+
+  if (accessToken && (expiresAt ?? 0) > Date.now()) {
     return (
       <Space>
         <Avatar style={{ background: '#52c41a' }} icon={<GoogleOutlined />} size={24} />
         <Typography.Text type="success">Drive connected</Typography.Text>
-        <Button size="small" icon={<LogoutOutlined />} onClick={() => setAccessToken(null)}>
+        <Button size="small" icon={<LogoutOutlined />} onClick={() => setAccessToken(null, null)}>
           Disconnect
         </Button>
       </Space>
