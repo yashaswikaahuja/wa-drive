@@ -133,7 +133,7 @@ export default function WhatsAppInboxPage() {
     win?.addEventListener('load', () => win.print());
   }
 
-  const visibleFiles = files
+  const visibleFiles = (Array.isArray(files) ? files : [])
     .map((file) => normalizeWhatsAppFile(file))
     .filter((file): file is WhatsAppFile => file !== null);
 
