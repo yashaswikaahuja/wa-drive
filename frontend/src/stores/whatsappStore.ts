@@ -32,7 +32,7 @@ export const useWhatsAppStore = create<WhatsAppState>()(
     {
       name: 'whatsapp-store',
       // Don't persist loading/error states
-      partialize: (s) => ({ files: s.files }),
+      partialize: (_s) => ({ files: [] }), // don't persist files - always load from Drive
     }
   )
 );
