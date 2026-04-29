@@ -1,281 +1,195 @@
-import WhatsAppWeb from 'whatsapp-web.js';
-import qrcodeTerminal from 'qrcode-terminal';
+import Baileys from '@whiskeysockets/baileys';
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = Baileys as any;
+import type { proto } from '@whiskeysockets/baileys';
+import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode';
+import qrcodeTerminal from 'qrcode-terminal';
 import { Server as SocketIOServer } from 'socket.io';
-import { mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
-import { saveWhatsAppFile } from '../db.js';
-
-const { Client, LocalAuth, NoAuth } = WhatsAppWeb;
-type WhatsAppClient = InstanceType<typeof WhatsAppWeb.Client>;
-type MessageMedia = InstanceType<typeof WhatsAppWeb.MessageMedia>;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPLOADS_ROOT = resolve(__dirname, '../../uploads/customers');
+const AUTH_DIR = '/tmp/.baileys_auth';
 
 const MIME_TO_EXT: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
-  'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp',
+  'image/gif': 'gif', 'image/webp': 'webp',
   'application/pdf': 'pdf',
-  'application/zip': 'zip', 'application/x-zip-compressed': 'zip',
+  'application/zip': 'zip',
   'application/msword': 'doc',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-  'application/vnd.ms-excel': 'xls',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav',
   'video/mp4': 'mp4', 'video/3gpp': '3gp',
 };
 
-function mimeToType(mime: string): string {
-  if (mime.startsWith('image/')) return 'photo';
-  if (mime.startsWith('video/')) return 'video';
-  if (mime.startsWith('audio/')) return 'audio';
-  if (mime === 'application/pdf') return 'document';
-  return 'file';
-}
-
-function sanitizeFolderName(name: string): string {
-  return name.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_\-]/g, '');
-}
-
-function formatDateTime(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-}
-
-// Mock customer store — replace with DB query later
-const customerMap = new Map<string, { id: string; name: string; folderName: string }>();
-
+const customerMap = new Map<string, { id: string; name: string }>();
 function findOrCreateCustomer(phone: string) {
-  if (customerMap.has(phone)) return customerMap.get(phone)!;
-  const folderName = phone;
-  const customer = { id: phone, name: `Guest ${phone.slice(-4)}`, folderName };
-  customerMap.set(phone, customer);
-  return customer;
+  if (!customerMap.has(phone)) {
+    customerMap.set(phone, { id: phone, name: `Guest ${phone.slice(-4)}` });
+  }
+  return customerMap.get(phone)!;
 }
 
 export class WhatsAppService {
-  private client: WhatsAppClient | null = null;
+  private sock: ReturnType<typeof makeWASocket> | null = null;
   private io: SocketIOServer | null = null;
   private isConnected = false;
-  private driveAccessToken: string | null = null;
   private lastQrCode: string | null = null;
+  private driveAccessToken: string | null = null;
 
-  setSocketIO(io: SocketIOServer): void { this.io = io; }
-  setDriveToken(token: string | null): void { this.driveAccessToken = token; }
-  getDriveToken(): string | null { return this.driveAccessToken; }
-  getStatus(): boolean { return this.isConnected; }
-  getQrCode(): string | null { return this.lastQrCode; }
+  setSocketIO(io: SocketIOServer) { this.io = io; }
+  setDriveToken(token: string | null) { this.driveAccessToken = token; }
+  getDriveToken() { return this.driveAccessToken; }
+  getStatus() { return this.isConnected; }
+  getQrCode() { return this.lastQrCode; }
 
-  async init(): Promise<void> {
-    const cacheDir = process.env['PUPPETEER_CACHE_DIR'];
-    const executablePath = cacheDir
-      ? (() => {
-          try {
-            const { execSync } = require('child_process');
-            return execSync(`find ${cacheDir} -name "chrome" -type f 2>/dev/null | head -1`).toString().trim() || undefined;
-          } catch { return undefined; }
-        })()
-      : undefined;
+  async init() {
+    mkdirSync(AUTH_DIR, { recursive: true });
+    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
 
-    this.client = new Client({
-      authStrategy: new NoAuth(),
-      puppeteer: {
-        headless: true,
-        executablePath: executablePath || process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-          '--disable-extensions',
-          '--disable-background-networking',
-          '--disable-default-apps',
-          '--disable-sync',
-          '--mute-audio',
-          '--js-flags=--max-old-space-size=256',
-          '--renderer-process-limit=1',
-          '--disable-features=TranslateUI,BlinkGenPropertyTrees'
-        ]
-      },
+    this.sock = makeWASocket({
+      auth: state,
+      printQRInTerminal: false,
+      logger: { level: 'silent' } as any,
     });
 
-    this.client.on('qr', async (qr: string) => {
-      console.log('\n[WhatsApp] Scan QR code with your phone:');
-      qrcodeTerminal.generate(qr, { small: true });
-      try {
-        const qrDataUrl = await qrcode.toDataURL(qr);
-        this.lastQrCode = qrDataUrl;
-        this.io?.emit('connection:status', { connected: false, qrCode: qrDataUrl });
-      } catch {
+    this.sock.ev.on('creds.update', saveCreds);
+
+    this.sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }: any) => {
+      if (qr) {
+        console.log('[WhatsApp] QR received');
+        qrcodeTerminal.generate(qr, { small: true });
+        try {
+          this.lastQrCode = await qrcode.toDataURL(qr);
+          this.io?.emit('connection:status', { connected: false, qrCode: this.lastQrCode });
+        } catch {
+          this.io?.emit('connection:status', { connected: false });
+        }
+      }
+      if (connection === 'open') {
+        console.log('[WhatsApp] Connected ✓');
+        this.isConnected = true;
+        this.lastQrCode = null;
+        this.io?.emit('connection:status', { connected: true });
+      }
+      if (connection === 'close') {
+        const code = (lastDisconnect?.error as Boom)?.output?.statusCode;
+        const shouldReconnect = code !== DisconnectReason.loggedOut;
+        console.log('[WhatsApp] Disconnected, code:', code, 'reconnect:', shouldReconnect);
+        this.isConnected = false;
         this.io?.emit('connection:status', { connected: false });
+        if (shouldReconnect) {
+          setTimeout(() => this.init(), 3000);
+        }
       }
     });
 
-    this.client.on('ready', () => {
-      console.log('[WhatsApp] Client ready! ✓');
-      this.isConnected = true;
-      this.lastQrCode = null;
-      this.io?.emit('connection:status', { connected: true });
-    });
-
-    // Fallback: authenticated fires before ready, mark connected early
-    this.client.on('authenticated', () => {
-      console.log('[WhatsApp] Authenticated ✓');
-      this.isConnected = true;
-      this.lastQrCode = null;
-      this.io?.emit('connection:status', { connected: true });
-    });
-
-    this.client.on('disconnected', () => {
-      console.log('[WhatsApp] Client disconnected');
-      this.isConnected = false;
-      this.io?.emit('connection:status', { connected: false });
-    });
-
-    this.client.on('message_create', async (message) => {
-      if (message.fromMe) return;
-      console.log(`[WhatsApp] message_create: from=${message.from} hasMedia=${message.hasMedia} type=${message.type}`);
-      if (message.hasMedia) {
-        try { await this.handleMedia(message); }
-        catch (e) { console.error('[WhatsApp] Media error:', e); }
+    this.sock.ev.on('messages.upsert', async ({ messages, type }: any) => {
+      if (type !== 'notify') return;
+      for (const msg of messages) {
+        if (msg.key.fromMe) continue;
+        const hasMedia = !!(msg.message?.imageMessage || msg.message?.documentMessage ||
+          msg.message?.videoMessage || msg.message?.audioMessage);
+        if (hasMedia) {
+          try { await this.handleMedia(msg); }
+          catch (e) { console.error('[WhatsApp] Media error:', e); }
+        }
       }
     });
-
-    await this.client.initialize();
   }
 
-  private async handleMedia(message: any): Promise<void> {
-    // Debug: log raw sender info
-    console.log(`[WhatsApp] message.from=${message.from} author=${message.author} notifyName=${message._data?.notifyName} id=${JSON.stringify(message.id)}`);
-
-    // Skip group messages
-    if (message.from.includes('-')) {
-      console.warn('[WhatsApp] Skipping group media:', message.from);
-      return;
-    }
-
-    // Use author for group fallback; strip @lid and use _data.from if available
-    const rawFrom: string = message._data?.from ?? message.from;
-
-    // @lid is a linked device ID — resolve real number via contact
-    let phone: string;
-    if (rawFrom.includes('@lid')) {
-      try {
-        const contact = await message.getContact();
-        phone = contact.number || contact.id.user;
-        console.log(`[WhatsApp] Resolved @lid to phone: ${phone}`);
-      } catch {
-        // Use the numeric part of @lid as fallback
-        phone = rawFrom.replace(/[^0-9+]/g, '');
-      }
-    } else {
-      phone = rawFrom
-        .replace('@c.us', '')
-        .replace('@s.whatsapp.net', '')
-        .replace(/[^0-9+]/g, '');
-    }
-
-    const media: MessageMedia = await message.downloadMedia();
-
-    if (!media) {
-      console.warn('[WhatsApp] downloadMedia() returned null — skipping');
-      return;
-    }
-    const mimetype: string = (media as any).mimetype ?? '';
-    const ext = MIME_TO_EXT[mimetype] ?? 'bin';
-
+  private async handleMedia(msg: proto.IWebMessageInfo) {
+    const from = msg.key.remoteJid ?? '';
+    const phone = from.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/[^0-9+]/g, '');
     const customer = findOrCreateCustomer(phone);
 
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const timestamp = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}_${pad(now.getDate())}-${pad(now.getMonth() + 1)}`;
+    const imgMsg = msg.message?.imageMessage;
+    const docMsg = msg.message?.documentMessage;
+    const vidMsg = msg.message?.videoMessage;
+    const audMsg = msg.message?.audioMessage;
+    const mediaMsg = imgMsg || docMsg || vidMsg || audMsg;
+    if (!mediaMsg) return;
 
-    const rawName: string = media.filename ?? message._data?.filename ?? '';
-    const baseName = rawName
-      ? rawName.replace(/\s+/g, '_').replace(/[:\\*?<>|/]/g, '').replace(/\.[^.]+$/, '')
-      : 'file';
-    const fileName = `${timestamp}_${phone}_${baseName}.${ext}`;
+    const mimetype = (mediaMsg as any).mimetype ?? 'application/octet-stream';
+    const ext = MIME_TO_EXT[mimetype] ?? 'bin';
+    const rawName = (docMsg?.fileName ?? '').replace(/\s+/g, '_').replace(/[:\\*?<>|]/g, '').replace(/\.[^.]+$/, '') || `file_${Date.now()}`;
+    const fileName = `${phone}_${rawName}.${ext}`;
 
-    const buffer = Buffer.from(media.data, 'base64');
+    const buffer = await downloadMediaMessage(msg, 'buffer', {}) as Buffer;
+    console.log(`[WhatsApp] Downloaded ${fileName} (${mimetype}, ${buffer.length} bytes)`);
+
     let fileUrl: string;
-    let filePath: string;
 
     if (this.driveAccessToken) {
-      console.log('[Drive] Uploading to Google Drive...');
-      const auth = new google.auth.OAuth2();
-      auth.setCredentials({ access_token: this.driveAccessToken });
-      const drive = google.drive({ version: 'v3', auth });
+      try {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: this.driveAccessToken });
+        const drive = google.drive({ version: 'v3', auth });
 
-      // Helper: find or create a folder by name under a parent
-      async function getOrCreateFolder(name: string, parentId?: string): Promise<string> {
-        const parentClause = parentId ? `'${parentId}' in parents` : `'root' in parents`;
-        const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false and ${parentClause}`;
-        const res = await drive.files.list({ q, fields: 'files(id)', spaces: 'drive', pageSize: 1 });
-        if (res.data.files?.length) return res.data.files[0].id!;
-        const folder = await drive.files.create({
-          requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId ?? 'root'] },
-          fields: 'id',
+        async function getOrCreateFolder(name: string, parentId?: string): Promise<string> {
+          const parentClause = parentId ? `'${parentId}' in parents` : `'root' in parents`;
+          const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false and ${parentClause}`;
+          const res = await drive.files.list({ q, fields: 'files(id)', spaces: 'drive', pageSize: 1 });
+          if (res.data.files?.length) return res.data.files[0].id!;
+          const folder = await drive.files.create({
+            requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId ?? 'root'] },
+            fields: 'id',
+          });
+          return folder.data.id!;
+        }
+
+        const customersId = await getOrCreateFolder('customers');
+        const phoneId = await getOrCreateFolder(phone, customersId);
+        const file = await drive.files.create({
+          requestBody: { name: fileName, parents: [phoneId] },
+          media: { mimeType: mimetype, body: Readable.from(buffer) },
+          fields: 'id,webContentLink',
         });
-        return folder.data.id!;
+        await drive.permissions.create({
+          fileId: file.data.id!,
+          requestBody: { role: 'reader', type: 'anyone' },
+        });
+        fileUrl = file.data.webContentLink!;
+        console.log(`[WhatsApp] Uploaded to Drive: ${fileUrl}`);
+      } catch (e) {
+        console.error('[WhatsApp] Drive upload failed, saving locally:', e);
+        const dir = join(UPLOADS_ROOT, phone);
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, fileName), buffer);
+        fileUrl = `/uploads/customers/${phone}/${fileName}`;
       }
-
-      // Structure: customers / {phone} / file
-      const customersId = await getOrCreateFolder('customers');
-      const phoneId = await getOrCreateFolder(phone, customersId);
-
-      const file = await drive.files.create({
-        requestBody: { name: fileName, parents: [phoneId] },
-        media: { mimeType: mimetype, body: Readable.from(buffer) },
-        fields: 'id,webContentLink',
-      });
-      await drive.permissions.create({
-        fileId: file.data.id!,
-        requestBody: { role: 'reader', type: 'anyone' },
-      });
-      fileUrl = file.data.webContentLink!;
-      filePath = `customers/${phone}/${fileName}`;
-      console.log(`[WhatsApp] Uploaded to Drive: customers/${phone}/${fileName}`);
     } else {
-      // Fallback: save locally
-      const { writeFileSync } = await import('fs');
       const dir = join(UPLOADS_ROOT, phone);
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, fileName), buffer);
       fileUrl = `/uploads/customers/${phone}/${fileName}`;
-      filePath = join(dir, fileName);
-      console.log(`[WhatsApp] Saved locally: ${fileUrl} (${buffer.length} bytes)`);
+      console.log(`[WhatsApp] Saved locally: ${fileUrl}`);
     }
 
     let profilePicUrl: string | null = null;
     try {
-      profilePicUrl = await this.client!.getProfilePicUrl(message.from) ?? null;
+      profilePicUrl = await this.sock!.profilePictureUrl(from, 'image') ?? null;
     } catch { /* unavailable */ }
 
-    const savedFile = await saveWhatsAppFile(
-      customer.id,
-      customer.name,
+    this.io?.emit('new_whatsapp_file', {
+      id: `${Date.now()}-${phone}`,
+      customerId: phone,
+      customerName: customer.name,
       fileName,
       fileUrl,
-      filePath,
-    );
-
-    this.io?.emit('new_whatsapp_file', {
-      ...savedFile,
       profilePicUrl,
+      timestamp: new Date().toISOString(),
     });
     console.log(`[WhatsApp] Emitted new_whatsapp_file: ${fileUrl}`);
   }
 
-  async disconnect(): Promise<void> {
-    await this.client?.destroy();
-    this.client = null;
+  async disconnect() {
+    await this.sock?.end(undefined);
+    this.sock = null;
     this.isConnected = false;
   }
 }
