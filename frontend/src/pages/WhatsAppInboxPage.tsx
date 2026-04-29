@@ -119,7 +119,7 @@ export default function WhatsAppInboxPage() {
     if (!id) return;
     try {
       // Try Drive delete first (Drive IDs are long alphanumeric, not UUID)
-      await axios.delete(`/api/drive/files/${id}`);
+      await axios.delete(`${API_BASE_URL}/drive/files/${id}`);
     } catch {
       // Fall back to local file delete
       try { await deleteWhatsAppFile(id); } catch { /* ignore */ }

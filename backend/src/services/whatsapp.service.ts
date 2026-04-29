@@ -7,6 +7,7 @@ import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
+import { saveWhatsAppFile } from '../db.js';
 
 const { Client, LocalAuth } = WhatsAppWeb;
 type WhatsAppClient = InstanceType<typeof WhatsAppWeb.Client>;
@@ -183,6 +184,7 @@ export class WhatsAppService {
 
     const buffer = Buffer.from(media.data, 'base64');
     let fileUrl: string;
+    let filePath: string;
 
     if (this.driveAccessToken) {
       console.log('[Drive] Uploading to Google Drive...');
@@ -217,6 +219,7 @@ export class WhatsAppService {
         requestBody: { role: 'reader', type: 'anyone' },
       });
       fileUrl = file.data.webContentLink!;
+      filePath = `customers/${phone}/${fileName}`;
       console.log(`[WhatsApp] Uploaded to Drive: customers/${phone}/${fileName}`);
     } else {
       // Fallback: save locally
@@ -225,6 +228,7 @@ export class WhatsAppService {
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, fileName), buffer);
       fileUrl = `/uploads/customers/${phone}/${fileName}`;
+      filePath = join(dir, fileName);
       console.log(`[WhatsApp] Saved locally: ${fileUrl} (${buffer.length} bytes)`);
     }
 
@@ -233,14 +237,17 @@ export class WhatsAppService {
       profilePicUrl = await this.client!.getProfilePicUrl(message.from) ?? null;
     } catch { /* unavailable */ }
 
-    this.io?.emit('new_whatsapp_file', {
-      id: `${Date.now()}-${phone}`,
-      customerId: phone,
-      customerName: customer.name,
+    const savedFile = await saveWhatsAppFile(
+      customer.id,
+      customer.name,
       fileName,
       fileUrl,
+      filePath,
+    );
+
+    this.io?.emit('new_whatsapp_file', {
+      ...savedFile,
       profilePicUrl,
-      timestamp: new Date().toISOString(),
     });
     console.log(`[WhatsApp] Emitted new_whatsapp_file: ${fileUrl}`);
   }
