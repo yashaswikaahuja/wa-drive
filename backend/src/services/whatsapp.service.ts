@@ -98,7 +98,10 @@ export class WhatsAppService {
           '--disable-background-networking',
           '--disable-default-apps',
           '--disable-sync',
-          '--mute-audio'
+          '--mute-audio',
+          '--js-flags=--max-old-space-size=256',
+          '--renderer-process-limit=1',
+          '--disable-features=TranslateUI,BlinkGenPropertyTrees'
         ]
       },
     });
