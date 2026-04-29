@@ -200,10 +200,32 @@ export default function WhatsAppInboxPage() {
             showIcon
             style={{ marginBottom: qrCode ? 8 : 16, borderRadius: 8 }}
           />
-          {!connected && qrCode && (
+          {!connected && (
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <img src={qrCode} alt="WhatsApp QR Code" style={{ width: 220, height: 220, borderRadius: 8, border: '1px solid #f0f0f0' }} />
-              <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>Open WhatsApp → Linked Devices → Link a Device</div>
+              {qrCode ? (
+                <>
+                  <img src={qrCode} alt="WhatsApp QR Code" style={{ width: 220, height: 220, borderRadius: 8, border: '1px solid #f0f0f0', display: 'block', margin: '0 auto 8px' }} />
+                  <div style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>Open WhatsApp → Linked Devices → Link a Device</div>
+                </>
+              ) : (
+                <div style={{ color: '#888', fontSize: 13, marginBottom: 8 }}>QR code not available yet...</div>
+              )}
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={async () => {
+                  setQrCode(null);
+                  await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => {});
+                  // Poll immediately
+                  setTimeout(async () => {
+                    try {
+                      const { data } = await axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`);
+                      if (data.qrCode) setQrCode(data.qrCode);
+                    } catch { /* ignore */ }
+                  }, 3000);
+                }}
+              >
+                Refresh QR
+              </Button>
             </div>
           )}
 
