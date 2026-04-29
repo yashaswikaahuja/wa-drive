@@ -55,6 +55,73 @@ app.post('/api/drive/token', (req, res) => {
   res.json({ ok: true });
 });
 
+// List files from Google Drive customers folder
+app.get('/api/drive/files', async (req, res) => {
+  const token = whatsappService.getDriveToken();
+  if (!token) { res.json([]); return; }
+
+  try {
+    const { google } = await import('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: token });
+    const drive = google.drive({ version: 'v3', auth });
+
+    // Find customers folder
+    const folderRes = await drive.files.list({
+      q: `name='customers' and mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents`,
+      fields: 'files(id)',
+      pageSize: 1,
+    });
+    const customersId = folderRes.data.files?.[0]?.id;
+    if (!customersId) { res.json([]); return; }
+
+    // List all files recursively under customers
+    const filesRes = await drive.files.list({
+      q: `'${customersId}' in parents or mimeType != 'application/vnd.google-apps.folder'`,
+      fields: 'files(id,name,webContentLink,createdTime,parents)',
+      orderBy: 'createdTime desc',
+      pageSize: 100,
+      includeItemsFromAllDrives: false,
+      supportsAllDrives: false,
+    });
+
+    // Get all phone subfolders first
+    const subfoldersRes = await drive.files.list({
+      q: `'${customersId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id,name)',
+    });
+    const folderMap = new Map(subfoldersRes.data.files?.map(f => [f.id!, f.name!]) ?? []);
+
+    // Get files inside each subfolder
+    const allFiles: object[] = [];
+    for (const [folderId, phone] of folderMap) {
+      const r = await drive.files.list({
+        q: `'${folderId}' in parents and trashed=false and mimeType != 'application/vnd.google-apps.folder'`,
+        fields: 'files(id,name,webContentLink,createdTime)',
+        orderBy: 'createdTime desc',
+        pageSize: 50,
+      });
+      for (const f of r.data.files ?? []) {
+        allFiles.push({
+          id: f.id,
+          customerId: phone,
+          customerName: `Guest ${phone.slice(-4)}`,
+          fileName: f.name,
+          fileUrl: f.webContentLink,
+          profilePicUrl: null,
+          timestamp: f.createdTime,
+        });
+      }
+    }
+
+    allFiles.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    res.json(allFiles);
+  } catch (e) {
+    console.error('[Drive] List files error:', e);
+    res.json([]);
+  }
+});
+
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });

@@ -64,6 +64,7 @@ export class WhatsAppService {
 
   setSocketIO(io: SocketIOServer): void { this.io = io; }
   setDriveToken(token: string | null): void { this.driveAccessToken = token; }
+  getDriveToken(): string | null { return this.driveAccessToken; }
 
   async init(): Promise<void> {
     const cacheDir = process.env['PUPPETEER_CACHE_DIR'];

@@ -9,6 +9,7 @@ import {
   ScissorOutlined, SearchOutlined, SoundOutlined, UserOutlined,
 } from '@ant-design/icons';
 import { io } from 'socket.io-client';
+import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -60,7 +61,7 @@ export default function WhatsAppInboxPage() {
   const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
 
   useEffect(() => {
-    if (socketRef.current) return; // already connected
+    if (socketRef.current) return;
     const socket = io(SOCKET_URL);
     socketRef.current = socket;
     socket.on('connection:status', (s: { connected: boolean; qrCode?: string }) => {
@@ -78,9 +79,22 @@ export default function WhatsAppInboxPage() {
       });
       setTimeout(() => newIds.current.delete(file.id), 3000);
     });
+
     load();
-    return () => { socket.disconnect(); socketRef.current = null; };
+    loadDriveFiles();
+
+    // Poll Drive files every 10 seconds
+    const poll = setInterval(loadDriveFiles, 10000);
+
+    return () => { socket.disconnect(); socketRef.current = null; clearInterval(poll); };
   }, []);
+
+  async function loadDriveFiles() {
+    try {
+      const { data } = await axios.get<WhatsAppFile[]>('/api/drive/files');
+      if (data.length > 0) setFiles(data);
+    } catch { /* ignore */ }
+  }
 
   async function load() {
     setLoading(true);
