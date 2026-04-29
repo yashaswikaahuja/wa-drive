@@ -83,9 +83,10 @@ export default function WhatsAppInboxPage() {
     setLoading(true);
     setError(null);
     try {
-      const [f, c] = await Promise.all([fetchWhatsAppFiles(), fetchWhatsAppStatus()]);
-      setFiles(f);
-      setConnected(c);
+      const [fetched, connected] = await Promise.all([fetchWhatsAppFiles(), fetchWhatsAppStatus()]);
+      // Only overwrite if backend returned files; otherwise keep persisted local files
+      if (fetched.length > 0) setFiles(fetched);
+      setConnected(connected);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load');
     } finally {
