@@ -133,7 +133,15 @@ export default function WhatsAppInboxPage() {
       const normalized = data
         .map((file) => normalizeWhatsAppFile(file as Parameters<typeof normalizeWhatsAppFile>[0]))
         .filter((file): file is WhatsAppFile => file !== null);
-      if (normalized.length > 0) setFiles(normalized);
+      if (normalized.length > 0) {
+        // Preserve profilePicUrl from existing store entries
+        const existing = new Map(useWhatsAppStore.getState().files.map(f => [f.id, f]));
+        const merged = normalized.map(f => ({
+          ...f,
+          profilePicUrl: f.profilePicUrl ?? existing.get(f.id)?.profilePicUrl ?? null,
+        }));
+        setFiles(merged);
+      }
     } catch { /* ignore */ }
   }
 
