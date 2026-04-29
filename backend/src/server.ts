@@ -19,8 +19,11 @@ const app = express();
 // Middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
+  const allowAll = allowedOrigins.includes('*');
 
-  if (origin && allowedOrigins.includes(origin)) {
+  if (allowAll) {
+    res.header('Access-Control-Allow-Origin', '*');
+  } else if (origin && allowedOrigins.includes(origin)) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
   }
