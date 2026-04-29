@@ -126,7 +126,16 @@ app.get('/api/drive/files', async (req, res) => {
   }
 });
 
-// Health check
+// WhatsApp logout
+app.post('/api/whatsapp/logout', async (_req, res) => {
+  await whatsappService.disconnect();
+  res.json({ ok: true });
+});
+
+// Get current QR code
+app.get('/api/whatsapp/qr', (_req, res) => {
+  res.json({ qrCode: whatsappService.getQrCode() });
+});
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });

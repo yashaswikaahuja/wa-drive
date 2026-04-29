@@ -84,10 +84,20 @@ export default function WhatsAppInboxPage() {
     load();
     loadDriveFiles();
 
+    // Poll for QR code when disconnected
+    const qrPoll = setInterval(async () => {
+      if (!useWhatsAppStore.getState().connected) {
+        try {
+          const { data } = await axios.get<{ qrCode: string | null }>('/api/whatsapp/qr');
+          if (data.qrCode) setQrCode(data.qrCode);
+        } catch { /* ignore */ }
+      }
+    }, 5000);
+
     // Poll Drive files every 10 seconds
     const poll = setInterval(loadDriveFiles, 10000);
 
-    return () => { socket.disconnect(); socketRef.current = null; clearInterval(poll); };
+    return () => { socket.disconnect(); socketRef.current = null; clearInterval(poll); clearInterval(qrPoll); };
   }, []);
 
   async function loadDriveFiles() {
@@ -169,13 +179,30 @@ export default function WhatsAppInboxPage() {
           {/* Status bar */}
           <Alert
             type={connected ? 'success' : 'warning'}
-            message={connected ? 'Connected – receiving files' : 'Disconnected. Scan QR code below to connect.'}
+            message={
+              <span>
+                {connected ? 'Connected – receiving files' : 'Disconnected. Scan QR code below to connect.'}
+                {connected && (
+                  <Button
+                    size="small"
+                    danger
+                    style={{ marginLeft: 12 }}
+                    onClick={async () => {
+                      await axios.post('/api/whatsapp/logout');
+                      setConnected(false);
+                    }}
+                  >
+                    Logout WhatsApp
+                  </Button>
+                )}
+              </span>
+            }
             showIcon
             style={{ marginBottom: qrCode ? 8 : 16, borderRadius: 8 }}
           />
           {!connected && qrCode && (
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <img src={qrCode} alt="WhatsApp QR Code" style={{ width: 200, height: 200, borderRadius: 8, border: '1px solid #f0f0f0' }} />
+              <img src={qrCode} alt="WhatsApp QR Code" style={{ width: 220, height: 220, borderRadius: 8, border: '1px solid #f0f0f0' }} />
               <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>Open WhatsApp → Linked Devices → Link a Device</div>
             </div>
           )}
