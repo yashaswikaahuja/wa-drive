@@ -111,31 +111,32 @@ export class WhatsAppService {
   }
 
   private async handleMedia(message: any) {
+    // Step A: Always resolve contact first
+    let contact: any = null;
+    try {
+      contact = await message.getContact();
+      console.log(`[WhatsApp] Contact: id=${contact.id?._serialized}, number=${contact.number}, name=${contact.name}, pushname=${contact.pushname}`);
+    } catch (e) {
+      console.warn(`[WhatsApp] getContact() failed:`, e);
+    }
+
+    // Step B: Extract real phone number
     let phone = '';
-    let cachedContact: any = null;
-    const rawFrom: string = message._data?.from ?? message.from ?? '';
-
-    // Always resolve via contact for @lid (linked device IDs are not real phone numbers)
-    if (rawFrom.includes('@lid')) {
-      try {
-        cachedContact = await message.getContact();
-        phone = (cachedContact.number || cachedContact.id?.user || '').replace(/[^0-9+]/g, '');
-      } catch { /* ignore */ }
+    if (contact) {
+      phone = (contact.number || contact.id?.user || '').replace(/[^0-9+]/g, '');
     }
-
-    // For @c.us or if contact resolution failed
     if (!phone || phone.length < 4) {
-      const stripped = rawFrom.replace(/@c\.us|@s\.whatsapp\.net|@g\.us|@lid/g, '').replace(/[^0-9+]/g, '');
-      if (stripped && !rawFrom.includes('-') && stripped.length > 4) {
-        phone = stripped;
-      }
+      const rawFrom: string = message._data?.from ?? message.from ?? '';
+      phone = rawFrom.replace(/@c\.us|@s\.whatsapp\.net|@g\.us|@lid/g, '').replace(/[^0-9+]/g, '');
     }
-
     if (!phone || phone.length < 4) {
-      phone = (message.from ?? '').replace(/@c\.us|@s\.whatsapp\.net|@lid/g, '').replace(/[^0-9+]/g, '') || `unknown_${Date.now()}`;
+      phone = `unknown_${Date.now()}`;
     }
 
-    console.log(`[WhatsApp] Resolved phone: ${phone} (from: ${message.from})`);
+    // Step C: Resolve display name
+    const customerName = contact?.name || contact?.pushname || contact?.verifiedName || `Guest ${phone.slice(-4)}`;
+
+    console.log(`[WhatsApp] Resolved phone: ${phone}, name: ${customerName}`);
 
     const media = await message.downloadMedia();
     if (!media) { console.warn('[WhatsApp] downloadMedia() returned null'); return; }
@@ -158,7 +159,6 @@ export class WhatsAppService {
     const buffer = Buffer.from(media.data, 'base64');
     console.log(`[WhatsApp] Downloaded ${fileName} (${mimetype}, ${buffer.length} bytes)`);
 
-    const customer = findOrCreateCustomer(phone);
     let fileUrl: string;
 
     if (this.driveAccessToken) {
@@ -212,14 +212,13 @@ export class WhatsAppService {
 
     let profilePicUrl: string | null = null;
     try {
-      const contact = cachedContact ?? await message.getContact();
-      profilePicUrl = await contact.getProfilePicUrl() ?? null;
-      if (!profilePicUrl) throw new Error('null from contact');
-      console.log(`[WhatsApp] Profile pic fetched for ${phone}: ${profilePicUrl.substring(0, 60)}...`);
+      profilePicUrl = await (contact ?? await message.getContact()).getProfilePicUrl() ?? null;
+      if (!profilePicUrl) throw new Error('null');
+      console.log(`[WhatsApp] Profile pic fetched for ${phone}`);
     } catch {
       try {
         profilePicUrl = await this.client.getProfilePicUrl(`${phone}@c.us`) ?? null;
-        if (profilePicUrl) console.log(`[WhatsApp] Profile pic fetched for ${phone} via @c.us`);
+        if (profilePicUrl) console.log(`[WhatsApp] Profile pic via @c.us for ${phone}`);
         else console.log(`[WhatsApp] Profile pic not available for ${phone}`);
       } catch {
         console.log(`[WhatsApp] Profile pic not available for ${phone}`);
@@ -228,7 +227,7 @@ export class WhatsAppService {
 
     this.io?.emit('new_whatsapp_file', {
       id: `${Date.now()}-${phone}`,
-      customerId: phone, customerName: customer.name,
+      customerId: phone, customerName,
       fileName, fileUrl, profilePicUrl,
       timestamp: new Date().toISOString(),
     });
