@@ -3,6 +3,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { google } from 'googleapis';
 import { whatsappService } from './services/whatsapp.service.js';
 import whatsappRoutes from './api/routes/whatsapp.routes.js';
+import filesRoutes from './api/routes/files.routes.js';
 
 const app = express();
 
@@ -15,6 +16,7 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/files', filesRoutes);
 
 // Drive helpers
 function getDrive() {
