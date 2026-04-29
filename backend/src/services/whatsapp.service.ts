@@ -122,6 +122,14 @@ export class WhatsAppService {
       this.io?.emit('connection:status', { connected: true });
     });
 
+    // Fallback: authenticated fires before ready, mark connected early
+    this.client.on('authenticated', () => {
+      console.log('[WhatsApp] Authenticated ✓');
+      this.isConnected = true;
+      this.lastQrCode = null;
+      this.io?.emit('connection:status', { connected: true });
+    });
+
     this.client.on('disconnected', () => {
       console.log('[WhatsApp] Client disconnected');
       this.isConnected = false;
