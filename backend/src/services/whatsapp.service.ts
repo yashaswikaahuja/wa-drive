@@ -189,29 +189,11 @@ export class WhatsAppService {
 
     let profilePicUrl: string | null = null;
     try {
-      // Try @c.us format first
-      const picId = `${phone}@c.us`;
-      console.log(`[WhatsApp] Fetching DP for: ${picId} (original: ${message.from})`);
-      profilePicUrl = await this.client.getProfilePicUrl(picId) ?? null;
-      console.log(`[WhatsApp] DP via @c.us: ${profilePicUrl}`);
-    } catch (e1: any) {
-      console.log(`[WhatsApp] DP @c.us failed: ${e1.message}`);
-      try {
-        // Fallback: resolve contact then get pic
-        const contact = await message.getContact();
-        console.log(`[WhatsApp] Contact resolved: ${contact.id._serialized}`);
-        profilePicUrl = await contact.getProfilePicUrl() ?? null;
-        console.log(`[WhatsApp] DP via contact: ${profilePicUrl}`);
-      } catch (e2: any) {
-        console.log(`[WhatsApp] DP contact failed: ${e2.message}`);
-        try {
-          // Last resort: original message.from
-          profilePicUrl = await this.client.getProfilePicUrl(message.from) ?? null;
-          console.log(`[WhatsApp] DP via message.from: ${profilePicUrl}`);
-        } catch (e3: any) {
-          console.log(`[WhatsApp] DP all methods failed: ${e3.message}`);
-        }
-      }
+      const contact = await message.getContact();
+      profilePicUrl = await contact.getProfilePicUrl() ?? null;
+      if (profilePicUrl) console.log(`[WhatsApp] DP: ${profilePicUrl.substring(0, 60)}...`);
+    } catch (e: any) {
+      console.log(`[WhatsApp] DP failed: ${e.message}`);
     }
 
     this.io?.emit('new_whatsapp_file', {
