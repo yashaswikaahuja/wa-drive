@@ -135,22 +135,24 @@ export default function WhatsAppInboxPage() {
         .filter((file): file is WhatsAppFile => file !== null);
       if (!incoming.length) return;
 
+      // Use fileName as merge key — Drive IDs differ from socket-generated IDs
       const current = useWhatsAppStore.getState().files;
-      const mergedMap = new Map<string, WhatsAppFile>();
-      for (const f of current) mergedMap.set(f.id, { ...f });
-      for (const f of incoming) {
-        const ex = mergedMap.get(f.id);
-        mergedMap.set(f.id, ex ? {
-          ...ex,
-          fileUrl: f.fileUrl,
-          fileName: f.fileName,
-          timestamp: f.timestamp,
-          customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : (f.customerName || ex.customerName),
+      const byName = new Map(current.map(f => [f.fileName, f]));
+
+      const merged = incoming.map(f => {
+        const ex = byName.get(f.fileName);
+        if (!ex) return f;
+        return {
+          ...f,
+          id: ex.id, // keep original id
+          customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : f.customerName,
           profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null,
-        } : f);
-      }
-      useWhatsAppStore.getState().setFiles(Array.from(mergedMap.values())
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+        };
+      });
+
+      useWhatsAppStore.getState().setFiles(
+        merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      );
     } catch { /* ignore */ }
   }
 
