@@ -139,6 +139,9 @@ export default function WhatsAppInboxPage() {
         const merged = normalized.map(f => ({
           ...f,
           profilePicUrl: f.profilePicUrl ?? existing.get(f.id)?.profilePicUrl ?? null,
+          customerName: (f.customerName && !f.customerName.startsWith('Guest'))
+            ? f.customerName
+            : existing.get(f.id)?.customerName ?? f.customerName,
         }));
         setFiles(merged);
       }

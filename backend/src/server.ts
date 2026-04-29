@@ -69,7 +69,7 @@ app.get('/api/drive/files', async (_req, res) => {
         if (!f.name || !f.id) continue;
         allFiles.push({
           id: f.id, customerId: folder.name,
-          customerName: `Guest ${(folder.name ?? '').slice(-4)}`,
+          customerName: whatsappService.getCustomerName(folder.name ?? ''),
           fileName: f.name,
           fileUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w200`,
           profilePicUrl: null, timestamp: f.createdTime,

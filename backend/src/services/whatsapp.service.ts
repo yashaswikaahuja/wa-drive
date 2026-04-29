@@ -38,12 +38,14 @@ export class WhatsAppService {
   private isInitializing = false;
   private lastQrCode: string | null = null;
   private driveAccessToken: string | null = null;
+  private customerNames = new Map<string, string>(); // phone → name
 
   setSocketIO(io: SocketIOServer) { this.io = io; }
   setDriveToken(token: string | null) { this.driveAccessToken = token; }
   getDriveToken() { return this.driveAccessToken; }
   getStatus() { return this.isConnected; }
   getQrCode() { return this.lastQrCode; }
+  getCustomerName(phone: string) { return this.customerNames.get(phone) ?? `Guest ${phone.slice(-4)}`; }
 
   async init() {
 
@@ -143,6 +145,7 @@ export class WhatsAppService {
     const customerName = contact?.name || contact?.pushname || contact?.verifiedName || `Guest ${phone.slice(-4)}`;
 
     console.log(`[WhatsApp] Resolved phone: ${phone}, name: ${customerName}`);
+    this.customerNames.set(phone, customerName); // cache for Drive poll
 
     const media = await message.downloadMedia();
     if (!media) { console.warn('[WhatsApp] downloadMedia() returned null'); return; }
