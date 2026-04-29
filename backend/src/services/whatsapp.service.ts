@@ -160,7 +160,9 @@ export class WhatsAppService {
           fileId: file.data.id!,
           requestBody: { role: 'reader', type: 'anyone' },
         });
-        fileUrl = file.data.webContentLink!;
+        // Use thumbnail URL for images, webContentLink for download
+        const fileId = file.data.id!;
+        fileUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
         console.log(`[WhatsApp] Uploaded to Drive: ${fileUrl}`);
       } catch (e) {
         console.error('[WhatsApp] Drive upload failed, saving locally:', e);

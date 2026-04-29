@@ -62,15 +62,16 @@ app.get('/api/drive/files', async (_req, res) => {
     for (const folder of subfoldersRes.data.files ?? []) {
       const r = await drive.files.list({
         q: `'${folder.id}' in parents and trashed=false and mimeType != 'application/vnd.google-apps.folder'`,
-        fields: 'files(id,name,webContentLink,createdTime)',
+        fields: 'files(id,name,createdTime)',
         orderBy: 'createdTime desc', pageSize: 50,
       });
       for (const f of r.data.files ?? []) {
-        if (!f.name || !f.webContentLink) continue;
+        if (!f.name || !f.id) continue;
         allFiles.push({
           id: f.id, customerId: folder.name,
           customerName: `Guest ${(folder.name ?? '').slice(-4)}`,
-          fileName: f.name, fileUrl: f.webContentLink,
+          fileName: f.name,
+          fileUrl: `https://drive.google.com/uc?export=view&id=${f.id}`,
           profilePicUrl: null, timestamp: f.createdTime,
         });
       }
