@@ -123,7 +123,13 @@ export class WhatsAppService {
     // Step B: Extract real phone number
     let phone = '';
     if (contact) {
-      phone = (contact.number || contact.id?.user || '').replace(/[^0-9+]/g, '');
+      // Prefer id._serialized (e.g. "919006615450@c.us") over contact.number which may be @lid
+      const serialized: string = contact.id?._serialized ?? '';
+      if (serialized.includes('@c.us') || serialized.includes('@s.whatsapp.net')) {
+        phone = serialized.replace(/@c\.us|@s\.whatsapp\.net/g, '').replace(/[^0-9+]/g, '');
+      } else {
+        phone = (contact.number || contact.id?.user || '').replace(/[^0-9+]/g, '');
+      }
     }
     if (!phone || phone.length < 4) {
       const rawFrom: string = message._data?.from ?? message.from ?? '';
