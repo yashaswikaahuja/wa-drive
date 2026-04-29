@@ -111,26 +111,47 @@ export class WhatsAppService {
   }
 
   private async handleMedia(message: any) {
-    const rawFrom: string = message._data?.from ?? message.from;
-    let phone: string;
-    if (rawFrom.includes('@lid')) {
+    // Robust phone extraction with fallback chain
+    let phone = '';
+    const rawFrom: string = message._data?.from ?? message.from ?? '';
+    const stripped = rawFrom.replace(/@c\.us|@s\.whatsapp\.net|@g\.us|@lid/g, '').replace(/[^0-9+]/g, '');
+
+    if (stripped && !rawFrom.includes('-') && stripped.length > 4) {
+      phone = stripped;
+    } else {
+      // Fallback: resolve via contact
       try {
         const contact = await message.getContact();
-        phone = contact.number || contact.id.user;
-      } catch { phone = rawFrom.replace(/[^0-9+]/g, ''); }
-    } else {
-      phone = rawFrom.replace('@c.us', '').replace('@s.whatsapp.net', '').replace(/[^0-9+]/g, '');
+        phone = contact.number || contact.id?.user || '';
+        phone = phone.replace(/[^0-9+]/g, '');
+      } catch { /* ignore */ }
     }
+
+    if (!phone || phone.length < 4) {
+      // Last resort
+      const fallback = (message.from ?? '').replace(/@c\.us|@s\.whatsapp\.net|@lid/g, '').replace(/[^0-9+]/g, '');
+      phone = fallback || `unknown_${Date.now()}`;
+    }
+
+    console.log(`[WhatsApp] Resolved phone: ${phone} (from: ${message.from})`);
 
     const media = await message.downloadMedia();
     if (!media) { console.warn('[WhatsApp] downloadMedia() returned null'); return; }
 
     const mimetype: string = (media as any).mimetype ?? '';
     const ext = MIME_TO_EXT[mimetype] ?? 'bin';
+
+    // Generate timestamp-based name if original is missing
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const mimeType2Label: Record<string, string> = { 'image/': 'photo', 'video/': 'video', 'audio/': 'audio' };
+    const typeLabel = Object.entries(mimeType2Label).find(([k]) => mimetype.startsWith(k))?.[1] ?? 'file';
+
     const rawName: string = media.filename ?? message._data?.filename ?? '';
     const baseName = rawName
       ? rawName.replace(/\s+/g, '_').replace(/[:\\*?<>|]/g, '').replace(/\.[^.]+$/, '')
-      : `file_${Date.now()}`;
+      : `${ts}_${typeLabel}`;
     const fileName = `${phone}_${baseName}.${ext}`;
     const buffer = Buffer.from(media.data, 'base64');
     console.log(`[WhatsApp] Downloaded ${fileName} (${mimetype}, ${buffer.length} bytes)`);
