@@ -57,6 +57,8 @@ const SLIDE_IN_CSS = `
 export default function WhatsAppInboxPage() {
   const navigate = useNavigate();
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const qrCodeRef = useRef<string | null>(null);
+  const setQrCodeSync = (v: string | null) => { qrCodeRef.current = v; setQrCode(v); };
   const newIds = useRef<Set<string>>(new Set());
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
@@ -67,7 +69,15 @@ export default function WhatsAppInboxPage() {
     socketRef.current = socket;
     socket.on('connection:status', (s: { connected: boolean; qrCode?: string }) => {
       setConnected(s.connected);
-      setQrCode(s.connected ? null : (s.qrCode ?? null));
+      const newQr = s.connected ? null : (s.qrCode ?? null);
+      setQrCodeSync(newQr);
+      // Fallback: if a QR just appeared, schedule a status check in 3 s
+      if (newQr) {
+        setTimeout(async () => {
+          const isConnected = await fetchWhatsAppStatus().catch(() => false);
+          if (isConnected) { useWhatsAppStore.getState().setConnected(true); setQrCodeSync(null); }
+        }, 3000);
+      }
     });
     socket.on('new_whatsapp_file', (file: WhatsAppFile) => {
       newIds.current.add(file.id);
@@ -84,20 +94,37 @@ export default function WhatsAppInboxPage() {
     load();
     loadDriveFiles();
 
-    // Poll for QR code when disconnected
-    const qrPoll = setInterval(async () => {
+    // Poll for QR code + connection status when disconnected.
+    // Uses a self-rescheduling timeout so frequency can vary:
+    //   - 2 s while a QR code is visible (user is about to scan)
+    //   - 5 s otherwise
+    let qrPollTimer: ReturnType<typeof setTimeout>;
+    async function pollQr() {
       if (!useWhatsAppStore.getState().connected) {
         try {
-          const { data } = await axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`);
-          if (data.qrCode) setQrCode(data.qrCode);
+          const [{ data }, isConnected] = await Promise.all([
+            axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`),
+            fetchWhatsAppStatus(),
+          ]);
+          useWhatsAppStore.getState().setConnected(isConnected);
+          if (isConnected) {
+            setQrCodeSync(null);
+          } else if (data.qrCode) {
+            setQrCodeSync(data.qrCode);
+          }
         } catch { /* ignore */ }
       }
-    }, 5000);
+      // Reschedule: faster while QR is shown
+      const delay = useWhatsAppStore.getState().connected ? 5000
+        : (qrCodeRef.current ? 2000 : 5000);
+      qrPollTimer = setTimeout(pollQr, delay);
+    }
+    qrPollTimer = setTimeout(pollQr, 5000);
 
     // Poll Drive files every 10 seconds
     const poll = setInterval(loadDriveFiles, 10000);
 
-    return () => { socket.disconnect(); socketRef.current = null; clearInterval(poll); clearInterval(qrPoll); };
+    return () => { socket.disconnect(); socketRef.current = null; clearInterval(poll); clearTimeout(qrPollTimer); };
   }, []);
 
   async function loadDriveFiles() {
@@ -213,13 +240,13 @@ export default function WhatsAppInboxPage() {
               <Button
                 icon={<ReloadOutlined />}
                 onClick={async () => {
-                  setQrCode(null);
+                  setQrCodeSync(null);
                   await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => {});
                   // Poll immediately
                   setTimeout(async () => {
                     try {
                       const { data } = await axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`);
-                      if (data.qrCode) setQrCode(data.qrCode);
+                      if (data.qrCode) setQrCodeSync(data.qrCode);
                     } catch { /* ignore */ }
                   }, 3000);
                 }}
