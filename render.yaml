@@ -1,16 +1,19 @@
 services:
   - type: web
     name: wa-drive
-    runtime: node
+    runtime: docker
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: npm install && PUPPETEER_CACHE_DIR=/opt/render/project/.puppeteer-cache npx puppeteer browsers install chrome && npm run build
-    startCommand: PUPPETEER_CACHE_DIR=/opt/render/project/.puppeteer-cache npm start
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3000
-      - key: PUPPETEER_CACHE_DIR
-        value: /opt/render/project/.puppeteer-cache
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium

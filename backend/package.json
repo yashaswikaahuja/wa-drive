@@ -8,7 +8,7 @@
     "dev": "tsc && node dist/server.js",
     "watch": "tsc --watch",
     "build": "tsc",
-    "start": "node -e \"require('child_process').execSync('npx puppeteer browsers install chrome', {stdio:'inherit', env:{...process.env, PUPPETEER_CACHE_DIR:process.env.PUPPETEER_CACHE_DIR||'/opt/render/project/.puppeteer-cache'}})\" && node dist/server.js"
+    "start": "node dist/server.js"
   },
   "dependencies": {
     "express": "^4.18.2",

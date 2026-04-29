@@ -132,6 +132,17 @@ app.post('/api/whatsapp/logout', async (_req, res) => {
   res.json({ ok: true });
 });
 
+// Re-initialize WhatsApp
+app.post('/api/whatsapp/reinit', async (_req, res) => {
+  try {
+    await whatsappService.disconnect();
+    await whatsappService.init();
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Get current QR code
 app.get('/api/whatsapp/qr', (_req, res) => {
   res.json({ qrCode: whatsappService.getQrCode() });
