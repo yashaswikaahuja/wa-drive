@@ -111,24 +111,22 @@ export class WhatsAppService {
   }
 
   private async handleMedia(message: any) {
-    // Robust phone extraction with fallback chain
+    // Robust phone extraction — cache contact for reuse in profile pic
     let phone = '';
+    let cachedContact: any = null;
     const rawFrom: string = message._data?.from ?? message.from ?? '';
     const stripped = rawFrom.replace(/@c\.us|@s\.whatsapp\.net|@g\.us|@lid/g, '').replace(/[^0-9+]/g, '');
 
     if (stripped && !rawFrom.includes('-') && stripped.length > 4) {
       phone = stripped;
     } else {
-      // Fallback: resolve via contact
       try {
-        const contact = await message.getContact();
-        phone = contact.number || contact.id?.user || '';
-        phone = phone.replace(/[^0-9+]/g, '');
+        cachedContact = await message.getContact();
+        phone = (cachedContact.number || cachedContact.id?.user || '').replace(/[^0-9+]/g, '');
       } catch { /* ignore */ }
     }
 
     if (!phone || phone.length < 4) {
-      // Last resort
       const fallback = (message.from ?? '').replace(/@c\.us|@s\.whatsapp\.net|@lid/g, '').replace(/[^0-9+]/g, '');
       phone = fallback || `unknown_${Date.now()}`;
     }
@@ -210,11 +208,18 @@ export class WhatsAppService {
 
     let profilePicUrl: string | null = null;
     try {
-      const contact = await message.getContact();
+      const contact = cachedContact ?? await message.getContact();
       profilePicUrl = await contact.getProfilePicUrl() ?? null;
-      if (profilePicUrl) console.log(`[WhatsApp] DP: ${profilePicUrl.substring(0, 60)}...`);
-    } catch (e: any) {
-      console.log(`[WhatsApp] DP failed: ${e.message}`);
+      if (!profilePicUrl) throw new Error('null from contact');
+      console.log(`[WhatsApp] Profile pic fetched for ${phone}: ${profilePicUrl.substring(0, 60)}...`);
+    } catch {
+      try {
+        profilePicUrl = await this.client.getProfilePicUrl(`${phone}@c.us`) ?? null;
+        if (profilePicUrl) console.log(`[WhatsApp] Profile pic fetched for ${phone} via @c.us`);
+        else console.log(`[WhatsApp] Profile pic not available for ${phone}`);
+      } catch {
+        console.log(`[WhatsApp] Profile pic not available for ${phone}`);
+      }
     }
 
     this.io?.emit('new_whatsapp_file', {

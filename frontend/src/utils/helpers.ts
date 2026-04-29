@@ -44,9 +44,13 @@ export function isImageFile(fileName: string): boolean {
  * Generate preview URL for file
  */
 export function getPreviewUrl(fileUrl: string): string {
-  if (/^https?:\/\//i.test(fileUrl)) {
-    return fileUrl;
-  }
-
-  return new URL(fileUrl, BACKEND_BASE_URL).toString();
+  if (!fileUrl) return '';
+  // Already a Drive thumbnail URL
+  if (fileUrl.includes('drive.google.com/thumbnail')) return fileUrl;
+  // Drive download/view URL — extract ID and make thumbnail
+  const driveMatch = fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (driveMatch) return `https://drive.google.com/thumbnail?sz=w200&id=${driveMatch[1]}`;
+  // Local path — prepend backend origin
+  if (fileUrl.startsWith('/uploads/')) return `${API_BASE_URL.replace('/api', '')}${fileUrl}`;
+  return fileUrl;
 }
