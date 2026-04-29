@@ -148,7 +148,16 @@ export class WhatsAppService {
     this.customerNames.set(phone, customerName); // cache for Drive poll
 
     const media = await message.downloadMedia();
-    if (!media) { console.warn('[WhatsApp] downloadMedia() returned null'); return; }
+    if (!media) {
+      await new Promise(r => setTimeout(r, 3000));
+      const retried = await message.downloadMedia();
+      if (!retried) { console.warn('[WhatsApp] downloadMedia() returned null after retry'); return; }
+      return this.processMedia(message, retried, phone, customerName, contact);
+    }
+    return this.processMedia(message, media, phone, customerName, contact);
+  }
+
+  private async processMedia(message: any, media: any, phone: string, customerName: string, contact: any) {
 
     const mimetype: string = (media as any).mimetype ?? '';
     const ext = MIME_TO_EXT[mimetype] ?? 'bin';
