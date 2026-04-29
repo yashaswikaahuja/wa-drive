@@ -204,12 +204,13 @@ export class WhatsAppService {
           media: { mimeType: mimetype, body: Readable.from(buffer) },
           fields: 'id,webContentLink',
         });
+        const driveFileId = file.data.id!;
         await drive.permissions.create({
-          fileId: file.data.id!,
+          fileId: driveFileId,
           requestBody: { role: 'reader', type: 'anyone' },
         });
         // Use thumbnail URL for images, webContentLink for download
-        const fileId = file.data.id!;
+        const fileId = driveFileId;
         // Use thumbnail URL (works without Google login for public files)
         fileUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`;
         console.log(`[WhatsApp] Uploaded to Drive: ${fileUrl}`);
@@ -250,6 +251,20 @@ export class WhatsAppService {
       timestamp: new Date().toISOString(),
     });
     console.log(`[WhatsApp] Emitted: ${fileUrl}`);
+
+    // Update Drive file description with customerName and profilePicUrl for persistence
+    if (this.driveAccessToken && fileUrl.includes('drive.google.com')) {
+      const idMatch = fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch) {
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: this.driveAccessToken });
+        const drive = google.drive({ version: 'v3', auth });
+        drive.files.update({
+          fileId: idMatch[1],
+          requestBody: { description: JSON.stringify({ customerName, profilePicUrl }) },
+        }).catch(() => { /* ignore */ });
+      }
+    }
   }
 
   async disconnect() {

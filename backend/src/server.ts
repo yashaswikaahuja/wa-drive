@@ -62,17 +62,20 @@ app.get('/api/drive/files', async (_req, res) => {
     for (const folder of subfoldersRes.data.files ?? []) {
       const r = await drive.files.list({
         q: `'${folder.id}' in parents and trashed=false and mimeType != 'application/vnd.google-apps.folder'`,
-        fields: 'files(id,name,createdTime)',
+        fields: 'files(id,name,description,createdTime)',
         orderBy: 'createdTime desc', pageSize: 50,
       });
       for (const f of r.data.files ?? []) {
         if (!f.name || !f.id) continue;
+        let meta: { customerName?: string; profilePicUrl?: string } = {};
+        try { meta = JSON.parse(f.description ?? '{}'); } catch { /* ignore */ }
         allFiles.push({
           id: f.id, customerId: folder.name,
-          customerName: whatsappService.getCustomerName(folder.name ?? ''),
+          customerName: meta.customerName || whatsappService.getCustomerName(folder.name ?? ''),
           fileName: f.name,
           fileUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w200`,
-          profilePicUrl: null, timestamp: f.createdTime,
+          profilePicUrl: meta.profilePicUrl ?? null,
+          timestamp: f.createdTime,
         });
       }
     }
