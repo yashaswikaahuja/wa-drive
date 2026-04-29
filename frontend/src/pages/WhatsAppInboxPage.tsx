@@ -119,7 +119,7 @@ export default function WhatsAppInboxPage() {
         : (qrCodeRef.current ? 2000 : 5000);
       qrPollTimer = setTimeout(pollQr, delay);
     }
-    qrPollTimer = setTimeout(pollQr, 5000);
+    qrPollTimer = setTimeout(pollQr, 500); // start almost immediately
 
     // Poll Drive files every 10 seconds
     const poll = setInterval(loadDriveFiles, 10000);
