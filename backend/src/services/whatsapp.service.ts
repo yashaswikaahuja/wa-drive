@@ -1,5 +1,6 @@
 import WhatsAppWeb from 'whatsapp-web.js';
 import qrcodeTerminal from 'qrcode-terminal';
+import qrcode from 'qrcode';
 import { Server as SocketIOServer } from 'socket.io';
 import { mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
@@ -92,10 +93,15 @@ export class WhatsAppService {
       },
     });
 
-    this.client.on('qr', (qr: string) => {
+    this.client.on('qr', async (qr: string) => {
       console.log('\n[WhatsApp] Scan QR code with your phone:');
       qrcodeTerminal.generate(qr, { small: true });
-      this.io?.emit('connection:status', { connected: false });
+      try {
+        const qrDataUrl = await qrcode.toDataURL(qr);
+        this.io?.emit('connection:status', { connected: false, qrCode: qrDataUrl });
+      } catch {
+        this.io?.emit('connection:status', { connected: false });
+      }
     });
 
     this.client.on('ready', () => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert, Avatar, Badge, Button, Card, Col, Empty,
   Image, Input, List, Popconfirm, Row, Space, Typography, notification,
@@ -15,8 +15,8 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import { useWhatsAppStore } from '../stores/whatsappStore';
 import type { WhatsAppFile } from '../types/whatsapp';
 import { fetchWhatsAppFiles, fetchWhatsAppStatus, deleteWhatsAppFile } from '../services/whatsapp.api';
-import GoogleDriveLogin from '../components/GoogleDriveLogin';
 import { SOCKET_URL, getPreviewUrl } from '../utils/helpers';
+import GoogleDriveLogin from '../components/GoogleDriveLogin';
 
 dayjs.extend(relativeTime);
 
@@ -54,12 +54,16 @@ const SLIDE_IN_CSS = `
 
 export default function WhatsAppInboxPage() {
   const navigate = useNavigate();
+  const [qrCode, setQrCode] = useState<string | null>(null);
   const newIds = useRef<Set<string>>(new Set());
   const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
 
   useEffect(() => {
     const socket = io(SOCKET_URL);
-    socket.on('connection:status', (s: { connected: boolean }) => setConnected(s.connected));
+    socket.on('connection:status', (s: { connected: boolean; qrCode?: string }) => {
+      setConnected(s.connected);
+      setQrCode(s.connected ? null : (s.qrCode ?? null));
+    });
     socket.on('new_whatsapp_file', (file: WhatsAppFile) => {
       newIds.current.add(file.id);
       addFile(file);
@@ -132,10 +136,16 @@ export default function WhatsAppInboxPage() {
           {/* Status bar */}
           <Alert
             type={connected ? 'success' : 'warning'}
-            message={connected ? 'Connected – receiving files' : 'Disconnected. Scan QR code in the server terminal.'}
+            message={connected ? 'Connected – receiving files' : 'Disconnected. Scan QR code below to connect.'}
             showIcon
-            style={{ marginBottom: 16, borderRadius: 8 }}
+            style={{ marginBottom: qrCode ? 8 : 16, borderRadius: 8 }}
           />
+          {!connected && qrCode && (
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              <img src={qrCode} alt="WhatsApp QR Code" style={{ width: 200, height: 200, borderRadius: 8, border: '1px solid #f0f0f0' }} />
+              <div style={{ color: '#888', fontSize: 12, marginTop: 4 }}>Open WhatsApp → Linked Devices → Link a Device</div>
+            </div>
+          )}
 
           {error && (
             <Alert type="error" message={error} showIcon style={{ marginBottom: 16, borderRadius: 8 }} />
