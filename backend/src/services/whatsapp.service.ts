@@ -69,6 +69,7 @@ export class WhatsAppService {
       authStrategy: new LocalAuth({ clientId: 'cybercafe_main' }),
       puppeteer: {
         headless: true,
+        executablePath: process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',

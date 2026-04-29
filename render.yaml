@@ -1,13 +1,18 @@
 services:
   - type: web
-    name: cybercontrol-backend
+    name: wa-drive
     runtime: node
+    region: singapore
+    plan: free
     rootDir: backend
-    buildCommand: npm install && npm run build
+    buildCommand: npm install && npx puppeteer browsers install chrome && npm run build
     startCommand: npm start
-    healthCheckPath: /api/health
     envVars:
-      - key: NODE_VERSION
-        value: 20
-      - key: CORS_ORIGINS
-        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+    headers:
+      - path: /*
+        name: Access-Control-Allow-Origin
+        value: "*"
