@@ -56,10 +56,13 @@ export default function WhatsAppInboxPage() {
   const navigate = useNavigate();
   const [qrCode, setQrCode] = useState<string | null>(null);
   const newIds = useRef<Set<string>>(new Set());
+  const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
 
   useEffect(() => {
+    if (socketRef.current) return; // already connected
     const socket = io(SOCKET_URL);
+    socketRef.current = socket;
     socket.on('connection:status', (s: { connected: boolean; qrCode?: string }) => {
       setConnected(s.connected);
       setQrCode(s.connected ? null : (s.qrCode ?? null));
@@ -76,7 +79,7 @@ export default function WhatsAppInboxPage() {
       setTimeout(() => newIds.current.delete(file.id), 3000);
     });
     load();
-    return () => { socket.disconnect(); };
+    return () => { socket.disconnect(); socketRef.current = null; };
   }, []);
 
   async function load() {

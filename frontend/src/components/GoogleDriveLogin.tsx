@@ -35,13 +35,13 @@ export default function GoogleDriveLogin() {
       return;
     }
 
-    // Retry syncing every 5s for up to 60s (in case backend just restarted)
+    // Retry syncing every 10s for up to 60s (in case backend just restarted)
     let attempts = 0;
     const interval = setInterval(() => {
       syncToken(accessToken);
       attempts++;
-      if (attempts >= 12) clearInterval(interval);
-    }, 5000);
+      if (attempts >= 6) clearInterval(interval);
+    }, 10000);
     syncToken(accessToken); // immediate first attempt
 
     // Schedule refresh 5 min before expiry
