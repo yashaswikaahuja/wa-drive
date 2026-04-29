@@ -71,7 +71,7 @@ app.get('/api/drive/files', async (_req, res) => {
           id: f.id, customerId: folder.name,
           customerName: `Guest ${(folder.name ?? '').slice(-4)}`,
           fileName: f.name,
-          fileUrl: `https://drive.google.com/uc?export=view&id=${f.id}`,
+          fileUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w200`,
           profilePicUrl: null, timestamp: f.createdTime,
         });
       }

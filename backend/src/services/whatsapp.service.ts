@@ -169,7 +169,8 @@ export class WhatsAppService {
         });
         // Use thumbnail URL for images, webContentLink for download
         const fileId = file.data.id!;
-        fileUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+        // Use thumbnail URL (works without Google login for public files)
+        fileUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`;
         console.log(`[WhatsApp] Uploaded to Drive: ${fileUrl}`);
       } catch (e) {
         console.error('[WhatsApp] Drive upload failed, saving locally:', e);
