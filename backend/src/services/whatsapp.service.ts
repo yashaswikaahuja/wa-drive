@@ -54,6 +54,7 @@ export class WhatsAppService {
     const isDocker = process.env['PUPPETEER_EXECUTABLE_PATH'];
     this.client = new Client({
       authStrategy: isDocker ? new NoAuth() : new LocalAuth({ clientId: 'cybercafe_main' }),
+      webVersionCache: { type: 'remote', remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1023141488.html' },
       puppeteer: {
         headless: true,
         executablePath: process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
@@ -62,7 +63,9 @@ export class WhatsAppService {
           '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote',
           '--disable-gpu', '--disable-extensions', '--mute-audio',
           '--js-flags=--max-old-space-size=256',
+          '--remote-debugging-port=0',
         ],
+        timeout: 60000,
       },
     });
 
