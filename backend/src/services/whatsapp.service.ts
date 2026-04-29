@@ -111,24 +111,28 @@ export class WhatsAppService {
   }
 
   private async handleMedia(message: any) {
-    // Robust phone extraction — cache contact for reuse in profile pic
     let phone = '';
     let cachedContact: any = null;
     const rawFrom: string = message._data?.from ?? message.from ?? '';
-    const stripped = rawFrom.replace(/@c\.us|@s\.whatsapp\.net|@g\.us|@lid/g, '').replace(/[^0-9+]/g, '');
 
-    if (stripped && !rawFrom.includes('-') && stripped.length > 4) {
-      phone = stripped;
-    } else {
+    // Always resolve via contact for @lid (linked device IDs are not real phone numbers)
+    if (rawFrom.includes('@lid')) {
       try {
         cachedContact = await message.getContact();
         phone = (cachedContact.number || cachedContact.id?.user || '').replace(/[^0-9+]/g, '');
       } catch { /* ignore */ }
     }
 
+    // For @c.us or if contact resolution failed
     if (!phone || phone.length < 4) {
-      const fallback = (message.from ?? '').replace(/@c\.us|@s\.whatsapp\.net|@lid/g, '').replace(/[^0-9+]/g, '');
-      phone = fallback || `unknown_${Date.now()}`;
+      const stripped = rawFrom.replace(/@c\.us|@s\.whatsapp\.net|@g\.us|@lid/g, '').replace(/[^0-9+]/g, '');
+      if (stripped && !rawFrom.includes('-') && stripped.length > 4) {
+        phone = stripped;
+      }
+    }
+
+    if (!phone || phone.length < 4) {
+      phone = (message.from ?? '').replace(/@c\.us|@s\.whatsapp\.net|@lid/g, '').replace(/[^0-9+]/g, '') || `unknown_${Date.now()}`;
     }
 
     console.log(`[WhatsApp] Resolved phone: ${phone} (from: ${message.from})`);
