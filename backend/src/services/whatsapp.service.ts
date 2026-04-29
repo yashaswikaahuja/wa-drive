@@ -35,6 +35,7 @@ export class WhatsAppService {
   private client: any = null;
   private io: SocketIOServer | null = null;
   private isConnected = false;
+  private isInitializing = false;
   private lastQrCode: string | null = null;
   private driveAccessToken: string | null = null;
 
@@ -45,6 +46,9 @@ export class WhatsAppService {
   getQrCode() { return this.lastQrCode; }
 
   async init() {
+    if (this.isInitializing) return;
+    this.isInitializing = true;
+    try {
     const isDocker = process.env['PUPPETEER_EXECUTABLE_PATH'];
     this.client = new Client({
       authStrategy: isDocker ? new NoAuth() : new LocalAuth({ clientId: 'cybercafe_main' }),
@@ -101,6 +105,9 @@ export class WhatsAppService {
     });
 
     await this.client.initialize();
+    } finally {
+      this.isInitializing = false;
+    }
   }
 
   private async handleMedia(message: any) {
