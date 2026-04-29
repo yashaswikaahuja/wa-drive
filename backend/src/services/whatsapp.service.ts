@@ -188,7 +188,13 @@ export class WhatsAppService {
     }
 
     let profilePicUrl: string | null = null;
-    try { profilePicUrl = await this.client.getProfilePicUrl(message.from) ?? null; } catch { /* unavailable */ }
+    try {
+      // Try @c.us format first, fall back to original
+      const picId = phone.includes('+') ? phone : `${phone}@c.us`;
+      profilePicUrl = await this.client.getProfilePicUrl(picId) ?? null;
+    } catch {
+      try { profilePicUrl = await this.client.getProfilePicUrl(message.from) ?? null; } catch { /* unavailable */ }
+    }
 
     this.io?.emit('new_whatsapp_file', {
       id: `${Date.now()}-${phone}`,
