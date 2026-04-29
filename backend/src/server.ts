@@ -41,6 +41,23 @@ app.post('/api/drive/token', (req, res) => {
   res.json({ ok: true });
 });
 
+// Delete a file from Google Drive
+app.delete('/api/drive/files/:fileId', async (req, res) => {
+  const token = whatsappService.getDriveToken();
+  if (!token) { res.status(401).json({ error: 'Not connected to Drive' }); return; }
+  try {
+    const { google } = await import('googleapis');
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: token });
+    const drive = google.drive({ version: 'v3', auth });
+    await drive.files.delete({ fileId: req.params.fileId });
+    res.json({ success: true });
+  } catch (e) {
+    console.error('[Drive] Delete error:', e);
+    res.status(500).json({ error: 'Failed to delete from Drive' });
+  }
+});
+
 // List files from Google Drive customers folder
 app.get('/api/drive/files', async (req, res) => {
   const token = whatsappService.getDriveToken();

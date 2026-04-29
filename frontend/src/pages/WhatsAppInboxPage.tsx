@@ -15,8 +15,8 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { useWhatsAppStore } from '../stores/whatsappStore';
 import type { WhatsAppFile } from '../types/whatsapp';
-import { fetchWhatsAppFiles, fetchWhatsAppStatus, deleteWhatsAppFile } from '../services/whatsapp.api';
-import { SOCKET_URL, getPreviewUrl } from '../utils/helpers';
+import { deleteWhatsAppFile, fetchWhatsAppFiles, fetchWhatsAppStatus, normalizeWhatsAppFile } from '../services/whatsapp.api';
+import { API_BASE_URL, SOCKET_URL, getPreviewUrl } from '../utils/helpers';
 import GoogleDriveLogin from '../components/GoogleDriveLogin';
 
 dayjs.extend(relativeTime);
@@ -40,6 +40,7 @@ function FileIcon({ fileName }: { fileName: string }) {
 
 function formatTime(ts: string) {
   const d = dayjs(ts);
+  if (!d.isValid()) return 'Unknown time';
   return dayjs().diff(d, 'hour') < 24
     ? d.format('h:mm A')
     : d.format('MMM D, h:mm A');
@@ -73,7 +74,7 @@ export default function WhatsAppInboxPage() {
       addFile(file);
       notification.success({
         message: 'New file received',
-        description: `${file.customerName}: ${file.fileName}`,
+        description: `${file.customerName ?? 'Unknown customer'}: ${file.fileName ?? 'New file'}`,
         placement: 'topRight',
         duration: 4,
       });
@@ -91,8 +92,11 @@ export default function WhatsAppInboxPage() {
 
   async function loadDriveFiles() {
     try {
-      const { data } = await axios.get<WhatsAppFile[]>('/api/drive/files');
-      if (data.length > 0) setFiles(data);
+      const { data } = await axios.get<unknown[]>(`${API_BASE_URL}/drive/files`);
+      const normalized = data
+        .map((file) => normalizeWhatsAppFile(file as Parameters<typeof normalizeWhatsAppFile>[0]))
+        .filter((file): file is WhatsAppFile => file !== null);
+      if (normalized.length > 0) setFiles(normalized);
     } catch { /* ignore */ }
   }
 
@@ -112,7 +116,14 @@ export default function WhatsAppInboxPage() {
   }
 
   async function handleDelete(id: string) {
-    await deleteWhatsAppFile(id);
+    if (!id) return;
+    try {
+      // Try Drive delete first (Drive IDs are long alphanumeric, not UUID)
+      await axios.delete(`/api/drive/files/${id}`);
+    } catch {
+      // Fall back to local file delete
+      try { await deleteWhatsAppFile(id); } catch { /* ignore */ }
+    }
     removeFile(id);
     notification.success({ message: 'File deleted', placement: 'topRight' });
   }
@@ -121,6 +132,10 @@ export default function WhatsAppInboxPage() {
     const win = window.open(getPreviewUrl(fileUrl), '_blank');
     win?.addEventListener('load', () => win.print());
   }
+
+  const visibleFiles = files
+    .map((file) => normalizeWhatsAppFile(file))
+    .filter((file): file is WhatsAppFile => file !== null);
 
   return (
     <>
@@ -143,7 +158,7 @@ export default function WhatsAppInboxPage() {
             </Col>
             <Col>
               <Space>
-                <Text type="secondary">{files.length} file{files.length !== 1 ? 's' : ''}</Text>
+                <Text type="secondary">{visibleFiles.length} file{visibleFiles.length !== 1 ? 's' : ''}</Text>
                 <Input prefix={<SearchOutlined />} placeholder="Search…" style={{ width: 180 }} disabled />
                 <GoogleDriveLogin />
                 <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
@@ -172,7 +187,7 @@ export default function WhatsAppInboxPage() {
           {/* File list */}
           <List
             loading={loading}
-            dataSource={files}
+            dataSource={visibleFiles}
             locale={{ emptyText: (
               <Empty
                 description={
