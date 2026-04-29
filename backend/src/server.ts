@@ -142,8 +142,12 @@ const httpServer = app.listen(PORT, async () => {
 
   io.on('connection', (socket) => {
     console.log(`[Socket.IO] Client connected: ${socket.id}`);
-    // Send current WhatsApp status to newly connected client
-    socket.emit('connection:status', { connected: whatsappService.getStatus() });
+    // Send current status immediately to new client
+    const qrCode = whatsappService.getQrCode();
+    socket.emit('connection:status', {
+      connected: whatsappService.getStatus(),
+      ...(qrCode ? { qrCode } : {}),
+    });
     socket.on('disconnect', () => {
       console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
     });

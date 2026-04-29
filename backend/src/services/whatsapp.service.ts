@@ -62,10 +62,13 @@ export class WhatsAppService {
   private io: SocketIOServer | null = null;
   private isConnected = false;
   private driveAccessToken: string | null = null;
+  private lastQrCode: string | null = null;
 
   setSocketIO(io: SocketIOServer): void { this.io = io; }
   setDriveToken(token: string | null): void { this.driveAccessToken = token; }
   getDriveToken(): string | null { return this.driveAccessToken; }
+  getStatus(): boolean { return this.isConnected; }
+  getQrCode(): string | null { return this.lastQrCode; }
 
   async init(): Promise<void> {
     const cacheDir = process.env['PUPPETEER_CACHE_DIR'];
@@ -100,6 +103,7 @@ export class WhatsAppService {
       qrcodeTerminal.generate(qr, { small: true });
       try {
         const qrDataUrl = await qrcode.toDataURL(qr);
+        this.lastQrCode = qrDataUrl;
         this.io?.emit('connection:status', { connected: false, qrCode: qrDataUrl });
       } catch {
         this.io?.emit('connection:status', { connected: false });
@@ -109,6 +113,7 @@ export class WhatsAppService {
     this.client.on('ready', () => {
       console.log('[WhatsApp] Client ready! ✓');
       this.isConnected = true;
+      this.lastQrCode = null;
       this.io?.emit('connection:status', { connected: true });
     });
 
@@ -251,8 +256,6 @@ export class WhatsAppService {
     });
     console.log(`[WhatsApp] Emitted new_whatsapp_file: ${fileUrl}`);
   }
-
-  getStatus(): boolean { return this.isConnected; }
 
   async disconnect(): Promise<void> {
     await this.client?.destroy();
