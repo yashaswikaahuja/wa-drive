@@ -9,7 +9,7 @@ import { google } from 'googleapis';
 import { Readable } from 'stream';
 import { saveWhatsAppFile } from '../db.js';
 
-const { Client, LocalAuth } = WhatsAppWeb;
+const { Client, LocalAuth, NoAuth } = WhatsAppWeb;
 type WhatsAppClient = InstanceType<typeof WhatsAppWeb.Client>;
 type MessageMedia = InstanceType<typeof WhatsAppWeb.MessageMedia>;
 
@@ -82,7 +82,7 @@ export class WhatsAppService {
       : undefined;
 
     this.client = new Client({
-      authStrategy: new LocalAuth({ clientId: 'cybercafe_main', dataPath: '/tmp/.wwebjs_auth' }),
+      authStrategy: new NoAuth(),
       puppeteer: {
         headless: true,
         executablePath: executablePath || process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
@@ -93,8 +93,12 @@ export class WhatsAppService {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
-          '--single-process',
-          '--disable-gpu'
+          '--disable-gpu',
+          '--disable-extensions',
+          '--disable-background-networking',
+          '--disable-default-apps',
+          '--disable-sync',
+          '--mute-audio'
         ]
       },
     });
