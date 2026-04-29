@@ -88,7 +88,7 @@ export default function WhatsAppInboxPage() {
     const qrPoll = setInterval(async () => {
       if (!useWhatsAppStore.getState().connected) {
         try {
-          const { data } = await axios.get<{ qrCode: string | null }>('/api/whatsapp/qr');
+          const { data } = await axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`);
           if (data.qrCode) setQrCode(data.qrCode);
         } catch { /* ignore */ }
       }
