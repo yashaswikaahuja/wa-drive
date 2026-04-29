@@ -13,4 +13,6 @@ build/
 *~
 .wwebjs_auth/
 uploads/
+data/
+backend/data/
 .github/

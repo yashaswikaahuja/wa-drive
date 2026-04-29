@@ -1,5 +1,29 @@
 import { v4 as uuidv4 } from 'uuid';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import type { Customer, WhatsAppFile } from './types/index.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = resolve(__dirname, '../data');
+const FILES_DB_PATH = resolve(DATA_DIR, 'whatsapp-files.json');
+
+function loadFiles(): WhatsAppFile[] {
+  if (!existsSync(FILES_DB_PATH)) return [];
+
+  try {
+    const parsed = JSON.parse(readFileSync(FILES_DB_PATH, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('[DB] Failed to read WhatsApp file index:', error);
+    return [];
+  }
+}
+
+function persistFiles(): void {
+  mkdirSync(DATA_DIR, { recursive: true });
+  writeFileSync(FILES_DB_PATH, JSON.stringify(files, null, 2));
+}
 
 // Mock database
 const customers: Customer[] = [
@@ -7,7 +31,7 @@ const customers: Customer[] = [
   { id: '2', name: 'Jane Smith', whatsapp: '9876543210' },
 ];
 
-const files: WhatsAppFile[] = [];
+const files: WhatsAppFile[] = loadFiles();
 
 /**
  * Find or create a customer by WhatsApp phone number
@@ -58,6 +82,7 @@ export async function saveWhatsAppFile(
   };
 
   files.push(fileRecord);
+  persistFiles();
   return fileRecord;
 }
 
@@ -78,6 +103,7 @@ export async function deleteFile(fileId: string): Promise<boolean> {
   const index = files.findIndex((f) => f.id === fileId);
   if (index > -1) {
     files.splice(index, 1);
+    persistFiles();
     return true;
   }
   return false;
