@@ -199,9 +199,12 @@ export class WhatsAppService {
   }
 
   async disconnect() {
-    await this.client?.destroy();
+    try { await this.client?.logout(); } catch { /* ignore */ }
+    try { await this.client?.destroy(); } catch { /* ignore */ }
     this.client = null;
     this.isConnected = false;
+    this.isInitializing = false;
+    this.lastQrCode = null;
   }
 }
 

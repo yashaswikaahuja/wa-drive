@@ -84,6 +84,8 @@ app.get('/api/drive/files', async (_req, res) => {
 app.post('/api/whatsapp/logout', async (_req, res) => {
   await whatsappService.disconnect();
   res.json({ ok: true });
+  // Reinit after short delay to generate new QR
+  setTimeout(() => whatsappService.init().catch(console.error), 1000);
 });
 
 app.post('/api/whatsapp/reinit', async (_req, res) => {
