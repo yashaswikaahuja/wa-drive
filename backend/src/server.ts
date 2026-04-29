@@ -18,24 +18,10 @@ const app = express();
 
 // Middleware
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  const allowAll = allowedOrigins.includes('*');
-
-  if (allowAll) {
-    res.header('Access-Control-Allow-Origin', '*');
-  } else if (origin && allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Vary', 'Origin');
-  }
-
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(204);
-    return;
-  }
-
+  if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
   next();
 });
 
@@ -133,10 +119,7 @@ const httpServer = app.listen(PORT, async () => {
   console.log(`\n[Server] Running on http://localhost:${PORT}`);
 
   const io = new SocketIOServer(httpServer, {
-    cors: {
-      origin: allowedOrigins,
-      methods: ['GET', 'POST'],
-    },
+    cors: { origin: '*', methods: ['GET', 'POST'] },
   });
 
   io.on('connection', (socket) => {
