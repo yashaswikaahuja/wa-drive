@@ -1,6 +1,7 @@
 import Baileys from '@whiskeysockets/baileys';
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = Baileys as any;
 import type { proto } from '@whiskeysockets/baileys';
+import pino from 'pino';
 import { Boom } from '@hapi/boom';
 import qrcode from 'qrcode';
 import qrcodeTerminal from 'qrcode-terminal';
@@ -54,7 +55,7 @@ export class WhatsAppService {
     this.sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
-      logger: { level: 'silent' } as any,
+      logger: pino({ level: 'silent' }),
     });
 
     this.sock.ev.on('creds.update', saveCreds);
