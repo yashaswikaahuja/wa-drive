@@ -82,7 +82,7 @@ export class WhatsAppService {
       : undefined;
 
     this.client = new Client({
-      authStrategy: new LocalAuth({ clientId: 'cybercafe_main' }),
+      authStrategy: new LocalAuth({ clientId: 'cybercafe_main', dataPath: '/tmp/.wwebjs_auth' }),
       puppeteer: {
         headless: true,
         executablePath: executablePath || process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
@@ -93,6 +93,7 @@ export class WhatsAppService {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
+          '--single-process',
           '--disable-gpu'
         ]
       },
