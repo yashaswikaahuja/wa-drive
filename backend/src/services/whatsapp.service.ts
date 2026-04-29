@@ -1,10 +1,6 @@
-import Baileys from '@whiskeysockets/baileys';
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, downloadMediaMessage } = Baileys as any;
-import type { proto } from '@whiskeysockets/baileys';
-import pino from 'pino';
-import { Boom } from '@hapi/boom';
-import qrcode from 'qrcode';
+import WhatsAppWeb from 'whatsapp-web.js';
 import qrcodeTerminal from 'qrcode-terminal';
+import qrcode from 'qrcode';
 import { Server as SocketIOServer } from 'socket.io';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
@@ -12,31 +8,31 @@ import { fileURLToPath } from 'url';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 
+const { Client, LocalAuth, NoAuth } = WhatsAppWeb as any;
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPLOADS_ROOT = resolve(__dirname, '../../uploads/customers');
-const AUTH_DIR = '/tmp/.baileys_auth';
 
 const MIME_TO_EXT: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
-  'image/gif': 'gif', 'image/webp': 'webp',
-  'application/pdf': 'pdf',
-  'application/zip': 'zip',
+  'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp',
+  'application/pdf': 'pdf', 'application/zip': 'zip',
   'application/msword': 'doc',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
   'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav',
   'video/mp4': 'mp4', 'video/3gpp': '3gp',
 };
 
 const customerMap = new Map<string, { id: string; name: string }>();
 function findOrCreateCustomer(phone: string) {
-  if (!customerMap.has(phone)) {
-    customerMap.set(phone, { id: phone, name: `Guest ${phone.slice(-4)}` });
-  }
+  if (!customerMap.has(phone)) customerMap.set(phone, { id: phone, name: `Guest ${phone.slice(-4)}` });
   return customerMap.get(phone)!;
 }
 
 export class WhatsAppService {
-  private sock: ReturnType<typeof makeWASocket> | null = null;
+  private client: any = null;
   private io: SocketIOServer | null = null;
   private isConnected = false;
   private lastQrCode: string | null = null;
@@ -49,80 +45,90 @@ export class WhatsAppService {
   getQrCode() { return this.lastQrCode; }
 
   async init() {
-    mkdirSync(AUTH_DIR, { recursive: true });
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-
-    this.sock = makeWASocket({
-      auth: state,
-      printQRInTerminal: false,
-      logger: pino({ level: 'silent' }),
+    const isDocker = process.env['PUPPETEER_EXECUTABLE_PATH'];
+    this.client = new Client({
+      authStrategy: isDocker ? new NoAuth() : new LocalAuth({ clientId: 'cybercafe_main' }),
+      puppeteer: {
+        headless: true,
+        executablePath: process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
+        args: [
+          '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote',
+          '--disable-gpu', '--disable-extensions', '--mute-audio',
+          '--js-flags=--max-old-space-size=256',
+        ],
+      },
     });
 
-    this.sock.ev.on('creds.update', saveCreds);
-
-    this.sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }: any) => {
-      if (qr) {
-        console.log('[WhatsApp] QR received');
-        qrcodeTerminal.generate(qr, { small: true });
-        try {
-          this.lastQrCode = await qrcode.toDataURL(qr);
-          this.io?.emit('connection:status', { connected: false, qrCode: this.lastQrCode });
-        } catch {
-          this.io?.emit('connection:status', { connected: false });
-        }
-      }
-      if (connection === 'open') {
-        console.log('[WhatsApp] Connected ✓');
-        this.isConnected = true;
-        this.lastQrCode = null;
-        this.io?.emit('connection:status', { connected: true });
-      }
-      if (connection === 'close') {
-        const code = (lastDisconnect?.error as Boom)?.output?.statusCode;
-        const shouldReconnect = code !== DisconnectReason.loggedOut && code !== 405;
-        console.log('[WhatsApp] Disconnected, code:', code, 'reconnect:', shouldReconnect);
-        this.isConnected = false;
+    this.client.on('qr', async (qr: string) => {
+      console.log('[WhatsApp] QR received');
+      qrcodeTerminal.generate(qr, { small: true });
+      try {
+        this.lastQrCode = await qrcode.toDataURL(qr);
+        this.io?.emit('connection:status', { connected: false, qrCode: this.lastQrCode });
+      } catch {
         this.io?.emit('connection:status', { connected: false });
-        if (shouldReconnect) {
-          setTimeout(() => this.init(), 5000);
-        }
       }
     });
 
-    this.sock.ev.on('messages.upsert', async ({ messages, type }: any) => {
-      if (type !== 'notify') return;
-      for (const msg of messages) {
-        if (msg.key.fromMe) continue;
-        const hasMedia = !!(msg.message?.imageMessage || msg.message?.documentMessage ||
-          msg.message?.videoMessage || msg.message?.audioMessage);
-        if (hasMedia) {
-          try { await this.handleMedia(msg); }
-          catch (e) { console.error('[WhatsApp] Media error:', e); }
-        }
+    this.client.on('authenticated', () => {
+      console.log('[WhatsApp] Authenticated ✓');
+      this.isConnected = true;
+      this.lastQrCode = null;
+      this.io?.emit('connection:status', { connected: true });
+    });
+
+    this.client.on('ready', () => {
+      console.log('[WhatsApp] Client ready! ✓');
+      this.isConnected = true;
+      this.lastQrCode = null;
+      this.io?.emit('connection:status', { connected: true });
+    });
+
+    this.client.on('disconnected', () => {
+      console.log('[WhatsApp] Client disconnected');
+      this.isConnected = false;
+      this.io?.emit('connection:status', { connected: false });
+    });
+
+    this.client.on('message_create', async (message: any) => {
+      if (message.fromMe) return;
+      console.log(`[WhatsApp] message_create: from=${message.from} hasMedia=${message.hasMedia} type=${message.type}`);
+      if (message.hasMedia) {
+        try { await this.handleMedia(message); }
+        catch (e) { console.error('[WhatsApp] Media error:', e); }
       }
     });
+
+    await this.client.initialize();
   }
 
-  private async handleMedia(msg: proto.IWebMessageInfo) {
-    const from = msg.key.remoteJid ?? '';
-    const phone = from.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/[^0-9+]/g, '');
-    const customer = findOrCreateCustomer(phone);
+  private async handleMedia(message: any) {
+    const rawFrom: string = message._data?.from ?? message.from;
+    let phone: string;
+    if (rawFrom.includes('@lid')) {
+      try {
+        const contact = await message.getContact();
+        phone = contact.number || contact.id.user;
+      } catch { phone = rawFrom.replace(/[^0-9+]/g, ''); }
+    } else {
+      phone = rawFrom.replace('@c.us', '').replace('@s.whatsapp.net', '').replace(/[^0-9+]/g, '');
+    }
 
-    const imgMsg = msg.message?.imageMessage;
-    const docMsg = msg.message?.documentMessage;
-    const vidMsg = msg.message?.videoMessage;
-    const audMsg = msg.message?.audioMessage;
-    const mediaMsg = imgMsg || docMsg || vidMsg || audMsg;
-    if (!mediaMsg) return;
+    const media = await message.downloadMedia();
+    if (!media) { console.warn('[WhatsApp] downloadMedia() returned null'); return; }
 
-    const mimetype = (mediaMsg as any).mimetype ?? 'application/octet-stream';
+    const mimetype: string = (media as any).mimetype ?? '';
     const ext = MIME_TO_EXT[mimetype] ?? 'bin';
-    const rawName = (docMsg?.fileName ?? '').replace(/\s+/g, '_').replace(/[:\\*?<>|]/g, '').replace(/\.[^.]+$/, '') || `file_${Date.now()}`;
-    const fileName = `${phone}_${rawName}.${ext}`;
-
-    const buffer = await downloadMediaMessage(msg, 'buffer', {}) as Buffer;
+    const rawName: string = media.filename ?? message._data?.filename ?? '';
+    const baseName = rawName
+      ? rawName.replace(/\s+/g, '_').replace(/[:\\*?<>|]/g, '').replace(/\.[^.]+$/, '')
+      : `file_${Date.now()}`;
+    const fileName = `${phone}_${baseName}.${ext}`;
+    const buffer = Buffer.from(media.data, 'base64');
     console.log(`[WhatsApp] Downloaded ${fileName} (${mimetype}, ${buffer.length} bytes)`);
 
+    const customer = findOrCreateCustomer(phone);
     let fileUrl: string;
 
     if (this.driveAccessToken) {
@@ -172,25 +178,20 @@ export class WhatsAppService {
     }
 
     let profilePicUrl: string | null = null;
-    try {
-      profilePicUrl = await this.sock!.profilePictureUrl(from, 'image') ?? null;
-    } catch { /* unavailable */ }
+    try { profilePicUrl = await this.client.getProfilePicUrl(message.from) ?? null; } catch { /* unavailable */ }
 
     this.io?.emit('new_whatsapp_file', {
       id: `${Date.now()}-${phone}`,
-      customerId: phone,
-      customerName: customer.name,
-      fileName,
-      fileUrl,
-      profilePicUrl,
+      customerId: phone, customerName: customer.name,
+      fileName, fileUrl, profilePicUrl,
       timestamp: new Date().toISOString(),
     });
-    console.log(`[WhatsApp] Emitted new_whatsapp_file: ${fileUrl}`);
+    console.log(`[WhatsApp] Emitted: ${fileUrl}`);
   }
 
   async disconnect() {
-    await this.sock?.end(undefined);
-    this.sock = null;
+    await this.client?.destroy();
+    this.client = null;
     this.isConnected = false;
   }
 }
