@@ -46,7 +46,7 @@ export class WhatsAppService {
   getQrCode() { return this.lastQrCode; }
 
   async init() {
-    if (this.isInitializing) return;
+
     this.isInitializing = true;
     try {
     const isDocker = process.env['PUPPETEER_EXECUTABLE_PATH'];
