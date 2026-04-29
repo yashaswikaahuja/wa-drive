@@ -5,14 +5,12 @@ services:
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: npm install && npx puppeteer browsers install chrome && npm run build
-    startCommand: npm start
+    buildCommand: npm install && PUPPETEER_CACHE_DIR=/opt/render/project/.puppeteer-cache npx puppeteer browsers install chrome && npm run build
+    startCommand: PUPPETEER_CACHE_DIR=/opt/render/project/.puppeteer-cache npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 3000
-    headers:
-      - path: /*
-        name: Access-Control-Allow-Origin
-        value: "*"
+      - key: PUPPETEER_CACHE_DIR
+        value: /opt/render/project/.puppeteer-cache

@@ -65,11 +65,21 @@ export class WhatsAppService {
   setDriveToken(token: string | null): void { this.driveAccessToken = token; }
 
   async init(): Promise<void> {
+    const cacheDir = process.env['PUPPETEER_CACHE_DIR'];
+    const executablePath = cacheDir
+      ? (() => {
+          try {
+            const { execSync } = require('child_process');
+            return execSync(`find ${cacheDir} -name "chrome" -type f 2>/dev/null | head -1`).toString().trim() || undefined;
+          } catch { return undefined; }
+        })()
+      : undefined;
+
     this.client = new Client({
       authStrategy: new LocalAuth({ clientId: 'cybercafe_main' }),
       puppeteer: {
         headless: true,
-        executablePath: process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
+        executablePath: executablePath || process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',

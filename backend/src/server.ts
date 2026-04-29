@@ -83,8 +83,7 @@ const httpServer = app.listen(PORT, async () => {
     await whatsappService.init();
     console.log('[WhatsApp] Service initialized successfully');
   } catch (error) {
-    console.error('[WhatsApp] Failed to initialize:', error);
-    process.exit(1);
+    console.error('[WhatsApp] Failed to initialize (continuing without WhatsApp):', error);
   }
 });
 
