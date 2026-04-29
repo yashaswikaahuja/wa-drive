@@ -25,8 +25,8 @@ const { Text, Title } = Typography;
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
 
-function fileExt(name: string) {
-  return name.split('.').pop()?.toLowerCase() ?? '';
+function fileExt(name: string | undefined) {
+  return (name ?? '').split('.').pop()?.toLowerCase() ?? '';
 }
 
 function FileIcon({ fileName }: { fileName: string }) {

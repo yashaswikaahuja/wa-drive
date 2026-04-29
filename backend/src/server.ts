@@ -88,6 +88,7 @@ app.get('/api/drive/files', async (req, res) => {
         pageSize: 50,
       });
       for (const f of r.data.files ?? []) {
+        if (!f.name || !f.webContentLink) continue;
         allFiles.push({
           id: f.id,
           customerId: phone,
