@@ -39,13 +39,23 @@ const MIME_TO_EXT: Record<string, string> = {
 
 let hub: Socket;
 let driveToken: string | null = process.env['DRIVE_ACCESS_TOKEN'] ?? null;
+let lastQrBase64: string | null = null; // re-emit on hub reconnect
 
 function connectHub() {
   hub = ioClient(HUB_URL, { auth: { secret: WORKER_SECRET }, reconnection: true, reconnectionDelay: 3000 });
-  hub.on('connect',       () => { console.log('[Worker] Hub connected'); hub.emit('worker:register', { secret: WORKER_SECRET }); });
+  hub.on('connect', () => {
+    console.log('[Worker] Hub connected');
+    hub.emit('worker:register', { secret: WORKER_SECRET });
+    // Re-emit current state so hub is in sync after reconnect
+    if (lastQrBase64) hub.emit('connection:status', { connected: false, qrCode: lastQrBase64 });
+  });
   hub.on('disconnect',    (r) => console.log('[Worker] Hub disconnected:', r));
   hub.on('connect_error', (e) => console.error('[Worker] Hub error:', e.message));
   hub.on('drive:token',   (t: string | null) => { driveToken = t; console.log('[Worker] Drive token updated'); });
+  hub.on('worker:reinit', () => {
+    console.log('[Worker] Reinit requested — restarting Baileys');
+    startBaileys().catch(console.error);
+  });
 }
 
 // ── Google Drive helpers ─────────────────────────────────────────────────────
@@ -152,6 +162,7 @@ async function startBaileys() {
       qrcodeTerminal.generate(qr, { small: true });
       try {
         const qrBase64 = await qrcode.toDataURL(qr);
+        lastQrBase64 = qrBase64;
         hub.emit('connection:status', { connected: false, qrCode: qrBase64 });
       } catch {
         hub.emit('connection:status', { connected: false });
@@ -160,6 +171,7 @@ async function startBaileys() {
 
     if (connection === 'open') {
       console.log('[Worker] Connected ✓');
+      lastQrBase64 = null;
       hub.emit('connection:status', { connected: true });
     }
 
