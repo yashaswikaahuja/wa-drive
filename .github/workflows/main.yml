@@ -1,0 +1,16 @@
+name: Keep Render Services Awake
+  
+  on:
+    schedule:
+      - cron: '*/14 * * * *'
+    workflow_dispatch:
+  
+  jobs:
+    ping:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Ping hub
+          run: curl --fail --silent --show-error "https://wa-drive-docker.onrender.com/api/health"
+  
+        - name: Ping worker
+          run: curl --fail --silent --show-error "https://wa-worker-u7l6.onrender.com"
