@@ -146,7 +146,7 @@ async function startBaileys() {
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', ({ connection, lastDisconnect, qr }) => {
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       console.log('[Worker] QR received — scan with WhatsApp:');
       qrcodeTerminal.generate(qr, { small: true });
