@@ -190,6 +190,7 @@ async function startBaileys() {
 
       const jid   = msg.key.remoteJid ?? '';
       const phone = jid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/[^0-9+]/g, '');
+      console.log(`[Worker] Resolved phone: ${phone} (from jid: ${jid})`);
       const pushName = msg.pushName ?? `Guest ${phone.slice(-4)}`;
 
       // Resolve profile pic
