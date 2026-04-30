@@ -1,61 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Alert, Avatar, Badge, Button, Card, Col, Empty,
-  Image, Input, List, Popconfirm, Row, Space, Typography, notification,
-} from 'antd';
-import {
-  DeleteOutlined, DownloadOutlined, FileOutlined, FilePdfOutlined,
-  PlayCircleOutlined, PrinterOutlined, ReloadOutlined,
-  ScissorOutlined, SearchOutlined, SoundOutlined, UserOutlined,
-} from '@ant-design/icons';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
+import { notification } from 'antd';
 import { useWhatsAppStore } from '../stores/whatsappStore';
 import type { WhatsAppFile } from '../types/whatsapp';
 import { deleteWhatsAppFile, fetchWhatsAppFiles, fetchWhatsAppStatus, normalizeWhatsAppFile } from '../services/whatsapp.api';
 import { API_BASE_URL, SOCKET_URL, getPreviewUrl } from '../utils/helpers';
-import GoogleDriveLogin from '../components/GoogleDriveLogin';
+import { Header } from '../components/dashboard/header';
+import { FilterBar, type FileFilter } from '../components/dashboard/filter-bar';
+import { FilesGrid } from '../components/dashboard/files-grid';
+import { PreviewModal } from '../components/dashboard/preview-modal';
 
-dayjs.extend(relativeTime);
-
-const { Text, Title } = Typography;
-
-const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
-
-function fileExt(name: string | undefined) {
-  return (name ?? '').split('.').pop()?.toLowerCase() ?? '';
-}
-
-function FileIcon({ fileName }: { fileName: string }) {
-  const ext = fileExt(fileName);
-  if (IMAGE_EXTS.has(ext)) return null; // handled by Image component
-  if (ext === 'pdf') return <FilePdfOutlined style={{ fontSize: 48, color: '#ff4d4f' }} />;
-  if (['mp4', '3gp', 'mov', 'avi'].includes(ext)) return <PlayCircleOutlined style={{ fontSize: 48, color: '#1677ff' }} />;
-  if (['mp3', 'ogg', 'wav', 'aac'].includes(ext)) return <SoundOutlined style={{ fontSize: 48, color: '#fa8c16' }} />;
-  return <FileOutlined style={{ fontSize: 48, color: '#8c8c8c' }} />;
-}
-
-function formatTime(ts: string) {
-  const d = dayjs(ts);
-  if (!d.isValid()) return 'Unknown time';
-  return dayjs().diff(d, 'hour') < 24
-    ? d.format('h:mm A')
-    : d.format('MMM D, h:mm A');
-}
-
-const SLIDE_IN_CSS = `
-@keyframes slideIn {
-  from { opacity: 0; transform: translateY(-16px); background: #f6ffed; }
-  to   { opacity: 1; transform: translateY(0);     background: transparent; }
-}
-.new-file-card { animation: slideIn 0.6s ease-out; }
-`;
+const EXT_FILTER = (name: string): FileFilter => {
+  const e = name.split('.').pop()?.toLowerCase() ?? '';
+  if (['jpg','jpeg','png','gif','webp','bmp'].includes(e)) return 'image';
+  if (['mp4','3gp','mov','avi'].includes(e)) return 'video';
+  if (['mp3','ogg','wav','aac'].includes(e)) return 'audio';
+  if (e === 'pdf') return 'pdf';
+  return 'document';
+};
 
 export default function WhatsAppInboxPage() {
-  const navigate = useNavigate();
   const [qrCode, setQrCode] = useState<string | null>(null);
   const qrCodeRef = useRef<string | null>(null);
   const setQrCodeSync = (v: string | null) => { qrCodeRef.current = v; setQrCode(v); };
@@ -63,330 +28,200 @@ export default function WhatsAppInboxPage() {
   const socketRef = useRef<ReturnType<typeof io> | null>(null);
   const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [activeFilter, setActiveFilter] = useState<FileFilter>('all');
+  const [selectedFile, setSelectedFile] = useState<WhatsAppFile | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
   useEffect(() => {
     if (socketRef.current) return;
     const socket = io(SOCKET_URL);
     socketRef.current = socket;
+
     socket.on('connection:status', (s: { connected: boolean; qrCode?: string }) => {
       setConnected(s.connected);
       const newQr = s.connected ? null : (s.qrCode ?? null);
       setQrCodeSync(newQr);
-      // Fallback: if a QR just appeared, schedule a status check in 3 s
       if (newQr) {
         setTimeout(async () => {
-          const isConnected = await fetchWhatsAppStatus().catch(() => false);
-          if (isConnected) { useWhatsAppStore.getState().setConnected(true); setQrCodeSync(null); }
+          const ok = await fetchWhatsAppStatus().catch(() => false);
+          if (ok) { useWhatsAppStore.getState().setConnected(true); setQrCodeSync(null); }
         }, 3000);
       }
     });
+
     socket.on('new_whatsapp_file', (file: WhatsAppFile) => {
       newIds.current.add(file.id);
       addFile(file);
-      notification.success({
-        message: 'New file received',
-        description: `${file.customerName ?? 'Unknown customer'}: ${file.fileName ?? 'New file'}`,
-        placement: 'topRight',
-        duration: 4,
-      });
+      notification.success({ message: 'New file received', description: `${file.customerName}: ${file.fileName}`, placement: 'topRight', duration: 4 });
       setTimeout(() => newIds.current.delete(file.id), 3000);
     });
 
     load();
     loadDriveFiles();
 
-    // Poll for QR code + connection status when disconnected.
-    // Uses a self-rescheduling timeout so frequency can vary:
-    //   - 2 s while a QR code is visible (user is about to scan)
-    //   - 5 s otherwise
     let qrPollTimer: ReturnType<typeof setTimeout>;
     async function pollQr() {
       if (!useWhatsAppStore.getState().connected) {
         try {
-          const [{ data }, isConnected] = await Promise.all([
+          const [{ data }, ok] = await Promise.all([
             axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`),
             fetchWhatsAppStatus(),
           ]);
-          useWhatsAppStore.getState().setConnected(isConnected);
-          if (isConnected) {
-            setQrCodeSync(null);
-          } else if (data.qrCode) {
-            setQrCodeSync(data.qrCode);
-          }
+          useWhatsAppStore.getState().setConnected(ok);
+          if (ok) setQrCodeSync(null);
+          else if (data.qrCode) setQrCodeSync(data.qrCode);
         } catch { /* ignore */ }
       }
-      // Reschedule: faster while QR is shown
-      const delay = useWhatsAppStore.getState().connected ? 5000
-        : (qrCodeRef.current ? 2000 : 5000);
-      qrPollTimer = setTimeout(pollQr, delay);
+      qrPollTimer = setTimeout(pollQr, qrCodeRef.current ? 2000 : 5000);
     }
-    qrPollTimer = setTimeout(pollQr, 500); // start almost immediately
+    qrPollTimer = setTimeout(pollQr, 500);
 
-    // Poll Drive files every 10 seconds
-    const poll = setInterval(loadDriveFiles, 10000);
-
-    return () => { socket.disconnect(); socketRef.current = null; clearInterval(poll); clearTimeout(qrPollTimer); };
+    const drivePoll = setInterval(loadDriveFiles, 10000);
+    return () => { socket.disconnect(); socketRef.current = null; clearInterval(drivePoll); clearTimeout(qrPollTimer); };
   }, []);
 
   async function loadDriveFiles() {
     try {
       const { data } = await axios.get<unknown[]>(`${API_BASE_URL}/drive/files`);
-      const incoming = data
-        .map((file) => normalizeWhatsAppFile(file as Parameters<typeof normalizeWhatsAppFile>[0]))
-        .filter((file): file is WhatsAppFile => file !== null);
+      const incoming = data.map(f => normalizeWhatsAppFile(f as Parameters<typeof normalizeWhatsAppFile>[0])).filter((f): f is WhatsAppFile => f !== null);
       if (!incoming.length) return;
-
-      // Use fileName as merge key — Drive IDs differ from socket-generated IDs
       const current = useWhatsAppStore.getState().files;
       const byName = new Map(current.map(f => [f.fileName, f]));
-
       const merged = incoming.map(f => {
         const ex = byName.get(f.fileName);
         if (!ex) return f;
-        return {
-          ...f,
-          id: ex.id, // keep original id
-          customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : f.customerName,
-          profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null,
-        };
+        return { ...f, id: ex.id, customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : f.customerName, profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null };
       });
-
-      useWhatsAppStore.getState().setFiles(
-        merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      );
+      useWhatsAppStore.getState().setFiles(merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
     } catch { /* ignore */ }
   }
 
   async function load() {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const [fetched, connected] = await Promise.all([fetchWhatsAppFiles(), fetchWhatsAppStatus()]);
-      // Only overwrite if backend returned files; otherwise keep persisted local files
+      const [fetched, ok] = await Promise.all([fetchWhatsAppFiles(), fetchWhatsAppStatus()]);
       if (fetched.length > 0) setFiles(fetched);
-      setConnected(connected);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
+      setConnected(ok);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
+    finally { setLoading(false); }
   }
 
-  async function handleDelete(id: string) {
-    if (!id) return;
-    try {
-      // Try Drive delete first (Drive IDs are long alphanumeric, not UUID)
-      await axios.delete(`${API_BASE_URL}/drive/files/${id}`);
-    } catch {
-      // Fall back to local file delete
-      try { await deleteWhatsAppFile(id); } catch { /* ignore */ }
+  const handleDelete = useCallback(async (file: WhatsAppFile) => {
+    try { await axios.delete(`${API_BASE_URL}/drive/files/${file.id}`); } catch {
+      try { await deleteWhatsAppFile(file.id); } catch { /* ignore */ }
     }
-    removeFile(id);
+    removeFile(file.id);
+    if (selectedFile?.id === file.id) setIsPreviewOpen(false);
     notification.success({ message: 'File deleted', placement: 'topRight' });
-  }
+  }, [selectedFile]);
 
-  function handlePrint(fileUrl: string) {
-    const win = window.open(getPreviewUrl(fileUrl), '_blank');
+  const handleDownload = useCallback((file: WhatsAppFile) => {
+    const a = document.createElement('a');
+    a.href = getPreviewUrl(file.fileUrl); a.download = file.fileName; a.target = '_blank';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }, []);
+
+  const handlePrint = useCallback((file: WhatsAppFile) => {
+    const win = window.open(getPreviewUrl(file.fileUrl), '_blank');
     win?.addEventListener('load', () => win.print());
-  }
+  }, []);
 
-  const visibleFiles = (Array.isArray(files) ? files : [])
-    .map((file) => normalizeWhatsAppFile(file))
-    .filter((file): file is WhatsAppFile => file !== null);
+  const visibleFiles = useMemo(() => {
+    let result = (Array.isArray(files) ? files : []).map(f => normalizeWhatsAppFile(f)).filter((f): f is WhatsAppFile => f !== null);
+    if (activeFilter !== 'all') result = result.filter(f => EXT_FILTER(f.fileName) === activeFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(f => f.fileName.toLowerCase().includes(q) || f.customerName.toLowerCase().includes(q) || f.customerId.includes(q));
+    }
+    return result;
+  }, [files, activeFilter, searchQuery]);
+
+  const fileCounts = useMemo(() => {
+    const all = (Array.isArray(files) ? files : []).map(f => normalizeWhatsAppFile(f)).filter((f): f is WhatsAppFile => f !== null);
+    const c: Record<FileFilter, number> = { all: all.length, image: 0, video: 0, audio: 0, pdf: 0, document: 0 };
+    all.forEach(f => { c[EXT_FILTER(f.fileName)]++; });
+    return c;
+  }, [files]);
+
+  const currentIndex = useMemo(() => selectedFile ? visibleFiles.findIndex(f => f.id === selectedFile.id) : -1, [selectedFile, visibleFiles]);
+
+  const handlePreview = useCallback((file: WhatsAppFile) => { setSelectedFile(file); setIsPreviewOpen(true); }, []);
+  const handleClosePreview = useCallback(() => { setIsPreviewOpen(false); setTimeout(() => setSelectedFile(null), 200); }, []);
 
   return (
-    <>
-      <style>{SLIDE_IN_CSS}</style>
-      <div style={{ padding: 24, background: '#f5f5f5', minHeight: '100vh' }}>
-        <Card
-          variant="outlined"
-          style={{ borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
-        >
-          {/* Header */}
-          <Row justify="space-between" align="middle" style={{ marginBottom: 8 }}>
-            <Col>
-              <Space align="center" size={12}>
-                <Title level={3} style={{ margin: 0 }}>WhatsApp Inbox</Title>
-                <Badge status={connected ? 'success' : 'error'} />
-              </Space>
-              <Text type="secondary" style={{ display: 'block', marginTop: 2 }}>
-                Real-time customer files from WhatsApp
-              </Text>
-            </Col>
-            <Col>
-              <Space>
-                <Text type="secondary">{visibleFiles.length} file{visibleFiles.length !== 1 ? 's' : ''}</Text>
-                <Input prefix={<SearchOutlined />} placeholder="Search…" style={{ width: 180 }} disabled />
-                <GoogleDriveLogin />
-                <Button icon={<ReloadOutlined />} onClick={load} loading={loading}>Refresh</Button>
-              </Space>
-            </Col>
-          </Row>
+    <div className="min-h-screen bg-background">
+      <style>{`@keyframes slideDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }`}</style>
 
-          {/* Status bar */}
-          <Alert
-            type={connected ? 'success' : 'warning'}
-            message={
-              <span>
-                {connected ? 'Connected – receiving files' : 'Disconnected. Scan QR code below to connect.'}
-                {connected && (
-                  <Button
-                    size="small"
-                    danger
-                    style={{ marginLeft: 12 }}
-                    onClick={async () => {
-                      await axios.post('/api/whatsapp/logout');
-                      setConnected(false);
-                    }}
-                  >
-                    Logout WhatsApp
-                  </Button>
-                )}
-              </span>
-            }
-            showIcon
-            style={{ marginBottom: qrCode ? 8 : 16, borderRadius: 8 }}
-          />
-          {!connected && (
-            <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              {qrCode ? (
-                <>
-                  <img src={qrCode} alt="WhatsApp QR Code" style={{ width: 220, height: 220, borderRadius: 8, border: '1px solid #f0f0f0', display: 'block', margin: '0 auto 8px' }} />
-                  <div style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>Open WhatsApp → Linked Devices → Link a Device</div>
-                </>
-              ) : (
-                <div style={{ color: '#888', fontSize: 13, marginBottom: 8 }}>QR code not available yet...</div>
-              )}
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={async () => {
-                  setQrCodeSync(null);
-                  await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => {});
-                  // Poll immediately
-                  setTimeout(async () => {
-                    try {
-                      const { data } = await axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`);
-                      if (data.qrCode) setQrCodeSync(data.qrCode);
-                    } catch { /* ignore */ }
-                  }, 3000);
-                }}
-              >
-                Refresh QR
-              </Button>
+      <Header
+        fileCount={visibleFiles.length}
+        isConnected={connected}
+        driveConnected={false}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onRefresh={load}
+        onDisconnect={async () => { await axios.post(`${API_BASE_URL}/whatsapp/logout`).catch(() => {}); setConnected(false); }}
+        loading={loading}
+      />
+
+      {/* QR / status banner */}
+      {!connected && (
+        <div className="flex flex-col items-center justify-center py-10 px-4">
+          <div className="bg-card border border-border rounded-xl p-8 flex flex-col items-center gap-4 max-w-sm w-full">
+            <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+              <span className="text-accent text-xl">📱</span>
             </div>
-          )}
+            <div className="text-center">
+              <p className="text-foreground font-semibold text-lg">Link your WhatsApp</p>
+              <p className="text-muted-foreground text-sm mt-1">Scan the QR code to start receiving customer files</p>
+            </div>
+            {qrCode ? (
+              <img src={qrCode} alt="QR Code" className="w-52 h-52 rounded-lg border border-border bg-white p-2" />
+            ) : (
+              <div className="w-52 h-52 rounded-lg border border-border bg-secondary/50 flex items-center justify-center">
+                <p className="text-muted-foreground text-sm">Loading QR...</p>
+              </div>
+            )}
+            <p className="text-muted-foreground text-xs text-center">Open WhatsApp → Linked Devices → Link a Device</p>
+            <button onClick={async () => { setQrCodeSync(null); await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => {}); }}
+              className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-3 py-1.5 transition-colors">
+              Refresh QR
+            </button>
+          </div>
+        </div>
+      )}
 
-          {error && (
-            <Alert type="error" message={error} showIcon style={{ marginBottom: 16, borderRadius: 8 }} />
-          )}
+      {connected && (
+        <div className="mx-4 lg:mx-6 mt-4 px-4 py-2 bg-accent/10 border border-accent/20 rounded-lg text-sm text-accent flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+          WhatsApp connected — receiving files in real time
+        </div>
+      )}
 
-          {/* File list */}
-          <List
-            loading={loading}
-            dataSource={visibleFiles}
-            locale={{ emptyText: (
-              <Empty
-                description={
-                  <Text type="secondary">
-                    No files received yet.<br />Ask customers to send files via WhatsApp.
-                  </Text>
-                }
-              />
-            )}}
-            renderItem={(file) => {
-              const isImg = IMAGE_EXTS.has(fileExt(file.fileName));
-              const isNew = newIds.current.has(file.id);
-              const previewUrl = getPreviewUrl(file.fileUrl);
-              return (
-                <List.Item style={{ padding: '12px 0' }}>
-                  <Card
-                    hoverable
-                    className={isNew ? 'new-file-card' : ''}
-                    style={{ width: '100%', borderRadius: 10 }}
-                    styles={{ body: { padding: '12px 16px' } }}
-                  >
-                    <Row align="middle" gutter={16} wrap={false}>
-                      {/* Thumbnail */}
-                      <Col flex="88px">
-                        <div style={{
-                          width: 80, height: 80, borderRadius: 8, overflow: 'hidden',
-                          background: '#fafafa', border: '1px solid #f0f0f0',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          {isImg ? (
-                            <Image
-                              src={previewUrl}
-                              width={80}
-                              height={80}
-                              style={{ objectFit: 'cover' }}
-                              preview={{ src: previewUrl }}
-                              fallback="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs="
-                            />
-                          ) : (
-                            <FileIcon fileName={file.fileName} />
-                          )}
-                        </div>
-                      </Col>
+      {error && (
+        <div className="mx-4 lg:mx-6 mt-4 px-4 py-2 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">{error}</div>
+      )}
 
-                      {/* Info */}
-                      <Col flex="auto" style={{ minWidth: 0 }}>
-                        <Text strong style={{ fontSize: 15, display: 'block' }} ellipsis>
-                          {file.fileName}
-                        </Text>
-                        <Space size={8} style={{ marginTop: 4 }}>
-                          <Avatar
-                            src={file.profilePicUrl ?? undefined}
-                            icon={!file.profilePicUrl && <UserOutlined />}
-                            size={22}
-                          />
-                          <Text type="secondary" style={{ fontSize: 13 }}>{file.customerName}</Text>
-                          <Text type="secondary" style={{ fontSize: 13 }}>·</Text>
-                          <Text type="secondary" style={{ fontSize: 13 }}>{file.customerId}</Text>
-                        </Space>
-                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
-                          {formatTime(file.timestamp)}
-                        </Text>
-                      </Col>
+      <main className="p-4 lg:p-6">
+        <div className="mb-6">
+          <FilterBar activeFilter={activeFilter} onFilterChange={setActiveFilter} counts={fileCounts} />
+        </div>
+        <FilesGrid
+          files={visibleFiles} newIds={newIds.current} viewMode={viewMode}
+          onPreview={handlePreview} onDownload={handleDownload} onPrint={handlePrint} onDelete={handleDelete}
+        />
+      </main>
 
-                      {/* Actions */}
-                      <Col flex="none">
-                        <Space size={6} wrap>
-                          <a href={previewUrl} download={file.fileName}>
-                            <Button size="small" icon={<DownloadOutlined />}>Download</Button>
-                          </a>
-                          <Button
-                            size="small"
-                            type="primary"
-                            ghost
-                            icon={<ScissorOutlined />}
-                            onClick={() => navigate('/photo-stitch', { state: { file } })}
-                          >
-                            Photo Stitch
-                          </Button>
-                          <Button
-                            size="small"
-                            icon={<PrinterOutlined />}
-                            onClick={() => handlePrint(file.fileUrl)}
-                          >
-                            Print
-                          </Button>
-                          <Popconfirm
-                            title="Delete this file?"
-                            okText="Delete"
-                            okType="danger"
-                            onConfirm={() => handleDelete(file.id)}
-                          >
-                            <Button size="small" danger icon={<DeleteOutlined />}>Delete</Button>
-                          </Popconfirm>
-                        </Space>
-                      </Col>
-                    </Row>
-                  </Card>
-                </List.Item>
-              );
-            }}
-          />
-        </Card>
-      </div>
-    </>
+      <PreviewModal
+        file={selectedFile} isOpen={isPreviewOpen} onClose={handleClosePreview}
+        onDownload={handleDownload} onPrint={handlePrint}
+        onPrevious={() => currentIndex > 0 && setSelectedFile(visibleFiles[currentIndex - 1])}
+        onNext={() => currentIndex < visibleFiles.length - 1 && setSelectedFile(visibleFiles[currentIndex + 1])}
+        hasPrevious={currentIndex > 0} hasNext={currentIndex < visibleFiles.length - 1}
+      />
+    </div>
   );
 }
