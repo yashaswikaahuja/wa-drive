@@ -219,5 +219,9 @@ async function startBaileys() {
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
+// Minimal HTTP server so Render's health check doesn't mark this as failed
+import { createServer } from 'http';
+createServer((_req, res) => res.end('ok')).listen(process.env['PORT'] ?? 3001);
+
 connectHub();
 startBaileys().catch((e) => { console.error('[Worker] Fatal:', e); process.exit(1); });
