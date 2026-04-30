@@ -1,16 +1,10 @@
-import { Router, Request, Response } from 'express';
-import { whatsappService } from '../../services/whatsapp.service.js';
-import { getWhatsAppFiles, deleteFile } from '../../db.js';
+import { Router } from 'express';
+import { getHubStatus } from '../../server.js';
 
 const router = Router();
 
-/**
- * GET /api/whatsapp/status
- * Get WhatsApp connection status
- */
-router.get('/status', (req: Request, res: Response) => {
-  const connected = whatsappService.getStatus();
-  res.json({ connected });
+router.get('/status', (_req, res) => {
+  res.json({ connected: getHubStatus().connected });
 });
 
 export default router;
