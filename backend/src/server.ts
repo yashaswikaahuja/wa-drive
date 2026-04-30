@@ -93,8 +93,9 @@ app.get('/api/drive/files', async (_req, res) => {
   } catch { res.json([]); }
 });
 
-// Reinit: tell worker to reconnect (worker handles its own lifecycle)
+// Reinit: tell worker to generate a fresh QR
 app.post('/api/whatsapp/reinit', (_req, res) => {
+  lastQrCode = null; // clear stale QR immediately
   workerSocket?.emit('worker:reinit');
   res.json({ ok: true });
 });

@@ -46,8 +46,6 @@ function connectHub() {
   hub.on('connect', () => {
     console.log('[Worker] Hub connected');
     hub.emit('worker:register', { secret: WORKER_SECRET });
-    // Re-emit current state so hub is in sync after reconnect
-    if (lastQrBase64) hub.emit('connection:status', { connected: false, qrCode: lastQrBase64 });
   });
   hub.on('disconnect',    (r) => console.log('[Worker] Hub disconnected:', r));
   hub.on('connect_error', (e) => console.error('[Worker] Hub error:', e.message));
@@ -137,7 +135,15 @@ async function processMedia(
 
 // ── Baileys WhatsApp client ──────────────────────────────────────────────────
 
+let currentSock: WASocket | null = null;
+
 async function startBaileys() {
+  // Close previous socket if reinit was called
+  if (currentSock) {
+    try { currentSock.end(undefined); } catch { /* ignore */ }
+    currentSock = null;
+  }
+
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
   console.log(`[Worker] Baileys version: ${version.join('.')}`);
@@ -149,10 +155,11 @@ async function startBaileys() {
       keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
     },
     logger: pino({ level: 'silent' }),
-    printQRInTerminal: false, // we handle it manually
+    printQRInTerminal: false,
     browser: ['CyberControl', 'Chrome', '1.0.0'],
     syncFullHistory: false,
   });
+  currentSock = sock;
 
   sock.ev.on('creds.update', saveCreds);
 
