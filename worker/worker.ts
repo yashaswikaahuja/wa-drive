@@ -9,6 +9,7 @@ import makeWASocket, {
 } from '@whiskeysockets/baileys';
 import type { WASocket, BaileysEventMap } from '@whiskeysockets/baileys';
 import qrcodeTerminal from 'qrcode-terminal';
+import qrcode from 'qrcode';
 import { io as ioClient, Socket } from 'socket.io-client';
 import { google } from 'googleapis';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -149,7 +150,12 @@ async function startBaileys() {
     if (qr) {
       console.log('[Worker] QR received — scan with WhatsApp:');
       qrcodeTerminal.generate(qr, { small: true });
-      hub.emit('connection:status', { connected: false, qrCode: qr });
+      try {
+        const qrBase64 = await qrcode.toDataURL(qr);
+        hub.emit('connection:status', { connected: false, qrCode: qrBase64 });
+      } catch {
+        hub.emit('connection:status', { connected: false });
+      }
     }
 
     if (connection === 'open') {

@@ -129,15 +129,11 @@ io.on('connection', (socket) => {
     if (driveAccessToken) socket.emit('drive:token', driveAccessToken);
   });
 
-  // Worker → hub: QR code (hub stores it for polling clients)
-  socket.on('worker:qr', ({ qr }: { qr: string }) => {
-    lastQrCode = qr; // raw QR string; frontend polls /api/whatsapp/qr for base64
-  });
-
   // Worker → hub: connection status change → broadcast to all dashboard clients
   socket.on('connection:status', (payload: { connected: boolean; qrCode?: string }) => {
     workerConnected = payload.connected;
     if (payload.connected) lastQrCode = null;
+    else if (payload.qrCode) lastQrCode = payload.qrCode;
     io.emit('connection:status', payload);
   });
 
