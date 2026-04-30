@@ -3,10 +3,8 @@
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "key": "Cross-Origin-Opener-Policy",
-          "value": "unsafe-none"
-        }
+        { "key": "Cross-Origin-Opener-Policy", "value": "unsafe-none" },
+        { "key": "Content-Security-Policy", "value": "frame-src https://drive.google.com https://docs.google.com;" }
       ]
     }
   ],

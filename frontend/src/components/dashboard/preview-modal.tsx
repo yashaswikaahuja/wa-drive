@@ -62,7 +62,9 @@ export function PreviewModal({ file, isOpen, onClose, onDownload, onPrint, onPre
     if (type === 'video') {
       const src = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : previewUrl;
       return driveId ? (
-        <iframe src={src} className="w-full aspect-video rounded-lg border-0" allow="autoplay" />
+        <iframe src={src} className="w-full aspect-video rounded-lg border-0" 
+          allow="autoplay; fullscreen" allowFullScreen 
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms" />
       ) : (
         <video src={src} controls autoPlay className="w-full aspect-video rounded-lg bg-black" />
       );
