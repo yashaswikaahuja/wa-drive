@@ -10,6 +10,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY . .
+# Pre-populate the WA Web version cache so whatsapp-web.js doesn't need a remote fetch
+RUN mkdir -p .wwebjs_cache && \
+    cp src/assets/wa-web.html .wwebjs_cache/2.3000.1038411376.html
 RUN npm run build
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

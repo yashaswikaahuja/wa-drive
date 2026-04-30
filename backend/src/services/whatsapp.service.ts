@@ -54,7 +54,7 @@ export class WhatsAppService {
     const isDocker = process.env['PUPPETEER_EXECUTABLE_PATH'];
     this.client = new Client({
       authStrategy: isDocker ? new NoAuth() : new LocalAuth({ clientId: 'cybercafe_main' }),
-      webVersionCache: { type: 'remote', remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1023141488.html' },
+      webVersionCache: { type: 'local', path: resolve(__dirname, '../../.wwebjs_cache') },
       puppeteer: {
         headless: true,
         executablePath: process.env['PUPPETEER_EXECUTABLE_PATH'] || undefined,
@@ -62,7 +62,7 @@ export class WhatsAppService {
           '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
           '--disable-accelerated-2d-canvas', '--no-first-run', '--no-zygote',
           '--disable-gpu', '--disable-extensions', '--mute-audio',
-          '--js-flags=--max-old-space-size=256',
+          '--js-flags=--max-old-space-size=512',
           '--remote-debugging-port=0',
         ],
         timeout: 60000,
@@ -85,6 +85,14 @@ export class WhatsAppService {
       this.isConnected = true;
       this.lastQrCode = null;
       this.io?.emit('connection:status', { connected: true });
+    });
+
+    this.client.on('auth_failure', (msg: string) => {
+      console.error('[WhatsApp] Auth failure:', msg);
+      this.isConnected = false;
+      this.io?.emit('connection:status', { connected: false });
+      // Restart after short delay so a new QR is generated
+      setTimeout(() => this.init().catch(console.error), 5000);
     });
 
     this.client.on('ready', () => {
