@@ -223,5 +223,10 @@ async function startBaileys() {
 import { createServer } from 'http';
 createServer((_req, res) => res.end('ok')).listen(process.env['PORT'] ?? 3001);
 
+// Keep hub awake by pinging it every 10 minutes
+setInterval(() => {
+  fetch(`${HUB_URL}/api/health`).catch(() => {});
+}, 10 * 60 * 1000);
+
 connectHub();
 startBaileys().catch((e) => { console.error('[Worker] Fatal:', e); process.exit(1); });
