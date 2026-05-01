@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.16",
-    "dotenv": "^16.0.0",
+    "dotenv": "^16.6.1",
     "googleapis": "^171.0.0",
     "pino": "^9.0.0",
     "qrcode": "^1.5.4",
