@@ -7,15 +7,12 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   proto,
 } from '@whiskeysockets/baileys';
-import type { WASocket, BaileysEventMap } from '@whiskeysockets/baileys';
+import type { WASocket } from '@whiskeysockets/baileys';
 import qrcodeTerminal from 'qrcode-terminal';
 import qrcode from 'qrcode';
 import { io as ioClient, Socket } from 'socket.io-client';
-import { google } from 'googleapis';
-import { writeFileSync, mkdirSync } from 'fs';
-import { join, dirname, resolve } from 'path';
+import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { Readable } from 'stream';
 import pino from 'pino';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +20,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const HUB_URL        = process.env['HUB_URL']            ?? 'http://localhost:3000';
 const WORKER_SECRET  = process.env['WORKER_SECRET']       ?? 'worker-secret';
 const AUTH_DIR       = resolve(__dirname, 'auth_info');
-const UPLOADS_ROOT   = resolve(__dirname, 'uploads/customers');
 
 const MIME_TO_EXT: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
@@ -38,8 +34,6 @@ const MIME_TO_EXT: Record<string, string> = {
 // ── Hub connection ───────────────────────────────────────────────────────────
 
 let hub: Socket;
-let driveToken: string | null = process.env['DRIVE_ACCESS_TOKEN'] ?? null;
-let lastQrBase64: string | null = null; // re-emit on hub reconnect
 
 function connectHub() {
   hub = ioClient(HUB_URL, { auth: { secret: WORKER_SECRET }, reconnection: true, reconnectionDelay: 3000 });
@@ -49,25 +43,10 @@ function connectHub() {
   });
   hub.on('disconnect',    (r) => console.log('[Worker] Hub disconnected:', r));
   hub.on('connect_error', (e) => console.error('[Worker] Hub error:', e.message));
-  hub.on('drive:token',   (t: string | null) => { driveToken = t; console.log('[Worker] Drive token updated'); });
   hub.on('worker:reinit', () => {
     console.log('[Worker] Reinit requested — restarting Baileys');
     startBaileys().catch(console.error);
   });
-}
-
-// ── Google Drive helpers ─────────────────────────────────────────────────────
-
-async function getOrCreateFolder(drive: any, name: string, parentId?: string): Promise<string> {
-  const parentClause = parentId ? `'${parentId}' in parents` : `'root' in parents`;
-  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false and ${parentClause}`;
-  const res = await drive.files.list({ q, fields: 'files(id)', spaces: 'drive', pageSize: 1 });
-  if (res.data.files?.length) return res.data.files[0].id!;
-  const f = await drive.files.create({
-    requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId ?? 'root'] },
-    fields: 'id',
-  });
-  return f.data.id!;
 }
 
 // ── Media processing ─────────────────────────────────────────────────────────
@@ -88,49 +67,40 @@ async function processMedia(
   const typeLabel = mimetype.startsWith('image/') ? 'photo' : mimetype.startsWith('video/') ? 'video' : mimetype.startsWith('audio/') ? 'audio' : 'file';
   const fileName = `${phone}_${ts}_${typeLabel}.${ext}`;
 
-  console.log(`[Worker] Processing ${fileName} (${mimetype}, ${buffer.length} bytes)`);
+  console.log(`[Worker] Uploading ${fileName} (${mimetype}, ${buffer.length} bytes) to hub`);
 
-  let fileUrl: string;
+  try {
+    const form = new FormData();
+    form.append('file', new Blob([buffer], { type: mimetype }), fileName);
+    form.append('phone', phone);
+    form.append('senderName', customerName);
+    form.append('profilePicUrl', profilePicUrl ?? '');
+    form.append('mimetype', mimetype);
+    form.append('fileName', fileName);
 
-  if (driveToken) {
-    try {
-      const auth = new google.auth.OAuth2();
-      auth.setCredentials({ access_token: driveToken });
-      const drive = google.drive({ version: 'v3', auth });
+    const res = await fetch(`${HUB_URL}/api/worker/upload`, {
+      method: 'POST',
+      body: form,
+    });
 
-      const customersId = await getOrCreateFolder(drive, 'customers');
-      const phoneId     = await getOrCreateFolder(drive, phone, customersId);
-      const file = await drive.files.create({
-        requestBody: { name: fileName, parents: [phoneId] },
-        media: { mimeType: mimetype, body: Readable.from(buffer) },
-        fields: 'id',
+    if (!res.ok) {
+      const err = await res.text();
+      console.error(`[Worker] Hub upload failed (${res.status}):`, err);
+      // Fallback: emit via socket without Drive URL
+      hub.emit('new_whatsapp_file', {
+        id: `${Date.now()}-${phone}`,
+        customerId: phone, customerName,
+        fileName, fileUrl: '', profilePicUrl,
+        timestamp: new Date().toISOString(),
       });
-      const fileId = file.data.id!;
-      await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' } });
-      fileUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`;
-      drive.files.update({ fileId, requestBody: { description: JSON.stringify({ customerName, profilePicUrl }) } }).catch(() => {});
-      console.log(`[Worker] Uploaded to Drive: ${fileUrl}`);
-    } catch (e) {
-      console.error('[Worker] Drive upload failed, saving locally:', e);
-      const dir = join(UPLOADS_ROOT, phone);
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, fileName), buffer);
-      fileUrl = `/uploads/customers/${phone}/${fileName}`;
+      return;
     }
-  } else {
-    const dir = join(UPLOADS_ROOT, phone);
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, fileName), buffer);
-    fileUrl = `/uploads/customers/${phone}/${fileName}`;
-    console.log(`[Worker] Saved locally: ${fileUrl}`);
-  }
 
-  hub.emit('new_whatsapp_file', {
-    id: `${Date.now()}-${phone}`,
-    customerId: phone, customerName,
-    fileName, fileUrl, profilePicUrl,
-    timestamp: new Date().toISOString(),
-  });
+    const { fileId, fileUrl } = await res.json() as { fileId: string; fileUrl: string };
+    console.log(`[Worker] Uploaded to hub → Drive: ${fileId}`);
+  } catch (e) {
+    console.error('[Worker] Upload error:', e);
+  }
 }
 
 // ── Baileys WhatsApp client ──────────────────────────────────────────────────
