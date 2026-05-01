@@ -12,11 +12,11 @@ import { FilesGrid } from '../components/dashboard/files-grid';
 import { PreviewModal } from '../components/dashboard/preview-modal';
 const EXT_FILTER = (name) => {
     const e = name.split('.').pop()?.toLowerCase() ?? '';
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(e))
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'tiff', 'tif'].includes(e))
         return 'image';
-    if (['mp4', '3gp', 'mov', 'avi'].includes(e))
+    if (['mp4', '3gp', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v'].includes(e))
         return 'video';
-    if (['mp3', 'ogg', 'wav', 'aac'].includes(e))
+    if (['mp3', 'ogg', 'wav', 'aac', 'm4a', 'flac', 'opus', 'wma', 'amr'].includes(e))
         return 'audio';
     if (e === 'pdf')
         return 'pdf';
@@ -90,14 +90,24 @@ export default function WhatsAppInboxPage() {
             if (!incoming.length)
                 return;
             const current = useWhatsAppStore.getState().files;
+            // Index current files by both Drive ID and fileName for merging
+            const byId = new Map(current.map(f => [f.id, f]));
             const byName = new Map(current.map(f => [f.fileName, f]));
             const merged = incoming.map(f => {
-                const ex = byName.get(f.fileName);
+                const ex = byId.get(f.id) ?? byName.get(f.fileName);
                 if (!ex)
                     return f;
-                return { ...f, id: ex.id, customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : f.customerName, profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null };
+                // Prefer socket-received data for name/pic (richer), fall back to Drive description
+                return {
+                    ...f,
+                    customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : f.customerName,
+                    profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null,
+                };
             });
-            useWhatsAppStore.getState().setFiles(merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+            // Also keep any socket-received files not yet in Drive (uploaded < 10s ago)
+            const driveIds = new Set(incoming.map(f => f.id));
+            const socketOnly = current.filter(f => !driveIds.has(f.id) && !merged.find(m => m.fileName === f.fileName));
+            useWhatsAppStore.getState().setFiles([...socketOnly, ...merged].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
         }
         catch { /* ignore */ }
     }

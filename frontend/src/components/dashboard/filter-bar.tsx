@@ -1,14 +1,15 @@
 import { Button } from '../ui/button';
-import { Image, Video, Music, FileText, Layers } from 'lucide-react';
+import { Image, Video, Music, FileText, Layers, File } from 'lucide-react';
 
 export type FileFilter = 'all' | 'image' | 'video' | 'audio' | 'pdf' | 'document';
 
 const filters: { type: FileFilter; label: string; icon: React.ReactNode }[] = [
-  { type: 'all', label: 'All', icon: <Layers className="w-4 h-4" /> },
-  { type: 'image', label: 'Images', icon: <Image className="w-4 h-4" /> },
-  { type: 'video', label: 'Videos', icon: <Video className="w-4 h-4" /> },
-  { type: 'audio', label: 'Audio', icon: <Music className="w-4 h-4" /> },
-  { type: 'pdf', label: 'PDFs', icon: <FileText className="w-4 h-4" /> },
+  { type: 'all',      label: 'All',       icon: <Layers   className="w-4 h-4" /> },
+  { type: 'image',    label: 'Images',    icon: <Image    className="w-4 h-4" /> },
+  { type: 'video',    label: 'Videos',    icon: <Video    className="w-4 h-4" /> },
+  { type: 'audio',    label: 'Audio',     icon: <Music    className="w-4 h-4" /> },
+  { type: 'pdf',      label: 'PDFs',      icon: <FileText className="w-4 h-4" /> },
+  { type: 'document', label: 'Documents', icon: <File     className="w-4 h-4" /> },
 ];
 
 interface FilterBarProps {

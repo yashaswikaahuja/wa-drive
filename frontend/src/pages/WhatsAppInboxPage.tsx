@@ -13,9 +13,9 @@ import { PreviewModal } from '../components/dashboard/preview-modal';
 
 const EXT_FILTER = (name: string): FileFilter => {
   const e = name.split('.').pop()?.toLowerCase() ?? '';
-  if (['jpg','jpeg','png','gif','webp','bmp'].includes(e)) return 'image';
-  if (['mp4','3gp','mov','avi'].includes(e)) return 'video';
-  if (['mp3','ogg','wav','aac'].includes(e)) return 'audio';
+  if (['jpg','jpeg','png','gif','webp','bmp','svg','heic','heif','tiff','tif'].includes(e)) return 'image';
+  if (['mp4','3gp','mov','avi','mkv','webm','flv','wmv','m4v'].includes(e)) return 'video';
+  if (['mp3','ogg','wav','aac','m4a','flac','opus','wma','amr'].includes(e)) return 'audio';
   if (e === 'pdf') return 'pdf';
   return 'document';
 };
