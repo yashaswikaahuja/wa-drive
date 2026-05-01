@@ -47,7 +47,7 @@ export function PreviewModal({ file, isOpen, onClose, onDownload, onPrint, onPre
             return (_jsx("div", { className: "flex items-center justify-center bg-black/20 rounded-lg overflow-hidden min-h-[300px]", children: _jsx("img", { src: previewUrl, alt: file.fileName, className: "max-w-full max-h-[60vh] object-contain rounded" }) }));
         if (type === 'video') {
             const src = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : previewUrl;
-            return driveId ? (_jsx("iframe", { src: src, className: "w-full aspect-video rounded-lg border-0", allow: "autoplay" })) : (_jsx("video", { src: src, controls: true, autoPlay: true, className: "w-full aspect-video rounded-lg bg-black" }));
+            return driveId ? (_jsx("iframe", { src: src, className: "w-full aspect-video rounded-lg border-0", allow: "autoplay; fullscreen", allowFullScreen: true, sandbox: "allow-same-origin allow-scripts allow-popups allow-forms" })) : (_jsx("video", { src: src, controls: true, autoPlay: true, className: "w-full aspect-video rounded-lg bg-black" }));
         }
         if (type === 'audio') {
             const src = driveId ? `https://drive.google.com/uc?export=download&id=${driveId}` : previewUrl;

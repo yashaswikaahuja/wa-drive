@@ -139,7 +139,6 @@ async function startBaileys() {
       qrcodeTerminal.generate(qr, { small: true });
       try {
         const qrBase64 = await qrcode.toDataURL(qr);
-        lastQrBase64 = qrBase64;
         hub.emit('connection:status', { connected: false, qrCode: qrBase64 });
       } catch {
         hub.emit('connection:status', { connected: false });
@@ -148,7 +147,6 @@ async function startBaileys() {
 
     if (connection === 'open') {
       console.log('[Worker] Connected ✓');
-      lastQrBase64 = null;
       hub.emit('connection:status', { connected: true });
     }
 
