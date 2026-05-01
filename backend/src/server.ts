@@ -132,12 +132,11 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
   try {
     const customersId = await findOrCreateFolder(drive, 'customers');
     const phoneId     = await findOrCreateFolder(drive, phone, customersId);
-    const waId        = await findOrCreateFolder(drive, 'whatsapp', phoneId);
 
     const file = await drive.files.create({
       requestBody: {
         name: fileName,
-        parents: [waId],
+        parents: [phoneId],
         description: JSON.stringify({ customerName: senderName, profilePicUrl: profilePicUrl || null }),
       },
       media: { mimeType: mimetype, body: Readable.from(req.file.buffer) },
