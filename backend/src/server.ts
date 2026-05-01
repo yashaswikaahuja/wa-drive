@@ -1,12 +1,18 @@
 import express from 'express';
+import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { google } from 'googleapis';
+import multer from 'multer';
+import { Readable } from 'stream';
 import whatsappRoutes from './api/routes/whatsapp.routes.js';
 import filesRoutes from './api/routes/files.routes.js';
 
 const WORKER_SECRET = process.env['WORKER_SECRET'] ?? 'worker-secret';
+const PORT = Number(process.env['PORT'] ?? 3000);
 
 const app = express();
+const httpServer = createServer(app);
+const io = new SocketIOServer(httpServer, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -19,10 +25,11 @@ app.use(express.json());
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/files', filesRoutes);
 
-// ── Hub state (set by worker via socket) ────────────────────────────────────
+// ── Hub state ────────────────────────────────────────────────────────────────
 let workerConnected = false;
 let lastQrCode: string | null = null;
 let driveAccessToken: string | null = null;
+let workerSocket: any = null;
 
 export function getHubStatus() { return { connected: workerConnected, qrCode: lastQrCode }; }
 
@@ -34,10 +41,31 @@ function getDrive() {
   return google.drive({ version: 'v3', auth });
 }
 
+async function findOrCreateFolder(drive: any, name: string, parentId?: string): Promise<string> {
+  const parentClause = parentId ? `'${parentId}' in parents` : `'root' in parents`;
+  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false and ${parentClause}`;
+  const res = await drive.files.list({ q, fields: 'files(id)', spaces: 'drive', pageSize: 1 });
+  if (res.data.files?.length) return res.data.files[0].id!;
+  const f = await drive.files.create({
+    requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId ?? 'root'] },
+    fields: 'id',
+  });
+  return f.data.id!;
+}
+
+function mimeToType(mime: string): string {
+  if (mime.startsWith('image/')) return 'photo';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  if (mime === 'application/pdf') return 'document';
+  return 'file';
+}
+
+// ── Routes ───────────────────────────────────────────────────────────────────
+
 app.post('/api/drive/token', (req, res) => {
   const { accessToken } = req.body as { accessToken: string | null };
   driveAccessToken = accessToken ?? null;
-  // Forward token to worker if connected
   workerSocket?.emit('drive:token', driveAccessToken);
   res.json({ ok: true });
 });
@@ -61,12 +89,10 @@ app.get('/api/drive/files', async (_req, res) => {
     });
     const customersId = folderRes.data.files?.[0]?.id;
     if (!customersId) { res.json([]); return; }
-
     const subfoldersRes = await drive.files.list({
       q: `'${customersId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
       fields: 'files(id,name)',
     });
-
     const allFiles: object[] = [];
     for (const folder of subfoldersRes.data.files ?? []) {
       const r = await drive.files.list({
@@ -93,9 +119,56 @@ app.get('/api/drive/files', async (_req, res) => {
   } catch { res.json([]); }
 });
 
-// Reinit: tell worker to generate a fresh QR
+// ── Worker file upload ────────────────────────────────────────────────────────
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post('/api/worker/upload', upload.single('file') as any, async (req: any, res: any) => {
+  const drive = getDrive();
+  if (!drive) { res.status(401).json({ error: 'Not connected to Drive' }); return; }
+  if (!req.file) { res.status(400).json({ error: 'No file' }); return; }
+
+  const { phone, senderName, profilePicUrl, mimetype, fileName } = req.body as Record<string, string>;
+
+  try {
+    const customersId = await findOrCreateFolder(drive, 'customers');
+    const phoneId     = await findOrCreateFolder(drive, phone, customersId);
+    const waId        = await findOrCreateFolder(drive, 'whatsapp', phoneId);
+
+    const file = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [waId],
+        description: JSON.stringify({ customerName: senderName, profilePicUrl: profilePicUrl || null }),
+      },
+      media: { mimeType: mimetype, body: Readable.from(req.file.buffer) },
+      fields: 'id,webContentLink',
+    });
+
+    const fileId = file.data.id!;
+    await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' } });
+
+    io.emit('new_whatsapp_file', {
+      id: fileId,
+      customerId: phone,
+      customerName: senderName,
+      phoneNumber: phone,
+      fileName,
+      fileUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`,
+      type: mimeToType(mimetype),
+      size: req.file.size,
+      timestamp: new Date().toISOString(),
+      profilePicUrl: profilePicUrl || null,
+    });
+
+    res.json({ fileUrl: file.data.webContentLink, fileId });
+  } catch (e) {
+    console.error('[Hub] Upload failed:', e);
+    res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
 app.post('/api/whatsapp/reinit', (_req, res) => {
-  lastQrCode = null; // clear stale QR immediately
+  lastQrCode = null;
   workerSocket?.emit('worker:reinit');
   res.json({ ok: true });
 });
@@ -111,26 +184,14 @@ app.get('/api/whatsapp/qr', (_req, res) => res.json({ qrCode: lastQrCode }));
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Socket.IO ────────────────────────────────────────────────────────────────
-const PORT = Number(process.env['PORT'] ?? 3000);
-const httpServer = app.listen(PORT, () => {
-  console.log(`[Hub] Running on http://localhost:${PORT}`);
-});
-
-const io = new SocketIOServer(httpServer, { cors: { origin: '*', methods: ['GET', 'POST'] } });
-
-let workerSocket: any = null; // the authenticated worker socket
-
 io.on('connection', (socket) => {
-  // Worker registration
   socket.on('worker:register', ({ secret }: { secret: string }) => {
     if (secret !== WORKER_SECRET) { socket.disconnect(); return; }
     workerSocket = socket;
     console.log('[Hub] Worker registered');
-    // Send current Drive token to worker
     if (driveAccessToken) socket.emit('drive:token', driveAccessToken);
   });
 
-  // Worker → hub: connection status change → broadcast to all dashboard clients
   socket.on('connection:status', (payload: { connected: boolean; qrCode?: string }) => {
     workerConnected = payload.connected;
     if (payload.connected) lastQrCode = null;
@@ -138,12 +199,10 @@ io.on('connection', (socket) => {
     io.emit('connection:status', payload);
   });
 
-  // Worker → hub: new file received → broadcast to all dashboard clients
   socket.on('new_whatsapp_file', (file: object) => {
     io.emit('new_whatsapp_file', file);
   });
 
-  // Dashboard client connects: send current status immediately
   socket.emit('connection:status', { connected: workerConnected, ...(lastQrCode ? { qrCode: lastQrCode } : {}) });
 
   socket.on('disconnect', () => {
@@ -156,4 +215,5 @@ io.on('connection', (socket) => {
   });
 });
 
+httpServer.listen(PORT, () => console.log(`[Hub] Running on http://localhost:${PORT}`));
 process.on('SIGINT', () => httpServer.close(() => process.exit(0)));
