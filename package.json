@@ -17,5 +17,9 @@
   },
   "dependencies": {
     "whatsapp-web.js": "^1.34.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
   }
 }
