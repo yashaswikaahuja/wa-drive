@@ -175,8 +175,21 @@ async function startBaileys() {
       );
       if (!hasMedia) continue;
 
-      const jid   = msg.key.remoteJid ?? '';
-      const phone = jid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/[^0-9+]/g, '');
+      const jid = msg.key.remoteJid ?? '';
+
+      // Resolve real phone: @lid JIDs are temporary IDs, real number is in contact.id._serialized
+      let phone: string;
+      if (jid.endsWith('@lid')) {
+        try {
+          const contact = await sock.getContact(jid);
+          const serialized: string = contact?.id?._serialized ?? '';
+          phone = serialized.replace(/@c\.us|@s\.whatsapp\.net/g, '').replace(/[^0-9+]/g, '');
+        } catch { phone = ''; }
+        if (!phone) phone = jid.replace('@lid', '').replace(/[^0-9+]/g, ''); // numeric fallback
+      } else {
+        phone = jid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/[^0-9+]/g, '');
+      }
+
       console.log(`[Worker] Resolved phone: ${phone} (from jid: ${jid})`);
       const pushName = msg.pushName ?? `Guest ${phone.slice(-4)}`;
 
