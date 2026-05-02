@@ -12,8 +12,16 @@ export async function generateAadhaarLayout(buffers: Buffer[]): Promise<Buffer> 
   if (buffers.length !== 2) throw new Error('Exactly 2 images required');
 
   const [left, right] = await Promise.all([
-    sharp(buffers[0]).resize(IMG_W, IMG_H, { fit: 'cover', position: 'centre' }).jpeg().toBuffer(),
-    sharp(buffers[1]).resize(IMG_W, IMG_H, { fit: 'cover', position: 'centre' }).jpeg().toBuffer(),
+    sharp(buffers[0]).resize(IMG_W, IMG_H, { fit: 'inside', withoutEnlargement: false })
+      .extend({ top: 0, bottom: 0, left: 0, right: 0, background: { r: 255, g: 255, b: 255 } })
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
+      .jpeg().toBuffer(),
+    sharp(buffers[1]).resize(IMG_W, IMG_H, { fit: 'inside', withoutEnlargement: false })
+      .extend({ top: 0, bottom: 0, left: 0, right: 0, background: { r: 255, g: 255, b: 255 } })
+      .flatten({ background: { r: 255, g: 255, b: 255 } })
+      .resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
+      .jpeg().toBuffer(),
   ]);
 
   return sharp({
