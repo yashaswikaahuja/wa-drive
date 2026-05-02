@@ -41,7 +41,10 @@ export default function WhatsAppInboxPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [aadhaarLoading, setAadhaarLoading] = useState(false);
   const [activeSender, setActiveSender] = useState<string | null>(null);
-  const [statusChecked, setStatusChecked] = useState(false); // don't show QR until first status check
+  const [statusChecked, setStatusChecked] = useState(false);
+
+  type QueueItem = { fileName: string; phone: string; status: 'queued' | 'uploading' | 'done' | 'failed'; reason?: string };
+  const [uploadQueue, setUploadQueue] = useState<QueueItem[]>([]); // don't show QR until first status check
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -73,6 +76,20 @@ export default function WhatsAppInboxPage() {
       newIds.current.add(file.id); addFile(file);
       notification.success({ message: `${file.customerName}: ${file.fileName}`, placement: 'topRight', duration: 3 });
       setTimeout(() => newIds.current.delete(file.id), 3000);
+    });
+
+    socket.on('upload:queued', ({ fileName, phone }: { fileName: string; phone: string }) => {
+      setUploadQueue(q => [...q.slice(-19), { fileName, phone, status: 'queued' }]);
+    });
+    socket.on('upload:start', ({ fileName }: { fileName: string }) => {
+      setUploadQueue(q => q.map(i => i.fileName === fileName ? { ...i, status: 'uploading' } : i));
+    });
+    socket.on('upload:done', ({ fileName }: { fileName: string }) => {
+      setUploadQueue(q => q.map(i => i.fileName === fileName ? { ...i, status: 'done' } : i));
+      setTimeout(() => setUploadQueue(q => q.filter(i => i.fileName !== fileName || i.status !== 'done')), 5000);
+    });
+    socket.on('upload:fail', ({ fileName, reason }: { fileName: string; reason: string }) => {
+      setUploadQueue(q => q.map(i => i.fileName === fileName ? { ...i, status: 'failed', reason } : i));
     });
     load(); loadDriveFiles();
     let qrPollTimer: ReturnType<typeof setTimeout>;
@@ -394,48 +411,74 @@ export default function WhatsAppInboxPage() {
           )}
         </div>
 
-        {/* Col 3: Actions panel (secondary) */}
-        <div className="w-56 bg-[#141b2b] border-l border-[#434655]/40 flex flex-col shrink-0 opacity-70 hover:opacity-100 transition-opacity">
-          <div className="p-4 border-b border-[#434655] bg-[#232a3a]">
-            <p className="text-[10px] text-[#8d90a0] uppercase tracking-wider mb-1">Selection</p>
-            <p className="text-lg font-semibold text-[#dce2f7]">{selectedIds.size} File{selectedIds.size !== 1 ? 's' : ''} Selected</p>
-            {selectedIds.size > 0 && <p className="text-xs text-[#8d90a0]">Click files to select</p>}
+        {/* Col 3: Actions panel — Stitch style */}
+        <div className="hidden lg:flex w-[200px] bg-[#0f172a] border-l border-[#334155] flex-col shrink-0">
+          <div className="px-3 py-2 border-b border-[#334155] flex justify-between items-center">
+            <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider">
+              {selectedIds.size > 0 ? `${selectedIds.size} SELECTED` : 'SELECTION'}
+            </span>
           </div>
-          <div className="p-4 flex flex-col gap-2 flex-1">
-            <p className="text-[10px] text-[#8d90a0] uppercase tracking-wider mt-1 mb-1">Primary Workflows</p>
+          <div className="p-2 flex flex-col gap-1.5 flex-1">
             <button onClick={handleAadhaarLayout} disabled={selectedIds.size !== 2 || aadhaarLoading}
-              className="w-full bg-blue-600 disabled:bg-blue-600/30 disabled:cursor-not-allowed text-white py-4 px-3 rounded font-semibold hover:bg-blue-700 transition-colors flex flex-col items-center gap-2">
-              <span className="material-symbols-outlined text-[28px]">layers</span>
-              <span className="text-sm">{aadhaarLoading ? 'Processing…' : selectedIds.size === 2 ? 'Aadhaar Layout' : `Aadhaar Layout (${selectedIds.size}/2)`}</span>
+              className="w-full bg-blue-600 disabled:bg-blue-600/30 disabled:cursor-not-allowed text-white py-2.5 px-2 rounded-sm text-xs font-bold hover:bg-blue-500 transition-colors flex items-center justify-center gap-1.5 h-10">
+              <span className="material-symbols-outlined text-[16px]">badge</span>
+              <span className="uppercase tracking-wide">{aadhaarLoading ? 'Processing…' : 'Print Aadhaar'}</span>
             </button>
             <button disabled={selectedIds.size === 0} onClick={() => { const f = visibleFiles.find(f => selectedIds.has(f.id)); if (f) handlePrint(f); }}
-              className="w-full bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2 px-3 rounded border border-[#434655] text-sm hover:border-[#8d90a0] hover:bg-[#232a3a] transition-colors flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-[18px]">print</span> Print Selected
+              className="w-full bg-[#1e293b] disabled:opacity-40 text-[#f1f5f9] py-1.5 px-2 rounded-sm border border-[#334155] text-[10px] font-semibold hover:bg-[#334155] transition-colors flex items-center justify-center gap-1 uppercase tracking-wide">
+              <span className="material-symbols-outlined text-[12px]">print</span> Print Selected
             </button>
-            <div className="h-px bg-[#434655]/50 my-2" />
-            <p className="text-[10px] text-[#8d90a0] uppercase tracking-wider mb-1">Utility</p>
             <button disabled={selectedIds.size === 0} onClick={() => { visibleFiles.filter(f => selectedIds.has(f.id)).forEach(handleDownload); }}
-              className="w-full bg-transparent disabled:opacity-40 text-[#dce2f7] py-2 px-3 rounded border border-[#434655] text-sm hover:bg-[#2e3545] transition-colors flex items-center justify-center gap-2">
-              <span className="material-symbols-outlined text-[18px]">download</span> Download Selected
+              className="w-full bg-transparent disabled:opacity-40 text-[#f1f5f9] py-1 px-2 rounded-sm text-[10px] font-medium hover:bg-[#1e293b] transition-colors flex items-center justify-center gap-1 uppercase tracking-wide">
+              <span className="material-symbols-outlined text-[12px]">download</span> Download Selected
             </button>
             {selectedIds.size > 0 && (
-              <button onClick={() => setSelectedIds(new Set())} className="w-full text-[#8d90a0] py-1 text-xs hover:text-[#dce2f7] transition-colors">
-                Clear selection
+              <button onClick={() => setSelectedIds(new Set())} className="w-full text-[#ef4444] py-1 text-[9px] font-medium hover:opacity-80 transition-opacity uppercase tracking-wider">
+                Clear Selection
               </button>
             )}
-            <div className="mt-auto flex flex-col gap-2 pt-4">
-              <button onClick={() => { setSelectedIds(new Set(visibleFiles.map(f => f.id))); }}
-                className="w-full text-[#8d90a0] py-2 px-3 rounded border border-[#434655]/50 text-xs hover:text-[#dce2f7] hover:border-[#434655] transition-colors flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-[16px]">done_all</span> Select All ({visibleFiles.length})
+            <div className="mt-auto flex flex-col gap-1 pt-2 border-t border-[#334155]">
+              <button onClick={() => setSelectedIds(new Set(visibleFiles.map(f => f.id)))}
+                className="w-full text-left text-[#94a3b8] hover:text-[#f1f5f9] text-[10px] font-medium py-1 px-1.5 rounded-sm hover:bg-[#1e293b] flex items-center justify-between transition-colors uppercase tracking-wide">
+                Select All ({visibleFiles.length}) <span className="material-symbols-outlined text-[12px]">done_all</span>
               </button>
               <button onClick={() => visibleFiles.forEach(handleDownload)}
-                className="w-full text-[#8d90a0] py-2 px-3 rounded border border-[#434655]/50 text-xs hover:text-[#dce2f7] hover:border-[#434655] transition-colors flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined text-[16px]">archive</span> Download All ({visibleFiles.length})
+                className="w-full text-left text-[#94a3b8] hover:text-[#f1f5f9] text-[10px] font-medium py-1 px-1.5 rounded-sm hover:bg-[#1e293b] flex items-center justify-between transition-colors uppercase tracking-wide">
+                Download All <span className="material-symbols-outlined text-[12px]">folder_zip</span>
               </button>
             </div>
           </div>
         </div>
       </main>
+
+      {/* Queue panel — bottom right, shows recent files */}
+      {uploadQueue.length > 0 && (
+        <div className="fixed bottom-0 right-0 w-[260px] bg-[#0f172a] border border-[#334155] rounded-tl-sm shadow-lg z-50">
+          <div className="px-2 py-1 flex justify-between items-center border-b border-[#334155] bg-[#1e293b]">
+            <span className="text-[10px] font-bold text-[#f1f5f9] flex items-center gap-1 uppercase tracking-wide">
+              <span className={`material-symbols-outlined text-[12px] text-blue-400 ${uploadQueue.some(i => i.status === 'uploading') ? 'animate-spin' : ''}`}>sync</span>
+              Queue ({uploadQueue.length})
+            </span>
+            <button onClick={() => setUploadQueue([])} className="text-[#94a3b8] hover:text-white text-[10px]">✕</button>
+          </div>
+          <div className="flex flex-col font-mono max-h-32 overflow-y-auto">
+            {uploadQueue.slice(-8).map((item, i) => (
+              <div key={i} className="px-2 py-1 flex items-center gap-1.5 border-b border-[#334155]/30 last:border-0">
+                {item.status === 'uploading' && <span className="material-symbols-outlined text-blue-400 text-[10px] animate-spin">sync</span>}
+                {item.status === 'queued'    && <span className="material-symbols-outlined text-[#94a3b8] text-[10px]">schedule</span>}
+                {item.status === 'done'      && <span className="material-symbols-outlined text-[#22c55e] text-[10px]">check_circle</span>}
+                {item.status === 'failed'    && <span className="material-symbols-outlined text-[#ef4444] text-[10px]">error</span>}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[9px] truncate" style={{color: item.status === 'failed' ? '#ef4444' : item.status === 'done' ? '#94a3b8' : '#f1f5f9'}}>
+                    {item.fileName}
+                  </div>
+                  {item.status === 'failed' && <div className="text-[8px] text-[#ef4444]/70">{item.reason}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <PreviewModal
         file={selectedFile} isOpen={isPreviewOpen} onClose={() => { setIsPreviewOpen(false); setTimeout(() => setSelectedFile(null), 200); }}

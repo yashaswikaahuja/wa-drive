@@ -240,6 +240,7 @@ async function startBaileys() {
       const fileName = `${phone}_${ts}_${typeLabel}.${ext}`;
 
       console.log(`[Worker] Queuing ${fileName} (${mimetype}) from ${phone}`);
+      hub.emit('upload:queued', { fileName, phone });
 
       // Capture msg reference for closure — download inside queue task
       const capturedMsg = msg;
@@ -250,11 +251,14 @@ async function startBaileys() {
         const buffer = await downloadWithRetry(capturedMsg);
         if (!buffer) {
           console.error(`[Worker] ✗ FAILED download ${fileName} | phone=${phone} | reason=download failed after 3 attempts`);
+          hub.emit('upload:fail', { fileName, phone, reason: 'Download failed' });
           return;
         }
 
         console.log(`[Worker] Processing ${fileName} (${buffer.length} bytes)`);
+        hub.emit('upload:start', { fileName, phone });
         await uploadWithRetry(buffer, mimetype, fileName, phone, pushName, profilePicUrl);
+        hub.emit('upload:done', { fileName, phone });
       });
     }
   });

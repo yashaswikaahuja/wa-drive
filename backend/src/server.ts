@@ -237,6 +237,12 @@ io.on('connection', (socket) => {
     io.emit('new_whatsapp_file', file);
   });
 
+  // Forward upload queue events to dashboard
+  socket.on('upload:queued', (d: object) => io.emit('upload:queued', d));
+  socket.on('upload:start',  (d: object) => io.emit('upload:start',  d));
+  socket.on('upload:done',   (d: object) => io.emit('upload:done',   d));
+  socket.on('upload:fail',   (d: object) => io.emit('upload:fail',   d));
+
   socket.emit('connection:status', { connected: workerConnected, ...(lastQrCode ? { qrCode: lastQrCode } : {}) });
 
   socket.on('disconnect', () => {
