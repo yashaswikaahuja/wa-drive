@@ -148,10 +148,10 @@ export default function WhatsAppInboxPage() {
   const activeSenderInfo = activeSender ? senders.find(s => s.lastFile.customerId === activeSender) : null;
 
   return (
-    <div className="bg-[#0c1322] text-[#dce2f7] h-screen flex flex-col font-['Inter',sans-serif] relative">
+    <div className="bg-[#0c1322] text-[#dce2f7] h-screen flex flex-col overflow-hidden font-['Inter',sans-serif]">
 
       {/* TopNav */}
-      <nav className="bg-slate-950 border-b border-slate-800 flex justify-between items-center px-4 h-14 shrink-0 z-50">
+      <nav className="bg-slate-950 border-b border-slate-800 flex justify-between items-center px-6 h-14 shrink-0 z-50">
         <div className="flex items-center gap-6">
           <span className="text-lg font-bold text-slate-100 uppercase tracking-widest">CyberNet WhatsApp</span>
           <div className="hidden md:flex gap-1">
@@ -184,78 +184,14 @@ export default function WhatsAppInboxPage() {
         </div>
       </nav>
 
-      {!connected && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center" style={{top:'56px', background:'rgba(0,0,0,0.85)'}}>
-          <div className="relative z-50 w-full max-w-[380px] bg-[#1a2035] rounded-[16px] shadow-[0_0_15px_rgba(59,130,246,0.2)] border border-[#3b82f6]/30 flex flex-col p-8 mx-4">
-            {/* Header */}
-            <div className="flex flex-col items-center mb-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-[#25D366]/10 flex items-center justify-center mb-4 border border-[#25D366]/30">
-                <span className="material-symbols-outlined text-[#25D366]" style={{fontSize:'28px', fontVariationSettings:"'FILL' 1"}}>chat</span>
-              </div>
-              <h2 className="text-white mb-1 text-[22px] font-bold">Scan to Connect</h2>
-              <p className="text-[#8892a4] text-[13px]">Open WhatsApp on your phone</p>
-            </div>
-
-            {/* QR Area */}
-            <div className="relative bg-white rounded-[12px] p-4 mb-6 border border-[#25D366] flex flex-col items-center justify-center overflow-hidden">
-              <div className="absolute top-0 left-0 w-4 h-4 border-t-[3px] border-l-[3px] border-[#25D366] rounded-tl-[10px] m-1" />
-              <div className="absolute top-0 right-0 w-4 h-4 border-t-[3px] border-r-[3px] border-[#25D366] rounded-tr-[10px] m-1" />
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-b-[3px] border-l-[3px] border-[#25D366] rounded-bl-[10px] m-1" />
-              <div className="absolute bottom-0 right-0 w-4 h-4 border-b-[3px] border-r-[3px] border-[#25D366] rounded-br-[10px] m-1" />
-              {qrCode ? (
-                <>
-                  <img src={qrCode} alt="QR Code" className="w-48 h-48 object-cover" />
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-full p-1 border-2 border-white">
-                    <div className="w-8 h-8 rounded-full bg-[#25D366] flex items-center justify-center">
-                      <span className="material-symbols-outlined text-white text-[18px]" style={{fontVariationSettings:"'FILL' 1"}}>chat</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="w-48 h-48 flex flex-col items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-[40px] text-gray-400 animate-pulse">qr_code_2</span>
-                  <p className="text-xs text-gray-400">Loading QR code...</p>
-                </div>
-              )}
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full h-1 bg-[#232b45] rounded-full mb-8 overflow-hidden">
-              <div className="h-full bg-[#25D366] w-3/4 rounded-full shadow-[0_0_8px_rgba(37,211,102,0.5)]" />
-            </div>
-
-            {/* Steps */}
-            <div className="flex items-start justify-between relative mb-8 px-2">
-              <div className="absolute top-3 left-[15%] right-[15%] h-[2px] border-t-2 border-dashed border-[#232b45] z-0" />
-              {[
-                { n:1, icon:'smartphone', label:'Open\nWhatsApp' },
-                { n:2, icon:'devices', label:'Linked\nDevices' },
-                { n:3, icon:'qr_code_scanner', label:'Scan\nCode' },
-              ].map(({ n, icon, label }) => (
-                <div key={n} className="flex flex-col items-center relative z-10 w-1/3">
-                  <div className="w-6 h-6 rounded-full bg-[#232b45] border border-[#3b82f6]/30 flex items-center justify-center mb-2">
-                    <span className="text-white text-[10px] font-semibold">{n}</span>
-                  </div>
-                  <span className="material-symbols-outlined text-[#8892a4] mb-1 text-[20px]">{icon}</span>
-                  <span className="text-[#8892a4] text-[11px] text-center leading-tight whitespace-pre-line">{label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Actions */}
-            <div className="flex flex-col items-center">
-              <button
-                onClick={async () => { setQrCodeSync(null); await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => {}); }}
-                className="w-full py-2 px-4 rounded-[12px] bg-transparent border border-[#3b82f6]/50 text-white text-sm font-semibold hover:bg-[#3b82f6]/10 hover:border-[#3b82f6] transition-all flex items-center justify-center gap-2 mb-3 group"
-              >
-                <span className="material-symbols-outlined text-[18px] group-hover:rotate-180 transition-transform duration-500">refresh</span>
-                Refresh QR Code
-              </button>
-              <p className="text-[#8892a4] text-[11px] flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px] text-[#25D366]">timer</span>
-                QR expires in 60 seconds
-              </p>
-            </div>
+      {/* QR overlay when disconnected */}
+      {!connected && qrCode && (
+        <div className="absolute inset-0 z-40 bg-black/70 flex items-center justify-center" style={{top:'56px'}}>
+          <div className="bg-[#191f2f] border border-[#434655] rounded-xl p-8 flex flex-col items-center gap-4 max-w-xs w-full">
+            <span className="text-2xl">📱</span>
+            <p className="text-[#dce2f7] font-semibold">Link your WhatsApp</p>
+            <img src={qrCode} alt="QR" className="w-48 h-48 rounded-lg bg-white p-2" />
+            <p className="text-[#8d90a0] text-xs text-center">WhatsApp → Linked Devices → Link a Device</p>
           </div>
         </div>
       )}
@@ -264,7 +200,7 @@ export default function WhatsAppInboxPage() {
       <main className="flex-1 flex overflow-hidden">
 
         {/* Col 1: Chat list */}
-        <div className="hidden md:flex w-72 bg-[#191f2f] border-r border-[#434655] flex-col shrink-0">
+        <div className="w-72 bg-[#191f2f] border-r border-[#434655] flex flex-col shrink-0">
           <div className="p-3 border-b border-[#434655] bg-[#232a3a]">
             <div className="relative">
               <span className="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[16px]">search</span>
@@ -301,7 +237,7 @@ export default function WhatsAppInboxPage() {
         {/* Col 2: Media grid */}
         <div className="flex-1 flex flex-col bg-[#0c1322] overflow-hidden relative">
           {/* Context header */}
-          <div className="px-4 py-3 border-b border-[#434655]/50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-[#070e1d] shrink-0">
+          <div className="px-5 py-3 border-b border-[#434655]/50 flex justify-between items-center bg-[#070e1d] shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-[#2e3545] flex items-center justify-center">
                 <span className="material-symbols-outlined text-[#8d90a0]">person</span>
@@ -311,10 +247,10 @@ export default function WhatsAppInboxPage() {
                 <p className="text-xs text-[#8d90a0]">{visibleFiles.length} file{visibleFiles.length !== 1 ? 's' : ''}</p>
               </div>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="flex gap-2">
               {['all','image','video','audio','pdf','document'].map(f => (
                 <button key={f} onClick={() => setActiveFilter(f)}
-                  className={`px-2 py-1 rounded text-xs border transition-colors shrink-0 ${activeFilter === f ? 'bg-blue-600/20 border-blue-600/50 text-blue-400' : 'border-[#434655] text-[#8d90a0] hover:border-[#8d90a0]'}`}>
+                  className={`px-2 py-1 rounded text-xs border transition-colors ${activeFilter === f ? 'bg-blue-600/20 border-blue-600/50 text-blue-400' : 'border-[#434655] text-[#8d90a0] hover:border-[#8d90a0]'}`}>
                   {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
                 </button>
               ))}
@@ -387,23 +323,23 @@ export default function WhatsAppInboxPage() {
             )}
           </div>
 
+          {/* Floating bottom action bar */}
           {selectedIds.size > 0 && (
-            <div className="absolute bottom-0 left-0 right-0 z-20 px-3 py-2 bg-[#070e1d]/95 backdrop-blur-sm border-t border-[#434655] flex items-center gap-2">
-              <span className="text-xs text-[#8d90a0] shrink-0 hidden sm:block">{selectedIds.size} selected</span>
+            <div className="absolute bottom-0 left-0 right-0 z-20 px-5 py-3 bg-[#070e1d]/95 backdrop-blur-sm border-t border-[#434655] flex items-center gap-3">
+              <span className="text-xs text-[#8d90a0] shrink-0">{selectedIds.size} selected</span>
               <div className="flex-1 flex gap-2">
                 <button onClick={handleAadhaarLayout} disabled={selectedIds.size !== 2 || aadhaarLoading}
-                  className="flex-1 bg-blue-600 disabled:bg-blue-600/30 disabled:cursor-not-allowed text-white py-2.5 px-2 rounded font-semibold text-xs sm:text-sm hover:bg-blue-500 transition-colors flex items-center justify-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">layers</span>
-                  <span className="hidden sm:inline">{aadhaarLoading ? 'Processing…' : 'Aadhaar'}</span>
-                  <span className="sm:hidden">Aadhaar</span>
+                  className="flex-1 bg-blue-600 disabled:bg-blue-600/30 disabled:cursor-not-allowed text-white py-2.5 px-3 rounded font-semibold text-sm hover:bg-blue-500 transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">layers</span>
+                  {aadhaarLoading ? 'Processing…' : 'Aadhaar Layout'}
                 </button>
                 <button disabled={selectedIds.size === 0} onClick={() => { const f = visibleFiles.find(f => selectedIds.has(f.id)); if (f) handlePrint(f); }}
-                  className="flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-2 rounded text-xs sm:text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">print</span> Print
+                  className="flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-3 rounded text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">print</span> Print
                 </button>
                 <button disabled={selectedIds.size === 0} onClick={() => { visibleFiles.filter(f => selectedIds.has(f.id)).forEach(handleDownload); }}
-                  className="flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-2 rounded text-xs sm:text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-1">
-                  <span className="material-symbols-outlined text-[16px]">download</span> Download
+                  className="flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-3 rounded text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">download</span> Download
                 </button>
               </div>
               <button onClick={() => setSelectedIds(new Set())} className="text-[#8d90a0] hover:text-[#dce2f7] p-1 transition-colors shrink-0">
@@ -414,7 +350,7 @@ export default function WhatsAppInboxPage() {
         </div>
 
         {/* Col 3: Actions panel (secondary) */}
-        <div className="hidden lg:flex w-56 bg-[#141b2b] border-l border-[#434655]/40 flex-col shrink-0 opacity-70 hover:opacity-100 transition-opacity">
+        <div className="w-56 bg-[#141b2b] border-l border-[#434655]/40 flex flex-col shrink-0 opacity-70 hover:opacity-100 transition-opacity">
           <div className="p-4 border-b border-[#434655] bg-[#232a3a]">
             <p className="text-[10px] text-[#8d90a0] uppercase tracking-wider mb-1">Selection</p>
             <p className="text-lg font-semibold text-[#dce2f7]">{selectedIds.size} File{selectedIds.size !== 1 ? 's' : ''} Selected</p>
