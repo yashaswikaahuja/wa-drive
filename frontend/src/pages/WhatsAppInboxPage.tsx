@@ -44,7 +44,48 @@ export default function WhatsAppInboxPage() {
   const [statusChecked, setStatusChecked] = useState(false);
 
   type QueueItem = { fileName: string; phone: string; status: 'queued' | 'uploading' | 'done' | 'failed'; reason?: string };
-  const [uploadQueue, setUploadQueue] = useState<QueueItem[]>([]); // don't show QR until first status check
+  const [uploadQueue, setUploadQueue] = useState<QueueItem[]>([]);
+
+  // ── Smart detection engine ───────────────────────────────────────────────
+  type DetectionResult = { type: 'aadhaar' | 'pan' | 'passport' | null; front: string | null; back: string | null; confidence: number };
+
+  const detectDocuments = useCallback((files: typeof visibleFiles): DetectionResult => {
+    const AADHAAR_FRONT = /aadhaar.*(front|f\b)|front.*(aadhaar|adhar)|adhar.*(front|f\b)/i;
+    const AADHAAR_BACK  = /aadhaar.*(back|b\b)|back.*(aadhaar|adhar)|adhar.*(back|b\b)/i;
+    const AADHAAR_ANY   = /aadhaar|adhar|aadhar/i;
+    const PAN_PATTERN   = /pan.*(card)?|income.tax/i;
+    const PASSPORT_PHOTO = /passport.*(photo|pic|size)|photo.*passport/i;
+
+    const images = files.filter(f => EXT_FILTER(f.fileName) === 'image');
+
+    // Check for explicit Aadhaar front+back
+    const front = images.find(f => AADHAAR_FRONT.test(f.fileName));
+    const back  = images.find(f => AADHAAR_BACK.test(f.fileName));
+    if (front && back) return { type: 'aadhaar', front: front.id, back: back.id, confidence: 95 };
+
+    // Check for any 2 Aadhaar images
+    const aadhaarFiles = images.filter(f => AADHAAR_ANY.test(f.fileName));
+    if (aadhaarFiles.length >= 2) return { type: 'aadhaar', front: aadhaarFiles[0].id, back: aadhaarFiles[1].id, confidence: 85 };
+
+    // PAN card
+    const pan = images.find(f => PAN_PATTERN.test(f.fileName));
+    if (pan) return { type: 'pan', front: pan.id, back: null, confidence: 90 };
+
+    // Passport photo
+    const passport = images.find(f => PASSPORT_PHOTO.test(f.fileName));
+    if (passport) return { type: 'passport', front: passport.id, back: null, confidence: 88 };
+
+    // Fallback: 2 images from same sender = likely Aadhaar
+    if (images.length >= 2) {
+      const bySender = new Map<string, typeof images>();
+      images.forEach(f => { const arr = bySender.get(f.customerId) ?? []; arr.push(f); bySender.set(f.customerId, arr); });
+      for (const [, arr] of bySender) {
+        if (arr.length >= 2) return { type: 'aadhaar', front: arr[0].id, back: arr[1].id, confidence: 65 };
+      }
+    }
+
+    return { type: null, front: null, back: null, confidence: 0 };
+  }, []);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -76,6 +117,14 @@ export default function WhatsAppInboxPage() {
       newIds.current.add(file.id); addFile(file);
       notification.success({ message: `${file.customerName}: ${file.fileName}`, placement: 'topRight', duration: 3 });
       setTimeout(() => newIds.current.delete(file.id), 3000);
+      // Auto-detect after new file arrives
+      setTimeout(() => {
+        const current = useWhatsAppStore.getState().files.map(f => normalizeWhatsAppFile(f)).filter(Boolean) as typeof visibleFiles;
+        const det = detectDocuments(current);
+        if (det.type === 'aadhaar' && det.confidence >= 80 && det.front && det.back) {
+          setSelectedIds(new Set([det.front, det.back]));
+        }
+      }, 500);
     });
 
     socket.on('upload:queued', ({ fileName, phone }: { fileName: string; phone: string }) => {
@@ -348,21 +397,64 @@ export default function WhatsAppInboxPage() {
             </div>
           </div>
 
-          {/* Smart suggestion */}
+          {/* Smart Action Engine */}
           {(() => {
-            const imageFiles = visibleFiles.filter(f => EXT_FILTER(f.fileName) === 'image');
-            if (imageFiles.length >= 2 && selectedIds.size === 0) {
+            const det = detectDocuments(visibleFiles);
+            if (!det.type) return null;
+
+            const isReady = det.confidence >= 80 && det.front && det.back !== undefined;
+            const isSelected = det.front && selectedIds.has(det.front) && (!det.back || selectedIds.has(det.back));
+
+            const labels: Record<string, string> = { aadhaar: 'Aadhaar Layout', pan: 'PAN Card', passport: 'Passport Photo' };
+            const label = labels[det.type] ?? 'Document';
+            const readyText = det.type === 'aadhaar' ? `${label} (2/2 ready)` : `${label} detected`;
+
+            if (isSelected) {
+              // Active state — print now
               return (
-                <div className="mx-5 mt-3 px-4 py-2 bg-blue-600/10 border border-blue-600/30 rounded-lg flex items-center justify-between shrink-0">
-                  <span className="text-xs text-blue-300">💡 Suggested: <strong>Aadhaar Layout</strong> — {imageFiles.length} images detected</span>
-                  <button onClick={() => { setSelectedIds(new Set([imageFiles[0].id, imageFiles[1].id])); }}
-                    className="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded transition-colors shrink-0">
-                    SELECT 2
+                <div className="mx-4 mt-2 px-3 py-2 bg-blue-600/20 border border-blue-500 rounded-lg flex items-center justify-between shrink-0">
+                  <span className="text-xs text-blue-200 font-semibold">✅ {readyText} — Print now</span>
+                  <div className="flex gap-2 ml-3 shrink-0">
+                    <button onClick={handleAadhaarLayout} disabled={aadhaarLoading}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-bold rounded transition-colors">
+                      {aadhaarLoading ? '…' : 'PRINT NOW'}
+                    </button>
+                    <button onClick={() => setSelectedIds(new Set())}
+                      className="px-2 py-1 border border-[#434655] text-[#8d90a0] hover:text-white text-xs rounded transition-colors">
+                      CHANGE
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            if (isReady) {
+              // High confidence — auto-select suggestion
+              return (
+                <div className="mx-4 mt-2 px-3 py-2 bg-green-600/10 border border-green-600/30 rounded-lg flex items-center justify-between shrink-0">
+                  <span className="text-xs text-green-300">💡 {readyText} — Auto-detected ({det.confidence}%)</span>
+                  <button onClick={() => {
+                    const ids = [det.front!, ...(det.back ? [det.back] : [])];
+                    setSelectedIds(new Set(ids));
+                  }} className="ml-3 px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-xs font-bold rounded transition-colors shrink-0">
+                    AUTO SELECT
                   </button>
                 </div>
               );
             }
-            return null;
+
+            // Low confidence — soft suggestion
+            return (
+              <div className="mx-4 mt-2 px-3 py-2 bg-[#1e293b] border border-[#334155] rounded-lg flex items-center justify-between shrink-0">
+                <span className="text-xs text-[#94a3b8]">💡 Possible {label} detected</span>
+                <button onClick={() => {
+                  const ids = [det.front!, ...(det.back ? [det.back] : [])];
+                  setSelectedIds(new Set(ids));
+                }} className="ml-3 px-2 py-1 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded transition-colors shrink-0">
+                  SELECT
+                </button>
+              </div>
+            );
           })()}
 
           {/* Grid */}
