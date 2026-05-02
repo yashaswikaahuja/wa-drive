@@ -21,6 +21,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const HUB_URL       = process.env['HUB_URL']       ?? 'http://localhost:3000';
 const WORKER_SECRET = process.env['WORKER_SECRET']  ?? 'worker-secret';
 const AUTH_DIR      = resolve(__dirname, 'auth_info');
+const UPLOAD_CONCURRENCY = 2;   // max parallel uploads
+const UPLOAD_TIMEOUT_MS  = 30000; // 30s per upload
+const RETRY_DELAYS = [1000, 3000, 7000]; // exponential backoff
 
 const MIME_TO_EXT: Record<string, string> = {
   'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png',
@@ -31,6 +34,28 @@ const MIME_TO_EXT: Record<string, string> = {
   'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav',
   'video/mp4': 'mp4',  'video/3gpp': '3gp',
 };
+
+// ── Simple concurrency-limited queue ────────────────────────────────────────
+
+type QueueTask = () => Promise<void>;
+let activeCount = 0;
+const taskQueue: QueueTask[] = [];
+
+function enqueue(task: QueueTask) {
+  taskQueue.push(task);
+  drainQueue();
+}
+
+function drainQueue() {
+  while (activeCount < UPLOAD_CONCURRENCY && taskQueue.length > 0) {
+    const task = taskQueue.shift()!;
+    activeCount++;
+    task().finally(() => {
+      activeCount--;
+      drainQueue();
+    });
+  }
+}
 
 // ── Hub connection ───────────────────────────────────────────────────────────
 
@@ -43,51 +68,31 @@ function connectHub() {
     reconnection: true,
     reconnectionDelay: 3000,
     reconnectionDelayMax: 10000,
-    // FIX 3: Force WebSocket transport — avoids Cloudflare 100s polling timeout
     transports: ['websocket'],
-    // FIX 3: Keep connection alive through Cloudflare tunnel
     pingInterval: 25000,
     pingTimeout: 20000,
   });
-
   hub.on('connect', () => {
     console.log('[Worker] Hub connected');
     hub.emit('worker:register', { secret: WORKER_SECRET });
-    // Re-sync WhatsApp state after hub reconnect
-    setTimeout(() => {
-      hub.emit('connection:status', { connected: isWhatsAppConnected });
-    }, 500); // small delay to ensure registration is processed first
+    setTimeout(() => hub.emit('connection:status', { connected: isWhatsAppConnected }), 500);
   });
   hub.on('disconnect',    (r) => console.log('[Worker] Hub disconnected:', r));
   hub.on('connect_error', (e) => console.error('[Worker] Hub error:', e.message));
-  hub.on('worker:reinit', () => {
-    console.log('[Worker] Reinit requested — restarting Baileys');
-    reconnectDelay = 5000; // reset backoff
-    startBaileys().catch(console.error);
-  });
+  hub.on('worker:reinit', () => { reconnectDelay = 5000; startBaileys().catch(console.error); });
 }
 
-// ── Media processing ─────────────────────────────────────────────────────────
+// ── Upload with retry + timeout ──────────────────────────────────────────────
 
-async function processMedia(
-  msg: proto.IWebMessageInfo,
+async function uploadWithRetry(
   buffer: Buffer,
   mimetype: string,
+  fileName: string,
   phone: string,
   customerName: string,
   profilePicUrl: string | null,
-) {
-  const ext = MIME_TO_EXT[mimetype] ?? 'bin';
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  const typeLabel = mimetype.startsWith('image/') ? 'photo' : mimetype.startsWith('video/') ? 'video' : mimetype.startsWith('audio/') ? 'audio' : 'file';
-  const fileName = `${phone}_${ts}_${typeLabel}.${ext}`;
-
-  console.log(`[Worker] Uploading ${fileName} (${mimetype}, ${buffer.length} bytes)`);
-
-  // FIX: retry upload up to 3 times
-  for (let attempt = 1; attempt <= 3; attempt++) {
+): Promise<void> {
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
     try {
       const form = new FormData();
       form.append('file', new Blob([buffer], { type: mimetype }), fileName);
@@ -97,95 +102,101 @@ async function processMedia(
       form.append('mimetype', mimetype);
       form.append('fileName', fileName);
 
-      const res = await fetch(`${HUB_URL}/api/worker/upload`, { method: 'POST', body: form });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+
+      const res = await fetch(`${HUB_URL}/api/worker/upload`, {
+        method: 'POST',
+        body: form,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
 
       if (res.ok) {
-        const { fileId } = await res.json() as { fileId: string; fileUrl: string };
-        console.log(`[Worker] Uploaded → Drive: ${fileId}`);
+        const { fileId } = await res.json() as { fileId: string };
+        console.log(`[Worker] ✓ Uploaded ${fileName} → Drive ${fileId}`);
         return;
       }
 
-      const err = await res.text();
-      console.error(`[Worker] Upload attempt ${attempt} failed (${res.status}): ${err}`);
-      if (res.status === 401) return; // no Drive token — don't retry
-    } catch (e) {
-      console.error(`[Worker] Upload attempt ${attempt} error:`, (e as Error).message);
-    }
-    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 2000));
-  }
+      const errText = await res.text();
+      if (res.status === 401) {
+        console.error(`[Worker] ✗ ${fileName} — Drive not connected (401). Skipping retries.`);
+        return; // no point retrying
+      }
+      throw new Error(`HTTP ${res.status}: ${errText}`);
 
-  // All retries failed — emit via socket as fallback
-  hub.emit('new_whatsapp_file', {
-    id: `${Date.now()}-${phone}`,
-    customerId: phone, customerName,
-    fileName, fileUrl: '', profilePicUrl,
-    timestamp: new Date().toISOString(),
-  });
+    } catch (e: any) {
+      const reason = e?.name === 'AbortError' ? 'Timeout' : e?.message ?? String(e);
+      if (attempt < RETRY_DELAYS.length) {
+        const delay = RETRY_DELAYS[attempt];
+        console.warn(`[Worker] ↻ ${fileName} attempt ${attempt + 1} failed (${reason}). Retrying in ${delay}ms…`);
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        console.error(`[Worker] ✗ FAILED ${fileName} | phone=${phone} | reason=${reason} | all retries exhausted`);
+      }
+    }
+  }
 }
 
-// ── Baileys WhatsApp client ──────────────────────────────────────────────────
+// ── Media download with retry ────────────────────────────────────────────────
+
+async function downloadWithRetry(msg: proto.IWebMessageInfo): Promise<Buffer | null> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const buf = await downloadMediaMessage(msg, 'buffer', {}) as Buffer;
+      if (buf?.length) return buf;
+      console.warn(`[Worker] Empty buffer attempt ${attempt}`);
+    } catch (e) {
+      console.warn(`[Worker] Download attempt ${attempt} failed: ${(e as Error).message}`);
+    }
+    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 3000));
+  }
+  return null;
+}
+
+// ── Baileys ──────────────────────────────────────────────────────────────────
 
 let currentSock: WASocket | null = null;
-let reconnectDelay = 5000; // FIX 1: exponential backoff state
+let reconnectDelay = 5000;
 
 async function startBaileys() {
-  if (currentSock) {
-    try { currentSock.end(undefined); } catch { /* ignore */ }
-    currentSock = null;
-  }
+  if (currentSock) { try { currentSock.end(undefined); } catch { /* ignore */ } currentSock = null; }
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
-  console.log(`[Worker] Baileys version: ${version.join('.')}`);
+  console.log(`[Worker] Baileys ${version.join('.')}`);
 
   const sock = makeWASocket({
     version,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })),
-    },
+    auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' })) },
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
     browser: ['CyberControl', 'Chrome', '1.0.0'],
     syncFullHistory: false,
-    // FIX 1: keep-alive to reduce server-side disconnects
     keepAliveIntervalMs: 30000,
   });
   currentSock = sock;
-
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      console.log('[Worker] QR received — scan with WhatsApp:');
       qrcodeTerminal.generate(qr, { small: true });
-      try {
-        const qrBase64 = await qrcode.toDataURL(qr);
-        hub.emit('connection:status', { connected: false, qrCode: qrBase64 });
-      } catch {
-        hub.emit('connection:status', { connected: false });
-      }
+      try { hub.emit('connection:status', { connected: false, qrCode: await qrcode.toDataURL(qr) }); }
+      catch { hub.emit('connection:status', { connected: false }); }
     }
-
     if (connection === 'open') {
-      console.log('[Worker] Connected ✓');
+      console.log('[Worker] WhatsApp connected ✓');
       isWhatsAppConnected = true;
-      reconnectDelay = 5000; // reset backoff on success
+      reconnectDelay = 5000;
       hub.emit('connection:status', { connected: true });
     }
-
     if (connection === 'close') {
       const code = (lastDisconnect?.error as any)?.output?.statusCode;
       const shouldReconnect = code !== DisconnectReason.loggedOut;
-      console.log(`[Worker] Connection closed (code=${code}), reconnect=${shouldReconnect}, delay=${reconnectDelay}ms`);
+      console.log(`[Worker] Closed (code=${code}), reconnect=${shouldReconnect}, delay=${reconnectDelay}ms`);
       isWhatsAppConnected = false;
       hub.emit('connection:status', { connected: false });
-
-      if (shouldReconnect) {
-        // FIX 1: exponential backoff — cap at 60s
-        setTimeout(startBaileys, reconnectDelay);
-        reconnectDelay = Math.min(reconnectDelay * 2, 60000);
-      }
+      if (shouldReconnect) { setTimeout(startBaileys, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 60000); }
     }
   });
 
@@ -196,29 +207,21 @@ async function startBaileys() {
       if (!msg.message || msg.key.fromMe) continue;
 
       const msgContent = msg.message;
-      const hasMedia = !!(
-        msgContent.imageMessage   ||
-        msgContent.videoMessage   ||
-        msgContent.audioMessage   ||
-        msgContent.documentMessage ||
-        msgContent.stickerMessage
-      );
+      const hasMedia = !!(msgContent.imageMessage || msgContent.videoMessage ||
+        msgContent.audioMessage || msgContent.documentMessage || msgContent.stickerMessage);
       if (!hasMedia) continue;
 
+      // Phone resolution
       const jid = msg.key.remoteJid ?? '';
-
       let phone: string;
       if (jid.endsWith('@lid')) {
-        // participant field contains the real @s.whatsapp.net JID
-        const participant = msg.key.participant ?? msg.participant ?? '';
+        const participant = msg.key.participant ?? (msg as any).participant ?? '';
         if (participant && !participant.endsWith('@lid')) {
           phone = participant.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/[^0-9+]/g, '');
         } else {
-          // fallback: try getContact, else use numeric lid
           try {
             const contact = await sock.getContact(jid);
-            const serialized: string = contact?.id?._serialized ?? '';
-            phone = serialized.replace(/@c\.us|@s\.whatsapp\.net/g, '').replace(/[^0-9+]/g, '');
+            phone = (contact?.id?._serialized ?? '').replace(/@c\.us|@s\.whatsapp\.net/g, '').replace(/[^0-9+]/g, '');
           } catch { phone = ''; }
           if (!phone) phone = jid.replace('@lid', '').replace(/[^0-9+]/g, '');
         }
@@ -226,38 +229,33 @@ async function startBaileys() {
         phone = jid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/[^0-9+]/g, '');
       }
 
-      console.log(`[Worker] Media from phone: ${phone} (jid: ${jid})`);
       const pushName = msg.pushName ?? `Guest ${phone.slice(-4)}`;
-
-      let profilePicUrl: string | null = null;
-      try { profilePicUrl = await sock.profilePictureUrl(jid, 'image'); } catch { /* ignore */ }
-
       const mediaMsg = msgContent.imageMessage ?? msgContent.videoMessage ?? msgContent.audioMessage ?? msgContent.documentMessage ?? msgContent.stickerMessage;
       const mimetype = mediaMsg?.mimetype ?? 'application/octet-stream';
+      const ext = MIME_TO_EXT[mimetype] ?? 'bin';
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const ts = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+      const typeLabel = mimetype.startsWith('image/') ? 'photo' : mimetype.startsWith('video/') ? 'video' : mimetype.startsWith('audio/') ? 'audio' : 'file';
+      const fileName = `${phone}_${ts}_${typeLabel}.${ext}`;
 
-      // FIX 2: retry media download — "empty media key" happens on first attempt during reconnect
-      let buffer: Buffer | null = null;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        try {
-          buffer = await downloadMediaMessage(msg, 'buffer', {}) as Buffer;
-          if (buffer?.length) break;
-          console.warn(`[Worker] Empty buffer attempt ${attempt}, retrying...`);
-        } catch (e) {
-          console.warn(`[Worker] Download attempt ${attempt} failed: ${(e as Error).message}`);
+      console.log(`[Worker] Queuing ${fileName} (${mimetype}) from ${phone}`);
+
+      // Capture msg reference for closure — download inside queue task
+      const capturedMsg = msg;
+      enqueue(async () => {
+        let profilePicUrl: string | null = null;
+        try { profilePicUrl = await sock.profilePictureUrl(jid, 'image'); } catch { /* ignore */ }
+
+        const buffer = await downloadWithRetry(capturedMsg);
+        if (!buffer) {
+          console.error(`[Worker] ✗ FAILED download ${fileName} | phone=${phone} | reason=download failed after 3 attempts`);
+          return;
         }
-        if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 3000));
-      }
 
-      if (!buffer?.length) {
-        console.error('[Worker] Media download failed after 3 attempts, skipping');
-        continue;
-      }
-
-      try {
-        await processMedia(msg, buffer, mimetype, phone, pushName, profilePicUrl);
-      } catch (e) {
-        console.error('[Worker] processMedia error:', e);
-      }
+        console.log(`[Worker] Processing ${fileName} (${buffer.length} bytes)`);
+        await uploadWithRetry(buffer, mimetype, fileName, phone, pushName, profilePicUrl);
+      });
     }
   });
 }
@@ -265,8 +263,6 @@ async function startBaileys() {
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
 createServer((_req, res) => res.end('ok')).listen(process.env['PORT'] ?? 3002);
-
-// Keep hub awake
 setInterval(() => fetch(`${HUB_URL}/api/health`).catch(() => {}), 10 * 60 * 1000);
 
 connectHub();
