@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { io } from 'socket.io-client';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { notification } from 'antd';
 import { useWhatsAppStore } from '../stores/whatsappStore';
@@ -27,6 +28,7 @@ function fileIcon(name: string) { return FILE_ICON[EXT_FILTER(name)] ?? 'insert_
 function isImage(name: string) { return EXT_FILTER(name) === 'image'; }
 
 export default function WhatsAppInboxPage() {
+  const navigate = useNavigate();
   const [qrCode, setQrCode] = useState<string | null>(null);
   const qrCodeRef = useRef<string | null>(null);
   const setQrCodeSync = (v: string | null) => { qrCodeRef.current = v; setQrCode(v); };
@@ -523,6 +525,12 @@ export default function WhatsAppInboxPage() {
                 <button disabled={selectedIds.size === 0} onClick={() => { visibleFiles.filter(f => selectedIds.has(f.id)).forEach(handleDownload); }}
                   className="flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-3 rounded text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-2">
                   <span className="material-symbols-outlined text-[18px]">download</span> Download
+                </button>
+                <button disabled={selectedIds.size === 0} onClick={() => {
+                  const selected = visibleFiles.filter(f => selectedIds.has(f.id)).map(f => ({ id: f.id, fileName: f.fileName, fileUrl: f.fileUrl, customerName: f.customerName }));
+                  navigate(`/stitch?files=${encodeURIComponent(JSON.stringify(selected))}`);
+                }} className="flex-1 bg-green-700 disabled:opacity-40 text-white py-2.5 px-3 rounded text-sm hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">layers</span> File Stitch
                 </button>
               </div>
               <button onClick={() => setSelectedIds(new Set())} className="text-[#8d90a0] hover:text-[#dce2f7] p-1 transition-colors shrink-0">
