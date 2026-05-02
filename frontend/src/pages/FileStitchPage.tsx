@@ -150,7 +150,7 @@ export default function FileStitchPage() {
       formData.append('size', 'auto');
       const res = await fetch('https://api.remove.bg/v1.0/removebg', {
         method: 'POST',
-        headers: { 'X-Api-Key': 'YOUR_REMOVE_BG_KEY' }, // user must set this
+        headers: { 'X-Api-Key': 'd9f7QFfqAdFuEzt1dXNqvSxP' },
         body: formData,
       });
       if (!res.ok) throw new Error(`remove.bg: ${res.status}`);
