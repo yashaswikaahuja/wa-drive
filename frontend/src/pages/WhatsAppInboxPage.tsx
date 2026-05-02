@@ -33,6 +33,34 @@ export default function WhatsAppInboxPage() {
   const [activeFilter, setActiveFilter] = useState<FileFilter>('all');
   const [selectedFile, setSelectedFile] = useState<WhatsAppFile | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [aadhaarLoading, setAadhaarLoading] = useState(false);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleAadhaarLayout = useCallback(async () => {
+    if (selectedIds.size !== 2) return;
+    setAadhaarLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/process`, {
+        fileIds: Array.from(selectedIds),
+        action: 'aadhaar_layout',
+      }, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      window.open(url, '_blank');
+      setSelectedIds(new Set());
+    } catch (e) {
+      notification.error({ message: 'Aadhaar layout failed', placement: 'topRight' });
+    } finally {
+      setAadhaarLoading(false);
+    }
+  }, [selectedIds]);
 
   useEffect(() => {
     if (socketRef.current) return;
@@ -222,11 +250,27 @@ export default function WhatsAppInboxPage() {
       )}
 
       <main className="p-4 lg:p-6">
-        <div className="mb-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
           <FilterBar activeFilter={activeFilter} onFilterChange={setActiveFilter} counts={fileCounts} />
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
+              <button onClick={handleAadhaarLayout} disabled={selectedIds.size !== 2 || aadhaarLoading}
+                className="px-3 py-1.5 text-xs font-medium rounded-md border transition-colors
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  enabled:bg-accent/10 enabled:border-accent/40 enabled:text-accent enabled:hover:bg-accent/20">
+                {aadhaarLoading ? 'Processing…' : `Aadhaar Layout${selectedIds.size === 2 ? '' : ' (select 2)'}`}
+              </button>
+              <button onClick={() => setSelectedIds(new Set())}
+                className="text-xs text-muted-foreground hover:text-foreground">
+                Clear
+              </button>
+            </div>
+          )}
         </div>
         <FilesGrid
           files={visibleFiles} newIds={newIds.current} viewMode={viewMode}
+          selectedIds={selectedIds} onToggleSelect={toggleSelect}
           onPreview={handlePreview} onDownload={handleDownload} onPrint={handlePrint} onDelete={handleDelete}
         />
       </main>
