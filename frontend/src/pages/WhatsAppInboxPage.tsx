@@ -136,14 +136,28 @@ export default function WhatsAppInboxPage() {
     notification.success({ message: 'File deleted', placement: 'topRight' });
   }, [selectedFile]);
 
+  const getDownloadUrl = (fileUrl: string) => {
+    const m = fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (m) return `https://drive.google.com/uc?export=download&id=${m[1]}`;
+    return fileUrl;
+  };
+
   const handleDownload = useCallback((file: WhatsAppFile) => {
-    const a = document.createElement('a'); a.href = getPreviewUrl(file.fileUrl); a.download = file.fileName; a.target = '_blank';
+    const url = getDownloadUrl(file.fileUrl);
+    const a = document.createElement('a');
+    a.href = url; a.download = file.fileName; a.target = '_blank';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   }, []);
 
   const handlePrint = useCallback((file: WhatsAppFile) => {
-    const win = window.open(getPreviewUrl(file.fileUrl), '_blank');
-    win?.addEventListener('load', () => win.print());
+    const m = file.fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    const fullUrl = m
+      ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w1600`
+      : getPreviewUrl(file.fileUrl);
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`<html><body style="margin:0"><img src="${fullUrl}" style="max-width:100%" onload="window.print()"/></body></html>`);
+    win.document.close();
   }, []);
 
   const allFiles = useMemo(() => (Array.isArray(files) ? files : []).map(f => normalizeWhatsAppFile(f)).filter((f): f is WhatsAppFile => f !== null), [files]);
