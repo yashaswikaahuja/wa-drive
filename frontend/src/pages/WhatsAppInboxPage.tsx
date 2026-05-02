@@ -532,7 +532,12 @@ export default function WhatsAppInboxPage() {
                 }} className="flex-1 bg-green-700 disabled:opacity-40 text-white py-2.5 px-3 rounded text-sm hover:bg-green-600 transition-colors flex items-center justify-center gap-2">
                   <span className="material-symbols-outlined text-[18px]">layers</span> File Stitch
                 </button>
-              </div>
+                <button disabled={selectedIds.size === 0} onClick={() => {
+                  const selected = visibleFiles.filter(f => selectedIds.has(f.id)).map(f => ({ id: f.id, fileName: f.fileName, fileUrl: f.fileUrl, customerName: f.customerName }));
+                  navigate(`/form-ready?files=${encodeURIComponent(JSON.stringify(selected))}`);
+                }} className="flex-1 bg-purple-700 disabled:opacity-40 text-white py-2.5 px-3 rounded text-sm hover:bg-purple-600 transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">description</span> Form Ready
+                </button>              </div>
               <button onClick={() => setSelectedIds(new Set())} className="text-[#8d90a0] hover:text-[#dce2f7] p-1 transition-colors shrink-0">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>

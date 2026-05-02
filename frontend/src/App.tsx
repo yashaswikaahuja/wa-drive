@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import WhatsAppInboxPage from './pages/WhatsAppInboxPage';
 import FileStitchPage from './pages/FileStitchPage';
+import FormReadyPage from './pages/FormReadyPage';
 
 export default function App() {
   return (
@@ -9,6 +10,7 @@ export default function App() {
         <Route path="/" element={<WhatsAppInboxPage />} />
         <Route path="/photo-stitch" element={<FileStitchPage />} />
         <Route path="/stitch" element={<FileStitchPage />} />
+        <Route path="/form-ready" element={<FormReadyPage />} />
       </Routes>
     </BrowserRouter>
   );
