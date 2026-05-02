@@ -201,6 +201,34 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
   }
 });
 
+// ── Background removal proxy ──────────────────────────────────────────────────
+const bgUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
+
+app.post('/api/remove-bg', bgUpload.single('image_file') as any, async (req: any, res: any) => {
+  if (!req.file) { res.status(400).json({ error: 'No image' }); return; }
+  try {
+    const FormDataNode = (await import('form-data')).default;
+    const form = new FormDataNode();
+    form.append('image_file', req.file.buffer, { filename: req.file.originalname, contentType: req.file.mimetype });
+    form.append('size', 'auto');
+    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: { 'X-Api-Key': 'd9f7QFfqAdFuEzt1dXNqvSxP', ...form.getHeaders() },
+      body: form as any,
+    });
+    if (!response.ok) {
+      const err = await response.text();
+      res.status(response.status).json({ error: err }); return;
+    }
+    const buf = Buffer.from(await response.arrayBuffer());
+    res.set('Content-Type', 'image/png');
+    res.send(buf);
+  } catch (e) {
+    console.error('[Hub] remove-bg failed:', e);
+    res.status(500).json({ error: 'Background removal failed' });
+  }
+});
+
 app.post('/api/whatsapp/reinit', (_req, res) => {
   lastQrCode = null;
   workerSocket?.emit('worker:reinit');
