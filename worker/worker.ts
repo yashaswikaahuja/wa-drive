@@ -21,7 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const HUB_URL       = process.env['HUB_URL']       ?? 'http://localhost:3000';
 const WORKER_SECRET = process.env['WORKER_SECRET']  ?? 'worker-secret';
 const AUTH_DIR      = resolve(__dirname, 'auth_info');
-const UPLOAD_CONCURRENCY = 2;   // max parallel uploads
+const UPLOAD_CONCURRENCY = 1;   // 1 at a time — safe for 1GB RAM
 const UPLOAD_TIMEOUT_MS  = 30000; // 30s per upload
 const RETRY_DELAYS = [1000, 3000, 7000]; // exponential backoff
 

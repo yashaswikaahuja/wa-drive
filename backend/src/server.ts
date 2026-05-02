@@ -123,7 +123,27 @@ app.get('/api/drive/files', async (_req, res) => {
 });
 
 // ── Worker file upload ────────────────────────────────────────────────────────
-const upload = multer({ storage: multer.memoryStorage() });
+// Memory storage but limit file size to 50MB to prevent OOM
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+});
+
+// Concurrency limiter — only 1 Drive upload at a time on e2-micro (1GB RAM)
+let hubUploadActive = 0;
+const hubUploadQueue: Array<() => void> = [];
+const HUB_UPLOAD_CONCURRENCY = 1;
+
+function acquireUploadSlot(): Promise<void> {
+  return new Promise(resolve => {
+    if (hubUploadActive < HUB_UPLOAD_CONCURRENCY) { hubUploadActive++; resolve(); }
+    else hubUploadQueue.push(resolve);
+  });
+}
+function releaseUploadSlot() {
+  const next = hubUploadQueue.shift();
+  if (next) { next(); } else { hubUploadActive--; }
+}
 
 app.post('/api/worker/upload', upload.single('file') as any, async (req: any, res: any) => {
   const drive = getDrive();
@@ -131,23 +151,33 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
   if (!req.file) { res.status(400).json({ error: 'No file' }); return; }
 
   const { phone, senderName, profilePicUrl, mimetype, fileName } = req.body as Record<string, string>;
+  const fileSize = req.file.size;
+  console.log(`[Hub] Upload queued: ${fileName} (${(fileSize/1024).toFixed(0)}KB) from ${phone}`);
 
+  await acquireUploadSlot();
   try {
+    console.log(`[Hub] Uploading: ${fileName}`);
     const customersId = await findOrCreateFolder(drive, 'customers');
     const phoneId     = await findOrCreateFolder(drive, phone, customersId);
 
+    // Stream buffer to Drive — don't hold reference after upload
+    const buffer = req.file.buffer;
     const file = await drive.files.create({
       requestBody: {
         name: fileName,
         parents: [phoneId],
         description: JSON.stringify({ customerName: senderName, profilePicUrl: profilePicUrl || null }),
       },
-      media: { mimeType: mimetype, body: Readable.from(req.file.buffer) },
+      media: { mimeType: mimetype, body: Readable.from(buffer) },
       fields: 'id,webContentLink',
     });
 
+    // Release buffer from memory immediately
+    (req.file as any).buffer = null;
+
     const fileId = file.data.id!;
     await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' } });
+    console.log(`[Hub] ✓ Uploaded: ${fileName} → ${fileId}`);
 
     io.emit('new_whatsapp_file', {
       id: fileId,
@@ -157,15 +187,17 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
       fileName,
       fileUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`,
       type: mimeToType(mimetype),
-      size: req.file.size,
+      size: fileSize,
       timestamp: new Date().toISOString(),
       profilePicUrl: profilePicUrl || null,
     });
 
     res.json({ fileUrl: file.data.webContentLink, fileId });
   } catch (e) {
-    console.error('[Hub] Upload failed:', e);
+    console.error(`[Hub] ✗ Upload failed: ${fileName} | ${(e as Error).message}`);
     res.status(500).json({ error: 'Upload failed' });
+  } finally {
+    releaseUploadSlot();
   }
 });
 
