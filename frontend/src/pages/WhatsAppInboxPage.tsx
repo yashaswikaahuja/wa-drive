@@ -153,11 +153,8 @@ export default function WhatsAppInboxPage() {
     const m = file.fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     const ext = file.fileName.split('.').pop()?.toLowerCase();
     if (m && ext === 'pdf') {
-      // Drive embed viewer with auto-print
-      const win = window.open('', '_blank');
-      if (!win) return;
-      win.document.write(`<html><body style="margin:0;height:100vh"><iframe src="https://drive.google.com/file/d/${m[1]}/preview" style="width:100%;height:100%;border:0" onload="this.contentWindow.print()"></iframe></body></html>`);
-      win.document.close();
+      // Drive blocks iframe embedding — open viewer directly, user prints with Ctrl+P
+      window.open(`https://drive.google.com/file/d/${m[1]}/view`, '_blank');
       return;
     }
     const fullUrl = m
