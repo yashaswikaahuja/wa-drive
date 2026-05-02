@@ -153,8 +153,17 @@ export default function WhatsAppInboxPage() {
     const m = file.fileUrl.match(/[?&]id=([a-zA-Z0-9_-]+)/);
     const ext = file.fileName.split('.').pop()?.toLowerCase();
     if (m && ext === 'pdf') {
-      // Drive blocks iframe embedding — open viewer directly, user prints with Ctrl+P
-      window.open(`https://drive.google.com/file/d/${m[1]}/view`, '_blank');
+      // On mobile: download opens native PDF viewer with print button
+      // On desktop: open Drive viewer (user presses Ctrl+P)
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if (isMobile) {
+        const a = document.createElement('a');
+        a.href = `https://drive.google.com/uc?export=download&id=${m[1]}`;
+        a.download = file.fileName;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      } else {
+        window.open(`https://drive.google.com/file/d/${m[1]}/view`, '_blank');
+      }
       return;
     }
     const fullUrl = m
