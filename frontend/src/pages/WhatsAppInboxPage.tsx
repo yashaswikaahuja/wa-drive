@@ -235,7 +235,7 @@ export default function WhatsAppInboxPage() {
         </div>
 
         {/* Col 2: Media grid */}
-        <div className="flex-1 flex flex-col bg-[#0c1322] overflow-hidden">
+        <div className="flex-1 flex flex-col bg-[#0c1322] overflow-hidden relative">
           {/* Context header */}
           <div className="px-5 py-3 border-b border-[#434655]/50 flex justify-between items-center bg-[#070e1d] shrink-0">
             <div className="flex items-center gap-3">
@@ -257,8 +257,25 @@ export default function WhatsAppInboxPage() {
             </div>
           </div>
 
+          {/* Smart suggestion */}
+          {(() => {
+            const imageFiles = visibleFiles.filter(f => EXT_FILTER(f.fileName) === 'image');
+            if (imageFiles.length >= 2 && selectedIds.size === 0) {
+              return (
+                <div className="mx-5 mt-3 px-4 py-2 bg-blue-600/10 border border-blue-600/30 rounded-lg flex items-center justify-between shrink-0">
+                  <span className="text-xs text-blue-300">💡 Suggested: <strong>Aadhaar Layout</strong> — {imageFiles.length} images detected</span>
+                  <button onClick={() => { setSelectedIds(new Set([imageFiles[0].id, imageFiles[1].id])); }}
+                    className="ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded transition-colors shrink-0">
+                    SELECT 2
+                  </button>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           {/* Grid */}
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className="flex-1 overflow-y-auto p-5" style={{ paddingBottom: selectedIds.size > 0 ? '80px' : '20px' }}>
             {visibleFiles.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-[#8d90a0]">
                 <span className="material-symbols-outlined text-[48px]">inbox</span>
@@ -272,7 +289,9 @@ export default function WhatsAppInboxPage() {
                   const thumb = getPreviewUrl(file.fileUrl);
                   return (
                     <div key={file.id}
-                      className={`bg-[#191f2f] border rounded-lg overflow-hidden group relative cursor-pointer transition-all
+                      onDoubleClick={() => handleDownload(file)}
+                      onContextMenu={e => { e.preventDefault(); if (window.confirm(`Delete ${file.fileName}?`)) handleDelete(file); }}
+                      className={`bg-[#191f2f] border rounded-lg overflow-hidden group relative cursor-pointer transition-all select-none
                         ${selected ? 'border-blue-500 ring-1 ring-blue-500' : isNew ? 'border-green-500/60' : 'border-[#434655] hover:border-[#8d90a0]'}`}>
                       {/* Checkbox */}
                       <div className="absolute top-2 left-2 z-10" onClick={e => { e.stopPropagation(); toggleSelect(file.id); }}>
@@ -280,32 +299,22 @@ export default function WhatsAppInboxPage() {
                           className={`w-4 h-4 cursor-pointer accent-blue-500 ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`} />
                       </div>
                       {/* Thumbnail */}
-                      <div className="h-36 bg-[#2e3545] relative" onClick={() => { setSelectedFile(file); setIsPreviewOpen(true); }}>
+                      <div className="h-32 bg-[#2e3545] relative" onClick={() => { setSelectedFile(file); setIsPreviewOpen(true); }}>
                         {isImage(file.fileName) ? (
                           <img src={thumb} alt={file.fileName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <span className="material-symbols-outlined text-[40px] text-[#434655] group-hover:text-[#8d90a0] transition-colors">{fileIcon(file.fileName)}</span>
+                            <span className="material-symbols-outlined text-[36px] text-[#434655] group-hover:text-[#8d90a0] transition-colors">{fileIcon(file.fileName)}</span>
                           </div>
                         )}
-                        <div className="absolute top-2 right-2 bg-[#232a3a]/80 backdrop-blur-sm px-1.5 py-0.5 rounded text-[10px] text-[#dce2f7] border border-[#434655]/30 uppercase">
+                        <div className="absolute top-1.5 right-1.5 bg-[#232a3a]/80 px-1.5 py-0.5 rounded text-[9px] text-[#8d90a0] uppercase">
                           {file.fileName.split('.').pop()}
                         </div>
                       </div>
-                      {/* Info */}
-                      <div className="p-2 flex justify-between items-end border-t border-[#434655]/50">
-                        <div className="truncate pr-1 min-w-0">
-                          <p className="text-xs font-medium text-[#dce2f7] truncate">{file.fileName}</p>
-                          <p className="text-[10px] text-[#8d90a0] mt-0.5">{file.customerName}</p>
-                        </div>
-                        <div className="flex gap-1">
-                          <button onClick={e => { e.stopPropagation(); handleDownload(file); }} className="text-[#8d90a0] hover:text-[#dce2f7] shrink-0 transition-colors">
-                            <span className="material-symbols-outlined text-[18px]">download</span>
-                          </button>
-                          <button onClick={e => { e.stopPropagation(); handleDelete(file); }} className="text-[#8d90a0] hover:text-red-400 shrink-0 transition-colors">
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
-                        </div>
+                      {/* Minimal info */}
+                      <div className="px-2 py-1.5 border-t border-[#434655]/50">
+                        <p className="text-[11px] font-medium text-[#dce2f7] truncate">{file.fileName}</p>
+                        <p className="text-[10px] text-[#434655] mt-0.5">{new Date(file.timestamp).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
                       </div>
                     </div>
                   );
@@ -313,10 +322,35 @@ export default function WhatsAppInboxPage() {
               </div>
             )}
           </div>
+
+          {/* Floating bottom action bar */}
+          {selectedIds.size > 0 && (
+            <div className="absolute bottom-0 left-0 right-0 z-20 px-5 py-3 bg-[#070e1d]/95 backdrop-blur-sm border-t border-[#434655] flex items-center gap-3">
+              <span className="text-xs text-[#8d90a0] shrink-0">{selectedIds.size} selected</span>
+              <div className="flex-1 flex gap-2">
+                <button onClick={handleAadhaarLayout} disabled={selectedIds.size !== 2 || aadhaarLoading}
+                  className="flex-1 bg-blue-600 disabled:bg-blue-600/30 disabled:cursor-not-allowed text-white py-2.5 px-3 rounded font-semibold text-sm hover:bg-blue-500 transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">layers</span>
+                  {aadhaarLoading ? 'Processing…' : 'Aadhaar Layout'}
+                </button>
+                <button disabled={selectedIds.size === 0} onClick={() => { const f = visibleFiles.find(f => selectedIds.has(f.id)); if (f) handlePrint(f); }}
+                  className="flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-3 rounded text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">print</span> Print
+                </button>
+                <button disabled={selectedIds.size === 0} onClick={() => { visibleFiles.filter(f => selectedIds.has(f.id)).forEach(handleDownload); }}
+                  className="flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-3 rounded text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">download</span> Download
+                </button>
+              </div>
+              <button onClick={() => setSelectedIds(new Set())} className="text-[#8d90a0] hover:text-[#dce2f7] p-1 transition-colors shrink-0">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Col 3: Actions panel */}
-        <div className="w-64 bg-[#191f2f] border-l border-[#434655] flex flex-col shrink-0">
+        {/* Col 3: Actions panel (secondary) */}
+        <div className="w-56 bg-[#141b2b] border-l border-[#434655]/40 flex flex-col shrink-0 opacity-70 hover:opacity-100 transition-opacity">
           <div className="p-4 border-b border-[#434655] bg-[#232a3a]">
             <p className="text-[10px] text-[#8d90a0] uppercase tracking-wider mb-1">Selection</p>
             <p className="text-lg font-semibold text-[#dce2f7]">{selectedIds.size} File{selectedIds.size !== 1 ? 's' : ''} Selected</p>
