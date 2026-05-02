@@ -41,6 +41,7 @@ export default function WhatsAppInboxPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [aadhaarLoading, setAadhaarLoading] = useState(false);
   const [activeSender, setActiveSender] = useState<string | null>(null);
+  const [statusChecked, setStatusChecked] = useState(false); // don't show QR until first status check
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -64,7 +65,8 @@ export default function WhatsAppInboxPage() {
     socket.on('connection:status', (s: { connected: boolean; qrCode?: string }) => {
       setConnected(s.connected);
       const newQr = s.connected ? null : (s.qrCode ?? null);
-      setQrCodeSync(newQr);
+      // Only update QR if we don't already have one displayed (prevents rapid flicker)
+      if (s.connected || !qrCodeRef.current) setQrCodeSync(newQr);
       if (newQr) setTimeout(async () => { const ok = await fetchWhatsAppStatus().catch(() => false); if (ok) { useWhatsAppStore.getState().setConnected(true); setQrCodeSync(null); } }, 3000);
     });
     socket.on('new_whatsapp_file', (file: WhatsAppFile) => {
@@ -79,7 +81,7 @@ export default function WhatsAppInboxPage() {
         try {
           const [{ data }, ok] = await Promise.all([axios.get<{ qrCode: string | null }>(`${API_BASE_URL}/whatsapp/qr`), fetchWhatsAppStatus()]);
           useWhatsAppStore.getState().setConnected(ok);
-          if (ok) setQrCodeSync(null); else if (data.qrCode) setQrCodeSync(data.qrCode);
+          if (ok) setQrCodeSync(null); else if (data.qrCode && !qrCodeRef.current) setQrCodeSync(data.qrCode);
         } catch { /* ignore */ }
       }
       qrPollTimer = setTimeout(pollQr, qrCodeRef.current ? 2000 : 5000);
@@ -106,7 +108,7 @@ export default function WhatsAppInboxPage() {
 
   async function load() {
     setLoading(true); setError(null);
-    try { const [fetched, ok] = await Promise.all([fetchWhatsAppFiles(), fetchWhatsAppStatus()]); if (fetched.length > 0) setFiles(fetched); setConnected(ok); }
+    try { const [fetched, ok] = await Promise.all([fetchWhatsAppFiles(), fetchWhatsAppStatus()]); if (fetched.length > 0) setFiles(fetched); setConnected(ok); setStatusChecked(true); }
     catch (e) { setError(e instanceof Error ? e.message : 'Failed to load'); }
     finally { setLoading(false); }
   }
@@ -151,7 +153,7 @@ export default function WhatsAppInboxPage() {
     <div className="bg-[#0c1322] text-[#dce2f7] h-screen flex flex-col overflow-hidden font-['Inter',sans-serif]">
 
       {/* TopNav */}
-      <nav className="bg-slate-950 border-b border-slate-800 flex justify-between items-center px-6 h-14 shrink-0 z-50">
+      <nav className="bg-[#1e293b] border-b border-[#334155] flex justify-between items-center px-3 h-8 shrink-0 z-50">
         <div className="flex items-center gap-6">
           <span className="text-lg font-bold text-slate-100 uppercase tracking-widest">CyberNet WhatsApp</span>
           <div className="hidden md:flex gap-1">
@@ -185,13 +187,56 @@ export default function WhatsAppInboxPage() {
       </nav>
 
       {/* QR overlay when disconnected */}
-      {!connected && qrCode && (
-        <div className="absolute inset-0 z-40 bg-black/70 flex items-center justify-center" style={{top:'56px'}}>
-          <div className="bg-[#191f2f] border border-[#434655] rounded-xl p-8 flex flex-col items-center gap-4 max-w-xs w-full">
-            <span className="text-2xl">📱</span>
-            <p className="text-[#dce2f7] font-semibold">Link your WhatsApp</p>
-            <img src={qrCode} alt="QR" className="w-48 h-48 rounded-lg bg-white p-2" />
-            <p className="text-[#8d90a0] text-xs text-center">WhatsApp → Linked Devices → Link a Device</p>
+      {statusChecked && !connected && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center px-4" style={{background:'rgba(0,0,0,0.88)',top:'32px'}}>
+          <div className="w-full max-w-[340px] bg-[#1a2035] rounded-[16px] border border-[#3b82f6]/30 shadow-[0_0_20px_rgba(59,130,246,0.15)] flex flex-col p-5 gap-4">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#25D366]/10 border border-[#25D366]/30 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[#25D366] text-[20px]" style={{fontVariationSettings:"'FILL' 1"}}>chat</span>
+              </div>
+              <div>
+                <h2 className="text-white text-base font-bold leading-tight">Scan to Connect</h2>
+                <p className="text-[#8892a4] text-[11px]">Open WhatsApp → Linked Devices → Scan Code</p>
+              </div>
+            </div>
+            {/* QR */}
+            <div className="relative bg-white rounded-[10px] flex items-center justify-center p-3 border-2 border-[#25D366] shadow-[0_0_16px_rgba(37,211,102,0.25)]">
+              <div className="absolute top-1 left-1 w-4 h-4 border-t-[3px] border-l-[3px] border-[#25D366] rounded-tl-[8px]" />
+              <div className="absolute top-1 right-1 w-4 h-4 border-t-[3px] border-r-[3px] border-[#25D366] rounded-tr-[8px]" />
+              <div className="absolute bottom-1 left-1 w-4 h-4 border-b-[3px] border-l-[3px] border-[#25D366] rounded-bl-[8px]" />
+              <div className="absolute bottom-1 right-1 w-4 h-4 border-b-[3px] border-r-[3px] border-[#25D366] rounded-br-[8px]" />
+              {qrCode ? (
+                <>
+                  <img src={qrCode} alt="QR" className="w-56 h-56 object-contain" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-full p-0.5">
+                    <div className="w-7 h-7 rounded-full bg-[#25D366] flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-[16px]" style={{fontVariationSettings:"'FILL' 1"}}>chat</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="w-56 h-56 flex flex-col items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-[40px] text-[#25D366] animate-pulse">qr_code_2</span>
+                  <p className="text-[#8892a4] text-xs">Loading QR...</p>
+                </div>
+              )}
+            </div>
+            {/* Status */}
+            <p className="text-center text-sm text-[#8892a4]">🔄 Waiting for scan...</p>
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button onClick={async () => { setQrCodeSync(null); await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => {}); }}
+                className="flex-1 py-2 rounded-[10px] bg-transparent border border-[#3b82f6]/40 text-white text-xs font-semibold hover:bg-[#3b82f6]/10 hover:border-[#3b82f6] transition-all flex items-center justify-center gap-1 group">
+                <span className="material-symbols-outlined text-[15px] group-hover:rotate-180 transition-transform duration-500">refresh</span>
+                Refresh QR
+              </button>
+              <button onClick={async () => { setQrCodeSync(null); await axios.post(`${API_BASE_URL}/whatsapp/logout`).catch(() => {}); setTimeout(async () => { await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => {}); }, 1000); }}
+                className="flex-1 py-2 rounded-[10px] bg-transparent border border-red-500/30 text-red-400 text-xs font-semibold hover:bg-red-500/10 hover:border-red-500/60 transition-all flex items-center justify-center gap-1">
+                <span className="material-symbols-outlined text-[15px]">restart_alt</span>
+                Restart
+              </button>
+            </div>
           </div>
         </div>
       )}
