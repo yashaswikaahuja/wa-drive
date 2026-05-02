@@ -6,6 +6,7 @@ import multer from 'multer';
 import { Readable } from 'stream';
 import whatsappRoutes from './api/routes/whatsapp.routes.js';
 import filesRoutes from './api/routes/files.routes.js';
+import processRoutes from './api/routes/process.routes.js';
 
 const WORKER_SECRET = process.env['WORKER_SECRET'] ?? 'worker-secret';
 const PORT = Number(process.env['PORT'] ?? 3000);
@@ -24,6 +25,7 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/files', filesRoutes);
+app.use('/api/process', processRoutes);
 
 // ── Hub state ────────────────────────────────────────────────────────────────
 let workerConnected = false;
@@ -66,6 +68,7 @@ function mimeToType(mime: string): string {
 app.post('/api/drive/token', (req, res) => {
   const { accessToken } = req.body as { accessToken: string | null };
   driveAccessToken = accessToken ?? null;
+  app.locals.driveAccessToken = driveAccessToken;
   workerSocket?.emit('drive:token', driveAccessToken);
   res.json({ ok: true });
 });

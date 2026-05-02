@@ -6,34 +6,59 @@ import { notification } from 'antd';
 import { useWhatsAppStore } from '../stores/whatsappStore';
 import { deleteWhatsAppFile, fetchWhatsAppFiles, fetchWhatsAppStatus, normalizeWhatsAppFile } from '../services/whatsapp.api';
 import { API_BASE_URL, SOCKET_URL, getPreviewUrl } from '../utils/helpers';
-import { Header } from '../components/dashboard/header';
-import { FilterBar } from '../components/dashboard/filter-bar';
-import { FilesGrid } from '../components/dashboard/files-grid';
 import { PreviewModal } from '../components/dashboard/preview-modal';
+import GoogleDriveLogin from '../components/GoogleDriveLogin';
 const EXT_FILTER = (name) => {
     const e = name.split('.').pop()?.toLowerCase() ?? '';
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'tiff', 'tif'].includes(e))
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'heic', 'heif', 'tiff'].includes(e))
         return 'image';
-    if (['mp4', '3gp', 'mov', 'avi', 'mkv', 'webm', 'flv', 'wmv', 'm4v'].includes(e))
+    if (['mp4', '3gp', 'mov', 'avi', 'mkv', 'webm'].includes(e))
         return 'video';
-    if (['mp3', 'ogg', 'wav', 'aac', 'm4a', 'flac', 'opus', 'wma', 'amr'].includes(e))
+    if (['mp3', 'ogg', 'wav', 'aac', 'm4a', 'flac', 'opus'].includes(e))
         return 'audio';
     if (e === 'pdf')
         return 'pdf';
     return 'document';
 };
+const FILE_ICON = {
+    image: 'image', video: 'videocam', audio: 'audio_file',
+    pdf: 'picture_as_pdf', document: 'description',
+};
+function fileIcon(name) { return FILE_ICON[EXT_FILTER(name)] ?? 'insert_drive_file'; }
+function isImage(name) { return EXT_FILTER(name) === 'image'; }
 export default function WhatsAppInboxPage() {
     const [qrCode, setQrCode] = useState(null);
     const qrCodeRef = useRef(null);
     const setQrCodeSync = (v) => { qrCodeRef.current = v; setQrCode(v); };
     const newIds = useRef(new Set());
     const socketRef = useRef(null);
-    const { files, connected, loading, error, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
+    const { files, connected, loading, setFiles, addFile, removeFile, setConnected, setLoading, setError } = useWhatsAppStore();
     const [searchQuery, setSearchQuery] = useState('');
-    const [viewMode, setViewMode] = useState('grid');
     const [activeFilter, setActiveFilter] = useState('all');
     const [selectedFile, setSelectedFile] = useState(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [selectedIds, setSelectedIds] = useState(new Set());
+    const [aadhaarLoading, setAadhaarLoading] = useState(false);
+    const [activeSender, setActiveSender] = useState(null);
+    const toggleSelect = useCallback((id) => {
+        setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    }, []);
+    const handleAadhaarLayout = useCallback(async () => {
+        if (selectedIds.size !== 2)
+            return;
+        setAadhaarLoading(true);
+        try {
+            const res = await axios.post(`${API_BASE_URL}/process`, { fileIds: Array.from(selectedIds), action: 'aadhaar_layout' }, { responseType: 'blob' });
+            window.open(URL.createObjectURL(res.data), '_blank');
+            setSelectedIds(new Set());
+        }
+        catch {
+            notification.error({ message: 'Aadhaar layout failed', placement: 'topRight' });
+        }
+        finally {
+            setAadhaarLoading(false);
+        }
+    }, [selectedIds]);
     useEffect(() => {
         if (socketRef.current)
             return;
@@ -43,20 +68,16 @@ export default function WhatsAppInboxPage() {
             setConnected(s.connected);
             const newQr = s.connected ? null : (s.qrCode ?? null);
             setQrCodeSync(newQr);
-            if (newQr) {
-                setTimeout(async () => {
-                    const ok = await fetchWhatsAppStatus().catch(() => false);
-                    if (ok) {
-                        useWhatsAppStore.getState().setConnected(true);
-                        setQrCodeSync(null);
-                    }
-                }, 3000);
-            }
+            if (newQr)
+                setTimeout(async () => { const ok = await fetchWhatsAppStatus().catch(() => false); if (ok) {
+                    useWhatsAppStore.getState().setConnected(true);
+                    setQrCodeSync(null);
+                } }, 3000);
         });
         socket.on('new_whatsapp_file', (file) => {
             newIds.current.add(file.id);
             addFile(file);
-            notification.success({ message: 'New file received', description: `${file.customerName}: ${file.fileName}`, placement: 'topRight', duration: 4 });
+            notification.success({ message: `${file.customerName}: ${file.fileName}`, placement: 'topRight', duration: 3 });
             setTimeout(() => newIds.current.delete(file.id), 3000);
         });
         load();
@@ -65,10 +86,7 @@ export default function WhatsAppInboxPage() {
         async function pollQr() {
             if (!useWhatsAppStore.getState().connected) {
                 try {
-                    const [{ data }, ok] = await Promise.all([
-                        axios.get(`${API_BASE_URL}/whatsapp/qr`),
-                        fetchWhatsAppStatus(),
-                    ]);
+                    const [{ data }, ok] = await Promise.all([axios.get(`${API_BASE_URL}/whatsapp/qr`), fetchWhatsAppStatus()]);
                     useWhatsAppStore.getState().setConnected(ok);
                     if (ok)
                         setQrCodeSync(null);
@@ -90,21 +108,10 @@ export default function WhatsAppInboxPage() {
             if (!incoming.length)
                 return;
             const current = useWhatsAppStore.getState().files;
-            // Index current files by both Drive ID and fileName for merging
             const byId = new Map(current.map(f => [f.id, f]));
             const byName = new Map(current.map(f => [f.fileName, f]));
-            const merged = incoming.map(f => {
-                const ex = byId.get(f.id) ?? byName.get(f.fileName);
-                if (!ex)
-                    return f;
-                // Prefer socket-received data for name/pic (richer), fall back to Drive description
-                return {
-                    ...f,
-                    customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : f.customerName,
-                    profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null,
-                };
-            });
-            // Also keep any socket-received files not yet in Drive (uploaded < 10s ago)
+            const merged = incoming.map(f => { const ex = byId.get(f.id) ?? byName.get(f.fileName); if (!ex)
+                return f; return { ...f, customerName: (ex.customerName && !ex.customerName.startsWith('Guest')) ? ex.customerName : f.customerName, profilePicUrl: ex.profilePicUrl ?? f.profilePicUrl ?? null }; });
             const driveIds = new Set(incoming.map(f => f.id));
             const socketOnly = current.filter(f => !driveIds.has(f.id) && !merged.find(m => m.fileName === f.fileName));
             useWhatsAppStore.getState().setFiles([...socketOnly, ...merged].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
@@ -155,24 +162,41 @@ export default function WhatsAppInboxPage() {
         const win = window.open(getPreviewUrl(file.fileUrl), '_blank');
         win?.addEventListener('load', () => win.print());
     }, []);
+    const allFiles = useMemo(() => (Array.isArray(files) ? files : []).map(f => normalizeWhatsAppFile(f)).filter((f) => f !== null), [files]);
+    // Unique senders for chat list
+    const senders = useMemo(() => {
+        const map = new Map();
+        [...allFiles].reverse().forEach(f => { map.set(f.customerId, { name: f.customerName, lastFile: f }); });
+        return Array.from(map.values()).reverse();
+    }, [allFiles]);
     const visibleFiles = useMemo(() => {
-        let result = (Array.isArray(files) ? files : []).map(f => normalizeWhatsAppFile(f)).filter((f) => f !== null);
+        let result = allFiles;
+        if (activeSender)
+            result = result.filter(f => f.customerId === activeSender);
         if (activeFilter !== 'all')
             result = result.filter(f => EXT_FILTER(f.fileName) === activeFilter);
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase();
-            result = result.filter(f => f.fileName.toLowerCase().includes(q) || f.customerName.toLowerCase().includes(q) || f.customerId.includes(q));
+            result = result.filter(f => f.fileName.toLowerCase().includes(q) || f.customerName.toLowerCase().includes(q));
         }
         return result;
-    }, [files, activeFilter, searchQuery]);
-    const fileCounts = useMemo(() => {
-        const all = (Array.isArray(files) ? files : []).map(f => normalizeWhatsAppFile(f)).filter((f) => f !== null);
-        const c = { all: all.length, image: 0, video: 0, audio: 0, pdf: 0, document: 0 };
-        all.forEach(f => { c[EXT_FILTER(f.fileName)]++; });
-        return c;
-    }, [files]);
+    }, [allFiles, activeSender, activeFilter, searchQuery]);
     const currentIndex = useMemo(() => selectedFile ? visibleFiles.findIndex(f => f.id === selectedFile.id) : -1, [selectedFile, visibleFiles]);
-    const handlePreview = useCallback((file) => { setSelectedFile(file); setIsPreviewOpen(true); }, []);
-    const handleClosePreview = useCallback(() => { setIsPreviewOpen(false); setTimeout(() => setSelectedFile(null), 200); }, []);
-    return (_jsxs("div", { className: "min-h-screen bg-background", children: [_jsx("style", { children: `@keyframes slideDown { from { opacity:0; transform:translateY(-16px); } to { opacity:1; transform:translateY(0); } }` }), _jsx(Header, { fileCount: visibleFiles.length, isConnected: connected, driveConnected: false, viewMode: viewMode, onViewModeChange: setViewMode, searchQuery: searchQuery, onSearchChange: setSearchQuery, onRefresh: load, onDisconnect: async () => { await axios.post(`${API_BASE_URL}/whatsapp/logout`).catch(() => { }); setConnected(false); }, loading: loading }), !connected && (_jsx("div", { className: "flex flex-col items-center justify-center py-10 px-4", children: _jsxs("div", { className: "bg-card border border-border rounded-xl p-8 flex flex-col items-center gap-4 max-w-sm w-full", children: [_jsx("div", { className: "w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center", children: _jsx("span", { className: "text-accent text-xl", children: "\uD83D\uDCF1" }) }), _jsxs("div", { className: "text-center", children: [_jsx("p", { className: "text-foreground font-semibold text-lg", children: "Link your WhatsApp" }), _jsx("p", { className: "text-muted-foreground text-sm mt-1", children: "Scan the QR code to start receiving customer files" })] }), qrCode ? (_jsx("img", { src: qrCode, alt: "QR Code", className: "w-52 h-52 rounded-lg border border-border bg-white p-2" })) : (_jsx("div", { className: "w-52 h-52 rounded-lg border border-border bg-secondary/50 flex items-center justify-center", children: _jsx("p", { className: "text-muted-foreground text-sm", children: "Loading QR..." }) })), _jsx("p", { className: "text-muted-foreground text-xs text-center", children: "Open WhatsApp \u2192 Linked Devices \u2192 Link a Device" }), _jsx("button", { onClick: async () => { setQrCodeSync(null); await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => { }); }, className: "text-xs text-muted-foreground hover:text-foreground border border-border rounded-md px-3 py-1.5 transition-colors", children: "Refresh QR" })] }) })), connected && (_jsxs("div", { className: "mx-4 lg:mx-6 mt-4 px-4 py-2 bg-accent/10 border border-accent/20 rounded-lg text-sm text-accent flex items-center gap-2", children: [_jsx("span", { className: "w-2 h-2 rounded-full bg-accent animate-pulse" }), "WhatsApp connected \u2014 receiving files in real time"] })), error && (_jsx("div", { className: "mx-4 lg:mx-6 mt-4 px-4 py-2 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive", children: error })), _jsxs("main", { className: "p-4 lg:p-6", children: [_jsx("div", { className: "mb-6", children: _jsx(FilterBar, { activeFilter: activeFilter, onFilterChange: setActiveFilter, counts: fileCounts }) }), _jsx(FilesGrid, { files: visibleFiles, newIds: newIds.current, viewMode: viewMode, onPreview: handlePreview, onDownload: handleDownload, onPrint: handlePrint, onDelete: handleDelete })] }), _jsx(PreviewModal, { file: selectedFile, isOpen: isPreviewOpen, onClose: handleClosePreview, onDownload: handleDownload, onPrint: handlePrint, onPrevious: () => currentIndex > 0 && setSelectedFile(visibleFiles[currentIndex - 1]), onNext: () => currentIndex < visibleFiles.length - 1 && setSelectedFile(visibleFiles[currentIndex + 1]), hasPrevious: currentIndex > 0, hasNext: currentIndex < visibleFiles.length - 1 })] }));
+    const activeSenderInfo = activeSender ? senders.find(s => s.lastFile.customerId === activeSender) : null;
+    return (_jsxs("div", { className: "bg-[#0c1322] text-[#dce2f7] h-screen flex flex-col font-['Inter',sans-serif] relative", children: [_jsxs("nav", { className: "bg-slate-950 border-b border-slate-800 flex justify-between items-center px-4 h-14 shrink-0 z-50", children: [_jsxs("div", { className: "flex items-center gap-6", children: [_jsx("span", { className: "text-lg font-bold text-slate-100 uppercase tracking-widest", children: "CyberNet WhatsApp" }), _jsx("div", { className: "hidden md:flex gap-1", children: ['Inbox', 'Media Hub', 'Direct Print'].map((t, i) => (_jsx("a", { href: "#", className: `text-sm px-3 py-1 border-b-2 transition-colors ${i === 0 ? 'text-blue-500 border-blue-500' : 'text-slate-400 border-transparent hover:bg-slate-900 rounded'}`, children: t }, t))) })] }), _jsxs("div", { className: "flex items-center gap-3", children: [_jsxs("div", { className: "relative hidden lg:block", children: [_jsx("span", { className: "material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[18px]", children: "search" }), _jsx("input", { value: searchQuery, onChange: e => setSearchQuery(e.target.value), placeholder: "Search...", className: "w-56 bg-[#232a3a] border border-[#434655] rounded py-1 pl-8 pr-3 text-sm text-[#dce2f7] focus:outline-none focus:border-blue-600" })] }), _jsxs("div", { className: "flex items-center gap-2 border-l border-[#434655] pl-3 ml-1", children: [_jsxs("span", { className: `text-xs flex items-center gap-1 ${connected ? 'text-green-400' : 'text-red-400'}`, children: [_jsx("span", { className: `w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}` }), connected ? 'Connected' : 'Disconnected'] }), _jsx(GoogleDriveLogin, {}), _jsx("button", { onClick: load, disabled: loading, className: "p-1 text-slate-500 hover:text-slate-200 hover:bg-slate-800 rounded transition-colors", children: _jsx("span", { className: `material-symbols-outlined text-[20px] ${loading ? 'animate-spin' : ''}`, children: "refresh" }) }), !connected && (_jsx("button", { onClick: async () => { setQrCodeSync(null); await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => { }); }, className: "p-1 text-slate-500 hover:text-slate-200 hover:bg-slate-800 rounded transition-colors", title: "Refresh QR", children: _jsx("span", { className: "material-symbols-outlined text-[20px]", children: "qr_code_scanner" }) }))] })] })] }), !connected && (_jsx("div", { className: "absolute inset-0 z-40 bg-black/80 flex items-center justify-center", style: { top: '56px' }, children: _jsxs("div", { className: "bg-[#191f2f] border border-[#434655] rounded-xl p-8 flex flex-col items-center gap-4 max-w-xs w-full", children: [_jsx("span", { className: "text-2xl", children: "\uD83D\uDCF1" }), _jsx("p", { className: "text-[#dce2f7] font-semibold", children: "Link your WhatsApp" }), qrCode ? (_jsx("img", { src: qrCode, alt: "QR", className: "w-52 h-52 rounded-lg bg-white p-2" })) : (_jsxs("div", { className: "w-52 h-52 rounded-lg bg-[#2e3545] border border-[#434655] flex flex-col items-center justify-center gap-2", children: [_jsx("span", { className: "material-symbols-outlined text-[32px] text-[#8d90a0] animate-pulse", children: "qr_code_2" }), _jsx("p", { className: "text-xs text-[#8d90a0]", children: "Loading QR code..." })] })), _jsx("p", { className: "text-[#8d90a0] text-xs text-center", children: "WhatsApp \u2192 Linked Devices \u2192 Link a Device" }), _jsx("button", { onClick: async () => { setQrCodeSync(null); await axios.post(`${API_BASE_URL}/whatsapp/reinit`).catch(() => { }); }, className: "text-xs text-[#8d90a0] hover:text-[#dce2f7] border border-[#434655] rounded px-3 py-1.5 transition-colors", children: "Refresh QR" })] }) })), _jsxs("main", { className: "flex-1 flex overflow-hidden", children: [_jsxs("div", { className: "hidden md:flex w-72 bg-[#191f2f] border-r border-[#434655] flex-col shrink-0", children: [_jsx("div", { className: "p-3 border-b border-[#434655] bg-[#232a3a]", children: _jsxs("div", { className: "relative", children: [_jsx("span", { className: "material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 text-[16px]", children: "search" }), _jsx("input", { placeholder: "Search chats...", className: "w-full bg-[#141b2b] border border-[#434655] rounded py-1.5 pl-7 pr-3 text-sm text-[#dce2f7] focus:outline-none focus:border-blue-600" })] }) }), _jsxs("div", { className: "flex-1 overflow-y-auto", children: [_jsxs("div", { onClick: () => setActiveSender(null), className: `p-3 border-b border-[#434655]/50 cursor-pointer transition-colors relative ${!activeSender ? 'bg-[#2e3545]' : 'hover:bg-[#232a3a]'}`, children: [!activeSender && _jsx("div", { className: "absolute left-0 top-0 bottom-0 w-0.5 bg-blue-600" }), _jsxs("div", { className: "flex justify-between items-baseline mb-1", children: [_jsx("span", { className: "text-xs font-semibold text-[#dce2f7] truncate", children: "All Files" }), _jsxs("span", { className: "text-[11px] text-[#8d90a0]", children: [allFiles.length, " files"] })] })] }), senders.map(({ name, lastFile }) => (_jsxs("div", { onClick: () => setActiveSender(lastFile.customerId), className: `p-3 border-b border-[#434655]/50 cursor-pointer transition-colors relative ${activeSender === lastFile.customerId ? 'bg-[#2e3545]' : 'hover:bg-[#232a3a]'}`, children: [activeSender === lastFile.customerId && _jsx("div", { className: "absolute left-0 top-0 bottom-0 w-0.5 bg-blue-600" }), _jsxs("div", { className: "flex justify-between items-baseline mb-1", children: [_jsx("span", { className: "text-xs font-semibold text-[#dce2f7] truncate pr-2", children: name }), _jsx("span", { className: "text-[11px] text-[#8d90a0] shrink-0", children: new Date(lastFile.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })] }), _jsxs("div", { className: "flex items-center gap-1", children: [_jsx("span", { className: "material-symbols-outlined text-[13px] text-[#8d90a0]", children: fileIcon(lastFile.fileName) }), _jsx("span", { className: "text-xs text-[#8d90a0] truncate", children: lastFile.fileName })] })] }, lastFile.customerId)))] })] }), _jsxs("div", { className: "flex-1 flex flex-col bg-[#0c1322] overflow-hidden relative", children: [_jsxs("div", { className: "px-4 py-3 border-b border-[#434655]/50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 bg-[#070e1d] shrink-0", children: [_jsxs("div", { className: "flex items-center gap-3", children: [_jsx("div", { className: "w-9 h-9 rounded-full bg-[#2e3545] flex items-center justify-center", children: _jsx("span", { className: "material-symbols-outlined text-[#8d90a0]", children: "person" }) }), _jsxs("div", { children: [_jsx("h2", { className: "text-base font-semibold text-[#dce2f7]", children: activeSenderInfo?.name ?? 'All Files' }), _jsxs("p", { className: "text-xs text-[#8d90a0]", children: [visibleFiles.length, " file", visibleFiles.length !== 1 ? 's' : ''] })] })] }), _jsx("div", { className: "flex gap-2 overflow-x-auto pb-1 scrollbar-hide", children: ['all', 'image', 'video', 'audio', 'pdf', 'document'].map(f => (_jsx("button", { onClick: () => setActiveFilter(f), className: `px-2 py-1 rounded text-xs border transition-colors shrink-0 ${activeFilter === f ? 'bg-blue-600/20 border-blue-600/50 text-blue-400' : 'border-[#434655] text-[#8d90a0] hover:border-[#8d90a0]'}`, children: f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1) }, f))) })] }), (() => {
+                                const imageFiles = visibleFiles.filter(f => EXT_FILTER(f.fileName) === 'image');
+                                if (imageFiles.length >= 2 && selectedIds.size === 0) {
+                                    return (_jsxs("div", { className: "mx-5 mt-3 px-4 py-2 bg-blue-600/10 border border-blue-600/30 rounded-lg flex items-center justify-between shrink-0", children: [_jsxs("span", { className: "text-xs text-blue-300", children: ["\uD83D\uDCA1 Suggested: ", _jsx("strong", { children: "Aadhaar Layout" }), " \u2014 ", imageFiles.length, " images detected"] }), _jsx("button", { onClick: () => { setSelectedIds(new Set([imageFiles[0].id, imageFiles[1].id])); }, className: "ml-4 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded transition-colors shrink-0", children: "SELECT 2" })] }));
+                                }
+                                return null;
+                            })(), _jsx("div", { className: "flex-1 overflow-y-auto p-5", style: { paddingBottom: selectedIds.size > 0 ? '80px' : '20px' }, children: visibleFiles.length === 0 ? (_jsxs("div", { className: "flex flex-col items-center justify-center h-full gap-3 text-[#8d90a0]", children: [_jsx("span", { className: "material-symbols-outlined text-[48px]", children: "inbox" }), _jsx("p", { className: "text-sm", children: connected ? 'No files yet' : 'WhatsApp not connected' })] })) : (_jsx("div", { className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3", children: visibleFiles.map(file => {
+                                        const selected = selectedIds.has(file.id);
+                                        const isNew = newIds.current.has(file.id);
+                                        const thumb = getPreviewUrl(file.fileUrl);
+                                        return (_jsxs("div", { onDoubleClick: () => handleDownload(file), onContextMenu: e => { e.preventDefault(); if (window.confirm(`Delete ${file.fileName}?`))
+                                                handleDelete(file); }, className: `bg-[#191f2f] border rounded-lg overflow-hidden group relative cursor-pointer transition-all select-none
+                        ${selected ? 'border-blue-500 ring-1 ring-blue-500' : isNew ? 'border-green-500/60' : 'border-[#434655] hover:border-[#8d90a0]'}`, children: [_jsx("div", { className: "absolute top-2 left-2 z-10", onClick: e => { e.stopPropagation(); toggleSelect(file.id); }, children: _jsx("input", { type: "checkbox", checked: selected, onChange: () => { }, className: `w-4 h-4 cursor-pointer accent-blue-500 ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity` }) }), _jsxs("div", { className: "h-32 bg-[#2e3545] relative", onClick: () => { setSelectedFile(file); setIsPreviewOpen(true); }, children: [isImage(file.fileName) ? (_jsx("img", { src: thumb, alt: file.fileName, className: "w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" })) : (_jsx("div", { className: "w-full h-full flex items-center justify-center", children: _jsx("span", { className: "material-symbols-outlined text-[36px] text-[#434655] group-hover:text-[#8d90a0] transition-colors", children: fileIcon(file.fileName) }) })), _jsx("div", { className: "absolute top-1.5 right-1.5 bg-[#232a3a]/80 px-1.5 py-0.5 rounded text-[9px] text-[#8d90a0] uppercase", children: file.fileName.split('.').pop() })] }), _jsxs("div", { className: "px-2 py-1.5 border-t border-[#434655]/50", children: [_jsx("p", { className: "text-[11px] font-medium text-[#dce2f7] truncate", children: file.fileName }), _jsx("p", { className: "text-[10px] text-[#434655] mt-0.5", children: new Date(file.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })] })] }, file.id));
+                                    }) })) }), selectedIds.size > 0 && (_jsxs("div", { className: "absolute bottom-0 left-0 right-0 z-20 px-3 py-2 bg-[#070e1d]/95 backdrop-blur-sm border-t border-[#434655] flex items-center gap-2", children: [_jsxs("span", { className: "text-xs text-[#8d90a0] shrink-0 hidden sm:block", children: [selectedIds.size, " selected"] }), _jsxs("div", { className: "flex-1 flex gap-2", children: [_jsxs("button", { onClick: handleAadhaarLayout, disabled: selectedIds.size !== 2 || aadhaarLoading, className: "flex-1 bg-blue-600 disabled:bg-blue-600/30 disabled:cursor-not-allowed text-white py-2.5 px-2 rounded font-semibold text-xs sm:text-sm hover:bg-blue-500 transition-colors flex items-center justify-center gap-1", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "layers" }), _jsx("span", { className: "hidden sm:inline", children: aadhaarLoading ? 'Processing…' : 'Aadhaar' }), _jsx("span", { className: "sm:hidden", children: "Aadhaar" })] }), _jsxs("button", { disabled: selectedIds.size === 0, onClick: () => { const f = visibleFiles.find(f => selectedIds.has(f.id)); if (f)
+                                                    handlePrint(f); }, className: "flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-2 rounded text-xs sm:text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-1", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "print" }), " Print"] }), _jsxs("button", { disabled: selectedIds.size === 0, onClick: () => { visibleFiles.filter(f => selectedIds.has(f.id)).forEach(handleDownload); }, className: "flex-1 bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2.5 px-2 rounded text-xs sm:text-sm border border-[#434655] hover:bg-[#3a4255] transition-colors flex items-center justify-center gap-1", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "download" }), " Download"] })] }), _jsx("button", { onClick: () => setSelectedIds(new Set()), className: "text-[#8d90a0] hover:text-[#dce2f7] p-1 transition-colors shrink-0", children: _jsx("span", { className: "material-symbols-outlined text-[20px]", children: "close" }) })] }))] }), _jsxs("div", { className: "hidden lg:flex w-56 bg-[#141b2b] border-l border-[#434655]/40 flex-col shrink-0 opacity-70 hover:opacity-100 transition-opacity", children: [_jsxs("div", { className: "p-4 border-b border-[#434655] bg-[#232a3a]", children: [_jsx("p", { className: "text-[10px] text-[#8d90a0] uppercase tracking-wider mb-1", children: "Selection" }), _jsxs("p", { className: "text-lg font-semibold text-[#dce2f7]", children: [selectedIds.size, " File", selectedIds.size !== 1 ? 's' : '', " Selected"] }), selectedIds.size > 0 && _jsx("p", { className: "text-xs text-[#8d90a0]", children: "Click files to select" })] }), _jsxs("div", { className: "p-4 flex flex-col gap-2 flex-1", children: [_jsx("p", { className: "text-[10px] text-[#8d90a0] uppercase tracking-wider mt-1 mb-1", children: "Primary Workflows" }), _jsxs("button", { onClick: handleAadhaarLayout, disabled: selectedIds.size !== 2 || aadhaarLoading, className: "w-full bg-blue-600 disabled:bg-blue-600/30 disabled:cursor-not-allowed text-white py-4 px-3 rounded font-semibold hover:bg-blue-700 transition-colors flex flex-col items-center gap-2", children: [_jsx("span", { className: "material-symbols-outlined text-[28px]", children: "layers" }), _jsx("span", { className: "text-sm", children: aadhaarLoading ? 'Processing…' : selectedIds.size === 2 ? 'Aadhaar Layout' : `Aadhaar Layout (${selectedIds.size}/2)` })] }), _jsxs("button", { disabled: selectedIds.size === 0, onClick: () => { const f = visibleFiles.find(f => selectedIds.has(f.id)); if (f)
+                                            handlePrint(f); }, className: "w-full bg-[#2e3545] disabled:opacity-40 text-[#dce2f7] py-2 px-3 rounded border border-[#434655] text-sm hover:border-[#8d90a0] hover:bg-[#232a3a] transition-colors flex items-center justify-center gap-2", children: [_jsx("span", { className: "material-symbols-outlined text-[18px]", children: "print" }), " Print Selected"] }), _jsx("div", { className: "h-px bg-[#434655]/50 my-2" }), _jsx("p", { className: "text-[10px] text-[#8d90a0] uppercase tracking-wider mb-1", children: "Utility" }), _jsxs("button", { disabled: selectedIds.size === 0, onClick: () => { visibleFiles.filter(f => selectedIds.has(f.id)).forEach(handleDownload); }, className: "w-full bg-transparent disabled:opacity-40 text-[#dce2f7] py-2 px-3 rounded border border-[#434655] text-sm hover:bg-[#2e3545] transition-colors flex items-center justify-center gap-2", children: [_jsx("span", { className: "material-symbols-outlined text-[18px]", children: "download" }), " Download Selected"] }), selectedIds.size > 0 && (_jsx("button", { onClick: () => setSelectedIds(new Set()), className: "w-full text-[#8d90a0] py-1 text-xs hover:text-[#dce2f7] transition-colors", children: "Clear selection" })), _jsxs("div", { className: "mt-auto flex flex-col gap-2 pt-4", children: [_jsxs("button", { onClick: () => { setSelectedIds(new Set(visibleFiles.map(f => f.id))); }, className: "w-full text-[#8d90a0] py-2 px-3 rounded border border-[#434655]/50 text-xs hover:text-[#dce2f7] hover:border-[#434655] transition-colors flex items-center justify-center gap-2", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "done_all" }), " Select All (", visibleFiles.length, ")"] }), _jsxs("button", { onClick: () => visibleFiles.forEach(handleDownload), className: "w-full text-[#8d90a0] py-2 px-3 rounded border border-[#434655]/50 text-xs hover:text-[#dce2f7] hover:border-[#434655] transition-colors flex items-center justify-center gap-2", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "archive" }), " Download All (", visibleFiles.length, ")"] })] })] })] })] }), _jsx(PreviewModal, { file: selectedFile, isOpen: isPreviewOpen, onClose: () => { setIsPreviewOpen(false); setTimeout(() => setSelectedFile(null), 200); }, onDownload: handleDownload, onPrint: handlePrint, onPrevious: () => currentIndex > 0 && setSelectedFile(visibleFiles[currentIndex - 1]), onNext: () => currentIndex < visibleFiles.length - 1 && setSelectedFile(visibleFiles[currentIndex + 1]), hasPrevious: currentIndex > 0, hasNext: currentIndex < visibleFiles.length - 1 })] }));
 }

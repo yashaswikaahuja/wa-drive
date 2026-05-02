@@ -30,13 +30,15 @@ const TYPE_COLOR: Record<string, string> = {
 interface Props {
   file: WhatsAppFile;
   isNew?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
   onPreview: (f: WhatsAppFile) => void;
   onDownload: (f: WhatsAppFile) => void;
   onPrint: (f: WhatsAppFile) => void;
   onDelete: (f: WhatsAppFile) => void;
 }
 
-export function FileCard({ file, isNew, onPreview, onDownload, onPrint, onDelete }: Props) {
+export function FileCard({ file, isNew, selected, onToggleSelect, onPreview, onDownload, onPrint, onDelete }: Props) {
   const type = EXT_TYPE(file.fileName);
   const thumb = getPreviewUrl(file.fileUrl);
 
@@ -44,8 +46,15 @@ export function FileCard({ file, isNew, onPreview, onDownload, onPrint, onDelete
     <div
       onClick={() => onPreview(file)}
       className={`group relative bg-card border rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:shadow-accent/5
-        ${isNew ? 'border-accent/60 animate-[slideDown_0.3s_ease-out]' : 'border-border hover:border-accent/50'}`}
+        ${isNew ? 'border-accent/60 animate-[slideDown_0.3s_ease-out]' : selected ? 'border-accent ring-1 ring-accent' : 'border-border hover:border-accent/50'}`}
     >
+      {/* Selection checkbox */}
+      {onToggleSelect && (
+        <div className="absolute top-2 left-2 z-10" onClick={e => { e.stopPropagation(); onToggleSelect(file.id); }}>
+          <input type="checkbox" checked={selected ?? false} onChange={() => {}}
+            className="w-4 h-4 accent-accent cursor-pointer" />
+        </div>
+      )}
       {/* Thumbnail */}
       <div className="relative aspect-square bg-secondary/50 overflow-hidden">
         {type === 'image' ? (
