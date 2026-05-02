@@ -209,12 +209,19 @@ async function startBaileys() {
 
       let phone: string;
       if (jid.endsWith('@lid')) {
-        try {
-          const contact = await sock.getContact(jid);
-          const serialized: string = contact?.id?._serialized ?? '';
-          phone = serialized.replace(/@c\.us|@s\.whatsapp\.net/g, '').replace(/[^0-9+]/g, '');
-        } catch { phone = ''; }
-        if (!phone) phone = jid.replace('@lid', '').replace(/[^0-9+]/g, '');
+        // participant field contains the real @s.whatsapp.net JID
+        const participant = msg.key.participant ?? msg.participant ?? '';
+        if (participant && !participant.endsWith('@lid')) {
+          phone = participant.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/[^0-9+]/g, '');
+        } else {
+          // fallback: try getContact, else use numeric lid
+          try {
+            const contact = await sock.getContact(jid);
+            const serialized: string = contact?.id?._serialized ?? '';
+            phone = serialized.replace(/@c\.us|@s\.whatsapp\.net/g, '').replace(/[^0-9+]/g, '');
+          } catch { phone = ''; }
+          if (!phone) phone = jid.replace('@lid', '').replace(/[^0-9+]/g, '');
+        }
       } else {
         phone = jid.replace(/@s\.whatsapp\.net|@c\.us/g, '').replace(/[^0-9+]/g, '');
       }
