@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { cropAndAlignFace } from './faceDetect.js';
 
 // ── Layout configs ────────────────────────────────────────────────────────────
 // Photo size is DERIVED from sheet + grid, not hardcoded.
@@ -24,30 +25,9 @@ function calcPhotoSize(cfg: typeof LAYOUTS[LayoutKey]) {
   return { pw, ph };
 }
 
-/**
- * Prepare a single passport photo:
- * 1. Extract top 80% (face area — avoids lower body)
- * 2. Smart square crop via attention strategy (finds face/eyes)
- * 3. Flatten transparency → white
- * 4. Resize to exact slot dimensions with white padding (contain — no distortion)
- */
+/** Prepare a single passport photo using Face++ detection with attention fallback */
 async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buffer> {
-  const { width = 600, height = 800 } = await sharp(input).metadata();
-
-  // Bias toward top 80% to keep face in frame
-  const cropH = Math.round(height * 0.80);
-  const squareSize = Math.min(width, cropH);
-
-  const square = await sharp(input)
-    .extract({ left: 0, top: 0, width, height: cropH })
-    .resize(squareSize, squareSize, { fit: 'cover', position: sharp.strategy.attention })
-    .toBuffer();
-
-  return sharp(square)
-    .flatten({ background: { r: 255, g: 255, b: 255 } })
-    .resize(pw, ph, { fit: 'contain', background: { r: 255, g: 255, b: 255 }, position: 'centre' })
-    .jpeg({ quality: 95 })
-    .toBuffer();
+  return cropAndAlignFace(input, pw, ph);
 }
 
 export async function generatePassportSheet(

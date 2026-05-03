@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { google } from 'googleapis';
+import multer from 'multer';
 import { generateAadhaarLayout, generatePassportSheet } from '../../services/processor/layout.js';
+import { cropAndAlignFace } from '../../services/processor/faceDetect.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
 async function downloadDriveFile(fileId: string, accessToken: string): Promise<Buffer> {
   const auth = new google.auth.OAuth2();
@@ -63,6 +66,31 @@ router.post('/passport-sheet', async (req: Request, res: Response) => {
   } catch (e: any) {
     console.error('[Process] passport-sheet error:', e.message);
     res.status(500).json({ error: e.message ?? 'Sheet generation failed' });
+  }
+});
+
+// POST /api/process/face-align
+// Accepts: multipart image_file OR JSON { fileId }
+// Returns: aligned passport photo (600×600 JPEG)
+router.post('/face-align', upload.single('image_file') as any, async (req: any, res: Response) => {
+  let imageBuffer: Buffer;
+  try {
+    if (req.file) {
+      imageBuffer = req.file.buffer;
+    } else if (req.body?.fileId) {
+      const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
+      if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
+      imageBuffer = await downloadDriveFile(req.body.fileId, driveAccessToken);
+    } else {
+      res.status(400).json({ error: 'Provide image_file (multipart) or fileId (JSON)' }); return;
+    }
+
+    const aligned = await cropAndAlignFace(imageBuffer, 600, 600);
+    res.set('Content-Type', 'image/jpeg');
+    res.send(aligned);
+  } catch (e: any) {
+    console.error('[Process] face-align error:', e.message);
+    res.status(500).json({ error: e.message ?? 'Face alignment failed' });
   }
 });
 
