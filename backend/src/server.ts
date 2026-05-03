@@ -225,33 +225,57 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
   }
 });
 
-// ── Background removal proxy ──────────────────────────────────────────────────
+// ── Background removal proxy ────────────────────────────────────────────
 const bgUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
+async function downloadDriveBuffer(fileId: string, accessToken: string): Promise<Buffer> {
+  const auth = new google.auth.OAuth2();
+  auth.setCredentials({ access_token: accessToken });
+  const drive = google.drive({ version: 'v3', auth });
+  const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+  return Buffer.from(res.data as ArrayBuffer);
+}
+
 app.post('/api/remove-bg', bgUpload.single('image_file') as any, async (req: any, res: any) => {
-  if (!req.file) { res.status(400).json({ error: 'No image' }); return; }
+  const REMOVE_BG_KEY = process.env['REMOVE_BG_API_KEY'] ?? 'd9f7QFfqAdFuEzt1dXNqvSxP';
+  let imageBuffer: Buffer;
+  let filename = 'image.jpg';
   try {
+    if (req.file) {
+      imageBuffer = req.file.buffer;
+      filename = req.file.originalname ?? filename;
+    } else if (req.body?.fileId) {
+      const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
+      if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
+      imageBuffer = await downloadDriveBuffer(req.body.fileId, driveAccessToken);
+      filename = req.body.fileName ?? filename;
+    } else {
+      res.status(400).json({ error: 'Provide image_file (multipart) or fileId (JSON)' }); return;
+    }
+    if (!imageBuffer || imageBuffer.length < 100) {
+      res.status(400).json({ error: 'Image buffer empty or too small' }); return;
+    }
     const FormDataNode = (await import('form-data')).default;
     const form = new FormDataNode();
-    form.append('image_file', req.file.buffer, { filename: req.file.originalname, contentType: req.file.mimetype });
+    form.append('image_file', imageBuffer, { filename, contentType: 'image/jpeg' });
     form.append('size', 'auto');
     const response = await fetch('https://api.remove.bg/v1.0/removebg', {
       method: 'POST',
-      headers: { 'X-Api-Key': 'd9f7QFfqAdFuEzt1dXNqvSxP', ...form.getHeaders() },
+      headers: { 'X-Api-Key': REMOVE_BG_KEY, ...form.getHeaders() },
       body: form as any,
     });
     if (!response.ok) {
       const err = await response.text();
-      res.status(response.status).json({ error: err }); return;
+      console.error(`[Hub] remove-bg API error ${response.status}: ${err}`);
+      res.status(response.status).json({ error: `remove.bg: ${err}` }); return;
     }
     const buf = Buffer.from(await response.arrayBuffer());
     res.set('Content-Type', 'image/png');
     res.send(buf);
-  } catch (e) {
-    console.error('[Hub] remove-bg failed:', e);
-    res.status(500).json({ error: 'Background removal failed' });
-  }
-});
+  } catch (e: any) {
+    console.error('[Hub] remove-bg failed:', e.message);
+    res.status(500).json({ error: e.message ?? 'Background removal failed' });
+  }});
 
 app.post('/api/whatsapp/reinit', (_req, res) => {
   lastQrCode = null;
