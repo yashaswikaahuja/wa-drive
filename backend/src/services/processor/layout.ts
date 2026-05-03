@@ -13,7 +13,7 @@ const LAYOUTS = {
   // 4×6 landscape @ 300 DPI — 6 photos (3 cols × 2 rows)
   '4x6-6':  { sw: 1800, sh: 1200, cols: 3, rows: 2, margin: 50, gap: 20 },
   // A4 portrait @ 300 DPI — 24 photos (4 cols × 6 rows)
-  'a4':     { sw: 2480, sh: 3508, cols: 4, rows: 6, margin: 60, gap: 20 },
+  'a4':     { sw: 2480, sh: 3508, cols: 4, rows: 6, margin: 40, gap: 8 },
 } as const;
 
 type LayoutKey = keyof typeof LAYOUTS;
