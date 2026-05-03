@@ -13,7 +13,7 @@ export type PhotoSpec = keyof typeof PHOTO_SPECS;
 export const SHEET_PRESETS = {
   '4x6-8':  { sw: 1800, sh: 1200, cols: 4, rows: 2, label: '4×6 · 8 photos (Standard)' },
   '4x6-12': { sw: 1800, sh: 1200, cols: 4, rows: 3, label: '4×6 · 12 photos (Small)' },
-  '4x6-4':  { sw: 1800, sh: 1200, cols: 2, rows: 2, label: '4×6 · 4 photos (Large)' },
+  '4x6-4':  { sw: 1200, sh: 1800, cols: 2, rows: 2, label: '4×6 · 4 photos (Large)' },
   'a4-24':  { sw: 2480, sh: 3508, cols: 4, rows: 6, label: 'A4 · 24 photos (Bulk)' },
 } as const;
 export type SheetPreset = keyof typeof SHEET_PRESETS;
@@ -35,10 +35,10 @@ export async function generatePassportSheet(
   const { w: specW, h: specH } = PHOTO_SPECS[spec];
   const aspect = specH / specW;
 
-  // Photo fills sheet width. Height from aspect ratio — never capped to sheet height.
-  // Sheet height is trimmed to fit content exactly (no wasted space).
+  // Photo fills sheet width. Height from aspect ratio, capped so all rows fit in sheet.
   const pw = Math.floor((sw - (cols - 1) * GAP) / cols);
-  const ph = Math.round(pw * aspect);
+  const maxPh = Math.floor((sh - (rows - 1) * GAP) / rows);
+  const ph = Math.min(Math.round(pw * aspect), maxPh);
 
   const photo = await preparePhoto(photoBuffer, pw, ph);
 
