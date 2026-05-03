@@ -32,39 +32,15 @@ async function applyBackground(pngDataUrl, color) {
         img.src = pngDataUrl;
     });
 }
-// Generate passport photo sheet on canvas
-async function generateSheet(imageDataUrl, sheet) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            // Sheet dimensions in px at 300dpi
-            const configs = {
-                '4x6': { w: 1800, h: 1200, cols: 3, rows: 2, photoW: 525, photoH: 675, margin: 50 },
-                'a4': { w: 2480, h: 3508, cols: 4, rows: 6, photoW: 525, photoH: 675, margin: 60 },
-            };
-            const c = configs[sheet];
-            const canvas = document.createElement('canvas');
-            canvas.width = c.w;
-            canvas.height = c.h;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, c.w, c.h);
-            const totalW = c.cols * c.photoW + (c.cols + 1) * c.margin;
-            const totalH = c.rows * c.photoH + (c.rows + 1) * c.margin;
-            const offsetX = (c.w - totalW) / 2;
-            const offsetY = (c.h - totalH) / 2;
-            for (let row = 0; row < c.rows; row++) {
-                for (let col = 0; col < c.cols; col++) {
-                    const x = offsetX + c.margin + col * (c.photoW + c.margin);
-                    const y = offsetY + c.margin + row * (c.photoH + c.margin);
-                    ctx.drawImage(img, x, y, c.photoW, c.photoH);
-                }
-            }
-            resolve(canvas.toDataURL('image/jpeg', 0.95));
-        };
-        img.onerror = reject;
-        img.src = imageDataUrl;
+// Generate passport sheet via backend Sharp — avoids CORS/tainted canvas
+async function generateSheet(fileId, sheet) {
+    const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, sheet }),
     });
+    if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
+    return URL.createObjectURL(await res.blob());
 }
 export default function FileStitchPage() {
     const [params] = useSearchParams();
@@ -174,15 +150,16 @@ export default function FileStitchPage() {
         catch { /* ignore */ }
     }
     async function generatePassportSheet() {
-        const src = processedUrl ?? originalUrl;
-        if (!src)
+        if (!activeFile)
             return;
+        const fileId = getDriveId(activeFile.fileUrl);
+        if (!fileId) { setBgError('No Drive file ID found'); return; }
         setSheetLoading(true);
         try {
-            const url = await generateSheet(src, sheet);
+            const url = await generateSheet(fileId, sheet);
             setSheetUrl(url);
         }
-        catch { /* ignore */ }
+        catch (e) { setBgError(e.message); }
         finally {
             setSheetLoading(false);
         }
