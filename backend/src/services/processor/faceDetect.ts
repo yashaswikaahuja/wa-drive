@@ -135,7 +135,7 @@ export async function cropAndAlignFace(
     .normalize()
     .modulate({ brightness: 1.04, saturation: 1.08 })
     .gamma(1.05)
-    .resize(targetW, targetH, { fit: 'contain', background: { r: 255, g: 255, b: 255 }, position: 'centre' })
+    .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
     .withMetadata({ density: 300 })
     .jpeg({ quality: 95 })
     .toBuffer();
