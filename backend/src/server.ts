@@ -123,7 +123,27 @@ app.get('/api/drive/files', async (_req, res) => {
 });
 
 // ── Worker file upload ────────────────────────────────────────────────────────
-const upload = multer({ storage: multer.memoryStorage() });
+// Memory storage but limit file size to 50MB to prevent OOM
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+});
+
+// Concurrency limiter — only 1 Drive upload at a time on e2-micro (1GB RAM)
+let hubUploadActive = 0;
+const hubUploadQueue: Array<() => void> = [];
+const HUB_UPLOAD_CONCURRENCY = 1;
+
+function acquireUploadSlot(): Promise<void> {
+  return new Promise(resolve => {
+    if (hubUploadActive < HUB_UPLOAD_CONCURRENCY) { hubUploadActive++; resolve(); }
+    else hubUploadQueue.push(resolve);
+  });
+}
+function releaseUploadSlot() {
+  const next = hubUploadQueue.shift();
+  if (next) { next(); } else { hubUploadActive--; }
+}
 
 app.post('/api/worker/upload', upload.single('file') as any, async (req: any, res: any) => {
   const drive = getDrive();
@@ -131,23 +151,33 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
   if (!req.file) { res.status(400).json({ error: 'No file' }); return; }
 
   const { phone, senderName, profilePicUrl, mimetype, fileName } = req.body as Record<string, string>;
+  const fileSize = req.file.size;
+  console.log(`[Hub] Upload queued: ${fileName} (${(fileSize/1024).toFixed(0)}KB) from ${phone}`);
 
+  await acquireUploadSlot();
   try {
+    console.log(`[Hub] Uploading: ${fileName}`);
     const customersId = await findOrCreateFolder(drive, 'customers');
     const phoneId     = await findOrCreateFolder(drive, phone, customersId);
 
+    // Stream buffer to Drive — don't hold reference after upload
+    const buffer = req.file.buffer;
     const file = await drive.files.create({
       requestBody: {
         name: fileName,
         parents: [phoneId],
         description: JSON.stringify({ customerName: senderName, profilePicUrl: profilePicUrl || null }),
       },
-      media: { mimeType: mimetype, body: Readable.from(req.file.buffer) },
+      media: { mimeType: mimetype, body: Readable.from(buffer) },
       fields: 'id,webContentLink',
     });
 
+    // Release buffer from memory immediately
+    (req.file as any).buffer = null;
+
     const fileId = file.data.id!;
     await drive.permissions.create({ fileId, requestBody: { role: 'reader', type: 'anyone' } });
+    console.log(`[Hub] ✓ Uploaded: ${fileName} → ${fileId}`);
 
     io.emit('new_whatsapp_file', {
       id: fileId,
@@ -157,15 +187,60 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
       fileName,
       fileUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`,
       type: mimeToType(mimetype),
-      size: req.file.size,
+      size: fileSize,
       timestamp: new Date().toISOString(),
       profilePicUrl: profilePicUrl || null,
     });
 
     res.json({ fileUrl: file.data.webContentLink, fileId });
   } catch (e) {
-    console.error('[Hub] Upload failed:', e);
+    console.error(`[Hub] ✗ Upload failed: ${fileName} | ${(e as Error).message}`);
     res.status(500).json({ error: 'Upload failed' });
+  } finally {
+    releaseUploadSlot();
+  }
+});
+
+// ── Background removal proxy ──────────────────────────────────────────────────
+const bgUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
+
+app.post('/api/remove-bg', bgUpload.single('image_file') as any, async (req: any, res: any) => {
+  try {
+    let imageBuffer: Buffer;
+    let filename = 'image.jpg';
+
+    if (req.file) {
+      // Direct upload
+      imageBuffer = req.file.buffer;
+      filename = req.file.originalname ?? filename;
+    } else if (req.body?.fileId) {
+      // Download from Drive server-side (avoids browser CORS)
+      const drive = getDrive();
+      if (!drive) { res.status(401).json({ error: 'Not connected to Drive' }); return; }
+      const driveRes = await drive.files.get({ fileId: req.body.fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+      imageBuffer = Buffer.from(driveRes.data as ArrayBuffer);
+      filename = req.body.fileName ?? filename;
+    } else {
+      res.status(400).json({ error: 'No image or fileId provided' }); return;
+    }
+
+    const FormDataNode = (await import('form-data')).default;
+    const form = new FormDataNode();
+    form.append('image_file', imageBuffer, { filename, contentType: 'image/jpeg' });
+    form.append('size', 'auto');
+
+    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: { 'X-Api-Key': 'd9f7QFfqAdFuEzt1dXNqvSxP', ...form.getHeaders() },
+      body: form as any,
+    });
+    if (!response.ok) { res.status(response.status).json({ error: await response.text() }); return; }
+    const buf = Buffer.from(await response.arrayBuffer());
+    res.set('Content-Type', 'image/png');
+    res.send(buf);
+  } catch (e) {
+    console.error('[Hub] remove-bg failed:', e);
+    res.status(500).json({ error: 'Background removal failed' });
   }
 });
 
@@ -204,6 +279,12 @@ io.on('connection', (socket) => {
   socket.on('new_whatsapp_file', (file: object) => {
     io.emit('new_whatsapp_file', file);
   });
+
+  // Forward upload queue events to dashboard
+  socket.on('upload:queued', (d: object) => io.emit('upload:queued', d));
+  socket.on('upload:start',  (d: object) => io.emit('upload:start',  d));
+  socket.on('upload:done',   (d: object) => io.emit('upload:done',   d));
+  socket.on('upload:fail',   (d: object) => io.emit('upload:fail',   d));
 
   socket.emit('connection:status', { connected: workerConnected, ...(lastQrCode ? { qrCode: lastQrCode } : {}) });
 
