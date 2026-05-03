@@ -33,19 +33,13 @@ export async function detectFace(imageBuffer: Buffer): Promise<FaceRect | null> 
   const secret = process.env['FACEPP_API_SECRET'];
   if (!key || !secret) { console.warn('[FacePP] API keys not set — skipping'); return null; }
 
-  // Compress to max 800px before sending to Face++ — reduces API latency, saves bandwidth
-  const compressed = await sharp(imageBuffer)
-    .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 80 })
-    .toBuffer();
-
-  console.log(`[FacePP] Calling detect API (${compressed.length} bytes, compressed from ${imageBuffer.length})`);
+  console.log(`[FacePP] Calling detect API (${imageBuffer.length} bytes)`);
 
   const result = await new Promise<FaceRect | null>((resolve) => {
     const form = new FormData();
     form.append('api_key', key);
     form.append('api_secret', secret);
-    form.append('image_file', compressed, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+    form.append('image_file', imageBuffer, { filename: 'photo.jpg', contentType: 'image/jpeg' });
     form.append('return_attributes', 'none');
 
     const req = https.request(
@@ -76,23 +70,8 @@ export async function detectFace(imageBuffer: Buffer): Promise<FaceRect | null> 
     form.pipe(req);
   });
 
-  // Scale face rect back to original image coordinates
-  const { width: origW = 800, height: origH = 800 } = await sharp(imageBuffer).metadata();
-  const { width: compW = 800, height: compH = 800 } = await sharp(compressed).metadata();
-  const scaleX = origW / compW;
-  const scaleY = origH / compH;
-
   faceCache.set(hash, result);
-
-  if (result) {
-    return {
-      top:    Math.round(result.top    * scaleY),
-      left:   Math.round(result.left   * scaleX),
-      width:  Math.round(result.width  * scaleX),
-      height: Math.round(result.height * scaleY),
-    };
-  }
-  return null;
+  return result;
 }
 
 /**
