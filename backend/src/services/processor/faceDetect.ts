@@ -9,7 +9,9 @@ interface FaceRect { top: number; left: number; width: number; height: number; }
 async function detectFace(imageBuffer: Buffer): Promise<FaceRect | null> {
   const key    = process.env['FACEPP_API_KEY'];
   const secret = process.env['FACEPP_API_SECRET'];
-  if (!key || !secret) return null;
+  if (!key || !secret) { console.warn('[FacePP] API keys not set — skipping'); return null; }
+
+  console.log(`[FacePP] Calling detect API (buffer: ${imageBuffer.length} bytes)`);
 
   const form = new FormData();
   form.append('api_key', key);
@@ -18,17 +20,24 @@ async function detectFace(imageBuffer: Buffer): Promise<FaceRect | null> {
   form.append('return_attributes', 'none');
 
   const res = await fetch(FACEPP_URL, { method: 'POST', body: form as any });
-  if (!res.ok) return null;
+  const data = await res.json() as { faces?: Array<{ face_rectangle: FaceRect }>; error_message?: string };
 
-  const data = await res.json() as { faces?: Array<{ face_rectangle: FaceRect }> };
-  if (!data.faces?.length) return null;
+  console.log(`[FacePP] Response: faces=${data.faces?.length ?? 0}${data.error_message ? ' error=' + data.error_message : ''}`);
 
-  // Pick the largest face (by area) in case multiple faces detected
-  return data.faces.reduce((best, f) => {
+  if (!res.ok || data.error_message) {
+    console.error('[FacePP] API error:', data.error_message ?? res.status);
+    return null;
+  }
+  if (!data.faces?.length) { console.warn('[FacePP] No face detected'); return null; }
+
+  const face = data.faces.reduce((best, f) => {
     const area = f.face_rectangle.width * f.face_rectangle.height;
     const bestArea = best.width * best.height;
     return area > bestArea ? f.face_rectangle : best;
   }, data.faces[0].face_rectangle);
+
+  console.log(`[FacePP] Face rect: top=${face.top} left=${face.left} w=${face.width} h=${face.height}`);
+  return face;
 }
 
 /**
@@ -63,18 +72,18 @@ export async function cropAndAlignFace(
       const bottom = Math.min(height, face.top  + face.height + padBottom);
 
       cropBox = { left, top, width: right - left, height: bottom - top };
+      console.log(`[FacePP] Crop box: left=${left} top=${top} w=${cropBox.width} h=${cropBox.height}`);
     }
-  } catch {
-    // Face++ unavailable — fall through to fallback
+  } catch (e: any) {
+    console.warn('[FacePP] Detection failed, using fallback:', e.message);
   }
 
   let cropped: Buffer;
   if (cropBox) {
-    cropped = await sharp(input)
-      .extract(cropBox)
-      .toBuffer();
+    console.log('[FacePP] Using face-detected crop');
+    cropped = await sharp(input).extract(cropBox).toBuffer();
   } else {
-    // Fallback: top-biased attention crop (no face detected or API unavailable)
+    console.log('[FacePP] Using attention fallback crop');
     const cropH = Math.round(height * 0.80);
     const squareSize = Math.min(width, cropH);
     cropped = await sharp(input)
