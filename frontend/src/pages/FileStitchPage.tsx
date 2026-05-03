@@ -7,6 +7,7 @@ interface StitchFile { id: string; fileName: string; fileUrl: string; customerNa
 type Mode = 'aadhaar' | 'passport';
 type BgColor = 'white' | 'lightblue' | 'red' | 'custom';
 type Sheet = '4x6' | 'a4';
+type PhotoSize = 'passport' | 'visa' | 'us';
 
 const BG_HEX: Record<BgColor, string> = {
   white: '#ffffff', lightblue: '#a8c8e8', red: '#c8102e', custom: '#ffffff',
@@ -40,11 +41,11 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 /** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
-async function buildSheet(fileId: string, sheet: Sheet, count: number): Promise<string> {
+async function buildSheet(fileId: string, sheet: Sheet, count: number, size: PhotoSize): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, sheet, count, size: 'passport' }),
+    body: JSON.stringify({ fileId, sheet, count, size }),
   });
   if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
   return URL.createObjectURL(await res.blob());
@@ -85,6 +86,7 @@ export default function FileStitchPage() {
   const [bgColor, setBgColor] = useState<BgColor>('white');
   const [customColor, setCustomColor] = useState('#ffffff');
   const [sheet, setSheet] = useState<Sheet>('4x6');
+  const [photoSize, setPhotoSize] = useState<PhotoSize>('passport');
 
   const [bgLoading, setBgLoading] = useState(false);
   const [bgError, setBgError] = useState<string | null>(null);
@@ -184,7 +186,7 @@ export default function FileStitchPage() {
     const fileId = getDriveId(activeFile.fileUrl);
     if (!fileId) { setBgError('No Drive file ID found'); return; }
     setSheetLoading(true);
-    try { setSheetUrl(await buildSheet(fileId, sheet, sheet === '4x6' ? 6 : 24)); }
+    try { setSheetUrl(await buildSheet(fileId, sheet, sheet === '4x6' ? 6 : 24, photoSize)); }
     catch (e) { setBgError((e as Error).message); }
     finally { setSheetLoading(false); }
   }
@@ -382,6 +384,23 @@ export default function FileStitchPage() {
                       className={`flex-1 py-2 rounded text-[10px] font-bold uppercase border transition-colors
                         ${sheet === s ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
                       {s === '4x6' ? '4×6 · 6 photos' : 'A4 · 24 photos'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Step 3b: Photo size */}
+              <div className="p-3 border-b border-[#334155]">
+                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <span className="bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">↳</span>
+                  Photo Size
+                </p>
+                <div className="flex gap-1.5">
+                  {([['passport','35×45mm'],['visa','35×45mm'],['us','2×2 in']] as [PhotoSize,string][]).map(([key, label]) => (
+                    <button key={key} onClick={() => { setPhotoSize(key); setSheetUrl(null); }}
+                      className={`flex-1 py-1.5 rounded text-[9px] font-bold uppercase border transition-colors
+                        ${photoSize === key ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
+                      {key}<br/><span className="font-normal normal-case">{label}</span>
                     </button>
                   ))}
                 </div>
