@@ -1,26 +1,59 @@
 import sharp from 'sharp';
 
+// ── Passport photo spec (2×2 inch at 300 DPI) ────────────────────────────────
+// 600×600 px per photo slot
+// Head must occupy 70–80% of frame height → we crop to a 1:1 region centered
+// on the face using Sharp's "attention" gravity (saliency-based, finds faces/eyes)
+// then pad to exact slot size with white background.
+
+const PHOTO_PX = 600; // 2 inch × 300 DPI
+
 // Sheet configs at 300 DPI
 const SHEET_CONFIGS = {
-  '4x6': { w: 1800, h: 1200, cols: 3, rows: 2, photoW: 525, photoH: 675, margin: 50 },
-  'a4':  { w: 2480, h: 3508, cols: 4, rows: 6, photoW: 525, photoH: 675, margin: 60 },
+  '4x6': { w: 1800, h: 1200, cols: 3, rows: 2, margin: 50 },
+  'a4':  { w: 2480, h: 3508, cols: 4, rows: 6, margin: 60 },
 } as const;
+
+/**
+ * Prepare a single passport photo from any input image:
+ * 1. Smart-crop to square using "attention" gravity (finds face/eyes automatically)
+ * 2. Flatten transparency → white background
+ * 3. Resize to exact PHOTO_PX × PHOTO_PX with white padding (contain)
+ */
+async function preparePassportPhoto(input: Buffer): Promise<Buffer> {
+  const meta = await sharp(input).metadata();
+  const { width = 0, height = 0 } = meta;
+
+  // Crop to the largest square centered on the most salient region (face)
+  const squareSize = Math.min(width, height);
+
+  return sharp(input)
+    // Step 1: smart square crop — "attention" uses saliency to find face/eyes
+    .resize(squareSize, squareSize, {
+      fit: 'cover',
+      position: sharp.strategy.attention,
+    })
+    // Step 2: flatten transparency (PNG with removed background → white)
+    .flatten({ background: { r: 255, g: 255, b: 255 } })
+    // Step 3: resize to exact passport slot with white padding to preserve aspect
+    .resize(PHOTO_PX, PHOTO_PX, {
+      fit: 'contain',
+      background: { r: 255, g: 255, b: 255 },
+    })
+    .jpeg({ quality: 95 })
+    .toBuffer();
+}
 
 export async function generatePassportSheet(
   photoBuffer: Buffer,
   sheet: '4x6' | 'a4' = '4x6',
 ): Promise<Buffer> {
   const c = SHEET_CONFIGS[sheet];
-
-  // Resize photo to exact slot size
-  const photo = await sharp(photoBuffer)
-    .resize(c.photoW, c.photoH, { fit: 'cover' })
-    .jpeg({ quality: 95 })
-    .toBuffer();
+  const photo = await preparePassportPhoto(photoBuffer);
 
   const composites: sharp.OverlayOptions[] = [];
-  const totalW = c.cols * c.photoW + (c.cols + 1) * c.margin;
-  const totalH = c.rows * c.photoH + (c.rows + 1) * c.margin;
+  const totalW = c.cols * PHOTO_PX + (c.cols + 1) * c.margin;
+  const totalH = c.rows * PHOTO_PX + (c.rows + 1) * c.margin;
   const offsetX = Math.floor((c.w - totalW) / 2);
   const offsetY = Math.floor((c.h - totalH) / 2);
 
@@ -28,8 +61,8 @@ export async function generatePassportSheet(
     for (let col = 0; col < c.cols; col++) {
       composites.push({
         input: photo,
-        top: offsetY + c.margin + row * (c.photoH + c.margin),
-        left: offsetX + c.margin + col * (c.photoW + c.margin),
+        top:  offsetY + c.margin + row * (PHOTO_PX + c.margin),
+        left: offsetX + c.margin + col * (PHOTO_PX + c.margin),
       });
     }
   }
