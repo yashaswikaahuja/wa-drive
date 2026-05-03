@@ -1,68 +1,94 @@
 import sharp from 'sharp';
 
-// ── Passport photo standard (2×2 inch at 300 DPI) ────────────────────────────
-// Based on ICAO 9303 / US passport standard:
-//   Photo:  600 × 600 px  (2 in × 300 DPI)
-//   Head height: 70–80% of photo height → target 75% = 450 px
-//   Crown-to-top margin: 8% of photo height = 48 px
-//   Therefore chin-to-bottom: 600 - 48 - 450 = 102 px
+// ── 4×6 sheet @ 300 DPI ──────────────────────────────────────────────────────
+// Sheet:  1800 × 1200 px  (6 in × 4 in)
+// Photos: 8 total — 2 cols × 4 rows
+// Photo:  413 × 531 px   (35mm × 45mm @ 300 DPI — standard passport size)
+// Outer margin: 50 px on all sides
+// Gap between photos: computed to fill remaining space evenly
 //
-// Pipeline: normalize → smart-crop to face region → pad to square → resize → output
+// Math:
+//   usableW = 1800 - 2×50 = 1700
+//   usableH = 1200 - 2×50 = 1100
+//   gapX = (usableW - 2×413) / 1 = 874 px  ← gap between 2 cols
+//   gapY = (usableH - 4×531) / 3 = (1100 - 2124) / 3 → negative!
+//
+// 4 rows of 531px = 2124px > 1100px usable height on a 4-inch sheet.
+// Solution: use landscape orientation (rotate sheet) OR reduce photo height.
+// Standard approach: 4×6 landscape = 1800w × 1200h, 2 cols × 4 rows doesn't fit.
+//
+// CORRECT layout for 4×6 (landscape):
+//   2 cols × 4 rows requires portrait sheet (1200w × 1800h) — i.e., 4×6 portrait
+//   OR use 4 cols × 2 rows on landscape.
+//
+// We use: 4×6 PORTRAIT sheet (1200 × 1800 px), 2 cols × 4 rows = 8 photos
+// Photo size: 413 × 531 px (35×45mm @ 300 DPI)
+// Outer margin: 50 px
+// usableW = 1200 - 2×50 = 1100 → gapX = (1100 - 2×413) / 1 = 274 px
+// usableH = 1800 - 2×50 = 1700 → gapY = (1700 - 4×531) / 3 = (1700-2124)/3 → still negative
+//
+// Root issue: 4 rows of 45mm photos don't fit on a 4-inch (101.6mm) sheet.
+// Real passport print sheets use 4×6 LANDSCAPE with 4 cols × 2 rows = 8 photos.
+//
+// FINAL CORRECT LAYOUT:
+//   Sheet: 1800 × 1200 px (4×6 landscape @ 300 DPI)
+//   Grid:  4 cols × 2 rows = 8 photos
+//   Photo: 413 × 531 px (35×45mm)
+//   Outer margin: 50 px
+//   usableW = 1800 - 2×50 = 1700 → gapX = (1700 - 4×413) / 3 = (1700-1652)/3 = 16 px
+//   usableH = 1200 - 2×50 = 1100 → gapY = (1100 - 2×531) / 1 = 38 px
+//   Total: 4×2 = 8 photos ✓, gaps ≥ 16 px ✓
 
-const PHOTO_PX = 600;           // 2 inch × 300 DPI
-const HEAD_RATIO = 0.75;        // head occupies 75% of photo height
-const CROWN_TOP_RATIO = 0.08;   // 8% top margin above crown
+const SHEET_W = 1800;   // 6 in × 300 DPI
+const SHEET_H = 1200;   // 4 in × 300 DPI
+const PHOTO_W = 413;    // 35mm × 300/25.4
+const PHOTO_H = 531;    // 45mm × 300/25.4
+const COLS = 4;
+const ROWS = 2;
+const MARGIN = 50;      // outer border on all sides
 
-// Sheet configs at 300 DPI
-const SHEET_CONFIGS = {
-  // 4×6 inch sheet: 1800×1200 px
-  // 35×45mm photo at 300 DPI ≈ 413×531 px, but we use 600×600 square
-  // → 3 cols × 2 rows = 6 photos with even margins
-  '4x6': { w: 1800, h: 1200, cols: 3, rows: 2, margin: 50 },
-  // A4 sheet: 2480×3508 px
-  // → 4 cols × 6 rows = 24 photos
-  'a4':  { w: 2480, h: 3508, cols: 4, rows: 6, margin: 40 },
-} as const;
+// Computed gaps (distribute remaining space evenly between photos)
+const GAP_X = Math.floor((SHEET_W - 2 * MARGIN - COLS * PHOTO_W) / (COLS - 1)); // ~16 px
+const GAP_Y = Math.floor((SHEET_H - 2 * MARGIN - ROWS * PHOTO_H) / (ROWS - 1)); // ~38 px
+
+// A4 sheet: 2480 × 3508 px — 4 cols × 6 rows = 24 photos
+const A4_W = 2480;
+const A4_H = 3508;
+const A4_COLS = 4;
+const A4_ROWS = 6;
+const A4_MARGIN = 60;
+const A4_GAP_X = Math.floor((A4_W - 2 * A4_MARGIN - A4_COLS * PHOTO_W) / (A4_COLS - 1));
+const A4_GAP_Y = Math.floor((A4_H - 2 * A4_MARGIN - A4_ROWS * PHOTO_H) / (A4_ROWS - 1));
 
 /**
- * Prepare a single passport photo from any input image.
- *
- * Without face detection (no ML on e2-micro), we use a two-stage approach:
- *
- * Stage 1 — Top-biased square crop:
- *   Portrait photos have the face in the upper portion. We crop a square
- *   from the top 70% of the image height (not center), which keeps the head
- *   in frame. Sharp's "attention" strategy then refines within that region.
- *
- * Stage 2 — Contain + white padding:
- *   Resize to PHOTO_PX × PHOTO_PX with white background using `contain`,
- *   which never distorts and adds padding only where needed.
- *
- * If the image came from background removal (transparent PNG), transparency
- * is flattened to white before JPEG output.
+ * Prepare a single passport photo:
+ * 1. Extract upper 80% of image (face area in portraits)
+ * 2. Smart square crop using attention strategy (finds face/eyes)
+ * 3. Flatten transparency → white
+ * 4. Resize to PHOTO_W × PHOTO_H with white padding (no distortion)
  */
 async function preparePassportPhoto(input: Buffer): Promise<Buffer> {
-  const { width = 600, height = 600 } = await sharp(input).metadata();
+  const { width = 600, height = 800 } = await sharp(input).metadata();
 
-  // Stage 1: crop a square from the top portion of the image.
-  // We take a square of side = min(width, height * 0.85) anchored at the top.
-  // This keeps the head/face in frame for typical portrait photos.
-  // "attention" gravity within this region finds the most salient point (face/eyes).
-  const cropSize = Math.min(width, Math.round(height * 0.85));
-
-  // Crop top-biased square using attention strategy
+  // Extract top 80% to bias toward face — avoids lower body in full-body shots
+  const cropH = Math.round(height * 0.80);
   const cropped = await sharp(input)
-    .resize(cropSize, cropSize, {
+    .extract({ left: 0, top: 0, width, height: cropH })
+    .toBuffer();
+
+  // Smart square crop using attention (saliency finds eyes/face)
+  const squareSize = Math.min(width, cropH);
+  const square = await sharp(cropped)
+    .resize(squareSize, squareSize, {
       fit: 'cover',
       position: sharp.strategy.attention,
-      // Bias toward top: extract from top half before attention crop
     })
     .toBuffer();
 
-  // Stage 2: flatten transparency + resize to exact passport dimensions
-  return sharp(cropped)
+  // Flatten + resize to exact passport dimensions with white padding
+  return sharp(square)
     .flatten({ background: { r: 255, g: 255, b: 255 } })
-    .resize(PHOTO_PX, PHOTO_PX, {
+    .resize(PHOTO_W, PHOTO_H, {
       fit: 'contain',
       background: { r: 255, g: 255, b: 255 },
       position: 'centre',
@@ -75,28 +101,30 @@ export async function generatePassportSheet(
   photoBuffer: Buffer,
   sheet: '4x6' | 'a4' = '4x6',
 ): Promise<Buffer> {
-  const c = SHEET_CONFIGS[sheet];
   const photo = await preparePassportPhoto(photoBuffer);
 
-  // Compute grid layout — center the grid on the sheet
-  const totalW = c.cols * PHOTO_PX + (c.cols - 1) * c.margin;
-  const totalH = c.rows * PHOTO_PX + (c.rows - 1) * c.margin;
-  const offsetX = Math.floor((c.w - totalW) / 2);
-  const offsetY = Math.floor((c.h - totalH) / 2);
+  const is4x6 = sheet === '4x6';
+  const sw = is4x6 ? SHEET_W : A4_W;
+  const sh = is4x6 ? SHEET_H : A4_H;
+  const cols = is4x6 ? COLS : A4_COLS;
+  const rows = is4x6 ? ROWS : A4_ROWS;
+  const margin = is4x6 ? MARGIN : A4_MARGIN;
+  const gapX = is4x6 ? GAP_X : A4_GAP_X;
+  const gapY = is4x6 ? GAP_Y : A4_GAP_Y;
 
   const composites: sharp.OverlayOptions[] = [];
-  for (let row = 0; row < c.rows; row++) {
-    for (let col = 0; col < c.cols; col++) {
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
       composites.push({
         input: photo,
-        top:  offsetY + row * (PHOTO_PX + c.margin),
-        left: offsetX + col * (PHOTO_PX + c.margin),
+        left: margin + col * (PHOTO_W + gapX),
+        top:  margin + row * (PHOTO_H + gapY),
       });
     }
   }
 
   return sharp({
-    create: { width: c.w, height: c.h, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: sw, height: sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
     .composite(composites)
     .jpeg({ quality: 92 })
@@ -104,12 +132,12 @@ export async function generatePassportSheet(
 }
 
 // A4 landscape at 150 DPI: 1754 x 1240 px (rotated for horizontal layout)
-const A4_W = 1754;
-const A4_H = 1240;
-const MARGIN = 20;
+const AADHAAR_W = 1754;
+const AADHAAR_H = 1240;
+const AADHAAR_MARGIN = 20;
 // Each card: half width minus 1.5 margins (left + middle + right)
-const IMG_W = Math.floor((A4_W - MARGIN * 3) / 2);
-const IMG_H = A4_H - MARGIN * 2;
+const IMG_W = Math.floor((AADHAAR_W - AADHAAR_MARGIN * 3) / 2);
+const IMG_H = AADHAAR_H - AADHAAR_MARGIN * 2;
 
 export async function generateAadhaarLayout(buffers: Buffer[]): Promise<Buffer> {
   if (buffers.length !== 2) throw new Error('Exactly 2 images required');
@@ -128,11 +156,11 @@ export async function generateAadhaarLayout(buffers: Buffer[]): Promise<Buffer> 
   ]);
 
   return sharp({
-    create: { width: A4_W, height: A4_H, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: AADHAAR_W, height: AADHAAR_H, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
     .composite([
-      { input: left,  top: MARGIN, left: MARGIN },
-      { input: right, top: MARGIN, left: MARGIN * 2 + IMG_W },
+      { input: left,  top: AADHAAR_MARGIN, left: AADHAAR_MARGIN },
+      { input: right, top: AADHAAR_MARGIN, left: AADHAAR_MARGIN * 2 + IMG_W },
     ])
     .jpeg({ quality: 90 })
     .toBuffer();
