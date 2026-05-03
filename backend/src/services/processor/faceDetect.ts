@@ -1,11 +1,13 @@
 import sharp from 'sharp';
 import FormData from 'form-data';
+import https from 'https';
 
-const FACEPP_URL = 'https://api-us.faceplusplus.com/facepp/v3/detect';
+const FACEPP_HOST = 'api-us.faceplusplus.com';
+const FACEPP_PATH = '/facepp/v3/detect';
 
 interface FaceRect { top: number; left: number; width: number; height: number; }
 
-/** Call Face++ detect API, return the largest face rectangle or null */
+/** Call Face++ detect API using https (compatible with form-data package) */
 async function detectFace(imageBuffer: Buffer): Promise<FaceRect | null> {
   const key    = process.env['FACEPP_API_KEY'];
   const secret = process.env['FACEPP_API_SECRET'];
@@ -13,41 +15,52 @@ async function detectFace(imageBuffer: Buffer): Promise<FaceRect | null> {
 
   console.log(`[FacePP] Calling detect API (buffer: ${imageBuffer.length} bytes)`);
 
-  const form = new FormData();
-  form.append('api_key', key);
-  form.append('api_secret', secret);
-  form.append('image_file', imageBuffer, { filename: 'photo.jpg', contentType: 'image/jpeg' });
-  form.append('return_attributes', 'none');
+  return new Promise((resolve) => {
+    const form = new FormData();
+    form.append('api_key', key);
+    form.append('api_secret', secret);
+    form.append('image_file', imageBuffer, { filename: 'photo.jpg', contentType: 'image/jpeg' });
+    form.append('return_attributes', 'none');
 
-  const res = await fetch(FACEPP_URL, { method: 'POST', body: form as any });
-  const data = await res.json() as { faces?: Array<{ face_rectangle: FaceRect }>; error_message?: string };
+    const options = {
+      hostname: FACEPP_HOST,
+      path: FACEPP_PATH,
+      method: 'POST',
+      headers: form.getHeaders(),
+    };
 
-  console.log(`[FacePP] Response: faces=${data.faces?.length ?? 0}${data.error_message ? ' error=' + data.error_message : ''}`);
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data) as {
+            faces?: Array<{ face_rectangle: FaceRect }>;
+            error_message?: string;
+          };
+          console.log(`[FacePP] Response: faces=${json.faces?.length ?? 0}${json.error_message ? ' error=' + json.error_message : ''}`);
+          if (json.error_message || !json.faces?.length) {
+            if (json.error_message) console.error('[FacePP] API error:', json.error_message);
+            else console.warn('[FacePP] No face detected');
+            resolve(null); return;
+          }
+          const face = json.faces.reduce((best, f) => {
+            return f.face_rectangle.width * f.face_rectangle.height >
+                   best.width * best.height ? f.face_rectangle : best;
+          }, json.faces[0].face_rectangle);
+          console.log(`[FacePP] Face rect: top=${face.top} left=${face.left} w=${face.width} h=${face.height}`);
+          resolve(face);
+        } catch { resolve(null); }
+      });
+    });
 
-  if (!res.ok || data.error_message) {
-    console.error('[FacePP] API error:', data.error_message ?? res.status);
-    return null;
-  }
-  if (!data.faces?.length) { console.warn('[FacePP] No face detected'); return null; }
-
-  const face = data.faces.reduce((best, f) => {
-    const area = f.face_rectangle.width * f.face_rectangle.height;
-    const bestArea = best.width * best.height;
-    return area > bestArea ? f.face_rectangle : best;
-  }, data.faces[0].face_rectangle);
-
-  console.log(`[FacePP] Face rect: top=${face.top} left=${face.left} w=${face.width} h=${face.height}`);
-  return face;
+    req.on('error', (e) => { console.error('[FacePP] Request error:', e.message); resolve(null); });
+    form.pipe(req);
+  });
 }
 
 /**
  * Crop image around detected face with padding, then resize to target dimensions.
- *
- * Padding strategy (based on ICAO passport standard):
- *   - Top:    80% of face height above crown (hair + space)
- *   - Bottom: 60% of face height below chin
- *   - Sides:  50% of face width on each side
- *
  * Falls back to top-biased attention crop if no face detected.
  */
 export async function cropAndAlignFace(
