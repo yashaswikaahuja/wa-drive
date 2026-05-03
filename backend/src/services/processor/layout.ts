@@ -62,14 +62,18 @@ export async function generatePassportSheet(
 
   const { cols, rows } = calcGrid(count, sw, sh);
 
-  // Width fills the sheet columns evenly. Height derived from aspect ratio — never square.
-  const aspect = PHOTO_SIZES[size].h / PHOTO_SIZES[size].w; // 45/35 = 1.286 for passport
-  const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
-  const ph = Math.round(pw * aspect);
+  // Width fills sheet columns. Height from aspect ratio.
+  // Also cap so all rows fit within sheet height.
+  const aspect = PHOTO_SIZES[size].h / PHOTO_SIZES[size].w;
+  let pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
+  let ph = Math.round(pw * aspect);
+
+  // If rows don't fit in sheet height, scale down proportionally
+  const maxPh = Math.floor((sh - 2 * MARGIN - (rows - 1) * GAP) / rows);
+  if (ph > maxPh) { ph = maxPh; pw = Math.round(ph / aspect); }
 
   const photo = await preparePhoto(photoBuffer, pw, ph);
 
-  // Tile from top-left with margin — don't center (avoids huge empty space)
   const composites: sharp.OverlayOptions[] = [];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -81,9 +85,8 @@ export async function generatePassportSheet(
     }
   }
 
-  // Sheet height: fit exactly to content + margins (no wasted space)
-  const contentH = rows * ph + (rows - 1) * GAP + 2 * MARGIN;
-  const finalH = Math.min(sh, contentH); // never exceed sheet height
+  // Sheet height = exactly what's needed to fit all rows (no wasted space, no clipping)
+  const finalH = MARGIN + rows * ph + (rows - 1) * GAP + MARGIN;
 
   return sharp({
     create: { width: sw, height: finalH, channels: 3, background: { r: 255, g: 255, b: 255 } },
