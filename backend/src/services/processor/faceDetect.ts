@@ -94,9 +94,9 @@ export async function cropAndAlignFace(
   try {
     faceRect = await detectFace(input);
     if (faceRect) {
-      const padTop    = Math.round(faceRect.height * pad);
-      const padBottom = Math.round(faceRect.height * (pad * 0.55));
-      const padSide   = Math.round(faceRect.width  * (pad * 0.50));
+      const padTop    = Math.round(faceRect.height * 1.3);   // full hair + forehead space
+      const padBottom = Math.round(faceRect.height * 1.8);   // chin + neck + shoulders
+      const padSide   = Math.round(faceRect.width  * 0.7);   // side breathing room
 
       const left   = Math.max(0, faceRect.left - padSide);
       const top    = Math.max(0, faceRect.top  - padTop);
