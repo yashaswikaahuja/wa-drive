@@ -111,15 +111,8 @@ export async function cropAndAlignFace(
 
   let cropped: Buffer;
   if (cropBox) {
-    let extracted = await sharp(input).extract(cropBox).toBuffer();
-    // If crop hit top edge, add white padding so hair isn't touching frame
-    if (cropBox.top === 0) {
-      const extraPad = Math.round(cropBox.height * 0.12);
-      extracted = await sharp(extracted)
-        .extend({ top: extraPad, bottom: 0, left: 0, right: 0, background: { r: 255, g: 255, b: 255 } })
-        .toBuffer();
-    }
-    cropped = extracted;
+    // Extract the face region — no extend needed, crop already includes padding
+    cropped = await sharp(input).extract(cropBox).toBuffer();
   } else {
     console.log('[FacePP] using attention fallback');
     const cropH = Math.round(height * 0.80);
@@ -135,7 +128,7 @@ export async function cropAndAlignFace(
     .normalize()
     .modulate({ brightness: 1.04, saturation: 1.08 })
     .gamma(1.05)
-    .resize(targetW, targetH, { fit: 'cover', position: 'north' })
+    .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
     .withMetadata({ density: 300 })
     .jpeg({ quality: 95 })
     .toBuffer();

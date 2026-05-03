@@ -236,7 +236,14 @@ async function downloadDriveBuffer(fileId: string, accessToken: string): Promise
   return Buffer.from(res.data as ArrayBuffer);
 }
 
-app.post('/api/remove-bg', bgUpload.single('image_file') as any, async (req: any, res: any) => {
+app.post('/api/remove-bg', (req: any, res: any, next: any) => {
+  // If JSON body (fileId), skip multer and parse as JSON
+  if (req.headers['content-type']?.includes('application/json')) {
+    express.json()(req, res, next);
+  } else {
+    (bgUpload.single('image_file') as any)(req, res, next);
+  }
+}, async (req: any, res: any) => {
   const REMOVE_BG_KEY = process.env['REMOVE_BG_API_KEY'] ?? 'd9f7QFfqAdFuEzt1dXNqvSxP';
   let imageBuffer: Buffer;
   let filename = 'image.jpg';
