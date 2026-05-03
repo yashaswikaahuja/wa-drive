@@ -22,6 +22,14 @@ function getFullUrl(url: string) {
   return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url;
 }
 
+// Fetch image as blob from Drive
+async function fetchImageBlob(url: string): Promise<Blob> {
+  const id = getDriveId(url);
+  const fetchUrl = id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
+  const res = await fetch(fetchUrl);
+  if (!res.ok) throw new Error('Failed to fetch image');
+  return res.blob();
+}
 
 // Apply background color to transparent PNG using canvas
 async function applyBackground(pngDataUrl: string, color: string): Promise<string> {
@@ -136,22 +144,18 @@ export default function FileStitchPage() {
     if (!activeFile) return;
     setBgLoading(true); setBgError(null); setProcessedUrl(null); setSheetUrl(null);
     try {
-      const driveId = getDriveId(activeFile.fileUrl);
-      let pngUrl: string;
-
-      if (driveId) {
-        // Send fileId to hub — hub downloads from Drive server-side (no CORS)
-        const res = await fetch(`${API_BASE_URL}/remove-bg`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fileId: driveId, fileName: activeFile.fileName }),
-        });
-        if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-        pngUrl = URL.createObjectURL(await res.blob());
-      } else {
-        throw new Error('No Drive file ID found');
-      }
-
+      const blob = await fetchImageBlob(activeFile.fileUrl);
+      const formData = new FormData();
+      formData.append('image_file', blob, activeFile.fileName);
+      formData.append('size', 'auto');
+      const res = await fetch('https://api.remove.bg/v1.0/removebg', {
+        method: 'POST',
+        headers: { 'X-Api-Key': 'd9f7QFfqAdFuEzt1dXNqvSxP' },
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`remove.bg: ${res.status}`);
+      const resultBlob = await res.blob();
+      const pngUrl = URL.createObjectURL(resultBlob);
       const color = bgColor === 'custom' ? customColor : BG_COLORS[bgColor];
       const withBg = await applyBackground(pngUrl, color);
       setProcessedUrl(withBg);

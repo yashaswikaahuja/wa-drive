@@ -205,36 +205,21 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
 const bgUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
 app.post('/api/remove-bg', bgUpload.single('image_file') as any, async (req: any, res: any) => {
+  if (!req.file) { res.status(400).json({ error: 'No image' }); return; }
   try {
-    let imageBuffer: Buffer;
-    let filename = 'image.jpg';
-
-    if (req.file) {
-      // Direct upload
-      imageBuffer = req.file.buffer;
-      filename = req.file.originalname ?? filename;
-    } else if (req.body?.fileId) {
-      // Download from Drive server-side (avoids browser CORS)
-      const drive = getDrive();
-      if (!drive) { res.status(401).json({ error: 'Not connected to Drive' }); return; }
-      const driveRes = await drive.files.get({ fileId: req.body.fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-      imageBuffer = Buffer.from(driveRes.data as ArrayBuffer);
-      filename = req.body.fileName ?? filename;
-    } else {
-      res.status(400).json({ error: 'No image or fileId provided' }); return;
-    }
-
     const FormDataNode = (await import('form-data')).default;
     const form = new FormDataNode();
-    form.append('image_file', imageBuffer, { filename, contentType: 'image/jpeg' });
+    form.append('image_file', req.file.buffer, { filename: req.file.originalname, contentType: req.file.mimetype });
     form.append('size', 'auto');
-
     const response = await fetch('https://api.remove.bg/v1.0/removebg', {
       method: 'POST',
       headers: { 'X-Api-Key': 'd9f7QFfqAdFuEzt1dXNqvSxP', ...form.getHeaders() },
       body: form as any,
     });
-    if (!response.ok) { res.status(response.status).json({ error: await response.text() }); return; }
+    if (!response.ok) {
+      const err = await response.text();
+      res.status(response.status).json({ error: err }); return;
+    }
     const buf = Buffer.from(await response.arrayBuffer());
     res.set('Content-Type', 'image/png');
     res.send(buf);
