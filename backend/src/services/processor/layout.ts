@@ -21,22 +21,22 @@ const MARGIN = 60;
 const GAP    = 40;
 
 /**
- * Auto-calculate cols × rows for a given count that best fills the sheet.
- * Prefers landscape-friendly grids for 4×6, portrait-friendly for A4.
- * Formula: find cols/rows pair where cols×rows = count and photo size is maximised.
+ * Auto-calculate cols × rows for a given count.
+ * Prefers the layout where derived photo width gives the largest portrait photo
+ * (width < height after applying aspect ratio).
  */
-function calcGrid(count: number, sw: number, sh: number): { cols: number; rows: number } {
+function calcGrid(count: number, sw: number, _sh: number): { cols: number; rows: number } {
   if (count === 1) return { cols: 1, rows: 1 };
 
-  let bestCols = 1, bestRows = count, bestArea = 0;
+  let bestCols = 1, bestRows = count, bestW = 0;
   for (let cols = 1; cols <= count; cols++) {
     if (count % cols !== 0) continue;
     const rows = count / cols;
     const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
-    const ph = Math.floor((sh - 2 * MARGIN - (rows - 1) * GAP) / rows);
-    if (pw <= 0 || ph <= 0) continue;
-    const area = pw * ph;
-    if (area > bestArea) { bestArea = area; bestCols = cols; bestRows = rows; }
+    if (pw <= 0) continue;
+    // Prefer more columns (wider photos) but only up to where photos stay portrait
+    // i.e. pw < ph. Since ph = pw * aspect (>1), pw is always < ph — so just maximise pw.
+    if (pw > bestW) { bestW = pw; bestCols = cols; bestRows = rows; }
   }
   return { cols: bestCols, rows: bestRows };
 }
@@ -62,8 +62,8 @@ export async function generatePassportSheet(
 
   const { cols, rows } = calcGrid(count, sw, sh);
 
-  // Photo width derived from cols, height from passport aspect ratio (not slot height)
-  const aspect = PHOTO_SIZES[size].h / PHOTO_SIZES[size].w; // e.g. 45/35 = 1.286
+  // Width fills the sheet columns evenly. Height derived from aspect ratio — never square.
+  const aspect = PHOTO_SIZES[size].h / PHOTO_SIZES[size].w; // 45/35 = 1.286 for passport
   const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
   const ph = Math.round(pw * aspect);
 
