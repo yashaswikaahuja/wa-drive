@@ -40,7 +40,7 @@ async function addTextOverlay(
   const lines = [text.name, text.date].filter(Boolean) as string[];
   if (!lines.length && !text.signature) return photoBuffer;
 
-  const lineH   = Math.round(ph * 0.08);
+  const lineH   = Math.round(ph * 0.05);
   const fontSize = Math.round(lineH * 0.65);
   const sigH     = text.signature ? Math.round(lineH * 1.2) : 0;
   const stripH   = lines.length * lineH + sigH + Math.round(lineH * 0.25);
