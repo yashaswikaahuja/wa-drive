@@ -58,19 +58,18 @@ export async function generatePassportSheet(
   size: PhotoSize = 'passport',
 ): Promise<Buffer> {
   const { sw, sh } = SHEETS[sheet];
+
+  // count=1: fill the sheet with one large photo (full passport size, centered)
+  if (count === 1) return generateSingleSheet(photoBuffer, size, sheet);
+
   const { cols, rows } = calcGrid(count, sw, sh);
   const { pw, ph } = calcPhotoSize(cols, rows, sw, sh);
 
-  // Use standard photo dimensions if they fit within the derived slot
-  const photoSize = PHOTO_SIZES[size];
-  const finalW = Math.min(pw, photoSize.w);
-  const finalH = Math.min(ph, photoSize.h);
+  // Use slot dimensions directly — don't cap to standard size (causes distortion)
+  const photo = await preparePhoto(photoBuffer, pw, ph);
 
-  const photo = await preparePhoto(photoBuffer, finalW, finalH);
-
-  // Center the grid on the sheet
-  const totalW = cols * finalW + (cols - 1) * GAP;
-  const totalH = rows * finalH + (rows - 1) * GAP;
+  const totalW = cols * pw + (cols - 1) * GAP;
+  const totalH = rows * ph + (rows - 1) * GAP;
   const offsetX = Math.floor((sw - totalW) / 2);
   const offsetY = Math.floor((sh - totalH) / 2);
 
@@ -79,8 +78,8 @@ export async function generatePassportSheet(
     for (let col = 0; col < cols; col++) {
       composites.push({
         input: photo,
-        left: offsetX + col * (finalW + GAP),
-        top:  offsetY + row * (finalH + GAP),
+        left: offsetX + col * (pw + GAP),
+        top:  offsetY + row * (ph + GAP),
       });
     }
   }
@@ -94,14 +93,20 @@ export async function generatePassportSheet(
     .toBuffer();
 }
 
-/** Place a single photo centered on sheet with equal margins */
+/** count=1: single large photo filling the sheet with equal margins */
 export async function generateSingleSheet(
   photoBuffer: Buffer,
   size: PhotoSize = 'passport',
   sheet: SheetType = '4x6',
 ): Promise<Buffer> {
   const { sw, sh } = SHEETS[sheet];
-  const { w, h } = PHOTO_SIZES[size];
+  // Fill sheet minus margins, maintain passport aspect ratio (35:45)
+  const maxW = sw - 2 * MARGIN;
+  const maxH = sh - 2 * MARGIN;
+  const aspect = PHOTO_SIZES[size].w / PHOTO_SIZES[size].h;
+  let w = maxW, h = Math.round(maxW / aspect);
+  if (h > maxH) { h = maxH; w = Math.round(maxH * aspect); }
+
   const photo = await preparePhoto(photoBuffer, w, h);
 
   return sharp({
