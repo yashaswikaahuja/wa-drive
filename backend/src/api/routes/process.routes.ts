@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
-import { generateAadhaarLayout, generatePassportSheet, generateSingleSheet } from '../../services/processor/layout.js';
+import { generateAadhaarLayout, generatePassportSheet, generateSingleSheet, SheetPreset, PhotoSpec } from '../../services/processor/layout.js';
 import { cropAndAlignFace, setLastImage, getLastImage } from '../../services/processor/faceDetect.js';
 
 const router = Router();
@@ -49,24 +49,25 @@ router.post('/', async (req: Request, res: Response) => {
 // Body: { fileId, sheet: '4x6'|'a4' }
 // Downloads from Drive server-side → Sharp sheet → returns JPEG (no CORS)
 router.post('/passport-sheet', async (req: Request, res: Response) => {
-  const { fileId, sheet = '4x6', count = 6, size = 'passport' } = req.body as {
-    fileId?: string; sheet?: string; count?: number; size?: string;
+  const { fileId, preset = '4x6-8', spec = 'standard' } = req.body as {
+    fileId?: string; preset?: string; spec?: string;
   };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
-  if (!['4x6', 'a4'].includes(sheet)) { res.status(400).json({ error: 'sheet must be 4x6 or a4' }); return; }
-  if (!Number.isInteger(count) || count < 1 || count > 24) { res.status(400).json({ error: 'count must be 1–24' }); return; }
-  if (!['passport', 'visa', 'us'].includes(size)) { res.status(400).json({ error: 'size must be passport, visa, or us' }); return; }
+  const validPresets = ['4x6-8', '4x6-12', '4x6-4', 'a4-24', 'single'];
+  const validSpecs   = ['standard', 'small', 'stamp'];
+  if (!validPresets.includes(preset)) { res.status(400).json({ error: `preset must be one of: ${validPresets.join(', ')}` }); return; }
+  if (!validSpecs.includes(spec))     { res.status(400).json({ error: `spec must be one of: ${validSpecs.join(', ')}` }); return; }
 
   const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
   if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
 
   try {
     const buffer = await downloadDriveFile(fileId, driveAccessToken);
-    const output = count === 1
-      ? await generateSingleSheet(buffer, size as any, sheet as any)
-      : await generatePassportSheet(buffer, sheet as any, count, size as any);
+    const output = preset === 'single'
+      ? await generateSingleSheet(buffer, spec as PhotoSpec)
+      : await generatePassportSheet(buffer, preset as SheetPreset, spec as PhotoSpec);
     res.set('Content-Type', 'image/jpeg');
-    res.set('Content-Disposition', `inline; filename="passport_${sheet}_${count}_${size}.jpg"`);
+    res.set('Content-Disposition', `inline; filename="photos_${preset}_${spec}.jpg"`);
     res.send(output);
   } catch (e: any) {
     console.error('[Process] passport-sheet error:', e.message);

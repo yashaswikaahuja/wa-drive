@@ -1,51 +1,27 @@
 import sharp from 'sharp';
 import { cropAndAlignFace } from './faceDetect.js';
 
-// ── Photo size configs (mm → px at 300 DPI) ───────────────────────────────────
-const MM_TO_PX = 300 / 25.4;
-const PHOTO_SIZES = {
-  passport: { w: Math.round(35 * MM_TO_PX), h: Math.round(45 * MM_TO_PX) }, // 413×531
-  visa:     { w: Math.round(35 * MM_TO_PX), h: Math.round(45 * MM_TO_PX) }, // same as passport
-  us:       { w: Math.round(51 * MM_TO_PX), h: Math.round(51 * MM_TO_PX) }, // 2×2 inch = 600×600
+// ── Real-world photo size specs (mm → px @ 300 DPI) ───────────────────────────
+const MM = (mm: number) => Math.round(mm * 300 / 25.4);
+
+export const PHOTO_SPECS = {
+  'standard': { w: MM(35), h: MM(45), label: '35×45mm (Passport/PAN/Aadhaar)' },
+  'small':    { w: MM(25), h: MM(30), label: '25×30mm (School/College)' },
+  'stamp':    { w: MM(20), h: MM(25), label: '20×25mm (Stamp size)' },
 } as const;
-export type PhotoSize = keyof typeof PHOTO_SIZES;
+export type PhotoSpec = keyof typeof PHOTO_SPECS;
 
-// ── Sheet dimensions @ 300 DPI ────────────────────────────────────────────────
-const SHEETS = {
-  '4x6': { sw: 1800, sh: 1200 },
-  'a4':  { sw: 2480, sh: 3508 },
+// ── Print sheet presets — what photo studios actually print ───────────────────
+const MARGIN = 50;
+const GAP    = 30;
+
+export const SHEET_PRESETS = {
+  '4x6-8':  { sw: 1800, sh: 1200, cols: 4, rows: 2, label: '4×6 · 8 photos (Standard)' },
+  '4x6-12': { sw: 1800, sh: 1200, cols: 4, rows: 3, label: '4×6 · 12 photos (Small)' },
+  '4x6-4':  { sw: 1800, sh: 1200, cols: 2, rows: 2, label: '4×6 · 4 photos (Large)' },
+  'a4-24':  { sw: 2480, sh: 3508, cols: 4, rows: 6, label: 'A4 · 24 photos (Bulk)' },
 } as const;
-export type SheetType = keyof typeof SHEETS;
-
-const MARGIN = 60;
-const GAP    = 40;
-
-/**
- * Auto-calculate cols × rows for a given count.
- * Prefers the layout where derived photo width gives the largest portrait photo
- * (width < height after applying aspect ratio).
- */
-function calcGrid(count: number, sw: number, _sh: number): { cols: number; rows: number } {
-  if (count === 1) return { cols: 1, rows: 1 };
-
-  let bestCols = 1, bestRows = count, bestW = 0;
-  for (let cols = 1; cols <= count; cols++) {
-    if (count % cols !== 0) continue;
-    const rows = count / cols;
-    const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
-    if (pw <= 0) continue;
-    // Prefer more columns (wider photos) but only up to where photos stay portrait
-    // i.e. pw < ph. Since ph = pw * aspect (>1), pw is always < ph — so just maximise pw.
-    if (pw > bestW) { bestW = pw; bestCols = cols; bestRows = rows; }
-  }
-  return { cols: bestCols, rows: bestRows };
-}
-
-function calcPhotoSize(cols: number, rows: number, sw: number, sh: number) {
-  const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
-  const ph = Math.floor((sh - 2 * MARGIN - (rows - 1) * GAP) / rows);
-  return { pw, ph };
-}
+export type SheetPreset = keyof typeof SHEET_PRESETS;
 
 async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buffer> {
   return cropAndAlignFace(input, pw, ph, { pad: 0.9 });
@@ -53,22 +29,15 @@ async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buff
 
 export async function generatePassportSheet(
   photoBuffer: Buffer,
-  sheet: SheetType = '4x6',
-  count: number = 6,
-  size: PhotoSize = 'passport',
+  preset: SheetPreset = '4x6-8',
+  spec: PhotoSpec = 'standard',
 ): Promise<Buffer> {
-  const { sw, sh } = SHEETS[sheet];
-  if (count === 1) return generateSingleSheet(photoBuffer, size, sheet);
+  const { sw, sh, cols, rows } = SHEET_PRESETS[preset];
+  const { w: specW, h: specH } = PHOTO_SPECS[spec];
+  const aspect = specH / specW;
 
-  const { cols, rows } = calcGrid(count, sw, sh);
-
-  // Width fills sheet columns. Height from aspect ratio.
-  // Also cap so all rows fit within sheet height.
-  const aspect = PHOTO_SIZES[size].h / PHOTO_SIZES[size].w;
   let pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
   let ph = Math.round(pw * aspect);
-
-  // If rows don't fit in sheet height, scale down proportionally
   const maxPh = Math.floor((sh - 2 * MARGIN - (rows - 1) * GAP) / rows);
   if (ph > maxPh) { ph = maxPh; pw = Math.round(ph / aspect); }
 
@@ -85,8 +54,7 @@ export async function generatePassportSheet(
     }
   }
 
-  // Sheet height = exactly what's needed to fit all rows (no wasted space, no clipping)
-  const finalH = MARGIN + rows * ph + (rows - 1) * GAP + MARGIN;
+  const finalH = Math.min(sh, MARGIN + rows * ph + (rows - 1) * GAP + MARGIN);
 
   return sharp({
     create: { width: sw, height: finalH, channels: 3, background: { r: 255, g: 255, b: 255 } },
@@ -97,36 +65,32 @@ export async function generatePassportSheet(
     .toBuffer();
 }
 
-/** count=1: single large photo filling the sheet with equal margins */
 export async function generateSingleSheet(
   photoBuffer: Buffer,
-  size: PhotoSize = 'passport',
-  sheet: SheetType = '4x6',
+  spec: PhotoSpec = 'standard',
 ): Promise<Buffer> {
-  const { sw, sh } = SHEETS[sheet];
-  // Fill sheet minus margins, maintain passport aspect ratio (35:45)
-  const maxW = sw - 2 * MARGIN;
-  const maxH = sh - 2 * MARGIN;
-  const aspect = PHOTO_SIZES[size].w / PHOTO_SIZES[size].h;
-  let w = maxW, h = Math.round(maxW / aspect);
-  if (h > maxH) { h = maxH; w = Math.round(maxH * aspect); }
+  const SW = 1800, SH = 1200;
+  const { w: specW, h: specH } = PHOTO_SPECS[spec];
+  const aspect = specH / specW;
+  const maxW = SW - 2 * MARGIN;
+  const maxH = SH - 2 * MARGIN;
+  let w = maxW, h = Math.round(maxW * aspect);
+  if (h > maxH) { h = maxH; w = Math.round(h / aspect); }
 
   const photo = await preparePhoto(photoBuffer, w, h);
-
   return sharp({
-    create: { width: sw, height: sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: SW, height: SH, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
-    .composite([{ input: photo, left: Math.floor((sw - w) / 2), top: Math.floor((sh - h) / 2) }])
+    .composite([{ input: photo, left: Math.floor((SW - w) / 2), top: Math.floor((SH - h) / 2) }])
     .withMetadata({ density: 300 })
     .jpeg({ quality: 92 })
     .toBuffer();
 }
 
-// A4 landscape at 150 DPI: 1754 x 1240 px (rotated for horizontal layout)
+// ── Aadhaar layout (unchanged) ────────────────────────────────────────────────
 const AADHAAR_W = 1754;
 const AADHAAR_H = 1240;
 const AADHAAR_MARGIN = 20;
-// Each card: half width minus 1.5 margins (left + middle + right)
 const IMG_W = Math.floor((AADHAAR_W - AADHAAR_MARGIN * 3) / 2);
 const IMG_H = AADHAAR_H - AADHAAR_MARGIN * 2;
 
@@ -135,12 +99,10 @@ export async function generateAadhaarLayout(buffers: Buffer[]): Promise<Buffer> 
 
   const [left, right] = await Promise.all([
     sharp(buffers[0]).resize(IMG_W, IMG_H, { fit: 'inside', withoutEnlargement: false })
-      .extend({ top: 0, bottom: 0, left: 0, right: 0, background: { r: 255, g: 255, b: 255 } })
       .flatten({ background: { r: 255, g: 255, b: 255 } })
       .resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
       .jpeg().toBuffer(),
     sharp(buffers[1]).resize(IMG_W, IMG_H, { fit: 'inside', withoutEnlargement: false })
-      .extend({ top: 0, bottom: 0, left: 0, right: 0, background: { r: 255, g: 255, b: 255 } })
       .flatten({ background: { r: 255, g: 255, b: 255 } })
       .resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
       .jpeg().toBuffer(),

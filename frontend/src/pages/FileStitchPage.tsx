@@ -8,10 +8,22 @@ type Mode = 'aadhaar' | 'passport';
 type BgColor = 'white' | 'lightblue' | 'red' | 'custom';
 type Sheet = '4x6' | 'a4';
 type PhotoSize = 'passport' | 'visa' | 'us';
-const SHEET_COUNTS: Record<Sheet, number[]> = {
-  '4x6': [1, 2, 4, 6, 8, 12],
-  'a4':  [4, 6, 8, 12, 16, 24],
-};
+type PhotoSpec = 'standard' | 'small' | 'stamp';
+type SheetPreset = '4x6-8' | '4x6-12' | '4x6-4' | 'a4-24' | 'single';
+
+const PRESETS: { key: SheetPreset; label: string; sub: string }[] = [
+  { key: '4x6-8',  label: '8 Photos',  sub: '4×6 · Standard (Passport/PAN/Aadhaar)' },
+  { key: '4x6-4',  label: '4 Photos',  sub: '4×6 · Large size' },
+  { key: '4x6-12', label: '12 Photos', sub: '4×6 · Small (School/College)' },
+  { key: 'a4-24',  label: '24 Photos', sub: 'A4 · Bulk (Job applications)' },
+  { key: 'single', label: '1 Photo',   sub: '4×6 · Full size (ID card)' },
+];
+
+const SPECS: { key: PhotoSpec; label: string }[] = [
+  { key: 'standard', label: '35×45mm — Passport / PAN / Aadhaar / Voter ID' },
+  { key: 'small',    label: '25×30mm — School / College admission' },
+  { key: 'stamp',    label: '20×25mm — Stamp size (some govt forms)' },
+];
 
 const BG_HEX: Record<BgColor, string> = {
   white: '#ffffff', lightblue: '#a8c8e8', red: '#c8102e', custom: '#ffffff',
@@ -45,11 +57,11 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 /** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
-async function buildSheet(fileId: string, sheet: Sheet, count: number, size: PhotoSize): Promise<string> {
+async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, sheet, count, size }),
+    body: JSON.stringify({ fileId, preset, spec }),
   });
   if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
   return URL.createObjectURL(await res.blob());
@@ -92,6 +104,8 @@ export default function FileStitchPage() {
   const [sheet, setSheet] = useState<Sheet>('4x6');
   const [photoSize, setPhotoSize] = useState<PhotoSize>('passport');
   const [count, setCount] = useState<number>(6);
+  const [preset, setPreset] = useState<SheetPreset>('4x6-8');
+  const [spec, setSpec] = useState<PhotoSpec>('standard');
 
   const [bgLoading, setBgLoading] = useState(false);
   const [bgError, setBgError] = useState<string | null>(null);
@@ -191,7 +205,7 @@ export default function FileStitchPage() {
     const fileId = getDriveId(activeFile.fileUrl);
     if (!fileId) { setBgError('No Drive file ID found'); return; }
     setSheetLoading(true);
-    try { setSheetUrl(await buildSheet(fileId, sheet, count, photoSize)); }
+    try { setSheetUrl(await buildSheet(fileId, preset, spec)); }
     catch (e) { setBgError((e as Error).message); }
     finally { setSheetLoading(false); }
   }
@@ -201,7 +215,7 @@ export default function FileStitchPage() {
   }
 
   const previewSrc = sheetUrl ?? processedUrl ?? originalUrl;
-  const photoCount = count;
+  const photoCount = PRESETS.find(p => p.key === preset)?.label ?? 'Sheet';
 
   return (
     <div className="min-h-screen bg-[#0c1322] text-[#dce2f7] font-['Inter',sans-serif] flex flex-col">
@@ -377,44 +391,36 @@ export default function FileStitchPage() {
                 </div>
               </div>
 
-              {/* Step 3: Sheet size */}
+              {/* Step 3: Layout preset */}
               <div className="p-3 border-b border-[#334155]">
                 <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2 flex items-center gap-1">
                   <span className="bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">3</span>
-                  Sheet & Count
+                  Layout
                 </p>
-                <div className="flex gap-2 mb-2">
-                  {(['4x6', 'a4'] as Sheet[]).map(s => (
-                    <button key={s} onClick={() => { setSheet(s); setCount(SHEET_COUNTS[s][2]); setSheetUrl(null); }}
-                      className={`flex-1 py-1.5 rounded text-[10px] font-bold uppercase border transition-colors
-                        ${sheet === s ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
-                      {s === '4x6' ? '4×6' : 'A4'}
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-3 gap-1">
-                  {SHEET_COUNTS[sheet].map(n => (
-                    <button key={n} onClick={() => { setCount(n); setSheetUrl(null); }}
-                      className={`py-1.5 rounded text-[10px] font-bold border transition-colors
-                        ${count === n ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
-                      {n} {n === 1 ? 'photo' : 'photos'}
+                <div className="flex flex-col gap-1">
+                  {PRESETS.map(p => (
+                    <button key={p.key} onClick={() => { setPreset(p.key); setSheetUrl(null); }}
+                      className={`w-full py-2 px-2.5 rounded text-left border transition-colors
+                        ${preset === p.key ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
+                      <span className="text-[11px] font-bold">{p.label}</span>
+                      <span className={`text-[9px] block ${preset === p.key ? 'text-blue-200' : 'text-[#64748b]'}`}>{p.sub}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Step 3b: Photo size */}
+              {/* Step 3b: Photo spec */}
               <div className="p-3 border-b border-[#334155]">
                 <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2 flex items-center gap-1">
                   <span className="bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">↳</span>
                   Photo Size
                 </p>
-                <div className="flex gap-1.5">
-                  {([['passport','35×45mm'],['visa','35×45mm'],['us','2×2 in']] as [PhotoSize,string][]).map(([key, label]) => (
-                    <button key={key} onClick={() => { setPhotoSize(key); setSheetUrl(null); }}
-                      className={`flex-1 py-1.5 rounded text-[9px] font-bold uppercase border transition-colors
-                        ${photoSize === key ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
-                      {key}<br/><span className="font-normal normal-case">{label}</span>
+                <div className="flex flex-col gap-1">
+                  {SPECS.map(s => (
+                    <button key={s.key} onClick={() => { setSpec(s.key); setSheetUrl(null); }}
+                      className={`w-full py-1.5 px-2.5 rounded text-left text-[10px] border transition-colors
+                        ${spec === s.key ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
+                      {s.label}
                     </button>
                   ))}
                 </div>
