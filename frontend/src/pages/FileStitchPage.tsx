@@ -6,8 +6,6 @@ interface StitchFile { id: string; fileName: string; fileUrl: string; customerNa
 
 type Mode = 'aadhaar' | 'passport';
 type BgColor = 'white' | 'lightblue' | 'red' | 'custom';
-type Sheet = '4x6' | 'a4';
-type PhotoSize = 'passport' | 'visa' | 'us';
 type PhotoSpec = 'standard' | 'small' | 'stamp';
 type SheetPreset = '4x6-8' | '4x6-12' | '4x6-4' | 'a4-24' | 'single';
 
@@ -101,9 +99,6 @@ export default function FileStitchPage() {
 
   const [bgColor, setBgColor] = useState<BgColor>('white');
   const [customColor, setCustomColor] = useState('#ffffff');
-  const [sheet, setSheet] = useState<Sheet>('4x6');
-  const [photoSize, setPhotoSize] = useState<PhotoSize>('passport');
-  const [count, setCount] = useState<number>(6);
   const [preset, setPreset] = useState<SheetPreset>('4x6-8');
   const [spec, setSpec] = useState<PhotoSpec>('standard');
 
@@ -257,7 +252,7 @@ export default function FileStitchPage() {
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px]">print</span> Print Sheet
               </button>
-              <button onClick={() => downloadDataUrl(sheetUrl, `passport_${sheet}.jpg`)}
+              <button onClick={() => downloadDataUrl(sheetUrl, `passport_${preset}.jpg`)}
                 className="px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px]">download</span>
               </button>
@@ -444,7 +439,7 @@ export default function FileStitchPage() {
                       className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1">
                       <span className="material-symbols-outlined text-[13px]">print</span> Print
                     </button>
-                    <button onClick={() => downloadDataUrl(sheetUrl, `passport_${sheet}.jpg`)}
+                    <button onClick={() => downloadDataUrl(sheetUrl, `passport_${preset}.jpg`)}
                       className="flex-1 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-[10px] rounded flex items-center justify-center gap-1">
                       <span className="material-symbols-outlined text-[13px]">download</span> Save
                     </button>
@@ -468,7 +463,7 @@ export default function FileStitchPage() {
               {previewSrc ? (
                 <>
                   <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider">
-                    {sheetUrl ? `${sheet.toUpperCase()} Sheet · ${photoCount} photos` : processedUrl ? 'Processed Photo' : 'Original Photo'}
+                    {sheetUrl ? `${photoCount}` : processedUrl ? 'Processed Photo' : 'Original Photo'}
                   </p>
                   <div className={`rounded shadow-2xl overflow-hidden max-w-2xl w-full ${sheetUrl || processedUrl ? 'bg-white' : 'bg-[#2e3545]'}`}>
                     <img src={previewSrc} alt="Preview" className="w-full h-auto" />
