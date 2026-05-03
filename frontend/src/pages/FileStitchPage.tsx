@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { API_BASE_URL } from '../utils/helpers';
+import { API_BASE_URL, BACKEND_BASE_URL } from '../utils/helpers';
 
 interface StitchFile { id: string; fileName: string; fileUrl: string; customerName: string; }
 
@@ -9,7 +8,7 @@ type Mode = 'aadhaar' | 'passport';
 type BgColor = 'white' | 'lightblue' | 'red' | 'custom';
 type Sheet = '4x6' | 'a4';
 
-const BG_COLORS: Record<BgColor, string> = {
+const BG_HEX: Record<BgColor, string> = {
   white: '#ffffff', lightblue: '#a8c8e8', red: '#c8102e', custom: '#ffffff',
 };
 
@@ -22,152 +21,184 @@ function getFullUrl(url: string) {
   return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url;
 }
 
-// Fetch image as blob from Drive
-async function fetchImageBlob(url: string): Promise<Blob> {
+/** Fetch image as blob — tries Drive download URL, falls back to thumbnail */
+async function fetchBlob(url: string): Promise<Blob> {
   const id = getDriveId(url);
-  const fetchUrl = id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
-  const res = await fetch(fetchUrl);
-  if (!res.ok) throw new Error('Failed to fetch image');
+  const src = id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
+  const res = await fetch(src);
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
   return res.blob();
 }
 
-// Apply background color to transparent PNG using canvas
-async function applyBackground(pngDataUrl: string, color: string): Promise<string> {
+/** Composite a foreground dataURL onto a solid color background */
+async function compositeOnColor(fgDataUrl: string, color: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width; canvas.height = img.height;
-      const ctx = canvas.getContext('2d')!;
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      const ctx = c.getContext('2d')!;
       ctx.fillStyle = color;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, c.width, c.height);
       ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/jpeg', 0.95));
+      resolve(c.toDataURL('image/jpeg', 0.95));
     };
     img.onerror = reject;
-    img.src = pngDataUrl;
+    img.src = fgDataUrl;
   });
 }
 
-// Generate passport photo sheet on canvas
-async function generateSheet(imageDataUrl: string, sheet: Sheet): Promise<string> {
+/** Tile photo onto sheet canvas */
+async function buildSheet(photoDataUrl: string, sheet: Sheet): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      // Sheet dimensions in px at 300dpi
-      const configs = {
-        '4x6': { w: 1800, h: 1200, cols: 3, rows: 2, photoW: 525, photoH: 675, margin: 50 },
-        'a4':  { w: 2480, h: 3508, cols: 4, rows: 6, photoW: 525, photoH: 675, margin: 60 },
-      };
-      const c = configs[sheet];
-      const canvas = document.createElement('canvas');
-      canvas.width = c.w; canvas.height = c.h;
-      const ctx = canvas.getContext('2d')!;
+      // 300 dpi dimensions
+      const cfg = {
+        '4x6': { w: 1800, h: 1200, cols: 3, rows: 2, pw: 525, ph: 675, gap: 25 },
+        'a4':  { w: 2480, h: 3508, cols: 4, rows: 6, pw: 525, ph: 675, gap: 30 },
+      }[sheet];
+      const c = document.createElement('canvas');
+      c.width = cfg.w; c.height = cfg.h;
+      const ctx = c.getContext('2d')!;
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, c.w, c.h);
-
-      const totalW = c.cols * c.photoW + (c.cols + 1) * c.margin;
-      const totalH = c.rows * c.photoH + (c.rows + 1) * c.margin;
-      const offsetX = (c.w - totalW) / 2;
-      const offsetY = (c.h - totalH) / 2;
-
-      for (let row = 0; row < c.rows; row++) {
-        for (let col = 0; col < c.cols; col++) {
-          const x = offsetX + c.margin + col * (c.photoW + c.margin);
-          const y = offsetY + c.margin + row * (c.photoH + c.margin);
-          ctx.drawImage(img, x, y, c.photoW, c.photoH);
+      ctx.fillRect(0, 0, cfg.w, cfg.h);
+      const totalW = cfg.cols * cfg.pw + (cfg.cols - 1) * cfg.gap;
+      const totalH = cfg.rows * cfg.ph + (cfg.rows - 1) * cfg.gap;
+      const ox = (cfg.w - totalW) / 2;
+      const oy = (cfg.h - totalH) / 2;
+      for (let r = 0; r < cfg.rows; r++) {
+        for (let col = 0; col < cfg.cols; col++) {
+          ctx.drawImage(img, ox + col * (cfg.pw + cfg.gap), oy + r * (cfg.ph + cfg.gap), cfg.pw, cfg.ph);
         }
       }
-      resolve(canvas.toDataURL('image/jpeg', 0.95));
+      resolve(c.toDataURL('image/jpeg', 0.95));
     };
     img.onerror = reject;
-    img.src = imageDataUrl;
+    img.src = photoDataUrl;
   });
+}
+
+function printDataUrl(dataUrl: string) {
+  const win = window.open('', '_blank');
+  if (!win) return;
+  win.document.write(`<html><body style="margin:0"><img src="${dataUrl}" style="width:100%" onload="window.print()"/></body></html>`);
+  win.document.close();
+}
+
+function downloadDataUrl(dataUrl: string, name: string) {
+  const a = document.createElement('a'); a.href = dataUrl; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 
 export default function FileStitchPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+
   const [files, setFiles] = useState<StitchFile[]>([]);
   const [mode, setMode] = useState<Mode>('aadhaar');
 
-  // Aadhaar layout state
+  // ── Aadhaar state ──────────────────────────────────────────────────────────
   const [layoutUrl, setLayoutUrl] = useState<string | null>(null);
   const [layoutLoading, setLayoutLoading] = useState(false);
   const [layoutError, setLayoutError] = useState<string | null>(null);
-  const [autoApplied, setAutoApplied] = useState(false);
+  const autoRan = useRef(false);
 
-  // Passport photo state
+  // ── Passport state ─────────────────────────────────────────────────────────
   const [activeFile, setActiveFile] = useState<StitchFile | null>(null);
-  const [originalUrl, setOriginalUrl] = useState<string | null>(null);
-  const [processedUrl, setProcessedUrl] = useState<string | null>(null);
+  const [originalUrl, setOriginalUrl] = useState<string | null>(null);   // full-res original
+  const [fgDataUrl, setFgDataUrl] = useState<string | null>(null);       // after bg removal (PNG, transparent)
+  const [processedUrl, setProcessedUrl] = useState<string | null>(null); // fg + bg color applied
+  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+
   const [bgColor, setBgColor] = useState<BgColor>('white');
   const [customColor, setCustomColor] = useState('#ffffff');
   const [sheet, setSheet] = useState<Sheet>('4x6');
-  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+
   const [bgLoading, setBgLoading] = useState(false);
   const [bgError, setBgError] = useState<string | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
 
+  // ── Init from URL params ───────────────────────────────────────────────────
   useEffect(() => {
     const raw = params.get('files');
     if (!raw) return;
     try {
       const parsed: StitchFile[] = JSON.parse(decodeURIComponent(raw));
       setFiles(parsed);
-      if (parsed.length === 2) { setMode('aadhaar'); }
-      else if (parsed.length === 1) { setMode('passport'); setActiveFile(parsed[0]); setOriginalUrl(getFullUrl(parsed[0].fileUrl)); }
+      if (parsed.length === 1) {
+        setMode('passport');
+        setActiveFile(parsed[0]);
+        setOriginalUrl(getFullUrl(parsed[0].fileUrl));
+      } else {
+        setMode('aadhaar');
+      }
     } catch { /* ignore */ }
   }, [params]);
 
   useEffect(() => {
-    if (mode === 'aadhaar' && files.length === 2 && !autoApplied && !layoutUrl) {
-      setAutoApplied(true);
-      applyAadhaarLayout(files);
+    if (mode === 'aadhaar' && files.length === 2 && !autoRan.current && !layoutUrl) {
+      autoRan.current = true;
+      runAadhaarLayout(files);
     }
   }, [files, mode]);
 
-  async function applyAadhaarLayout(filesToProcess: StitchFile[]) {
+  // ── Aadhaar layout ─────────────────────────────────────────────────────────
+  async function runAadhaarLayout(filesToProcess: StitchFile[]) {
     setLayoutLoading(true); setLayoutError(null);
     try {
-      const res = await axios.post(`${API_BASE_URL}/process`, {
-        fileIds: filesToProcess.map(f => getDriveId(f.fileUrl) ?? f.id),
-        action: 'aadhaar_layout',
-      }, { responseType: 'blob' });
-      setLayoutUrl(URL.createObjectURL(res.data));
-    } catch { setLayoutError('Layout failed. Ensure Drive is connected.'); }
-    finally { setLayoutLoading(false); }
+      const res = await fetch(`${API_BASE_URL}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileIds: filesToProcess.map(f => getDriveId(f.fileUrl) ?? f.id),
+          action: 'aadhaar_layout',
+        }),
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const blob = await res.blob();
+      setLayoutUrl(URL.createObjectURL(blob));
+    } catch (e) {
+      setLayoutError(`Layout failed: ${(e as Error).message}. Ensure Drive is connected.`);
+    } finally { setLayoutLoading(false); }
   }
 
+  // ── Background removal (via hub proxy) ────────────────────────────────────
   async function removeBackground() {
     if (!activeFile) return;
-    setBgLoading(true); setBgError(null); setProcessedUrl(null); setSheetUrl(null);
+    setBgLoading(true); setBgError(null); setFgDataUrl(null); setProcessedUrl(null); setSheetUrl(null);
     try {
-      const blob = await fetchImageBlob(activeFile.fileUrl);
-      const formData = new FormData();
-      formData.append('image_file', blob, activeFile.fileName);
-      formData.append('size', 'auto');
-      const res = await fetch('https://api.remove.bg/v1.0/removebg', {
-        method: 'POST',
-        headers: { 'X-Api-Key': 'd9f7QFfqAdFuEzt1dXNqvSxP' },
-        body: formData,
+      const blob = await fetchBlob(activeFile.fileUrl);
+      const form = new FormData();
+      form.append('image_file', blob, activeFile.fileName);
+
+      const res = await fetch(`${BACKEND_BASE_URL}/api/remove-bg`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || `API error ${res.status}`);
+      }
+      const pngBlob = await res.blob();
+      const pngDataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(pngBlob);
       });
-      if (!res.ok) throw new Error(`remove.bg: ${res.status}`);
-      const resultBlob = await res.blob();
-      const pngUrl = URL.createObjectURL(resultBlob);
-      const color = bgColor === 'custom' ? customColor : BG_COLORS[bgColor];
-      const withBg = await applyBackground(pngUrl, color);
+      setFgDataUrl(pngDataUrl);
+      const color = bgColor === 'custom' ? customColor : BG_HEX[bgColor];
+      const withBg = await compositeOnColor(pngDataUrl, color);
       setProcessedUrl(withBg);
     } catch (e) {
       setBgError(`Background removal failed: ${(e as Error).message}`);
     } finally { setBgLoading(false); }
   }
 
-  async function changeBackground(color: string) {
-    if (!processedUrl) return;
+  /** Re-apply a new background color to the already-removed foreground */
+  async function applyBgColor(color: string) {
+    if (!fgDataUrl) return;
     try {
-      const withBg = await applyBackground(processedUrl, color);
+      const withBg = await compositeOnColor(fgDataUrl, color);
       setProcessedUrl(withBg);
       setSheetUrl(null);
     } catch { /* ignore */ }
@@ -177,72 +208,76 @@ export default function FileStitchPage() {
     const src = processedUrl ?? originalUrl;
     if (!src) return;
     setSheetLoading(true);
-    try {
-      const url = await generateSheet(src, sheet);
-      setSheetUrl(url);
-    } catch { /* ignore */ }
+    try { setSheetUrl(await buildSheet(src, sheet)); }
+    catch { /* ignore */ }
     finally { setSheetLoading(false); }
   }
 
-  function handlePrint(url: string) {
-    const win = window.open('', '_blank');
-    if (!win) return;
-    win.document.write(`<html><body style="margin:0"><img src="${url}" style="width:100%" onload="window.print()"/></body></html>`);
-    win.document.close();
-  }
-
-  function handleDownload(url: string, name: string) {
-    const a = document.createElement('a'); a.href = url; a.download = name;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  function resetToOriginal() {
+    setFgDataUrl(null); setProcessedUrl(null); setSheetUrl(null); setBgError(null);
   }
 
   const previewSrc = sheetUrl ?? processedUrl ?? originalUrl;
+  const photoCount = sheet === '4x6' ? 6 : 24;
 
   return (
     <div className="min-h-screen bg-[#0c1322] text-[#dce2f7] font-['Inter',sans-serif] flex flex-col">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div className="bg-[#1e293b] border-b border-[#334155] px-4 h-10 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/')} className="text-[#94a3b8] hover:text-white">
             <span className="material-symbols-outlined text-[20px]">arrow_back</span>
           </button>
-          <span className="text-sm font-bold uppercase tracking-wider">File Stitch Pro</span>
-          {/* Mode tabs */}
+          <span className="text-sm font-bold uppercase tracking-wider">Photo Processing</span>
           <div className="flex gap-1 ml-2">
             {(['aadhaar', 'passport'] as Mode[]).map(m => (
               <button key={m} onClick={() => setMode(m)}
-                className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-colors ${mode === m ? 'bg-blue-600 text-white' : 'text-[#94a3b8] hover:text-white border border-[#334155]'}`}>
+                className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide transition-colors
+                  ${mode === m ? 'bg-blue-600 text-white' : 'text-[#94a3b8] hover:text-white border border-[#334155]'}`}>
                 {m === 'aadhaar' ? 'Aadhaar Layout' : 'Passport Photo'}
               </button>
             ))}
           </div>
         </div>
+        {/* Header actions */}
         <div className="flex gap-2">
           {mode === 'aadhaar' && layoutUrl && (
             <>
-              <button onClick={() => handlePrint(layoutUrl)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1.5">
+              <button onClick={() => printDataUrl(layoutUrl)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px]">print</span> Print Now
               </button>
-              <button onClick={() => handleDownload(layoutUrl, 'aadhaar_layout.jpg')} className="px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center gap-1.5">
+              <button onClick={() => downloadDataUrl(layoutUrl, 'aadhaar_layout.jpg')}
+                className="px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px]">download</span>
               </button>
             </>
           )}
           {mode === 'passport' && sheetUrl && (
             <>
-              <button onClick={() => handlePrint(sheetUrl)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1.5">
+              <button onClick={() => printDataUrl(sheetUrl)}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px]">print</span> Print Sheet
               </button>
-              <button onClick={() => handleDownload(sheetUrl, `passport_${sheet}.jpg`)} className="px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center gap-1.5">
+              <button onClick={() => downloadDataUrl(sheetUrl, `passport_${sheet}.jpg`)}
+                className="px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px]">download</span>
               </button>
             </>
+          )}
+          {mode === 'passport' && processedUrl && !sheetUrl && (
+            <button onClick={() => printDataUrl(processedUrl)}
+              className="px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[16px]">print</span> Print Photo
+            </button>
           )}
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* ── AADHAAR MODE ── */}
+
+        {/* ══════════════════ AADHAAR MODE ══════════════════ */}
         {mode === 'aadhaar' && (
           <>
             {/* Left: file list */}
@@ -250,120 +285,198 @@ export default function FileStitchPage() {
               <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider px-1">Files ({files.length})</p>
               {files.map((f, i) => (
                 <div key={f.id} className="bg-[#1e293b] border border-[#334155] rounded overflow-hidden">
-                  <div className="h-20 relative"><img src={getFullUrl(f.fileUrl)} alt={f.fileName} className="w-full h-full object-cover" />
-                    <div className="absolute top-1 left-1 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">{i === 0 ? 'FRONT' : 'BACK'}</div>
+                  <div className="h-20 relative">
+                    <img src={getFullUrl(f.fileUrl)} alt={f.fileName} className="w-full h-full object-cover" />
+                    <div className="absolute top-1 left-1 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                      {i === 0 ? 'FRONT' : 'BACK'}
+                    </div>
                   </div>
                   <p className="text-[9px] text-[#94a3b8] truncate px-1.5 py-1">{f.fileName}</p>
                 </div>
               ))}
               {files.length === 2 && (
-                <button onClick={() => { setLayoutUrl(null); setAutoApplied(false); applyAadhaarLayout(files); }} disabled={layoutLoading}
+                <button onClick={() => { setLayoutUrl(null); runAadhaarLayout(files); }} disabled={layoutLoading}
                   className="w-full py-2 bg-blue-600 disabled:opacity-50 text-white text-xs font-bold rounded hover:bg-blue-500 mt-auto">
                   {layoutLoading ? 'Generating…' : 'Regenerate'}
                 </button>
               )}
             </div>
+
             {/* Center: preview */}
             <div className="flex-1 flex items-center justify-center bg-[#0c1322] p-6 overflow-auto">
-              {layoutLoading && <div className="flex flex-col items-center gap-3 text-[#94a3b8]"><span className="material-symbols-outlined text-[48px] animate-spin">sync</span><p>Generating layout…</p></div>}
-              {layoutError && <div className="bg-red-500/10 border border-red-500/30 rounded p-4 text-red-400 text-sm max-w-sm text-center">{layoutError}<br/><button onClick={() => applyAadhaarLayout(files)} className="mt-2 px-3 py-1 border border-red-500/50 rounded text-xs">Retry</button></div>}
-              {layoutUrl && !layoutLoading && (
-                <div className="flex flex-col items-center gap-3 max-w-2xl w-full">
-                  <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider">A4 Landscape — Front (left) · Back (right)</p>
-                  <div className="bg-white rounded shadow-2xl overflow-hidden w-full"><img src={layoutUrl} alt="Layout" className="w-full h-auto" /></div>
+              {layoutLoading && (
+                <div className="flex flex-col items-center gap-3 text-[#94a3b8]">
+                  <span className="material-symbols-outlined text-[48px] animate-spin">sync</span>
+                  <p>Generating layout…</p>
                 </div>
               )}
-              {!layoutLoading && !layoutUrl && !layoutError && files.length !== 2 && (
+              {layoutError && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded p-4 text-red-400 text-sm max-w-sm text-center">
+                  {layoutError}
+                  <br />
+                  <button onClick={() => runAadhaarLayout(files)} className="mt-2 px-3 py-1 border border-red-500/50 rounded text-xs">
+                    Retry
+                  </button>
+                </div>
+              )}
+              {layoutUrl && !layoutLoading && (
+                <div className="flex flex-col items-center gap-3 max-w-2xl w-full">
+                  <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider">A4 Landscape — Front · Back</p>
+                  <div className="bg-white rounded shadow-2xl overflow-hidden w-full">
+                    <img src={layoutUrl} alt="Aadhaar Layout" className="w-full h-auto" />
+                  </div>
+                </div>
+              )}
+              {!layoutLoading && !layoutUrl && !layoutError && (
                 <div className="flex flex-col items-center gap-3 text-[#94a3b8]">
                   <span className="material-symbols-outlined text-[48px]">layers</span>
-                  <p className="text-sm">Select 2 files from inbox</p>
-                  <button onClick={() => navigate('/')} className="px-4 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded">← Back to Inbox</button>
+                  <p className="text-sm">Select 2 Aadhaar images from inbox</p>
+                  <button onClick={() => navigate('/')} className="px-4 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded">
+                    ← Back to Inbox
+                  </button>
                 </div>
               )}
             </div>
           </>
         )}
 
-        {/* ── PASSPORT MODE ── */}
+        {/* ══════════════════ PASSPORT MODE ══════════════════ */}
         {mode === 'passport' && (
           <>
             {/* Left: controls */}
-            <div className="w-56 bg-[#141b2b] border-r border-[#334155] flex flex-col shrink-0">
+            <div className="w-60 bg-[#141b2b] border-r border-[#334155] flex flex-col shrink-0 overflow-y-auto">
+
+              {/* Step 1: Remove BG */}
               <div className="p-3 border-b border-[#334155]">
-                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2">Background Removal</p>
+                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <span className="bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">1</span>
+                  Remove Background
+                </p>
                 <button onClick={removeBackground} disabled={bgLoading || !activeFile}
-                  className="w-full py-2 bg-[#1e293b] border border-[#334155] disabled:opacity-40 text-[#dce2f7] text-xs font-semibold rounded hover:bg-[#334155] transition-colors flex items-center justify-center gap-1.5">
-                  {bgLoading ? <><span className="material-symbols-outlined text-[14px] animate-spin">sync</span>Removing…</> : <><span className="material-symbols-outlined text-[14px]">auto_fix_high</span>Remove Background</>}
+                  className="w-full py-2.5 bg-[#1e293b] border border-[#334155] disabled:opacity-40 text-[#dce2f7] text-xs font-semibold rounded hover:bg-[#334155] transition-colors flex items-center justify-center gap-1.5">
+                  {bgLoading
+                    ? <><span className="material-symbols-outlined text-[14px] animate-spin">sync</span>Removing…</>
+                    : <><span className="material-symbols-outlined text-[14px]">auto_fix_high</span>Remove Background</>}
                 </button>
-                {bgError && <p className="text-[9px] text-red-400 mt-1">{bgError}</p>}
-                {processedUrl && <p className="text-[9px] text-green-400 mt-1">✓ Background removed</p>}
+                {bgError && (
+                  <div className="mt-2 p-2 bg-red-500/10 border border-red-500/30 rounded">
+                    <p className="text-[9px] text-red-400 mb-1">{bgError}</p>
+                    <button onClick={removeBackground} className="text-[9px] text-red-400 border border-red-500/40 px-2 py-0.5 rounded hover:bg-red-500/10">
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {fgDataUrl && !bgError && <p className="text-[9px] text-green-400 mt-1.5 flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">check_circle</span>Background removed</p>}
               </div>
 
-              {processedUrl && (
-                <div className="p-3 border-b border-[#334155]">
-                  <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2">Background Color</p>
-                  <div className="grid grid-cols-4 gap-1.5 mb-2">
-                    {(Object.entries(BG_COLORS) as [BgColor, string][]).filter(([k]) => k !== 'custom').map(([key, color]) => (
-                      <button key={key} onClick={() => { setBgColor(key); changeBackground(color); }}
-                        className={`h-7 rounded border-2 transition-colors ${bgColor === key ? 'border-blue-500' : 'border-[#334155]'}`}
-                        style={{ background: color }} title={key} />
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input type="color" value={customColor} onChange={e => { setCustomColor(e.target.value); setBgColor('custom'); changeBackground(e.target.value); }}
-                      className="w-7 h-7 rounded border border-[#334155] cursor-pointer bg-transparent" />
-                    <span className="text-[10px] text-[#94a3b8]">Custom color</span>
-                  </div>
+              {/* Step 2: Background color */}
+              <div className={`p-3 border-b border-[#334155] transition-opacity ${!fgDataUrl ? 'opacity-40 pointer-events-none' : ''}`}>
+                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <span className="bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">2</span>
+                  Background Color
+                </p>
+                <div className="grid grid-cols-3 gap-1.5 mb-2">
+                  {([['white','#ffffff','White'],['lightblue','#a8c8e8','Light Blue'],['red','#c8102e','Red']] as [BgColor,string,string][]).map(([key, hex, label]) => (
+                    <button key={key} onClick={() => { setBgColor(key); applyBgColor(hex); }}
+                      className={`h-8 rounded border-2 text-[8px] font-bold transition-colors flex items-end justify-center pb-0.5
+                        ${bgColor === key ? 'border-blue-500' : 'border-[#334155]'}`}
+                      style={{ background: hex, color: key === 'white' || key === 'lightblue' ? '#333' : '#fff' }}>
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  <input type="color" value={customColor}
+                    onChange={e => { setCustomColor(e.target.value); setBgColor('custom'); applyBgColor(e.target.value); }}
+                    className="w-8 h-8 rounded border border-[#334155] cursor-pointer bg-transparent p-0.5" />
+                  <span className="text-[10px] text-[#94a3b8]">Custom color</span>
+                  {bgColor === 'custom' && <span className="text-[9px] text-blue-400">✓ active</span>}
+                </div>
+              </div>
 
+              {/* Step 3: Sheet size */}
               <div className="p-3 border-b border-[#334155]">
-                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2">Sheet Size</p>
+                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <span className="bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">3</span>
+                  Sheet Size
+                </p>
                 <div className="flex gap-2">
                   {(['4x6', 'a4'] as Sheet[]).map(s => (
                     <button key={s} onClick={() => { setSheet(s); setSheetUrl(null); }}
-                      className={`flex-1 py-1.5 rounded text-[10px] font-bold uppercase border transition-colors ${sheet === s ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
-                      {s === '4x6' ? '4×6 (6 photos)' : 'A4 (24 photos)'}
+                      className={`flex-1 py-2 rounded text-[10px] font-bold uppercase border transition-colors
+                        ${sheet === s ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}>
+                      {s === '4x6' ? '4×6 · 6 photos' : 'A4 · 24 photos'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="p-3">
+              {/* Step 4: Generate */}
+              <div className="p-3 border-b border-[#334155]">
+                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <span className="bg-blue-600 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">4</span>
+                  Generate Sheet
+                </p>
                 <button onClick={generatePassportSheet} disabled={sheetLoading || (!processedUrl && !originalUrl)}
-                  className="w-full py-2 bg-green-700 hover:bg-green-600 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors">
-                  {sheetLoading ? <><span className="material-symbols-outlined text-[14px] animate-spin">sync</span>Generating…</> : <><span className="material-symbols-outlined text-[14px]">grid_on</span>Generate Sheet</>}
+                  className="w-full py-2.5 bg-green-700 hover:bg-green-600 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors">
+                  {sheetLoading
+                    ? <><span className="material-symbols-outlined text-[14px] animate-spin">sync</span>Generating…</>
+                    : <><span className="material-symbols-outlined text-[14px]">grid_on</span>Generate {photoCount} Photos</>}
                 </button>
-                {processedUrl && (
-                  <button onClick={() => { setProcessedUrl(null); setSheetUrl(null); setBgError(null); }}
-                    className="w-full mt-2 py-1 text-[#94a3b8] hover:text-white text-[10px] border border-[#334155] rounded transition-colors">
-                    Reset to Original
-                  </button>
+                {sheetUrl && (
+                  <div className="mt-2 flex gap-1.5">
+                    <button onClick={() => printDataUrl(sheetUrl)}
+                      className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded flex items-center justify-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">print</span> Print
+                    </button>
+                    <button onClick={() => downloadDataUrl(sheetUrl, `passport_${sheet}.jpg`)}
+                      className="flex-1 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-[10px] rounded flex items-center justify-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">download</span> Save
+                    </button>
+                  </div>
                 )}
               </div>
+
+              {/* Reset */}
+              {(fgDataUrl || processedUrl) && (
+                <div className="p-3">
+                  <button onClick={resetToOriginal}
+                    className="w-full py-1.5 text-[#94a3b8] hover:text-white text-[10px] border border-[#334155] rounded transition-colors">
+                    ↺ Reset to Original
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Center: preview */}
-            <div className="flex-1 flex items-center justify-center bg-[#0c1322] p-6 overflow-auto">
+            <div className="flex-1 flex flex-col items-center justify-center bg-[#0c1322] p-6 overflow-auto gap-3">
               {previewSrc ? (
-                <div className="flex flex-col items-center gap-3 max-w-2xl w-full">
+                <>
                   <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider">
-                    {sheetUrl ? `${sheet.toUpperCase()} Sheet Preview` : processedUrl ? 'Processed Photo' : 'Original Photo'}
+                    {sheetUrl ? `${sheet.toUpperCase()} Sheet · ${photoCount} photos` : processedUrl ? 'Processed Photo' : 'Original Photo'}
                   </p>
-                  <div className={`rounded shadow-2xl overflow-hidden w-full ${sheetUrl ? 'bg-white' : 'bg-[#2e3545]'}`}>
+                  <div className={`rounded shadow-2xl overflow-hidden max-w-2xl w-full ${sheetUrl || processedUrl ? 'bg-white' : 'bg-[#2e3545]'}`}>
                     <img src={previewSrc} alt="Preview" className="w-full h-auto" />
                   </div>
-                </div>
+                  {!sheetUrl && (
+                    <p className="text-[10px] text-[#475569]">
+                      {processedUrl ? 'Background removed — choose a color above, then generate sheet' : 'Click "Remove Background" to start'}
+                    </p>
+                  )}
+                </>
               ) : (
                 <div className="flex flex-col items-center gap-3 text-[#94a3b8]">
                   <span className="material-symbols-outlined text-[48px]">portrait</span>
                   <p className="text-sm">Select a photo from inbox</p>
-                  <button onClick={() => navigate('/')} className="px-4 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded">← Back to Inbox</button>
+                  <button onClick={() => navigate('/')} className="px-4 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded">
+                    ← Back to Inbox
+                  </button>
                 </div>
               )}
             </div>
           </>
         )}
+
       </div>
     </div>
   );
