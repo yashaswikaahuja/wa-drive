@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { google } from 'googleapis';
 import multer from 'multer';
-import { Readable } from 'stream';
+import { Readable } from 'stream';import sharp from 'sharp';
 import whatsappRoutes from './api/routes/whatsapp.routes.js';
 import filesRoutes from './api/routes/files.routes.js';
 import processRoutes from './api/routes/process.routes.js';
@@ -153,6 +153,30 @@ app.post('/api/worker/upload', upload.single('file') as any, async (req: any, re
   const { phone, senderName, profilePicUrl, mimetype, fileName } = req.body as Record<string, string>;
   const fileSize = req.file.size;
   console.log(`[Hub] Upload queued: ${fileName} (${(fileSize/1024).toFixed(0)}KB) from ${phone}`);
+
+  // ── Sharp image validation ──────────────────────────────────────────────────
+  // Validate image buffers before uploading to Drive.
+  // Non-image files (PDF, audio, video) are passed through without validation.
+  if (mimetype.startsWith('image/')) {
+    if (!req.file.buffer || req.file.buffer.length < 100) {
+      console.error(`[Hub] ✗ Rejected ${fileName} — buffer empty or too small (${req.file.buffer?.length ?? 0} bytes)`);
+      res.status(400).json({ error: 'Invalid image: buffer empty or too small' });
+      return;
+    }
+    try {
+      const meta = await sharp(req.file.buffer).metadata();
+      if (!meta.width || !meta.height) {
+        console.error(`[Hub] ✗ Rejected ${fileName} — Sharp could not read image dimensions`);
+        res.status(400).json({ error: 'Invalid image: cannot read dimensions' });
+        return;
+      }
+      console.log(`[Hub] ✓ Image valid: ${fileName} (${meta.width}x${meta.height} ${meta.format})`);
+    } catch (sharpErr: any) {
+      console.error(`[Hub] ✗ Rejected ${fileName} — Sharp error: ${sharpErr.message}`);
+      res.status(400).json({ error: `Invalid image: ${sharpErr.message}` });
+      return;
+    }
+  }
 
   await acquireUploadSlot();
   try {

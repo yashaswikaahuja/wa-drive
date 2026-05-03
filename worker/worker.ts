@@ -140,16 +140,51 @@ async function uploadWithRetry(
 
 // ── Media download with retry ────────────────────────────────────────────────
 
+const DOWNLOAD_DELAYS_MS = [3000, 6000, 12000, 20000, 30000]; // 5 attempts
+
 async function downloadWithRetry(msg: proto.IWebMessageInfo): Promise<Buffer | null> {
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const msgContent = msg.message;
+  if (!msgContent) return null;
+
+  // Validate that the message has a media key before attempting download.
+  // "Cannot derive from empty media key" happens when the key is missing/null.
+  const mediaMsg =
+    msgContent.imageMessage ??
+    msgContent.videoMessage ??
+    msgContent.audioMessage ??
+    msgContent.documentMessage ??
+    msgContent.stickerMessage;
+
+  if (!mediaMsg) {
+    console.warn('[Worker] No media message object found — skipping download');
+    return null;
+  }
+
+  // WhatsApp CDN sometimes needs a moment before the media is available.
+  // A short initial delay prevents the "empty media key" error on first attempt.
+  await new Promise(r => setTimeout(r, 2000));
+
+  for (let attempt = 1; attempt <= DOWNLOAD_DELAYS_MS.length; attempt++) {
     try {
+      // Re-check media key on each attempt — it may have been populated by now
+      if (!mediaMsg.mediaKey || mediaMsg.mediaKey.length === 0) {
+        console.warn(`[Worker] Empty media key on attempt ${attempt} — waiting before retry`);
+        if (attempt < DOWNLOAD_DELAYS_MS.length) {
+          await new Promise(r => setTimeout(r, DOWNLOAD_DELAYS_MS[attempt - 1]));
+        }
+        continue;
+      }
+
       const buf = await downloadMediaMessage(msg, 'buffer', {}) as Buffer;
-      if (buf?.length) return buf;
-      console.warn(`[Worker] Empty buffer attempt ${attempt}`);
-    } catch (e) {
-      console.warn(`[Worker] Download attempt ${attempt} failed: ${(e as Error).message}`);
+      if (buf && buf.length > 0) return buf;
+      console.warn(`[Worker] Empty buffer on attempt ${attempt}`);
+    } catch (e: any) {
+      const reason = (e as Error).message ?? String(e);
+      console.warn(`[Worker] Download attempt ${attempt} failed: ${reason}`);
     }
-    if (attempt < 3) await new Promise(r => setTimeout(r, attempt * 3000));
+    if (attempt < DOWNLOAD_DELAYS_MS.length) {
+      await new Promise(r => setTimeout(r, DOWNLOAD_DELAYS_MS[attempt - 1]));
+    }
   }
   return null;
 }
@@ -249,9 +284,16 @@ async function startBaileys() {
         try { profilePicUrl = await sock.profilePictureUrl(jid, 'image'); } catch { /* ignore */ }
 
         const buffer = await downloadWithRetry(capturedMsg);
-        if (!buffer) {
-          console.error(`[Worker] ✗ FAILED download ${fileName} | phone=${phone} | reason=download failed after 3 attempts`);
+        if (!buffer || buffer.length === 0) {
+          console.error(`[Worker] ✗ FAILED download ${fileName} | phone=${phone} | reason=download failed after all attempts`);
           hub.emit('upload:fail', { fileName, phone, reason: 'Download failed' });
+          return;
+        }
+
+        // Sanity check: reject suspiciously small buffers (< 100 bytes = corrupt)
+        if (buffer.length < 100) {
+          console.error(`[Worker] ✗ SKIPPED ${fileName} | phone=${phone} | reason=buffer too small (${buffer.length} bytes)`);
+          hub.emit('upload:fail', { fileName, phone, reason: 'Corrupt file (too small)' });
           return;
         }
 
