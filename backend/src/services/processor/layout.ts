@@ -10,19 +10,40 @@ const PHOTO_SIZES = {
 } as const;
 export type PhotoSize = keyof typeof PHOTO_SIZES;
 
-// ── Sheet layout configs ───────────────────────────────────────────────────────
-// Photo size is DERIVED from sheet + grid, not hardcoded.
-// Formula: photoW = (sheetW - 2×margin - (cols-1)×gap) / cols
-const LAYOUTS = {
-  '4x6-8':  { sw: 1800, sh: 1200, cols: 4, rows: 2, margin: 50, gap: 20 },
-  '4x6-6':  { sw: 1800, sh: 1200, cols: 3, rows: 2, margin: 50, gap: 20 },
-  'a4':     { sw: 2480, sh: 3508, cols: 4, rows: 6, margin: 40, gap: 8  },
+// ── Sheet dimensions @ 300 DPI ────────────────────────────────────────────────
+const SHEETS = {
+  '4x6': { sw: 1800, sh: 1200 },
+  'a4':  { sw: 2480, sh: 3508 },
 } as const;
-type LayoutKey = keyof typeof LAYOUTS;
+export type SheetType = keyof typeof SHEETS;
 
-function calcPhotoSize(cfg: typeof LAYOUTS[LayoutKey]) {
-  const pw = Math.floor((cfg.sw - 2 * cfg.margin - (cfg.cols - 1) * cfg.gap) / cfg.cols);
-  const ph = Math.floor((cfg.sh - 2 * cfg.margin - (cfg.rows - 1) * cfg.gap) / cfg.rows);
+const MARGIN = 60;
+const GAP    = 40;
+
+/**
+ * Auto-calculate cols × rows for a given count that best fills the sheet.
+ * Prefers landscape-friendly grids for 4×6, portrait-friendly for A4.
+ * Formula: find cols/rows pair where cols×rows = count and photo size is maximised.
+ */
+function calcGrid(count: number, sw: number, sh: number): { cols: number; rows: number } {
+  if (count === 1) return { cols: 1, rows: 1 };
+
+  let bestCols = 1, bestRows = count, bestArea = 0;
+  for (let cols = 1; cols <= count; cols++) {
+    if (count % cols !== 0) continue;
+    const rows = count / cols;
+    const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
+    const ph = Math.floor((sh - 2 * MARGIN - (rows - 1) * GAP) / rows);
+    if (pw <= 0 || ph <= 0) continue;
+    const area = pw * ph;
+    if (area > bestArea) { bestArea = area; bestCols = cols; bestRows = rows; }
+  }
+  return { cols: bestCols, rows: bestRows };
+}
+
+function calcPhotoSize(cols: number, rows: number, sw: number, sh: number) {
+  const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
+  const ph = Math.floor((sh - 2 * MARGIN - (rows - 1) * GAP) / rows);
   return { pw, ph };
 }
 
@@ -32,40 +53,40 @@ async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buff
 
 export async function generatePassportSheet(
   photoBuffer: Buffer,
-  sheet: '4x6' | 'a4' = '4x6',
-  count: 6 | 8 | 24 = 6,
+  sheet: SheetType = '4x6',
+  count: number = 6,
   size: PhotoSize = 'passport',
 ): Promise<Buffer> {
-  const key: LayoutKey = sheet === 'a4' ? 'a4' : count === 6 ? '4x6-6' : '4x6-8';
-  const cfg = LAYOUTS[key];
-  const { pw, ph } = calcPhotoSize(cfg);
+  const { sw, sh } = SHEETS[sheet];
+  const { cols, rows } = calcGrid(count, sw, sh);
+  const { pw, ph } = calcPhotoSize(cols, rows, sw, sh);
 
-  // Use size-specific dimensions if they fit better than derived ones
+  // Use standard photo dimensions if they fit within the derived slot
   const photoSize = PHOTO_SIZES[size];
-  const finalW = photoSize.w < pw ? photoSize.w : pw;
-  const finalH = photoSize.h < ph ? photoSize.h : ph;
+  const finalW = Math.min(pw, photoSize.w);
+  const finalH = Math.min(ph, photoSize.h);
 
   const photo = await preparePhoto(photoBuffer, finalW, finalH);
 
-  const composites: sharp.OverlayOptions[] = [];
   // Center the grid on the sheet
-  const totalW = cfg.cols * finalW + (cfg.cols - 1) * cfg.gap;
-  const totalH = cfg.rows * finalH + (cfg.rows - 1) * cfg.gap;
-  const offsetX = Math.floor((cfg.sw - totalW) / 2);
-  const offsetY = Math.floor((cfg.sh - totalH) / 2);
+  const totalW = cols * finalW + (cols - 1) * GAP;
+  const totalH = rows * finalH + (rows - 1) * GAP;
+  const offsetX = Math.floor((sw - totalW) / 2);
+  const offsetY = Math.floor((sh - totalH) / 2);
 
-  for (let row = 0; row < cfg.rows; row++) {
-    for (let col = 0; col < cfg.cols; col++) {
+  const composites: sharp.OverlayOptions[] = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
       composites.push({
         input: photo,
-        left: offsetX + col * (finalW + cfg.gap),
-        top:  offsetY + row * (finalH + cfg.gap),
+        left: offsetX + col * (finalW + GAP),
+        top:  offsetY + row * (finalH + GAP),
       });
     }
   }
 
   return sharp({
-    create: { width: cfg.sw, height: cfg.sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: sw, height: sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
     .composite(composites)
     .withMetadata({ density: 300 })
@@ -73,21 +94,20 @@ export async function generatePassportSheet(
     .toBuffer();
 }
 
-/** Place a single photo centered on a 4×6 sheet with equal margins */
+/** Place a single photo centered on sheet with equal margins */
 export async function generateSingleSheet(
   photoBuffer: Buffer,
   size: PhotoSize = 'passport',
+  sheet: SheetType = '4x6',
 ): Promise<Buffer> {
-  const SW = 1800, SH = 1200; // 4×6 landscape @ 300 DPI
+  const { sw, sh } = SHEETS[sheet];
   const { w, h } = PHOTO_SIZES[size];
   const photo = await preparePhoto(photoBuffer, w, h);
-  const left = Math.floor((SW - w) / 2);
-  const top  = Math.floor((SH - h) / 2);
 
   return sharp({
-    create: { width: SW, height: SH, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: sw, height: sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
-    .composite([{ input: photo, left, top }])
+    .composite([{ input: photo, left: Math.floor((sw - w) / 2), top: Math.floor((sh - h) / 2) }])
     .withMetadata({ density: 300 })
     .jpeg({ quality: 92 })
     .toBuffer();

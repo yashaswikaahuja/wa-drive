@@ -50,11 +50,11 @@ router.post('/', async (req: Request, res: Response) => {
 // Downloads from Drive server-side → Sharp sheet → returns JPEG (no CORS)
 router.post('/passport-sheet', async (req: Request, res: Response) => {
   const { fileId, sheet = '4x6', count = 6, size = 'passport' } = req.body as {
-    fileId?: string; sheet?: '4x6' | 'a4'; count?: number; size?: string;
+    fileId?: string; sheet?: string; count?: number; size?: string;
   };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
   if (!['4x6', 'a4'].includes(sheet)) { res.status(400).json({ error: 'sheet must be 4x6 or a4' }); return; }
-  if (![1, 6, 8, 24].includes(count)) { res.status(400).json({ error: 'count must be 1, 6, 8, or 24' }); return; }
+  if (!Number.isInteger(count) || count < 1 || count > 24) { res.status(400).json({ error: 'count must be 1–24' }); return; }
   if (!['passport', 'visa', 'us'].includes(size)) { res.status(400).json({ error: 'size must be passport, visa, or us' }); return; }
 
   const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
@@ -63,8 +63,8 @@ router.post('/passport-sheet', async (req: Request, res: Response) => {
   try {
     const buffer = await downloadDriveFile(fileId, driveAccessToken);
     const output = count === 1
-      ? await generateSingleSheet(buffer, size as any)
-      : await generatePassportSheet(buffer, sheet as '4x6' | 'a4', count as 6 | 8 | 24, size as any);
+      ? await generateSingleSheet(buffer, size as any, sheet as any)
+      : await generatePassportSheet(buffer, sheet as any, count, size as any);
     res.set('Content-Type', 'image/jpeg');
     res.set('Content-Disposition', `inline; filename="passport_${sheet}_${count}_${size}.jpg"`);
     res.send(output);
