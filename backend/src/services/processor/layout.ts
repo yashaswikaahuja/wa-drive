@@ -1,7 +1,6 @@
 import sharp from 'sharp';
 import { cropAndAlignFace } from './faceDetect.js';
 
-// ── Real-world photo size specs (mm → px @ 300 DPI) ───────────────────────────
 const MM = (mm: number) => Math.round(mm * 300 / 25.4);
 
 export const PHOTO_SPECS = {
@@ -11,10 +10,6 @@ export const PHOTO_SPECS = {
 } as const;
 export type PhotoSpec = keyof typeof PHOTO_SPECS;
 
-// ── Print sheet presets — what photo studios actually print ───────────────────
-const MARGIN = 50;
-const GAP    = 30;
-
 export const SHEET_PRESETS = {
   '4x6-8':  { sw: 1800, sh: 1200, cols: 4, rows: 2, label: '4×6 · 8 photos (Standard)' },
   '4x6-12': { sw: 1800, sh: 1200, cols: 4, rows: 3, label: '4×6 · 12 photos (Small)' },
@@ -22,6 +17,10 @@ export const SHEET_PRESETS = {
   'a4-24':  { sw: 2480, sh: 3508, cols: 4, rows: 6, label: 'A4 · 24 photos (Bulk)' },
 } as const;
 export type SheetPreset = keyof typeof SHEET_PRESETS;
+
+// No outer margin — photos fill edge to edge like real photo studios
+const MARGIN = 0;
+const GAP    = 6;  // tiny gap for cutting guide only
 
 async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buffer> {
   return cropAndAlignFace(input, pw, ph, { pad: 0.9 });
@@ -36,9 +35,12 @@ export async function generatePassportSheet(
   const { w: specW, h: specH } = PHOTO_SPECS[spec];
   const aspect = specH / specW;
 
-  let pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
+  // Photo fills the sheet completely — width from cols, height from aspect ratio
+  let pw = Math.floor((sw - (cols - 1) * GAP) / cols);
   let ph = Math.round(pw * aspect);
-  const maxPh = Math.floor((sh - 2 * MARGIN - (rows - 1) * GAP) / rows);
+
+  // If rows overflow sheet height, scale down
+  const maxPh = Math.floor((sh - (rows - 1) * GAP) / rows);
   if (ph > maxPh) { ph = maxPh; pw = Math.round(ph / aspect); }
 
   const photo = await preparePhoto(photoBuffer, pw, ph);
@@ -48,20 +50,21 @@ export async function generatePassportSheet(
     for (let col = 0; col < cols; col++) {
       composites.push({
         input: photo,
-        left: MARGIN + col * (pw + GAP),
-        top:  MARGIN + row * (ph + GAP),
+        left: col * (pw + GAP),
+        top:  row * (ph + GAP),
       });
     }
   }
 
-  const finalH = Math.min(sh, MARGIN + rows * ph + (rows - 1) * GAP + MARGIN);
+  // Sheet height = exact content height (no wasted space)
+  const finalH = rows * ph + (rows - 1) * GAP;
 
   return sharp({
     create: { width: sw, height: finalH, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
     .composite(composites)
     .withMetadata({ density: 300 })
-    .jpeg({ quality: 92 })
+    .jpeg({ quality: 95 })
     .toBuffer();
 }
 
@@ -72,49 +75,31 @@ export async function generateSingleSheet(
   const SW = 1800, SH = 1200;
   const { w: specW, h: specH } = PHOTO_SPECS[spec];
   const aspect = specH / specW;
-  const maxW = SW - 2 * MARGIN;
-  const maxH = SH - 2 * MARGIN;
-  let w = maxW, h = Math.round(maxW * aspect);
-  if (h > maxH) { h = maxH; w = Math.round(h / aspect); }
+  let w = SW, h = Math.round(SW * aspect);
+  if (h > SH) { h = SH; w = Math.round(SH / aspect); }
 
   const photo = await preparePhoto(photoBuffer, w, h);
   return sharp({
-    create: { width: SW, height: SH, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: w, height: h, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
-    .composite([{ input: photo, left: Math.floor((SW - w) / 2), top: Math.floor((SH - h) / 2) }])
+    .composite([{ input: photo, left: 0, top: 0 }])
     .withMetadata({ density: 300 })
-    .jpeg({ quality: 92 })
+    .jpeg({ quality: 95 })
     .toBuffer();
 }
 
-// ── Aadhaar layout (unchanged) ────────────────────────────────────────────────
-const AADHAAR_W = 1754;
-const AADHAAR_H = 1240;
-const AADHAAR_MARGIN = 20;
+// ── Aadhaar layout ────────────────────────────────────────────────────────────
+const AADHAAR_W = 1754, AADHAAR_H = 1240, AADHAAR_MARGIN = 20;
 const IMG_W = Math.floor((AADHAAR_W - AADHAAR_MARGIN * 3) / 2);
 const IMG_H = AADHAAR_H - AADHAAR_MARGIN * 2;
 
 export async function generateAadhaarLayout(buffers: Buffer[]): Promise<Buffer> {
   if (buffers.length !== 2) throw new Error('Exactly 2 images required');
-
   const [left, right] = await Promise.all([
-    sharp(buffers[0]).resize(IMG_W, IMG_H, { fit: 'inside', withoutEnlargement: false })
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
-      .jpeg().toBuffer(),
-    sharp(buffers[1]).resize(IMG_W, IMG_H, { fit: 'inside', withoutEnlargement: false })
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
-      .resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } })
-      .jpeg().toBuffer(),
+    sharp(buffers[0]).resize(IMG_W, IMG_H, { fit: 'inside' }).flatten({ background: { r: 255, g: 255, b: 255 } }).resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } }).jpeg().toBuffer(),
+    sharp(buffers[1]).resize(IMG_W, IMG_H, { fit: 'inside' }).flatten({ background: { r: 255, g: 255, b: 255 } }).resize(IMG_W, IMG_H, { fit: 'contain', background: { r: 255, g: 255, b: 255 } }).jpeg().toBuffer(),
   ]);
-
-  return sharp({
-    create: { width: AADHAAR_W, height: AADHAAR_H, channels: 3, background: { r: 255, g: 255, b: 255 } },
-  })
-    .composite([
-      { input: left,  top: AADHAAR_MARGIN, left: AADHAAR_MARGIN },
-      { input: right, top: AADHAAR_MARGIN, left: AADHAAR_MARGIN * 2 + IMG_W },
-    ])
-    .jpeg({ quality: 90 })
-    .toBuffer();
+  return sharp({ create: { width: AADHAAR_W, height: AADHAAR_H, channels: 3, background: { r: 255, g: 255, b: 255 } } })
+    .composite([{ input: left, top: AADHAAR_MARGIN, left: AADHAAR_MARGIN }, { input: right, top: AADHAAR_MARGIN, left: AADHAAR_MARGIN * 2 + IMG_W }])
+    .jpeg({ quality: 90 }).toBuffer();
 }
