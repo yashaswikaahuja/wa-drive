@@ -103,19 +103,21 @@ export async function generatePassportSheet(
     photo = await addTextOverlay(photo, pw, ph, text, font);
   }
 
+  // Get actual photo height after text strip may have been added
+  const { height: actualPh = ph } = await sharp(photo).metadata();
+
   const composites: sharp.OverlayOptions[] = [];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       composites.push({
         input: photo,
         left: col * (pw + GAP),
-        top:  row * (ph + GAP),
+        top:  row * (actualPh + GAP),
       });
     }
   }
 
-  // Sheet height = exact content height (no wasted space)
-  const finalH = rows * ph + (rows - 1) * GAP;
+  const finalH = rows * actualPh + (rows - 1) * GAP;
 
   return sharp({
     create: { width: sw, height: finalH, channels: 3, background: { r: 255, g: 255, b: 255 } },
