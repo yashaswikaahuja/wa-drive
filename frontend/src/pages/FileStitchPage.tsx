@@ -40,12 +40,11 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 /** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
-async function buildSheet(fileId: string, sheet: Sheet): Promise<string> {
-  const count = sheet === '4x6' ? 6 : 24;
+async function buildSheet(fileId: string, sheet: Sheet, count: number): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, sheet, count }),
+    body: JSON.stringify({ fileId, sheet, count, size: 'passport' }),
   });
   if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
   return URL.createObjectURL(await res.blob());
@@ -185,7 +184,7 @@ export default function FileStitchPage() {
     const fileId = getDriveId(activeFile.fileUrl);
     if (!fileId) { setBgError('No Drive file ID found'); return; }
     setSheetLoading(true);
-    try { setSheetUrl(await buildSheet(fileId, sheet)); }
+    try { setSheetUrl(await buildSheet(fileId, sheet, sheet === '4x6' ? 6 : 24)); }
     catch (e) { setBgError((e as Error).message); }
     finally { setSheetLoading(false); }
   }

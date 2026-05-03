@@ -1,31 +1,31 @@
 import sharp from 'sharp';
 import { cropAndAlignFace } from './faceDetect.js';
 
-// ── Layout configs ────────────────────────────────────────────────────────────
+// ── Photo size configs (mm → px at 300 DPI) ───────────────────────────────────
+const MM_TO_PX = 300 / 25.4;
+const PHOTO_SIZES = {
+  passport: { w: Math.round(35 * MM_TO_PX), h: Math.round(45 * MM_TO_PX) }, // 413×531
+  visa:     { w: Math.round(35 * MM_TO_PX), h: Math.round(45 * MM_TO_PX) }, // same as passport
+  us:       { w: Math.round(51 * MM_TO_PX), h: Math.round(51 * MM_TO_PX) }, // 2×2 inch = 600×600
+} as const;
+export type PhotoSize = keyof typeof PHOTO_SIZES;
+
+// ── Sheet layout configs ───────────────────────────────────────────────────────
 // Photo size is DERIVED from sheet + grid, not hardcoded.
 // Formula: photoW = (sheetW - 2×margin - (cols-1)×gap) / cols
-//          photoH = (sheetH - 2×margin - (rows-1)×gap) / rows
-// This guarantees photos always fill the sheet evenly with no empty space.
-
 const LAYOUTS = {
-  // 4×6 landscape @ 300 DPI — 8 photos (4 cols × 2 rows)
   '4x6-8':  { sw: 1800, sh: 1200, cols: 4, rows: 2, margin: 50, gap: 20 },
-  // 4×6 landscape @ 300 DPI — 6 photos (3 cols × 2 rows)
   '4x6-6':  { sw: 1800, sh: 1200, cols: 3, rows: 2, margin: 50, gap: 20 },
-  // A4 portrait @ 300 DPI — 24 photos (4 cols × 6 rows)
-  'a4':     { sw: 2480, sh: 3508, cols: 4, rows: 6, margin: 40, gap: 8 },
+  'a4':     { sw: 2480, sh: 3508, cols: 4, rows: 6, margin: 40, gap: 8  },
 } as const;
-
 type LayoutKey = keyof typeof LAYOUTS;
 
-/** Derive photo dimensions from sheet + grid config */
 function calcPhotoSize(cfg: typeof LAYOUTS[LayoutKey]) {
   const pw = Math.floor((cfg.sw - 2 * cfg.margin - (cfg.cols - 1) * cfg.gap) / cfg.cols);
   const ph = Math.floor((cfg.sh - 2 * cfg.margin - (cfg.rows - 1) * cfg.gap) / cfg.rows);
   return { pw, ph };
 }
 
-/** Prepare a single passport photo using Face++ detection with attention fallback */
 async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buffer> {
   return cropAndAlignFace(input, pw, ph, { pad: 0.9 });
 }
@@ -33,21 +33,33 @@ async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buff
 export async function generatePassportSheet(
   photoBuffer: Buffer,
   sheet: '4x6' | 'a4' = '4x6',
-  count: 6 | 8 | 24 = 8,
+  count: 6 | 8 | 24 = 6,
+  size: PhotoSize = 'passport',
 ): Promise<Buffer> {
   const key: LayoutKey = sheet === 'a4' ? 'a4' : count === 6 ? '4x6-6' : '4x6-8';
   const cfg = LAYOUTS[key];
   const { pw, ph } = calcPhotoSize(cfg);
 
-  const photo = await preparePhoto(photoBuffer, pw, ph);
+  // Use size-specific dimensions if they fit better than derived ones
+  const photoSize = PHOTO_SIZES[size];
+  const finalW = photoSize.w < pw ? photoSize.w : pw;
+  const finalH = photoSize.h < ph ? photoSize.h : ph;
+
+  const photo = await preparePhoto(photoBuffer, finalW, finalH);
 
   const composites: sharp.OverlayOptions[] = [];
+  // Center the grid on the sheet
+  const totalW = cfg.cols * finalW + (cfg.cols - 1) * cfg.gap;
+  const totalH = cfg.rows * finalH + (cfg.rows - 1) * cfg.gap;
+  const offsetX = Math.floor((cfg.sw - totalW) / 2);
+  const offsetY = Math.floor((cfg.sh - totalH) / 2);
+
   for (let row = 0; row < cfg.rows; row++) {
     for (let col = 0; col < cfg.cols; col++) {
       composites.push({
         input: photo,
-        left: cfg.margin + col * (pw + cfg.gap),
-        top:  cfg.margin + row * (ph + cfg.gap),
+        left: offsetX + col * (finalW + cfg.gap),
+        top:  offsetY + row * (finalH + cfg.gap),
       });
     }
   }
@@ -56,6 +68,27 @@ export async function generatePassportSheet(
     create: { width: cfg.sw, height: cfg.sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
     .composite(composites)
+    .withMetadata({ density: 300 })
+    .jpeg({ quality: 92 })
+    .toBuffer();
+}
+
+/** Place a single photo centered on a 4×6 sheet with equal margins */
+export async function generateSingleSheet(
+  photoBuffer: Buffer,
+  size: PhotoSize = 'passport',
+): Promise<Buffer> {
+  const SW = 1800, SH = 1200; // 4×6 landscape @ 300 DPI
+  const { w, h } = PHOTO_SIZES[size];
+  const photo = await preparePhoto(photoBuffer, w, h);
+  const left = Math.floor((SW - w) / 2);
+  const top  = Math.floor((SH - h) / 2);
+
+  return sharp({
+    create: { width: SW, height: SH, channels: 3, background: { r: 255, g: 255, b: 255 } },
+  })
+    .composite([{ input: photo, left, top }])
+    .withMetadata({ density: 300 })
     .jpeg({ quality: 92 })
     .toBuffer();
 }

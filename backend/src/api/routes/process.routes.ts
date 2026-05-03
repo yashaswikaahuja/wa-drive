@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
-import { generateAadhaarLayout, generatePassportSheet } from '../../services/processor/layout.js';
+import { generateAadhaarLayout, generatePassportSheet, generateSingleSheet } from '../../services/processor/layout.js';
 import { cropAndAlignFace, setLastImage, getLastImage } from '../../services/processor/faceDetect.js';
 
 const router = Router();
@@ -49,19 +49,24 @@ router.post('/', async (req: Request, res: Response) => {
 // Body: { fileId, sheet: '4x6'|'a4' }
 // Downloads from Drive server-side → Sharp sheet → returns JPEG (no CORS)
 router.post('/passport-sheet', async (req: Request, res: Response) => {
-  const { fileId, sheet = '4x6', count = 8 } = req.body as { fileId?: string; sheet?: '4x6' | 'a4'; count?: number };
+  const { fileId, sheet = '4x6', count = 6, size = 'passport' } = req.body as {
+    fileId?: string; sheet?: '4x6' | 'a4'; count?: number; size?: string;
+  };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
   if (!['4x6', 'a4'].includes(sheet)) { res.status(400).json({ error: 'sheet must be 4x6 or a4' }); return; }
-  if (![6, 8, 24].includes(count)) { res.status(400).json({ error: 'count must be 6, 8, or 24' }); return; }
+  if (![1, 6, 8, 24].includes(count)) { res.status(400).json({ error: 'count must be 1, 6, 8, or 24' }); return; }
+  if (!['passport', 'visa', 'us'].includes(size)) { res.status(400).json({ error: 'size must be passport, visa, or us' }); return; }
 
   const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
   if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
 
   try {
     const buffer = await downloadDriveFile(fileId, driveAccessToken);
-    const output = await generatePassportSheet(buffer, sheet as '4x6' | 'a4', count as 6 | 8 | 24);
+    const output = count === 1
+      ? await generateSingleSheet(buffer, size as any)
+      : await generatePassportSheet(buffer, sheet as '4x6' | 'a4', count as 6 | 8 | 24, size as any);
     res.set('Content-Type', 'image/jpeg');
-    res.set('Content-Disposition', `inline; filename="passport_${sheet}_${count}.jpg"`);
+    res.set('Content-Disposition', `inline; filename="passport_${sheet}_${count}_${size}.jpg"`);
     res.send(output);
   } catch (e: any) {
     console.error('[Process] passport-sheet error:', e.message);
