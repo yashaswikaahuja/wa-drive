@@ -49,9 +49,9 @@ router.post('/', async (req: Request, res: Response) => {
 // Body: { fileId, sheet: '4x6'|'a4' }
 // Downloads from Drive server-side → Sharp sheet → returns JPEG (no CORS)
 router.post('/passport-sheet', async (req: Request, res: Response) => {
-  const { fileId, preset = '4x6-8', spec = 'standard', name, date, signature } = req.body as {
+  const { fileId, preset = '4x6-8', spec = 'standard', name, date, signature, font = 'bold' } = req.body as {
     fileId?: string; preset?: string; spec?: string;
-    name?: string; date?: string; signature?: boolean;
+    name?: string; date?: string; signature?: boolean; font?: string;
   };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
   const validPresets = ['4x6-8', '4x6-12', '4x6-4', 'a4-24', 'single'];
@@ -67,7 +67,7 @@ router.post('/passport-sheet', async (req: Request, res: Response) => {
     const textOpts = (name || date || signature) ? { name, date, signature } : undefined;
     const output = preset === 'single'
       ? await generateSingleSheet(buffer, spec as PhotoSpec)
-      : await generatePassportSheet(buffer, preset as SheetPreset, spec as PhotoSpec, textOpts);
+      : await generatePassportSheet(buffer, preset as SheetPreset, spec as PhotoSpec, textOpts, font as any);
     res.set('Content-Type', 'image/jpeg');
     res.set('Content-Disposition', `inline; filename="photos_${preset}_${spec}.jpg"`);
     res.send(output);

@@ -55,7 +55,7 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 /** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
-async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, text?: { name?: string; date?: string; signature?: boolean }): Promise<string> {
+async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, text?: { name?: string; date?: string; signature?: boolean; font?: string }): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -104,6 +104,7 @@ export default function FileStitchPage() {
   const [textName, setTextName] = useState('');
   const [textDate, setTextDate] = useState('');
   const [textSig, setTextSig] = useState(false);
+  const [textFont, setTextFont] = useState<'bold'|'normal'|'italic'>('bold');
 
   const [bgLoading, setBgLoading] = useState(false);
   const [bgError, setBgError] = useState<string | null>(null);
@@ -203,7 +204,7 @@ export default function FileStitchPage() {
     const fileId = getDriveId(activeFile.fileUrl);
     if (!fileId) { setBgError('No Drive file ID found'); return; }
     setSheetLoading(true);
-    try { setSheetUrl(await buildSheet(fileId, preset, spec, { name: textName || undefined, date: textDate || undefined, signature: textSig || undefined })); }
+    try { setSheetUrl(await buildSheet(fileId, preset, spec, { name: textName || undefined, date: textDate || undefined, signature: textSig || undefined, font: textFont })); }
     catch (e) { setBgError((e as Error).message); }
     finally { setSheetLoading(false); }
   }
@@ -430,7 +431,16 @@ export default function FileStitchPage() {
                 <input type="text" placeholder="Name" value={textName} onChange={e => setTextName(e.target.value)}
                   className="w-full mb-1.5 px-2 py-1.5 bg-[#0c1322] border border-[#334155] rounded text-[11px] text-[#dce2f7] placeholder-[#475569] focus:outline-none focus:border-blue-500" />
                 <input type="text" placeholder="Date (e.g. 03/05/2026)" value={textDate} onChange={e => setTextDate(e.target.value)}
-                  className="w-full mb-1.5 px-2 py-1.5 bg-[#0c1322] border border-[#334155] rounded text-[11px] text-[#dce2f7] placeholder-[#475569] focus:outline-none focus:border-blue-500" />
+                  className="w-full mb-2 px-2 py-1.5 bg-[#0c1322] border border-[#334155] rounded text-[11px] text-[#dce2f7] placeholder-[#475569] focus:outline-none focus:border-blue-500" />
+                <div className="flex gap-1.5 mb-2">
+                  {(['bold','normal','italic'] as const).map(f => (
+                    <button key={f} onClick={() => setTextFont(f)}
+                      className={`flex-1 py-1 rounded text-[10px] border transition-colors ${textFont === f ? 'bg-blue-600 border-blue-600 text-white' : 'border-[#334155] text-[#94a3b8] hover:text-white'}`}
+                      style={{ fontWeight: f === 'bold' ? 'bold' : 'normal', fontStyle: f === 'italic' ? 'italic' : 'normal' }}>
+                      {f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                </div>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={textSig} onChange={e => setTextSig(e.target.checked)} className="accent-blue-500" />
                   <span className="text-[10px] text-[#94a3b8]">Add signature line</span>
