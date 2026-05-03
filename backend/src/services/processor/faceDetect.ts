@@ -75,11 +75,11 @@ export async function cropAndAlignFace(
   try {
     const face = await detectFace(input);
     if (face) {
-      // Passport standard: head fills 70-80% of frame height
-      // Tight padding to avoid too much body/background
-      const padTop    = Math.round(face.height * 0.50);  // space above crown (hair)
-      const padBottom = Math.round(face.height * 0.30);  // small chin space
-      const padSide   = Math.round(face.width  * 0.35);  // side padding
+      // ICAO passport standard: head fills ~70% of frame
+      // Need generous top padding for hair/crown, moderate bottom for chin
+      const padTop    = Math.round(face.height * 0.90);  // crown + hair space
+      const padBottom = Math.round(face.height * 0.50);  // chin + neck space
+      const padSide   = Math.round(face.width  * 0.45);  // side breathing room
 
       const left   = Math.max(0, face.left - padSide);
       const top    = Math.max(0, face.top  - padTop);

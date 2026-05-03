@@ -41,10 +41,11 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 
 /** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
 async function buildSheet(fileId: string, sheet: Sheet): Promise<string> {
+  const count = sheet === '4x6' ? 6 : 24;
   const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, sheet }),
+    body: JSON.stringify({ fileId, sheet, count }),
   });
   if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
   return URL.createObjectURL(await res.blob());
