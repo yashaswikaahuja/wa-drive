@@ -27,7 +27,7 @@ function calcPhotoSize(cfg: typeof LAYOUTS[LayoutKey]) {
 
 /** Prepare a single passport photo using Face++ detection with attention fallback */
 async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buffer> {
-  return cropAndAlignFace(input, pw, ph);
+  return cropAndAlignFace(input, pw, ph, { pad: 0.9 });
 }
 
 export async function generatePassportSheet(

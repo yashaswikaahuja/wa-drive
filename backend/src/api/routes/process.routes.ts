@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
 import { generateAadhaarLayout, generatePassportSheet } from '../../services/processor/layout.js';
-import { cropAndAlignFace } from '../../services/processor/faceDetect.js';
+import { cropAndAlignFace, setLastImage, getLastImage } from '../../services/processor/faceDetect.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
@@ -71,8 +71,12 @@ router.post('/passport-sheet', async (req: Request, res: Response) => {
 
 // POST /api/process/face-align
 // Accepts: multipart image_file OR JSON { fileId }
+// Query params: ?pad=0.9 (crop padding), ?debug=true (draw face box overlay)
 // Returns: aligned passport photo (600×600 JPEG)
 router.post('/face-align', upload.single('image_file') as any, async (req: any, res: Response) => {
+  const pad   = parseFloat(req.query.pad as string)   || 0.9;
+  const debug = req.query.debug === 'true';
+
   let imageBuffer: Buffer;
   try {
     if (req.file) {
@@ -85,12 +89,30 @@ router.post('/face-align', upload.single('image_file') as any, async (req: any, 
       res.status(400).json({ error: 'Provide image_file (multipart) or fileId (JSON)' }); return;
     }
 
-    const aligned = await cropAndAlignFace(imageBuffer, 600, 600);
+    setLastImage(imageBuffer);
+    const aligned = await cropAndAlignFace(imageBuffer, 600, 600, { pad, debug });
     res.set('Content-Type', 'image/jpeg');
     res.send(aligned);
   } catch (e: any) {
     console.error('[Process] face-align error:', e.message);
     res.status(500).json({ error: e.message ?? 'Face alignment failed' });
+  }
+});
+
+// GET /api/process/debug/last-image
+// Re-runs face detection + crop on the last uploaded image — no re-upload needed
+// Query params: ?pad=0.9&debug=true
+router.get('/debug/last-image', async (req: Request, res: Response) => {
+  const buf = getLastImage();
+  if (!buf) { res.status(404).json({ error: 'No image uploaded yet' }); return; }
+  const pad   = parseFloat(req.query.pad as string)   || 0.9;
+  const debug = req.query.debug !== 'false';  // debug=true by default for this endpoint
+  try {
+    const result = await cropAndAlignFace(buf, 600, 600, { pad, debug });
+    res.set('Content-Type', 'image/jpeg');
+    res.send(result);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
