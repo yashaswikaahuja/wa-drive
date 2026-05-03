@@ -21,20 +21,10 @@ function getFullUrl(url: string) {
   return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w1600` : url;
 }
 
-/** Fetch image as blob — tries Drive download URL, falls back to thumbnail */
-async function fetchBlob(url: string): Promise<Blob> {
-  const id = getDriveId(url);
-  const src = id ? `https://drive.google.com/uc?export=download&id=${id}` : url;
-  const res = await fetch(src);
-  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-  return res.blob();
-}
-
-/** Composite a foreground dataURL onto a solid color background */
+/** Composite a foreground dataURL onto a solid color background — safe because fgDataUrl is always a local blob: URL */
 async function compositeOnColor(fgDataUrl: string, color: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => {
       const c = document.createElement('canvas');
       c.width = img.width; c.height = img.height;
@@ -49,35 +39,15 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
   });
 }
 
-/** Tile photo onto sheet canvas */
-async function buildSheet(photoDataUrl: string, sheet: Sheet): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      // 300 dpi dimensions
-      const cfg = {
-        '4x6': { w: 1800, h: 1200, cols: 3, rows: 2, pw: 525, ph: 675, gap: 25 },
-        'a4':  { w: 2480, h: 3508, cols: 4, rows: 6, pw: 525, ph: 675, gap: 30 },
-      }[sheet];
-      const c = document.createElement('canvas');
-      c.width = cfg.w; c.height = cfg.h;
-      const ctx = c.getContext('2d')!;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, cfg.w, cfg.h);
-      const totalW = cfg.cols * cfg.pw + (cfg.cols - 1) * cfg.gap;
-      const totalH = cfg.rows * cfg.ph + (cfg.rows - 1) * cfg.gap;
-      const ox = (cfg.w - totalW) / 2;
-      const oy = (cfg.h - totalH) / 2;
-      for (let r = 0; r < cfg.rows; r++) {
-        for (let col = 0; col < cfg.cols; col++) {
-          ctx.drawImage(img, ox + col * (cfg.pw + cfg.gap), oy + r * (cfg.ph + cfg.gap), cfg.pw, cfg.ph);
-        }
-      }
-      resolve(c.toDataURL('image/jpeg', 0.95));
-    };
-    img.onerror = reject;
-    img.src = photoDataUrl;
+/** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
+async function buildSheet(fileId: string, sheet: Sheet): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileId, sheet }),
   });
+  if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
+  return URL.createObjectURL(await res.blob());
 }
 
 function printDataUrl(dataUrl: string) {
@@ -169,16 +139,21 @@ export default function FileStitchPage() {
     if (!activeFile) return;
     setBgLoading(true); setBgError(null); setFgDataUrl(null); setProcessedUrl(null); setSheetUrl(null);
     try {
-      const blob = await fetchBlob(activeFile.fileUrl);
-      const form = new FormData();
-      form.append('image_file', blob, activeFile.fileName);
+      const fileId = getDriveId(activeFile.fileUrl);
+      if (!fileId) throw new Error('No Drive file ID found');
 
-      const res = await fetch(`${BACKEND_BASE_URL}/api/remove-bg`, { method: 'POST', body: form });
+      // Send fileId as JSON — backend downloads from Drive server-side (no CORS)
+      const res = await fetch(`${BACKEND_BASE_URL}/api/remove-bg`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId, fileName: activeFile.fileName }),
+      });
       if (!res.ok) {
         const txt = await res.text();
         throw new Error(txt || `API error ${res.status}`);
       }
       const pngBlob = await res.blob();
+      // Convert blob to dataURL so canvas compositing works (same-origin blob: URL)
       const pngDataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -205,11 +180,12 @@ export default function FileStitchPage() {
   }
 
   async function generatePassportSheet() {
-    const src = processedUrl ?? originalUrl;
-    if (!src) return;
+    if (!activeFile) return;
+    const fileId = getDriveId(activeFile.fileUrl);
+    if (!fileId) { setBgError('No Drive file ID found'); return; }
     setSheetLoading(true);
-    try { setSheetUrl(await buildSheet(src, sheet)); }
-    catch { /* ignore */ }
+    try { setSheetUrl(await buildSheet(fileId, sheet)); }
+    catch (e) { setBgError((e as Error).message); }
     finally { setSheetLoading(false); }
   }
 
