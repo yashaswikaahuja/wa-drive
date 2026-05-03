@@ -96,7 +96,19 @@ export async function cropAndAlignFace(
   let cropped: Buffer;
   if (cropBox) {
     console.log('[FacePP] Using face-detected crop');
-    cropped = await sharp(input).extract(cropBox).toBuffer();
+    const extracted = await sharp(input).extract(cropBox).toBuffer();
+
+    // If crop hit the top edge (top=0), the original photo had no space above the head.
+    // Extend with white padding to avoid hair touching the frame edge.
+    const hitTopEdge = cropBox.top === 0;
+    if (hitTopEdge) {
+      const extraPad = Math.round(cropBox.height * 0.12); // add 12% height as top padding
+      cropped = await sharp(extracted)
+        .extend({ top: extraPad, bottom: 0, left: 0, right: 0, background: { r: 255, g: 255, b: 255 } })
+        .toBuffer();
+    } else {
+      cropped = extracted;
+    }
   } else {
     console.log('[FacePP] Using attention fallback crop');
     const cropH = Math.round(height * 0.80);
