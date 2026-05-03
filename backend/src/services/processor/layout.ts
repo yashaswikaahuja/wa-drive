@@ -20,7 +20,7 @@ export type SheetPreset = keyof typeof SHEET_PRESETS;
 
 // No outer margin — photos fill edge to edge like real photo studios
 const MARGIN = 0;
-const GAP    = 6;  // tiny gap for cutting guide only
+const GAP    = 10;  // tiny gap for cutting guide only
 
 async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buffer> {
   return cropAndAlignFace(input, pw, ph, { pad: 0.9 });
@@ -28,44 +28,44 @@ async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buff
 
 export type FontStyle = 'bold' | 'normal' | 'italic';
 
-/** Overlay name/date as black text on a white strip AT THE BOTTOM of the photo.
- *  Photo dimensions stay unchanged — no extra height added. */
-async function addTextOverlay(
-  photoBuffer: Buffer,
+/** Build a white text strip to place BELOW the photo — photo is never modified */
+async function buildTextStrip(
   pw: number,
-  ph: number,
   text: { name?: string; date?: string; signature?: boolean },
   font: FontStyle = 'bold',
-): Promise<Buffer> {
+): Promise<{ strip: Buffer; stripH: number } | null> {
   const lines = [text.name, text.date].filter(Boolean) as string[];
-  if (!lines.length && !text.signature) return photoBuffer;
+  if (!lines.length && !text.signature) return null;
 
-  const lineH   = Math.round(ph * 0.05);
-  const fontSize = Math.round(lineH * 0.65);
-  const sigH     = text.signature ? Math.round(lineH * 1.2) : 0;
-  const stripH   = lines.length * lineH + sigH + Math.round(lineH * 0.25);
-  const stripY   = ph - stripH;
+  const lineH    = Math.round(pw * 0.10);
+  const fontSize = Math.round(lineH * 0.70);
+  const sigH     = text.signature ? Math.round(lineH * 1.4) : 0;
+  const stripH   = lines.length * lineH + sigH + Math.round(lineH * 0.3);
 
   const fontWeight = font === 'bold'   ? 'bold'   : 'normal';
   const fontStyle  = font === 'italic' ? 'italic' : 'normal';
 
-  let svgContent = `<rect x="0" y="${stripY}" width="${pw}" height="${stripH}" fill="white"/>`;
-
+  let svgContent = '';
   lines.forEach((line, i) => {
-    const y = stripY + lineH * (i + 0.78);
+    const y = lineH * (i + 0.82);
     svgContent += `<text x="${pw / 2}" y="${y}" font-family="Arial,sans-serif" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" fill="black" text-anchor="middle">${line}</text>`;
   });
 
   if (text.signature) {
-    const sigTextY = stripY + lines.length * lineH + Math.round(sigH * 0.55);
-    const sigLineY = stripY + lines.length * lineH + Math.round(sigH * 0.9);
-    svgContent += `<text x="${pw / 2}" y="${sigTextY}" font-family="Arial,sans-serif" font-size="${Math.round(fontSize * 0.6)}" fill="#888" text-anchor="middle">Signature</text>`;
-    svgContent += `<line x1="${pw * 0.1}" y1="${sigLineY}" x2="${pw * 0.9}" y2="${sigLineY}" stroke="#333" stroke-width="1.5"/>`;
+    const sigTextY = lines.length * lineH + Math.round(sigH * 0.55);
+    const sigLineY = lines.length * lineH + Math.round(sigH * 0.88);
+    svgContent += `<text x="${pw / 2}" y="${sigTextY}" font-family="Arial,sans-serif" font-size="${Math.round(fontSize * 0.55)}" fill="#666" text-anchor="middle">Signature</text>`;
+    svgContent += `<line x1="${pw * 0.1}" y1="${sigLineY}" x2="${pw * 0.9}" y2="${sigLineY}" stroke="#333" stroke-width="2"/>`;
   }
 
-  const svg = Buffer.from(`<svg width="${pw}" height="${ph}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`);
-  return sharp(photoBuffer).composite([{ input: svg, top: 0, left: 0 }]).jpeg({ quality: 95 }).toBuffer();
+  const svg = Buffer.from(`<svg width="${pw}" height="${stripH}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`);
+  const strip = await sharp({ create: { width: pw, height: stripH, channels: 3, background: { r: 255, g: 255, b: 255 } } })
+    .composite([{ input: svg, top: 0, left: 0 }])
+    .jpeg({ quality: 95 })
+    .toBuffer();
+  return { strip, stripH };
 }
+
 
 export async function generatePassportSheet(
   photoBuffer: Buffer,
@@ -82,23 +82,29 @@ export async function generatePassportSheet(
   const maxPh = Math.floor((sh - (rows - 1) * GAP) / rows);
   const ph = Math.min(Math.round(pw * aspect), maxPh);
 
-  let photo = await preparePhoto(photoBuffer, pw, ph);
-  if (text && (text.name || text.date || text.signature)) {
-    photo = await addTextOverlay(photo, pw, ph, text, font);
-  }
+  const photo = await preparePhoto(photoBuffer, pw, ph);
+
+  // Build text strip separately — photo is never modified, shoulders stay visible
+  const textResult = (text && (text.name || text.date || text.signature))
+    ? await buildTextStrip(pw, text, font)
+    : null;
+  const stripH = textResult?.stripH ?? 0;
+  const cellH  = ph + (stripH > 0 ? stripH : 0);  // total cell height = photo + strip
 
   const composites: sharp.OverlayOptions[] = [];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
-      composites.push({
-        input: photo,
-        left: col * (pw + GAP),
-        top:  row * (ph + GAP),
-      });
+      const cellTop = row * (cellH + GAP);
+      // Photo at top of cell
+      composites.push({ input: photo, left: col * (pw + GAP), top: cellTop });
+      // Text strip directly below photo
+      if (textResult) {
+        composites.push({ input: textResult.strip, left: col * (pw + GAP), top: cellTop + ph });
+      }
     }
   }
 
-  const finalH = rows * ph + (rows - 1) * GAP;
+  const finalH = rows * cellH + (rows - 1) * GAP;
 
   return sharp({
     create: { width: sw, height: finalH, channels: 3, background: { r: 255, g: 255, b: 255 } },
