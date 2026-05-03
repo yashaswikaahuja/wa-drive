@@ -58,34 +58,35 @@ export async function generatePassportSheet(
   size: PhotoSize = 'passport',
 ): Promise<Buffer> {
   const { sw, sh } = SHEETS[sheet];
-
-  // count=1: fill the sheet with one large photo (full passport size, centered)
   if (count === 1) return generateSingleSheet(photoBuffer, size, sheet);
 
   const { cols, rows } = calcGrid(count, sw, sh);
-  const { pw, ph } = calcPhotoSize(cols, rows, sw, sh);
 
-  // Use slot dimensions directly — don't cap to standard size (causes distortion)
+  // Photo width derived from cols, height from passport aspect ratio (not slot height)
+  const aspect = PHOTO_SIZES[size].h / PHOTO_SIZES[size].w; // e.g. 45/35 = 1.286
+  const pw = Math.floor((sw - 2 * MARGIN - (cols - 1) * GAP) / cols);
+  const ph = Math.round(pw * aspect);
+
   const photo = await preparePhoto(photoBuffer, pw, ph);
 
-  const totalW = cols * pw + (cols - 1) * GAP;
-  const totalH = rows * ph + (rows - 1) * GAP;
-  const offsetX = Math.floor((sw - totalW) / 2);
-  const offsetY = Math.floor((sh - totalH) / 2);
-
+  // Tile from top-left with margin — don't center (avoids huge empty space)
   const composites: sharp.OverlayOptions[] = [];
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       composites.push({
         input: photo,
-        left: offsetX + col * (pw + GAP),
-        top:  offsetY + row * (ph + GAP),
+        left: MARGIN + col * (pw + GAP),
+        top:  MARGIN + row * (ph + GAP),
       });
     }
   }
 
+  // Sheet height: fit exactly to content + margins (no wasted space)
+  const contentH = rows * ph + (rows - 1) * GAP + 2 * MARGIN;
+  const finalH = Math.min(sh, contentH); // never exceed sheet height
+
   return sharp({
-    create: { width: sw, height: sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: sw, height: finalH, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
     .composite(composites)
     .withMetadata({ density: 300 })
