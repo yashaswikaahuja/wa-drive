@@ -55,11 +55,11 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 /** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
-async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec): Promise<string> {
+async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, text?: { name?: string; date?: string; signature?: boolean }): Promise<string> {
   const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, preset, spec }),
+    body: JSON.stringify({ fileId, preset, spec, ...text }),
   });
   if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
   return URL.createObjectURL(await res.blob());
@@ -101,6 +101,9 @@ export default function FileStitchPage() {
   const [customColor, setCustomColor] = useState('#ffffff');
   const [preset, setPreset] = useState<SheetPreset>('4x6-8');
   const [spec, setSpec] = useState<PhotoSpec>('standard');
+  const [textName, setTextName] = useState('');
+  const [textDate, setTextDate] = useState('');
+  const [textSig, setTextSig] = useState(false);
 
   const [bgLoading, setBgLoading] = useState(false);
   const [bgError, setBgError] = useState<string | null>(null);
@@ -200,7 +203,7 @@ export default function FileStitchPage() {
     const fileId = getDriveId(activeFile.fileUrl);
     if (!fileId) { setBgError('No Drive file ID found'); return; }
     setSheetLoading(true);
-    try { setSheetUrl(await buildSheet(fileId, preset, spec)); }
+    try { setSheetUrl(await buildSheet(fileId, preset, spec, { name: textName || undefined, date: textDate || undefined, signature: textSig || undefined })); }
     catch (e) { setBgError((e as Error).message); }
     finally { setSheetLoading(false); }
   }
@@ -419,6 +422,19 @@ export default function FileStitchPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Optional: Name / Date / Signature */}
+              <div className="p-3 border-b border-[#334155]">
+                <p className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2">Text on Photo (optional)</p>
+                <input type="text" placeholder="Name" value={textName} onChange={e => setTextName(e.target.value)}
+                  className="w-full mb-1.5 px-2 py-1.5 bg-[#0c1322] border border-[#334155] rounded text-[11px] text-[#dce2f7] placeholder-[#475569] focus:outline-none focus:border-blue-500" />
+                <input type="text" placeholder="Date (e.g. 03/05/2026)" value={textDate} onChange={e => setTextDate(e.target.value)}
+                  className="w-full mb-1.5 px-2 py-1.5 bg-[#0c1322] border border-[#334155] rounded text-[11px] text-[#dce2f7] placeholder-[#475569] focus:outline-none focus:border-blue-500" />
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={textSig} onChange={e => setTextSig(e.target.checked)} className="accent-blue-500" />
+                  <span className="text-[10px] text-[#94a3b8]">Add signature line</span>
+                </label>
               </div>
 
               {/* Step 4: Generate */}

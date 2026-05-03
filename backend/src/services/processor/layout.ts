@@ -26,21 +26,65 @@ async function preparePhoto(input: Buffer, pw: number, ph: number): Promise<Buff
   return cropAndAlignFace(input, pw, ph, { pad: 0.9 });
 }
 
+/**
+ * Add name/date/signature line at the bottom of a photo using SVG overlay.
+ * Text is white on a semi-transparent dark strip for readability on any background.
+ */
+async function addTextOverlay(
+  photoBuffer: Buffer,
+  pw: number,
+  ph: number,
+  text: { name?: string; date?: string; signature?: boolean },
+): Promise<Buffer> {
+  const lines: string[] = [];
+  if (text.name) lines.push(text.name);
+  if (text.date) lines.push(text.date);
+
+  const lineH = Math.round(ph * 0.07);   // 7% of photo height per line
+  const fontSize = Math.round(lineH * 0.55);
+  const stripH = lines.length * lineH + (text.signature ? lineH * 1.5 : 0);
+  const stripY = ph - stripH;
+
+  let svgContent = `<rect x="0" y="${stripY}" width="${pw}" height="${stripH}" fill="rgba(0,0,0,0.45)"/>`;
+
+  lines.forEach((line, i) => {
+    const y = stripY + lineH * (i + 0.75);
+    svgContent += `<text x="${pw / 2}" y="${y}" font-family="Arial,sans-serif" font-size="${fontSize}" fill="white" text-anchor="middle">${line}</text>`;
+  });
+
+  if (text.signature) {
+    const sigY = ph - lineH * 0.8;
+    const sigLineY = ph - lineH * 0.3;
+    svgContent += `<text x="${pw / 2}" y="${sigY}" font-family="Arial,sans-serif" font-size="${Math.round(fontSize * 0.7)}" fill="#aaa" text-anchor="middle">Sign here</text>`;
+    svgContent += `<line x1="${pw * 0.15}" y1="${sigLineY}" x2="${pw * 0.85}" y2="${sigLineY}" stroke="white" stroke-width="1"/>`;
+  }
+
+  const svg = Buffer.from(`<svg width="${pw}" height="${ph}" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>`);
+
+  return sharp(photoBuffer)
+    .composite([{ input: svg, top: 0, left: 0 }])
+    .jpeg({ quality: 95 })
+    .toBuffer();
+}
+
 export async function generatePassportSheet(
   photoBuffer: Buffer,
   preset: SheetPreset = '4x6-8',
   spec: PhotoSpec = 'standard',
+  text?: { name?: string; date?: string; signature?: boolean },
 ): Promise<Buffer> {
   const { sw, sh, cols, rows } = SHEET_PRESETS[preset];
   const { w: specW, h: specH } = PHOTO_SPECS[spec];
   const aspect = specH / specW;
 
-  // Photo fills sheet width. Height from aspect ratio, capped so all rows fit in sheet.
   const pw = Math.floor((sw - (cols - 1) * GAP) / cols);
   const maxPh = Math.floor((sh - (rows - 1) * GAP) / rows);
   const ph = Math.min(Math.round(pw * aspect), maxPh);
 
-  const photo = await preparePhoto(photoBuffer, pw, ph);
+  let photo = await preparePhoto(photoBuffer, pw, ph);
+  if (text && (text.name || text.date || text.signature)) {
+    photo = await addTextOverlay(photo, pw, ph, text);
+  }
 
   const composites: sharp.OverlayOptions[] = [];
   for (let row = 0; row < rows; row++) {
