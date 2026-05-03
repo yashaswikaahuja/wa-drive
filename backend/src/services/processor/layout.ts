@@ -35,13 +35,10 @@ export async function generatePassportSheet(
   const { w: specW, h: specH } = PHOTO_SPECS[spec];
   const aspect = specH / specW;
 
-  // Photo fills the sheet completely — width from cols, height from aspect ratio
-  let pw = Math.floor((sw - (cols - 1) * GAP) / cols);
-  let ph = Math.round(pw * aspect);
-
-  // If rows overflow sheet height, scale down
-  const maxPh = Math.floor((sh - (rows - 1) * GAP) / rows);
-  if (ph > maxPh) { ph = maxPh; pw = Math.round(ph / aspect); }
+  // Photo fills sheet width. Height from aspect ratio — never capped to sheet height.
+  // Sheet height is trimmed to fit content exactly (no wasted space).
+  const pw = Math.floor((sw - (cols - 1) * GAP) / cols);
+  const ph = Math.round(pw * aspect);
 
   const photo = await preparePhoto(photoBuffer, pw, ph);
 
