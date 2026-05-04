@@ -106,7 +106,7 @@ export default function WhatsAppInboxPage() {
 
   useEffect(() => {
     if (socketRef.current) return;
-    const socket = io(SOCKET_URL, { extraHeaders: { "ngrok-skip-browser-warning": "true" } });
+    const socket = io(SOCKET_URL);
     socketRef.current = socket;
     socket.on('connection:status', (s: { connected: boolean; qrCode?: string }) => {
       setConnected(s.connected);
