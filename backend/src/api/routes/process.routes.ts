@@ -130,3 +130,52 @@ router.get('/debug/last-image', async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// POST /api/process/extract
+// Body: { fileId } — downloads from Drive, sends to Groq Vision, returns extracted fields
+router.post('/extract', async (req: Request, res: Response) => {
+  const { fileId } = req.body as { fileId?: string };
+  if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
+
+  const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
+  if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
+
+  const GROQ_API_KEY = process.env['GROQ_API_KEY'];
+  if (!GROQ_API_KEY) { res.status(500).json({ error: 'GROQ_API_KEY not configured' }); return; }
+
+  try {
+    const buffer = await downloadDriveFile(fileId, driveAccessToken);
+    const base64 = buffer.toString('base64');
+
+    const prompt = `You are an OCR assistant. Extract information from this Indian identity document and return ONLY a valid JSON object with these fields:
+{ name: , dob: , gender: , id_number: , address: , father_name: , expiry:  }
+Rules:
+- Fill only fields visible in the document. Leave others as empty string.
+- dob format: DD/MM/YYYY
+- id_number: Aadhaar (12 digits), PAN (10 chars), Passport number, Voter ID etc.
+- Do NOT include any explanation, only the JSON object.`;
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
+        ]}],
+        max_tokens: 300,
+      }),
+    });
+
+    const data = await response.json() as any;
+    const text = data?.choices?.[0]?.message?.content ?? '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) { res.status(500).json({ error: 'Could not parse AI response', raw: text }); return; }
+    const fields = JSON.parse(jsonMatch[0]);
+    res.json(fields);
+  } catch (e: any) {
+    console.error('[Process] extract error:', e.message);
+    res.status(500).json({ error: e.message ?? 'Extraction failed' });
+  }
+});

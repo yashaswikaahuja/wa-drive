@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../utils/helpers';
 
 interface FormFile { id: string; fileName: string; fileUrl: string; customerName: string; }
 interface Field { key: string; label: string; value: string; }
@@ -25,14 +26,16 @@ function detectFields(file: FormFile): Field[] {
     base.push({ key: 'dob',     label: 'Date of Birth',  value: '' });
     base.push({ key: 'address', label: 'Address',        value: '' });
   } else if (fn.includes('pan')) {
-    base.push({ key: 'pan',    label: 'PAN Number',  value: '' });
+    base.push({ key: 'pan',    label: 'PAN Number',    value: '' });
     base.push({ key: 'father', label: "Father's Name", value: '' });
   } else if (fn.includes('passport')) {
     base.push({ key: 'passport', label: 'Passport No', value: '' });
     base.push({ key: 'expiry',   label: 'Expiry Date', value: '' });
   } else {
     base.push({ key: 'id',      label: 'ID / Reference', value: '' });
-    base.push({ key: 'remarks', label: 'Remarks',         value: '' });
+    base.push({ key: 'dob',     label: 'Date of Birth',  value: '' });
+    base.push({ key: 'address', label: 'Address',        value: '' });
+    base.push({ key: 'remarks', label: 'Remarks',        value: '' });
   }
   return base;
 }
@@ -44,6 +47,8 @@ export default function FormReadyPage() {
   const [activeFile, setActiveFile] = useState<FormFile | null>(null);
   const [fields, setFields] = useState<Field[]>([]);
   const [isPdf, setIsPdf] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
 
   useEffect(() => {
     const raw = params.get('files');
@@ -59,10 +64,41 @@ export default function FormReadyPage() {
     setActiveFile(f);
     setFields(detectFields(f));
     setIsPdf(f.fileName.toLowerCase().endsWith('.pdf'));
+    setExtractError('');
   }
 
   function updateField(key: string, value: string) {
     setFields(prev => prev.map(f => f.key === key ? { ...f, value } : f));
+  }
+
+  async function handleAutoFill() {
+    if (!activeFile) return;
+    const fileId = getDriveId(activeFile.fileUrl);
+    if (!fileId) { setExtractError('Cannot extract: no Drive file ID'); return; }
+    setExtracting(true);
+    setExtractError('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/process/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId }),
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? 'Extraction failed'); }
+      const data = await res.json();
+      setFields(prev => prev.map(f => {
+        const map: Record<string, string> = {
+          name: data.name, dob: data.dob, address: data.address,
+          aadhaar: data.id_number, pan: data.id_number,
+          passport: data.id_number, father: data.father_name,
+          gender: data.gender, expiry: data.expiry,
+        };
+        return map[f.key] ? { ...f, value: map[f.key] } : f;
+      }));
+    } catch (e: any) {
+      setExtractError(e.message ?? 'Auto-fill failed');
+    } finally {
+      setExtracting(false);
+    }
   }
 
   function handlePrint() {
@@ -128,6 +164,19 @@ export default function FormReadyPage() {
               ))}
             </div>
           )}
+
+          {/* Auto-fill button */}
+          <div className="px-3 py-2 border-b border-[#334155]">
+            <button onClick={handleAutoFill} disabled={!activeFile || extracting}
+              className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors">
+              {extracting
+                ? <><span className="animate-spin material-symbols-outlined text-[16px]">progress_activity</span> Extracting...</>
+                : <><span className="material-symbols-outlined text-[16px]">auto_awesome</span> Auto-fill from Document</>
+              }
+            </button>
+            {extractError && <p className="text-[10px] text-red-400 mt-1 text-center">{extractError}</p>}
+          </div>
+
           <div className="px-3 py-2 border-b border-[#334155] text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider flex items-center gap-1">
             <span className="material-symbols-outlined text-[14px]">auto_fix_high</span>
             Detected Fields
