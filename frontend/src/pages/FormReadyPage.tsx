@@ -101,8 +101,16 @@ export default function FormReadyPage() {
       // Label map for known keys
       const labelMap: Record<string, string> = {
         name: 'Full Name', dob: 'Date of Birth', address: 'Address',
-        id_number: 'ID Number', father_name: "Father's Name",
-        gender: 'Gender', expiry: 'Expiry Date',
+        id_number: 'ID Number', father_name: "Father's Name", mother_name: "Mother's Name",
+        husband_name: "Husband's Name", gender: 'Gender', expiry: 'Expiry Date',
+        aadhaar_number: 'Aadhaar Number', pan_number: 'PAN Number',
+        epic_number: 'EPIC Number', passport_number: 'Passport Number',
+        driving_license: 'Driving License', abha_number: 'ABHA Number',
+        abha_address: 'ABHA Address', mobile: 'Mobile', email: 'Email',
+        nationality: 'Nationality', issue_date: 'Issue Date',
+        place_of_birth: 'Place of Birth', roll_number: 'Roll Number',
+        category: 'Category', centre: 'Centre', exam_date: 'Exam Date',
+        part_number: 'Part Number', serial_number: 'Serial Number',
       };
       // Keep base fields (name, date, phone) with updated values
       // Then add all non-empty AI fields dynamically
