@@ -49,6 +49,7 @@ export default function FormReadyPage() {
   const [isPdf, setIsPdf] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
+  const [newFieldLabel, setNewFieldLabel] = useState('');
 
   useEffect(() => {
     const raw = params.get('files');
@@ -69,6 +70,18 @@ export default function FormReadyPage() {
 
   function updateField(key: string, value: string) {
     setFields(prev => prev.map(f => f.key === key ? { ...f, value } : f));
+  }
+
+  function removeField(key: string) {
+    setFields(prev => prev.filter(f => f.key !== key));
+  }
+
+  function addField() {
+    const label = newFieldLabel.trim();
+    if (!label) return;
+    const key = label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+    setFields(prev => [...prev, { key, label, value: '' }]);
+    setNewFieldLabel('');
   }
 
   async function handleAutoFill() {
@@ -183,13 +196,24 @@ export default function FormReadyPage() {
           </div>
           <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-3">
             {fields.map(f => (
-              <div key={f.key}>
-                <label className="text-[10px] text-[#94a3b8] uppercase tracking-wider block mb-1">{f.label}</label>
+              <div key={f.key} className="group relative">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[10px] text-[#94a3b8] uppercase tracking-wider">{f.label}</label>
+                  <button onClick={() => removeField(f.key)} className="text-[#475569] hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                </div>
                 <input value={f.value} onChange={e => updateField(f.key, e.target.value)}
                   placeholder={`Enter ${f.label.toLowerCase()}…`}
                   className="w-full bg-[#1e293b] border border-[#334155] rounded px-2 py-1.5 text-xs text-[#dce2f7] focus:outline-none focus:border-blue-500 transition-colors placeholder:text-[#475569]" />
               </div>
             ))}
+            <div className="flex gap-1 mt-2">
+              <input value={newFieldLabel} onChange={e => setNewFieldLabel(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addField()}
+                placeholder="Add field..."
+                className="flex-1 bg-[#1e293b] border border-dashed border-[#334155] rounded px-2 py-1.5 text-xs text-[#dce2f7] focus:outline-none focus:border-blue-500 placeholder:text-[#475569]" />
+              <button onClick={addField} disabled={!newFieldLabel.trim()}
+                className="px-2 py-1.5 bg-[#1e293b] border border-dashed border-[#334155] hover:border-blue-500 disabled:opacity-30 text-[#94a3b8] hover:text-blue-400 text-xs rounded transition-colors">+</button>
+            </div>
             {fields.length === 0 && (
               <p className="text-[11px] text-[#94a3b8] text-center mt-4">Select a file to detect fields</p>
             )}
