@@ -46,24 +46,29 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/process/passport-sheet
-// Body: { fileId, sheet: '4x6'|'a4' }
-// Downloads from Drive server-side → Sharp sheet → returns JPEG (no CORS)
-router.post('/passport-sheet', async (req: Request, res: Response) => {
+// Accepts: JSON { fileId } OR multipart image_file (for bg-removed images)
+router.post('/passport-sheet', upload.single('image_file') as any, async (req: Request, res: Response) => {
   const { fileId, preset = '4x6-8', spec = 'standard', name, date, signature, font = 'bold' } = req.body as {
     fileId?: string; preset?: string; spec?: string;
     name?: string; date?: string; signature?: boolean; font?: string;
   };
-  if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
   const validPresets = ['4x6-8', '4x6-12', '4x6-4', 'a4-24', 'single'];
   const validSpecs   = ['standard', 'small', 'stamp'];
   if (!validPresets.includes(preset)) { res.status(400).json({ error: `preset must be one of: ${validPresets.join(', ')}` }); return; }
   if (!validSpecs.includes(spec))     { res.status(400).json({ error: `spec must be one of: ${validSpecs.join(', ')}` }); return; }
 
-  const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
-  if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
-
+  let buffer: Buffer;
   try {
-    const buffer = await downloadDriveFile(fileId, driveAccessToken);
+    if ((req as any).file) {
+      // Multipart upload — bg-removed image from frontend
+      buffer = (req as any).file.buffer;
+    } else if (fileId) {
+      const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
+      if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
+      buffer = await downloadDriveFile(fileId, driveAccessToken);
+    } else {
+      res.status(400).json({ error: 'Provide image_file (multipart) or fileId' }); return;
+    }
     const textOpts = (name || date || signature) ? { name, date, signature } : undefined;
     const output = preset === 'single'
       ? await generateSingleSheet(buffer, spec as PhotoSpec)

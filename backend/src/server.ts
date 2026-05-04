@@ -263,20 +263,26 @@ app.post('/api/remove-bg', (req: any, res: any, next: any) => {
       res.status(400).json({ error: 'Image buffer empty or too small' }); return;
     }
     const FormDataNode = (await import('form-data')).default;
+    const https = (await import('https')).default;
     const form = new FormDataNode();
     form.append('image_file', imageBuffer, { filename, contentType: 'image/jpeg' });
     form.append('size', 'auto');
-    const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-      method: 'POST',
-      headers: { 'X-Api-Key': REMOVE_BG_KEY, ...form.getHeaders() },
-      body: form as any,
+    const buf = await new Promise<Buffer>((resolve, reject) => {
+      const req2 = https.request({
+        hostname: 'api.remove.bg', path: '/v1.0/removebg', method: 'POST',
+        headers: { 'X-Api-Key': REMOVE_BG_KEY, ...form.getHeaders() },
+      }, (r) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => {
+          const body = Buffer.concat(chunks);
+          if (r.statusCode !== 200) reject(new Error('remove.bg: ' + body.toString()));
+          else resolve(body);
+        });
+      });
+      req2.on('error', reject);
+      form.pipe(req2);
     });
-    if (!response.ok) {
-      const err = await response.text();
-      console.error(`[Hub] remove-bg API error ${response.status}: ${err}`);
-      res.status(response.status).json({ error: `remove.bg: ${err}` }); return;
-    }
-    const buf = Buffer.from(await response.arrayBuffer());
     res.set('Content-Type', 'image/png');
     res.send(buf);
   } catch (e: any) {

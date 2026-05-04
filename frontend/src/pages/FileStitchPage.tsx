@@ -55,12 +55,26 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 /** Generate passport sheet via backend Sharp — avoids CORS/tainted canvas entirely */
-async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, text?: { name?: string; date?: string; signature?: boolean; font?: string }): Promise<string> {
-  const res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fileId, preset, spec, ...text }),
-  });
+async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, text?: { name?: string; date?: string; signature?: boolean; font?: string }, processedBlob?: Blob): Promise<string> {
+  let res: Response;
+  if (processedBlob) {
+    // Send bg-removed image directly — backend uses this instead of re-downloading from Drive
+    const form = new FormData();
+    form.append('image_file', processedBlob, 'photo.png');
+    form.append('preset', preset);
+    form.append('spec', spec);
+    if (text?.name) form.append('name', text.name);
+    if (text?.date) form.append('date', text.date);
+    if (text?.signature) form.append('signature', 'true');
+    if (text?.font) form.append('font', text.font);
+    res = await fetch(`${API_BASE_URL}/process/passport-sheet`, { method: 'POST', body: form });
+  } else {
+    res = await fetch(`${API_BASE_URL}/process/passport-sheet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileId, preset, spec, ...text }),
+    });
+  }
   if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
   return URL.createObjectURL(await res.blob());
 }
@@ -204,7 +218,13 @@ export default function FileStitchPage() {
     const fileId = getDriveId(activeFile.fileUrl);
     if (!fileId) { setBgError('No Drive file ID found'); return; }
     setSheetLoading(true);
-    try { setSheetUrl(await buildSheet(fileId, preset, spec, { name: textName || undefined, date: textDate || undefined, signature: textSig || undefined, font: textFont })); }
+    // If bg was removed, send the processed image blob directly
+    let processedBlob: Blob | undefined;
+    if (processedUrl) {
+      const r = await fetch(processedUrl);
+      processedBlob = await r.blob();
+    }
+    try { setSheetUrl(await buildSheet(fileId, preset, spec, { name: textName || undefined, date: textDate || undefined, signature: textSig || undefined, font: textFont }, processedBlob)); }
     catch (e) { setBgError((e as Error).message); }
     finally { setSheetLoading(false); }
   }
