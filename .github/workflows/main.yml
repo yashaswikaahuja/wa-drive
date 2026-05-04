@@ -1,16 +1,23 @@
-name: Keep Render Services Awake
-  
-  on:
-    schedule:
-      - cron: '*/14 * * * *'
-    workflow_dispatch:
-  
-  jobs:
-    ping:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Ping hub
-          run: curl --fail --silent --show-error "https://wa-drive-docker.onrender.com/api/health"
-  
-        - name: Ping worker
-          run: curl --fail --silent --show-error "https://wa-worker-u7l6.onrender.com"
+name: Deploy Frontend to Vercel
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'frontend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Deploy to Vercel
+        run: |
+          cd frontend
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
