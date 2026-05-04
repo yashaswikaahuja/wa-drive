@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+    body { width: 320px; background: #0f172a; color: #e2e8f0; }
+    .header { background: #1e293b; padding: 12px 16px; border-bottom: 1px solid #334155; }
+    .header h1 { font-size: 14px; font-weight: 700; color: #60a5fa; }
+    .header span { font-size: 10px; color: #64748b; }
+    .section { padding: 12px 16px; }
+    .label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    input { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 7px 10px; color: #e2e8f0; font-size: 12px; outline: none; margin-bottom: 6px; }
+    input:focus { border-color: #3b82f6; }
+    .btn { width: 100%; padding: 9px; border-radius: 6px; border: none; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-sm { background: #1e293b; color: #94a3b8; border: 1px solid #334155; font-size: 11px; padding: 6px; margin-top: 6px; }
+    .btn-sm:hover { color: white; }
+    .profile-card { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
+    .profile-card:hover, .profile-card.selected { border-color: #3b82f6; background: #1e3a5f; }
+    .profile-name { font-size: 12px; font-weight: 600; }
+    .profile-meta { font-size: 10px; color: #64748b; margin-top: 2px; }
+    .status { padding: 7px 10px; border-radius: 6px; font-size: 11px; text-align: center; margin-top: 8px; }
+    .success { background: #064e3b; color: #6ee7b7; }
+    .error { background: #450a0a; color: #fca5a5; }
+    .info { background: #1e3a5f; color: #93c5fd; }
+    hr { border: none; border-top: 1px solid #334155; margin: 4px 0; }
+    .profiles-list { max-height: 180px; overflow-y: auto; }
+    .empty { text-align: center; padding: 16px; color: #475569; font-size: 11px; }
+    .filled-count { font-size: 11px; color: #6ee7b7; margin-top: 4px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>⚡ CyberControl AutoFill</h1>
+    <span>SSC · Railway · NEET · NTPC · Bank</span>
+  </div>
+
+  <div class="section">
+    <div class="label">Backend URL</div>
+    <input type="text" id="backend-url" placeholder="https://xxx.trycloudflare.com/api" />
+    <div class="label">Groq API Key (for AI matching)</div>
+    <input type="password" id="groq-key" placeholder="gsk_..." />
+    <button class="btn btn-sm" id="save-settings">💾 Save Settings</button>
+  </div>
+
+  <hr>
+
+  <div class="section">
+    <div class="label">Student Profile</div>
+    <div class="profiles-list" id="profiles-list">
+      <div class="empty">Enter backend URL and save settings.</div>
+    </div>
+    <button class="btn btn-sm" id="refresh-btn">🔄 Refresh</button>
+  </div>
+
+  <hr>
+
+  <div class="section">
+    <button class="btn btn-primary" id="autofill-btn" disabled>⚡ Auto-fill This Form</button>
+    <div id="filled-count" class="filled-count" style="display:none"></div>
+    <div id="status" style="display:none" class="status"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
