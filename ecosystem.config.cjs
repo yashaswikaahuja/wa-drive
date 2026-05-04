@@ -9,6 +9,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: '3000',
+        GROQ_API_KEY: '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',
       },
       // Restart if process exceeds 300MB RSS
       max_memory_restart: '300M',
