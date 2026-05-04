@@ -98,15 +98,32 @@ export default function FormReadyPage() {
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.error ?? 'Extraction failed'); }
       const data = await res.json();
-      setFields(prev => prev.map(f => {
-        const map: Record<string, string> = {
-          name: data.name, dob: data.dob, address: data.address,
-          aadhaar: data.id_number, pan: data.id_number,
-          passport: data.id_number, father: data.father_name,
-          gender: data.gender, expiry: data.expiry,
-        };
-        return map[f.key] ? { ...f, value: map[f.key] } : f;
-      }));
+      // Label map for known keys
+      const labelMap: Record<string, string> = {
+        name: 'Full Name', dob: 'Date of Birth', address: 'Address',
+        id_number: 'ID Number', father_name: "Father's Name",
+        gender: 'Gender', expiry: 'Expiry Date',
+      };
+      // Keep base fields (name, date, phone) with updated values
+      // Then add all non-empty AI fields dynamically
+      setFields(prev => {
+        const baseKeys = new Set(prev.map(f => f.key));
+        // Update existing fields
+        const updated = prev.map(f => {
+          const aiKey = f.key === 'aadhaar' || f.key === 'pan' || f.key === 'passport' ? 'id_number' : f.key;
+          return data[aiKey] ? { ...f, value: data[aiKey] } : f;
+        });
+        // Add new fields for AI data not already in form
+        const newFields: Field[] = [];
+        for (const [key, value] of Object.entries(data)) {
+          if (!value || baseKeys.has(key)) continue;
+          // Skip if value already mapped to existing field
+          const alreadyMapped = key === 'id_number' && (baseKeys.has('aadhaar') || baseKeys.has('pan') || baseKeys.has('passport'));
+          if (alreadyMapped) continue;
+          newFields.push({ key, label: labelMap[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: value as string });
+        }
+        return [...updated, ...newFields];
+      });
     } catch (e: any) {
       setExtractError(e.message ?? 'Auto-fill failed');
     } finally {
