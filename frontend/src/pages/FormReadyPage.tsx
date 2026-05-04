@@ -59,13 +59,14 @@ export default function FormReadyPage() {
     try {
       const parsed: FormFile[] = JSON.parse(decodeURIComponent(raw));
       setFiles(parsed);
-      if (parsed.length > 0) selectFile(parsed[0]);
+      if (parsed.length > 0) selectFile(parsed[0], true);
     } catch { /* ignore */ }
   }, [params]);
 
-  function selectFile(f: FormFile) {
+  function selectFile(f: FormFile, isFirst = false) {
     setActiveFile(f);
-    setFields(detectFields(f));
+    // Only reset fields for the first file — preserve accumulated data when switching
+    if (isFirst) setFields(detectFields(f));
     setIsPdf(f.fileName.toLowerCase().endsWith('.pdf'));
     setExtractError('');
   }
@@ -93,6 +94,12 @@ export default function FormReadyPage() {
     try {
       const profile: Record<string, string> = { phone };
       fields.forEach(f => { if (f.value) profile[f.key] = f.value; });
+      // Attach photo if current file is an image
+      const isImage = activeFile && !activeFile.fileName.toLowerCase().endsWith('.pdf');
+      if (isImage && activeFile) {
+        const photoId = getDriveId(activeFile.fileUrl);
+        if (photoId) profile.photo_url = `https://drive.google.com/thumbnail?id=${photoId}&sz=w400`;
+      }
       await fetch(`${API_BASE_URL}/profiles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profile),
@@ -236,6 +243,10 @@ export default function FormReadyPage() {
               className="w-full mt-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors">
               <span className="material-symbols-outlined text-[16px]">person_add</span>
               {saving ? 'Saving...' : 'Save as Profile'}
+            </button>
+            <button onClick={() => { setFields(activeFile ? detectFields(activeFile) : []); setSaveMsg(''); }}
+              className="w-full mt-1 px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center justify-center gap-1.5 transition-colors">
+              <span className="material-symbols-outlined text-[16px]">restart_alt</span> Clear & Start New
             </button>
             {saveMsg && <p className="text-[10px] text-emerald-400 mt-1 text-center">{saveMsg}</p>}
           </div>
