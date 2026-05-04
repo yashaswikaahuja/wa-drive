@@ -1,6 +1,7 @@
 name: Deploy Frontend to Vercel
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
     paths:
@@ -11,11 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Install & Build
         working-directory: frontend
         env:
@@ -23,7 +22,6 @@ jobs:
           VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
         run: npm install && npm run build
-
       - name: Deploy prebuilt to Vercel
         working-directory: frontend
         run: npx vercel deploy dist --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
