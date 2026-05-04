@@ -50,6 +50,8 @@ export default function FormReadyPage() {
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [newFieldLabel, setNewFieldLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
     const raw = params.get('files');
@@ -82,6 +84,23 @@ export default function FormReadyPage() {
     const key = label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
     setFields(prev => [...prev, { key, label, value: '' }]);
     setNewFieldLabel('');
+  }
+
+  async function saveProfile() {
+    const phone = activeFile?.id.match(/\d{10,}/)?.[0] ?? fields.find(f => f.key === 'phone')?.value ?? '';
+    if (!phone) { setSaveMsg('No phone number found'); setTimeout(() => setSaveMsg(''), 3000); return; }
+    setSaving(true);
+    try {
+      const profile: Record<string, string> = { phone };
+      fields.forEach(f => { if (f.value) profile[f.key] = f.value; });
+      await fetch(`${API_BASE_URL}/profiles`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile),
+      });
+      setSaveMsg('Profile saved ✓');
+    } catch { setSaveMsg('Save failed'); }
+    setSaving(false);
+    setTimeout(() => setSaveMsg(''), 3000);
   }
 
   async function handleAutoFill() {
@@ -213,6 +232,12 @@ export default function FormReadyPage() {
               }
             </button>
             {extractError && <p className="text-[10px] text-red-400 mt-1 text-center">{extractError}</p>}
+            <button onClick={saveProfile} disabled={saving || fields.length === 0}
+              className="w-full mt-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors">
+              <span className="material-symbols-outlined text-[16px]">person_add</span>
+              {saving ? 'Saving...' : 'Save as Profile'}
+            </button>
+            {saveMsg && <p className="text-[10px] text-emerald-400 mt-1 text-center">{saveMsg}</p>}
           </div>
 
           <div className="px-3 py-2 border-b border-[#334155] text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider flex items-center gap-1">
