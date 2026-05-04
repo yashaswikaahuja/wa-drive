@@ -54,3 +54,4 @@ export function getPreviewUrl(fileUrl: string): string {
   if (fileUrl.startsWith('/uploads/')) return `${API_BASE_URL.replace('/api', '')}${fileUrl}`;
   return fileUrl;
 }
+
