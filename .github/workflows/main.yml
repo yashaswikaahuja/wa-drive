@@ -18,9 +18,13 @@ jobs:
 
       - name: Install & Build
         working-directory: frontend
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          VITE_SOCKET_URL: ${{ secrets.VITE_SOCKET_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
         run: npm install && npm run build
 
-      - name: Deploy to Vercel
+      - name: Deploy prebuilt to Vercel
         working-directory: frontend
         run: npx vercel deploy dist --prod --yes --token=${{ secrets.VERCEL_TOKEN }}
         env:
