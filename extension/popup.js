@@ -67,23 +67,23 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
-  name:           ['name', 'full_name', 'fullname', 'candidate_name', 'applicant_name', 'student_name', 'naam'],
-  dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm'],
-  father_name:    ['father', 'father_name', 'pita', 'pita_ka_naam'],
-  mother_name:    ['mother', 'mother_name', 'mata', 'mata_ka_naam'],
-  address:        ['address', 'permanent_address', 'pata', 'niwas'],
-  mobile:         ['mobile', 'phone', 'contact', 'mo_no', 'sampark'],
-  email:          ['email', 'email_id', 'mail'],
-  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no'],
-  pan_number:     ['pan', 'pan_no', 'pancard'],
-  epic_number:    ['epic', 'voter', 'voter_id'],
-  category:       ['category', 'caste', 'varg'],
+  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam'],
+  dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate'],
+  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam'],
+  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam'],
+  address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
+  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark'],
+  email:          ['email_address', 'email_id', 'emailid', 'email_add'],
+  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity'],
+  pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
+  epic_number:    ['epic_no', 'voter_id', 'epic_number'],
+  category:       ['category', 'caste_category', 'varg'],
   gender:         ['gender', 'sex', 'ling'],
-  pincode:        ['pincode', 'pin', 'postal_code', 'zip'],
-  state:          ['state', 'rajya'],
-  district:       ['district', 'jila'],
+  pincode:        ['pincode', 'pin_code', 'postal_code', 'zip_code'],
+  state:          ['state_name', 'state_of', 'rajya'],
+  district:       ['district_name', 'jila'],
   nationality:    ['nationality', 'rashtriyata'],
-  roll_number:    ['roll', 'roll_no', 'roll_number'],
+  // roll_number intentionally excluded to avoid filling education table fields
 };
 
 function fuzzyMatch(formFields, profile) {
@@ -91,8 +91,11 @@ function fuzzyMatch(formFields, profile) {
   for (const field of formFields) {
     const ident = [field.id, field.name, field.placeholder, field.label]
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()]/g, '_');
+    // Skip fields that are clearly father/mother name when matching 'name'
+    const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     for (const [profileKey, aliases] of Object.entries(FIELD_ALIASES)) {
       if (!profile[profileKey]) continue;
+      if (profileKey === 'name' && isFatherMother) continue; // don't fill father/mother fields with candidate name
       if (aliases.some(alias => ident.includes(alias))) {
         mapping[field.selector] = { value: profile[profileKey], type: field.type };
         break;
