@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.3';
+const CURRENT_VERSION = '3.4';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -195,7 +195,10 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       document.getElementById('save-learning-btn').style.display = 'none';
     };
   } else {
-    showStatus('No fields filled. Check profile data or try with Groq key set.', 'error');
+    const hasGroq = !!groqKey;
+    const hasProfile = selectedProfile && Object.keys(selectedProfile).length > 2;
+    const fieldCount = formFields.length;
+    showStatus(`No fields filled. Fields detected: ${fieldCount}. Profile: ${hasProfile?'✓':'✗'}. Groq: ${hasGroq?'✓':'✗ (add key in settings)'}`, 'error');
   }
 });
 
