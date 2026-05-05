@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '1.8';
+const CURRENT_VERSION = '1.9';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -155,16 +155,19 @@ const FIELD_ALIASES = {
   mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother', 'txt_mother', 'txtmother', 'txt_mother_name'],
   address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
   mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no', 'txt_mobile', 'txtmobile', 'txt_mobile_no'],
-  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email, 'txt_email', 'txtemail', 'txt_email_id'],
+  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email', 'txt_email', 'txtemail', 'txt_email_id'],
   aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar'],
   pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
   epic_number:    ['epic_no', 'voter_id', 'epic_number'],
-  category:       ['category', 'caste_category', 'varg, 'txt_category', 'ddl_category', 'ddlcategory'],
-  gender:         ['gender', 'sex', 'ling, 'txt_gender', 'ddl_gender', 'rbl_gender'],
+  category:       ['category', 'caste_category', 'varg', 'txt_category', 'ddl_category', 'ddlcategory'],
+  gender:         ['gender', 'sex', 'ling', 'txt_gender', 'ddl_gender', 'rbl_gender'],
   pincode:        ['pincode', 'pin_code', 'postal_code', 'zip_code'],
   state:          ['state_name', 'state_of', 'rajya'],
   district:       ['district_name', 'jila'],
-  nationality:    ['nationality', 'rashtriyata'],
+  nationality:    ['nationality', 'rashtriyata', 'citizenship', 'citizen'],
+  marital_status: ['marital_status', 'marital', 'vivah', 'married', 'marriage_status', 'ddl_marital'],
+  religion:       ['religion', 'dharm', 'dharma', 'ddl_religion', 'txt_religion'],
+  domicile_state: ['domicile', 'domicile_state', 'home_state', 'state_of_domicile'],
   // roll_number intentionally excluded to avoid filling education table fields
 };
 
@@ -200,6 +203,24 @@ function fuzzyMatch(formFields, profile) {
       }
       if (ident.includes('middle_name') || ident.includes('middlename')) {
         mapping[field.selector] = { value: middleName, type: field.type }; continue;
+      }
+    }
+
+    // DOB split — handle separate day/month/year dropdowns
+    if (profile.dob) {
+      const dobParts = profile.dob.split('/'); // DD/MM/YYYY
+      const [dobDay, dobMonth, dobYear] = dobParts;
+      const months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+      if (ident.includes('day') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born'))) {
+        mapping[field.selector] = { value: dobDay, type: field.type }; continue;
+      }
+      if (ident.includes('month') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born'))) {
+        // Try numeric month first, then month name
+        const monthVal = field.type === 'select' ? (parseInt(dobMonth)).toString() : dobMonth;
+        mapping[field.selector] = { value: monthVal, type: field.type }; continue;
+      }
+      if (ident.includes('year') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born'))) {
+        mapping[field.selector] = { value: dobYear, type: field.type }; continue;
       }
     }
 
