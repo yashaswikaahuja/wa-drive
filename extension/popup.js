@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.4';
+const CURRENT_VERSION = '3.5';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -568,7 +568,7 @@ function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
 function fillFormFieldsSequential(mapping) {
-  // Sort: fill state before district before block
+  // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
   entries.sort(([sa], [sb]) => {
@@ -579,14 +579,59 @@ function fillFormFieldsSequential(mapping) {
 
   let filled = 0;
   let delay = 0;
+
+  function fillOne(selector, value, type) {
+    try {
+      let el;
+      if (selector.startsWith('form-field-')) {
+        const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
+        el = all[parseInt(selector.split('-')[2])];
+      } else {
+        el = document.querySelector(selector);
+      }
+      if (!el) return 0;
+
+      if (type === 'select') {
+        const opts = Array.from(el.options).filter(o => o.value && o.value !== '0' && o.value !== '-1');
+        const v = value.toLowerCase().trim();
+        const extraValues = [];
+        if (mapping[selector]?.monthNum) { extraValues.push(mapping[selector].monthNum.toString()); if (mapping[selector].monthShort) extraValues.push(mapping[selector].monthShort.toLowerCase()); }
+        let opt = opts.find(o => o.value.toLowerCase() === v) ||
+                  opts.find(o => o.text.toLowerCase().trim() === v) ||
+                  (extraValues.length && opts.find(o => extraValues.includes(o.value.toLowerCase()) || extraValues.includes(o.text.toLowerCase().trim()))) ||
+                  opts.find(o => o.text.toLowerCase().trim().startsWith(v)) ||
+                  opts.find(o => v.startsWith(o.text.toLowerCase().trim()) && o.text.length > 2) ||
+                  opts.find(o => o.text.toLowerCase().includes(v)) ||
+                  opts.find(o => v.includes(o.text.toLowerCase().trim()) && o.text.length > 2) ||
+                  (() => { const fw = v.split(/\s+/)[0]; return opts.find(o => o.text.toLowerCase().startsWith(fw) && fw.length > 2); })();
+        if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new Event('input', { bubbles: true })); setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 300); return 1; }
+      } else if (type === 'radio') {
+        const radios = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
+        const match = Array.from(radios).find(r => r.value.toLowerCase() === value.toLowerCase() || r.value.toLowerCase().startsWith(value.toLowerCase()[0]));
+        if (match) { match.checked = true; match.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
+      } else if (type === 'checkbox') {
+        const truthy = ['yes','true','1','checked'].includes(value.toLowerCase());
+        if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
+      } else {
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        if (niv) { niv.set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); }
+        return 1;
+      }
+    } catch { /* skip */ }
+    return 0;
+  }
+
   for (const [selector, fieldData] of entries) {
+    const { value, type } = fieldData;
     const isDependent = PRIORITY_KEYS.some(k => selector.toLowerCase().includes(k));
     if (isDependent && filled > 0) {
-      // Schedule dependent fields with delay
-      setTimeout(() => fillFormFields({ [selector]: fieldData }), delay);
+      setTimeout(() => fillOne(selector, value, type), delay);
       delay += 600;
     } else {
-      filled += fillFormFields({ [selector]: fieldData });
+      filled += fillOne(selector, value, type);
     }
   }
   return filled;
