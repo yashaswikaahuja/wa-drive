@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '1.4';
+const CURRENT_VERSION = '1.5';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -112,7 +112,9 @@ function fuzzyMatch(formFields, profile) {
   const middleName = nameParts.length >= 3 ? nameParts[1] : '';
 
   for (const field of formFields) {
-    const ident = [field.id, field.name, field.placeholder, field.label]
+    // Prioritize label text — for ServicePlus/dynamic forms, label is the only meaningful identifier
+    // Repeat label twice to give it more weight over generic IDs like field_1_1
+    const ident = [field.label, field.label, field.placeholder, field.id, field.name]
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()]/g, '_');
 
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
@@ -120,6 +122,9 @@ function fuzzyMatch(formFields, profile) {
     // Skip education table roll numbers (they appear in rows with exam context)
     const isEducationRow = ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll');
     if (isEducationRow) continue;
+    // Skip Hindi name fields (auto-converted by ServicePlus on Tab press)
+    const isHindiField = ident.includes('hindi') || ident.includes('_hindi') || field.label.includes('हिंदी') || field.label.includes('(Hindi)');
+    if (isHindiField) continue;
 
     // Handle first/last/middle name fields
     if (!isFatherMother && profile.name) {
