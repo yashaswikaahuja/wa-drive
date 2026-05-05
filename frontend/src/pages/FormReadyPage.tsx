@@ -142,15 +142,19 @@ export default function FormReadyPage() {
       // Then add all non-empty AI fields dynamically
       setFields(prev => {
         const baseKeys = new Set(prev.map(f => f.key));
-        // Update existing fields
+        // Update existing fields — only overwrite if new value is non-empty
         const updated = prev.map(f => {
           const aiKey = f.key === 'aadhaar' || f.key === 'pan' || f.key === 'passport' ? 'id_number' : f.key;
-          return data[aiKey] ? { ...f, value: data[aiKey] } : f;
+          const newVal = data[aiKey];
+          // Only update if: new value exists AND (current is empty OR new value is longer/more complete)
+          if (newVal && (!f.value || newVal.length > f.value.length)) return { ...f, value: newVal };
+          return f;
         });
         // Add new fields for AI data not already in form
         const newFields: Field[] = [];
         for (const [key, value] of Object.entries(data)) {
-          if (!value || baseKeys.has(key)) continue;
+          if (!value) continue;
+          if (baseKeys.has(key)) continue; // already exists
           // Skip if value already mapped to existing field
           const alreadyMapped = key === 'id_number' && (baseKeys.has('aadhaar') || baseKeys.has('pan') || baseKeys.has('passport'));
           if (alreadyMapped) continue;
