@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.6';
+const CURRENT_VERSION = '3.7';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -606,7 +606,16 @@ function fillFormFieldsSequential(mapping) {
                   opts.find(o => o.text.toLowerCase().includes(v)) ||
                   opts.find(o => v.includes(o.text.toLowerCase().trim()) && o.text.length > 2) ||
                   (() => { const fw = v.split(/\s+/)[0]; return opts.find(o => o.text.toLowerCase().startsWith(fw) && fw.length > 2); })();
-        if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new Event('input', { bubbles: true })); setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 300); return 1; }
+        if (opt) {
+          // Native setter for Angular/React
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value');
+          if (nativeSetter) nativeSetter.set.call(el, opt.value);
+          else el.value = opt.value;
+          ['input','change'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true })));
+          setTimeout(() => ['input','change'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true }))), 100);
+          setTimeout(() => ['input','change'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true }))), 500);
+          return 1;
+        }
       } else if (elType === 'radio') {
         const radios = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
         const match = Array.from(radios).find(r => r.value.toLowerCase() === value.toLowerCase() || r.value.toLowerCase().startsWith(value.toLowerCase()[0]));
@@ -615,11 +624,16 @@ function fillFormFieldsSequential(mapping) {
         const truthy = ['yes','true','1','checked'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
       } else {
-        el.value = value;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-        if (niv) { niv.set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); }
+        // Angular/React compatible input filling
+        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
+                    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+        if (niv) niv.set.call(el, value);
+        else el.value = value;
+        ['input','change','keyup','keydown'].forEach(ev => {
+          el.dispatchEvent(new Event(ev, { bubbles: true }));
+        });
+        // Also simulate keyboard events for Angular
+        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
         return 1;
       }
     } catch { /* skip */ }
