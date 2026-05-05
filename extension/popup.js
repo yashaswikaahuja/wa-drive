@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '1.9';
+const CURRENT_VERSION = '2.0';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -168,6 +168,12 @@ const FIELD_ALIASES = {
   marital_status: ['marital_status', 'marital', 'vivah', 'married', 'marriage_status', 'ddl_marital'],
   religion:       ['religion', 'dharm', 'dharma', 'ddl_religion', 'txt_religion'],
   domicile_state: ['domicile', 'domicile_state', 'home_state', 'state_of_domicile'],
+  village:        ['village', 'village_name', 'gram', 'gaon', 'txt_village', 'ddl_village'],
+  post_office:    ['post_office', 'post', 'po', 'txt_post', 'post_name'],
+  police_station: ['police_station', 'thana', 'ps', 'txt_ps', 'ddl_ps'],
+  block:          ['block', 'block_name', 'taluka', 'tehsil', 'txt_block', 'ddl_block'],
+  house_no:       ['house_no', 'house_number', 'house', 'flat_no', 'door_no', 'txt_house'],
+  street:         ['street', 'street_name', 'road', 'lane', 'txt_street'],
   // roll_number intentionally excluded to avoid filling education table fields
 };
 
