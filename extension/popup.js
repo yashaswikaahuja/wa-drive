@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.1';
+const CURRENT_VERSION = '3.2';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -140,10 +140,10 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     }
   }
 
-  // Step 6: Fill the form
+  // Step 6: Fill the form (sequential for dependent dropdowns)
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: fillFormFields,
+    func: fillFormFieldsSequential,
     args: [mapping],
   });
 
@@ -304,14 +304,16 @@ function fuzzyMatch(formFields, profile) {
     if (profile.dob) {
       const dobParts = profile.dob.split('/'); // DD/MM/YYYY
       const [dobDay, dobMonth, dobYear] = dobParts;
-      const months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+      const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+      const monthShort = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const monthNum = parseInt(dobMonth);
       if (ident.includes('day') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born'))) {
-        mapping[field.selector] = { value: dobDay, type: field.type }; continue;
+        mapping[field.selector] = { value: parseInt(dobDay).toString(), type: field.type }; continue;
       }
       if (ident.includes('month') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born'))) {
-        // Try numeric month first, then month name
-        const monthVal = field.type === 'select' ? (parseInt(dobMonth)).toString() : dobMonth;
-        mapping[field.selector] = { value: monthVal, type: field.type }; continue;
+        // For select: try month name, short name, and number
+        const monthVal = field.type === 'select' ? monthNames[monthNum] : dobMonth;
+        mapping[field.selector] = { value: monthVal, type: field.type, monthNum, monthShort: monthShort[monthNum] }; continue;
       }
       if (ident.includes('year') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born'))) {
         mapping[field.selector] = { value: dobYear, type: field.type }; continue;
@@ -562,6 +564,27 @@ function injectCorrectionObserver(mapping, filledBySource, profile) {
 function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
+async function fillFormFieldsSequential(mapping) {
+  // Sort: fill state before district before block (dependent dropdowns need sequence)
+  const PRIORITY = { state: 1, district: 2, block: 3, panchayat: 4 };
+  const entries = Object.entries(mapping);
+  entries.sort(([sa, a], [sb, b]) => {
+    const pa = Object.keys(PRIORITY).find(k => sa.toLowerCase().includes(k) || (a.value||'').toLowerCase().includes(k)) ? PRIORITY[Object.keys(PRIORITY).find(k => sa.toLowerCase().includes(k))] || 99 : 99;
+    const pb = Object.keys(PRIORITY).find(k => sb.toLowerCase().includes(k) || (b.value||'').toLowerCase().includes(k)) ? PRIORITY[Object.keys(PRIORITY).find(k => sb.toLowerCase().includes(k))] || 99 : 99;
+    return pa - pb;
+  });
+  // Fill with small delays between dependent fields
+  let filled = 0;
+  for (const [selector, fieldData] of entries) {
+    const singleMapping = { [selector]: fieldData };
+    const count = fillFormFields(singleMapping);
+    filled += count;
+    // Add delay after state/district to let dependent dropdowns load
+    const isDependent = ['state','district','block'].some(k => selector.toLowerCase().includes(k));
+    if (isDependent && count > 0) await new Promise(r => setTimeout(r, 500));
+  }
+  return filled;
+}
 function fillFormFields(mapping) {
   let filled = 0;
   for (const [selector, { value, type }] of Object.entries(mapping)) {
@@ -579,13 +602,40 @@ function fillFormFields(mapping) {
       if (!el) continue;
 
       if (type === 'select') {
-        // Try exact match first, then partial
-        const opts = Array.from(el.options);
-        const opt = opts.find(o => o.value.toLowerCase() === value.toLowerCase()) ||
-                    opts.find(o => o.text.toLowerCase() === value.toLowerCase()) ||
-                    opts.find(o => o.text.toLowerCase().includes(value.toLowerCase())) ||
-                    opts.find(o => value.toLowerCase().includes(o.text.toLowerCase()) && o.text.length > 2);
-        if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
+        const opts = Array.from(el.options).filter(o => o.value && o.value !== '0' && o.value !== '-1');
+        const v = value.toLowerCase().trim();
+        // For month fields, also try numeric and short name
+        const extraValues = [];
+        if (mapping[selector]?.monthNum) {
+          extraValues.push(mapping[selector].monthNum.toString());
+          extraValues.push(mapping[selector].monthShort?.toLowerCase());
+        }
+        // 1. Exact value match
+        let opt = opts.find(o => o.value.toLowerCase() === v);
+        // 2. Exact text match
+        if (!opt) opt = opts.find(o => o.text.toLowerCase().trim() === v);
+        // 3. Extra values (month number/short)
+        if (!opt && extraValues.length) opt = opts.find(o => extraValues.includes(o.value.toLowerCase()) || extraValues.includes(o.text.toLowerCase().trim()));
+        // 4. Text starts with value
+        if (!opt) opt = opts.find(o => o.text.toLowerCase().trim().startsWith(v));
+        // 5. Value starts with text
+        if (!opt) opt = opts.find(o => v.startsWith(o.text.toLowerCase().trim()) && o.text.length > 2);
+        // 6. Text contains value
+        if (!opt) opt = opts.find(o => o.text.toLowerCase().includes(v));
+        // 7. Value contains text
+        if (!opt) opt = opts.find(o => v.includes(o.text.toLowerCase().trim()) && o.text.length > 2);
+        // 8. First word match
+        if (!opt) {
+          const firstWord = v.split(/\s+/)[0];
+          opt = opts.find(o => o.text.toLowerCase().startsWith(firstWord) && firstWord.length > 2);
+        }
+        if (opt) {
+          el.value = opt.value;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 300);
+          filled++;
+        }
 
       } else if (type === 'radio') {
         // Find radio with matching value or label
