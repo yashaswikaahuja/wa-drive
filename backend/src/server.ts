@@ -8,6 +8,7 @@ import whatsappRoutes from './api/routes/whatsapp.routes.js';
 import filesRoutes from './api/routes/files.routes.js';
 import processRoutes from './api/routes/process.routes.js';
 import profilesRoutes from './api/routes/profiles.routes.js';
+import mappingsRoutes from './api/routes/mappings.routes.js';
 
 const WORKER_SECRET = process.env['WORKER_SECRET'] ?? 'worker-secret';
 const PORT = Number(process.env['PORT'] ?? 3000);
@@ -28,6 +29,7 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/process', processRoutes);
 app.use('/api/profiles', profilesRoutes);
+app.use('/api/mappings', mappingsRoutes);
 
 // ── Hub state ────────────────────────────────────────────────────────────────
 let workerConnected = false;

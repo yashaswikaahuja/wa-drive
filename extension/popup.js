@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '1.7';
+const CURRENT_VERSION = '1.8';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -41,8 +41,12 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
 
 document.getElementById('autofill-btn').addEventListener('click', async () => {
   if (!selectedProfile) return;
-  const { groqKey } = await chrome.storage.local.get(['groqKey']);
+  const { groqKey, backendUrl } = await chrome.storage.local.get(['groqKey', 'backendUrl']);
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+  // Generate form key from URL (domain + path)
+  const url = new URL(tab.url);
+  const formKey = (url.hostname + url.pathname).replace(/[^a-z0-9]/gi, '_').toLowerCase();
 
   showStatus('Analyzing form...', 'info');
 
@@ -55,18 +59,62 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   const formFields = fields?.[0]?.result ?? [];
   if (!formFields.length) { showStatus('No form fields found on this page.', 'error'); return; }
 
-  // Step 2: Try fuzzy matching first
-  let mapping = fuzzyMatch(formFields, selectedProfile);
+  let mapping = {};
 
-  // Step 3: For unmatched fields, use Groq AI
-  const unmatched = formFields.filter(f => !mapping[f.selector]);
-  if (unmatched.length > 0 && groqKey) {
-    showStatus('Using AI to map remaining fields...', 'info');
-    const aiMapping = await aiMatch(unmatched, selectedProfile, groqKey);
-    mapping = { ...mapping, ...aiMapping };
+  // Step 2: Check saved mapping for this form
+  let savedMapping = null;
+  if (backendUrl) {
+    try {
+      const res = await fetch(`${backendUrl}/mappings/${formKey}`);
+      savedMapping = await res.json();
+    } catch { /* ignore */ }
   }
 
-  // Step 4: Fill the form
+  if (savedMapping && Object.keys(savedMapping).length > 1) {
+    // Use saved mapping — map field selectors to profile values
+    showStatus('Using saved form mapping...', 'info');
+    for (const [fieldLabel, profileKey] of Object.entries(savedMapping)) {
+      if (fieldLabel === 'savedAt') continue;
+      const field = formFields.find(f => f.label === fieldLabel || f.id === fieldLabel);
+      if (field && selectedProfile[profileKey]) {
+        mapping[field.selector] = { value: selectedProfile[profileKey], type: field.type };
+      }
+    }
+  }
+
+  // Step 3: Fuzzy match for unmapped fields
+  const unmappedAfterSaved = formFields.filter(f => !mapping[f.selector]);
+  const fuzzyResult = fuzzyMatch(unmappedAfterSaved, selectedProfile);
+  mapping = { ...mapping, ...fuzzyResult };
+
+  // Step 4: Groq AI for still-unmapped fields (PRIMARY for unknown forms)
+  const stillUnmapped = formFields.filter(f => !mapping[f.selector]);
+  if (stillUnmapped.length > 0 && groqKey) {
+    showStatus(`AI mapping ${stillUnmapped.length} fields...`, 'info');
+    const aiMapping = await aiMatch(stillUnmapped, selectedProfile, groqKey);
+    mapping = { ...mapping, ...aiMapping };
+
+    // Step 5: Save the AI mapping for next time (self-learning)
+    if (backendUrl && Object.keys(aiMapping).length > 0) {
+      const toSave = {};
+      for (const [selector, { value }] of Object.entries(aiMapping)) {
+        const field = formFields.find(f => f.selector === selector);
+        if (field?.label) {
+          // Find which profile key this value came from
+          const profileKey = Object.entries(selectedProfile).find(([, v]) => v === value)?.[0];
+          if (profileKey) toSave[field.label] = profileKey;
+        }
+      }
+      if (Object.keys(toSave).length > 0) {
+        fetch(`${backendUrl}/mappings/${formKey}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(toSave),
+        }).catch(() => {});
+      }
+    }
+  }
+
+  // Step 6: Fill the form
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: fillFormFields,
