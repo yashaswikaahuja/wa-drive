@@ -68,6 +68,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
   name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam'],
+  // first_name and last_name handled separately in fuzzyMatch
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate'],
   father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam'],
   mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam'],
@@ -88,14 +89,36 @@ const FIELD_ALIASES = {
 
 function fuzzyMatch(formFields, profile) {
   const mapping = {};
+  const nameParts = (profile.name || '').trim().split(/\s+/);
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || nameParts[0] || '';
+  const middleName = nameParts.length >= 3 ? nameParts[1] : '';
+
   for (const field of formFields) {
     const ident = [field.id, field.name, field.placeholder, field.label]
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()]/g, '_');
-    // Skip fields that are clearly father/mother name when matching 'name'
+
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
+    // Skip education table roll numbers (they appear in rows with exam context)
+    const isEducationRow = ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject');
+    if (isEducationRow) continue;
+
+    // Handle first/last/middle name fields
+    if (!isFatherMother && profile.name) {
+      if (ident.includes('first_name') || ident.includes('firstname') || ident === 'fname') {
+        mapping[field.selector] = { value: firstName, type: field.type }; continue;
+      }
+      if (ident.includes('last_name') || ident.includes('lastname') || ident === 'lname' || ident.includes('surname')) {
+        mapping[field.selector] = { value: lastName, type: field.type }; continue;
+      }
+      if (ident.includes('middle_name') || ident.includes('middlename')) {
+        mapping[field.selector] = { value: middleName, type: field.type }; continue;
+      }
+    }
+
     for (const [profileKey, aliases] of Object.entries(FIELD_ALIASES)) {
       if (!profile[profileKey]) continue;
-      if (profileKey === 'name' && isFatherMother) continue; // don't fill father/mother fields with candidate name
+      if (profileKey === 'name' && isFatherMother) continue;
       if (aliases.some(alias => ident.includes(alias))) {
         mapping[field.selector] = { value: profile[profileKey], type: field.type };
         break;
