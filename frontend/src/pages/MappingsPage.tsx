@@ -65,14 +65,19 @@ export default function MappingsPage() {
 
   async function deleteField(fieldLabel: string) {
     if (!selected) return;
-    const updated = { ...mapping };
-    delete updated[fieldLabel];
-    // Save without the deleted field by posting corrections=99 to kill confidence
     await fetch(`${API_BASE_URL}/mappings/${selected}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates: { [fieldLabel]: { profileKey: mapping[fieldLabel]?.profileKey || '', delta: { fills: 0, corrections: 99 } } } }),
     });
     await loadMapping(selected);
+  }
+
+  async function deleteForm() {
+    if (!selected || !confirm(`Delete all learned mappings for:\n${selected}?`)) return;
+    await fetch(`${API_BASE_URL}/mappings/${selected}`, { method: 'DELETE' });
+    setSelected(null);
+    setMapping({});
+    await loadKeys();
   }
 
   const entries = Object.entries(mapping).filter(([k]) => k !== 'savedAt');
@@ -93,10 +98,14 @@ export default function MappingsPage() {
           <div className="px-3 py-2 text-[10px] text-[#94a3b8] uppercase tracking-wider border-b border-[#334155]">Forms</div>
           {formKeys.length === 0 && <div className="p-4 text-[11px] text-[#475569]">No learned mappings yet.</div>}
           {formKeys.map(k => (
-            <button key={k} onClick={() => loadMapping(k)}
-              className={`w-full text-left px-3 py-2 text-[11px] truncate border-b border-[#1e293b] transition-colors ${selected === k ? 'bg-blue-600/20 text-blue-300 border-l-2 border-blue-500' : 'text-[#94a3b8] hover:bg-[#1e293b]'}`}>
-              {k.replace(/_/g, '.')}
-            </button>
+            <div key={k} className={`flex items-center border-b border-[#1e293b] ${selected === k ? 'bg-blue-600/20 border-l-2 border-blue-500' : ''}`}>
+              <button onClick={() => loadMapping(k)}
+                className={`flex-1 text-left px-3 py-2 text-[11px] truncate transition-colors ${selected === k ? 'text-blue-300' : 'text-[#94a3b8] hover:bg-[#1e293b]'}`}>
+                {k.replace(/_/g, '.')}
+              </button>
+              <button onClick={async () => { if (confirm(`Delete mapping for ${k}?`)) { await fetch(`${API_BASE_URL}/mappings/${k}`, { method: 'DELETE' }); if (selected === k) { setSelected(null); setMapping({}); } await loadKeys(); } }}
+                className="px-2 text-red-500 hover:text-red-300 text-[13px]" title="Delete form mapping">✕</button>
+            </div>
           ))}
         </div>
 
