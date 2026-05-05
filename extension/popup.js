@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.7';
+const CURRENT_VERSION = '3.8';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -455,22 +455,49 @@ function extractFormFieldsWithFingerprint() {
   const labelList = [];
   const formFields = [];
 
+  function getLabel(el) {
+    if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
+    const td = el.closest('td');
+    if (td) { const prev = td.previousElementSibling; if (prev) return prev.textContent.trim().slice(0, 40); }
+    const parent = el.closest('div,td,tr,li,span,p,mat-form-field');
+    if (parent) { const l = parent.querySelector('label,mat-label'); if (l) return l.textContent.trim(); }
+    if (el.placeholder) return el.placeholder;
+    if (el.getAttribute && el.getAttribute('aria-label')) return el.getAttribute('aria-label');
+    if (el.nextSibling?.textContent) return el.nextSibling.textContent.trim();
+    return '';
+  }
+
   inputs.forEach((el, i) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
-    const label = (() => {
-      if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
-      const td = el.closest('td');
-      if (td) { const prev = td.previousElementSibling; if (prev) return prev.textContent.trim().slice(0, 40); }
-      const parent = el.closest('div,td,tr,li,span,p');
-      if (parent) { const l = parent.querySelector('label'); if (l) return l.textContent.trim(); }
-      if (el.placeholder) return el.placeholder;
-      if (el.nextSibling?.textContent) return el.nextSibling.textContent.trim();
-      return '';
-    })();
+    const label = getLabel(el);
     const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"][value="${el.value || ''}"]` : `form-field-${i}`;
     const type = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
     if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: i });
+  });
+
+  // Angular Material: mat-select, mat-checkbox, mat-radio-button
+  let matIdx = 10000;
+  document.querySelectorAll('mat-select').forEach(el => {
+    const label = getLabel(el) || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '';
+    const id = el.id || `mat-select-${matIdx}`;
+    if (!el.id) el.setAttribute('data-cc-id', id);
+    const selector = `[data-cc-id="${id}"],#${id}`;
+    if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++ });
+  });
+  document.querySelectorAll('mat-checkbox').forEach(el => {
+    const label = getLabel(el) || el.textContent.trim().slice(0, 40);
+    const id = el.id || `mat-cb-${matIdx}`;
+    if (!el.id) el.setAttribute('data-cc-id', id);
+    formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-checkbox', index: matIdx++ });
+  });
+  document.querySelectorAll('mat-radio-button').forEach(el => {
+    const label = el.textContent.trim().slice(0, 40);
+    const name = el.getAttribute('name') || el.closest('mat-radio-group')?.getAttribute('formcontrolname') || '';
+    const id = el.id || `mat-rb-${matIdx}`;
+    if (!el.id) el.setAttribute('data-cc-id', id);
+    formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name, value: label, placeholder: '', label, type: 'mat-radio', index: matIdx++ });
   });
 
   // Fingerprint: hostname + title + sorted top-10 labels
@@ -591,7 +618,53 @@ function fillFormFieldsSequential(mapping) {
       }
       if (!el) return 0;
       // Detect type from DOM directly (more reliable than passed type)
-      const elType = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
+      const tagName = el.tagName.toLowerCase();
+      const elType = tagName === 'select' ? 'select'
+        : tagName === 'mat-select' ? 'mat-select'
+        : tagName === 'mat-checkbox' ? 'mat-checkbox'
+        : tagName === 'mat-radio-button' ? 'mat-radio'
+        : el.type || 'text';
+
+      // Angular Material mat-select: click trigger, wait for panel, click matching option
+      if (elType === 'mat-select') {
+        const trigger = el.querySelector('.mat-select-trigger,.mat-mdc-select-trigger') || el;
+        trigger.click();
+        return new Promise(resolve => {
+          setTimeout(() => {
+            const v = value.toLowerCase().trim();
+            const panel = document.querySelector('mat-option,.mat-option,.mat-mdc-option');
+            if (!panel) { document.body.click(); resolve(0); return; }
+            const opts = Array.from(document.querySelectorAll('mat-option,.mat-option,.mat-mdc-option'));
+            const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
+                        opts.find(o => o.textContent.trim().toLowerCase().startsWith(v)) ||
+                        opts.find(o => v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2) ||
+                        opts.find(o => o.textContent.trim().toLowerCase().includes(v));
+            if (opt) { opt.click(); resolve(1); }
+            else { document.body.click(); resolve(0); }
+          }, 400);
+        });
+      }
+
+      // Angular Material mat-checkbox
+      if (elType === 'mat-checkbox') {
+        const shouldCheck = /yes|true|1|on|checked/i.test(value);
+        const input = el.querySelector('input[type="checkbox"]');
+        const isChecked = input ? input.checked : el.classList.contains('mat-checkbox-checked');
+        if (shouldCheck !== isChecked) { (input || el).click(); }
+        return 1;
+      }
+
+      // Angular Material mat-radio-button
+      if (elType === 'mat-radio') {
+        const v = value.toLowerCase().trim();
+        const label = el.textContent.trim().toLowerCase();
+        if (label === v || label.includes(v) || v.includes(label)) {
+          const input = el.querySelector('input[type="radio"]') || el;
+          input.click();
+          return 1;
+        }
+        return 0;
+      }
 
       if (elType === 'select') {
         const opts = Array.from(el.options).filter(o => o.value && o.value !== '0' && o.value !== '-1');
@@ -642,8 +715,13 @@ function fillFormFieldsSequential(mapping) {
 
   for (const [selector, fieldData] of entries) {
     const { value, type } = fieldData;
+    const isMatSelect = type === 'mat-select' || type === 'mat-radio';
     const isDependent = PRIORITY_KEYS.some(k => selector.toLowerCase().includes(k));
-    if (isDependent && filled > 0) {
+    if (isMatSelect) {
+      // mat-select needs real click simulation with delay between each
+      setTimeout(() => fillOne(selector, value, type), delay);
+      delay += 800;
+    } else if (isDependent && filled > 0) {
       setTimeout(() => fillOne(selector, value, type), delay);
       delay += 600;
     } else {
