@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '1.3';
+const CURRENT_VERSION = '1.4';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -85,14 +85,14 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
-  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name'],
-  dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate'],
-  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father'],
+  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english'],
+  dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_'],
+  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam'],
   mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother'],
   address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
-  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone'],
+  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no'],
   email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email'],
-  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity'],
+  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card'],
   pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
   epic_number:    ['epic_no', 'voter_id', 'epic_number'],
   category:       ['category', 'caste_category', 'varg'],
@@ -244,10 +244,26 @@ function extractFormFields() {
   inputs.forEach((el, i) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
     const label = (() => {
+      // Standard label[for] association
       if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
-      const parent = el.closest('div,td,tr,li,span');
-      if (parent) { const l = parent.querySelector('label'); if (l) return l.textContent.trim(); }
-      // For radio/checkbox, the label is often next to it
+      // ServicePlus uses td > label pattern in tables
+      const td = el.closest('td');
+      if (td) {
+        const prevTd = td.previousElementSibling;
+        if (prevTd) return prevTd.textContent.trim();
+      }
+      // Generic parent search
+      const parent = el.closest('div,td,tr,li,span,p');
+      if (parent) {
+        const l = parent.querySelector('label');
+        if (l) return l.textContent.trim();
+        // Text node before input
+        const prev = el.previousSibling;
+        if (prev && prev.nodeType === 3 && prev.textContent.trim()) return prev.textContent.trim();
+      }
+      // Placeholder as fallback
+      if (el.placeholder) return el.placeholder;
+      // Radio/checkbox: text after element
       if (el.nextSibling && el.nextSibling.textContent) return el.nextSibling.textContent.trim();
       return '';
     })();
