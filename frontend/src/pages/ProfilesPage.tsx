@@ -12,6 +12,9 @@ const LABEL: Record<string, string> = {
   category: 'Category', nationality: 'Nationality', pincode: 'Pincode',
   state: 'State', district: 'District', place_of_birth: 'Place of Birth',
   photo_url: 'Photo URL', signature_url: 'Signature URL',
+  village: 'Village', post_office: 'Post Office', police_station: 'Police Station',
+  block: 'Block', house_no: 'House No', street: 'Street',
+  marital_status: 'Marital Status', religion: 'Religion', domicile_state: 'Domicile State',
 };
 
 export default function ProfilesPage() {
@@ -64,14 +67,39 @@ export default function ProfilesPage() {
       </div>
       <div className="max-w-lg mx-auto p-4 flex flex-col gap-3">
         {Object.entries(editing).filter(([k]) => k !== 'updatedAt' && k !== 'photo_url').map(([key, val]) => (
-          <div key={key}>
-            <label className="text-[10px] text-[#94a3b8] uppercase tracking-wider block mb-1">
-              {LABEL[key] ?? key.replace(/_/g, ' ')}
-            </label>
+          <div key={key} className="group relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] text-[#94a3b8] uppercase tracking-wider">
+                {LABEL[key] ?? key.replace(/_/g, ' ')}
+              </label>
+              <button onClick={() => { const e = { ...editing }; delete e[key]; setEditing(e); }}
+                className="text-[#475569] hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+            </div>
             <input value={val} onChange={e => setEditing({ ...editing, [key]: e.target.value })}
               className="w-full bg-[#1e293b] border border-[#334155] rounded px-3 py-2 text-sm text-[#dce2f7] focus:outline-none focus:border-blue-500" />
           </div>
         ))}
+
+        {/* Add new field */}
+        <div className="border-t border-[#334155] pt-3 mt-1">
+          <div className="text-[10px] text-[#94a3b8] uppercase tracking-wider mb-2">Add New Field</div>
+          <div className="flex gap-2">
+            <input id="new-field-key" placeholder="Field name (e.g. religion)"
+              className="flex-1 bg-[#1e293b] border border-dashed border-[#334155] rounded px-3 py-2 text-sm text-[#dce2f7] focus:outline-none focus:border-blue-500 placeholder:text-[#475569]" />
+            <input id="new-field-val" placeholder="Value"
+              className="flex-1 bg-[#1e293b] border border-dashed border-[#334155] rounded px-3 py-2 text-sm text-[#dce2f7] focus:outline-none focus:border-blue-500 placeholder:text-[#475569]" />
+            <button onClick={() => {
+              const k = (document.getElementById('new-field-key') as HTMLInputElement).value.trim().toLowerCase().replace(/\s+/g,'_');
+              const v = (document.getElementById('new-field-val') as HTMLInputElement).value.trim();
+              if (k && v) {
+                setEditing({ ...editing, [k]: v });
+                (document.getElementById('new-field-key') as HTMLInputElement).value = '';
+                (document.getElementById('new-field-val') as HTMLInputElement).value = '';
+              }
+            }} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded font-bold">+</button>
+          </div>
+        </div>
+
         <button onClick={saveEdit} disabled={saving}
           className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-sm font-bold rounded">
           {saving ? 'Saving...' : 'Save Changes'}
