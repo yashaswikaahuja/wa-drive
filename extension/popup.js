@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '1.1';
+const CURRENT_VERSION = '1.3';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -236,19 +236,24 @@ function showStatus(msg, type) {
 
 // ── Content script functions (run in page context) ────────────────────────────
 function extractFormFields() {
-  const inputs = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input:not([type]),textarea,select');
+  const inputs = document.querySelectorAll(
+    'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
+    'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
+  );
   const fields = [];
   inputs.forEach((el, i) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
     const label = (() => {
       if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
-      const parent = el.closest('div,td,tr,li');
+      const parent = el.closest('div,td,tr,li,span');
       if (parent) { const l = parent.querySelector('label'); if (l) return l.textContent.trim(); }
+      // For radio/checkbox, the label is often next to it
+      if (el.nextSibling && el.nextSibling.textContent) return el.nextSibling.textContent.trim();
       return '';
     })();
-    // Generate unique selector
-    const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"]` : `form-field-${i}`;
-    fields.push({ selector, id: el.id, name: el.name, placeholder: el.placeholder, label, type: el.tagName === 'SELECT' ? 'select' : el.type || 'text', index: i });
+    const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"][value="${el.value || ''}"]` : `form-field-${i}`;
+    const type = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
+    fields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: i });
   });
   return fields;
 }
@@ -257,17 +262,47 @@ function fillFormFields(mapping) {
   let filled = 0;
   for (const [selector, { value, type }] of Object.entries(mapping)) {
     try {
-      const el = selector.startsWith('form-field-')
-        ? document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input:not([type]),textarea,select')[parseInt(selector.split('-')[2])]
-        : document.querySelector(selector);
+      let el;
+      if (selector.startsWith('form-field-')) {
+        const all = document.querySelectorAll(
+          'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
+          'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
+        );
+        el = all[parseInt(selector.split('-')[2])];
+      } else {
+        el = document.querySelector(selector);
+      }
       if (!el) continue;
+
       if (type === 'select') {
-        const opt = Array.from(el.options).find(o => o.text.toLowerCase().includes(value.toLowerCase()) || o.value.toLowerCase() === value.toLowerCase());
+        // Try exact match first, then partial
+        const opts = Array.from(el.options);
+        const opt = opts.find(o => o.value.toLowerCase() === value.toLowerCase()) ||
+                    opts.find(o => o.text.toLowerCase() === value.toLowerCase()) ||
+                    opts.find(o => o.text.toLowerCase().includes(value.toLowerCase())) ||
+                    opts.find(o => value.toLowerCase().includes(o.text.toLowerCase()) && o.text.length > 2);
         if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
+
+      } else if (type === 'radio') {
+        // Find radio with matching value or label
+        const radios = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
+        const match = Array.from(radios).find(r =>
+          r.value.toLowerCase() === value.toLowerCase() ||
+          r.value.toLowerCase().startsWith(value.toLowerCase()[0])
+        );
+        if (match) { match.checked = true; match.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
+
+      } else if (type === 'checkbox') {
+        const truthy = ['yes', 'true', '1', 'checked'].includes(value.toLowerCase());
+        if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
+
       } else {
         el.value = value;
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
+        // React/Vue compatibility
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        if (nativeInputValueSetter) { nativeInputValueSetter.set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); }
         filled++;
       }
     } catch { /* skip */ }
