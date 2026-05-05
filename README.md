@@ -1,6 +1,13 @@
-# CyberControl — WhatsApp Inbox
+# CyberControl — WhatsApp Inbox + AI Form Autofill
 
-A cybercafe management tool that receives files sent by customers via WhatsApp, uploads them to Google Drive, and displays them in a real-time dashboard.
+A cybercafe management tool for operators near Patna, Bihar. Customers send documents via WhatsApp → AI extracts data → staff fills govt forms (SSC/Railway/NEET/UPSC) automatically using the Chrome extension.
+
+## What It Does
+
+1. **WhatsApp Inbox** — Customers send Aadhaar, PAN, photos, admit cards via WhatsApp
+2. **AI Extraction** — Groq Vision AI reads documents and extracts name, DOB, address, ID numbers etc.
+3. **Student Profiles** — Extracted data saved as reusable profiles
+4. **Chrome Extension** — Auto-fills SSC/Railway/NEET/UPSC/IBPS govt forms from saved profiles
 
 ## Architecture
 
@@ -9,41 +16,65 @@ GCP VM (34.134.111.239)
 ┌──────────────────────────────────────────────┐
 │                                              │
 │  Baileys Worker ──localhost:3000──▶ Hub      │
-│  (PM2: whatsapp-worker)         (PM2: cybercontrol-hub)
+│  (PM2: whatsapp-worker)    (PM2: cybercontrol-hub)
 │                                      │       │
 │  Cloudflare Tunnel ◀─────────────────┘       │
 │  (PM2: cloudflare-tunnel)                    │
+│  Tunnel URL Updater (PM2: tunnel-url-updater)│
 └──────────────────────────────────────────────┘
          │ HTTPS
          ▼
-  https://strings-broker-minimal-cut.trycloudflare.com
+  https://cursor-reservoir-surrounding-city.trycloudflare.com
          │
          ▼
   Vercel Frontend (https://frontend-pi-ochre-71.vercel.app)
-```
 
-- **Worker** (`worker/`) — Baileys WhatsApp client, no Chromium. Receives media, POSTs to hub via `http://localhost:3000`.
-- **Hub** (`backend/`) — Express + Socket.IO. Receives files from worker, uploads to Google Drive, emits real-time events to dashboard.
-- **Frontend** (`frontend/`) — React dashboard on Vercel. Real-time file display, Drive login, preview/print/download.
-- **Cloudflare Tunnel** — Free HTTPS proxy exposing the hub to the internet (URL changes on restart).
+Chrome Extension (installed on cybercafe PC)
+  ↕ fetches profiles from backend
+  ↕ auto-fills govt form websites
+```
 
 ## Services
 
 | Service | URL | Platform |
 |---------|-----|----------|
 | Dashboard | https://frontend-pi-ochre-71.vercel.app | Vercel |
-| API Hub | https://strings-broker-minimal-cut.trycloudflare.com | GCP VM (PM2) |
-| WA Worker | internal (localhost) | GCP VM (PM2) |
+| API Hub | https://cursor-reservoir-surrounding-city.trycloudflare.com | GCP VM |
+| WA Worker | internal (localhost) | GCP VM |
+| Chrome Extension | installed locally | Cybercafe PC |
 
 ## GCP VM
 
 - **IP:** `34.134.111.239` (static)
-- **SSH:** `ssh -i ~/.ssh/gcp_worker bharattvv542@34.134.111.239`
-- **PM2 processes:** `cybercontrol-hub` (port 3000), `whatsapp-worker` (port 3002), `cloudflare-tunnel`
+- **SSH alias:** `ssh gcp-worker`
+- **PM2 processes:** `cybercontrol-hub` (port 3000), `whatsapp-worker`, `cloudflare-tunnel`, `tunnel-url-updater`
+
+## Project Structure
+
+```
+cybercontrol-hub/
+├── backend/          # Express + Socket.IO hub (GCP VM)
+│   └── src/
+│       ├── server.ts              # Routes, Drive upload, Socket.IO
+│       └── api/routes/
+│           ├── process.routes.ts  # AI extraction, photo processing
+│           └── profiles.routes.ts # Student profiles CRUD
+├── worker/           # Baileys WhatsApp worker (GCP VM)
+│   └── worker.ts
+├── frontend/         # React dashboard (Vercel)
+│   └── src/pages/
+│       ├── WhatsAppInboxPage.tsx  # Main inbox
+│       ├── FormReadyPage.tsx      # AI extraction + profile save
+│       └── ProfilesPage.tsx       # Profile management
+└── extension/        # Chrome extension (auto-fill govt forms)
+    ├── manifest.json
+    ├── popup.html / popup.js
+    └── content.js
+```
 
 ## Quick Start
 
-### Hub (GCP VM)
+### Deploy Hub (GCP VM)
 ```bash
 # Build locally (tsc OOMs on e2-micro)
 cd backend && npm run build
@@ -51,24 +82,38 @@ scp -r backend/dist gcp-worker:/opt/cybercontrol-hub/backend/dist
 ssh gcp-worker "pm2 restart cybercontrol-hub"
 ```
 
-### Worker (GCP VM)
-```bash
-# /opt/whatsapp-worker/worker/.env
-HUB_URL=http://localhost:3000
+### Deploy Frontend (Vercel via GitHub Actions)
+Push any change to `frontend/**` on master → GitHub Actions auto-deploys to Vercel.
+
+### Install Chrome Extension
+1. Download zip from: `https://<tunnel-url>/api/extension/download`
+2. Extract zip
+3. Chrome → `chrome://extensions` → Developer Mode → Load unpacked → select folder
+
+## Key API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/process/extract | AI extract fields from Drive file |
+| GET | /api/profiles | List all student profiles |
+| POST | /api/profiles | Save/update student profile |
+| DELETE | /api/profiles/:phone | Delete profile |
+| GET | /api/extension/version | Extension version check |
+| GET | /api/extension/download | Download latest extension zip |
+| POST | /api/drive/token | Set Google Drive OAuth token |
+| GET | /api/drive/files | List files from Drive |
+| POST | /api/worker/upload | Worker uploads file to Drive |
+
+## Environment Variables
+
+### Backend (ecosystem.config.cjs)
+```
+PORT=3000
 WORKER_SECRET=cybercontrol-worker-secret-2024
-PORT=3002
-```
-```bash
-scp worker/worker.ts gcp-worker:/opt/whatsapp-worker/worker/worker.ts
-ssh gcp-worker "pm2 restart whatsapp-worker"
+GROQ_API_KEY=gsk_...
 ```
 
-### Frontend (Vercel)
-```bash
-cd frontend && npx vercel --prod --yes
-```
-
-Set env vars on Vercel:
+### Frontend (Vercel project settings)
 ```
 VITE_API_URL=https://<tunnel-url>/api
 VITE_SOCKET_URL=https://<tunnel-url>
@@ -77,47 +122,44 @@ VITE_GOOGLE_CLIENT_ID=your-google-oauth-client-id
 
 ## When Cloudflare Tunnel URL Changes
 
-```bash
-# Get new URL
-ssh gcp-worker "pm2 logs cloudflare-tunnel --lines 30 --nostream | grep trycloudflare"
+The `tunnel-url-updater` PM2 process handles this automatically:
+- Detects new URL from cloudflared logs
+- Updates `frontend/src/utils/helpers.ts` fallback URL
+- Pushes to GitHub → GitHub Actions redeploys frontend
 
-# Update Vercel and redeploy
-cd frontend
-npx vercel env rm VITE_API_URL production --yes
-npx vercel env rm VITE_SOCKET_URL production --yes
-echo 'https://NEW-URL.trycloudflare.com/api' | npx vercel env add VITE_API_URL production
-echo 'https://NEW-URL.trycloudflare.com' | npx vercel env add VITE_SOCKET_URL production
-npx vercel --prod --yes
+Manual update if needed:
+```bash
+ssh gcp-worker "pm2 logs cloudflare-tunnel --lines 30 --nostream | grep trycloudflare"
+# Then update helpers.ts and push
+```
+
+## Releasing Extension Updates
+
+```bash
+# 1. Edit extension/manifest.json — bump version (e.g. 1.2 → 1.3)
+# 2. Edit extension/popup.js — update CURRENT_VERSION constant
+# 3. Repackage
+python3 -c "
+import zipfile
+with zipfile.ZipFile('/tmp/ext.zip','w') as z:
+    for f in ['manifest.json','popup.html','popup.js','content.js','icon.png']:
+        z.write(f'extension/{f}', f)
+"
+# 4. Upload to GCP
+scp /tmp/ext.zip gcp-worker:/opt/cybercontrol-hub/extension.zip
+# 5. Update server version
+ssh gcp-worker "sed -i \"s/version: '1.2'/version: '1.3'/\" /opt/cybercontrol-hub/backend/dist/server.js && pm2 restart cybercontrol-hub"
 ```
 
 ## Google Drive Setup
 
-1. Open the dashboard
-2. Click **Connect Google Drive** → sign in
-3. Token stored in browser, synced to hub automatically
-4. Files uploaded to `customers/{phone}/` in your Drive
-5. Token expires after ~1 hour — click again to reconnect
+1. Open dashboard → click **Connect Google Drive** → sign in
+2. Token stored in browser, synced to hub automatically
+3. Files uploaded to `customers/{phone}/` in your Drive
+4. Token expires after ~1 hour — click again to reconnect
 
-## Project Structure
+## See Also
 
-```
-wa/
-├── backend/          # Express + Socket.IO hub (GCP VM)
-│   └── src/server.ts # Routes, Drive upload, Socket.IO relay
-├── worker/           # Baileys WhatsApp worker (GCP VM)
-│   └── worker.ts     # Media handler, hub uploader
-└── frontend/         # React dashboard (Vercel)
-    └── src/
-        ├── pages/WhatsAppInboxPage.tsx
-        ├── components/dashboard/
-        └── stores/
-```
-
-## Socket.IO Events
-
-| Event | Direction | Payload |
-|-------|-----------|---------|
-| `connection:status` | Worker → Hub → Dashboard | `{ connected, qrCode? }` |
-| `new_whatsapp_file` | Hub → Dashboard | `{ id, customerId, customerName, fileName, fileUrl, ... }` |
-| `worker:reinit` | Hub → Worker | — |
-| `drive:token` | Hub → Worker | `string \| null` |
+- `APPLICATION_OVERVIEW.md` — detailed technical reference
+- `CHANGELOG.md` — version history
+- `GCP_PM2_OPS.md` — PM2 operations guide
