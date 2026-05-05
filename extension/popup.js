@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '1.5';
+const CURRENT_VERSION = '1.7';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -79,24 +79,40 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     document.getElementById('filled-count').style.display = 'block';
     showStatus(`Filled ${count} fields successfully!`, 'success');
   } else {
-    showStatus('No matching fields found.', 'info');
+    // Show debug info - what fields were detected
+    const debugFields = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const inputs = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
+        return Array.from(inputs).slice(0,5).map(el => {
+          const label = (() => {
+            if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
+            const td = el.closest('td'); if (td) { const prev = td.previousElementSibling; if (prev) return prev.textContent.trim().slice(0,30); }
+            return el.placeholder || el.name || el.id || '?';
+          })();
+          return `${el.id||el.name}: "${label}"`;
+        }).join('\n');
+      }
+    });
+    const debug = debugFields?.[0]?.result || 'No fields found';
+    showStatus(`No fields filled. Detected:\n${debug}`, 'error');
   }
 });
 
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
-  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english'],
-  dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_'],
-  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam'],
-  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother'],
+  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname'],
+  dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_', 'txt_dob', 'txtdob', 'txt_date_of_birth'],
+  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name'],
+  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother', 'txt_mother', 'txtmother', 'txt_mother_name'],
   address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
-  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no'],
-  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email'],
-  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card'],
+  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no', 'txt_mobile', 'txtmobile', 'txt_mobile_no'],
+  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email, 'txt_email', 'txtemail', 'txt_email_id'],
+  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar'],
   pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
   epic_number:    ['epic_no', 'voter_id', 'epic_number'],
-  category:       ['category', 'caste_category', 'varg'],
-  gender:         ['gender', 'sex', 'ling'],
+  category:       ['category', 'caste_category', 'varg, 'txt_category', 'ddl_category', 'ddlcategory'],
+  gender:         ['gender', 'sex', 'ling, 'txt_gender', 'ddl_gender', 'rbl_gender'],
   pincode:        ['pincode', 'pin_code', 'postal_code', 'zip_code'],
   state:          ['state_name', 'state_of', 'rajya'],
   district:       ['district_name', 'jila'],
@@ -115,7 +131,7 @@ function fuzzyMatch(formFields, profile) {
     // Prioritize label text — for ServicePlus/dynamic forms, label is the only meaningful identifier
     // Repeat label twice to give it more weight over generic IDs like field_1_1
     const ident = [field.label, field.label, field.placeholder, field.id, field.name]
-      .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()]/g, '_');
+      .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./$]/g, '_');
 
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
