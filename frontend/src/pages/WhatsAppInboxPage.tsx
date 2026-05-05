@@ -257,6 +257,7 @@ export default function WhatsAppInboxPage() {
             {['Inbox','Media Hub','Direct Print'].map((t,i) => (
               <a key={t} href="#" className={`text-sm px-3 py-1 border-b-2 transition-colors ${i===0 ? 'text-blue-500 border-blue-500' : 'text-slate-400 border-transparent hover:bg-slate-900 rounded'}`}>{t}</a>
             ))}
+            <a href="/profiles" className="text-sm px-3 py-1 border-b-2 border-transparent text-slate-400 hover:bg-slate-900 rounded">Profiles</a>
           </div>
         </div>
         <div className="flex items-center gap-3">
