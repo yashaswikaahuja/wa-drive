@@ -68,7 +68,6 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
   name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name'],
-  // first_name and last_name handled separately in fuzzyMatch
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate'],
   father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father'],
   mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother'],
@@ -99,8 +98,9 @@ function fuzzyMatch(formFields, profile) {
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()]/g, '_');
 
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
+    const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
-    const isEducationRow = ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject');
+    const isEducationRow = ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll');
     if (isEducationRow) continue;
 
     // Handle first/last/middle name fields
@@ -118,7 +118,7 @@ function fuzzyMatch(formFields, profile) {
 
     for (const [profileKey, aliases] of Object.entries(FIELD_ALIASES)) {
       if (!profile[profileKey]) continue;
-      if (profileKey === 'name' && isFatherMother) continue;
+      if (profileKey === 'name' && (isFatherMother || isStateDistrict)) continue;
       if (aliases.some(alias => ident.includes(alias))) {
         mapping[field.selector] = { value: profile[profileKey], type: field.type };
         break;
