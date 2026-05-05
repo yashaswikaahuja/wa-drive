@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '2.1';
+const CURRENT_VERSION = '2.2';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -167,7 +167,12 @@ const FIELD_ALIASES = {
   nationality:    ['nationality', 'rashtriyata', 'citizenship', 'citizen'],
   marital_status: ['marital_status', 'marital', 'vivah', 'married', 'marriage_status', 'ddl_marital'],
   religion:       ['religion', 'dharm', 'dharma', 'ddl_religion', 'txt_religion'],
-  domicile_state: ['domicile', 'domicile_state', 'home_state', 'state_of_domicile'],
+  domicile_state:      ['domicile', 'domicile_state', 'home_state', 'state_of_domicile'],
+  qualification_status:['essential_qualification','have_qualification','possess_qualification','affirmation','qualified'],
+  year_of_passing:     ['year_of_passing','passing_year','year_pass','year_graduation'],
+  grade:               ['grade','division','class_obtained','cgpa','gpa'],
+  degree_name:         ['degree_name','degree','qualification_name','course_name','programme'],
+  university_name:     ['university_name','university','institution_name','college_name','college'],
   village:        ['village', 'village_name', 'gram', 'gaon', 'txt_village', 'ddl_village'],
   post_office:    ['post_office', 'post', 'po', 'txt_post', 'post_name'],
   police_station: ['police_station', 'thana', 'ps', 'txt_ps', 'ddl_ps'],
@@ -207,6 +212,13 @@ function fuzzyMatch(formFields, profile) {
         marks_12th:         ['marks_12th','percentage_12th','12th_marks','inter_marks','12th_percentage'],
         school_name:        ['school_name','school','institution_10','matric_school'],
         college_name:       ['college_name','college','institution_12','inter_college'],
+        university_name:    ['university_name','university','institution_grad','college_grad','institution_name'],
+        roll_no_graduation: ['roll_no_graduation','roll_grad','graduation_roll','degree_roll'],
+        passing_year_12th:  ['passing_year_12th','year_12th','year_inter','inter_year','12th_year'],
+        year_of_passing:    ['year_of_passing','passing_year','year_pass','year_graduation','grad_year'],
+        grade:              ['grade','grade_system','grading','cgpa','gpa','division','class_obtained'],
+        degree_name:        ['degree_name','degree','qualification','course_name','programme'],
+        marks_graduation:   ['marks_graduation','percentage_grad','grad_marks','grad_percentage'],
       };
       let eduMatched = false;
       for (const [key, aliases] of Object.entries(eduAliases)) {
