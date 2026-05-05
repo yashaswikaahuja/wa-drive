@@ -72,14 +72,6 @@ export default function MappingsPage() {
     await loadMapping(selected);
   }
 
-  async function deleteForm() {
-    if (!selected || !confirm(`Delete all learned mappings for:\n${selected}?`)) return;
-    await fetch(`${API_BASE_URL}/mappings/${selected}`, { method: 'DELETE' });
-    setSelected(null);
-    setMapping({});
-    await loadKeys();
-  }
-
   const entries = Object.entries(mapping).filter(([k]) => k !== 'savedAt');
 
   return (
