@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '2.0';
+const CURRENT_VERSION = '2.1';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -194,7 +194,31 @@ function fuzzyMatch(formFields, profile) {
     const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
     const isEducationRow = ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll');
-    if (isEducationRow) continue;
+    if (isEducationRow) {
+      // Don't skip — try to match education fields from profile
+      const eduAliases = {
+        board_10th:         ['board_10th','board_matric','board_class10','10th_board','matric_board'],
+        board_12th:         ['board_12th','board_inter','board_class12','12th_board','inter_board'],
+        roll_no_10th:       ['roll_no_10th','roll_10th','roll_matric','matric_roll','10th_roll'],
+        roll_no_12th:       ['roll_no_12th','roll_12th','roll_inter','inter_roll','12th_roll'],
+        passing_year_10th:  ['passing_year_10th','year_10th','year_matric','matric_year','10th_year','year_of_passing_10'],
+        passing_year_12th:  ['passing_year_12th','year_12th','year_inter','inter_year','12th_year','year_of_passing_12'],
+        marks_10th:         ['marks_10th','percentage_10th','10th_marks','matric_marks','10th_percentage'],
+        marks_12th:         ['marks_12th','percentage_12th','12th_marks','inter_marks','12th_percentage'],
+        school_name:        ['school_name','school','institution_10','matric_school'],
+        college_name:       ['college_name','college','institution_12','inter_college'],
+      };
+      let eduMatched = false;
+      for (const [key, aliases] of Object.entries(eduAliases)) {
+        if (!profile[key]) continue;
+        if (aliases.some(a => ident.includes(a))) {
+          mapping[field.selector] = { value: profile[key], type: field.type };
+          eduMatched = true; break;
+        }
+      }
+      if (!eduMatched) continue; // skip if no match
+      continue;
+    }
     // Skip Hindi name fields (auto-converted by ServicePlus on Tab press)
     const isHindiField = ident.includes('hindi') || ident.includes('_hindi') || field.label.includes('हिंदी') || field.label.includes('(Hindi)');
     if (isHindiField) continue;
