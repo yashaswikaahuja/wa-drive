@@ -145,6 +145,14 @@ export default function FormReadyPage() {
         place_of_birth: 'Place of Birth', roll_number: 'Roll Number',
         category: 'Category', centre: 'Centre', exam_date: 'Exam Date',
         part_number: 'Part Number', serial_number: 'Serial Number',
+        certificate_number: 'Certificate Number', certificate_no: 'Certificate No',
+        reg_number: 'Registration Number', registration_number: 'Registration Number',
+        school_name: 'School Name', college_name: 'College Name',
+        university_name: 'University Name', course_name: 'Course Name',
+        degree_name: 'Degree', specialization: 'Specialization',
+        year_of_passing: 'Year of Passing', division: 'Division', grade: 'Grade',
+        percentage_10th: 'Marks % (10th)', percentage_12th: 'Marks % (12th)',
+        subject_10th: 'Subject (10th)', subject_12th: 'Subject (12th)',
       };
       // Keep base fields (name, date, phone) with updated values
       // Then add all non-empty AI fields dynamically
