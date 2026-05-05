@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.5';
+const CURRENT_VERSION = '3.6';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -590,8 +590,10 @@ function fillFormFieldsSequential(mapping) {
         el = document.querySelector(selector);
       }
       if (!el) return 0;
+      // Detect type from DOM directly (more reliable than passed type)
+      const elType = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
 
-      if (type === 'select') {
+      if (elType === 'select') {
         const opts = Array.from(el.options).filter(o => o.value && o.value !== '0' && o.value !== '-1');
         const v = value.toLowerCase().trim();
         const extraValues = [];
@@ -605,11 +607,11 @@ function fillFormFieldsSequential(mapping) {
                   opts.find(o => v.includes(o.text.toLowerCase().trim()) && o.text.length > 2) ||
                   (() => { const fw = v.split(/\s+/)[0]; return opts.find(o => o.text.toLowerCase().startsWith(fw) && fw.length > 2); })();
         if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new Event('input', { bubbles: true })); setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 300); return 1; }
-      } else if (type === 'radio') {
+      } else if (elType === 'radio') {
         const radios = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
         const match = Array.from(radios).find(r => r.value.toLowerCase() === value.toLowerCase() || r.value.toLowerCase().startsWith(value.toLowerCase()[0]));
         if (match) { match.checked = true; match.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
-      } else if (type === 'checkbox') {
+      } else if (elType === 'checkbox') {
         const truthy = ['yes','true','1','checked'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
       } else {
@@ -688,7 +690,7 @@ function fillFormFields(mapping) {
           filled++;
         }
 
-      } else if (type === 'radio') {
+      } else if (elType === 'radio') {
         // Find radio with matching value or label
         const radios = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
         const match = Array.from(radios).find(r =>
@@ -697,7 +699,7 @@ function fillFormFields(mapping) {
         );
         if (match) { match.checked = true; match.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
 
-      } else if (type === 'checkbox') {
+      } else if (elType === 'checkbox') {
         const truthy = ['yes', 'true', '1', 'checked'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
 
