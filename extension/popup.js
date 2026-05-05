@@ -1,4 +1,22 @@
+const CURRENT_VERSION = '1.1';
 let selectedProfile = null;
+
+// Check for updates on every popup open
+chrome.storage.local.get(['backendUrl'], async (result) => {
+  if (!result.backendUrl) return;
+  try {
+    const res = await fetch(`${result.backendUrl}/extension/version`);
+    const { version, download_url } = await res.json();
+    if (version && version !== CURRENT_VERSION) {
+      const banner = document.getElementById('update-banner');
+      const link = document.getElementById('update-link');
+      if (banner && link) {
+        link.href = download_url;
+        banner.style.display = 'block';
+      }
+    }
+  } catch { /* ignore */ }
+});
 
 // Load saved settings
 chrome.storage.local.get(['backendUrl', 'groqKey'], (result) => {
