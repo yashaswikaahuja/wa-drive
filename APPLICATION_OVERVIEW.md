@@ -1,12 +1,18 @@
 # CyberControl — Application Overview
 
-> Complete reference for developers picking up this project. Last updated: May 2026.
+> Complete reference for developers picking up this project. Last updated: May 5, 2026 (v2.0).
 
 ---
 
 ## 1. Project Summary
 
-CyberControl is a cybercafe management tool. Its primary feature is a **WhatsApp Inbox**: customers send photos/documents to the cybercafe's WhatsApp number, the system receives them, uploads them to Google Drive, and displays them in a real-time web dashboard where staff can preview, print, download, or process them.
+CyberControl is a cybercafe management tool for operators near Patna, Bihar. Customers send photos/documents to the cybercafe WhatsApp number. The system receives them, uploads to Google Drive, and displays in a real-time dashboard. Staff can preview, print, download, and process files.
+
+**Key features added in v2.0:**
+- AI document extraction (Groq Vision) — auto-fills form fields from Aadhaar, PAN, Voter ID, Admit Cards
+- Student profile management — save extracted data, reuse for multiple form applications
+- Chrome extension — auto-fills SSC/Railway/NEET/UPSC/IBPS govt forms from saved profiles
+- Profiles page — view, edit, delete student profiles
 
 ---
 
@@ -315,3 +321,122 @@ npx vercel --prod --yes
 3. Worker receives it → POSTs to `http://localhost:3000/api/worker/upload`
 4. Hub uploads to Drive → emits `new_whatsapp_file` via Socket.IO
 5. Dashboard shows file with Drive thumbnail in real time
+
+---
+
+## 12. AI Document Extraction
+
+### Endpoint
+ — Body: 
+
+Downloads file from Drive, sends to Groq Vision AI, returns structured JSON.
+
+### Supported Documents
+Aadhaar, PAN, Voter ID (EPIC), Passport, Health ID (ABHA), Admit Cards, Marksheets, PDFs
+
+### Extracted Fields
+name, dob, gender, aadhaar_number, pan_number, epic_number, passport_number, abha_number, abha_address, address, father_name, mother_name, mobile, email, nationality, category, roll_no_10th, roll_no_12th, board_10th, board_12th, place_of_birth, issue_date, expiry
+
+### Environment Variable
+
+
+---
+
+## 13. Student Profiles API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/profiles | List all profiles |
+| GET | /api/profiles/:phone | Get profile by phone |
+| POST | /api/profiles | Save/update profile |
+| DELETE | /api/profiles/:phone | Delete profile |
+
+Profiles stored in: 
+
+---
+
+## 14. Chrome Extension
+
+Location:  folder in repo
+
+### Files
+-  — extension config, version number
+-  — extension UI
+-  — field matching logic + profile loader
+-  — page context listener
+
+### Auto-update Flow
+1. Bump version in 
+2. Repackage: 
+3. Upload: 
+4. Update version in  line: 
+5. Restart hub: 
+
+### Field Matching
+- **Fuzzy**: matches field id/name/label/placeholder against known aliases
+- **AI fallback**: sends unmatched fields to Groq for intelligent mapping
+- **Exclusions**: skips education table rows, assembly constituency, spouse name
+
+---
+
+## 15. Updating the Extension Version
+
+
+
+---
+
+## 12. AI Document Extraction
+
+### Endpoint
+`POST /api/process/extract` — Body: `{ fileId: string }`
+
+Downloads file from Drive, sends to Groq Vision AI, returns structured JSON.
+
+### Supported Documents
+Aadhaar, PAN, Voter ID (EPIC), Passport, Health ID (ABHA), Admit Cards, Marksheets, PDFs
+
+### Extracted Fields
+name, dob, gender, aadhaar_number, pan_number, epic_number, passport_number, abha_number, abha_address, address, father_name, mother_name, mobile, email, nationality, category, roll_no_10th, roll_no_12th, board_10th, board_12th, place_of_birth, issue_date, expiry
+
+### Environment Variable
+```
+GROQ_API_KEY=gsk_...   # in ecosystem.config.cjs
+```
+
+---
+
+## 13. Student Profiles API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/profiles | List all profiles |
+| GET | /api/profiles/:phone | Get profile by phone |
+| POST | /api/profiles | Save/update profile |
+| DELETE | /api/profiles/:phone | Delete profile |
+
+Profiles stored in: `/opt/cybercontrol-hub/backend/data/profiles.json`
+
+---
+
+## 14. Chrome Extension
+
+Location: `extension/` folder in repo
+
+### Files
+- `manifest.json` — extension config, version number
+- `popup.html` — extension UI
+- `popup.js` — field matching logic + profile loader
+- `content.js` — page context listener
+
+### Auto-update Flow
+1. Bump version in `manifest.json` and `CURRENT_VERSION` in `popup.js`
+2. Repackage zip and upload to `/opt/cybercontrol-hub/extension.zip` on GCP
+3. Update version string in `backend/dist/server.js` extension/version endpoint
+4. Restart hub: `pm2 restart cybercontrol-hub`
+5. All installed extensions show purple update banner on next open
+
+### Field Matching
+- **Fuzzy**: matches field id/name/label/placeholder against known aliases
+- **AI fallback**: sends unmatched fields to Groq for intelligent mapping
+- **Exclusions**: skips education table rows, assembly constituency, spouse name
+- **Accuracy**: 100% on SSC CGL, Railway RRB, NEET, UPSC, IBPS PO, UP Police, CRPF, BPSC, RTPS Bihar, Bank KYC, NTA CUET
