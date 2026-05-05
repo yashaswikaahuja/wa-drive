@@ -3,6 +3,7 @@ import WhatsAppInboxPage from './pages/WhatsAppInboxPage';
 import FileStitchPage from './pages/FileStitchPage';
 import FormReadyPage from './pages/FormReadyPage';
 import ProfilesPage from './pages/ProfilesPage';
+import MappingsPage from './pages/MappingsPage';
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
         <Route path="/stitch" element={<FileStitchPage />} />
         <Route path="/form-ready" element={<FormReadyPage />} />
         <Route path="/profiles" element={<ProfilesPage />} />
+        <Route path="/mappings" element={<MappingsPage />} />
       </Routes>
     </BrowserRouter>
   );
