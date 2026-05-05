@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.2';
+const CURRENT_VERSION = '3.3';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -564,24 +564,27 @@ function injectCorrectionObserver(mapping, filledBySource, profile) {
 function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
-async function fillFormFieldsSequential(mapping) {
-  // Sort: fill state before district before block (dependent dropdowns need sequence)
-  const PRIORITY = { state: 1, district: 2, block: 3, panchayat: 4 };
+function fillFormFieldsSequential(mapping) {
+  // Sort: fill state before district before block
+  const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
-  entries.sort(([sa, a], [sb, b]) => {
-    const pa = Object.keys(PRIORITY).find(k => sa.toLowerCase().includes(k) || (a.value||'').toLowerCase().includes(k)) ? PRIORITY[Object.keys(PRIORITY).find(k => sa.toLowerCase().includes(k))] || 99 : 99;
-    const pb = Object.keys(PRIORITY).find(k => sb.toLowerCase().includes(k) || (b.value||'').toLowerCase().includes(k)) ? PRIORITY[Object.keys(PRIORITY).find(k => sb.toLowerCase().includes(k))] || 99 : 99;
-    return pa - pb;
+  entries.sort(([sa], [sb]) => {
+    const pa = PRIORITY_KEYS.findIndex(k => sa.toLowerCase().includes(k));
+    const pb = PRIORITY_KEYS.findIndex(k => sb.toLowerCase().includes(k));
+    return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
   });
-  // Fill with small delays between dependent fields
+
   let filled = 0;
+  let delay = 0;
   for (const [selector, fieldData] of entries) {
-    const singleMapping = { [selector]: fieldData };
-    const count = fillFormFields(singleMapping);
-    filled += count;
-    // Add delay after state/district to let dependent dropdowns load
-    const isDependent = ['state','district','block'].some(k => selector.toLowerCase().includes(k));
-    if (isDependent && count > 0) await new Promise(r => setTimeout(r, 500));
+    const isDependent = PRIORITY_KEYS.some(k => selector.toLowerCase().includes(k));
+    if (isDependent && filled > 0) {
+      // Schedule dependent fields with delay
+      setTimeout(() => fillFormFields({ [selector]: fieldData }), delay);
+      delay += 600;
+    } else {
+      filled += fillFormFields({ [selector]: fieldData });
+    }
   }
   return filled;
 }
