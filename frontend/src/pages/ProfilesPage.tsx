@@ -11,6 +11,7 @@ const LABEL: Record<string, string> = {
   aadhaar_number: 'Aadhaar', pan_number: 'PAN', epic_number: 'EPIC',
   category: 'Category', nationality: 'Nationality', pincode: 'Pincode',
   state: 'State', district: 'District', place_of_birth: 'Place of Birth',
+  photo_url: 'Photo URL', signature_url: 'Signature URL',
 };
 
 export default function ProfilesPage() {
@@ -110,9 +111,20 @@ export default function ProfilesPage() {
                   <div className="font-semibold text-sm">{p.name || 'Unknown'}</div>
                   <div className="text-[11px] text-[#64748b]">📱 {p.phone}</div>
                 </div>
-                {p.photo_url && (
-                  <img src={p.photo_url} alt="" className="w-10 h-10 rounded object-cover border border-[#334155]" />
-                )}
+                <div className="flex gap-1">
+                  {p.photo_url && (
+                    <div className="text-center">
+                      <img src={p.photo_url} alt="Photo" className="w-10 h-12 rounded object-cover border border-[#334155]" />
+                      <div className="text-[8px] text-[#64748b] mt-0.5">Photo</div>
+                    </div>
+                  )}
+                  {p.signature_url && (
+                    <div className="text-center">
+                      <img src={p.signature_url} alt="Sign" className="w-16 h-8 rounded object-cover border border-[#334155] bg-white" />
+                      <div className="text-[8px] text-[#64748b] mt-0.5">Sign</div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="text-[11px] text-[#94a3b8] flex flex-col gap-0.5">
                 {p.dob && <span>🎂 {p.dob}</span>}

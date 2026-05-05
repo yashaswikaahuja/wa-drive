@@ -52,6 +52,8 @@ export default function FormReadyPage() {
   const [newFieldLabel, setNewFieldLabel] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [photoFileId, setPhotoFileId] = useState<string | null>(null);
+  const [signatureFileId, setSignatureFileId] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = params.get('files');
@@ -94,12 +96,18 @@ export default function FormReadyPage() {
     try {
       const profile: Record<string, string> = { phone };
       fields.forEach(f => { if (f.value) profile[f.key] = f.value; });
-      // Attach photo if current file is an image
-      const isImage = activeFile && !activeFile.fileName.toLowerCase().endsWith('.pdf');
-      if (isImage && activeFile) {
-        const photoId = getDriveId(activeFile.fileUrl);
-        if (photoId) profile.photo_url = `https://drive.google.com/thumbnail?id=${photoId}&sz=w400`;
+      // Attach tagged photo
+      if (photoFileId) profile.photo_url = `https://drive.google.com/thumbnail?id=${photoFileId}&sz=w400`;
+      else {
+        // Auto-detect: use current file if it's an image
+        const isImage = activeFile && !activeFile.fileName.toLowerCase().endsWith('.pdf');
+        if (isImage && activeFile) {
+          const photoId = getDriveId(activeFile.fileUrl);
+          if (photoId) profile.photo_url = `https://drive.google.com/thumbnail?id=${photoId}&sz=w400`;
+        }
       }
+      // Attach tagged signature
+      if (signatureFileId) profile.signature_url = `https://drive.google.com/thumbnail?id=${signatureFileId}&sz=w400`;
       await fetch(`${API_BASE_URL}/profiles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(profile),
@@ -224,12 +232,27 @@ export default function FormReadyPage() {
           {/* File selector */}
           {files.length > 1 && (
             <div className="border-b border-[#334155]">
-              {files.map(f => (
-                <button key={f.id} onClick={() => selectFile(f)}
-                  className={`w-full text-left px-3 py-2 text-[11px] truncate transition-colors ${activeFile?.id === f.id ? 'bg-blue-600/20 text-blue-300 border-l-2 border-blue-500' : 'text-[#94a3b8] hover:bg-[#1e293b]'}`}>
-                  {f.fileName}
-                </button>
-              ))}
+              {files.map(f => {
+                const fid = getDriveId(f.fileUrl);
+                return (
+                  <div key={f.id} className={`border-b border-[#1e293b] ${activeFile?.id === f.id ? 'bg-blue-600/10' : ''}`}>
+                    <button onClick={() => selectFile(f)}
+                      className={`w-full text-left px-3 py-1.5 text-[11px] truncate transition-colors ${activeFile?.id === f.id ? 'text-blue-300 border-l-2 border-blue-500' : 'text-[#94a3b8] hover:bg-[#1e293b]'}`}>
+                      {f.fileName}
+                    </button>
+                    <div className="flex gap-1 px-2 pb-1.5">
+                      <button onClick={() => setPhotoFileId(fid === photoFileId ? null : fid)}
+                        className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${fid === photoFileId ? 'bg-emerald-600 text-white' : 'bg-[#1e293b] text-[#64748b] hover:text-emerald-400'}`}>
+                        📷 Photo
+                      </button>
+                      <button onClick={() => setSignatureFileId(fid === signatureFileId ? null : fid)}
+                        className={`text-[9px] px-1.5 py-0.5 rounded transition-colors ${fid === signatureFileId ? 'bg-purple-600 text-white' : 'bg-[#1e293b] text-[#64748b] hover:text-purple-400'}`}>
+                        ✍️ Sign
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
