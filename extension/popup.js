@@ -67,14 +67,14 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
-  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam'],
+  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name'],
   // first_name and last_name handled separately in fuzzyMatch
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate'],
-  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam'],
-  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam'],
+  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father'],
+  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother'],
   address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
-  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark'],
-  email:          ['email_address', 'email_id', 'emailid', 'email_add'],
+  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone'],
+  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email'],
   aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity'],
   pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
   epic_number:    ['epic_no', 'voter_id', 'epic_number'],
