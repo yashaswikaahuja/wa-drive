@@ -39,77 +39,103 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
   if (url) loadProfiles(url);
 });
 
+// ── Semantic aliases — normalize label variants to canonical keys ─────────────
+const SEMANTIC_ALIASES = {
+  'full name': 'name', 'candidate name': 'name', 'applicant name': 'name',
+  'student name': 'name', 'name of candidate': 'name', 'name of applicant': 'name',
+  'candidates name': 'name', 'applicants name': 'name',
+  'date of birth': 'dob', 'birth date': 'dob', 'dob': 'dob', 'date of birth ddmmyyyy': 'dob',
+  "fathers name": 'father_name', 'father name': 'father_name', "fathers husbands name": 'father_name',
+  "mothers name": 'mother_name', 'mother name': 'mother_name',
+  'aadhaar no': 'aadhaar_number', 'aadhaar number': 'aadhaar_number', 'aadhar no': 'aadhaar_number',
+  'pan no': 'pan_number', 'pan number': 'pan_number', 'pan card': 'pan_number',
+  'mobile no': 'mobile', 'mobile number': 'mobile', 'phone no': 'mobile', 'contact no': 'mobile',
+  'email id': 'email', 'email address': 'email',
+  'permanent address': 'address', 'residential address': 'address', 'correspondence address': 'address',
+  'pin code': 'pincode', 'postal code': 'pincode', 'pincode': 'pincode',
+  'state name': 'state', 'district name': 'district',
+};
+
+function normalizeLabel(label) {
+  return label.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function getSemanticKey(label) {
+  const n = normalizeLabel(label);
+  return SEMANTIC_ALIASES[n] || n;
+}
+
+function calcConfidence(fills, corrections) {
+  if (fills + corrections === 0) return 0.5;
+  return fills / (fills + corrections * 3);
+}
+
 document.getElementById('autofill-btn').addEventListener('click', async () => {
   if (!selectedProfile) return;
   const { groqKey, backendUrl } = await chrome.storage.local.get(['groqKey', 'backendUrl']);
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-  // Generate form key from URL (domain + path)
-  const url = new URL(tab.url);
-  const formKey = (url.hostname + url.pathname).replace(/[^a-z0-9]/gi, '_').toLowerCase();
-
   showStatus('Analyzing form...', 'info');
 
-  // Step 1: Get all form fields from the page
-  const fields = await chrome.scripting.executeScript({
+  // Step 1: Get all form fields + generate form fingerprint
+  const fieldsResult = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: extractFormFields,
+    func: extractFormFieldsWithFingerprint,
   });
 
-  const formFields = fields?.[0]?.result ?? [];
+  const { formFields, formKey } = fieldsResult?.[0]?.result ?? { formFields: [], formKey: '' };
   if (!formFields.length) { showStatus('No form fields found on this page.', 'error'); return; }
 
   let mapping = {};
+  let filledBySource = {}; // track {selector: {label, profileKey, source}}
 
-  // Step 2: Check saved mapping for this form
+  // Step 2: Load saved mapping with confidence scores
   let savedMapping = null;
-  if (backendUrl) {
+  if (backendUrl && formKey) {
     try {
       const res = await fetch(`${backendUrl}/mappings/${formKey}`);
-      savedMapping = await res.json();
+      const data = await res.json();
+      if (data && typeof data === 'object') savedMapping = data;
     } catch { /* ignore */ }
   }
 
-  if (savedMapping && Object.keys(savedMapping).length > 1) {
-    // Use saved mapping — map field selectors to profile values
-    showStatus('Using saved form mapping...', 'info');
-    for (const [fieldLabel, profileKey] of Object.entries(savedMapping)) {
-      if (fieldLabel === 'savedAt') continue;
-      const field = formFields.find(f => f.label === fieldLabel || f.id === fieldLabel);
-      if (field && selectedProfile[profileKey]) {
-        mapping[field.selector] = { value: selectedProfile[profileKey], type: field.type };
+  // Step 3: Apply saved mappings (confidence > 0.4)
+  if (savedMapping) {
+    for (const field of formFields) {
+      const semanticKey = getSemanticKey(field.label);
+      const saved = savedMapping[semanticKey];
+      if (!saved) continue;
+      const conf = calcConfidence(saved.fills || 0, saved.corrections || 0);
+      if (conf >= 0.4 && saved.profileKey && selectedProfile[saved.profileKey]) {
+        mapping[field.selector] = { value: selectedProfile[saved.profileKey], type: field.type };
+        filledBySource[field.selector] = { label: field.label, semanticKey, profileKey: saved.profileKey, source: 'saved', confidence: conf };
       }
     }
   }
 
-  // Step 3: Fuzzy match for unmapped fields
-  const unmappedAfterSaved = formFields.filter(f => !mapping[f.selector]);
-  const fuzzyResult = fuzzyMatch(unmappedAfterSaved, selectedProfile);
-  mapping = { ...mapping, ...fuzzyResult };
+  // Step 4: Fuzzy match for unmapped fields
+  const unmapped1 = formFields.filter(f => !mapping[f.selector]);
+  const fuzzyResult = fuzzyMatch(unmapped1, selectedProfile);
+  for (const [sel, val] of Object.entries(fuzzyResult)) {
+    mapping[sel] = val;
+    const field = formFields.find(f => f.selector === sel);
+    if (field) {
+      const profileKey = Object.entries(selectedProfile).find(([, v]) => v === val.value)?.[0];
+      filledBySource[sel] = { label: field.label, semanticKey: getSemanticKey(field.label), profileKey, source: 'fuzzy', confidence: 0.6 };
+    }
+  }
 
-  // Step 4: Groq AI for still-unmapped fields (PRIMARY for unknown forms)
-  const stillUnmapped = formFields.filter(f => !mapping[f.selector]);
-  if (stillUnmapped.length > 0 && groqKey) {
-    showStatus(`AI mapping ${stillUnmapped.length} fields...`, 'info');
-    const aiMapping = await aiMatch(stillUnmapped, selectedProfile, groqKey);
-    mapping = { ...mapping, ...aiMapping };
-
-    // Step 5: Save the AI mapping for next time (self-learning)
-    if (backendUrl && Object.keys(aiMapping).length > 0) {
-      const toSave = {};
-      for (const [selector, { value }] of Object.entries(aiMapping)) {
-        const field = formFields.find(f => f.selector === selector);
-        if (field?.label) {
-          // Find which profile key this value came from
-          const profileKey = Object.entries(selectedProfile).find(([, v]) => v === value)?.[0];
-          if (profileKey) toSave[field.label] = profileKey;
-        }
-      }
-      if (Object.keys(toSave).length > 0) {
-        fetch(`${backendUrl}/mappings/${formKey}`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(toSave),
-        }).catch(() => {});
+  // Step 5: Groq AI for still-unmapped fields
+  const unmapped2 = formFields.filter(f => !mapping[f.selector]);
+  if (unmapped2.length > 0 && groqKey) {
+    showStatus(`AI mapping ${unmapped2.length} fields...`, 'info');
+    const aiMapping = await aiMatch(unmapped2, selectedProfile, groqKey);
+    for (const [sel, val] of Object.entries(aiMapping)) {
+      mapping[sel] = val;
+      const field = formFields.find(f => f.selector === sel);
+      if (field) {
+        const profileKey = Object.entries(selectedProfile).find(([, v]) => v === val.value)?.[0];
+        filledBySource[sel] = { label: field.label, semanticKey: getSemanticKey(field.label), profileKey, source: 'ai', confidence: 0.5 };
       }
     }
   }
@@ -126,24 +152,25 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     document.getElementById('filled-count').textContent = `✓ Filled ${count} field(s)`;
     document.getElementById('filled-count').style.display = 'block';
     showStatus(`Filled ${count} fields successfully!`, 'success');
+
+    // Step 7: Inject correction observer
+    if (backendUrl && formKey) {
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: injectCorrectionObserver,
+        args: [mapping, filledBySource, selectedProfile],
+      });
+    }
+
+    // Show Save Learning button
+    document.getElementById('save-learning-btn').style.display = 'block';
+    document.getElementById('save-learning-btn').onclick = async () => {
+      await saveLearning(backendUrl, formKey, filledBySource, selectedProfile, false);
+      showStatus('Learning saved!', 'success');
+      document.getElementById('save-learning-btn').style.display = 'none';
+    };
   } else {
-    // Show debug info - what fields were detected
-    const debugFields = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => {
-        const inputs = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
-        return Array.from(inputs).slice(0,5).map(el => {
-          const label = (() => {
-            if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
-            const td = el.closest('td'); if (td) { const prev = td.previousElementSibling; if (prev) return prev.textContent.trim().slice(0,30); }
-            return el.placeholder || el.name || el.id || '?';
-          })();
-          return `${el.id||el.name}: "${label}"`;
-        }).join('\n');
-      }
-    });
-    const debug = debugFields?.[0]?.result || 'No fields found';
-    showStatus(`No fields filled. Detected:\n${debug}`, 'error');
+    showStatus('No fields filled. Check profile data or try with Groq key set.', 'error');
   }
 });
 
@@ -366,46 +393,96 @@ function showStatus(msg, type) {
   if (type !== 'info') setTimeout(() => { el.style.display = 'none'; }, 4000);
 }
 
+// ── Save Learning ─────────────────────────────────────────────────────────────
+async function saveLearning(backendUrl, formKey, filledBySource, profile, fromCorrection) {
+  if (!backendUrl || !formKey) return;
+  const updates = {};
+  for (const [, info] of Object.entries(filledBySource)) {
+    if (!info.profileKey || !info.semanticKey) continue;
+    updates[info.semanticKey] = {
+      profileKey: info.profileKey,
+      // fromCorrection = strong signal, Save Learning = weak signal
+      delta: fromCorrection ? { corrections: 0, fills: 1 } : { corrections: 0, fills: 0.3 },
+    };
+  }
+  if (Object.keys(updates).length > 0) {
+    fetch(`${backendUrl}/mappings/${formKey}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates, formKey }),
+    }).catch(() => {});
+  }
+}
+
 // ── Content script functions (run in page context) ────────────────────────────
-function extractFormFields() {
+function extractFormFieldsWithFingerprint() {
+  // Generate stable form fingerprint
+  const hostname = location.hostname;
+  const title = (document.querySelector('h1,h2,legend,.form-title,.page-title')?.textContent || document.title || '').trim().slice(0, 50);
   const inputs = document.querySelectorAll(
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
     'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
   );
-  const fields = [];
+  const labelList = [];
+  const formFields = [];
+
   inputs.forEach((el, i) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
     const label = (() => {
-      // Standard label[for] association
       if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
-      // ServicePlus uses td > label pattern in tables
       const td = el.closest('td');
-      if (td) {
-        const prevTd = td.previousElementSibling;
-        if (prevTd) return prevTd.textContent.trim();
-      }
-      // Generic parent search
+      if (td) { const prev = td.previousElementSibling; if (prev) return prev.textContent.trim().slice(0, 40); }
       const parent = el.closest('div,td,tr,li,span,p');
-      if (parent) {
-        const l = parent.querySelector('label');
-        if (l) return l.textContent.trim();
-        // Text node before input
-        const prev = el.previousSibling;
-        if (prev && prev.nodeType === 3 && prev.textContent.trim()) return prev.textContent.trim();
-      }
-      // Placeholder as fallback
+      if (parent) { const l = parent.querySelector('label'); if (l) return l.textContent.trim(); }
       if (el.placeholder) return el.placeholder;
-      // Radio/checkbox: text after element
-      if (el.nextSibling && el.nextSibling.textContent) return el.nextSibling.textContent.trim();
+      if (el.nextSibling?.textContent) return el.nextSibling.textContent.trim();
       return '';
     })();
     const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"][value="${el.value || ''}"]` : `form-field-${i}`;
     const type = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
-    fields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: i });
+    if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: i });
   });
-  return fields;
+
+  // Fingerprint: hostname + title + sorted top-10 labels
+  const labelSig = labelList.sort().slice(0, 10).join('|');
+  const raw = `${hostname}::${title}::${labelSig}`;
+  // Simple hash
+  let hash = 0;
+  for (let i = 0; i < raw.length; i++) { hash = ((hash << 5) - hash) + raw.charCodeAt(i); hash |= 0; }
+  const formKey = Math.abs(hash).toString(36);
+
+  return { formFields, formKey };
 }
 
+// ── Correction observer (injected after autofill) ─────────────────────────────
+function injectCorrectionObserver(mapping, filledBySource, profile) {
+  const corrections = [];
+  for (const [selector, { value }] of Object.entries(mapping)) {
+    try {
+      const el = selector.startsWith('form-field-')
+        ? document.querySelectorAll('input,select,textarea')[parseInt(selector.split('-')[2])]
+        : document.querySelector(selector);
+      if (!el) continue;
+      const originalValue = value;
+      const info = filledBySource[selector];
+      if (!info) continue;
+
+      el.addEventListener('change', () => {
+        const newVal = el.value;
+        if (newVal === originalValue) return; // unchanged
+        // Find which profile key matches the new value
+        const correctedKey = Object.entries(profile).find(([, v]) => v === newVal)?.[0];
+        corrections.push({ semanticKey: info.semanticKey, oldKey: info.profileKey, newKey: correctedKey || null, corrected: true });
+        // Store corrections in sessionStorage for Save Learning to pick up
+        sessionStorage.setItem('_cc_corrections', JSON.stringify(corrections));
+      });
+    } catch { /* skip */ }
+  }
+}
+
+function extractFormFields() {
+  return extractFormFieldsWithFingerprint().formFields;
+}
 function fillFormFields(mapping) {
   let filled = 0;
   for (const [selector, { value, type }] of Object.entries(mapping)) {
