@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.24';
+const CURRENT_VERSION = '3.25';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -224,10 +224,28 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   );
 
   const count = result?.[0]?.result ?? 0;
+
+  // Populate result panel
+  const resultPanel = document.getElementById('result-panel');
+  resultPanel.style.display = 'block';
+  document.getElementById('count-filled').textContent = count;
+
+  if (failedFields.length > 0) {
+    document.getElementById('row-unresolved').style.display = 'flex';
+    document.getElementById('count-unresolved').textContent = failedFields.length;
+    const list = document.getElementById('unresolved-list');
+    list.innerHTML = '';
+    for (const f of failedFields) {
+      const hasAdapter = !!(portalAdapters && portalAdapters[f.type]);
+      const item = document.createElement('div');
+      item.className = 'unresolved-item';
+      item.innerHTML = `<span>${f.label.slice(0,30)}</span><span class="adapter-badge ${hasAdapter ? 'adapter-learned' : 'adapter-missing'}">${hasAdapter ? '✓ adapter' : '⚠ needs teaching'}</span>`;
+      list.appendChild(item);
+    }
+  }
+
   if (count > 0) {
-    document.getElementById('filled-count').textContent = `✓ Filled ${count} field(s)`;
-    document.getElementById('filled-count').style.display = 'block';
-    showStatus(`Filled ${count} fields successfully!`, 'success');
+    showStatus(`Filled ${count} field(s)${failedFields.length ? ` · ${failedFields.length} unresolved` : ''}`, count > 0 ? 'success' : 'info');
 
     // Step 7: Inject correction observer
     if (backendUrl && formKey) {
@@ -866,7 +884,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.24 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.25 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);

@@ -18,6 +18,8 @@
     .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-sm { background: #1e293b; color: #94a3b8; border: 1px solid #334155; font-size: 11px; padding: 6px; margin-top: 6px; }
     .btn-sm:hover { color: white; }
+    .btn-teach { background: #dc2626; color: white; border: none; font-size: 11px; padding: 7px; margin-top: 6px; border-radius: 6px; }
+    .btn-save { background: #7c3aed; color: white; border: none; font-size: 11px; padding: 7px; margin-top: 6px; border-radius: 6px; }
     .profile-card { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
     .profile-card:hover, .profile-card.selected { border-color: #3b82f6; background: #1e3a5f; }
     .profile-name { font-size: 12px; font-weight: 600; }
@@ -29,13 +31,24 @@
     hr { border: none; border-top: 1px solid #334155; margin: 4px 0; }
     .profiles-list { max-height: 180px; overflow-y: auto; }
     .empty { text-align: center; padding: 16px; color: #475569; font-size: 11px; }
-    .filled-count { font-size: 11px; color: #6ee7b7; margin-top: 4px; text-align: center; }
+
+    /* Result panel */
+    #result-panel { display:none; margin-top: 8px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 10px; }
+    .result-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+    .result-ok { color: #6ee7b7; }
+    .result-warn { color: #fbbf24; }
+    .result-fail { color: #f87171; }
+    #unresolved-list { margin-top: 6px; }
+    .unresolved-item { font-size: 10px; padding: 3px 6px; background: #450a0a; border-radius: 4px; margin-bottom: 3px; display: flex; justify-content: space-between; }
+    .adapter-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
+    .adapter-learned { background: #064e3b; color: #6ee7b7; }
+    .adapter-missing { background: #451a03; color: #fbbf24; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>⚡ CyberControl AutoFill</h1>
-    <span>SSC · Railway · NEET · NTPC · Bank</span>
+    <span>SSC · Railway · RTPS · BTSC · Bank</span>
   </div>
 
   <div id="update-banner" style="display:none; background:#7c3aed; color:white; padding:8px 12px; font-size:11px; text-align:center;">
@@ -64,9 +77,22 @@
 
   <div class="section">
     <button class="btn btn-primary" id="autofill-btn" disabled>⚡ Auto-fill This Form</button>
-    <button class="btn btn-secondary" id="teach-btn" style="display:none;margin-top:6px;background:#dc2626;color:white;border:none;">⚠ Teach Failed Fields</button>
-    <button class="btn btn-secondary" id="save-learning-btn" style="display:none;margin-top:6px;background:#7c3aed;color:white;border:none;">🧠 Save Learning</button>
-    <div id="filled-count" class="filled-count" style="display:none"></div>
+
+    <!-- Result panel shown after autofill -->
+    <div id="result-panel">
+      <div class="result-row">
+        <span>✓ Text / Select fields filled</span>
+        <span class="result-ok" id="count-filled">0</span>
+      </div>
+      <div class="result-row" id="row-unresolved" style="display:none">
+        <span>⚠ Interactive fields unresolved</span>
+        <span class="result-warn" id="count-unresolved">0</span>
+      </div>
+      <div id="unresolved-list"></div>
+    </div>
+
+    <button class="btn btn-teach btn-secondary" id="teach-btn" style="display:none;">⚠ Teach Failed Fields</button>
+    <button class="btn btn-save btn-secondary" id="save-learning-btn" style="display:none;">🧠 Save Mapping</button>
     <div id="status" style="display:none" class="status"></div>
   </div>
 
