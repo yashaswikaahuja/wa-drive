@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.23';
+const CURRENT_VERSION = '3.24';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -264,14 +264,14 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
-  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname'],
+  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname', 'name_of_applicant', 'name_of_candidate', 'applicants_name', 'candidates_name'],
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_', 'txt_dob', 'txtdob', 'txt_date_of_birth'],
-  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name'],
-  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother', 'txt_mother', 'txtmother', 'txt_mother_name'],
+  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name', 'name_of_father'],
+  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother', 'txt_mother', 'txtmother', 'txt_mother_name', 'name_of_mother'],
   address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
-  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no', 'txt_mobile', 'txtmobile', 'txt_mobile_no'],
-  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email', 'txt_email', 'txtemail', 'txt_email_id'],
-  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar'],
+  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no', 'txt_mobile', 'txtmobile', 'txt_mobile_no', 'mobile_no_of_applicant', 'applicant_mobile'],
+  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email', 'txt_email', 'txtemail', 'txt_email_id', 'email_of_applicant', 'applicant_email'],
+  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar', 'aadhaar_number'],
   pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
   epic_number:    ['epic_no', 'voter_id', 'epic_number'],
   category:       ['category', 'caste_category', 'varg', 'txt_category', 'ddl_category', 'ddlcategory'],
@@ -720,7 +720,7 @@ function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
 function fillFormFieldsSequential(mapping, filledBySource) {
-  console.log('[CC] v3.23 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.24 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
@@ -919,16 +919,23 @@ function fillFormFieldsSequential(mapping, filledBySource) {
         const truthy = ['yes','true','1','checked','on'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
       } else {
-        // Angular/React compatible input filling
+        // ServicePlus/NIC compatible input filling
+        // Must: focus → set value via native setter → fire keydown+keypress+keyup+input+change+blur
+        el.focus();
+        el.dispatchEvent(new Event('focus', { bubbles: true }));
         const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
                     Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
         if (niv) niv.set.call(el, value);
         else el.value = value;
-        ['input','change','keyup','keydown'].forEach(ev => {
-          el.dispatchEvent(new Event(ev, { bubbles: true }));
-        });
-        // Also simulate keyboard events for Angular
-        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
+        // Fire full event sequence that ServicePlus onkeyup handlers expect
+        const lastChar = value.slice(-1);
+        const lastCode = lastChar.charCodeAt(0) || 0;
+        el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: lastChar, keyCode: lastCode, which: lastCode }));
+        el.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, cancelable: true, key: lastChar, keyCode: lastCode, which: lastCode }));
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: lastChar, keyCode: lastCode, which: lastCode }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('blur', { bubbles: true }));
         return 1;
       }
     } catch { /* skip */ }
