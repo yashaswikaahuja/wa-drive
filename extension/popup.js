@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.29';
+const CURRENT_VERSION = '3.30';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -458,51 +458,62 @@ function teachOneField(field) {
   positionBadge();
   const posInterval = setInterval(positionBadge, 150);
 
-  let phase = 1; // 1=waiting for trigger, 2=waiting for option
+  // Find the element that shows the selected value (to detect state change)
+  const verifyEl = root.querySelector('.select-type, .selected-value, [class*="selected"], [class*="value"]');
+  const verifySel = verifyEl ? '.' + (verifyEl.className || '').trim().split(/\s+/)[0] : '';
+  const initialValue = verifyEl ? verifyEl.textContent.trim() : '';
+
   let triggerSelector = '';
+  let phase = 1; // 1=waiting for trigger click, 2=waiting for state change
 
   function cleanup() {
     clearInterval(posInterval);
-    document.removeEventListener('click', onClick, true);
+    clearInterval(statePoller);
+    document.removeEventListener('click', onTriggerClick, true);
     try { document.body.removeChild(host); } catch {}
     root.style.outline = origOutline;
     root.style.boxShadow = origBoxShadow;
     sessionStorage.removeItem('_cc_teach_active');
   }
 
-  function onClick(e) {
-    if (phase === 1) {
-      // Must click inside the component root
-      if (!root.contains(e.target)) return;
-      const el = e.target;
-      triggerSelector = el.className ? '.' + el.className.trim().split(/\s+/)[0] : el.tagName.toLowerCase();
-      badge.textContent = '⚠ Now click an option from the list';
-      phase = 2;
-      return;
-    }
-    if (phase === 2) {
-      // Must click OUTSIDE the root (options panel is outside)
-      if (root.contains(e.target)) return;
-      const optEl = e.target;
+  // Phase 1: capture trigger click (must be inside root)
+  function onTriggerClick(e) {
+    if (!root.contains(e.target)) return;
+    const el = e.target;
+    triggerSelector = el.className ? '.' + el.className.trim().split(/\s+/)[0] : el.tagName.toLowerCase();
+    badge.textContent = '⚠ Select an option from the list';
+    phase = 2;
+    document.removeEventListener('click', onTriggerClick, true);
+  }
+  document.addEventListener('click', onTriggerClick, true);
+
+  // Phase 2: poll for component state change (value changed = selection made)
+  let statePoller = setInterval(() => {
+    if (phase !== 2) return;
+    const currentValue = verifyEl ? verifyEl.textContent.trim() : '';
+    const placeholder = /^(select|choose|--)/i;
+    if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
+      clearInterval(statePoller);
       cleanup();
 
-      const optTag = optEl.tagName.toLowerCase();
-      const optClass = optEl.className ? '.' + optEl.className.trim().split(/\s+/)[0] : '';
-      const optionSelector = optTag + optClass;
-
-      // Walk up to find options container
-      let container = optEl.parentElement;
-      for (let i = 0; i < 6 && container && container !== document.body; i++) {
-        const cls = container.className || '';
-        if (cls.includes('list') || cls.includes('option') || cls.includes('dropdown') || cls.includes('overlay') || cls.includes('panel') || cls.includes('menu')) break;
-        container = container.parentElement;
-      }
-      const containerSel = container && container !== document.body
-        ? container.tagName.toLowerCase() + (container.className ? '.' + container.className.trim().split(/\s+/)[0] : '')
-        : '';
-
-      const verifyEl = root.querySelector('.select-type, .selected-value, [class*="selected"], [class*="value"]');
-      const verifySel = verifyEl ? '.' + (verifyEl.className || '').trim().split(/\s+/)[0] : '';
+      // Infer option selector by finding visible option-like elements near the selected text
+      // Walk DOM for any element whose text matches the selected value
+      let optionSelector = 'li';
+      let containerSel = '';
+      document.querySelectorAll('li, [class*="option"], [class*="item"]').forEach(el => {
+        if (el.textContent.trim() === currentValue) {
+          optionSelector = el.tagName.toLowerCase() + (el.className ? '.' + el.className.trim().split(/\s+/)[0] : '');
+          let c = el.parentElement;
+          for (let i = 0; i < 5 && c && c !== document.body; i++) {
+            const cls = c.className || '';
+            if (cls.includes('list') || cls.includes('option') || cls.includes('dropdown') || cls.includes('panel') || cls.includes('menu')) {
+              containerSel = c.tagName.toLowerCase() + (c.className ? '.' + c.className.trim().split(/\s+/)[0] : '');
+              break;
+            }
+            c = c.parentElement;
+          }
+        }
+      });
 
       const result = {
         componentClass: root.className.trim().split(/\s+/)[0] || 'ng-dropdown',
@@ -510,12 +521,11 @@ function teachOneField(field) {
         optionsContainer: containerSel,
         optionSelector,
         verifySelector: verifySel,
+        learnedValue: currentValue,
       };
       sessionStorage.setItem('_cc_teach_result', JSON.stringify(result));
     }
-  }
-
-  document.addEventListener('click', onClick, true);
+  }, 200);
 
   // Timeout after 45s
   setTimeout(() => { cleanup(); }, 45000);
@@ -979,7 +989,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.29 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.30 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
