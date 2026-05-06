@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.37';
+const CURRENT_VERSION = '3.38';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -345,66 +345,24 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
 // ── Assisted Learning Mode ───────────────────────────────────────────────────
 async function startTeachMode(tab, failedFields, backendUrl, profile) {
-  showStatus(`Teaching ${failedFields.length} field(s)... Fill them manually on the page.`, 'info');
+  // Delegate to background service worker — it stays alive when popup closes
+  showStatus('Teaching started — interact with the highlighted field on the page.', 'info');
   document.getElementById('teach-btn').style.display = 'none';
 
-  const hostname = new URL(tab.url).hostname;
-  const TEACHABLE_TYPES = ['ng-dropdown','mat-select','select','mat-radio'];
-  const teachable = failedFields.filter(f => TEACHABLE_TYPES.includes(f.type));
-  console.log('[CC] startTeachMode failedFields:', JSON.stringify(failedFields));
-  console.log('[CC] teachable:', JSON.stringify(teachable));
-  if (teachable.length === 0) {
-    showStatus('No interactive fields need teaching.', 'info');
-    return;
-  }
+  // Listen for progress updates from background
+  chrome.runtime.onMessage.addListener(function onTeachProgress(msg) {
+    if (msg.type !== 'TEACH_PROGRESS') return;
+    showStatus(msg.status, msg.done ? 'success' : 'info');
+    if (msg.done) chrome.runtime.onMessage.removeListener(onTeachProgress);
+  });
 
-  for (const field of teachable) {
-    const labelClean = normalizeFieldLabel(field.label).slice(0,30);
-    showStatus(`⚠ Teach: "${labelClean}" — click the dropdown, then click an option`, 'info');
-
-    // Inject teach observer into page
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: teachOneField,
-      args: [field],
-    });
-
-    // Poll sessionStorage for result (up to 45s)
-    const adapter = await new Promise(resolve => {
-      let elapsed = 0;
-      const poll = setInterval(async () => {
-        elapsed += 500;
-        const r = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: () => {
-            const v = sessionStorage.getItem('_cc_teach_result');
-            if (v) { sessionStorage.removeItem('_cc_teach_result'); return JSON.parse(v); }
-            return null;
-          }
-        });
-        const result = r?.[0]?.result;
-        if (result?.error) { clearInterval(poll); resolve(null); return; }
-        if (result || elapsed >= 45000) { clearInterval(poll); resolve(result || null); }
-      }, 500);
-    });
-
-    if (!adapter) { showStatus(`⚠ Skipped "${labelClean}" (timeout)`, 'info'); continue; }
-
-    const saveRes = await fetch(`${backendUrl}/adapters/${hostname}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(adapter),
-    }).catch(e => ({ ok: false, _err: e.message }));
-    const saveOk = saveRes?.ok ?? false;
-    if (!saveOk) {
-      const errText = await saveRes?.text?.() ?? 'network error';
-      showStatus(`⚠ Save failed for "${labelClean}": ${errText}`, 'error');
-      continue;
-    }
-    showStatus(`✓ Learned "${labelClean}"`, 'success');
-    await new Promise(r => setTimeout(r, 600));
-  }
-  showStatus('Teaching complete! Adapters saved.', 'success');
+  chrome.runtime.sendMessage({
+    type: 'START_TEACH',
+    tabId: tab.id,
+    fields: failedFields,
+    backendUrl,
+    hostname: new URL(tab.url).hostname,
+  });
 }
 
 // Runs in page context — injects overlay badge, waits for user interaction via sessionStorage polling

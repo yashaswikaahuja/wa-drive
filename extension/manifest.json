@@ -1,28 +1,28 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "3.37",
+  "version": "3.38",
   "description": "Auto-fill SSC/Railway/NEET forms from CyberControl student profiles",
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": "icon.png"
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "content.js"
-      ],
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
       "run_at": "document_idle"
     }
   ]
