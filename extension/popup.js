@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.23';
+const CURRENT_VERSION = '3.24';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -189,6 +189,17 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     }
   }
 
+  // Step 5b: Load portal adapters for component-based fields
+  let portalAdapters = {};
+  if (backendUrl) {
+    try {
+      const [tab2] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const hostname = new URL(tab2.url).hostname;
+      const ar = await fetch(`${backendUrl}/adapters/${hostname}`);
+      portalAdapters = await ar.json();
+    } catch {}
+  }
+
   // Step 6: Fill the form (sequential for dependent dropdowns)
   // Type-safety: remove mappings that are incompatible with field type
   const BOOLEAN_LIKE = new Set(['yes','true','1','checked','on','no','false','0','off','unchecked']);
@@ -204,8 +215,13 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: fillFormFieldsSequential,
-    args: [mapping, filledBySource],
+    args: [mapping, filledBySource, portalAdapters],
   });
+
+  // Identify fields that were mapped but may have failed (ng-dropdown types)
+  const failedFields = formFields.filter(f =>
+    mapping[f.selector] && ['ng-dropdown','mat-select'].includes(f.type)
+  );
 
   const count = result?.[0]?.result ?? 0;
   if (count > 0) {
@@ -220,6 +236,13 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         func: injectCorrectionObserver,
         args: [mapping, filledBySource, selectedProfile, backendUrl, formKey],
       });
+    }
+
+    // Show Teach button if there are unresolved component fields
+    if (failedFields.length > 0 && backendUrl) {
+      const teachBtn = document.getElementById('teach-btn');
+      teachBtn.style.display = 'block';
+      teachBtn.onclick = () => startTeachMode(tab, failedFields, backendUrl, selectedProfile);
     }
 
     // Show Save Learning button
@@ -261,6 +284,128 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     showStatus(`No fields filled. Fields detected: ${fieldCount}. Profile: ${hasProfile?'✓':'✗'}. Groq: ${hasGroq?'✓':'✗ (add key in settings)'}`, 'error');
   }
 });
+
+// ── Assisted Learning Mode ───────────────────────────────────────────────────
+async function startTeachMode(tab, failedFields, backendUrl, profile) {
+  showStatus(`Teaching ${failedFields.length} field(s)... Fill them manually on the page.`, 'info');
+  document.getElementById('teach-btn').style.display = 'none';
+
+  // Process one field at a time
+  for (const field of failedFields) {
+    showStatus(`⚠ Teach: "${field.label}" — click the dropdown, then select a value`, 'info');
+    const learned = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: teachOneField,
+      args: [field],
+    });
+    const adapter = learned?.[0]?.result;
+    if (!adapter) continue;
+
+    // Save adapter to backend
+    const hostname = new URL(tab.url).hostname;
+    await fetch(`${backendUrl}/adapters/${hostname}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adapter),
+    }).catch(() => {});
+    showStatus(`✓ Learned "${field.label}"`, 'success');
+    await new Promise(r => setTimeout(r, 800));
+  }
+  showStatus('Teaching complete! Adapters saved.', 'success');
+}
+
+// Runs in page context — shows overlay badge, intercepts clicks, infers adapter
+function teachOneField(field) {
+  return new Promise(resolve => {
+    // Find the component root
+    const root = field.selector.startsWith('[data-cc-id=')
+      ? document.querySelector(field.selector)
+      : document.querySelector(`[data-cc-id="${field.id}"]`) || document.querySelector(field.selector);
+    if (!root) { resolve(null); return; }
+
+    // Inject shadow DOM badge
+    const host = document.createElement('div');
+    host.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;';
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const badge = document.createElement('div');
+    badge.style.cssText = 'background:#dc2626;color:white;padding:4px 8px;border-radius:4px;font-size:12px;font-family:sans-serif;pointer-events:none;';
+    badge.textContent = '⚠ Fill this field';
+    shadow.appendChild(badge);
+
+    // Position badge near root
+    function positionBadge() {
+      const r = root.getBoundingClientRect();
+      host.style.left = r.left + 'px';
+      host.style.top = (r.top - 28) + 'px';
+    }
+    positionBadge();
+    const posInterval = setInterval(positionBadge, 300);
+
+    let triggerEl = null;
+    let triggerSelector = '';
+
+    // Phase 1: capture trigger click
+    function onTriggerClick(e) {
+      const el = e.target;
+      if (!root.contains(el)) return;
+      triggerEl = el;
+      // Build stable relative selector from class
+      triggerSelector = el.className ? '.' + el.className.trim().split(/\s+/)[0] : el.tagName.toLowerCase();
+      badge.textContent = '⚠ Now click an option';
+      document.removeEventListener('click', onTriggerClick, true);
+      document.addEventListener('click', onOptionClick, true);
+    }
+
+    // Phase 2: capture option click
+    function onOptionClick(e) {
+      const optEl = e.target;
+      if (optEl === triggerEl || root.contains(optEl)) return;
+      document.removeEventListener('click', onOptionClick, true);
+      clearInterval(posInterval);
+      document.body.removeChild(host);
+
+      // Infer option selector from tag + first class
+      const optTag = optEl.tagName.toLowerCase();
+      const optClass = optEl.className ? '.' + optEl.className.trim().split(/\s+/)[0] : '';
+      const optionSelector = optTag + optClass;
+
+      // Infer container: walk up from option to find a container that appeared after trigger
+      let container = optEl.parentElement;
+      for (let i = 0; i < 5 && container; i++) {
+        if (container === document.body) break;
+        const cls = container.className || '';
+        if (cls.includes('list') || cls.includes('option') || cls.includes('dropdown') || cls.includes('overlay') || cls.includes('panel')) break;
+        container = container.parentElement;
+      }
+      const containerClass = container?.className ? '.' + container.className.trim().split(/\s+/)[0] : '';
+      const optionsContainer = container ? container.tagName.toLowerCase() + containerClass : '';
+
+      // Infer verify selector: element inside root showing selected text
+      const verifyEl = root.querySelector('.select-type, .selected-value, .value-text, [class*="selected"], [class*="value"]');
+      const verifySelector = verifyEl ? ('.' + (verifyEl.className || '').trim().split(/\s+/)[0]) : '';
+
+      resolve({
+        componentClass: root.className.trim().split(/\s+/)[0] || 'ng-dropdown',
+        triggerSelector,
+        optionsContainer,
+        optionSelector,
+        verifySelector,
+      });
+    }
+
+    document.addEventListener('click', onTriggerClick, true);
+
+    // Timeout after 30s
+    setTimeout(() => {
+      document.removeEventListener('click', onTriggerClick, true);
+      document.removeEventListener('click', onOptionClick, true);
+      clearInterval(posInterval);
+      try { document.body.removeChild(host); } catch {}
+      resolve(null);
+    }, 30000);
+  });
+}
 
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
@@ -719,8 +864,9 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
 function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
-function fillFormFieldsSequential(mapping, filledBySource) {
-  console.log('[CC] v3.23 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
+  portalAdapters = portalAdapters || {};
+  console.log('[CC] v3.24 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
@@ -753,6 +899,45 @@ function fillFormFieldsSequential(mapping, filledBySource) {
         : tagName === 'mat-checkbox' ? 'mat-checkbox'
         : tagName === 'mat-radio-button' ? 'mat-radio'
         : el.type || 'text';
+
+      // Portal adapter replay for ng-dropdown and similar custom components
+      if (elType === 'ng-dropdown' || type === 'ng-dropdown') {
+        // Find adapter by componentClass matching root's first class
+        const rootClass = el.className ? el.className.trim().split(/\s+/)[0] : 'ng-dropdown';
+        const adapter = portalAdapters[rootClass] || portalAdapters['ng-dropdown'];
+        if (adapter) {
+          const trigger = el.querySelector(adapter.triggerSelector) || el;
+          trigger.click();
+          let attempts = 0;
+          const poll = setInterval(() => {
+            attempts++;
+            const container = adapter.optionsContainer ? document.querySelector(adapter.optionsContainer) : null;
+            const searchRoot = container || document;
+            const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector));
+            const v = value.toLowerCase().trim();
+            const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
+                        opts.find(o => o.textContent.trim().toLowerCase().includes(v));
+            if (opt) {
+              clearInterval(poll);
+              opt.click();
+              // Verify after 1s
+              setTimeout(() => {
+                const verifyEl = adapter.verifySelector ? el.querySelector(adapter.verifySelector) : null;
+                const displayed = verifyEl ? verifyEl.textContent.trim().toLowerCase() : '';
+                console.debug('[CC] adapter replay verify:', displayed, 'expected:', v, 'match:', displayed.includes(v));
+              }, 1000);
+            } else if (attempts >= 8) {
+              clearInterval(poll);
+              document.body.click();
+              console.debug('[CC] adapter replay: no option found for', value);
+            }
+          }, 200);
+          return 1;
+        }
+        // No adapter yet — skip silently (teach mode will handle it)
+        console.debug('[CC] no adapter for ng-dropdown, label:', filledBySource[selector]?.label);
+        return 0;
+      }
 
       // Angular Material mat-select: click trigger, wait for panel, click matching option
       if (elType === 'mat-select') {
