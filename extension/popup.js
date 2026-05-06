@@ -114,7 +114,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
                 class: el.className.toString().slice(0,80),
                 role: el.getAttribute('role'),
                 formcontrolname: el.getAttribute('formcontrolname') || el.getAttribute('ng-reflect-name'),
-                outerHTML: el.outerHTML.slice(0,300),
+                outerHTML: el.outerHTML.slice(0,1500),
               });
             });
           } catch {}
