@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.30';
+const CURRENT_VERSION = '3.31';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -459,9 +459,15 @@ function teachOneField(field) {
   const posInterval = setInterval(positionBadge, 150);
 
   // Find the element that shows the selected value (to detect state change)
-  const verifyEl = root.querySelector('.select-type, .selected-value, [class*="selected"], [class*="value"]');
+  // Try multiple selectors for the displayed value
+  const verifyEl = root.querySelector('.select-type') ||
+                   root.querySelector('[class*="selected"]') ||
+                   root.querySelector('[class*="value"]') ||
+                   root.querySelector('.value-area');
   const verifySel = verifyEl ? '.' + (verifyEl.className || '').trim().split(/\s+/)[0] : '';
-  const initialValue = verifyEl ? verifyEl.textContent.trim() : '';
+  const initialValue = verifyEl ? verifyEl.textContent.trim() : root.textContent.trim().slice(0,50);
+  // Also snapshot root innerHTML to detect any change
+  const initialHTML = root.innerHTML;
 
   let triggerSelector = '';
   let phase = 1; // 1=waiting for trigger click, 2=waiting for state change
@@ -490,9 +496,12 @@ function teachOneField(field) {
   // Phase 2: poll for component state change (value changed = selection made)
   let statePoller = setInterval(() => {
     if (phase !== 2) return;
-    const currentValue = verifyEl ? verifyEl.textContent.trim() : '';
-    const placeholder = /^(select|choose|--)/i;
-    if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
+    const currentValue = verifyEl ? verifyEl.textContent.trim() : root.textContent.trim().slice(0,50);
+    const currentHTML = root.innerHTML;
+    const placeholder = /^(select|choose|--|please)/i;
+    const valueChanged = (currentValue && currentValue !== initialValue && !placeholder.test(currentValue))
+                      || (currentHTML !== initialHTML && !placeholder.test(currentValue));
+    if (valueChanged) {
       clearInterval(statePoller);
       cleanup();
 
@@ -989,7 +998,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.30 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.31 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
