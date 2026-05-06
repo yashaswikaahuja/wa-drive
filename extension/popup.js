@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.26';
+const CURRENT_VERSION = '3.27';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -741,7 +741,7 @@ function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
 function fillFormFieldsSequential(mapping, filledBySource) {
-  console.log('[CC] v3.26 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.27 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
