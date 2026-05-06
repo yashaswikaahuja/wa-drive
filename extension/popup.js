@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.26';
+const CURRENT_VERSION = '3.27';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -218,14 +218,19 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     args: [mapping, filledBySource, portalAdapters],
   });
 
-  // Unresolved = fields detected on form but NOT in mapping (extension couldn't map or fill them)
+  // Unresolved = fields NOT filled, split into two groups
   const skipLabels = /verify|confirm|re.?enter|captcha|otp|token|password|changed name|new name/i;
-  const failedFields = formFields.filter(f => {
-    if (mapping[f.selector]) return false;           // was filled
-    if (!f.label || skipLabels.test(f.label)) return false; // skip verify/captcha
+  const allUnresolved = formFields.filter(f => {
+    if (mapping[f.selector]) return false;
+    if (!f.label || skipLabels.test(f.label)) return false;
     if (['hidden','submit','button'].includes(f.type)) return false;
     return true;
   });
+  // Only interactive/component fields need teaching (not text fields that just weren't mapped)
+  const INTERACTIVE_TYPES = ['ng-dropdown','mat-select','mat-radio','mat-checkbox','select'];
+  const failedFields = allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type));
+  // Text fields that weren't mapped are shown as info but don't need teaching
+  const unmappedTextFields = allUnresolved.filter(f => !INTERACTIVE_TYPES.includes(f.type));
 
   const count = result?.[0]?.result ?? 0;
 
@@ -234,17 +239,18 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   resultPanel.style.display = 'block';
   document.getElementById('count-filled').textContent = count;
 
-  if (failedFields.length > 0) {
+  const allDisplay = [...failedFields, ...unmappedTextFields];
+  if (allDisplay.length > 0) {
     document.getElementById('row-unresolved').style.display = 'flex';
-    document.getElementById('count-unresolved').textContent = failedFields.length;
+    document.getElementById('count-unresolved').textContent = allDisplay.length;
     const list = document.getElementById('unresolved-list');
     list.innerHTML = '';
-    for (const f of failedFields) {
-      // Check adapter by componentClass or type
-      const compClass = f.type === 'ng-dropdown' ? 'ng-dropdown' : null;
-      const hasAdapter = compClass ? !!(portalAdapters && portalAdapters[compClass]) : false;
-      const reason = f.type === 'ng-dropdown' || f.type === 'mat-select'
-        ? (hasAdapter ? '✓ adapter · replay' : '⚠ needs teaching')
+    for (const f of allDisplay) {
+      const isInteractive = INTERACTIVE_TYPES.includes(f.type);
+      const compClass = f.type === 'ng-dropdown' ? 'ng-dropdown' : f.type;
+      const hasAdapter = isInteractive ? !!(portalAdapters && portalAdapters[compClass]) : false;
+      const reason = isInteractive
+        ? (hasAdapter ? '✓ adapter' : '⚠ teach')
         : '⚠ not mapped';
       const badgeClass = hasAdapter ? 'adapter-learned' : 'adapter-missing';
       const item = document.createElement('div');
@@ -318,121 +324,156 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
   showStatus(`Teaching ${failedFields.length} field(s)... Fill them manually on the page.`, 'info');
   document.getElementById('teach-btn').style.display = 'none';
 
-  // Process one field at a time
-  for (const field of failedFields) {
-    showStatus(`⚠ Teach: "${field.label}" — click the dropdown, then select a value`, 'info');
-    const learned = await chrome.scripting.executeScript({
+  const hostname = new URL(tab.url).hostname;
+  // Only teach interactive/component fields
+  const teachable = failedFields.filter(f => ['ng-dropdown','mat-select','select'].includes(f.type) ||
+    f.label.toLowerCase().includes('gender') || f.label.toLowerCase().includes('category') ||
+    f.label.toLowerCase().includes('religion') || f.label.toLowerCase().includes('board'));
+
+  if (teachable.length === 0) {
+    showStatus('No interactive fields need teaching.', 'info');
+    return;
+  }
+
+  for (const field of teachable) {
+    const labelClean = field.label.replace(/\n/g,' ').trim().slice(0,30);
+    showStatus(`⚠ Teach: "${labelClean}" — click the dropdown, then click an option`, 'info');
+
+    // Inject teach observer into page
+    await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: teachOneField,
       args: [field],
     });
-    const adapter = learned?.[0]?.result;
-    if (!adapter) continue;
 
-    // Save adapter to backend
-    const hostname = new URL(tab.url).hostname;
+    // Poll sessionStorage for result (up to 45s)
+    const adapter = await new Promise(resolve => {
+      let elapsed = 0;
+      const poll = setInterval(async () => {
+        elapsed += 500;
+        const r = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            const v = sessionStorage.getItem('_cc_teach_result');
+            if (v) { sessionStorage.removeItem('_cc_teach_result'); return JSON.parse(v); }
+            return null;
+          }
+        });
+        const result = r?.[0]?.result;
+        if (result || elapsed >= 45000) { clearInterval(poll); resolve(result); }
+      }, 500);
+    });
+
+    if (!adapter) { showStatus(`⚠ Skipped "${labelClean}" (timeout)`, 'info'); continue; }
+
     await fetch(`${backendUrl}/adapters/${hostname}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(adapter),
     }).catch(() => {});
-    showStatus(`✓ Learned "${field.label}"`, 'success');
-    await new Promise(r => setTimeout(r, 800));
+    showStatus(`✓ Learned "${labelClean}"`, 'success');
+    await new Promise(r => setTimeout(r, 600));
   }
   showStatus('Teaching complete! Adapters saved.', 'success');
 }
 
-// Runs in page context — shows overlay badge, intercepts clicks, infers adapter
+// Runs in page context — injects overlay badge, waits for user interaction via sessionStorage polling
 function teachOneField(field) {
-  return new Promise(resolve => {
-    // Find the component root
-    const root = field.selector.startsWith('[data-cc-id=')
-      ? document.querySelector(field.selector)
-      : document.querySelector(`[data-cc-id="${field.id}"]`) || document.querySelector(field.selector);
-    if (!root) { resolve(null); return; }
+  // Clear any previous result
+  sessionStorage.removeItem('_cc_teach_result');
+  sessionStorage.setItem('_cc_teach_active', '1');
 
-    // Inject shadow DOM badge
-    const host = document.createElement('div');
-    host.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;';
-    document.body.appendChild(host);
-    const shadow = host.attachShadow({ mode: 'open' });
-    const badge = document.createElement('div');
-    badge.style.cssText = 'background:#dc2626;color:white;padding:4px 8px;border-radius:4px;font-size:12px;font-family:sans-serif;pointer-events:none;';
-    badge.textContent = '⚠ Fill this field';
-    shadow.appendChild(badge);
+  // Find component root - for unresolved fields, find by label text
+  let root = null;
+  if (field.selector && !field.selector.startsWith('form-field-')) {
+    root = document.querySelector(field.selector);
+  }
+  // Fallback: find ng-dropdown by label text
+  if (!root) {
+    document.querySelectorAll('div.ng-dropdown, mat-select, [role="combobox"]').forEach(el => {
+      const lbl = el.querySelector('.label, mat-label, label')?.textContent?.trim() || el.getAttribute('aria-label') || '';
+      if (lbl && field.label && lbl.includes(field.label.replace(/[\n*]/g,'').trim().slice(0,15))) root = el;
+    });
+  }
+  if (!root) { sessionStorage.removeItem('_cc_teach_active'); return; }
 
-    // Position badge near root
-    function positionBadge() {
-      const r = root.getBoundingClientRect();
-      host.style.left = r.left + 'px';
-      host.style.top = (r.top - 28) + 'px';
-    }
-    positionBadge();
-    const posInterval = setInterval(positionBadge, 300);
+  // Inject floating badge (shadow DOM, outside Angular tree)
+  const host = document.createElement('div');
+  host.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;top:0;left:0;';
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+  const badge = document.createElement('div');
+  badge.style.cssText = 'background:#dc2626;color:white;padding:5px 10px;border-radius:4px;font-size:12px;font-family:sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
+  badge.textContent = '⚠ Click this dropdown to open it';
+  shadow.appendChild(badge);
 
-    let triggerEl = null;
-    let triggerSelector = '';
+  function positionBadge() {
+    const r = root.getBoundingClientRect();
+    host.style.left = (r.left + window.scrollX) + 'px';
+    host.style.top = (r.top + window.scrollY - 32) + 'px';
+  }
+  positionBadge();
+  const posInterval = setInterval(positionBadge, 200);
 
-    // Phase 1: capture trigger click
-    function onTriggerClick(e) {
+  let phase = 1; // 1=waiting for trigger, 2=waiting for option
+  let triggerSelector = '';
+
+  function cleanup() {
+    clearInterval(posInterval);
+    document.removeEventListener('click', onClick, true);
+    try { document.body.removeChild(host); } catch {}
+    sessionStorage.removeItem('_cc_teach_active');
+  }
+
+  function onClick(e) {
+    if (phase === 1) {
+      // Must click inside the component root
+      if (!root.contains(e.target)) return;
       const el = e.target;
-      if (!root.contains(el)) return;
-      triggerEl = el;
-      // Build stable relative selector from class
       triggerSelector = el.className ? '.' + el.className.trim().split(/\s+/)[0] : el.tagName.toLowerCase();
-      badge.textContent = '⚠ Now click an option';
-      document.removeEventListener('click', onTriggerClick, true);
-      document.addEventListener('click', onOptionClick, true);
+      badge.textContent = '⚠ Now click an option from the list';
+      phase = 2;
+      return;
     }
-
-    // Phase 2: capture option click
-    function onOptionClick(e) {
+    if (phase === 2) {
+      // Must click OUTSIDE the root (options panel is outside)
+      if (root.contains(e.target)) return;
       const optEl = e.target;
-      if (optEl === triggerEl || root.contains(optEl)) return;
-      document.removeEventListener('click', onOptionClick, true);
-      clearInterval(posInterval);
-      document.body.removeChild(host);
+      cleanup();
 
-      // Infer option selector from tag + first class
       const optTag = optEl.tagName.toLowerCase();
       const optClass = optEl.className ? '.' + optEl.className.trim().split(/\s+/)[0] : '';
       const optionSelector = optTag + optClass;
 
-      // Infer container: walk up from option to find a container that appeared after trigger
+      // Walk up to find options container
       let container = optEl.parentElement;
-      for (let i = 0; i < 5 && container; i++) {
-        if (container === document.body) break;
+      for (let i = 0; i < 6 && container && container !== document.body; i++) {
         const cls = container.className || '';
-        if (cls.includes('list') || cls.includes('option') || cls.includes('dropdown') || cls.includes('overlay') || cls.includes('panel')) break;
+        if (cls.includes('list') || cls.includes('option') || cls.includes('dropdown') || cls.includes('overlay') || cls.includes('panel') || cls.includes('menu')) break;
         container = container.parentElement;
       }
-      const containerClass = container?.className ? '.' + container.className.trim().split(/\s+/)[0] : '';
-      const optionsContainer = container ? container.tagName.toLowerCase() + containerClass : '';
+      const containerSel = container && container !== document.body
+        ? container.tagName.toLowerCase() + (container.className ? '.' + container.className.trim().split(/\s+/)[0] : '')
+        : '';
 
-      // Infer verify selector: element inside root showing selected text
-      const verifyEl = root.querySelector('.select-type, .selected-value, .value-text, [class*="selected"], [class*="value"]');
-      const verifySelector = verifyEl ? ('.' + (verifyEl.className || '').trim().split(/\s+/)[0]) : '';
+      const verifyEl = root.querySelector('.select-type, .selected-value, [class*="selected"], [class*="value"]');
+      const verifySel = verifyEl ? '.' + (verifyEl.className || '').trim().split(/\s+/)[0] : '';
 
-      resolve({
+      const result = {
         componentClass: root.className.trim().split(/\s+/)[0] || 'ng-dropdown',
         triggerSelector,
-        optionsContainer,
+        optionsContainer: containerSel,
         optionSelector,
-        verifySelector,
-      });
+        verifySelector: verifySel,
+      };
+      sessionStorage.setItem('_cc_teach_result', JSON.stringify(result));
     }
+  }
 
-    document.addEventListener('click', onTriggerClick, true);
+  document.addEventListener('click', onClick, true);
 
-    // Timeout after 30s
-    setTimeout(() => {
-      document.removeEventListener('click', onTriggerClick, true);
-      document.removeEventListener('click', onOptionClick, true);
-      clearInterval(posInterval);
-      try { document.body.removeChild(host); } catch {}
-      resolve(null);
-    }, 30000);
-  });
+  // Timeout after 45s
+  setTimeout(() => { cleanup(); }, 45000);
 }
 
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
@@ -893,7 +934,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.26 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.27 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
