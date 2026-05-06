@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.25';
+const CURRENT_VERSION = '3.26';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -563,7 +563,7 @@ function extractFormFieldsWithFingerprint() {
     let selector;
     if (el.id) {
       selector = `#${el.id}`;
-    } else if (el.name) {
+    } else if (el.name && !(el.type === 'radio' && (el.value === 'on' || el.value === ''))) {
       selector = `[name="${el.name}"][value="${el.value || ''}"]`;
     } else {
       el.setAttribute('data-cc-idx', i);
@@ -599,6 +599,19 @@ function extractFormFieldsWithFingerprint() {
     const id = el.id || `mat-rb-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name, value: label, placeholder: '', label, type: 'mat-radio', index: matIdx++ });
+  });
+
+  // SSC custom ng-dropdown (div.ng-dropdown with div.label + div.value-area)
+  document.querySelectorAll('div.ng-dropdown').forEach(el => {
+    const labelEl = el.querySelector('.label');
+    const label = labelEl ? labelEl.textContent.trim() : '';
+    if (!label) return;
+    const trigger = el.querySelector('.value-area');
+    if (!trigger) return;
+    const id = `ng-drop-${matIdx}`;
+    el.setAttribute('data-cc-id', id);
+    if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    formFields.push({ selector: `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'ng-dropdown', index: matIdx++ });
   });
 
   // role=combobox / ng-select / custom dropdowns not using mat-select
@@ -728,7 +741,7 @@ function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
 function fillFormFieldsSequential(mapping, filledBySource) {
-  console.log('[CC] v3.25 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.26 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
@@ -757,7 +770,8 @@ function fillFormFieldsSequential(mapping, filledBySource) {
       if (!el) return 0;
       // Detect type from DOM directly (more reliable than passed type)
       const tagName = el.tagName.toLowerCase();
-      const elType = tagName === 'select' ? 'select'
+      const elType = type === 'ng-dropdown' ? 'ng-dropdown'
+        : tagName === 'select' ? 'select'
         : tagName === 'mat-select' ? 'mat-select'
         : tagName === 'mat-checkbox' ? 'mat-checkbox'
         : tagName === 'mat-radio-button' ? 'mat-radio'
@@ -801,6 +815,32 @@ function fillFormFieldsSequential(mapping, filledBySource) {
       }
 
       console.log('[CC] fillOne:', selector, 'elType:', elType, 'value:', value);
+      // ng-dropdown: SSC custom dropdown - click value-area, wait for options, click match
+      if (elType === 'ng-dropdown' || el.classList.contains('ng-dropdown')) {
+        const trigger = el.querySelector('.value-area') || el;
+        trigger.click();
+        setTimeout(() => {
+          const v = value.toLowerCase().trim();
+          // After click, find visible option elements - try multiple selectors
+          const optSelectors = [
+            '.ng-dropdown .option', '.ng-dropdown li',
+            '.dropdown-list li', '.dropdown-list .item',
+            '.options-container li', '.options-container .option',
+            '.custom-dropdown li', '.custom-dropdown .option',
+          ];
+          // Also look inside the same ng-dropdown element
+          const localOpts = Array.from(el.querySelectorAll('li, .option, .item, [class*="option"]'));
+          const globalOpts = Array.from(document.querySelectorAll(optSelectors.join(',')));
+          const opts = localOpts.length > 1 ? localOpts : globalOpts;
+          const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
+                      opts.find(o => o.textContent.trim().toLowerCase().includes(v)) ||
+                      opts.find(o => v.includes(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 1);
+          if (opt) { opt.click(); return; }
+          document.body.click();
+        }, 500);
+        return 1;
+      }
+
       // radio-click: directly click this specific radio option (matched by label in fuzzyMatch)
       if (type === 'radio-click') {
         el.focus();
