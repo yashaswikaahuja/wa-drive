@@ -669,7 +669,6 @@ async function loadProfiles(backendUrl) {
         card.classList.add('selected');
         selectedProfile = profile;
         document.getElementById('autofill-btn').disabled = false;
-        document.getElementById('filled-count').style.display = 'none';
       });
       list.appendChild(card);
     });
