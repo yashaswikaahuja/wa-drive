@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.36';
+const CURRENT_VERSION = '3.37';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -351,6 +351,8 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
   const hostname = new URL(tab.url).hostname;
   const TEACHABLE_TYPES = ['ng-dropdown','mat-select','select','mat-radio'];
   const teachable = failedFields.filter(f => TEACHABLE_TYPES.includes(f.type));
+  console.log('[CC] startTeachMode failedFields:', JSON.stringify(failedFields));
+  console.log('[CC] teachable:', JSON.stringify(teachable));
   if (teachable.length === 0) {
     showStatus('No interactive fields need teaching.', 'info');
     return;

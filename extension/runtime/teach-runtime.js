@@ -15,6 +15,7 @@ function teachOneField(field) {
       if (lbl && field.label && lbl.includes(field.label.replace(/[\n*]/g,'').trim().slice(0,15))) root = el;
     });
   }
+  console.log('[CC] teachOneField: field=', JSON.stringify(field), 'root=', root ? root.className : 'NULL');
   if (!root) { sessionStorage.removeItem('_cc_teach_active'); return; }
 
   // Must have a verifyEl to detect state change — without it we can't know when selection completes
@@ -22,6 +23,7 @@ function teachOneField(field) {
                         root.querySelector('[class*="selected"]') ||
                         root.querySelector('[class*="value"]') ||
                         root.querySelector('.value-area');
+  console.log('[CC] teachOneField: verifyEl=', verifyElCheck ? verifyElCheck.className : 'NULL', 'initialValue=', verifyElCheck?.textContent?.trim());
   if (!verifyElCheck) {
     sessionStorage.setItem('_cc_teach_result', JSON.stringify({ error: 'no-verify-el', componentClass: 'ng-dropdown' }));
     sessionStorage.removeItem('_cc_teach_active');
