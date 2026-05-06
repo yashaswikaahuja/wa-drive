@@ -93,7 +93,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   if (backendUrl) {
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: async () => {
+      func: () => {
         const dropdowns = [];
         // Cast wide net - find anything that could be a dropdown
         const selectors = [
@@ -127,16 +127,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
             allTags[t] = (allTags[t]||0)+1;
           }
         });
-        // Click first ng-dropdown to capture open-state HTML
-        let openStateHTML = '';
-        const firstDrop = document.querySelector('div.ng-dropdown .value-area');
-        if (firstDrop) {
-          firstDrop.click();
-          await new Promise(r => setTimeout(r, 600));
-          openStateHTML = (firstDrop.closest('div.ng-dropdown') || firstDrop).outerHTML.slice(0, 3000);
-          document.body.click(); // close
-        }
-        return { url: location.href, dropdowns, allTags, openStateHTML };
+        return { url: location.href, dropdowns, allTags };
       }
     }).then(r => {
       const data = r?.[0]?.result;
