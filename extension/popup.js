@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.28';
+const CURRENT_VERSION = '3.29';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -285,7 +285,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       const badgeClass = hasAdapter ? 'adapter-learned' : 'adapter-missing';
       const item = document.createElement('div');
       item.className = 'unresolved-item';
-      item.innerHTML = `<span title="${f.selector}">${f.label.replace(/\n/g,' ').trim().slice(0,32)}</span><span class="adapter-badge ${badgeClass}">${reason}</span>`;
+      item.innerHTML = `<span title="${f.selector || f.label}">${normalizeFieldLabel(f.label).slice(0,32)}</span><span class="adapter-badge ${badgeClass}">${reason}</span>`;
       list.appendChild(item);
     }
   }
@@ -350,6 +350,9 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 });
 
 // ── Assisted Learning Mode ───────────────────────────────────────────────────
+function normalizeFieldLabel(label) {
+  return (label || '').replace(/\n/g,' ').replace(/^[\d]+\.\s*/,'').replace(/^[a-z]\.\s*/i,'').replace(/\*$/,'').trim();
+}
 async function startTeachMode(tab, failedFields, backendUrl, profile) {
   showStatus(`Teaching ${failedFields.length} field(s)... Fill them manually on the page.`, 'info');
   document.getElementById('teach-btn').style.display = 'none';
@@ -366,7 +369,7 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
   }
 
   for (const field of teachable) {
-    const labelClean = field.label.replace(/\n/g,' ').trim().slice(0,30);
+    const labelClean = normalizeFieldLabel(field.label).slice(0,30);
     showStatus(`⚠ Teach: "${labelClean}" — click the dropdown, then click an option`, 'info');
 
     // Inject teach observer into page
@@ -427,23 +430,33 @@ function teachOneField(field) {
   }
   if (!root) { sessionStorage.removeItem('_cc_teach_active'); return; }
 
-  // Inject floating badge (shadow DOM, outside Angular tree)
+  // Scroll root into view
+  root.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  // Highlight root element
+  const origOutline = root.style.outline;
+  const origBoxShadow = root.style.boxShadow;
+  root.style.outline = '2px solid #dc2626';
+  root.style.boxShadow = '0 0 0 4px rgba(220,38,38,0.3)';
+
+  // Inject floating badge (shadow DOM, fixed position relative to viewport)
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;top:0;left:0;';
   document.body.appendChild(host);
   const shadow = host.attachShadow({ mode: 'open' });
   const badge = document.createElement('div');
-  badge.style.cssText = 'background:#dc2626;color:white;padding:5px 10px;border-radius:4px;font-size:12px;font-family:sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.4);';
+  badge.style.cssText = 'background:#dc2626;color:white;padding:5px 10px;border-radius:4px;font-size:12px;font-family:sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
   badge.textContent = '⚠ Click this dropdown to open it';
   shadow.appendChild(badge);
 
   function positionBadge() {
     const r = root.getBoundingClientRect();
-    host.style.left = (r.left + window.scrollX) + 'px';
-    host.style.top = (r.top + window.scrollY - 32) + 'px';
+    // Fixed positioning is relative to viewport — no scroll offset needed
+    host.style.left = r.left + 'px';
+    host.style.top = Math.max(4, r.top - 34) + 'px';
   }
   positionBadge();
-  const posInterval = setInterval(positionBadge, 200);
+  const posInterval = setInterval(positionBadge, 150);
 
   let phase = 1; // 1=waiting for trigger, 2=waiting for option
   let triggerSelector = '';
@@ -452,6 +465,8 @@ function teachOneField(field) {
     clearInterval(posInterval);
     document.removeEventListener('click', onClick, true);
     try { document.body.removeChild(host); } catch {}
+    root.style.outline = origOutline;
+    root.style.boxShadow = origBoxShadow;
     sessionStorage.removeItem('_cc_teach_active');
   }
 
@@ -964,7 +979,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.28 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.29 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
