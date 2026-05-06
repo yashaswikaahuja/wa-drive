@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.27';
+const CURRENT_VERSION = '3.28';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -218,18 +218,48 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     args: [mapping, filledBySource, portalAdapters],
   });
 
-  // Unresolved = fields NOT filled, split into two groups
-  const skipLabels = /verify|confirm|re.?enter|captcha|otp|token|password|changed name|new name/i;
+  // Unresolved detection — semantic field groups, not raw DOM nodes
+  const skipLabels = /^(yes|no|true|false|select|choose|dd.mm.yyyy|mm.yyyy|please select)$/i;
+  const skipLabelPatterns = /verify|confirm|re.?enter|captcha|otp|token|password/i;
+
+  // Deduplicate radio groups — one entry per name group, using the group's context label
+  const seenRadioGroups = new Set();
   const allUnresolved = formFields.filter(f => {
     if (mapping[f.selector]) return false;
-    if (!f.label || skipLabels.test(f.label)) return false;
+    if (!f.label) return false;
+    const lbl = f.label.replace(/\n/g,' ').trim();
+    if (skipLabels.test(lbl)) return false;
+    if (skipLabelPatterns.test(lbl)) return false;
     if (['hidden','submit','button'].includes(f.type)) return false;
+    // Deduplicate radio groups by name
+    if (f.type === 'radio' && f.name) {
+      if (seenRadioGroups.has(f.name)) return false;
+      seenRadioGroups.add(f.name);
+    }
     return true;
   });
-  // Only interactive/component fields need teaching (not text fields that just weren't mapped)
+
+  // Also detect ng-dropdown fields from the page (not captured in formFields)
+  const ngDropdownResult = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const fields = [];
+      document.querySelectorAll('div.ng-dropdown').forEach(el => {
+        const lbl = el.querySelector('.label')?.textContent?.trim() || '';
+        if (!lbl || /verify/i.test(lbl)) return;
+        const selected = el.querySelector('.select-type')?.textContent?.trim() || '';
+        fields.push({ label: lbl, type: 'ng-dropdown', filled: selected && selected !== 'Select' });
+      });
+      return fields;
+    }
+  });
+  const ngDropdowns = (ngDropdownResult?.[0]?.result || []).filter(f => !f.filled);
+
   const INTERACTIVE_TYPES = ['ng-dropdown','mat-select','mat-radio','mat-checkbox','select'];
-  const failedFields = allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type));
-  // Text fields that weren't mapped are shown as info but don't need teaching
+  const failedFields = [
+    ...allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type)),
+    ...ngDropdowns.map(f => ({ ...f, selector: null })),
+  ];
   const unmappedTextFields = allUnresolved.filter(f => !INTERACTIVE_TYPES.includes(f.type));
 
   const count = result?.[0]?.result ?? 0;
@@ -934,7 +964,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.27 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.28 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
