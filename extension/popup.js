@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.24';
+const CURRENT_VERSION = '3.25';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -560,7 +560,15 @@ function extractFormFieldsWithFingerprint() {
   inputs.forEach((el, i) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
     const label = getLabel(el);
-    const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"][value="${el.value || ''}"]` : `form-field-${i}`;
+    let selector;
+    if (el.id) {
+      selector = `#${el.id}`;
+    } else if (el.name) {
+      selector = `[name="${el.name}"][value="${el.value || ''}"]`;
+    } else {
+      el.setAttribute('data-cc-idx', i);
+      selector = `[data-cc-idx="${i}"]`;
+    }
     const type = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
     if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: i });
@@ -623,7 +631,7 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
   // Watch autofilled fields for corrections
   for (const [selector, { value }] of Object.entries(mapping)) {
     try {
-      const el = selector.startsWith('form-field-')
+      const el = selector.startsWith('form-field-') || selector.startsWith('[data-cc-idx')
         ? document.querySelectorAll('input,select,textarea')[parseInt(selector.split('-')[2])]
         : document.querySelector(selector);
       if (!el) continue;
@@ -720,7 +728,7 @@ function extractFormFields() {
   return extractFormFieldsWithFingerprint().formFields;
 }
 function fillFormFieldsSequential(mapping, filledBySource) {
-  console.log('[CC] v3.24 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.25 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
@@ -739,7 +747,8 @@ function fillFormFieldsSequential(mapping, filledBySource) {
   function fillOne(selector, value, type) {
     try {
       let el;
-      if (selector.startsWith('form-field-')) {
+      if (selector.startsWith('form-field-') || selector.startsWith('[data-cc-idx')) {
+        // legacy fallback
         const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
         el = all[parseInt(selector.split('-')[2])];
       } else {
@@ -958,7 +967,7 @@ function fillFormFieldsSequential(mapping, filledBySource) {
       try { filled += fillOne(selector, value, type) || 0; }
       catch(e) { console.debug('[CC] fillOne error on', selector, ':', e.message); }
       // Fix #2: fill verify/confirm fields by label similarity (re-enter, confirm, verify)
-      if (!selector.startsWith('form-field-') && !['select','radio','checkbox','mat-select','mat-radio','mat-checkbox'].includes(type)) {
+      if (!selector.startsWith('form-field-') || selector.startsWith('[data-cc-idx') && !['select','radio','checkbox','mat-select','mat-radio','mat-checkbox'].includes(type)) {
         const SENSITIVE = ['aadhaar_number','mobile','email','pan_number'];
         const info2 = filledBySource[selector];
         const isSensitive = info2 && SENSITIVE.includes(info2.profileKey);
@@ -1006,7 +1015,7 @@ function fillFormFields(mapping) {
   for (const [selector, { value, type }] of Object.entries(mapping)) {
     try {
       let el;
-      if (selector.startsWith('form-field-')) {
+      if (selector.startsWith('form-field-') || selector.startsWith('[data-cc-idx')) {
         const all = document.querySelectorAll(
           'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
           'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
