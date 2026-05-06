@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.25';
+const CURRENT_VERSION = '3.26';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -218,10 +218,14 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     args: [mapping, filledBySource, portalAdapters],
   });
 
-  // Identify fields that were mapped but may have failed (ng-dropdown types)
-  const failedFields = formFields.filter(f =>
-    mapping[f.selector] && ['ng-dropdown','mat-select'].includes(f.type)
-  );
+  // Unresolved = fields detected on form but NOT in mapping (extension couldn't map or fill them)
+  const skipLabels = /verify|confirm|re.?enter|captcha|otp|token|password|changed name|new name/i;
+  const failedFields = formFields.filter(f => {
+    if (mapping[f.selector]) return false;           // was filled
+    if (!f.label || skipLabels.test(f.label)) return false; // skip verify/captcha
+    if (['hidden','submit','button'].includes(f.type)) return false;
+    return true;
+  });
 
   const count = result?.[0]?.result ?? 0;
 
@@ -236,10 +240,16 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     const list = document.getElementById('unresolved-list');
     list.innerHTML = '';
     for (const f of failedFields) {
-      const hasAdapter = !!(portalAdapters && portalAdapters[f.type]);
+      // Check adapter by componentClass or type
+      const compClass = f.type === 'ng-dropdown' ? 'ng-dropdown' : null;
+      const hasAdapter = compClass ? !!(portalAdapters && portalAdapters[compClass]) : false;
+      const reason = f.type === 'ng-dropdown' || f.type === 'mat-select'
+        ? (hasAdapter ? '✓ adapter · replay' : '⚠ needs teaching')
+        : '⚠ not mapped';
+      const badgeClass = hasAdapter ? 'adapter-learned' : 'adapter-missing';
       const item = document.createElement('div');
       item.className = 'unresolved-item';
-      item.innerHTML = `<span>${f.label.slice(0,30)}</span><span class="adapter-badge ${hasAdapter ? 'adapter-learned' : 'adapter-missing'}">${hasAdapter ? '✓ adapter' : '⚠ needs teaching'}</span>`;
+      item.innerHTML = `<span title="${f.selector}">${f.label.replace(/\n/g,' ').trim().slice(0,32)}</span><span class="adapter-badge ${badgeClass}">${reason}</span>`;
       list.appendChild(item);
     }
   }
@@ -257,7 +267,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     }
 
     // Show Teach button if there are unresolved component fields
-    if (failedFields.length > 0 && backendUrl) {
+    if (failedFields.length > 0) {
       const teachBtn = document.getElementById('teach-btn');
       teachBtn.style.display = 'block';
       teachBtn.onclick = () => startTeachMode(tab, failedFields, backendUrl, selectedProfile);
@@ -884,7 +894,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.25 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.26 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
