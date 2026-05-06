@@ -93,7 +93,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   if (backendUrl) {
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => {
+      func: async () => {
         const dropdowns = [];
         // Cast wide net - find anything that could be a dropdown
         const selectors = [
@@ -237,7 +237,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       // Get enrichments from page
       const enrichResult = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
-        func: () => {
+        func: async () => {
           const e = sessionStorage.getItem('_cc_enrichments');
           return e ? JSON.parse(e) : [];
         }
