@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.35';
+const CURRENT_VERSION = '3.36';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -187,6 +187,18 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     args: [mapping, filledBySource, portalAdapters],
   });
 
+  // Read replay telemetry written by executor
+  await new Promise(r => setTimeout(r, 1200)); // wait for async verify timeouts
+  const replayTelemetryResult = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const v = sessionStorage.getItem('_cc_replay_results');
+      sessionStorage.removeItem('_cc_replay_results');
+      return v ? JSON.parse(v) : {};
+    }
+  });
+  const replayResults = replayTelemetryResult?.[0]?.result ?? {};
+
   // Unresolved detection — semantic field groups, not raw DOM nodes
   const skipLabels = /^(yes|no|true|false|select|choose|dd.mm.yyyy|mm.yyyy|please select)$/i;
   const skipLabelPatterns = /verify|confirm|re.?enter|captcha|otp|token|password/i;
@@ -248,9 +260,16 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       const isInteractive = INTERACTIVE_TYPES.includes(f.type);
       const compClass = f.type === 'ng-dropdown' ? 'ng-dropdown' : f.type;
       const adapter = isInteractive ? (portalAdapters && portalAdapters[compClass]) : null;
+      const replayStatus = replayResults[f.label] || replayResults[normalizeFieldLabel(f.label)];
       let reason, badgeClass;
       if (!isInteractive) {
         reason = '⚠ not mapped'; badgeClass = 'adapter-missing';
+      } else if (replayStatus === 'ok') {
+        reason = '✓ replayed'; badgeClass = 'adapter-learned';
+      } else if (replayStatus === 'verify-fail') {
+        reason = '⚠ replay failed'; badgeClass = 'adapter-missing';
+      } else if (replayStatus === 'no-option') {
+        reason = '⚠ option not found'; badgeClass = 'adapter-missing';
       } else if (!adapter) {
         reason = '⚠ no adapter'; badgeClass = 'adapter-missing';
       } else if (adapter.stale) {

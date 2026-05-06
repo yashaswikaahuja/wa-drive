@@ -1,6 +1,7 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.32 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.35 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
@@ -40,6 +41,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         const rootClass = el.className ? el.className.trim().split(/\s+/)[0] : 'ng-dropdown';
         const adapter = portalAdapters[rootClass] || portalAdapters['ng-dropdown'];
         if (adapter) {
+          const _label = filledBySource[selector]?.label || selector;
           const trigger = el.querySelector(adapter.triggerSelector) || el;
           trigger.click();
           let attempts = 0;
@@ -54,22 +56,26 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
             if (opt) {
               clearInterval(poll);
               opt.click();
-              // Verify after 1s
               setTimeout(() => {
                 const verifyEl = adapter.verifySelector ? el.querySelector(adapter.verifySelector) : null;
                 const displayed = verifyEl ? verifyEl.textContent.trim().toLowerCase() : '';
-                console.debug('[CC] adapter replay verify:', displayed, 'expected:', v, 'match:', displayed.includes(v));
-              }, 1000);
+                const ok = displayed && displayed.includes(v);
+                _replayResults[_label] = ok ? 'ok' : 'verify-fail';
+                sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+              }, 800);
             } else if (attempts >= 8) {
               clearInterval(poll);
               document.body.click();
-              console.debug('[CC] adapter replay: no option found for', value);
+              _replayResults[_label] = 'no-option';
+              sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
             }
           }, 200);
           return 1;
         }
-        // No adapter yet — skip silently (teach mode will handle it)
-        console.debug('[CC] no adapter for ng-dropdown, label:', filledBySource[selector]?.label);
+        // No adapter yet
+        const _noAdapterLabel = filledBySource[selector]?.label || selector;
+        _replayResults[_noAdapterLabel] = 'no-adapter';
+        sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
         return 0;
       }
 
