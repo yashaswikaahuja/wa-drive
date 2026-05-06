@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.31';
+const CURRENT_VERSION = '3.32';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -278,11 +278,17 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     for (const f of allDisplay) {
       const isInteractive = INTERACTIVE_TYPES.includes(f.type);
       const compClass = f.type === 'ng-dropdown' ? 'ng-dropdown' : f.type;
-      const hasAdapter = isInteractive ? !!(portalAdapters && portalAdapters[compClass]) : false;
-      const reason = isInteractive
-        ? (hasAdapter ? '✓ adapter' : '⚠ teach')
-        : '⚠ not mapped';
-      const badgeClass = hasAdapter ? 'adapter-learned' : 'adapter-missing';
+      const adapter = isInteractive ? (portalAdapters && portalAdapters[compClass]) : null;
+      let reason, badgeClass;
+      if (!isInteractive) {
+        reason = '⚠ not mapped'; badgeClass = 'adapter-missing';
+      } else if (!adapter) {
+        reason = '⚠ no adapter'; badgeClass = 'adapter-missing';
+      } else if (adapter.stale) {
+        reason = '⚠ stale'; badgeClass = 'adapter-missing';
+      } else {
+        reason = '✓ adapter'; badgeClass = 'adapter-learned';
+      }
       const item = document.createElement('div');
       item.className = 'unresolved-item';
       item.innerHTML = `<span title="${f.selector || f.label}">${normalizeFieldLabel(f.label).slice(0,32)}</span><span class="adapter-badge ${badgeClass}">${reason}</span>`;
@@ -358,11 +364,8 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
   document.getElementById('teach-btn').style.display = 'none';
 
   const hostname = new URL(tab.url).hostname;
-  // Only teach interactive/component fields
-  const teachable = failedFields.filter(f => ['ng-dropdown','mat-select','select'].includes(f.type) ||
-    f.label.toLowerCase().includes('gender') || f.label.toLowerCase().includes('category') ||
-    f.label.toLowerCase().includes('religion') || f.label.toLowerCase().includes('board'));
-
+  const TEACHABLE_TYPES = ['ng-dropdown','mat-select','select','mat-radio'];
+  const teachable = failedFields.filter(f => TEACHABLE_TYPES.includes(f.type));
   if (teachable.length === 0) {
     showStatus('No interactive fields need teaching.', 'info');
     return;
@@ -393,7 +396,8 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
           }
         });
         const result = r?.[0]?.result;
-        if (result || elapsed >= 45000) { clearInterval(poll); resolve(result); }
+        if (result?.error) { clearInterval(poll); resolve(null); return; }
+        if (result || elapsed >= 45000) { clearInterval(poll); resolve(result || null); }
       }, 500);
     });
 
@@ -430,6 +434,17 @@ function teachOneField(field) {
   }
   if (!root) { sessionStorage.removeItem('_cc_teach_active'); return; }
 
+  // Must have a verifyEl to detect state change — without it we can't know when selection completes
+  const verifyElCheck = root.querySelector('.select-type') ||
+                        root.querySelector('[class*="selected"]') ||
+                        root.querySelector('[class*="value"]') ||
+                        root.querySelector('.value-area');
+  if (!verifyElCheck) {
+    sessionStorage.setItem('_cc_teach_result', JSON.stringify({ error: 'no-verify-el', componentClass: 'ng-dropdown' }));
+    sessionStorage.removeItem('_cc_teach_active');
+    return;
+  }
+
   // Scroll root into view
   root.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
@@ -465,9 +480,7 @@ function teachOneField(field) {
                    root.querySelector('[class*="value"]') ||
                    root.querySelector('.value-area');
   const verifySel = verifyEl ? '.' + (verifyEl.className || '').trim().split(/\s+/)[0] : '';
-  const initialValue = verifyEl ? verifyEl.textContent.trim() : root.textContent.trim().slice(0,50);
-  // Also snapshot root innerHTML to detect any change
-  const initialHTML = root.innerHTML;
+  const initialValue = verifyEl ? verifyEl.textContent.trim() : '';
 
   let triggerSelector = '';
   let phase = 1; // 1=waiting for trigger click, 2=waiting for state change
@@ -493,14 +506,12 @@ function teachOneField(field) {
   }
   document.addEventListener('click', onTriggerClick, true);
 
-  // Phase 2: poll for component state change (value changed = selection made)
+  // Phase 2: poll for verifyEl text change only (innerHTML diff causes Angular false-positives)
   let statePoller = setInterval(() => {
-    if (phase !== 2) return;
-    const currentValue = verifyEl ? verifyEl.textContent.trim() : root.textContent.trim().slice(0,50);
-    const currentHTML = root.innerHTML;
-    const placeholder = /^(select|choose|--|please)/i;
-    const valueChanged = (currentValue && currentValue !== initialValue && !placeholder.test(currentValue))
-                      || (currentHTML !== initialHTML && !placeholder.test(currentValue));
+    if (phase !== 2 || !verifyEl) return;
+    const currentValue = verifyEl.textContent.trim();
+    const placeholder = /^(select|choose|--|please|select option)/i;
+    const valueChanged = currentValue && currentValue !== initialValue && !placeholder.test(currentValue);
     if (valueChanged) {
       clearInterval(statePoller);
       cleanup();
@@ -998,7 +1009,7 @@ function extractFormFields() {
 }
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.31 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.32 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
   const entries = Object.entries(mapping);
