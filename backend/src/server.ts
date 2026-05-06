@@ -1,9 +1,12 @@
 import express from 'express';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { google } from 'googleapis';
 import multer from 'multer';
-import { Readable } from 'stream';import sharp from 'sharp';
+import { Readable } from 'stream';
+import sharp from 'sharp';
 import whatsappRoutes from './api/routes/whatsapp.routes.js';
 import filesRoutes from './api/routes/files.routes.js';
 import processRoutes from './api/routes/process.routes.js';
@@ -346,6 +349,23 @@ io.on('connection', (socket) => {
       io.emit('connection:status', { connected: false });
     }
   });
+});
+
+
+// Extension update endpoints
+import { readFileSync } from 'fs';
+function getExtensionVersion(): string {
+  try {
+    const manifest = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../extension/manifest.json'), 'utf8'));
+    return manifest.version;
+  } catch { return '0.0'; }
+}
+app.get('/extension/version', (_req, res) => {
+  res.json({ version: getExtensionVersion(), download_url: '/extension/download' });
+});
+app.get('/extension/download', (_req, res) => {
+  const zipPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../extension.zip');
+  res.download(zipPath, 'cybercontrol-autofill.zip');
 });
 
 httpServer.listen(PORT, () => console.log(`[Hub] Running on http://localhost:${PORT}`));
