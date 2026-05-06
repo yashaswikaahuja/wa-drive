@@ -82,7 +82,10 @@ function teachOneField(field) {
   function onTriggerClick(e) {
     if (!root.contains(e.target)) return;
     const el = e.target;
-    triggerSelector = el.className ? '.' + el.className.trim().split(/\s+/)[0] : el.tagName.toLowerCase();
+    // Build a stable selector: prefer class, fall back to tag, always have a value
+    const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
+    triggerSelector = cls ? '.' + cls : (el.tagName.toLowerCase() + (el.getAttribute('role') ? `[role="${el.getAttribute('role')}"]` : ''));
+    if (!triggerSelector) triggerSelector = '.value-area'; // SSC ng-dropdown fallback
     badge.textContent = '⚠ Select an option from the list';
     phase = 2;
     document.removeEventListener('click', onTriggerClick, true);

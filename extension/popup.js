@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.34';
+const CURRENT_VERSION = '3.35';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -369,11 +369,17 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
 
     if (!adapter) { showStatus(`⚠ Skipped "${labelClean}" (timeout)`, 'info'); continue; }
 
-    await fetch(`${backendUrl}/adapters/${hostname}`, {
+    const saveRes = await fetch(`${backendUrl}/adapters/${hostname}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(adapter),
-    }).catch(() => {});
+    }).catch(e => ({ ok: false, _err: e.message }));
+    const saveOk = saveRes?.ok ?? false;
+    if (!saveOk) {
+      const errText = await saveRes?.text?.() ?? 'network error';
+      showStatus(`⚠ Save failed for "${labelClean}": ${errText}`, 'error');
+      continue;
+    }
     showStatus(`✓ Learned "${labelClean}"`, 'success');
     await new Promise(r => setTimeout(r, 600));
   }
