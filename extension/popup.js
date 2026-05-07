@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.45';
+const CURRENT_VERSION = '3.46';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -349,12 +349,14 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
   document.getElementById('teach-btn').style.display = 'none';
 
   // Listen for progress updates from background via storage
-  chrome.storage.onChanged.addListener(function onTeachProgress(changes) {
-    if (!changes._cc_teach_progress) return;
+  chrome.storage.onChanged.addListener(function onTeachProgress(changes, area) {
+    if (area !== 'local' || !changes._cc_teach_progress?.newValue) return;
     const msg = changes._cc_teach_progress.newValue;
-    if (!msg) return;
     showStatus(msg.status, msg.done ? 'success' : 'info');
-    if (msg.done) chrome.storage.onChanged.removeListener(onTeachProgress);
+    if (msg.done) {
+      chrome.storage.onChanged.removeListener(onTeachProgress);
+      chrome.storage.local.remove('_cc_teach_progress');
+    }
   });
 
   // Write job to storage — this wakes the SW via onChanged

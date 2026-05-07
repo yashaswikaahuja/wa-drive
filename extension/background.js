@@ -1,14 +1,18 @@
-console.log("[CC] background.js loaded v3.44");
+console.log("[CC] background.js loaded v3.45");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
+let _teachRunning = false;
 chrome.storage.onChanged.addListener((changes, area) => {
-  console.log('[CC] storage changed:', area, Object.keys(changes));
-  if (area === 'local' && changes._cc_teach_job?.newValue) {
-    const job = changes._cc_teach_job.newValue;
-    console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields');
-    runTeachSession(job).catch(console.error);
-  }
+  if (area !== 'local') return;
+  // Only react to a new teach job — ignore progress/ping writes
+  if (!changes._cc_teach_job?.newValue) return;
+  if (_teachRunning) return; // prevent re-entrant sessions
+  const job = changes._cc_teach_job.newValue;
+  console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields');
+  // Clear job immediately so storage write doesn't re-trigger
+  chrome.storage.local.remove('_cc_teach_job');
+  runTeachSession(job).catch(console.error);
 });
 
 // Keep service worker alive during long teach sessions (SW dies after 30s idle)
@@ -23,6 +27,7 @@ function stopKeepalive() {
 }
 
 async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
+  _teachRunning = true;
   startKeepalive();
   const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'select', 'mat-radio'];
   const teachable = fields.filter(f => TEACHABLE_TYPES.includes(f.type));
@@ -84,6 +89,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
   }
 
   stopKeepalive();
+  _teachRunning = false;
   notifyPopup({ type: 'TEACH_PROGRESS', status: 'Teaching complete! Adapters saved.', done: true });
 }
 
