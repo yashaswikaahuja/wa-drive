@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.53");
+console.log("[CC] background.js loaded v3.56");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -199,14 +199,18 @@ function teachOneField(field) {
 
       let optionSelector = 'li';
       let containerSel = '';
-      document.querySelectorAll('li, [class*="option"], [class*="item"]').forEach(el => {
+      // Search visible option elements — include app-dropdown children
+      document.querySelectorAll('li, [class*="option"], [class*="item"], app-dropdown li').forEach(el => {
+        if (el.offsetParent === null) return; // skip hidden
         if (el.textContent.trim() === currentValue) {
-          optionSelector = el.tagName.toLowerCase() + (el.className ? '.' + el.className.trim().split(/\s+/)[0] : '');
+          const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
+          optionSelector = cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
           let c = el.parentElement;
-          for (let i = 0; i < 5 && c && c !== document.body; i++) {
-            const cls = c.className || '';
-            if (cls.includes('list') || cls.includes('option') || cls.includes('dropdown') || cls.includes('panel') || cls.includes('menu')) {
-              containerSel = c.tagName.toLowerCase() + (c.className ? '.' + c.className.trim().split(/\s+/)[0] : '');
+          for (let i = 0; i < 6 && c && c !== document.body; i++) {
+            const tag = c.tagName.toLowerCase();
+            const ccls = (c.className || '').trim().split(/\s+/)[0] || '';
+            if (tag === 'app-dropdown' || tag === 'ul' || ccls.includes('option') || ccls.includes('dropdown') || ccls.includes('list') || ccls.includes('menu')) {
+              containerSel = tag + (ccls ? '.' + ccls : '');
               break;
             }
             c = c.parentElement;

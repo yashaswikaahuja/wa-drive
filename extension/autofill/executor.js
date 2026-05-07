@@ -50,8 +50,12 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           const poll = setInterval(() => {
             attempts++;
             const container = adapter.optionsContainer ? document.querySelector(adapter.optionsContainer) : null;
-            const searchRoot = container || document;
-            const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector));
+            // If no container, scope to app-dropdown, ul.dropdown, or any visible list near the trigger
+            const searchRoot = container ||
+              document.querySelector('app-dropdown .options, app-dropdown ul, .dropdown-options, .options-list, .dropdown-menu') ||
+              document;
+            const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector))
+              .filter(o => o.offsetParent !== null); // only visible options
             const v = value.toLowerCase().trim();
             const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
                         opts.find(o => o.textContent.trim().toLowerCase().includes(v));
