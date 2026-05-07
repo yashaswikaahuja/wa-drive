@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.59';
+const CURRENT_VERSION = '3.60';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -39,7 +39,15 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
   if (url) loadProfiles(url);
 });
 
+let _autofillRunning = false;
+let _autofillRunning = false;
 document.getElementById('autofill-btn').addEventListener('click', async () => {
+  if (_autofillRunning) return;
+  _autofillRunning = true;
+  setTimeout(() => { _autofillRunning = false; }, 8000);
+  if (_autofillRunning) return;
+  _autofillRunning = true;
+  setTimeout(() => { _autofillRunning = false; }, 5000); // reset after 5s
   if (!selectedProfile) return;
   const { groqKey, backendUrl } = await chrome.storage.local.get(['groqKey', 'backendUrl']);
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });

@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.59 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.60 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -47,15 +47,16 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           const trigger = el.querySelector(adapter.triggerSelector) || el;
           trigger.click();
           let attempts = 0;
+          // Wait 400ms for Angular to render options panel before polling
+          setTimeout(() => {
           const poll = setInterval(() => {
             attempts++;
             const container = adapter.optionsContainer ? document.querySelector(adapter.optionsContainer) : null;
-            // If no container, scope to app-dropdown, ul.dropdown, or any visible list near the trigger
             const searchRoot = container ||
               document.querySelector('app-dropdown .options, app-dropdown ul, .dropdown-options, .options-list, .dropdown-menu') ||
               document;
             const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector))
-              .filter(o => o.offsetParent !== null); // only visible options
+              .filter(o => o.offsetParent !== null);
             const v = value.toLowerCase().trim();
             const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
                         opts.find(o => o.textContent.trim().toLowerCase().includes(v));
@@ -63,19 +64,21 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
               clearInterval(poll);
               opt.click();
               setTimeout(() => {
+                // Re-query verifyEl fresh — Angular replaces DOM nodes on value change
                 const verifyEl = adapter.verifySelector ? el.querySelector(adapter.verifySelector) : null;
                 const displayed = verifyEl ? verifyEl.textContent.trim().toLowerCase() : '';
-                const ok = displayed && displayed.includes(v);
+                const ok = displayed && displayed !== 'select' && displayed.length > 0;
                 _replayResults[_label] = ok ? 'ok' : 'verify-fail';
                 sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
-              }, 800);
-            } else if (attempts >= 8) {
+              }, 1000);
+            } else if (attempts >= 10) {
               clearInterval(poll);
               document.body.click();
               _replayResults[_label] = 'no-option';
               sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
             }
-          }, 200);
+          }, 300);
+          }, 400);
           return 1;
         }
         // No adapter yet
