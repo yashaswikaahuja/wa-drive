@@ -51,6 +51,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
 
     // Poll sessionStorage for result (up to 45s) — background stays alive
     const adapter = await pollTeachResult(tabId, 45000);
+    console.log('[CC] pollTeachResult returned:', JSON.stringify(adapter));
 
     if (!adapter) {
       notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Skipped "${label}" (timeout)`, done: false });
@@ -197,14 +198,16 @@ function teachOneField(field) {
         }
       });
 
-      sessionStorage.setItem('_cc_teach_result', JSON.stringify({
+      const result = {
         componentClass: root.className.trim().split(/\s+/)[0] || 'ng-dropdown',
         triggerSelector,
         optionsContainer: containerSel,
         optionSelector,
         verifySelector: verifySel,
         learnedValue: currentValue,
-      }));
+      };
+      console.log('[CC] teachOneField result:', JSON.stringify(result));
+      sessionStorage.setItem('_cc_teach_result', JSON.stringify(result));
     }
   }, 200);
 
