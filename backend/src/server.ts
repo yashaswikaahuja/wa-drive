@@ -370,8 +370,9 @@ function getExtensionVersion(): string {
     return manifest.version;
   } catch { return '0.0'; }
 }
-app.get('/api/extension/version', (_req, res) => {
-  res.json({ version: getExtensionVersion(), download_url: '/api/extension/download' });
+app.get('/api/extension/version', (req: any, res: any) => {
+  const base = `${req.protocol}://${req.get('host')}`;
+  res.json({ version: getExtensionVersion(), download_url: `${base}/api/extension/download` });
 });
 app.get('/api/extension/download', (_req, res) => {
   const zipPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../extension.zip');
