@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.64';
+const CURRENT_VERSION = '3.65';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -11,11 +11,12 @@ chrome.storage.local.get(['backendUrl'], async (result) => {
       const banner = document.getElementById('update-banner');
       const link = document.getElementById('update-link');
       if (banner && link) {
-        link.href = download_url.startsWith('http') ? download_url : result.backendUrl + download_url;
+        link.href = (typeof download_url === 'string' && download_url.startsWith('http'))
+          ? download_url : result.backendUrl + '/api/extension/download';
         banner.style.display = 'block';
       }
     }
-  } catch { /* ignore */ }
+  } catch(e) { console.warn('[CC] version check failed:', e.message); }
 });
 
 // Load saved settings
