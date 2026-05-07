@@ -76,6 +76,8 @@ function connectHub() {
     console.log('[Worker] Hub connected');
     hub.emit('worker:register', { secret: WORKER_SECRET });
     setTimeout(() => hub.emit('connection:status', { connected: isWhatsAppConnected }), 500);
+    // Heartbeat: re-send status every 30s so hub always knows real state
+    setInterval(() => hub.emit('connection:status', { connected: isWhatsAppConnected }), 30_000);
   });
   hub.on('disconnect',    (r) => console.log('[Worker] Hub disconnected:', r));
   hub.on('connect_error', (e) => console.error('[Worker] Hub error:', e.message));

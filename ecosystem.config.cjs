@@ -32,10 +32,10 @@ module.exports = {
     },
     {
       name: 'whatsapp-worker',
-      script: '/opt/whatsapp-worker/worker/worker.ts',
+      script: 'npm',
+      args: 'start',
       cwd: '/opt/whatsapp-worker/worker',
-      interpreter: 'tsx',
-      interpreter_args: '',
+      interpreter: 'none',
       env: {
         NODE_ENV: 'production',
         PORT: '3002',
