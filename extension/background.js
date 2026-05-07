@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.52");
+console.log("[CC] background.js loaded v3.53");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -186,9 +186,12 @@ function teachOneField(field) {
   }
   document.addEventListener('click', onTriggerClick, true);
 
-  // State poller: watch for value change — no phase gate, works even if trigger click missed
+  // State poller: re-query on each tick — Angular replaces DOM nodes on value change
   let statePoller = setInterval(() => {
-    const currentValue = verifyEl !== root ? verifyEl.textContent.trim() : getRootValue();
+    const liveEl = root.querySelector('.select-type') ||
+                   root.querySelector('[class*="selected"]') ||
+                   root.querySelector('.value-area');
+    const currentValue = liveEl ? liveEl.textContent.trim() : getRootValue();
     const placeholder = /^(select|choose|--|please|select option)/i;
     if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
       clearInterval(statePoller);
