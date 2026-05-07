@@ -197,20 +197,25 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       if (ngf.filled) continue;
       const adapter = portalAdapters['ng-dropdown'];
       if (!adapter) continue;
-      // Verify/confirm fields: mirror value from the corresponding base field
+      // Verify/confirm fields: mirror value from the corresponding base ng-dropdown
       if (ngf.isVerify) {
-        // Find base label by stripping "verify"/"confirm" prefix/suffix
+        // Strip "verify"/"confirm" words to get base concept e.g. "Verify Gender" -> "gender"
         const baseNorm = ngf.label.replace(/^\d+\.\s*/, '').replace(/\*$/, '').trim()
           .toLowerCase().replace(/verify|confirm/gi, '').replace(/[^a-z0-9\s]/g, '').trim();
-        // Find a mapping entry whose label matches the base
-        const baseEntry = Object.entries(mapping).find(([sel, v]) => {
-          const bl = (filledBySource[sel]?.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+        // Find matching base field in ngFields (non-verify, same concept)
+        const baseNgf = ngFields.find(f => !f.isVerify && (() => {
+          const bl = f.label.replace(/^\d+\.\s*/, '').replace(/\*$/, '').trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
           return bl && baseNorm && (bl.includes(baseNorm) || baseNorm.includes(bl));
-        });
-        if (baseEntry) {
-          const sel = `ng-dropdown-${ngf.domIndex}`;
-          mapping[sel] = { value: baseEntry[1].value, type: 'ng-dropdown' };
-          filledBySource[sel] = { label: ngf.label, semanticKey: baseNorm, profileKey: filledBySource[baseEntry[0]]?.profileKey, source: 'verify-mirror', confidence: 1 };
+        })());
+        if (baseNgf) {
+          const baseSel = `ng-dropdown-${baseNgf.domIndex}`;
+          const baseVal = mapping[baseSel];
+          if (baseVal) {
+            const sel = `ng-dropdown-${ngf.domIndex}`;
+            mapping[sel] = { value: baseVal.value, type: 'ng-dropdown' };
+            filledBySource[sel] = { label: ngf.label, semanticKey: baseNorm, profileKey: filledBySource[baseSel]?.profileKey, source: 'verify-mirror', confidence: 1 };
+            console.log('[CC] verify-mirror:', ngf.label, '->', baseVal.value);
+          }
         }
         continue;
       }
