@@ -33,12 +33,24 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
     const label = normalizeFieldLabel(field.label);
     notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Teach: "${label}" — click the dropdown, then select a value`, done: false });
 
-    // Inject teachOneField directly as func (background has no script tags, must inline)
+    // Test injection first
+    const testResult = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => { console.log('[CC] SW injection test OK'); return 'ok'; },
+    }).catch(e => { console.error('[CC] inject failed:', e.message); return null; });
+    console.log('[CC] test inject result:', testResult?.[0]?.result);
+
+    if (testResult?.[0]?.result !== 'ok') {
+      notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Cannot inject into page (check activeTab permission)`, done: true });
+      stopKeepalive();
+      return;
+    }
+
     await chrome.scripting.executeScript({
       target: { tabId },
       func: teachOneField,
       args: [field],
-    }).catch(e => console.error('[CC] inject failed:', e));
+    }).catch(e => console.error('[CC] teachOneField inject failed:', e.message));
 
     // Poll sessionStorage for result (up to 45s) — background stays alive
     const adapter = await pollTeachResult(tabId, 45000);
