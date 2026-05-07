@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.50");
+console.log("[CC] background.js loaded v3.51");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -42,6 +42,12 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
   for (const field of teachable) {
     const label = normalizeFieldLabel(field.label);
     notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Teach: "${label}" — click the dropdown, then select a value`, done: false });
+
+    // Clear any stale result before injecting
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => { sessionStorage.removeItem('_cc_teach_result'); sessionStorage.removeItem('_cc_teach_active'); },
+    }).catch(() => {});
 
     await chrome.scripting.executeScript({
       target: { tabId },
@@ -88,6 +94,8 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
 
 // ── teachOneField — runs in PAGE context (injected via executeScript func:) ──
 function teachOneField(field) {
+  // Only one teach session at a time on the page
+  if (sessionStorage.getItem('_cc_teach_active') === '1') return;
   sessionStorage.removeItem('_cc_teach_result');
   sessionStorage.setItem('_cc_teach_active', '1');
 
