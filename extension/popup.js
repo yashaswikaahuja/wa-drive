@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.42';
+const CURRENT_VERSION = '3.43';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -345,23 +345,27 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
 // ── Assisted Learning Mode ───────────────────────────────────────────────────
 async function startTeachMode(tab, failedFields, backendUrl, profile) {
-  // Delegate to background service worker — it stays alive when popup closes
   showStatus('Teaching started — interact with the highlighted field on the page.', 'info');
   document.getElementById('teach-btn').style.display = 'none';
 
-  // Listen for progress updates from background
-  chrome.runtime.onMessage.addListener(function onTeachProgress(msg) {
-    if (msg.type !== 'TEACH_PROGRESS') return;
+  // Listen for progress updates from background via storage
+  chrome.storage.onChanged.addListener(function onTeachProgress(changes) {
+    if (!changes._cc_teach_progress) return;
+    const msg = changes._cc_teach_progress.newValue;
+    if (!msg) return;
     showStatus(msg.status, msg.done ? 'success' : 'info');
-    if (msg.done) chrome.runtime.onMessage.removeListener(onTeachProgress);
+    if (msg.done) chrome.storage.onChanged.removeListener(onTeachProgress);
   });
 
-  chrome.runtime.sendMessage({
-    type: 'START_TEACH',
-    tabId: tab.id,
-    fields: failedFields,
-    backendUrl,
-    hostname: new URL(tab.url).hostname,
+  // Write job to storage — this wakes the SW via onChanged
+  await chrome.storage.local.set({
+    _cc_teach_job: {
+      tabId: tab.id,
+      fields: failedFields,
+      backendUrl,
+      hostname: new URL(tab.url).hostname,
+      ts: Date.now(),
+    }
   });
 }
 

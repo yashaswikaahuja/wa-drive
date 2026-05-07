@@ -1,10 +1,11 @@
 // Background service worker — owns teach session, survives popup close
 
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'START_TEACH') {
-    sendResponse({ ok: true });
-    runTeachSession(msg).catch(console.error);
-    return true; // keep SW alive
+// Wake on storage change — more reliable than sendMessage for waking SW
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes._cc_teach_job?.newValue) {
+    const job = changes._cc_teach_job.newValue;
+    console.log('[CC] SW woke up, teach job received:', job.hostname, job.fields?.length, 'fields');
+    runTeachSession(job).catch(console.error);
   }
 });
 
@@ -226,7 +227,7 @@ function pollTeachResult(tabId, timeout) {
 }
 
 function notifyPopup(msg) {
-  chrome.runtime.sendMessage(msg).catch(() => {});
+  chrome.storage.local.set({ _cc_teach_progress: msg }).catch(() => {});
 }
 
 function normalizeFieldLabel(label) {
