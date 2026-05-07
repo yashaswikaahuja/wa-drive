@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.69';
+const CURRENT_VERSION = '3.70';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -183,10 +183,11 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         const fields = [];
         document.querySelectorAll('div.ng-dropdown').forEach((el, idx) => {
           const lbl = el.querySelector('.label')?.textContent?.trim() || '';
-          if (!lbl || /verify/i.test(lbl) || /^(-+select-+|--|please)/i.test(lbl)) return;
+          if (!lbl || /^(-+select-+|--|please)/i.test(lbl)) return;
           const selected = el.querySelector('.select-type')?.textContent?.trim() || '';
           const filled = selected && !/^(select|choose|--)$/i.test(selected);
-          fields.push({ label: lbl, domIndex: idx, filled });
+          const isVerify = /verify|confirm/i.test(lbl);
+          fields.push({ label: lbl, domIndex: idx, filled, isVerify });
         });
         return fields;
       }
@@ -196,8 +197,23 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       if (ngf.filled) continue;
       const adapter = portalAdapters['ng-dropdown'];
       if (!adapter) continue;
-      // Skip verify/confirm fields
-      if (/verify|confirm/i.test(ngf.label)) continue;
+      // Verify/confirm fields: mirror value from the corresponding base field
+      if (ngf.isVerify) {
+        // Find base label by stripping "verify"/"confirm" prefix/suffix
+        const baseNorm = ngf.label.replace(/^\d+\.\s*/, '').replace(/\*$/, '').trim()
+          .toLowerCase().replace(/verify|confirm/gi, '').replace(/[^a-z0-9\s]/g, '').trim();
+        // Find a mapping entry whose label matches the base
+        const baseEntry = Object.entries(mapping).find(([sel, v]) => {
+          const bl = (filledBySource[sel]?.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+          return bl && baseNorm && (bl.includes(baseNorm) || baseNorm.includes(bl));
+        });
+        if (baseEntry) {
+          const sel = `ng-dropdown-${ngf.domIndex}`;
+          mapping[sel] = { value: baseEntry[1].value, type: 'ng-dropdown' };
+          filledBySource[sel] = { label: ngf.label, semanticKey: baseNorm, profileKey: filledBySource[baseEntry[0]]?.profileKey, source: 'verify-mirror', confidence: 1 };
+        }
+        continue;
+      }
       // Normalize label
       const normLabel = ngf.label.replace(/^\d+\.\s*/, '').replace(/^[a-z]\.\s*/i, '').replace(/\*$/, '').trim().toLowerCase();
       // Explicit label→profileKey map for common SSC fields
