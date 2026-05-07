@@ -17,7 +17,7 @@ chrome.storage.local.get(['backendUrl'], async (result) => {
         banner.style.display = 'block';
       }
     }
-  } catch(e) { console.warn('[CC] version check failed:', e.message); }
+  } catch { /* ignore */ }
 });
 
 // Load saved settings
