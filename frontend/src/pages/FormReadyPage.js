@@ -1,6 +1,7 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../utils/helpers';
 function getDriveId(url) {
     return url.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] ?? null;
 }
@@ -29,6 +30,8 @@ function detectFields(file) {
     }
     else {
         base.push({ key: 'id', label: 'ID / Reference', value: '' });
+        base.push({ key: 'dob', label: 'Date of Birth', value: '' });
+        base.push({ key: 'address', label: 'Address', value: '' });
         base.push({ key: 'remarks', label: 'Remarks', value: '' });
     }
     return base;
@@ -40,6 +43,13 @@ export default function FormReadyPage() {
     const [activeFile, setActiveFile] = useState(null);
     const [fields, setFields] = useState([]);
     const [isPdf, setIsPdf] = useState(false);
+    const [extracting, setExtracting] = useState(false);
+    const [extractError, setExtractError] = useState('');
+    const [newFieldLabel, setNewFieldLabel] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [saveMsg, setSaveMsg] = useState('');
+    const [photoFileId, setPhotoFileId] = useState(null);
+    const [signatureFileId, setSignatureFileId] = useState(null);
     useEffect(() => {
         const raw = params.get('files');
         if (!raw)
@@ -48,17 +58,149 @@ export default function FormReadyPage() {
             const parsed = JSON.parse(decodeURIComponent(raw));
             setFiles(parsed);
             if (parsed.length > 0)
-                selectFile(parsed[0]);
+                selectFile(parsed[0], true);
         }
         catch { /* ignore */ }
     }, [params]);
-    function selectFile(f) {
+    function selectFile(f, isFirst = false) {
         setActiveFile(f);
-        setFields(detectFields(f));
+        // Only reset fields for the first file — preserve accumulated data when switching
+        if (isFirst)
+            setFields(detectFields(f));
         setIsPdf(f.fileName.toLowerCase().endsWith('.pdf'));
+        setExtractError('');
     }
     function updateField(key, value) {
         setFields(prev => prev.map(f => f.key === key ? { ...f, value } : f));
+    }
+    function removeField(key) {
+        setFields(prev => prev.filter(f => f.key !== key));
+    }
+    function addField() {
+        const label = newFieldLabel.trim();
+        if (!label)
+            return;
+        const key = label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now();
+        setFields(prev => [...prev, { key, label, value: '' }]);
+        setNewFieldLabel('');
+    }
+    async function saveProfile() {
+        const phone = activeFile?.id.match(/\d{10,}/)?.[0] ?? fields.find(f => f.key === 'phone')?.value ?? '';
+        if (!phone) {
+            setSaveMsg('No phone number found');
+            setTimeout(() => setSaveMsg(''), 3000);
+            return;
+        }
+        setSaving(true);
+        try {
+            const profile = { phone };
+            fields.forEach(f => { if (f.value)
+                profile[f.key] = f.value; });
+            // Attach tagged photo
+            if (photoFileId)
+                profile.photo_url = `https://drive.google.com/thumbnail?id=${photoFileId}&sz=w400`;
+            else {
+                // Auto-detect: use current file if it's an image
+                const isImage = activeFile && !activeFile.fileName.toLowerCase().endsWith('.pdf');
+                if (isImage && activeFile) {
+                    const photoId = getDriveId(activeFile.fileUrl);
+                    if (photoId)
+                        profile.photo_url = `https://drive.google.com/thumbnail?id=${photoId}&sz=w400`;
+                }
+            }
+            // Attach tagged signature
+            if (signatureFileId)
+                profile.signature_url = `https://drive.google.com/thumbnail?id=${signatureFileId}&sz=w400`;
+            await fetch(`${API_BASE_URL}/profiles`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(profile),
+            });
+            setSaveMsg('Profile saved ✓');
+        }
+        catch {
+            setSaveMsg('Save failed');
+        }
+        setSaving(false);
+        setTimeout(() => setSaveMsg(''), 3000);
+    }
+    async function handleAutoFill() {
+        if (!activeFile)
+            return;
+        const fileId = getDriveId(activeFile.fileUrl);
+        if (!fileId) {
+            setExtractError('Cannot extract: no Drive file ID');
+            return;
+        }
+        setExtracting(true);
+        setExtractError('');
+        try {
+            const res = await fetch(`${API_BASE_URL}/process/extract`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fileId }),
+            });
+            if (!res.ok) {
+                const e = await res.json();
+                throw new Error(e.error ?? 'Extraction failed');
+            }
+            const data = await res.json();
+            // Label map for known keys
+            const labelMap = {
+                name: 'Full Name', dob: 'Date of Birth', address: 'Address',
+                id_number: 'ID Number', father_name: "Father's Name", mother_name: "Mother's Name",
+                husband_name: "Husband's Name", gender: 'Gender', expiry: 'Expiry Date',
+                aadhaar_number: 'Aadhaar Number', pan_number: 'PAN Number',
+                epic_number: 'EPIC Number', passport_number: 'Passport Number',
+                driving_license: 'Driving License', abha_number: 'ABHA Number',
+                abha_address: 'ABHA Address', mobile: 'Mobile', email: 'Email',
+                nationality: 'Nationality', issue_date: 'Issue Date',
+                place_of_birth: 'Place of Birth', roll_number: 'Roll Number',
+                category: 'Category', centre: 'Centre', exam_date: 'Exam Date',
+                part_number: 'Part Number', serial_number: 'Serial Number',
+                certificate_number: 'Certificate Number', certificate_no: 'Certificate No',
+                reg_number: 'Registration Number', registration_number: 'Registration Number',
+                school_name: 'School Name', college_name: 'College Name',
+                university_name: 'University Name', course_name: 'Course Name',
+                degree_name: 'Degree', specialization: 'Specialization',
+                year_of_passing: 'Year of Passing', division: 'Division', grade: 'Grade',
+                percentage_10th: 'Marks % (10th)', percentage_12th: 'Marks % (12th)',
+                subject_10th: 'Subject (10th)', subject_12th: 'Subject (12th)',
+            };
+            // Keep base fields (name, date, phone) with updated values
+            // Then add all non-empty AI fields dynamically
+            setFields(prev => {
+                const baseKeys = new Set(prev.map(f => f.key));
+                // Update existing fields — only overwrite if new value is non-empty
+                const updated = prev.map(f => {
+                    const aiKey = f.key === 'aadhaar' || f.key === 'pan' || f.key === 'passport' ? 'id_number' : f.key;
+                    const newVal = data[aiKey];
+                    // Only update if: new value exists AND (current is empty OR new value is longer/more complete)
+                    if (newVal && (!f.value || newVal.length > f.value.length))
+                        return { ...f, value: newVal };
+                    return f;
+                });
+                // Add new fields for AI data not already in form
+                const newFields = [];
+                for (const [key, value] of Object.entries(data)) {
+                    if (!value)
+                        continue;
+                    if (baseKeys.has(key))
+                        continue; // already exists
+                    // Skip if value already mapped to existing field
+                    const alreadyMapped = key === 'id_number' && (baseKeys.has('aadhaar') || baseKeys.has('pan') || baseKeys.has('passport'));
+                    if (alreadyMapped)
+                        continue;
+                    newFields.push({ key, label: labelMap[key] ?? key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), value: value });
+                }
+                return [...updated, ...newFields];
+            });
+        }
+        catch (e) {
+            setExtractError(e.message ?? 'Auto-fill failed');
+        }
+        finally {
+            setExtracting(false);
+        }
     }
     function handlePrint() {
         if (!activeFile)
@@ -94,5 +236,10 @@ export default function FormReadyPage() {
             return activeFile.fileUrl;
         return isPdf ? `https://drive.google.com/file/d/${id}/preview` : `https://drive.google.com/thumbnail?id=${id}&sz=w1200`;
     })() : null;
-    return (_jsxs("div", { className: "min-h-screen bg-[#0c1322] text-[#dce2f7] font-['Inter',sans-serif] flex flex-col", children: [_jsxs("div", { className: "bg-[#1e293b] border-b border-[#334155] px-4 h-10 flex items-center justify-between shrink-0", children: [_jsxs("div", { className: "flex items-center gap-3", children: [_jsx("button", { onClick: () => navigate('/'), className: "text-[#94a3b8] hover:text-white transition-colors", children: _jsx("span", { className: "material-symbols-outlined text-[20px]", children: "arrow_back" }) }), _jsx("span", { className: "text-sm font-bold uppercase tracking-wider", children: "Form Ready" }), activeFile && _jsx("span", { className: "text-[10px] text-[#94a3b8] truncate max-w-[200px]", children: activeFile.fileName })] }), _jsxs("div", { className: "flex gap-2", children: [_jsxs("button", { onClick: handlePrint, disabled: !activeFile, className: "px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center gap-1.5 transition-colors", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "print" }), " Print"] }), _jsxs("button", { onClick: handleDownload, disabled: !activeFile, className: "px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white disabled:opacity-40 text-xs rounded flex items-center gap-1.5 transition-colors", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "download" }), " Download"] })] })] }), _jsxs("div", { className: "flex flex-1 overflow-hidden", children: [_jsxs("div", { className: "w-64 bg-[#141b2b] border-r border-[#334155] flex flex-col shrink-0", children: [files.length > 1 && (_jsx("div", { className: "border-b border-[#334155]", children: files.map(f => (_jsx("button", { onClick: () => selectFile(f), className: `w-full text-left px-3 py-2 text-[11px] truncate transition-colors ${activeFile?.id === f.id ? 'bg-blue-600/20 text-blue-300 border-l-2 border-blue-500' : 'text-[#94a3b8] hover:bg-[#1e293b]'}`, children: f.fileName }, f.id))) })), _jsxs("div", { className: "px-3 py-2 border-b border-[#334155] text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider flex items-center gap-1", children: [_jsx("span", { className: "material-symbols-outlined text-[14px]", children: "auto_fix_high" }), "Detected Fields"] }), _jsxs("div", { className: "flex-1 overflow-y-auto p-3 flex flex-col gap-3", children: [fields.map(f => (_jsxs("div", { children: [_jsx("label", { className: "text-[10px] text-[#94a3b8] uppercase tracking-wider block mb-1", children: f.label }), _jsx("input", { value: f.value, onChange: e => updateField(f.key, e.target.value), placeholder: `Enter ${f.label.toLowerCase()}…`, className: "w-full bg-[#1e293b] border border-[#334155] rounded px-2 py-1.5 text-xs text-[#dce2f7] focus:outline-none focus:border-blue-500 transition-colors placeholder:text-[#475569]" })] }, f.key))), fields.length === 0 && (_jsx("p", { className: "text-[11px] text-[#94a3b8] text-center mt-4", children: "Select a file to detect fields" }))] }), fields.length > 0 && (_jsx("div", { className: "p-3 border-t border-[#334155]", children: _jsxs("div", { className: "text-[9px] text-[#475569] text-center", children: ["Fields are for reference only.", _jsx("br", {}), "Edit before printing."] }) }))] }), _jsx("div", { className: "flex-1 flex flex-col items-center justify-center bg-[#0c1322] p-4 overflow-auto", children: previewUrl ? (_jsxs("div", { className: "flex flex-col items-center gap-3 w-full max-w-2xl", children: [_jsx("div", { className: "text-[10px] text-[#94a3b8] uppercase tracking-wider", children: activeFile?.fileName }), isPdf ? (_jsx("iframe", { src: previewUrl, className: "w-full rounded border border-[#334155] shadow-xl", style: { height: '70vh' }, title: "PDF Preview" })) : (_jsx("div", { className: "bg-white rounded shadow-xl overflow-hidden w-full", children: _jsx("img", { src: previewUrl, alt: "Document", className: "w-full h-auto" }) }))] })) : (_jsxs("div", { className: "flex flex-col items-center gap-3 text-[#94a3b8]", children: [_jsx("span", { className: "material-symbols-outlined text-[48px]", children: "description" }), _jsx("p", { className: "text-sm", children: "No document selected" }), _jsx("button", { onClick: () => navigate('/'), className: "px-4 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded transition-colors", children: "\u2190 Back to Inbox" })] })) })] })] }));
+    return (_jsxs("div", { className: "min-h-screen bg-[#0c1322] text-[#dce2f7] font-['Inter',sans-serif] flex flex-col", children: [_jsxs("div", { className: "bg-[#1e293b] border-b border-[#334155] px-4 h-10 flex items-center justify-between shrink-0", children: [_jsxs("div", { className: "flex items-center gap-3", children: [_jsx("button", { onClick: () => navigate('/'), className: "text-[#94a3b8] hover:text-white transition-colors", children: _jsx("span", { className: "material-symbols-outlined text-[20px]", children: "arrow_back" }) }), _jsx("span", { className: "text-sm font-bold uppercase tracking-wider", children: "Form Ready" }), activeFile && _jsx("span", { className: "text-[10px] text-[#94a3b8] truncate max-w-[200px]", children: activeFile.fileName })] }), _jsxs("div", { className: "flex gap-2", children: [_jsxs("button", { onClick: handlePrint, disabled: !activeFile, className: "px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center gap-1.5 transition-colors", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "print" }), " Print"] }), _jsxs("button", { onClick: handleDownload, disabled: !activeFile, className: "px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white disabled:opacity-40 text-xs rounded flex items-center gap-1.5 transition-colors", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "download" }), " Download"] })] })] }), _jsxs("div", { className: "flex flex-1 overflow-hidden", children: [_jsxs("div", { className: "w-64 bg-[#141b2b] border-r border-[#334155] flex flex-col shrink-0", children: [files.length > 1 && (_jsx("div", { className: "border-b border-[#334155]", children: files.map(f => {
+                                    const fid = getDriveId(f.fileUrl);
+                                    return (_jsxs("div", { className: `border-b border-[#1e293b] ${activeFile?.id === f.id ? 'bg-blue-600/10' : ''}`, children: [_jsx("button", { onClick: () => selectFile(f), className: `w-full text-left px-3 py-1.5 text-[11px] truncate transition-colors ${activeFile?.id === f.id ? 'text-blue-300 border-l-2 border-blue-500' : 'text-[#94a3b8] hover:bg-[#1e293b]'}`, children: f.fileName }), _jsxs("div", { className: "flex gap-1 px-2 pb-1.5", children: [_jsx("button", { onClick: () => setPhotoFileId(fid === photoFileId ? null : fid), className: `text-[9px] px-1.5 py-0.5 rounded transition-colors ${fid === photoFileId ? 'bg-emerald-600 text-white' : 'bg-[#1e293b] text-[#64748b] hover:text-emerald-400'}`, children: "\uD83D\uDCF7 Photo" }), _jsx("button", { onClick: () => setSignatureFileId(fid === signatureFileId ? null : fid), className: `text-[9px] px-1.5 py-0.5 rounded transition-colors ${fid === signatureFileId ? 'bg-purple-600 text-white' : 'bg-[#1e293b] text-[#64748b] hover:text-purple-400'}`, children: "\u270D\uFE0F Sign" })] })] }, f.id));
+                                }) })), _jsxs("div", { className: "px-3 py-2 border-b border-[#334155]", children: [_jsx("button", { onClick: handleAutoFill, disabled: !activeFile || extracting, className: "w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors", children: extracting
+                                            ? _jsxs(_Fragment, { children: [_jsx("span", { className: "animate-spin material-symbols-outlined text-[16px]", children: "progress_activity" }), " Extracting..."] })
+                                            : _jsxs(_Fragment, { children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "auto_awesome" }), " Auto-fill from Document"] }) }), extractError && _jsx("p", { className: "text-[10px] text-red-400 mt-1 text-center", children: extractError }), _jsxs("button", { onClick: saveProfile, disabled: saving || fields.length === 0, className: "w-full mt-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold rounded flex items-center justify-center gap-1.5 transition-colors", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "person_add" }), saving ? 'Saving...' : 'Save as Profile'] }), _jsxs("button", { onClick: () => { setFields(activeFile ? detectFields(activeFile) : []); setSaveMsg(''); }, className: "w-full mt-1 px-3 py-1.5 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded flex items-center justify-center gap-1.5 transition-colors", children: [_jsx("span", { className: "material-symbols-outlined text-[16px]", children: "restart_alt" }), " Clear & Start New"] }), saveMsg && _jsx("p", { className: "text-[10px] text-emerald-400 mt-1 text-center", children: saveMsg })] }), _jsxs("div", { className: "px-3 py-2 border-b border-[#334155] text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider flex items-center gap-1", children: [_jsx("span", { className: "material-symbols-outlined text-[14px]", children: "auto_fix_high" }), "Detected Fields"] }), _jsxs("div", { className: "flex-1 overflow-y-auto p-3 flex flex-col gap-3", children: [fields.map(f => (_jsxs("div", { className: "group relative", children: [_jsxs("div", { className: "flex items-center justify-between mb-1", children: [_jsx("label", { className: "text-[10px] text-[#94a3b8] uppercase tracking-wider", children: f.label }), _jsx("button", { onClick: () => removeField(f.key), className: "text-[#475569] hover:text-red-400 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity", children: "\u2715" })] }), _jsx("input", { value: f.value, onChange: e => updateField(f.key, e.target.value), placeholder: `Enter ${f.label.toLowerCase()}…`, className: "w-full bg-[#1e293b] border border-[#334155] rounded px-2 py-1.5 text-xs text-[#dce2f7] focus:outline-none focus:border-blue-500 transition-colors placeholder:text-[#475569]" })] }, f.key))), _jsxs("div", { className: "flex gap-1 mt-2", children: [_jsx("input", { value: newFieldLabel, onChange: e => setNewFieldLabel(e.target.value), onKeyDown: e => e.key === 'Enter' && addField(), placeholder: "Add field...", className: "flex-1 bg-[#1e293b] border border-dashed border-[#334155] rounded px-2 py-1.5 text-xs text-[#dce2f7] focus:outline-none focus:border-blue-500 placeholder:text-[#475569]" }), _jsx("button", { onClick: addField, disabled: !newFieldLabel.trim(), className: "px-2 py-1.5 bg-[#1e293b] border border-dashed border-[#334155] hover:border-blue-500 disabled:opacity-30 text-[#94a3b8] hover:text-blue-400 text-xs rounded transition-colors", children: "+" })] }), fields.length === 0 && (_jsx("p", { className: "text-[11px] text-[#94a3b8] text-center mt-4", children: "Select a file to detect fields" }))] }), fields.length > 0 && (_jsx("div", { className: "p-3 border-t border-[#334155]", children: _jsxs("div", { className: "text-[9px] text-[#475569] text-center", children: ["Fields are for reference only.", _jsx("br", {}), "Edit before printing."] }) }))] }), _jsx("div", { className: "flex-1 flex flex-col items-center justify-center bg-[#0c1322] p-4 overflow-auto", children: previewUrl ? (_jsxs("div", { className: "flex flex-col items-center gap-3 w-full max-w-2xl", children: [_jsx("div", { className: "text-[10px] text-[#94a3b8] uppercase tracking-wider", children: activeFile?.fileName }), isPdf ? (_jsx("iframe", { src: previewUrl, className: "w-full rounded border border-[#334155] shadow-xl", style: { height: '70vh' }, title: "PDF Preview" })) : (_jsx("div", { className: "bg-white rounded shadow-xl overflow-hidden w-full", children: _jsx("img", { src: previewUrl, alt: "Document", className: "w-full h-auto" }) }))] })) : (_jsxs("div", { className: "flex flex-col items-center gap-3 text-[#94a3b8]", children: [_jsx("span", { className: "material-symbols-outlined text-[48px]", children: "description" }), _jsx("p", { className: "text-sm", children: "No document selected" }), _jsx("button", { onClick: () => navigate('/'), className: "px-4 py-2 border border-[#334155] text-[#94a3b8] hover:text-white text-xs rounded transition-colors", children: "\u2190 Back to Inbox" })] })) })] })] }));
 }

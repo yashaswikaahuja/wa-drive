@@ -1,8 +1,8 @@
 /**
  * Frontend utilities for WhatsApp Inbox
  */
-export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || '';
 export const BACKEND_BASE_URL = new URL(API_BASE_URL).origin;
 /**
  * Format file size for display
@@ -53,3 +53,5 @@ export function getPreviewUrl(fileUrl) {
         return `${API_BASE_URL.replace('/api', '')}${fileUrl}`;
     return fileUrl;
 }
+// Mon May  4 11:30:37 AM UTC 2026
+// cache bust Mon May  4 03:27:13 PM UTC 2026

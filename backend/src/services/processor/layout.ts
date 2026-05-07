@@ -79,17 +79,25 @@ export async function generatePassportSheet(
   const aspect = specH / specW;
 
   const pw = Math.floor((sw - (cols - 1) * GAP) / cols);
-  const maxPh = Math.floor((sh - (rows - 1) * GAP) / rows);
-  const ph = Math.min(Math.round(pw * aspect), maxPh);
+  const maxCellH = Math.floor((sh - (rows - 1) * GAP) / rows);
+
+  // Pre-estimate strip height so photo fits within preset sheet dimensions
+  const hasText = !!(text && (text.name || text.date || text.signature));
+  const estimatedStripH = hasText ? (() => {
+    const lineH = Math.round(pw * 0.10);
+    const lines = [text!.name, text!.date].filter(Boolean).length;
+    const sigH  = text!.signature ? Math.round(lineH * 1.4) : 0;
+    return lines * lineH + sigH + Math.round(lineH * 0.3);
+  })() : 0;
+
+  const ph = Math.min(Math.round(pw * aspect), maxCellH - estimatedStripH);
 
   const photo = await preparePhoto(photoBuffer, pw, ph);
 
   // Build text strip separately — photo is never modified, shoulders stay visible
-  const textResult = (text && (text.name || text.date || text.signature))
-    ? await buildTextStrip(pw, text, font)
-    : null;
+  const textResult = hasText ? await buildTextStrip(pw, text!, font) : null;
   const stripH = textResult?.stripH ?? 0;
-  const cellH  = ph + (stripH > 0 ? stripH : 0);  // total cell height = photo + strip
+  const cellH  = ph + stripH;
 
   const composites: sharp.OverlayOptions[] = [];
   for (let row = 0; row < rows; row++) {
@@ -107,7 +115,7 @@ export async function generatePassportSheet(
   const finalH = rows * cellH + (rows - 1) * GAP;
 
   return sharp({
-    create: { width: sw, height: finalH, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    create: { width: sw, height: sh, channels: 3, background: { r: 255, g: 255, b: 255 } },
   })
     .composite(composites)
     .withMetadata({ density: 300 })

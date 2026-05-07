@@ -317,6 +317,14 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
+  // Auto-register worker if auth secret matches (handles cases where worker:register event is lost)
+  if ((socket.handshake.auth as any)?.secret === WORKER_SECRET) {
+    workerSocket = socket;
+    workerConnected = false;
+    console.log('[Hub] Worker auto-registered via auth');
+    if (driveAccessToken) socket.emit('drive:token', driveAccessToken);
+  }
+
   socket.on('worker:register', ({ secret }: { secret: string }) => {
     if (secret !== WORKER_SECRET) { socket.disconnect(); return; }
     workerSocket = socket;
