@@ -3,14 +3,16 @@ console.log("[CC] background.js loaded v3.45");
 
 // Wake on storage change — more reliable than sendMessage for waking SW
 let _teachRunning = false;
+let _lastTeachTs = 0;
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
-  // Only react to a new teach job — ignore progress/ping writes
   if (!changes._cc_teach_job?.newValue) return;
-  if (_teachRunning) return; // prevent re-entrant sessions
   const job = changes._cc_teach_job.newValue;
+  // Deduplicate: same timestamp = same job, ignore
+  if (job.ts === _lastTeachTs) return;
+  if (_teachRunning) return;
+  _lastTeachTs = job.ts;
   console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields');
-  // Clear job immediately so storage write doesn't re-trigger
   chrome.storage.local.remove('_cc_teach_job');
   runTeachSession(job).catch(console.error);
 });
@@ -40,19 +42,6 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
   for (const field of teachable) {
     const label = normalizeFieldLabel(field.label);
     notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Teach: "${label}" — click the dropdown, then select a value`, done: false });
-
-    // Test injection first
-    const testResult = await chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => { console.log('[CC] SW injection test OK'); return 'ok'; },
-    }).catch(e => { console.error('[CC] inject failed:', e.message); return null; });
-    console.log('[CC] test inject result:', testResult?.[0]?.result);
-
-    if (testResult?.[0]?.result !== 'ok') {
-      notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Cannot inject into page (check activeTab permission)`, done: true });
-      stopKeepalive();
-      return;
-    }
 
     await chrome.scripting.executeScript({
       target: { tabId },
