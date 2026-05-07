@@ -4,6 +4,7 @@ import FileStitchPage from './pages/FileStitchPage';
 import FormReadyPage from './pages/FormReadyPage';
 import ProfilesPage from './pages/ProfilesPage';
 import MappingsPage from './pages/MappingsPage';
+import AdaptersPage from './pages/AdaptersPage';
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/form-ready" element={<FormReadyPage />} />
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/mappings" element={<MappingsPage />} />
+        <Route path="/adapters" element={<AdaptersPage />} />
       </Routes>
     </BrowserRouter>
   );

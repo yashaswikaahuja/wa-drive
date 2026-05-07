@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../utils/helpers';
 
 type Adapter = {
@@ -8,22 +9,18 @@ type Adapter = {
   stale: boolean; learnedAt: string;
 };
 type Store = Record<string, Record<string, Adapter>>;
-type Edits = Record<string, Partial<Adapter>>;
 
-const S = {
-  page: { padding: 24, fontFamily: 'sans-serif', background: '#0f172a', minHeight: '100vh', color: '#e2e8f0' } as React.CSSProperties,
-  card: { background: '#1e293b', borderRadius: 8, padding: 16, marginBottom: 12 } as React.CSSProperties,
-  row: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 } as React.CSSProperties,
-  label: { fontSize: 12, color: '#94a3b8', width: 140, flexShrink: 0 } as React.CSSProperties,
-  input: { flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 4, padding: '4px 8px', color: '#e2e8f0', fontSize: 12, outline: 'none' } as React.CSSProperties,
-  btnBlue: { background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: 12 } as React.CSSProperties,
-  btnRed: { background: '#ef4444', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: 12 } as React.CSSProperties,
-  btnGray: { background: '#334155', color: '#e2e8f0', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontSize: 12 } as React.CSSProperties,
-};
+const FIELDS: [keyof Adapter, string][] = [
+  ['triggerSelector', 'Trigger Selector'],
+  ['optionSelector', 'Option Selector'],
+  ['verifySelector', 'Verify Selector'],
+  ['optionsContainer', 'Options Container'],
+];
 
 export default function AdaptersPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState<Store>({});
-  const [edits, setEdits] = useState<Edits>({});
+  const [edits, setEdits] = useState<Record<string, Partial<Adapter>>>({});
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
 
@@ -31,7 +28,7 @@ export default function AdaptersPage() {
     setLoading(true);
     fetch(`${API_BASE_URL}/adapters`).then(r => r.json()).then((store: Store) => {
       setData(store);
-      const init: Edits = {};
+      const init: Record<string, Partial<Adapter>> = {};
       Object.entries(store).forEach(([host, map]) =>
         Object.entries(map).forEach(([cls, a]) => { init[`${host}::${cls}`] = { ...a }; })
       );
@@ -75,49 +72,65 @@ export default function AdaptersPage() {
   const total = Object.values(data).reduce((s, h) => s + Object.keys(h).length, 0);
 
   return (
-    <div style={S.page}>
-      <h1 style={{ fontSize: 22, marginBottom: 4 }}>🔧 Adapter Management</h1>
-      {toast && <div style={{ background: '#1e3a5f', color: '#7dd3fc', padding: '8px 12px', borderRadius: 6, marginBottom: 12, fontSize: 13 }}>{toast}</div>}
-      {loading ? <p>Loading...</p> : total === 0 ? <p style={{ color: '#94a3b8' }}>No adapters saved yet.</p> : (
-        Object.entries(data).map(([host, adapters]) => (
-          <div key={host} style={{ marginBottom: 28 }}>
-            <h2 style={{ fontSize: 16, color: '#7dd3fc', marginBottom: 10 }}>{host}</h2>
+    <div className="min-h-screen bg-[#0c1322] text-[#dce2f7] font-['Inter',sans-serif] flex flex-col">
+      <div className="bg-[#1e293b] border-b border-[#334155] px-4 h-10 flex items-center gap-3 shrink-0">
+        <button onClick={() => navigate('/')} className="text-[#94a3b8] hover:text-white">
+          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+        </button>
+        <span className="text-sm font-bold uppercase tracking-wider">Adapter Manager</span>
+        <span className="text-[11px] text-[#64748b]">{total} adapter{total !== 1 ? 's' : ''}</span>
+        <button onClick={load} className="ml-auto text-[#94a3b8] hover:text-white" title="Refresh">
+          <span className="material-symbols-outlined text-[20px]">refresh</span>
+        </button>
+      </div>
+
+      {toast && (
+        <div className="mx-4 mt-2 px-3 py-2 rounded text-xs bg-blue-900/50 text-blue-300">{toast}</div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {loading && <div className="text-[#475569] text-sm mt-8 text-center">Loading...</div>}
+        {!loading && total === 0 && <div className="text-[#475569] text-sm mt-8 text-center">No adapters saved yet.</div>}
+
+        {Object.entries(data).map(([host, adapters]) => (
+          <div key={host} className="mb-6">
+            <div className="text-xs text-[#7dd3fc] font-semibold uppercase tracking-wider mb-2">{host}</div>
             {Object.entries(adapters).map(([cls, a]) => {
               const e = edits[`${host}::${cls}`] || a;
               return (
-                <div key={cls} style={S.card}>
-                  {/* Title row */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div key={cls} className="bg-[#1e293b] border border-[#334155] rounded p-4 mb-3">
+                  <div className="flex items-start justify-between mb-3">
                     <div>
-                      <span style={{ fontWeight: 600 }}>{cls}</span>
-                      <span style={{ fontSize: 12, color: a.stale ? '#f87171' : '#4ade80', marginLeft: 8 }}>
-                        v{a.adapterVersion} {a.stale ? '⚠ stale' : '✓ active'}
+                      <span className="text-sm font-semibold">{cls}</span>
+                      <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded ${a.stale ? 'bg-yellow-900 text-yellow-300' : 'bg-emerald-900 text-emerald-300'}`}>
+                        {a.stale ? '⚠ stale' : '✓ active'}
                       </span>
-                      <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
-                        ✓{a.successCount} ✗{a.failureCount} · {a.learnedAt}
+                      <div className="text-[11px] text-[#64748b] mt-0.5">
+                        v{a.adapterVersion} · {a.learnedAt} · ✓{a.successCount} ✗{a.failureCount}
                       </div>
                     </div>
-                    <button onClick={() => del(host, cls)} style={S.btnRed}>Delete</button>
+                    <button onClick={() => del(host, cls)}
+                      className="text-red-400 hover:text-red-300 text-xs">✕ Delete</button>
                   </div>
 
-                  {/* Editable fields */}
-                  {([
-                    ['triggerSelector', 'Trigger Selector'],
-                    ['optionSelector', 'Option Selector'],
-                    ['verifySelector', 'Verify Selector'],
-                    ['optionsContainer', 'Options Container'],
-                  ] as [string, string][]).map(([f, label]) => (
-                    <div key={f} style={S.row}>
-                      <span style={S.label}>{label}</span>
-                      <input style={S.input} value={(e as any)[f] || ''}
-                        onChange={ev => setField(host, cls, f, ev.target.value)} />
+                  {FIELDS.map(([f, label]) => (
+                    <div key={f as string} className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] text-[#94a3b8] w-36 shrink-0">{label}</span>
+                      <input
+                        value={(e[f] as string) || ''}
+                        onChange={ev => setField(host, cls, f as string, ev.target.value)}
+                        className="flex-1 bg-[#0c1322] border border-[#334155] rounded px-2 py-1 text-xs text-[#dce2f7] focus:outline-none focus:border-blue-500"
+                      />
                     </div>
                   ))}
 
-                  {/* Action buttons */}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <button onClick={() => save(host, cls)} style={S.btnBlue}>💾 Save</button>
-                    <button onClick={() => toggleStale(host, cls, !a.stale)} style={S.btnGray}>
+                  <div className="flex gap-2 mt-3">
+                    <button onClick={() => save(host, cls)}
+                      className="text-[11px] bg-blue-600 hover:bg-blue-500 px-3 py-1 rounded text-white">
+                      💾 Save
+                    </button>
+                    <button onClick={() => toggleStale(host, cls, !a.stale)}
+                      className="text-[11px] bg-[#334155] hover:bg-[#475569] px-3 py-1 rounded">
                       {a.stale ? '✅ Mark Active' : '⚠ Mark Stale'}
                     </button>
                   </div>
@@ -125,8 +138,8 @@ export default function AdaptersPage() {
               );
             })}
           </div>
-        ))
-      )}
+        ))}
+      </div>
     </div>
   );
 }
