@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.61';
+const CURRENT_VERSION = '3.62';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -181,7 +181,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         const fields = [];
         document.querySelectorAll('div.ng-dropdown').forEach((el, idx) => {
           const lbl = el.querySelector('.label')?.textContent?.trim() || '';
-          if (!lbl || /verify/i.test(lbl)) return;
+          if (!lbl || /verify/i.test(lbl) || /^(-+select-+|--|please)/i.test(lbl)) return;
           const selected = el.querySelector('.select-type')?.textContent?.trim() || '';
           const filled = selected && !/^(select|choose|--)$/i.test(selected);
           fields.push({ label: lbl, domIndex: idx, filled });
@@ -285,7 +285,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       const seenLabels = new Set();
       document.querySelectorAll('div.ng-dropdown').forEach((el, idx) => {
         const lbl = el.querySelector('.label')?.textContent?.trim() || '';
-        if (!lbl || /verify/i.test(lbl)) return;
+        if (!lbl || /verify/i.test(lbl) || /^(-+select-+|--|please)/i.test(lbl)) return;
         const selected = el.querySelector('.select-type')?.textContent?.trim()
                       || el.querySelector('.value-area')?.textContent?.trim() || '';
         const filled = selected && !/^(select|choose|--)$/i.test(selected.trim());
