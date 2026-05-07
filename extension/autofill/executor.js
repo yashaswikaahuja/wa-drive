@@ -71,13 +71,13 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
               });
             }
           });
-          mo.observe(document.body, { childList: true, subtree: true });
-
           // ── Part 6: trace object ────────────────────────────────────
           const _trace = { triggerLabel: _label, overlayFound: false, overlayTag: '', mutationCount: 0, optionCount: 0, matchedOption: '', clicked: false, verifyStatus: '', durationMs: 0 };
           const _t0 = Date.now();
 
           trigger.click();
+          // Start observing AFTER click — only captures mutations caused by THIS click
+          mo.observe(document.body, { childList: true, subtree: true });
 
           // After click: wait for overlay to stabilize (Part 5)
           // MutationObserver detects when DOM stops changing (~150ms quiet)
