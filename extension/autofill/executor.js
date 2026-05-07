@@ -58,6 +58,8 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
             const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector))
               .filter(o => o.offsetParent !== null);
             const v = value.toLowerCase().trim();
+            console.log('[CC] poll attempt='+attempts+' opts='+opts.length+' v='+v+' root='+searchRoot.tagName);
+            if(opts.length>0&&attempts===1) console.log('[CC] sample opts:', opts.slice(0,3).map(o=>o.textContent.trim()));
             const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
                         opts.find(o => o.textContent.trim().toLowerCase().includes(v));
             if (opt) {
