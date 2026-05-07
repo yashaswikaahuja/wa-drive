@@ -375,7 +375,7 @@ app.get('/api/extension/version', (req: any, res: any) => {
   res.json({ version: getExtensionVersion(), download_url: `${base}/api/extension/download` });
 });
 app.get('/api/extension/download', (_req, res) => {
-  const zipPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../extension.zip');
+  const zipPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../extension.zip');
   res.download(zipPath, 'cybercontrol-autofill.zip');
 });
 
