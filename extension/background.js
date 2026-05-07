@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.51");
+console.log("[CC] background.js loaded v3.52");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -156,8 +156,8 @@ function teachOneField(field) {
   positionBadge();
   const posInterval = setInterval(positionBadge, 150);
 
-  let triggerSelector = '';
-  let phase = 1;
+  let triggerSelector = '.value-area'; // default fallback
+  let triggerCaptured = false;
 
   function cleanup() {
     clearInterval(posInterval);
@@ -169,20 +169,25 @@ function teachOneField(field) {
     sessionStorage.removeItem('_cc_teach_active');
   }
 
+  // Capture trigger click — works even if click is on child outside root bounds
   function onTriggerClick(e) {
-    if (!root.contains(e.target)) return;
+    if (triggerCaptured) return;
+    // Accept click anywhere near the root (within 200px) or inside it
+    const rr = root.getBoundingClientRect();
+    const inArea = e.clientX >= rr.left - 20 && e.clientX <= rr.right + 20 &&
+                   e.clientY >= rr.top - 20 && e.clientY <= rr.bottom + 200;
+    if (!inArea) return;
     const el = e.target;
     const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
-    triggerSelector = cls ? '.' + cls : (el.tagName.toLowerCase() + (el.getAttribute('role') ? `[role="${el.getAttribute('role')}"]` : ''));
-    if (!triggerSelector) triggerSelector = '.value-area';
+    if (cls) triggerSelector = '.' + cls;
+    triggerCaptured = true;
     badge.textContent = '⚠ Select an option from the list';
-    phase = 2;
     document.removeEventListener('click', onTriggerClick, true);
   }
   document.addEventListener('click', onTriggerClick, true);
 
+  // State poller: watch for value change — no phase gate, works even if trigger click missed
   let statePoller = setInterval(() => {
-    if (phase !== 2) return;
     const currentValue = verifyEl !== root ? verifyEl.textContent.trim() : getRootValue();
     const placeholder = /^(select|choose|--|please|select option)/i;
     if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
