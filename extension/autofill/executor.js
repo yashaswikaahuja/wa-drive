@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.63 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.64 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -39,48 +39,114 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
 
       // Portal adapter replay for ng-dropdown and similar custom components
       if (elType === 'ng-dropdown' || type === 'ng-dropdown') {
-        // Find adapter by componentClass matching root's first class
         const rootClass = el.className ? el.className.trim().split(/\s+/)[0] : 'ng-dropdown';
         const adapter = portalAdapters[rootClass] || portalAdapters['ng-dropdown'];
         if (adapter) {
           const _label = filledBySource[selector]?.label || selector;
           const trigger = el.querySelector(adapter.triggerSelector) || el;
-          trigger.click();
-          let attempts = 0;
-          // Wait 400ms for Angular to render options panel before polling
-          setTimeout(() => {
-          const poll = setInterval(() => {
-            attempts++;
-            const container = adapter.optionsContainer ? document.querySelector(adapter.optionsContainer) : null;
-            const searchRoot = container ||
-              document.querySelector('app-dropdown .options, app-dropdown ul, .dropdown-options, .options-list, .dropdown-menu') ||
-              document;
-            const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector))
-              .filter(o => o.offsetParent !== null);
-            const v = value.toLowerCase().trim();
-            console.log('[CC] poll attempt='+attempts+' opts='+opts.length+' v='+v+' root='+searchRoot.tagName);
-            if(opts.length>0&&attempts===1) console.log('[CC] sample opts:', opts.slice(0,3).map(o=>o.textContent.trim()));
-            const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
-                        opts.find(o => o.textContent.trim().toLowerCase().includes(v));
-            if (opt) {
-              clearInterval(poll);
-              opt.click();
-              setTimeout(() => {
-                // Re-query verifyEl fresh — Angular replaces DOM nodes on value change
-                const verifyEl = adapter.verifySelector ? el.querySelector(adapter.verifySelector) : null;
-                const displayed = verifyEl ? verifyEl.textContent.trim().toLowerCase() : '';
-                const ok = displayed && displayed !== 'select' && displayed.length > 0;
-                _replayResults[_label] = ok ? 'ok' : 'verify-fail';
-                sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
-              }, 1000);
-            } else if (attempts >= 10) {
-              clearInterval(poll);
-              document.body.click();
-              _replayResults[_label] = 'no-option';
-              sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+
+          // ── Overlay session tracking (ChatGPT fix) ──────────────────────
+          // Snapshot existing overlay candidates BEFORE click so we can identify
+          // which subtree was newly added/shown by THIS dropdown trigger.
+          function isVisible(node) {
+            const r = node.getBoundingClientRect();
+            if (r.width === 0 || r.height === 0) return false;
+            const s = getComputedStyle(node);
+            return s.display !== 'none' && s.visibility !== 'hidden';
+          }
+          const OVERLAY_TAGS = ['app-dropdown','ul','ng-dropdown-panel','cdk-overlay-container',
+                                '.dropdown-options','.options-list','.dropdown-menu','.ng-dropdown-panel'];
+          const existingOverlays = new Set(
+            OVERLAY_TAGS.flatMap(sel => { try { return Array.from(document.querySelectorAll(sel)); } catch { return []; } })
+          );
+
+          let activeOverlayRoot = null;
+          const addedNodes = [];
+
+          // MutationObserver: watch for newly added subtrees after click
+          const mo = new MutationObserver(mutations => {
+            for (const m of mutations) {
+              m.addedNodes.forEach(n => {
+                if (n.nodeType === 1) addedNodes.push(n);
+              });
             }
-          }, 300);
-          }, 400);
+          });
+          mo.observe(document.body, { childList: true, subtree: true });
+
+          trigger.click();
+
+          // After 800ms, resolve activeOverlayRoot from mutation data
+          setTimeout(() => {
+            mo.disconnect();
+
+            // Priority 1: newly added node containing visible li options
+            const trigRect = trigger.getBoundingClientRect();
+            for (const node of addedNodes) {
+              if (!isVisible(node)) continue;
+              const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li'))
+                .filter(o => isVisible(o));
+              if (lis.length > 0) { activeOverlayRoot = node; break; }
+            }
+
+            // Priority 2: existing overlay that became visible and is nearest trigger
+            if (!activeOverlayRoot) {
+              let bestDist = Infinity;
+              OVERLAY_TAGS.forEach(sel => {
+                try {
+                  document.querySelectorAll(sel).forEach(node => {
+                    if (existingOverlays.has(node) && !isVisible(node)) return;
+                    const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li'))
+                      .filter(o => isVisible(o));
+                    if (lis.length === 0) return;
+                    const r = node.getBoundingClientRect();
+                    const dist = Math.abs(r.left - trigRect.left) + Math.abs(r.top - trigRect.bottom);
+                    if (dist < bestDist) { bestDist = dist; activeOverlayRoot = node; }
+                  });
+                } catch {}
+              });
+            }
+
+            // Priority 3: adapter.optionsContainer fallback
+            if (!activeOverlayRoot && adapter.optionsContainer) {
+              activeOverlayRoot = document.querySelector(adapter.optionsContainer) || null;
+            }
+
+            console.log('[CC][overlay] label='+_label+' root='+(activeOverlayRoot ? activeOverlayRoot.tagName+'.'+activeOverlayRoot.className.slice(0,40) : 'NONE')+' mutations='+addedNodes.length);
+
+            // ── Poll inside activeOverlayRoot only ──────────────────────
+            let attempts = 0;
+            const poll = setInterval(() => {
+              attempts++;
+              const searchRoot = activeOverlayRoot || document;
+              const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li'))
+                .filter(o => isVisible(o));
+              const v = value.toLowerCase().trim();
+              console.log('[CC][overlay] poll attempt='+attempts+' opts='+opts.length+' v='+v+' root='+(searchRoot === document ? 'document' : searchRoot.tagName));
+              if (opts.length > 0 && attempts === 1) console.log('[CC][overlay] sample opts:', opts.slice(0,3).map(o=>o.textContent.trim()));
+              const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
+                          opts.find(o => o.textContent.trim().toLowerCase().includes(v));
+              if (opt) {
+                clearInterval(poll);
+                console.log('[CC][overlay] matched:', opt.textContent.trim());
+                opt.click();
+                setTimeout(() => {
+                  const verifyEl = adapter.verifySelector ? el.querySelector(adapter.verifySelector) : null;
+                  const displayed = verifyEl ? verifyEl.textContent.trim().toLowerCase() : '';
+                  const ok = displayed && displayed !== 'select' && displayed.length > 0;
+                  console.log('[CC][overlay] verify:', displayed, ok ? 'OK' : 'FAIL');
+                  _replayResults[_label] = ok ? 'ok' : 'verify-fail';
+                  sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+                }, 1000);
+              } else if (attempts >= 10) {
+                clearInterval(poll);
+                document.body.click();
+                console.log('[CC][overlay] no-option after 10 attempts for:', _label);
+                _replayResults[_label] = 'no-option';
+                sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+              }
+            }, 300);
+          }, 800);
+
           return 1;
         }
         // No adapter yet
