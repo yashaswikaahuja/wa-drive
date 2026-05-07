@@ -76,19 +76,23 @@ function teachOneField(field) {
   }
   if (!root) { sessionStorage.removeItem('_cc_teach_active'); return; }
 
+  // Try specific selectors first, fall back to any child element or root itself
   const verifyEl = root.querySelector('.select-type') ||
                    root.querySelector('[class*="selected"]') ||
                    root.querySelector('[class*="value"]') ||
-                   root.querySelector('.value-area');
-  if (!verifyEl) {
-    sessionStorage.setItem('_cc_teach_result', JSON.stringify({ error: 'no-verify-el' }));
-    sessionStorage.removeItem('_cc_teach_active');
-    return;
-  }
+                   root.querySelector('.value-area') ||
+                   root.querySelector('span, div > span, .label ~ *') ||
+                   root;
 
-  const verifySel = '.' + (verifyEl.className || '').trim().split(/\s+/)[0];
-  const initialValue = verifyEl.textContent.trim();
+  const verifySel = verifyEl !== root
+    ? ('.' + (verifyEl.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0] || '.select-type')
+    : '';
+  // Snapshot initial text — exclude the label text to avoid false positives
+  const labelText = (root.querySelector('.label')?.textContent || '').trim();
+  const getRootValue = () => root.textContent.replace(labelText, '').trim();
+  const initialValue = verifyEl !== root ? verifyEl.textContent.trim() : getRootValue();
 
+  console.log('[CC] teachOneField: root=', root.className, 'verifyEl=', verifyEl === root ? 'root' : verifyEl.className, 'initialValue=', initialValue);
   root.scrollIntoView({ behavior: 'smooth', block: 'center' });
   const origOutline = root.style.outline;
   const origBoxShadow = root.style.boxShadow;
@@ -139,7 +143,7 @@ function teachOneField(field) {
 
   let statePoller = setInterval(() => {
     if (phase !== 2) return;
-    const currentValue = verifyEl.textContent.trim();
+    const currentValue = verifyEl !== root ? verifyEl.textContent.trim() : getRootValue();
     const placeholder = /^(select|choose|--|please|select option)/i;
     if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
       clearInterval(statePoller);
