@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.60 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.61 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -272,12 +272,17 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   for (const [selector, fieldData] of entries) {
     const { value, type } = fieldData;
     const isMatSelect = type === 'mat-select' || type === 'mat-radio';
+    const isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
     const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
     const isDependent = PRIORITY_KEYS.some(k => fieldLabel.includes(k) || selector.toLowerCase().includes(k));
     if (isMatSelect) {
       // mat-select needs real click simulation with delay between each
       setTimeout(() => fillOne(selector, value, type), delay);
       delay += 800;
+    } else if (isNgDropdown) {
+      // ng-dropdown: async click sequence — must be sequential, not concurrent
+      setTimeout(() => fillOne(selector, value, type), delay);
+      delay += 2000; // 400ms open + 300ms*10 poll + 1000ms verify = ~2s per dropdown
     } else if (isDependent && filled > 0) {
       setTimeout(() => fillOne(selector, value, type), delay);
       delay += 600;
