@@ -61,11 +61,14 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
       continue;
     }
 
-    const saveRes = await fetch(`${backendUrl}/adapters/${hostname}`, {
+    const saveUrl = `${backendUrl}/adapters/${hostname}`;
+    console.log('[CC] saving adapter to:', saveUrl, 'adapter:', JSON.stringify(adapter).slice(0,200));
+    const saveRes = await fetch(saveUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(adapter),
-    }).catch(e => ({ ok: false, _err: e.message }));
+    }).catch(e => { console.error('[CC] fetch failed:', e.message); return { ok: false, _err: e.message }; });
+    console.log('[CC] save response:', saveRes?.ok, saveRes?.status);
 
     if (saveRes?.ok) {
       notifyPopup({ type: 'TEACH_PROGRESS', status: `✓ Learned "${label}"`, done: false });
