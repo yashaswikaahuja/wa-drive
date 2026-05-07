@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.57';
+const CURRENT_VERSION = '3.58';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -162,11 +162,11 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   let portalAdapters = {};
   if (backendUrl) {
     try {
-      const [tab2] = await chrome.tabs.query({ active: true, currentWindow: true });
-      const hostname = new URL(tab2.url).hostname;
+      const hostname = new URL(tab.url).hostname;
       const ar = await fetch(`${backendUrl}/adapters/${hostname}`);
       portalAdapters = await ar.json();
-    } catch {}
+      console.log('[CC] portalAdapters loaded:', Object.keys(portalAdapters));
+    } catch (e) { console.warn('[CC] adapter fetch failed:', e.message); }
   }
 
   // Step 5c: Add ng-dropdown fields into mapping if adapter exists
