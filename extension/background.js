@@ -2,13 +2,25 @@
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'START_TEACH') {
-    runTeachSession(msg).catch(console.error);
     sendResponse({ ok: true });
+    runTeachSession(msg).catch(console.error);
+    return true; // keep SW alive
   }
-  return false;
 });
 
+// Keep service worker alive during long teach sessions (SW dies after 30s idle)
+let _keepaliveInterval = null;
+function startKeepalive() {
+  if (_keepaliveInterval) return;
+  _keepaliveInterval = setInterval(() => chrome.storage.local.set({ _sw_ping: Date.now() }), 20000);
+}
+function stopKeepalive() {
+  clearInterval(_keepaliveInterval);
+  _keepaliveInterval = null;
+}
+
 async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
+  startKeepalive();
   const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'select', 'mat-radio'];
   const teachable = fields.filter(f => TEACHABLE_TYPES.includes(f.type));
 
@@ -56,6 +68,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
     await sleep(600);
   }
 
+  stopKeepalive();
   notifyPopup({ type: 'TEACH_PROGRESS', status: 'Teaching complete! Adapters saved.', done: true });
 }
 
