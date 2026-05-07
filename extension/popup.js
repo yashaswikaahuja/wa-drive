@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.53';
+const CURRENT_VERSION = '3.54';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -167,6 +167,40 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       const ar = await fetch(`${backendUrl}/adapters/${hostname}`);
       portalAdapters = await ar.json();
     } catch {}
+  }
+
+  // Step 5c: Add ng-dropdown fields into mapping if adapter exists
+  if (portalAdapters && Object.keys(portalAdapters).length > 0) {
+    const ngResult = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const fields = [];
+        document.querySelectorAll('div.ng-dropdown').forEach((el, idx) => {
+          const lbl = el.querySelector('.label')?.textContent?.trim() || '';
+          if (!lbl || /verify/i.test(lbl)) return;
+          const selected = el.querySelector('.select-type')?.textContent?.trim() || '';
+          const filled = selected && !/^(select|choose|--)$/i.test(selected);
+          fields.push({ label: lbl, domIndex: idx, filled });
+        });
+        return fields;
+      }
+    }).catch(() => [{ result: [] }]);
+    const ngFields = ngResult?.[0]?.result || [];
+    for (const ngf of ngFields) {
+      if (ngf.filled) continue;
+      const adapter = portalAdapters['ng-dropdown'];
+      if (!adapter) continue;
+      // Find matching profile value by label
+      const normLabel = ngf.label.replace(/^\d+\.\s*/, '').replace(/\*$/, '').trim().toLowerCase();
+      const profileKey = Object.keys(selectedProfile).find(k => {
+        const nk = k.toLowerCase().replace(/_/g, ' ');
+        return normLabel.includes(nk) || nk.includes(normLabel.split(' ')[0]);
+      });
+      if (!profileKey || !selectedProfile[profileKey]) continue;
+      const sel = `ng-dropdown-${ngf.domIndex}`;
+      mapping[sel] = { value: selectedProfile[profileKey], type: 'ng-dropdown' };
+      filledBySource[sel] = { label: ngf.label, semanticKey: normLabel, profileKey, source: 'adapter', confidence: 0.9 };
+    }
   }
 
   // Step 6: Fill the form (sequential for dependent dropdowns)

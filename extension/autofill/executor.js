@@ -23,6 +23,8 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       if (selector.startsWith('form-field-')) {
         const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
         el = all[parseInt(selector.split('-')[2])];
+      } else if (selector.startsWith('ng-dropdown-')) {
+        el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
       } else {
         el = document.querySelector(selector);
       }
