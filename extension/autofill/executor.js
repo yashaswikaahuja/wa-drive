@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.65 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.66 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -73,30 +73,45 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           });
           mo.observe(document.body, { childList: true, subtree: true });
 
+          // ── Part 6: trace object ────────────────────────────────────
+          const _trace = { triggerLabel: _label, overlayFound: false, overlayTag: '', mutationCount: 0, optionCount: 0, matchedOption: '', clicked: false, verifyStatus: '', durationMs: 0 };
+          const _t0 = Date.now();
+
           trigger.click();
 
-          // After 800ms, resolve activeOverlayRoot from mutation data
-          setTimeout(() => {
+          // After click: wait for overlay to stabilize (Part 5)
+          // MutationObserver detects when DOM stops changing (~150ms quiet)
+          let _lastMutation = Date.now();
+          const _stabilizeMo = new MutationObserver(() => { _lastMutation = Date.now(); });
+          _stabilizeMo.observe(document.body, { childList: true, subtree: true, attributes: true });
+
+          function waitStable(cb) {
+            const check = setInterval(() => {
+              if (Date.now() - _lastMutation >= 150) { clearInterval(check); _stabilizeMo.disconnect(); cb(); }
+            }, 50);
+            // Hard cap: 1200ms max wait
+            setTimeout(() => { clearInterval(check); _stabilizeMo.disconnect(); cb(); }, 1200);
+          }
+
+          waitStable(() => {
             mo.disconnect();
+            _trace.mutationCount = addedNodes.length;
 
             // Priority 1: newly added node containing visible li options
             const trigRect = trigger.getBoundingClientRect();
             for (const node of addedNodes) {
               if (!isVisible(node)) continue;
-              const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li'))
-                .filter(o => isVisible(o));
+              const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
               if (lis.length > 0) { activeOverlayRoot = node; break; }
             }
 
-            // Priority 2: existing overlay that became visible and is nearest trigger
+            // Priority 2: existing overlay nearest trigger that now has visible options
             if (!activeOverlayRoot) {
               let bestDist = Infinity;
               OVERLAY_TAGS.forEach(sel => {
                 try {
                   document.querySelectorAll(sel).forEach(node => {
-                    if (existingOverlays.has(node) && !isVisible(node)) return;
-                    const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li'))
-                      .filter(o => isVisible(o));
+                    const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
                     if (lis.length === 0) return;
                     const r = node.getBoundingClientRect();
                     const dist = Math.abs(r.left - trigRect.left) + Math.abs(r.top - trigRect.bottom);
@@ -111,41 +126,62 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
               activeOverlayRoot = document.querySelector(adapter.optionsContainer) || null;
             }
 
-            console.log('[CC][overlay] label='+_label+' root='+(activeOverlayRoot ? activeOverlayRoot.tagName+'.'+activeOverlayRoot.className.slice(0,40) : 'NONE')+' mutations='+addedNodes.length);
+            _trace.overlayFound = !!activeOverlayRoot;
+            _trace.overlayTag = activeOverlayRoot ? activeOverlayRoot.tagName + '.' + activeOverlayRoot.className.slice(0,40) : 'NONE';
+            console.log('[CC][overlay] label='+_label+' root='+_trace.overlayTag+' mutations='+addedNodes.length);
 
             // ── Poll inside activeOverlayRoot only ──────────────────────
             let attempts = 0;
             const poll = setInterval(() => {
               attempts++;
               const searchRoot = activeOverlayRoot || document;
-              const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li'))
-                .filter(o => isVisible(o));
+              const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
               const v = value.toLowerCase().trim();
-              console.log('[CC][overlay] poll attempt='+attempts+' opts='+opts.length+' v='+v+' root='+(searchRoot === document ? 'document' : searchRoot.tagName));
-              if (opts.length > 0 && attempts === 1) console.log('[CC][overlay] sample opts:', opts.slice(0,3).map(o=>o.textContent.trim()));
+              _trace.optionCount = opts.length;
+              console.log('[CC][poll] attempt='+attempts+' opts='+opts.length+' v='+v+' root='+(searchRoot === document ? 'document' : searchRoot.tagName));
+              if (opts.length > 0 && attempts === 1) console.log('[CC][poll] sample:', opts.slice(0,3).map(o=>o.textContent.trim()));
               const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
                           opts.find(o => o.textContent.trim().toLowerCase().includes(v));
               if (opt) {
                 clearInterval(poll);
-                console.log('[CC][overlay] matched:', opt.textContent.trim());
-                opt.click();
-                setTimeout(() => {
+                _trace.matchedOption = opt.textContent.trim();
+                _trace.clicked = true;
+                console.log('[CC][poll] matched:', _trace.matchedOption);
+                // ── Part 3: full pointer event pipeline ─────────────────
+                ['pointerdown','mousedown','mouseup','click'].forEach(ev =>
+                  opt.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }))
+                );
+                // ── Part 4: multi-stage verification (poll up to 3000ms) ─
+                const verifyStart = Date.now();
+                const triggerInitialText = trigger.textContent.trim();
+                const verifyPoll = setInterval(() => {
                   const verifyEl = adapter.verifySelector ? el.querySelector(adapter.verifySelector) : null;
-                  const displayed = verifyEl ? verifyEl.textContent.trim().toLowerCase() : '';
-                  const ok = displayed && displayed !== 'select' && displayed.length > 0;
-                  console.log('[CC][overlay] verify:', displayed, ok ? 'OK' : 'FAIL');
-                  _replayResults[_label] = ok ? 'ok' : 'verify-fail';
-                  sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
-                }, 1000);
+                  const displayed = verifyEl ? verifyEl.textContent.trim() : '';
+                  const overlayGone = activeOverlayRoot ? !isVisible(activeOverlayRoot) : false;
+                  const triggerChanged = trigger.textContent.trim() !== triggerInitialText;
+                  const ariaSelected = opt.getAttribute('aria-selected') === 'true';
+                  const ok = (displayed && !/^(select|choose|--)$/i.test(displayed)) || overlayGone || triggerChanged || ariaSelected;
+                  console.log('[CC][verify] displayed='+displayed+' overlayGone='+overlayGone+' triggerChanged='+triggerChanged+' ariaSelected='+ariaSelected);
+                  if (ok || Date.now() - verifyStart >= 3000) {
+                    clearInterval(verifyPoll);
+                    _trace.verifyStatus = ok ? 'ok' : 'verify-fail';
+                    _trace.durationMs = Date.now() - _t0;
+                    console.log('[CC][trace]', JSON.stringify(_trace));
+                    _replayResults[_label] = _trace.verifyStatus;
+                    sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+                  }
+                }, 200);
               } else if (attempts >= 10) {
                 clearInterval(poll);
                 document.body.click();
-                console.log('[CC][overlay] no-option after 10 attempts for:', _label);
+                _trace.verifyStatus = 'no-option';
+                _trace.durationMs = Date.now() - _t0;
+                console.log('[CC][trace]', JSON.stringify(_trace));
                 _replayResults[_label] = 'no-option';
                 sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
               }
             }, 300);
-          }, 800);
+          });
 
           return 1;
         }

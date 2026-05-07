@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.65");
+console.log("[CC] background.js loaded v3.66");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -186,6 +186,39 @@ function teachOneField(field) {
   }
   document.addEventListener('click', onTriggerClick, true);
 
+  // ── Part 7: MutationObserver captures overlay subtree on trigger click ──
+  let _teachOverlayRoot = null;
+  const _teachAddedNodes = [];
+  const _teachMo = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      m.addedNodes.forEach(n => { if (n.nodeType === 1) _teachAddedNodes.push(n); });
+    }
+  });
+  function isVisibleTeach(node) {
+    const r = node.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return false;
+    const s = getComputedStyle(node);
+    return s.display !== 'none' && s.visibility !== 'hidden';
+  }
+  document.addEventListener('click', function _teachOverlayCapture(e) {
+    const rr = root.getBoundingClientRect();
+    const inArea = e.clientX >= rr.left - 20 && e.clientX <= rr.right + 20 &&
+                   e.clientY >= rr.top - 20 && e.clientY <= rr.bottom + 200;
+    if (!inArea) return;
+    _teachAddedNodes.length = 0;
+    _teachMo.observe(document.body, { childList: true, subtree: true });
+    setTimeout(() => {
+      _teachMo.disconnect();
+      for (const node of _teachAddedNodes) {
+        if (!isVisibleTeach(node)) continue;
+        const lis = Array.from(node.querySelectorAll('li')).filter(o => isVisibleTeach(o));
+        if (lis.length > 0) { _teachOverlayRoot = node; break; }
+      }
+      console.log('[CC] teach overlay root:', _teachOverlayRoot ? _teachOverlayRoot.tagName + '.' + _teachOverlayRoot.className.slice(0,40) : 'none');
+    }, 1000);
+    document.removeEventListener('click', _teachOverlayCapture, true);
+  }, true);
+
   // State poller: re-query on each tick — Angular replaces DOM nodes on value change
   let statePoller = setInterval(() => {
     const liveEl = root.querySelector('.select-type') ||
@@ -195,25 +228,32 @@ function teachOneField(field) {
     const placeholder = /^(select|choose|--|please|select option)/i;
     if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
       clearInterval(statePoller);
+      _teachMo.disconnect();
       cleanup();
 
       let optionSelector = 'li';
       let containerSel = '';
-      // Search visible option elements — include app-dropdown children
-      document.querySelectorAll('li, [class*="option"], [class*="item"], app-dropdown li').forEach(el => {
-        if (el.offsetParent === null) return; // skip hidden
+      const searchRoot = _teachOverlayRoot || document;
+      searchRoot.querySelectorAll('li, [class*="option"], [class*="item"]').forEach(el => {
+        if (!isVisibleTeach(el) && el.offsetParent === null) return;
         if (el.textContent.trim() === currentValue) {
           const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
-          optionSelector = cls ? `${el.tagName.toLowerCase()}.${cls}` : el.tagName.toLowerCase();
-          let c = el.parentElement;
-          for (let i = 0; i < 6 && c && c !== document.body; i++) {
-            const tag = c.tagName.toLowerCase();
-            const ccls = (c.className || '').trim().split(/\s+/)[0] || '';
-            if (tag === 'app-dropdown' || tag === 'ul' || ccls.includes('option') || ccls.includes('dropdown') || ccls.includes('list') || ccls.includes('menu')) {
-              containerSel = tag + (ccls ? '.' + ccls : '');
-              break;
+          optionSelector = cls ? (el.tagName.toLowerCase() + '.' + cls) : el.tagName.toLowerCase();
+          if (_teachOverlayRoot) {
+            const tag = _teachOverlayRoot.tagName.toLowerCase();
+            const ccls = (_teachOverlayRoot.className || '').trim().split(/\s+/)[0] || '';
+            containerSel = tag + (ccls ? '.' + ccls : '');
+          } else {
+            let c = el.parentElement;
+            for (let i = 0; i < 6 && c && c !== document.body; i++) {
+              const tag = c.tagName.toLowerCase();
+              const ccls = (c.className || '').trim().split(/\s+/)[0] || '';
+              if (tag === 'app-dropdown' || tag === 'ul' || ccls.includes('option') || ccls.includes('dropdown') || ccls.includes('list') || ccls.includes('menu')) {
+                containerSel = tag + (ccls ? '.' + ccls : '');
+                break;
+              }
+              c = c.parentElement;
             }
-            c = c.parentElement;
           }
         }
       });

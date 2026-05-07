@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.65';
+const CURRENT_VERSION = '3.66';
 let selectedProfile = null;
 
 // Check for updates on every popup open
