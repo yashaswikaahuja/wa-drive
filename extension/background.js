@@ -88,13 +88,18 @@ function teachOneField(field) {
   sessionStorage.setItem('_cc_teach_active', '1');
 
   let root = null;
-  if (field.selector && !field.selector.startsWith('form-field-')) {
+  // Use domIndex if available (precise, handles duplicate labels)
+  if (typeof field.domIndex === 'number') {
+    root = document.querySelectorAll('div.ng-dropdown')[field.domIndex] || null;
+  }
+  if (!root && field.selector && !field.selector.startsWith('form-field-')) {
     root = document.querySelector(field.selector);
   }
   if (!root) {
+    const baseLabel = field.label.replace(/\s*\(\d+\)$/, '').replace(/[\n*]/g,'').trim().slice(0,15);
     document.querySelectorAll('div.ng-dropdown, mat-select, [role="combobox"]').forEach(el => {
       const lbl = el.querySelector('.label, mat-label, label')?.textContent?.trim() || el.getAttribute('aria-label') || '';
-      if (lbl && field.label && lbl.includes(field.label.replace(/[\n*]/g,'').trim().slice(0,15))) root = el;
+      if (lbl && baseLabel && lbl.includes(baseLabel)) root = el;
     });
   }
   if (!root) { sessionStorage.removeItem('_cc_teach_active'); return; }

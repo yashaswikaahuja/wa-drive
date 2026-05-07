@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.47';
+const CURRENT_VERSION = '3.48';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -225,11 +225,17 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     target: { tabId: tab.id },
     func: () => {
       const fields = [];
-      document.querySelectorAll('div.ng-dropdown').forEach(el => {
+      const seenLabels = new Set();
+      document.querySelectorAll('div.ng-dropdown').forEach((el, idx) => {
         const lbl = el.querySelector('.label')?.textContent?.trim() || '';
         if (!lbl || /verify/i.test(lbl)) return;
-        const selected = el.querySelector('.select-type')?.textContent?.trim() || '';
-        fields.push({ label: lbl, type: 'ng-dropdown', filled: selected && selected !== 'Select' });
+        const selected = el.querySelector('.select-type')?.textContent?.trim()
+                      || el.querySelector('.value-area')?.textContent?.trim() || '';
+        const filled = selected && !/^(select|choose|--)$/i.test(selected.trim());
+        // For duplicate labels (e.g. State/UT in permanent + present address), suffix with index
+        const key = seenLabels.has(lbl) ? `${lbl} (${idx})` : lbl;
+        seenLabels.add(lbl);
+        fields.push({ label: key, type: 'ng-dropdown', filled, domIndex: idx });
       });
       return fields;
     }
