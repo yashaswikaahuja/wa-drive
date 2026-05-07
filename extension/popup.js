@@ -349,6 +349,13 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     }
   }
 
+  // Show Teach button whenever there are unresolved interactive fields (even if count=0)
+  if (failedFields.length > 0) {
+    const teachBtn = document.getElementById('teach-btn');
+    teachBtn.style.display = 'block';
+    teachBtn.onclick = () => startTeachMode(tab, failedFields, backendUrl, selectedProfile);
+  }
+
   if (count > 0) {
     showStatus(`Filled ${count} field(s)${failedFields.length ? ` · ${failedFields.length} unresolved` : ''}`, count > 0 ? 'success' : 'info');
 
