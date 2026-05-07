@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.54';
+const CURRENT_VERSION = '3.55';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -198,6 +198,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       });
       if (!profileKey || !selectedProfile[profileKey]) continue;
       const sel = `ng-dropdown-${ngf.domIndex}`;
+      console.log('[CC] adding ng-dropdown to mapping:', sel, ngf.label, '->', selectedProfile[profileKey]);
       mapping[sel] = { value: selectedProfile[profileKey], type: 'ng-dropdown' };
       filledBySource[sel] = { label: ngf.label, semanticKey: normLabel, profileKey, source: 'adapter', confidence: 0.9 };
     }
