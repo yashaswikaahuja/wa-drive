@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.56';
+const CURRENT_VERSION = '3.57';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -190,12 +190,30 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       if (ngf.filled) continue;
       const adapter = portalAdapters['ng-dropdown'];
       if (!adapter) continue;
-      // Find matching profile value by label
-      const normLabel = ngf.label.replace(/^\d+\.\s*/, '').replace(/\*$/, '').trim().toLowerCase();
-      const profileKey = Object.keys(selectedProfile).find(k => {
-        const nk = k.toLowerCase().replace(/_/g, ' ');
-        return normLabel.includes(nk) || nk.includes(normLabel.split(' ')[0]);
-      });
+      // Skip verify/confirm fields
+      if (/verify|confirm/i.test(ngf.label)) continue;
+      // Normalize label
+      const normLabel = ngf.label.replace(/^\d+\.\s*/, '').replace(/^[a-z]\.\s*/i, '').replace(/\*$/, '').trim().toLowerCase();
+      // Explicit label→profileKey map for common SSC fields
+      const LABEL_MAP = {
+        'gender': 'gender',
+        'state/ut': 'state', 'state': 'state',
+        'district': 'district',
+        'year of passing': 'year_of_passing',
+        'matriculation (10th class) year of passing': 'passing_year_10th',
+        'matriculation (10th class) education board': 'board_10th',
+        'your highest level of educational qualification': 'course_name',
+        'nationality': 'nationality',
+        'religion': 'religion',
+      };
+      // Try explicit map first, then fuzzy
+      let profileKey = LABEL_MAP[normLabel];
+      if (!profileKey) {
+        profileKey = Object.keys(selectedProfile).find(k => {
+          const nk = k.toLowerCase().replace(/_/g, ' ');
+          return normLabel === nk || normLabel.includes(nk) || nk.includes(normLabel.split(' ')[0]);
+        });
+      }
       if (!profileKey || !selectedProfile[profileKey]) continue;
       const sel = `ng-dropdown-${ngf.domIndex}`;
       console.log('[CC] adding ng-dropdown to mapping:', sel, ngf.label, '->', selectedProfile[profileKey]);
