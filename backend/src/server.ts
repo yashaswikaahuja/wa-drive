@@ -366,14 +366,14 @@ io.on('connection', (socket) => {
 import { readFileSync } from 'fs';
 function getExtensionVersion(): string {
   try {
-    const manifest = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../extension/manifest.json'), 'utf8'));
+    const manifest = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../extension/manifest.json'), 'utf8'));
     return manifest.version;
   } catch { return '0.0'; }
 }
-app.get('/extension/version', (_req, res) => {
-  res.json({ version: getExtensionVersion(), download_url: '/extension/download' });
+app.get('/api/extension/version', (_req, res) => {
+  res.json({ version: getExtensionVersion(), download_url: '/api/extension/download' });
 });
-app.get('/extension/download', (_req, res) => {
+app.get('/api/extension/download', (_req, res) => {
   const zipPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../extension.zip');
   res.download(zipPath, 'cybercontrol-autofill.zip');
 });

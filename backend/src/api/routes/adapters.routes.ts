@@ -33,6 +33,23 @@ function save(data: AdaptersStore) {
   writeFileSync(ADAPTERS_PATH, JSON.stringify(data, null, 2));
 }
 
+// GET /api/adapters — get all adapters
+router.get('/', (req: Request, res: Response) => {
+  res.json(load());
+});
+
+// DELETE /api/adapters/:hostname/:componentClass
+router.delete('/:hostname/:componentClass', (req: Request, res: Response) => {
+  const { hostname, componentClass } = req.params;
+  const data = load();
+  if (data[hostname]) {
+    delete data[hostname][componentClass];
+    if (Object.keys(data[hostname]).length === 0) delete data[hostname];
+    save(data);
+  }
+  res.json({ ok: true });
+});
+
 // GET /api/adapters/:hostname — get all adapters for a hostname
 router.get('/:hostname', (req: Request, res: Response) => {
   const store = load();
