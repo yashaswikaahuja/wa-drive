@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.68';
+const CURRENT_VERSION = '3.69';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -247,16 +247,35 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   });
 
   // Read replay telemetry written by executor
-  await new Promise(r => setTimeout(r, 1200)); // wait for async verify timeouts
-  const replayTelemetryResult = await chrome.scripting.executeScript({
-    target: { tabId: tab.id },
-    func: () => {
-      const v = sessionStorage.getItem('_cc_replay_results');
-      sessionStorage.removeItem('_cc_replay_results');
-      return v ? JSON.parse(v) : {};
-    }
+  // Wait for all ng-dropdowns to finish (each takes up to 5500ms)
+  // Poll until results stop changing or 60s max
+  const ngDropdownCount = Object.values(mapping).filter(v => v.type === 'ng-dropdown').length;
+  const waitMs = Math.max(2000, ngDropdownCount * 5500 + 1000);
+  const replayResults = await new Promise(resolve => {
+    let last = '{}', stable = 0;
+    const poll = setInterval(async () => {
+      const r = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => { const v = sessionStorage.getItem('_cc_replay_results'); return v || '{}'; }
+      }).catch(() => [{ result: '{}' }]);
+      const cur = r?.[0]?.result || '{}';
+      if (cur === last) stable++;
+      else { stable = 0; last = cur; }
+      // Done when stable for 2 ticks (600ms) or all ng-dropdowns have results
+      const parsed = JSON.parse(cur);
+      const done = (stable >= 2 && Object.keys(parsed).length >= ngDropdownCount) || stable >= 10;
+      if (done) {
+        clearInterval(poll);
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => sessionStorage.removeItem('_cc_replay_results')
+        }).catch(() => {});
+        resolve(parsed);
+      }
+    }, 300);
+    // Hard timeout
+    setTimeout(() => { clearInterval(poll); resolve(JSON.parse(last)); }, waitMs);
   });
-  const replayResults = replayTelemetryResult?.[0]?.result ?? {};
 
   // Unresolved detection — semantic field groups, not raw DOM nodes
   const skipLabels = /^(yes|no|true|false|select|choose|dd.mm.yyyy|mm.yyyy|please select)$/i;
