@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.70 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.71 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -45,67 +45,98 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           const _label = filledBySource[selector]?.label || selector;
           const trigger = el.querySelector(adapter.triggerSelector) || el;
 
-          // ── Overlay session tracking (ChatGPT fix) ──────────────────────
-          // Snapshot existing overlay candidates BEFORE click so we can identify
-          // which subtree was newly added/shown by THIS dropdown trigger.
+          // ── Session lifecycle ────────────────────────────────────────
+          if (!window._ccReplaySessions) window._ccReplaySessions = new Map();
+          // Cancel any existing session for this field
+          if (window._ccReplaySessions.has(_label)) {
+            const old = window._ccReplaySessions.get(_label);
+            old.cancelled = true;
+            clearInterval(old.pollTimer);
+            old.timeoutIds.forEach(id => clearTimeout(id));
+            if (old.observer) old.observer.disconnect();
+            window._ccReplaySessions.delete(_label);
+            console.log('[CC][session-cancel] id='+old.id+' label='+_label);
+          }
+          const session = {
+            id: Math.random().toString(36).slice(2,8),
+            fieldKey: _label,
+            resolved: false,
+            cancelled: false,
+            pollTimer: null,
+            timeoutIds: [],
+            observer: null,
+            startedAt: Date.now(),
+          };
+          window._ccReplaySessions.set(_label, session);
+          console.log('[CC][session-start] id='+session.id+' label='+_label);
+
           function isVisible(node) {
             const r = node.getBoundingClientRect();
             if (r.width === 0 || r.height === 0) return false;
             const s = getComputedStyle(node);
             return s.display !== 'none' && s.visibility !== 'hidden';
           }
+
+          function cleanupSession(result) {
+            if (session.resolved && result !== session._result) return; // already resolved, don't overwrite
+            session.resolved = true;
+            session._result = result;
+            clearInterval(session.pollTimer);
+            session.timeoutIds.forEach(id => clearTimeout(id));
+            if (session.observer) { session.observer.disconnect(); session.observer = null; }
+            window._ccReplaySessions.delete(_label);
+            _replayResults[_label] = result;
+            sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+            console.log('[CC][session-cleanup] id='+session.id+' label='+_label+' result='+result+' duration='+(Date.now()-session.startedAt)+'ms');
+          }
+
           const OVERLAY_TAGS = ['app-dropdown','ul','ng-dropdown-panel','cdk-overlay-container',
                                 '.dropdown-options','.options-list','.dropdown-menu','.ng-dropdown-panel'];
-          const existingOverlays = new Set(
-            OVERLAY_TAGS.flatMap(sel => { try { return Array.from(document.querySelectorAll(sel)); } catch { return []; } })
-          );
-
-          let activeOverlayRoot = null;
           const addedNodes = [];
-
-          // MutationObserver: watch for newly added subtrees after click
-          const mo = new MutationObserver(mutations => {
-            for (const m of mutations) {
-              m.addedNodes.forEach(n => {
-                if (n.nodeType === 1) addedNodes.push(n);
-              });
-            }
-          });
-          // ── Part 6: trace object ────────────────────────────────────
           const _trace = { triggerLabel: _label, overlayFound: false, overlayTag: '', mutationCount: 0, optionCount: 0, matchedOption: '', clicked: false, verifyStatus: '', durationMs: 0 };
-          const _t0 = Date.now();
 
           trigger.click();
-          // Start observing AFTER click — only captures mutations caused by THIS click
+
+          // MutationObserver starts AFTER click — only captures mutations from THIS click
+          const mo = new MutationObserver(mutations => {
+            if (session.cancelled || session.resolved) return;
+            for (const m of mutations) {
+              m.addedNodes.forEach(n => { if (n.nodeType === 1) addedNodes.push(n); });
+            }
+          });
+          session.observer = mo;
           mo.observe(document.body, { childList: true, subtree: true });
 
-          // After click: wait for overlay to stabilize (Part 5)
-          // MutationObserver detects when DOM stops changing (~150ms quiet)
+          // Wait for DOM to stabilize (~150ms quiet), max 1200ms
           let _lastMutation = Date.now();
           const _stabilizeMo = new MutationObserver(() => { _lastMutation = Date.now(); });
           _stabilizeMo.observe(document.body, { childList: true, subtree: true, attributes: true });
 
           function waitStable(cb) {
             const check = setInterval(() => {
+              if (session.cancelled) { clearInterval(check); _stabilizeMo.disconnect(); return; }
               if (Date.now() - _lastMutation >= 150) { clearInterval(check); _stabilizeMo.disconnect(); cb(); }
             }, 50);
-            // Hard cap: 1200ms max wait
-            setTimeout(() => { clearInterval(check); _stabilizeMo.disconnect(); cb(); }, 1200);
+            const capId = setTimeout(() => { clearInterval(check); _stabilizeMo.disconnect(); if (!session.cancelled) cb(); }, 1200);
+            session.timeoutIds.push(capId);
           }
 
           waitStable(() => {
+            if (session.cancelled || session.resolved) return;
             mo.disconnect();
+            session.observer = null;
             _trace.mutationCount = addedNodes.length;
 
-            // Priority 1: newly added node containing visible li options
+            let activeOverlayRoot = null;
             const trigRect = trigger.getBoundingClientRect();
+
+            // Priority 1: newly added node with visible options
             for (const node of addedNodes) {
               if (!isVisible(node)) continue;
               const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
               if (lis.length > 0) { activeOverlayRoot = node; break; }
             }
-
-            // Priority 2: existing overlay nearest trigger that now has visible options
+            // Priority 2: existing overlay nearest trigger with visible options
             if (!activeOverlayRoot) {
               let bestDist = Infinity;
               OVERLAY_TAGS.forEach(sel => {
@@ -120,65 +151,68 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
                 } catch {}
               });
             }
-
-            // Priority 3: adapter.optionsContainer fallback
+            // Priority 3: adapter fallback
             if (!activeOverlayRoot && adapter.optionsContainer) {
               activeOverlayRoot = document.querySelector(adapter.optionsContainer) || null;
             }
 
             _trace.overlayFound = !!activeOverlayRoot;
             _trace.overlayTag = activeOverlayRoot ? activeOverlayRoot.tagName + '.' + activeOverlayRoot.className.slice(0,40) : 'NONE';
-            console.log('[CC][overlay] label='+_label+' root='+_trace.overlayTag+' mutations='+addedNodes.length);
+            console.log('[CC][overlay] id='+session.id+' label='+_label+' root='+_trace.overlayTag+' mutations='+addedNodes.length);
 
-            // ── Poll inside activeOverlayRoot only ──────────────────────
+            // ── Poll for matching option ─────────────────────────────
             let attempts = 0;
-            const poll = setInterval(() => {
+            session.pollTimer = setInterval(() => {
+              if (session.cancelled || session.resolved) { clearInterval(session.pollTimer); return; }
               attempts++;
               const searchRoot = activeOverlayRoot || document;
               const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
-              console.log('[CC][poll] attempt='+attempts+' opts='+opts.length+' v='+v+' root='+(searchRoot === document ? 'document' : searchRoot.tagName));
+              console.log('[CC][poll] id='+session.id+' attempt='+attempts+' opts='+opts.length+' v='+v);
               if (opts.length > 0 && attempts === 1) console.log('[CC][poll] sample:', opts.slice(0,3).map(o=>o.textContent.trim()));
+
               const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
                           opts.find(o => o.textContent.trim().toLowerCase().includes(v));
+
               if (opt) {
-                clearInterval(poll);
+                clearInterval(session.pollTimer);
+                if (session.cancelled || session.resolved) return;
                 _trace.matchedOption = opt.textContent.trim();
                 _trace.clicked = true;
-                console.log('[CC][poll] matched:', _trace.matchedOption);
-                // ── Part 3: full pointer event pipeline ─────────────────
+                console.log('[CC][poll] matched: '+_trace.matchedOption+' id='+session.id);
                 ['pointerdown','mousedown','mouseup','click'].forEach(ev =>
                   opt.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }))
                 );
-                // ── Part 4: multi-stage verification (poll up to 3000ms) ─
+                // Multi-stage verify
                 const verifyStart = Date.now();
                 const triggerInitialText = trigger.textContent.trim();
                 const verifyPoll = setInterval(() => {
+                  if (session.cancelled || session.resolved) { clearInterval(verifyPoll); return; }
                   const verifyEl = adapter.verifySelector ? el.querySelector(adapter.verifySelector) : null;
                   const displayed = verifyEl ? verifyEl.textContent.trim() : '';
                   const overlayGone = activeOverlayRoot ? !isVisible(activeOverlayRoot) : false;
                   const triggerChanged = trigger.textContent.trim() !== triggerInitialText;
                   const ariaSelected = opt.getAttribute('aria-selected') === 'true';
                   const ok = (displayed && !/^(select|choose|--)$/i.test(displayed)) || overlayGone || triggerChanged || ariaSelected;
-                  console.log('[CC][verify] displayed='+displayed+' overlayGone='+overlayGone+' triggerChanged='+triggerChanged+' ariaSelected='+ariaSelected);
                   if (ok || Date.now() - verifyStart >= 3000) {
                     clearInterval(verifyPoll);
+                    if (session.resolved) return;
                     _trace.verifyStatus = ok ? 'ok' : 'verify-fail';
-                    _trace.durationMs = Date.now() - _t0;
-                    console.log('[CC][trace]', JSON.stringify(_trace));
-                    _replayResults[_label] = _trace.verifyStatus;
-                    sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+                    _trace.durationMs = Date.now() - session.startedAt;
+                    console.log('[CC][session-resolve] id='+session.id+' label='+_label+' result='+_trace.verifyStatus+' duration='+_trace.durationMs+'ms');
+                    cleanupSession(_trace.verifyStatus);
                   }
                 }, 200);
+                session.timeoutIds.push(setInterval(() => {}, 0)); // placeholder — verifyPoll managed separately
+
               } else if (attempts >= 10) {
-                clearInterval(poll);
+                clearInterval(session.pollTimer);
+                if (session.resolved) return;
                 document.body.click();
-                _trace.verifyStatus = 'no-option';
-                _trace.durationMs = Date.now() - _t0;
-                console.log('[CC][trace]', JSON.stringify(_trace));
-                _replayResults[_label] = 'no-option';
-                sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+                _trace.durationMs = Date.now() - session.startedAt;
+                console.log('[CC][session-resolve] id='+session.id+' label='+_label+' result=no-option');
+                cleanupSession('no-option');
               }
             }, 300);
           });
@@ -192,7 +226,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         return 0;
       }
 
-      // Angular Material mat-select: click trigger, wait for panel, click matching option
+      // Angular Material mat-select      // Angular Material mat-select: click trigger, wait for panel, click matching option
       if (elType === 'mat-select') {
         const trigger = el.querySelector('.mat-select-trigger,.mat-mdc-select-trigger') || el;
         trigger.click();
