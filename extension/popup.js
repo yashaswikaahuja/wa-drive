@@ -250,32 +250,18 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   // Wait for all ng-dropdowns to finish (each takes up to 5500ms)
   // Poll until results stop changing or 60s max
   const ngDropdownCount = Object.values(mapping).filter(v => v.type === 'ng-dropdown').length;
-  const waitMs = Math.max(2000, ngDropdownCount * 5500 + 1000);
-  const replayResults = await new Promise(resolve => {
-    let last = '{}', stable = 0;
-    const poll = setInterval(async () => {
-      const r = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: () => { const v = sessionStorage.getItem('_cc_replay_results'); return v || '{}'; }
-      }).catch(() => [{ result: '{}' }]);
-      const cur = r?.[0]?.result || '{}';
-      if (cur === last) stable++;
-      else { stable = 0; last = cur; }
-      // Done when stable for 2 ticks (600ms) or all ng-dropdowns have results
-      const parsed = JSON.parse(cur);
-      const done = (stable >= 2 && Object.keys(parsed).length >= ngDropdownCount) || stable >= 10;
-      if (done) {
-        clearInterval(poll);
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: () => sessionStorage.removeItem('_cc_replay_results')
-        }).catch(() => {});
-        resolve(parsed);
-      }
-    }, 300);
-    // Hard timeout
-    setTimeout(() => { clearInterval(poll); resolve(JSON.parse(last)); }, waitMs);
+  // Each ng-dropdown takes up to 5500ms; wait for all + 2s buffer, min 3s
+  const waitMs = Math.max(3000, ngDropdownCount * 5500 + 2000);
+  await new Promise(r => setTimeout(r, waitMs));
+  const replayTelemetryResult = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const v = sessionStorage.getItem('_cc_replay_results');
+      sessionStorage.removeItem('_cc_replay_results');
+      return v ? JSON.parse(v) : {};
+    }
   });
+  const replayResults = replayTelemetryResult?.[0]?.result ?? {};
 
   // Unresolved detection — semantic field groups, not raw DOM nodes
   const skipLabels = /^(yes|no|true|false|select|choose|dd.mm.yyyy|mm.yyyy|please select)$/i;
