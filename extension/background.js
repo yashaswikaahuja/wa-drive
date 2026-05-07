@@ -3,9 +3,10 @@ console.log("[CC] background.js loaded v3.44");
 
 // Wake on storage change — more reliable than sendMessage for waking SW
 chrome.storage.onChanged.addListener((changes, area) => {
+  console.log('[CC] storage changed:', area, Object.keys(changes));
   if (area === 'local' && changes._cc_teach_job?.newValue) {
     const job = changes._cc_teach_job.newValue;
-    console.log('[CC] SW woke up, teach job received:', job.hostname, job.fields?.length, 'fields');
+    console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields');
     runTeachSession(job).catch(console.error);
   }
 });

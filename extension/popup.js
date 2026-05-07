@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.44';
+const CURRENT_VERSION = '3.45';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -358,6 +358,7 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
   });
 
   // Write job to storage — this wakes the SW via onChanged
+  console.log('[CC] popup: writing teach job to storage');
   await chrome.storage.local.set({
     _cc_teach_job: {
       tabId: tab.id,
