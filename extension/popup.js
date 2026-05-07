@@ -1,11 +1,12 @@
-const CURRENT_VERSION = '3.66';
+const CURRENT_VERSION = '3.67';
 let selectedProfile = null;
 
 // Check for updates on every popup open
 chrome.storage.local.get(['backendUrl'], async (result) => {
   if (!result.backendUrl) return;
   try {
-    const res = await fetch(`${result.backendUrl}/extension/version`);
+    const _vbase = result.backendUrl.replace(/\/api$/, '');
+    const res = await fetch(`${_vbase}/api/extension/version`);
     const { version, download_url } = await res.json();
     if (version && version !== CURRENT_VERSION) {
       const banner = document.getElementById('update-banner');
