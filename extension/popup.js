@@ -303,7 +303,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   const INTERACTIVE_TYPES = ['ng-dropdown','mat-select','mat-radio','mat-checkbox','select'];
   const failedFields = [
-    ...allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type)),
+    ...allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type) && f.type !== 'ng-dropdown'),
     ...ngDropdowns.map(f => ({ ...f, selector: null })),
   ];
   const unmappedTextFields = allUnresolved.filter(f => !INTERACTIVE_TYPES.includes(f.type));
@@ -361,12 +361,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       });
     }
 
-    // Show Teach button if there are unresolved component fields
-    if (failedFields.length > 0) {
-      const teachBtn = document.getElementById('teach-btn');
-      teachBtn.style.display = 'block';
-      teachBtn.onclick = () => startTeachMode(tab, failedFields, backendUrl, selectedProfile);
-    }
+    // teach button already shown above
 
     // Show Save Learning button
     document.getElementById('save-learning-btn').style.display = 'block';
