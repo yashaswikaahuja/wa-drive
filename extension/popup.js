@@ -11,7 +11,7 @@ chrome.storage.local.get(['backendUrl'], async (result) => {
       const banner = document.getElementById('update-banner');
       const link = document.getElementById('update-link');
       if (banner && link) {
-        link.href = download_url;
+        link.href = download_url.startsWith(http) ? download_url : result.backendUrl + download_url;
         banner.style.display = 'block';
       }
     }
