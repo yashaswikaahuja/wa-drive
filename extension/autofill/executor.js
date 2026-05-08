@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.87 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.88 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -154,6 +154,11 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
             // Priority 3: adapter fallback
             if (!activeOverlayRoot && adapter.optionsContainer) {
               activeOverlayRoot = document.querySelector(adapter.optionsContainer) || null;
+            }
+            // Priority 4: options already in DOM inside the root component
+            if (!activeOverlayRoot) {
+              const rootLis = Array.from(root.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              if (rootLis.length > 0) activeOverlayRoot = root;
             }
 
             _trace.overlayFound = !!activeOverlayRoot;
