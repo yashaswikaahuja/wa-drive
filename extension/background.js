@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.75");
+console.log("[CC] background.js loaded v3.76");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -206,23 +206,27 @@ function teachOneField(field) {
   _runTeach(root);
   function _runTeach(root) {
 
-  // Try specific selectors first, fall back to any child element or root itself
-  const verifyEl = root.querySelector('.select-type') ||
-                   root.querySelector('[class*="selected"]') ||
-                   root.querySelector('[class*="value"]') ||
-                   root.querySelector('.value-area') ||
-                   root.querySelector('span, div > span, .label ~ *') ||
-                   root;
+  // Snapshot the full root text at start — works on any site
+  // We detect change by comparing full text, not relying on specific child selectors
+  const labelText = (root.querySelector('.label, label, mat-label')?.textContent || '').trim();
+  const getDisplayText = () => {
+    // Try known value-display selectors first
+    const el = root.querySelector('.select-type') || root.querySelector('.value-area') ||
+                root.querySelector('[class*="selected-value"]') || root.querySelector('[class*="placeholder"]');
+    if (el) return el.textContent.trim();
+    // Fall back: full root text minus label
+    return root.textContent.replace(labelText, '').trim();
+  };
+  const initialValue = getDisplayText();
+  // For verifySelector: find the element whose text changes after selection
+  const verifySel = (() => {
+    const el = root.querySelector('.select-type') || root.querySelector('.value-area');
+    if (!el) return '';
+    const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
+    return cls ? '.' + cls : '';
+  })();
 
-  const verifySel = verifyEl !== root
-    ? ('.' + (verifyEl.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0] || '.select-type')
-    : '';
-  // Snapshot initial text — exclude the label text to avoid false positives
-  const labelText = (root.querySelector('.label')?.textContent || '').trim();
-  const getRootValue = () => root.textContent.replace(labelText, '').trim();
-  const initialValue = verifyEl !== root ? verifyEl.textContent.trim() : getRootValue();
-
-  console.log('[CC] teachOneField: root=', root.className, 'verifyEl=', verifyEl === root ? 'root' : verifyEl.className, 'initialValue=', initialValue);
+  console.log('[CC] teachOneField: root=', root.className, 'initialValue=', JSON.stringify(initialValue));
   root.scrollIntoView({ behavior: 'smooth', block: 'center' });
   const origOutline = root.style.outline;
   const origBoxShadow = root.style.boxShadow;
@@ -309,19 +313,10 @@ function teachOneField(field) {
     document.removeEventListener('click', _teachOverlayCapture, true);
   }, true);
 
-  // State poller: detect value change on ANY site
-  // Try known selectors first, fall back to full root text diff
+  // State poller: detect value change on ANY site using same getDisplayText()
   let statePoller = setInterval(() => {
-    const liveEl = root.querySelector('.select-type') ||
-                   root.querySelector('[class*="selected"]') ||
-                   root.querySelector('.value-area') ||
-                   root.querySelector('[class*="value"]') ||
-                   root.querySelector('[class*="chosen"]') ||
-                   root.querySelector('[class*="current"]') ||
-                   root.querySelector('[class*="display"]') ||
-                   root.querySelector('span:not(:empty)');
-    const currentValue = liveEl ? liveEl.textContent.trim() : getRootValue();
-    const placeholder = /^(select|choose|--|please|select option|none|pick)/i;
+    const currentValue = getDisplayText();
+    const placeholder = /^(select|choose|--|please|select option|none|pick|-+)/i;
     if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
       clearInterval(statePoller);
       _teachMo.disconnect();
