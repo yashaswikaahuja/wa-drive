@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.83';
+const CURRENT_VERSION = '3.84';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -328,19 +328,29 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
           // Must have visible text and be interactive
           const hasOptions = el.querySelector('li, [class*="option"], [class*="item"]') ||
                              el.getAttribute('role') === 'combobox' ||
-                             (el.querySelector('button > span') && el.classList.contains('relative'));
+                             el.querySelector('button > span') || // Vue teleported dropdowns
+                             el.classList.contains('relative');
           if (hasOptions) els.push(el);
         });
       }
       els.forEach((el, idx) => {
         // Try to get label: look for sibling label, parent label, aria-label, or first text node
-        const lbl = el.querySelector('.label, label, mat-label')?.textContent?.trim()
-                 || el.getAttribute('aria-label')
-                 || el.closest('[class*="form"],[class*="field"],[class*="group"]')?.querySelector('label')?.textContent?.trim()
-                 || el.previousElementSibling?.textContent?.trim()
-                 || el.parentElement?.querySelector('label')?.textContent?.trim()
-                 || el.parentElement?.previousElementSibling?.textContent?.trim()
-                 || '';
+        // Walk up to 5 levels to find a label (handles Vue flex-gap wrappers)
+        let lbl = el.querySelector('.label, label, mat-label')?.textContent?.trim()
+                 || el.getAttribute('aria-label') || '';
+        if (!lbl) {
+          let node = el;
+          for (let _i = 0; _i < 5 && !lbl; _i++) {
+            node = node.parentElement;
+            if (!node) break;
+            const found = node.querySelector('label');
+            if (found && !found.closest('div.relative')) lbl = found.textContent.trim();
+            if (!lbl && node.previousElementSibling) {
+              const ps = node.previousElementSibling;
+              lbl = (ps.tagName === 'LABEL' ? ps : ps.querySelector('label'))?.textContent?.trim() || '';
+            }
+          }
+        }
         if (!lbl || /verify/i.test(lbl) || /^(-+select-+|--|please)/i.test(lbl)) return;
         // Get current selected value
         const verifyEl = verifySel ? el.querySelector(verifySel) : null;
@@ -348,7 +358,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
                       || el.querySelector('.select-type,.value-area,[class*="selected"],[class*="value"]')?.textContent?.trim()
                       || el.querySelector('button > span:first-child')?.textContent?.trim()
                       || '';
-        const filled = selected && !/^(select|choose|--)$/i.test(selected.trim());
+        const filled = selected && !/^(select|choose|--|day|month|year)$/i.test(selected.trim());
         const key = seenLabels.has(lbl) ? `${lbl} (${idx})` : lbl;
         seenLabels.add(lbl);
         fields.push({ label: key, type: 'ng-dropdown', filled, domIndex: idx, componentClass: compClass || el.className.trim().split(/\s+/)[0] });
