@@ -114,14 +114,14 @@ function fuzzyMatch(formFields, profile) {
       const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
       const monthShort = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       const monthNum = parseInt(dobMonth);
-      if (ident.includes('day') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || /^day[_\s]*(of[_\s]*birth)?$/.test(ident.trim()))) {
+      if (ident.includes('day') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || /^[_\s]*day[_\s]*$/.test(ident.replace(/day/g,'').trim()) || ident.replace(/[_\s]/g,'') === 'day')) {
         mapping[field.selector] = { value: parseInt(dobDay).toString(), type: field.type }; continue;
       }
-      if (ident.includes('month') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || /^month[_\s]*(of[_\s]*birth)?$/.test(ident.trim()))) {
+      if (ident.includes('month') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1)) {
         const monthVal = field.type === 'select' ? monthNames[monthNum] : dobMonth;
         mapping[field.selector] = { value: monthVal, type: field.type, monthNum, monthShort: monthShort[monthNum] }; continue;
       }
-      if (ident.includes('year') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || /^year[_\s]*(of[_\s]*birth)?$/.test(ident.trim()))) {
+      if (ident.includes('year') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1)) {
         mapping[field.selector] = { value: dobYear, type: field.type }; continue;
       }
       // Full DOB field (single input) - detect separator from placeholder

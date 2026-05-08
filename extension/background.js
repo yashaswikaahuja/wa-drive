@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.79");
+console.log("[CC] background.js loaded v3.80");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -222,8 +222,13 @@ function teachOneField(field) {
                 root.querySelector('[class*="select-value"] span') || root.querySelector('[class*="mat-select-value"] span');
     if (el) return el.textContent.trim();
     // Clone root, strip option lists and placeholders, get remaining text
+    // For mat-select: check mat-select-value span directly
+    const matVal = root.querySelector('.mat-select-value-text,.mat-mdc-select-value-text');
+    if (matVal) return matVal.textContent.trim();
     const clone = root.cloneNode(true);
-    clone.querySelectorAll('ul,ol,[class*="options"],[class*="dropdown-list"],[class*="drop-list"],[class*="menu"],[class*="items"],[class*="placeholder"]').forEach(e => e.remove());
+    clone.querySelectorAll('ul,ol,[class*="options"],[class*="dropdown-list"],[class*="drop-list"],[class*="menu"],[class*="items"]').forEach(e => e.remove());
+    // Remove placeholder only if it has placeholder class (not value class)
+    clone.querySelectorAll('[class*="placeholder"]:not([class*="value"])').forEach(e => e.remove());
     return clone.textContent.replace(labelText, '').trim();
   };
   const initialValue = getDisplayText();

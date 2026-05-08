@@ -249,3 +249,38 @@ const SITES = [
 ];
 
 module.exports = SITES;
+
+// Add UPESSC from screenshot
+SITES.push({
+  site: 'UPESSC bed.upessc.org (Angular custom dropdown)',
+  html: `<div class="ng-select-container">
+    <div class="ng-value-container">
+      <div class="ng-placeholder">Select Identity Proof</div>
+    </div>
+    <div class="ng-arrow-wrapper"><span class="ng-arrow"></span></div>
+  </div>`,
+  label: 'Step 2a: Select Identity Proof',
+  selectValue: 'Aadhaar Card',
+  expectedDisplayAfter: 'Aadhaar Card',
+  triggerSel: '.ng-select-container',
+});
+
+SITES.push({
+  site: 'UPESSC bed.upessc.org (DAY select)',
+  html: `<select id="day" name="day"><option value="">DAY</option><option value="14">14</option></select>`,
+  label: 'DAY',
+  selectValue: '14',
+  expectedDisplayAfter: '14',
+  triggerSel: 'select',
+  isNativeSelect: true,
+});
+
+SITES.push({
+  site: 'UPESSC bed.upessc.org (MONTH select)',
+  html: `<select id="month" name="month"><option value="">MONTH</option><option value="January">January</option></select>`,
+  label: 'MONTH',
+  selectValue: 'January',
+  expectedDisplayAfter: 'January',
+  triggerSel: 'select',
+  isNativeSelect: true,
+});
