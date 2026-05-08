@@ -363,13 +363,14 @@ io.on('connection', (socket) => {
 
 
 // Extension update endpoints
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 function getExtensionVersion(): string {
   try {
     const manifest = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../extension/manifest.json'), 'utf8'));
     return manifest.version;
   } catch { return '0.0'; }
 }
+app.get('/api/diagnose.js', (_req, res) => { res.setHeader('Content-Type','application/javascript'); res.sendFile(resolve(dirname(fileURLToPath(import.meta.url)), '../../tests/diagnose.js')); });
 app.get('/api/extension/version', (req: any, res: any) => {
   const base = `${req.protocol}://${req.get('host')}`;
   res.json({ version: getExtensionVersion(), download_url: `${base}/api/extension/download` });
