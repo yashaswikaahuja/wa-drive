@@ -1,20 +1,20 @@
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
-  name:           ['candidate_name', 'applicant_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname'],
+  name:           ['candidate_name', 'candidates_name', 'applicant_name', 'applicants_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname', 'pratyashi_ka_naam', 'your_name', 'enter_name'],
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_', 'txt_dob', 'txtdob', 'txt_date_of_birth'],
-  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name'],
-  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother', 'txt_mother', 'txtmother', 'txt_mother_name'],
+  father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name', 'fathers_name_and_verify', 'pitaji_ka_naam'],
+  mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother', 'txt_mother', 'txtmother', 'txt_mother_name', 'mothers_name_and_verify', 'mata_ka_naam'],
   address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
-  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no', 'txt_mobile', 'txtmobile', 'txt_mobile_no'],
-  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email', 'txt_email', 'txtemail', 'txt_email_id'],
-  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar'],
+  mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no', 'txt_mobile', 'txtmobile', 'txt_mobile_no', 'mobile_no_mobile_sankhya', 'registered_mobile'],
+  email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email', 'txt_email', 'txtemail', 'txt_email_id', 'email_id_e_mail_a_i_di', 'registered_email'],
+  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar', 'aadhaar_card_no', 'aadhar_number', 'uid_no'],
   pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
   epic_number:    ['epic_no', 'voter_id', 'epic_number'],
-  category:       ['category', 'caste_category', 'varg', 'txt_category', 'ddl_category', 'ddlcategory'],
+  category:       ['category', 'caste_category', 'varg', 'txt_category', 'ddl_category', 'ddlcategory', 'social_category', 'reservation_category', 'caste'],
   gender:         ['gender', 'sex', 'ling', 'txt_gender', 'ddl_gender', 'rbl_gender'],
-  pincode:        ['pincode', 'pin_code', 'postal_code', 'zip_code'],
-  state:          ['state_name', 'state_of', 'rajya'],
-  district:       ['district_name', 'jila'],
+  pincode:        ['pincode', 'pin_code', 'postal_code', 'zip_code', 'pin', 'zip', 'pincode_pin_code'],
+  state:          ['state_name', 'state_of', 'rajya', 'state', 'home_state', 'permanent_state', 'state_of_residence'],
+  district:       ['district_name', 'jila', 'district', 'home_district', 'permanent_district'],
   nationality:    ['nationality', 'rashtriyata', 'citizenship', 'citizen'],
   marital_status: ['marital_status', 'marital', 'vivah', 'married', 'marriage_status', 'ddl_marital'],
   religion:       ['religion', 'dharm', 'dharma', 'ddl_religion', 'txt_religion'],
@@ -43,8 +43,12 @@ function fuzzyMatch(formFields, profile) {
   for (const field of formFields) {
     // Prioritize label text — for ServicePlus/dynamic forms, label is the only meaningful identifier
     // Repeat label twice to give it more weight over generic IDs like field_1_1
-    const ident = [field.label, field.label, field.placeholder, field.id, field.name]
-      .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./$]/g, '_');
+    // Strip Hindi/non-ASCII chars from label for matching, keep English part
+    const labelEn = (field.label || '').replace(/[^\x00-\x7F]/g, ' ').trim();
+    const ident = [labelEn, labelEn, field.placeholder, field.id, field.name]
+      .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_');
+    // Skip verify/confirm mirror fields (UPSC OTR has 'Verify Name', 'Verify DOB' etc)
+    if (/^verify_|_and_verify|^confirm_|re_enter/i.test(ident) && !ident.includes('id')) continue;
 
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
