@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.80';
+const CURRENT_VERSION = '3.81';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -323,7 +323,9 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         const candidates = document.querySelectorAll('[class*="dropdown"],[class*="select"],[class*="picker"],[class*="combo"]');
         candidates.forEach(el => {
           if (el.tagName === 'SELECT' || el.tagName === 'INPUT') return;
-          // Must have visible text and be interactive (has click handler or tabindex)
+          // Skip wrappers around native selects — those are already handled
+          if (el.querySelector('select')) return;
+          // Must have visible text and be interactive
           const hasOptions = el.querySelector('li, [class*="option"], [class*="item"]') ||
                              el.getAttribute('role') === 'combobox';
           if (hasOptions) els.push(el);
