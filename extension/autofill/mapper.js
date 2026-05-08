@@ -53,7 +53,9 @@ function fuzzyMatch(formFields, profile) {
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
-    const isEducationRow = ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll');
+    // 'candidate name as per matriculation' is a name field, not education row
+    const isCandidateNameField = ident.includes('candidate_name') || ident.includes('candidates_name') || (ident.includes('name') && ident.includes('candidate'));
+    const isEducationRow = !isCandidateNameField && (ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll'));
     if (isEducationRow) {
       // Don't skip — try to match education fields from profile
       const eduAliases = {
@@ -123,6 +125,10 @@ function fuzzyMatch(formFields, profile) {
       }
       if (ident.includes('year') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1)) {
         mapping[field.selector] = { value: dobYear, type: field.type }; continue;
+      }
+      // Angular Material DOB: placeholder='dd-mm-yyyy' with no label
+      if (!field.label && (field.placeholder === 'dd-mm-yyyy' || field.placeholder === 'DD-MM-YYYY')) {
+        mapping[field.selector] = { value: profile.dob.split('/').join('-'), type: field.type }; continue;
       }
       // Full DOB field (single input) - detect separator from placeholder
       if (ident.includes('dob') || ident.includes('date_of_birth') || ident.includes('dateofbirth') || ident.includes('birth_date') || (ident.includes('date') && ident.includes('birth'))) {
