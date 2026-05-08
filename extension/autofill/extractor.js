@@ -1,78 +1,157 @@
 // ── Content script functions (run in page context) ────────────────────────────
 function extractFormFieldsWithFingerprint() {
-  // Generate stable form fingerprint
   const hostname = location.hostname;
   const title = (document.querySelector('h1,h2,legend,.form-title,.page-title')?.textContent || document.title || '').trim().slice(0, 50);
+  const labelList = [];
+  const formFields = [];
+
+  // ── Skip elements inside nav/header/search/footer contexts ──
+  function isInSkipContext(el) {
+    return !!(el.closest('nav,header,footer,[role="navigation"],[role="search"],[role="banner"]'));
+  }
+
+  // ── Meaningful label: must be non-empty, not just symbols, min 2 chars ──
+  function isGoodLabel(s) {
+    if (!s) return false;
+    const t = s.replace(/[*:\s]/g, '');
+    return t.length >= 2;
+  }
+
+  // ── Get label for an input element ──
+  function getLabel(el) {
+    // 1. Explicit <label for="id">
+    if (el.id) {
+      const l = document.querySelector(`label[for="${el.id}"]`);
+      if (l && isGoodLabel(l.textContent.trim())) return l.textContent.trim();
+    }
+    // 2. aria-label / aria-labelledby
+    const ariaLabel = el.getAttribute('aria-label');
+    if (ariaLabel && isGoodLabel(ariaLabel)) return ariaLabel.trim();
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const lEl = document.getElementById(labelledBy);
+      if (lEl && isGoodLabel(lEl.textContent.trim())) return lEl.textContent.trim();
+    }
+    // 3. Wrapping <label>
+    const wrappingLabel = el.closest('label');
+    if (wrappingLabel) {
+      const clone = wrappingLabel.cloneNode(true);
+      clone.querySelectorAll('input,select,textarea').forEach(e => e.remove());
+      const t = clone.textContent.trim();
+      if (isGoodLabel(t)) return t;
+    }
+    // 4. Preceding <td> in a table row
+    const td = el.closest('td');
+    if (td) {
+      const prev = td.previousElementSibling;
+      if (prev && isGoodLabel(prev.textContent.trim())) return prev.textContent.trim().slice(0, 60);
+    }
+    // 5. Sibling or parent label within a form-field container
+    const container = el.closest('.form-group,.form-field,.field-wrapper,.input-group,mat-form-field,[class*="form-row"],[class*="field-row"]');
+    if (container) {
+      const l = container.querySelector('label,mat-label,.label,.field-label,.control-label');
+      if (l && isGoodLabel(l.textContent.trim())) return l.textContent.trim();
+    }
+    // 6. Immediately preceding sibling element that looks like a label
+    let prev = el.previousElementSibling;
+    if (prev && ['LABEL','SPAN','DIV','P'].includes(prev.tagName)) {
+      const t = prev.textContent.trim();
+      // Must be short (label-like) and not contain other inputs
+      if (isGoodLabel(t) && t.length < 80 && !prev.querySelector('input,select,textarea')) return t;
+    }
+    // 7. placeholder as last resort (only if meaningful)
+    if (el.placeholder && isGoodLabel(el.placeholder) && el.placeholder.length < 60) return el.placeholder;
+    return '';
+  }
+
+  // ── Determine if a page has a real form worth scanning ──
+  // Must have at least 2 labeled inputs to be considered a form page
+  function hasFormContext() {
+    const forms = document.querySelectorAll('form');
+    if (forms.length > 0) return true;
+    // No <form> tag but has multiple labeled inputs (some govt sites don't use <form>)
+    const inputs = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],textarea');
+    let labeled = 0;
+    inputs.forEach(el => { if (!isInSkipContext(el) && getLabel(el)) labeled++; });
+    return labeled >= 2;
+  }
+
+  if (!hasFormContext()) return { formFields: [], formKey: '' };
+
+  // ── Scan standard inputs ──
   const inputs = document.querySelectorAll(
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
     'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
   );
-  const labelList = [];
-  const formFields = [];
 
-  function getLabel(el) {
-    if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
-    const td = el.closest('td');
-    if (td) { const prev = td.previousElementSibling; if (prev) return prev.textContent.trim().slice(0, 40); }
-    const parent = el.closest('div,td,tr,li,span,p,mat-form-field');
-    if (parent) { const l = parent.querySelector('label,mat-label'); if (l) return l.textContent.trim(); }
-    if (el.placeholder) return el.placeholder;
-    if (el.getAttribute && el.getAttribute('aria-label')) return el.getAttribute('aria-label');
-    if (el.nextSibling?.textContent) return el.nextSibling.textContent.trim();
-    return '';
-  }
+  let idx = 0;
+  inputs.forEach((el) => {
+    if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' ||
+        el.type === 'search' || el.type === 'password' || el.type === 'file' ||
+        el.type === 'image' || el.type === 'reset') return;
+    if (isInSkipContext(el)) return;
+    // Skip inputs that are clearly search/filter (by name/id/class)
+    const meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
+    if (/search|query|filter|captcha|otp|token|csrf|recaptcha/i.test(meta)) return;
 
-  inputs.forEach((el, i) => {
-    if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button') return;
     const label = getLabel(el);
-    const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"][value="${el.value || ''}"]` : `form-field-${i}`;
+    const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"]` : `form-field-${idx}`;
     const type = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
     if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: i });
+    formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: idx });
+    idx++;
   });
 
-  // Angular Material: mat-select, mat-checkbox, mat-radio-button
+  // ── Angular Material: mat-select ──
   let matIdx = 10000;
-  // Find ALL mat-select elements including those with dynamic attributes
-  document.querySelectorAll('mat-select, [mat-select], [_nghost] select, mat-form-field select').forEach(el => {
-    // Skip if already captured as native select
-    if (el.tagName === 'SELECT' && Array.from(formFields).some(f => f.selector === (el.id ? '#'+el.id : '[name="'+el.name+'"]'))) return;
-    const label = getLabel(el) || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '';
+  document.querySelectorAll('mat-select,mat-form-field select').forEach(el => {
+    if (isInSkipContext(el)) return;
+    if (el.tagName === 'SELECT' && formFields.some(f => f.selector === (el.id ? '#'+el.id : `[name="${el.name}"]`))) return;
+    const label = getLabel(el) || el.getAttribute('aria-label') || '';
+    if (!isGoodLabel(label)) return;
     const id = el.id || `mat-select-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     const type = el.tagName === 'SELECT' ? 'select' : 'mat-select';
-    if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || el.name || '', value: '', placeholder: '', label, type, index: matIdx++ });
   });
+
+  // ── mat-checkbox / mat-radio ──
   document.querySelectorAll('mat-checkbox').forEach(el => {
+    if (isInSkipContext(el)) return;
     const label = getLabel(el) || el.textContent.trim().slice(0, 40);
+    if (!isGoodLabel(label)) return;
     const id = el.id || `mat-cb-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-checkbox', index: matIdx++ });
   });
   document.querySelectorAll('mat-radio-button').forEach(el => {
+    if (isInSkipContext(el)) return;
     const label = el.textContent.trim().slice(0, 40);
+    if (!isGoodLabel(label)) return;
     const name = el.getAttribute('name') || el.closest('mat-radio-group')?.getAttribute('formcontrolname') || '';
     const id = el.id || `mat-rb-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name, value: label, placeholder: '', label, type: 'mat-radio', index: matIdx++ });
   });
 
-  // role=combobox / ng-select / custom dropdowns not using mat-select
+  // ── role=combobox (non-input, non-search) ──
   document.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(el => {
-    if (el.tagName.toLowerCase() === 'input') return; // skip autocomplete inputs
-    const label = getLabel(el) || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '';
-    if (!label) return;
+    if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
+    if (isInSkipContext(el)) return;
+    const meta = ((el.id || '') + ' ' + (el.className || '')).toLowerCase();
+    if (/search|query|filter/i.test(meta)) return;
+    const label = getLabel(el) || el.getAttribute('aria-label') || '';
+    if (!isGoodLabel(label)) return;
     const id = el.id || `combobox-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
-    if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++ });
   });
 
-  // Fingerprint: hostname + title + sorted top-10 labels
+  // ── Fingerprint ──
   const labelSig = labelList.sort().slice(0, 10).join('|');
   const raw = `${hostname}::${title}::${labelSig}`;
-  // Simple hash
   let hash = 0;
   for (let i = 0; i < raw.length; i++) { hash = ((hash << 5) - hash) + raw.charCodeAt(i); hash |= 0; }
   const formKey = Math.abs(hash).toString(36);
@@ -105,7 +184,6 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
         corrections.push({ semanticKey: info.semanticKey, oldKey: info.profileKey, newKey: correctedKey });
         sessionStorage.setItem('_cc_corrections', JSON.stringify(corrections));
         if (!backendUrl || !formKey) return;
-        // Debounce: batch corrections within 1.5s window
         clearTimeout(el._ccTimer);
         el._ccTimer = setTimeout(() => {
           const pending = JSON.parse(sessionStorage.getItem('_cc_corrections') || '[]');
@@ -114,12 +192,10 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
             if (c.newKey) updates[c.semanticKey] = { profileKey: c.newKey, delta: { fills: 0, corrections: 1 } };
           }
           if (!Object.keys(updates).length) return;
-          console.debug('[CC] saving corrections (batched):', updates);
           fetch(backendUrl + '/mappings/' + formKey, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ updates, formKey }),
           }).then(() => {
-            console.debug('[CC] corrections saved ok');
             sessionStorage.removeItem('_cc_corrections');
           }).catch(e => console.warn('[CC] correction save failed', e));
         }, 1500);
@@ -130,23 +206,16 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
   // Watch UNFILLED fields for profile enrichment
   const skipLabels = /captcha|otp|token|verification|code|password|confirm|repeat|retype/i;
   const skipTypes = ['select', 'checkbox', 'radio', 'hidden', 'submit', 'button'];
-  const allInputs = document.querySelectorAll('input,textarea');
-
-  allInputs.forEach(el => {
+  document.querySelectorAll('input,textarea').forEach(el => {
     if (skipTypes.includes(el.type)) return;
-    // Skip if already autofilled
     const selector = el.id ? `#${el.id}` : `[name="${el.name}"]`;
     if (mapping[selector]) return;
-
-    // Get label
     const label = (() => {
       if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
       const td = el.closest('td'); if (td?.previousElementSibling) return td.previousElementSibling.textContent.trim();
       return el.placeholder || '';
     })();
     if (!label || skipLabels.test(label)) return;
-
-    // Normalize label to semantic key
     const normalized = label.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
     const semanticAliases = {
       'full name': 'name', 'candidate name': 'name', 'applicant name': 'name',
@@ -155,29 +224,21 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
       'pin code': 'pincode', 'permanent address': 'address',
     };
     const semanticKey = semanticAliases[normalized] || normalized;
-
     el.addEventListener('blur', () => {
       const val = el.value.trim();
       if (!val || val.length < 2) return;
-
-      // Type validation
       const isValid = (() => {
         if (semanticKey === 'dob') return /^\d{2}\/\d{2}\/\d{4}$/.test(val);
         if (semanticKey === 'pincode') return /^\d{6}$/.test(val);
         if (semanticKey === 'mobile') return /^\d{10}$/.test(val);
         if (semanticKey === 'aadhaar_number') return /^\d{12}$/.test(val);
         if (['name','father_name','mother_name'].includes(semanticKey)) return /^[a-zA-Z\s\.]{2,60}$/.test(val);
-        return val.length >= 2 && val.length <= 200; // generic
+        return val.length >= 2 && val.length <= 200;
       })();
-
       if (!isValid) return;
-
-      // Don't enrich if profile already has this key
       if (profile[semanticKey]) return;
-
       enrichments.push({ semanticKey, value: val, label });
       sessionStorage.setItem('_cc_enrichments', JSON.stringify(enrichments));
     });
   });
 }
-
