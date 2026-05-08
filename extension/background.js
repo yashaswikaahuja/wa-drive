@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.77");
+console.log("[CC] background.js loaded v3.78");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -235,7 +235,7 @@ function teachOneField(field) {
     return cls ? '.' + cls : '';
   })();
 
-  console.log('[CC] teachOneField: root=', root.className, 'initialValue=', JSON.stringify(initialValue));
+  console.log('[CC] teachOneField: root=', root.className, 'initialValue=', JSON.stringify(initialValue), 'triggerSel=', triggerSelector);
   root.scrollIntoView({ behavior: 'smooth', block: 'center' });
   const origOutline = root.style.outline;
   const origBoxShadow = root.style.boxShadow;
@@ -259,12 +259,13 @@ function teachOneField(field) {
   positionBadge();
   const posInterval = setInterval(positionBadge, 150);
 
-  let triggerSelector = '.value-area'; // default fallback
+  let triggerSelector = field.aiTrigger || '.value-area'; // use AI hint if available
   let triggerCaptured = false;
 
   function cleanup() {
     clearInterval(posInterval);
     clearInterval(statePoller);
+    _mo.disconnect();
     document.removeEventListener('click', onTriggerClick, true);
     try { document.body.removeChild(host); } catch {}
     root.style.outline = origOutline;
@@ -322,8 +323,13 @@ function teachOneField(field) {
     document.removeEventListener('click', _teachOverlayCapture, true);
   }, true);
 
-  // State poller: detect value change on ANY site using same getDisplayText()
+  // Use both MutationObserver (immediate) and polling (fallback) for change detection
+  let _domChanged = false;
+  const _mo = new MutationObserver(() => { _domChanged = true; });
+  _mo.observe(root, { childList: true, subtree: true, characterData: true, attributes: true });
+
   let statePoller = setInterval(() => {
+    if (!_domChanged && getDisplayText() === initialValue) return; // nothing changed yet
     const currentValue = getDisplayText();
     const placeholder = /^(select|choose|--|please|select option|none|pick|-+)/i;
     if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
