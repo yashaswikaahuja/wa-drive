@@ -95,7 +95,7 @@ function extractFormFieldsWithFingerprint() {
     if (/search|query|filter|captcha|otp|token|csrf|recaptcha/i.test(meta)) return;
 
     const label = getLabel(el);
-    const selector = el.id ? `#${el.id}` : el.name ? `[name="${el.name}"]` : `form-field-${idx}`;
+    const selector = el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : el.name ? `[name="${el.name}"]` : `form-field-${idx}`;
     const type = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
     if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: idx });
@@ -106,14 +106,14 @@ function extractFormFieldsWithFingerprint() {
   let matIdx = 10000;
   document.querySelectorAll('mat-select,mat-form-field select').forEach(el => {
     if (isInSkipContext(el)) return;
-    if (el.tagName === 'SELECT' && formFields.some(f => f.selector === (el.id ? '#'+el.id : `[name="${el.name}"]`))) return;
+    if (el.tagName === 'SELECT' && formFields.some(f => f.selector === (el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : '#'+el.id) : `[name="${el.name}"]`))) return;
     const label = getLabel(el) || el.getAttribute('aria-label') || '';
     if (!isGoodLabel(label)) return;
     const id = el.id || `mat-select-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     const type = el.tagName === 'SELECT' ? 'select' : 'mat-select';
     labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || el.name || '', value: '', placeholder: '', label, type, index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || el.name || '', value: '', placeholder: '', label, type, index: matIdx++ });
   });
 
   // ── mat-checkbox / mat-radio ──
@@ -123,7 +123,7 @@ function extractFormFieldsWithFingerprint() {
     if (!isGoodLabel(label)) return;
     const id = el.id || `mat-cb-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
-    formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-checkbox', index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-checkbox', index: matIdx++ });
   });
   document.querySelectorAll('mat-radio-button').forEach(el => {
     if (isInSkipContext(el)) return;
@@ -132,7 +132,7 @@ function extractFormFieldsWithFingerprint() {
     const name = el.getAttribute('name') || el.closest('mat-radio-group')?.getAttribute('formcontrolname') || '';
     const id = el.id || `mat-rb-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
-    formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name, value: label, placeholder: '', label, type: 'mat-radio', index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name, value: label, placeholder: '', label, type: 'mat-radio', index: matIdx++ });
   });
 
   // ── role=combobox (non-input, non-search) ──
@@ -146,7 +146,7 @@ function extractFormFieldsWithFingerprint() {
     const id = el.id || `combobox-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector: el.id ? `#${el.id}` : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++ });
   });
 
   // ── Fingerprint ──
@@ -208,7 +208,7 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
   const skipTypes = ['select', 'checkbox', 'radio', 'hidden', 'submit', 'button'];
   document.querySelectorAll('input,textarea').forEach(el => {
     if (skipTypes.includes(el.type)) return;
-    const selector = el.id ? `#${el.id}` : `[name="${el.name}"]`;
+    const selector = el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[name="${el.name}"]`;
     if (mapping[selector]) return;
     const label = (() => {
       if (el.id) { const l = document.querySelector(`label[for="${el.id}"]`); if (l) return l.textContent.trim(); }
