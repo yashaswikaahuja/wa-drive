@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.76");
+console.log("[CC] background.js loaded v3.77");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -210,12 +210,21 @@ function teachOneField(field) {
   // We detect change by comparing full text, not relying on specific child selectors
   const labelText = (root.querySelector('.label, label, mat-label')?.textContent || '').trim();
   const getDisplayText = () => {
-    // Try known value-display selectors first
+    // ng-select: value shown in .ng-value, placeholder in .ng-placeholder
+    const ngValue = root.querySelector('.ng-value-label,.ng-value .ng-star-inserted,.ng-value');
+    if (ngValue) return ngValue.textContent.trim();
+    // Known value-display selectors
     const el = root.querySelector('.select-type') || root.querySelector('.value-area') ||
-                root.querySelector('[class*="selected-value"]') || root.querySelector('[class*="placeholder"]');
+                root.querySelector('[class*="selection__rendered"]') || root.querySelector('[class*="filter-option"]') ||
+                root.querySelector('[class*="chosen-single"] span') || root.querySelector('.p-dropdown-label') ||
+                root.querySelector('[class*="selectmenu-text"]') || root.querySelector('[class*="selected-value"]') ||
+                root.querySelector('[class*="trigger"] span:first-child') ||
+                root.querySelector('[class*="select-value"] span') || root.querySelector('[class*="mat-select-value"] span');
     if (el) return el.textContent.trim();
-    // Fall back: full root text minus label
-    return root.textContent.replace(labelText, '').trim();
+    // Clone root, strip option lists and placeholders, get remaining text
+    const clone = root.cloneNode(true);
+    clone.querySelectorAll('ul,ol,[class*="options"],[class*="dropdown-list"],[class*="drop-list"],[class*="menu"],[class*="items"],[class*="placeholder"]').forEach(e => e.remove());
+    return clone.textContent.replace(labelText, '').trim();
   };
   const initialValue = getDisplayText();
   // For verifySelector: find the element whose text changes after selection
