@@ -284,3 +284,22 @@ SITES.push({
   triggerSel: 'select',
   isNativeSelect: true,
 });
+
+// UPESSC Vue custom select (actual DOM from source analysis)
+SITES.push({
+  site: 'UPESSC Vue custom select (DAY)',
+  html: '<div class="relative"><button type="button" class="w-full border rounded px-3 py-2 text-sm text-left text-gray-400"><span>DAY</span><svg class="w-4 h-4"></svg></button></div>',
+  label: 'DAY',
+  selectValue: '14',
+  expectedDisplayAfter: '14',
+  triggerSel: 'button',
+});
+
+SITES.push({
+  site: 'UPESSC Vue identity select',
+  html: '<div class="relative"><button type="button" class="w-full border rounded px-3 py-2 text-sm text-left text-gray-400"><span>Select Identity Proof</span><svg class="w-4 h-4"></svg></button></div>',
+  label: 'Step 2a: Select Identity Proof',
+  selectValue: 'Aadhaar Card',
+  expectedDisplayAfter: 'Aadhaar Card',
+  triggerSel: 'button',
+});

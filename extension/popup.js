@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.81';
+const CURRENT_VERSION = '3.82';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -327,7 +327,8 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
           if (el.querySelector('select')) return;
           // Must have visible text and be interactive
           const hasOptions = el.querySelector('li, [class*="option"], [class*="item"]') ||
-                             el.getAttribute('role') === 'combobox';
+                             el.getAttribute('role') === 'combobox' ||
+                             (el.querySelector('button > span') && el.classList.contains('relative'));
           if (hasOptions) els.push(el);
         });
       }
