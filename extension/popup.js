@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.71';
+const CURRENT_VERSION = '3.72';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -306,24 +306,50 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   });
 
   // Also detect ng-dropdown fields from the page (not captured in formFields)
+  // Use adapter componentClass if available, otherwise scan generically
+  const _adapterCompClass = portalAdapters && Object.keys(portalAdapters)[0];
+  const _adapterTrigger = _adapterCompClass && portalAdapters[_adapterCompClass]?.triggerSelector;
+  const _adapterVerify = _adapterCompClass && portalAdapters[_adapterCompClass]?.verifySelector;
   const ngDropdownResult = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: () => {
+    func: (compClass, triggerSel, verifySel) => {
       const fields = [];
       const seenLabels = new Set();
-      document.querySelectorAll('div.ng-dropdown').forEach((el, idx) => {
-        const lbl = el.querySelector('.label')?.textContent?.trim() || '';
+      // Build selector: use adapter componentClass if known, else broad generic
+      const sel = compClass ? `div.${compClass}` : 'div.ng-dropdown';
+      let els = Array.from(document.querySelectorAll(sel));
+      // Generic fallback: find div/span elements that look like custom dropdowns
+      if (els.length === 0) {
+        const candidates = document.querySelectorAll('[class*="dropdown"],[class*="select"],[class*="picker"],[class*="combo"]');
+        candidates.forEach(el => {
+          if (el.tagName === 'SELECT' || el.tagName === 'INPUT') return;
+          // Must have visible text and be interactive (has click handler or tabindex)
+          const hasOptions = el.querySelector('li, [class*="option"], [class*="item"]') ||
+                             el.getAttribute('role') === 'combobox';
+          if (hasOptions) els.push(el);
+        });
+      }
+      els.forEach((el, idx) => {
+        // Try to get label: look for sibling label, parent label, aria-label, or first text node
+        const lbl = el.querySelector('.label, label, mat-label')?.textContent?.trim()
+                 || el.getAttribute('aria-label')
+                 || el.closest('[class*="form"],[class*="field"],[class*="group"]')?.querySelector('label')?.textContent?.trim()
+                 || el.previousElementSibling?.textContent?.trim()
+                 || '';
         if (!lbl || /verify/i.test(lbl) || /^(-+select-+|--|please)/i.test(lbl)) return;
-        const selected = el.querySelector('.select-type')?.textContent?.trim()
-                      || el.querySelector('.value-area')?.textContent?.trim() || '';
+        // Get current selected value
+        const verifyEl = verifySel ? el.querySelector(verifySel) : null;
+        const selected = verifyEl?.textContent?.trim()
+                      || el.querySelector('.select-type,.value-area,[class*="selected"],[class*="value"]')?.textContent?.trim()
+                      || '';
         const filled = selected && !/^(select|choose|--)$/i.test(selected.trim());
-        // For duplicate labels (e.g. State/UT in permanent + present address), suffix with index
         const key = seenLabels.has(lbl) ? `${lbl} (${idx})` : lbl;
         seenLabels.add(lbl);
-        fields.push({ label: key, type: 'ng-dropdown', filled, domIndex: idx });
+        fields.push({ label: key, type: 'ng-dropdown', filled, domIndex: idx, componentClass: compClass || el.className.trim().split(/\s+/)[0] });
       });
       return fields;
-    }
+    },
+    args: [_adapterCompClass || null, _adapterTrigger || null, _adapterVerify || null],
   });
   const ngDropdowns = (ngDropdownResult?.[0]?.result || []).filter(f => !f.filled);
 

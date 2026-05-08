@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.71");
+console.log("[CC] background.js loaded v3.72");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -100,21 +100,67 @@ function teachOneField(field) {
   sessionStorage.setItem('_cc_teach_active', '1');
 
   let root = null;
+  const compClass = field.componentClass || 'ng-dropdown';
   // Use domIndex if available (precise, handles duplicate labels)
   if (typeof field.domIndex === 'number') {
-    root = document.querySelectorAll('div.ng-dropdown')[field.domIndex] || null;
+    root = document.querySelectorAll(`div.${compClass}`)[field.domIndex] || null;
+    // Fallback: try generic dropdown selectors at same index
+    if (!root) {
+      const allDropdowns = Array.from(document.querySelectorAll(
+        `div.${compClass},[class*=dropdown],[class*=select],[class*=picker]`
+      )).filter(el => el.tagName !== 'SELECT' && el.tagName !== 'INPUT');
+      root = allDropdowns[field.domIndex] || null;
+    }
   }
   if (!root && field.selector && !field.selector.startsWith('form-field-')) {
     root = document.querySelector(field.selector);
   }
   if (!root) {
     const baseLabel = field.label.replace(/\s*\(\d+\)$/, '').replace(/[\n*]/g,'').trim().slice(0,15);
-    document.querySelectorAll('div.ng-dropdown, mat-select, [role="combobox"]').forEach(el => {
+    document.querySelectorAll(`div.${compClass}, mat-select, [role=combobox]`).forEach(el => {
       const lbl = el.querySelector('.label, mat-label, label')?.textContent?.trim() || el.getAttribute('aria-label') || '';
       if (lbl && baseLabel && lbl.includes(baseLabel)) root = el;
     });
   }
-  if (!root) { sessionStorage.removeItem('_cc_teach_active'); return; }
+
+  // Click-to-identify mode: root still null — ask user to click the component
+  if (!root) {
+    const _host = document.createElement('div');
+    _host.style.cssText = 'position:fixed;z-index:2147483647;top:12px;left:50%;transform:translateX(-50%);pointer-events:none;';
+    document.body.appendChild(_host);
+    const _sh = _host.attachShadow({ mode: 'open' });
+    const _b = document.createElement('div');
+    _b.style.cssText = 'background:#7c3aed;color:white;padding:8px 16px;border-radius:6px;font-size:13px;font-family:sans-serif;box-shadow:0 2px 12px rgba(0,0,0,0.5);white-space:nowrap;';
+    _b.textContent = `⚠ Click the dropdown for ${field.label} to identify it`;
+    _sh.appendChild(_b);
+    function _onIdentify(e) {
+      let el = e.target;
+      let found = null;
+      for (let i = 0; i < 8 && el && el !== document.body; i++) {
+        const cls = (el.className || '').toLowerCase();
+        if (el.tagName !== 'SELECT' && el.tagName !== 'INPUT' &&
+            (cls.includes('dropdown') || cls.includes('select') || cls.includes('picker') ||
+             cls.includes('combo') || el.querySelector('li,[class*=\option\]'))) {
+          found = el; break;
+        }
+        el = el.parentElement;
+      }
+      root = found || e.target.closest('div') || e.target;
+      document.removeEventListener('click', _onIdentify, true);
+      try { document.body.removeChild(_host); } catch {}
+      _runTeach(root);
+    }
+    document.addEventListener('click', _onIdentify, true);
+    setTimeout(() => {
+      document.removeEventListener('click', _onIdentify, true);
+      try { document.body.removeChild(_host); } catch {}
+      sessionStorage.removeItem('_cc_teach_active');
+    }, 30000);
+    return;
+  }
+
+  _runTeach(root);
+  function _runTeach(root) {
 
   // Try specific selectors first, fall back to any child element or root itself
   const verifyEl = root.querySelector('.select-type') ||
@@ -272,6 +318,7 @@ function teachOneField(field) {
   }, 200);
 
   setTimeout(() => { cleanup(); }, 45000);
+  } // end _runTeach
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
