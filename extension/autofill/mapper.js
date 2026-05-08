@@ -22,6 +22,7 @@ const FIELD_ALIASES = {
   qualification_status:['essential_qualification','have_qualification','possess_qualification','affirmation','qualified'],
   year_of_passing:     ['year_of_passing','passing_year','year_pass','year_graduation'],
   grade:               ['grade','division','class_obtained','cgpa','gpa'],
+  highest_education_qualification: ['highest_education','highest_qualification','highest_level_of_education','highest_level_of_educational'],
   degree_name:         ['degree_name','degree','qualification_name','course_name','programme'],
   university_name:     ['university_name','university','institution_name','college_name','college'],
   village:        ['village', 'village_name', 'gram', 'gaon', 'txt_village', 'ddl_village'],
@@ -145,6 +146,8 @@ function fuzzyMatch(formFields, profile) {
       // father_name only if field is clearly a father field; mother_name only if clearly mother
       if (profileKey === 'father_name' && !isFatherMother) continue;
       if (profileKey === 'mother_name' && !(ident.includes('mother') || ident.includes('mata'))) continue;
+      // degree_name/course_name must not match 'highest level of education' fields
+      if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
       // For radio buttons: match by checking if this option's label contains the profile value
       if (field.type === 'radio') {
