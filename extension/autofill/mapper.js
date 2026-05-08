@@ -1,6 +1,5 @@
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 const FIELD_ALIASES = {
-  highest_education_qualification: ['highest_education','highest_qualification','education_qualification','highest_level_of_education','highest_level_of_educational'],
   name:           ['candidate_name', 'candidates_name', 'applicant_name', 'applicants_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname', 'pratyashi_ka_naam', 'your_name', 'enter_name'],
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_', 'txt_dob', 'txtdob', 'txt_date_of_birth'],
   father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name', 'fathers_name_and_verify', 'pitaji_ka_naam'],
@@ -164,9 +163,7 @@ function fuzzyMatch(formFields, profile) {
       }
 
       if (aliases.some(alias => ident.includes(alias))) {
-        const val = profile[profileKey];
-        if (typeof val === 'string' && val.includes('*')) break; // skip masked values
-        mapping[field.selector] = { value: val, type: field.type };
+        mapping[field.selector] = { value: profile[profileKey], type: field.type };
         break;
       }
     }
