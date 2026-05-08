@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.82';
+const CURRENT_VERSION = '3.83';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -320,7 +320,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       let els = Array.from(document.querySelectorAll(sel));
       // Generic fallback: find div/span elements that look like custom dropdowns
       if (els.length === 0) {
-        const candidates = document.querySelectorAll('[class*="dropdown"],[class*="select"],[class*="picker"],[class*="combo"]');
+        const candidates = document.querySelectorAll('[class*="dropdown"],[class*="select"],[class*="picker"],[class*="combo"],div.relative');
         candidates.forEach(el => {
           if (el.tagName === 'SELECT' || el.tagName === 'INPUT') return;
           // Skip wrappers around native selects — those are already handled
@@ -338,12 +338,15 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
                  || el.getAttribute('aria-label')
                  || el.closest('[class*="form"],[class*="field"],[class*="group"]')?.querySelector('label')?.textContent?.trim()
                  || el.previousElementSibling?.textContent?.trim()
+                 || el.parentElement?.querySelector('label')?.textContent?.trim()
+                 || el.parentElement?.previousElementSibling?.textContent?.trim()
                  || '';
         if (!lbl || /verify/i.test(lbl) || /^(-+select-+|--|please)/i.test(lbl)) return;
         // Get current selected value
         const verifyEl = verifySel ? el.querySelector(verifySel) : null;
         const selected = verifyEl?.textContent?.trim()
                       || el.querySelector('.select-type,.value-area,[class*="selected"],[class*="value"]')?.textContent?.trim()
+                      || el.querySelector('button > span:first-child')?.textContent?.trim()
                       || '';
         const filled = selected && !/^(select|choose|--)$/i.test(selected.trim());
         const key = seenLabels.has(lbl) ? `${lbl} (${idx})` : lbl;
