@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.74';
+const CURRENT_VERSION = '3.75';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -486,6 +486,7 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
       fields: failedFields,
       backendUrl,
       hostname: new URL(tab.url).hostname,
+      groqKey: groqKey || null,
       ts: Date.now(),
     }
   });

@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v3.74");
+console.log("[CC] background.js loaded v3.75");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -28,7 +28,7 @@ function stopKeepalive() {
   _keepaliveInterval = null;
 }
 
-async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
+async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey }) {
   _teachRunning = true;
   startKeepalive();
   const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'select', 'mat-radio'];
@@ -49,10 +49,54 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname }) {
       func: () => { sessionStorage.removeItem('_cc_teach_result'); sessionStorage.removeItem('_cc_teach_active'); },
     }).catch(() => {});
 
+    // AI-assisted: if no known adapter, ask Groq to identify the dropdown component
+    let fieldWithHint = { ...field };
+    if (groqKey && !field.componentClass) {
+      try {
+        const domSnap = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (lbl) => {
+            // Collect outer HTML of elements that look like custom dropdowns near the label
+            const snippets = [];
+            document.querySelectorAll('div,span,ul,ng-select,app-dropdown,[class*=select],[class*=dropdown],[class*=picker]').forEach(el => {
+              if (el.tagName === 'SELECT' || el.tagName === 'INPUT') return;
+              const text = el.textContent.slice(0, 100);
+              if (text.toLowerCase().includes(lbl.toLowerCase().slice(0, 10))) {
+                snippets.push(el.outerHTML.slice(0, 300));
+              }
+            });
+            return snippets.slice(0, 5).join('\n---\n');
+          },
+          args: [field.label],
+        }).catch(() => [{ result: '' }]);
+        const domText = domSnap?.[0]?.result || '';
+        if (domText) {
+          const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+              messages: [{ role: 'user', content: 'Identify the dropdown component class and trigger selector from these HTML snippets near field "' + field.label + '". Reply ONLY as JSON: {"componentClass":"...","triggerSelector":"..."}. Snippets: ' + domText }],
+              max_tokens: 80,
+            }),
+          }).then(r => r.json()).catch(() => null);
+          const txt = aiRes?.choices?.[0]?.message?.content || '';
+          const m = txt.match(/\{[^}]+\}/);
+          if (m) {
+            try {
+              const hint = JSON.parse(m[0]);
+              if (hint.componentClass) fieldWithHint = { ...field, componentClass: hint.componentClass, aiTrigger: hint.triggerSelector };
+              console.log('[CC] AI hint:', JSON.stringify(hint));
+            } catch {}
+          }
+        }
+      } catch (e) { console.warn('[CC] AI identify failed:', e.message); }
+    }
+
     await chrome.scripting.executeScript({
       target: { tabId },
       func: teachOneField,
-      args: [field],
+      args: [fieldWithHint],
     }).catch(e => console.error('[CC] teachOneField inject failed:', e.message));
 
     // Poll sessionStorage for result (up to 45s) — background stays alive
@@ -140,7 +184,7 @@ function teachOneField(field) {
         const cls = (el.className || '').toLowerCase();
         if (el.tagName !== 'SELECT' && el.tagName !== 'INPUT' &&
             (cls.includes('dropdown') || cls.includes('select') || cls.includes('picker') ||
-             cls.includes('combo') || el.querySelector('li,[class*=\option\]'))) {
+             cls.includes('combo') || el.querySelector('li,[class*="option"]'))) {
           found = el; break;
         }
         el = el.parentElement;
@@ -265,13 +309,19 @@ function teachOneField(field) {
     document.removeEventListener('click', _teachOverlayCapture, true);
   }, true);
 
-  // State poller: re-query on each tick — Angular replaces DOM nodes on value change
+  // State poller: detect value change on ANY site
+  // Try known selectors first, fall back to full root text diff
   let statePoller = setInterval(() => {
     const liveEl = root.querySelector('.select-type') ||
                    root.querySelector('[class*="selected"]') ||
-                   root.querySelector('.value-area');
+                   root.querySelector('.value-area') ||
+                   root.querySelector('[class*="value"]') ||
+                   root.querySelector('[class*="chosen"]') ||
+                   root.querySelector('[class*="current"]') ||
+                   root.querySelector('[class*="display"]') ||
+                   root.querySelector('span:not(:empty)');
     const currentValue = liveEl ? liveEl.textContent.trim() : getRootValue();
-    const placeholder = /^(select|choose|--|please|select option)/i;
+    const placeholder = /^(select|choose|--|please|select option|none|pick)/i;
     if (currentValue && currentValue !== initialValue && !placeholder.test(currentValue)) {
       clearInterval(statePoller);
       _teachMo.disconnect();
