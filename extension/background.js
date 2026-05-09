@@ -1,9 +1,22 @@
-console.log("[CC] background.js loaded v4.11");
+console.log("[CC] background.js loaded v4.12");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
 let _teachRunning = false;
 let _lastTeachTs = 0;
+// Alarm-based wake — most reliable way to wake sleeping SW in MV3
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== 'cc_teach_wake') return;
+  const data = await chrome.storage.local.get('_cc_teach_job');
+  const job = data._cc_teach_job;
+  if (!job) return;
+  if (job.ts === _lastTeachTs || _teachRunning) return;
+  _lastTeachTs = job.ts;
+  chrome.storage.local.remove('_cc_teach_job');
+  console.log('[CC] alarm woke SW for teach:', job.hostname);
+  runTeachSession(job).catch(console.error);
+});
+
 // Also wake via message (more reliable than storage for sleeping SW)
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'TEACH_JOB') {
