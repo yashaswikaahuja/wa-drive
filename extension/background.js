@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.15");
+console.log("[CC] background.js loaded v4.16");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -294,18 +294,12 @@ function teachOneField(field) {
   root.style.boxShadow = '0 0 0 4px rgba(220,38,38,0.3)';
 
   const host = document.createElement('div');
-  host.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;background:#dc2626;color:white;padding:5px 10px;border-radius:4px;font-size:12px;font-family:sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
-  host.textContent = '⚠ Click this dropdown to open it';
+  host.style.cssText = 'position:fixed;z-index:2147483647;top:12px;left:50%;transform:translateX(-50%);pointer-events:none;background:#dc2626;color:white;padding:10px 24px;border-radius:6px;font-size:15px;font-weight:bold;font-family:sans-serif;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.7);border:2px solid #ff6b6b;';
+  host.textContent = '⚠ Click the highlighted dropdown, then select a value';
   const badge = host;
   document.body.appendChild(host);
 
-  function positionBadge() {
-    const r = root.getBoundingClientRect();
-    host.style.left = r.left + 'px';
-    host.style.top = Math.max(4, r.top - 34) + 'px';
-  }
-  positionBadge();
-  const posInterval = setInterval(positionBadge, 150);
+  const posInterval = setInterval(() => {}, 5000); // no-op, badge is fixed center-top
 
   let triggerSelector = field.aiTrigger || '.value-area'; // use AI hint if available
   let triggerCaptured = false;
