@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.01 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.02 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
@@ -352,8 +352,10 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         console.debug('[CC] select attempt:', selector, 'value:', value, 'total opts:', allOptions.length, 'matched:', opt ? opt.text.trim() : 'NONE', 'sample:', allOptions.slice(0,3).map(o=>o.value+'='+o.text.trim()));
         if (opt) return applySelect(el, opt);
 
-        // Options not ready yet (dependent dropdown) — schedule retry, count as pending
-        // Return 1 optimistically so the filled count isn't 0; retry will apply the value
+        // Options not ready yet (dependent dropdown) — schedule retry
+        // For cascade parents (state/district) that already applied, don't retry (would reset children)
+        const isCascadeParent = /state|district|17391|17297/.test(selector);
+        if (isCascadeParent) { console.debug('[CC] cascade parent already set, skip retry:', selector); return 1; }
         let attempts = 0;
         const interval = setInterval(() => {
           const allOpts = Array.from(el.options);
