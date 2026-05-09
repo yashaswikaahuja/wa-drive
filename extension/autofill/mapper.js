@@ -146,6 +146,8 @@ function fuzzyMatch(formFields, profile) {
       // father_name only if field is clearly a father field; mother_name only if clearly mother
       if (profileKey === 'father_name' && !isFatherMother) continue;
       if (profileKey === 'mother_name' && !(ident.includes('mother') || ident.includes('mata'))) continue;
+      // name must not fill husband/wife/spouse fields
+      if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
       // degree_name/course_name must not match 'highest level of education' fields
       if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
