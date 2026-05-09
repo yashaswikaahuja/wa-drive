@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.92 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.93 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -406,6 +406,12 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         });
         // Also simulate keyboard events for Angular
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
+        // ServicePlus (Bihar RTPS) transliterates English→Hindi on Space keypress
+        if (location.hostname.includes('serviceonline') || location.hostname.includes('serviceplus')) {
+          el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ' ', code: 'Space', keyCode: 32 }));
+          el.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, key: ' ', code: 'Space', keyCode: 32 }));
+          el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ' ', code: 'Space', keyCode: 32 }));
+        }
         return 1;
       }
     } catch { /* skip */ }
