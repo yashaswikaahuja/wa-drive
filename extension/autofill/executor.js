@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.02 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.03 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
@@ -323,6 +323,8 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           );
           // Trigger ASP.NET onchange handler directly if present
           if (typeof el.onchange === 'function') { try { el.onchange.call(el, new Event('change')); } catch(e) { console.debug('[CC] onchange handler error:', e.message); } }
+          // jQuery change trigger — needed for ServicePlus/DWR cascading selects
+          if (typeof $ !== 'undefined') { try { $(el).trigger('change'); } catch(e) {} }
           // propertychange for old ASP.NET/IE compat (optional)
           try { el.dispatchEvent(new Event('propertychange', { bubbles: true })); } catch {}
           el.dispatchEvent(new Event('blur', { bubbles: true }));
