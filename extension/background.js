@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.08");
+console.log("[CC] background.js loaded v4.09");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -25,6 +25,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (_teachRunning) return;
   _lastTeachTs = job.ts;
   console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields');
+  chrome.storage.local.set({_cc_teach_debug: 'received:' + job.hostname + ':' + job.fields?.length});
   chrome.storage.local.remove('_cc_teach_job');
   runTeachSession(job).catch(console.error);
 });
@@ -110,7 +111,11 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
       target: { tabId },
       func: teachOneField,
       args: [fieldWithHint],
-    }).catch(e => console.error('[CC] teachOneField inject failed:', e.message));
+    }).catch(e => {
+      console.error('[CC] teachOneField inject failed:', e.message);
+      chrome.storage.local.set({_cc_teach_debug: 'inject failed: '+e.message});
+      notifyPopup({ type: 'TEACH_PROGRESS', status: 'Error: '+e.message, done: true });
+    });
 
     // Poll sessionStorage for result (up to 45s) — background stays alive
     const adapter = await pollTeachResult(tabId, 45000);
