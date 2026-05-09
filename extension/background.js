@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.16");
+console.log("[CC] background.js loaded v4.17");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -134,15 +134,19 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
       } catch (e) { console.warn('[CC] AI identify failed:', e.message); }
     }
 
-    await chrome.scripting.executeScript({
+    console.log('[CC] injecting teachOneField into tabId:', tabId, 'field:', fieldWithHint.label);
+    const injectResult = await chrome.scripting.executeScript({
       target: { tabId },
       func: teachOneField,
       args: [fieldWithHint],
-    }).catch(e => {
-      console.error('[CC] teachOneField inject failed:', e.message);
-      chrome.storage.local.set({_cc_teach_debug: 'inject failed: '+e.message});
-      notifyPopup({ type: 'TEACH_PROGRESS', status: 'Error: '+e.message, done: true });
-    });
+    }).then(r => { console.log('[CC] inject OK, result:', r?.[0]?.result); return r; })
+      .catch(e => {
+        console.error('[CC] teachOneField inject failed:', e.message);
+        chrome.storage.local.set({_cc_teach_debug: 'inject failed: '+e.message});
+        notifyPopup({ type: 'TEACH_PROGRESS', status: 'Inject error: '+e.message, done: true });
+        return null;
+      });
+    if (!injectResult) { _teachRunning = false; stopKeepalive(); return; }
 
     // Poll sessionStorage for result (up to 45s) — background stays alive
     const adapter = await pollTeachResult(tabId, 45000);
