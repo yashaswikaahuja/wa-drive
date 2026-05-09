@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.17");
+console.log("[CC] background.js loaded v4.18");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -87,6 +87,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
     // Clear any stale result before injecting
     await chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',
       func: () => { sessionStorage.removeItem('_cc_teach_result'); sessionStorage.removeItem('_cc_teach_active'); },
     }).catch(() => {});
 
@@ -137,6 +138,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
     console.log('[CC] injecting teachOneField into tabId:', tabId, 'field:', fieldWithHint.label);
     const injectResult = await chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',
       func: teachOneField,
       args: [fieldWithHint],
     }).then(r => { console.log('[CC] inject OK, result:', r?.[0]?.result); return r; })
@@ -154,6 +156,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
     // Always clear page teach state after poll (timeout or success)
     await chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',
       func: () => { sessionStorage.removeItem('_cc_teach_active'); sessionStorage.removeItem('_cc_teach_result'); },
     }).catch(() => {});
 
@@ -435,6 +438,7 @@ function pollTeachResult(tabId, timeout) {
       elapsed += 500;
       const r = await chrome.scripting.executeScript({
         target: { tabId },
+        world: 'MAIN',
         func: () => {
           const v = sessionStorage.getItem('_cc_teach_result');
           if (v) { sessionStorage.removeItem('_cc_teach_result'); return JSON.parse(v); }
