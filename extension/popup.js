@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.85';
+const CURRENT_VERSION = '3.86';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -421,7 +421,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   if (failedFields.length > 0) {
     const teachBtn = document.getElementById('teach-btn');
     teachBtn.style.display = 'block';
-    teachBtn.onclick = () => startTeachMode(tab, failedFields, backendUrl, selectedProfile);
+    teachBtn.onclick = () => startTeachMode(tab, failedFields, backendUrl, selectedProfile, groqKey);
   }
 
   if (count > 0) {
@@ -479,7 +479,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 });
 
 // ── Assisted Learning Mode ───────────────────────────────────────────────────
-async function startTeachMode(tab, failedFields, backendUrl, profile) {
+async function startTeachMode(tab, failedFields, backendUrl, profile, groqKey) {
   showStatus('Teaching started — interact with the highlighted field on the page.', 'info');
   document.getElementById('teach-btn').style.display = 'none';
 
