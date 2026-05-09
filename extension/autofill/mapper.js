@@ -56,7 +56,9 @@ function fuzzyMatch(formFields, profile) {
     // Skip education table roll numbers (they appear in rows with exam context)
     // 'candidate name as per matriculation' is a name field, not education row
     const isCandidateNameField = ident.includes('candidate_name') || ident.includes('candidates_name') || (ident.includes('name') && ident.includes('candidate'));
-    const isEducationRow = !isCandidateNameField && (ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll'));
+    // 'highest level of educational qualification' contains 'graduation' but is NOT an education row
+    const isHighestEduField = ident.includes('highest');
+    const isEducationRow = !isCandidateNameField && !isHighestEduField && (ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll'));
     if (isEducationRow) {
       // Don't skip — try to match education fields from profile
       const eduAliases = {
