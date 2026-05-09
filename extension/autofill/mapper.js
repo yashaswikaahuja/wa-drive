@@ -7,7 +7,7 @@ const FIELD_ALIASES = {
   address:        ['permanent_address', 'correspondence_address', 'residential_address', 'pata', 'niwas'],
   mobile:         ['mobile_no', 'mobile_number', 'phone_no', 'contact_no', 'mo_no', 'sampark', 'mobile', 'phone', 'mobile_no_', 'sampark_no', 'txt_mobile', 'txtmobile', 'txt_mobile_no', 'mobile_no_mobile_sankhya', 'registered_mobile'],
   email:          ['email_address', 'email_id', 'emailid', 'email_add', 'email', 'txt_email', 'txtemail', 'txt_email_id', 'email_id_e_mail_a_i_di', 'registered_email'],
-  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar', 'aadhaar_card_no', 'aadhar_number', 'uid_no'],
+  aadhaar_number: ['aadhaar', 'aadhar', 'uid', 'aadhaar_no', 'aadhar_no', 'identity_card_no', 'enter_identity', 'aadhaar_number_', 'aadhar_card', 'txt_aadhaar', 'txtaadhaar', 'txt_aadhar', 'aadhaar_card_no', 'aadhar_number', 'uid_no', 'aadhar_sankhya', 'aadhaar_sankhya'],
   pan_number:     ['pan_no', 'pan_number', 'pancard', 'pan_card'],
   epic_number:    ['epic_no', 'voter_id', 'epic_number'],
   category:       ['category', 'caste_category', 'varg', 'txt_category', 'ddl_category', 'ddlcategory', 'social_category', 'reservation_category', 'caste'],
@@ -148,6 +148,8 @@ function fuzzyMatch(formFields, profile) {
       if (profileKey === 'mother_name' && !(ident.includes('mother') || ident.includes('mata'))) continue;
       // name must not fill husband/wife/spouse fields
       if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
+      // post_office/village must not fill 'purpose' or 'office' fields
+      if ((profileKey === 'post_office' || profileKey === 'village') && (ident.includes('purpose') || ident.includes('office') || ident.includes('uddeshya'))) continue;
       // degree_name/course_name must not match 'highest level of education' fields
       if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
