@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.94 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.95 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -406,9 +406,17 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         });
         // Also simulate keyboard events for Angular
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
-        // ServicePlus: trigger jQuery keyup to activate Google Transliteration for fullName fields
-        if (el.getAttribute('data-type') === 'fullName' && typeof $ !== 'undefined') {
-          setTimeout(() => $(el).trigger('keyup'), 100);
+        // ServicePlus: fill paired Hindi field (same data-groupno, data-type=text) with same value
+        if (el.getAttribute('data-type') === 'fullName') {
+          const groupNo = el.getAttribute('data-groupno');
+          if (groupNo) {
+            const paired = document.querySelector('[data-groupno="'+groupNo+'"][data-type="text"]');
+            if (paired && paired !== el) {
+              const niv2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+              if (niv2) niv2.set.call(paired, value); else paired.value = value;
+              ['input','change'].forEach(ev => paired.dispatchEvent(new Event(ev, {bubbles:true})));
+            }
+          }
         }
         return 1;
       }
