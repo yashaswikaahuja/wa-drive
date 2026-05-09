@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.96 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v3.97 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
@@ -406,15 +406,22 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         });
         // Also simulate keyboard events for Angular
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
-        // ServicePlus: fill paired Hindi field (next text input after fullName in DOM order)
+        // ServicePlus: transliterate English→Hindi for paired Hindi field
         if (el.getAttribute('data-type') === 'fullName') {
           const allInputs = Array.from(document.querySelectorAll('input[type="text"]'));
           const idx = allInputs.indexOf(el);
           const next = allInputs[idx + 1];
           if (next && next.getAttribute('data-type') === 'text') {
-            const niv2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-            if (niv2) niv2.set.call(next, value); else next.value = value;
-            ['input','change'].forEach(ev => next.dispatchEvent(new Event(ev, {bubbles:true})));
+            const fillHindi = (hindiVal) => {
+              const niv2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+              if (niv2) niv2.set.call(next, hindiVal); else next.value = hindiVal;
+              ['input','change'].forEach(ev => next.dispatchEvent(new Event(ev, {bubbles:true})));
+            };
+            // Call Google transliteration API
+            fetch('https://inputtools.google.com/request?text='+encodeURIComponent(value)+'&itc=hi-t-i0-und&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8')
+              .then(r=>r.json())
+              .then(d=>{ const hindi = d?.[1]?.[0]?.[1]?.[0]; fillHindi(hindi || value); })
+              .catch(()=>fillHindi(value));
           }
         }
         return 1;
