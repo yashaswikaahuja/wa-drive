@@ -1,5 +1,4 @@
 node_modules/
-dist/
 build/
 .env
 .env.local
@@ -13,6 +12,9 @@ build/
 *~
 .wwebjs_auth/
 uploads/
-data/
-backend/data/
+# Keep data tracked (profiles, adapters are critical)
+# backend/data/
+# Keep dist tracked (tsc can't run on VM)
+# dist/
 .github/
+WORKER_SECRET*

@@ -1,0 +1,17 @@
+{
+  "ssc.gov.in": {
+    "ng-dropdown": {
+      "componentClass": "ng-dropdown",
+      "triggerSelector": ".value-area",
+      "optionsContainer": "",
+      "optionSelector": "li",
+      "verifySelector": ".select-type",
+      "adapterVersion": 8,
+      "learnedAt": "2026-05-07",
+      "lastUsedAt": "2026-05-07",
+      "successCount": 0,
+      "failureCount": 0,
+      "stale": false
+    }
+  }
+}
