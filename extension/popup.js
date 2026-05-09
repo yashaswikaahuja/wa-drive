@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.14';
+const CURRENT_VERSION = '4.15';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -506,7 +506,7 @@ async function startTeachMode(tab, failedFields, backendUrl, profile, groqKey) {
   chrome.storage.local.set({ _cc_teach_job: job }, () => {
     console.log('[CC] popup: teach job written to storage, creating alarm');
     // Alarm is the most reliable way to wake a sleeping MV3 service worker
-    chrome.alarms.create('cc_teach_wake', { delayInMinutes: 0.1 });
+    chrome.alarms.create('cc_teach_wake', { delayInMinutes: 0.5 }); // 30s min enforced in packed ext
     // Also try sendMessage in case SW is already awake (faster path)
     chrome.runtime.sendMessage({ type: 'TEACH_JOB', job }).catch(() => {
       console.log('[CC] popup: SW sleeping, alarm will wake it in ~6s');
