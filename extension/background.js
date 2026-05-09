@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.13");
+console.log("[CC] background.js loaded v4.14");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -147,6 +147,11 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
     // Poll sessionStorage for result (up to 45s) — background stays alive
     const adapter = await pollTeachResult(tabId, 45000);
     console.log('[CC] pollTeachResult returned:', JSON.stringify(adapter));
+    // Always clear page teach state after poll (timeout or success)
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => { sessionStorage.removeItem('_cc_teach_active'); sessionStorage.removeItem('_cc_teach_result'); },
+    }).catch(() => {});
 
     if (!adapter) {
       notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Skipped "${label}" (timeout)`, done: false });
