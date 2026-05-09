@@ -149,7 +149,7 @@ function fuzzyMatch(formFields, profile) {
       // name must not fill husband/wife/spouse fields
       if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
       // post_office/village must not fill 'purpose' or 'office' fields
-      if ((profileKey === 'post_office' || profileKey === 'village') && (ident.includes('purpose') || ident.includes('office') || ident.includes('uddeshya'))) continue;
+      if ((profileKey === 'post_office' || profileKey === 'village') && (ident.includes('purpose') || ident.includes('uddeshya') || (ident.includes('apply') && ident.includes('office')))) continue;
       // degree_name/course_name must not match 'highest level of education' fields
       if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
