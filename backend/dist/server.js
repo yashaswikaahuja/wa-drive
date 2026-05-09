@@ -1,4 +1,5 @@
 import express from 'express';
+import { writeFileSync, readFileSync, existsSync, mkdirSync, renameSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
@@ -437,6 +438,102 @@ app.post('/api/whatsapp/logout', (_req, res) => {
     res.json({ ok: true });
 });
 app.get('/api/whatsapp/qr', (_req, res) => res.json({ qrCode: lastQrCode }));
+
+const INBOX_DIR = '/opt/cybercontrol-hub/inbox';
+if (!existsSync(INBOX_DIR)) mkdirSync(INBOX_DIR, { recursive: true });
+const inboxUpload = multer({ dest: INBOX_DIR });
+
+app.get('/inbox', (_req, res) => res.send(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Inbox</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:sans-serif;background:#f5f5f5;padding:16px}
+h2{margin-bottom:12px;color:#333}
+textarea{width:100%;height:140px;padding:10px;border:1px solid #ccc;border-radius:6px;font-size:14px;resize:vertical}
+input[type=file]{margin:8px 0;display:block}
+button{background:#2563eb;color:#fff;border:none;padding:10px 24px;border-radius:6px;font-size:15px;cursor:pointer;margin-top:8px}
+button:hover{background:#1d4ed8}
+#status{margin-top:10px;color:#16a34a;font-weight:bold}
+.msg{background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:10px;margin-bottom:8px}
+.msg .meta{font-size:11px;color:#888;margin-bottom:4px}
+.msg img{max-width:100%;border-radius:4px;margin-top:6px}
+</style></head>
+<body>
+<h2>📥 Inbox</h2>
+<textarea id="txt" placeholder="Paste text here..."></textarea>
+<input type="file" id="file" accept="image/*,.pdf,.txt,.json,.md">
+<button onclick="send()">Send to GCP</button>
+<div id="status"></div>
+<hr style="margin:16px 0">
+<div id="msgs"></div>
+<script>
+async function send(){
+  const txt=document.getElementById('txt').value;
+  const file=document.getElementById('file').files[0];
+  const fd=new FormData();
+  if(txt) fd.append('text',txt);
+  if(file) fd.append('file',file);
+  if(!txt&&!file) return;
+  document.getElementById('status').textContent='Sending...';
+  const r=await fetch('/inbox/send',{method:'POST',body:fd});
+  const j=await r.json();
+  document.getElementById('status').textContent=j.ok?'✓ Sent!':'Error: '+j.error;
+  document.getElementById('txt').value='';
+  document.getElementById('file').value='';
+  loadMsgs();
+}
+async function loadMsgs(){
+  const r=await fetch('/inbox/list');
+  const msgs=await r.json();
+  document.getElementById('msgs').innerHTML=msgs.map(m=>\`<div class="msg">
+    <div class="meta">\${m.time}</div>
+    \${m.text?'<div>'+m.text.replace(/</g,'&lt;')+'</div>':''}
+    \${m.file?'<div>📎 '+m.file+'</div>':''}
+    \${m.isImage?'<img src="/inbox/file/'+m.id+'">':''}
+  </div>\`).join('');
+}
+loadMsgs();
+setInterval(loadMsgs,5000);
+</script></body></html>`));
+
+app.post('/inbox/send', inboxUpload.single('file'), (req, res) => {
+  const id = Date.now().toString();
+  const entry = { id, time: new Date().toISOString(), text: req.body.text || '', file: '', isImage: false };
+  if (req.file) {
+    const ext = req.file.originalname.split('.').pop();
+    const dest = `${INBOX_DIR}/${id}.${ext}`;
+    renameSync(req.file.path, dest);
+    entry.file = req.file.originalname;
+    entry.isImage = /^(jpg|jpeg|png|gif|webp)$/i.test(ext);
+    entry.filePath = `${id}.${ext}`;
+  }
+  const logFile = `${INBOX_DIR}/messages.json`;
+  const msgs = existsSync(logFile) ? JSON.parse(readFileSync(logFile,'utf8')) : [];
+  msgs.unshift(entry);
+  writeFileSync(logFile, JSON.stringify(msgs.slice(0,50), null, 2));
+  res.json({ ok: true, id });
+});
+
+app.get('/inbox/list', (_req, res) => {
+  const logFile = `${INBOX_DIR}/messages.json`;
+  res.json(existsSync(logFile) ? JSON.parse(readFileSync(logFile,'utf8')) : []);
+});
+
+app.get('/inbox/file/:id', (req, res) => {
+  const logFile = `${INBOX_DIR}/messages.json`;
+  const msgs = existsSync(logFile) ? JSON.parse(readFileSync(logFile,'utf8')) : [];
+  const m = msgs.find(x => x.id === req.params.id.split('.')[0]);
+  if (m?.filePath) res.sendFile(`${INBOX_DIR}/${m.filePath}`);
+  else res.status(404).end();
+});
+
+app.get('/inbox/latest', (_req, res) => {
+  const logFile = `${INBOX_DIR}/messages.json`;
+  const msgs = existsSync(logFile) ? JSON.parse(readFileSync(logFile,'utf8')) : [];
+  res.json(msgs[0] || null);
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
@@ -485,7 +582,6 @@ io.on('connection', (socket) => {
     });
 });
 // Extension update endpoints
-import { readFileSync, writeFileSync } from 'fs';
 function getExtensionVersion() {
     try {
         const manifest = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../extension/manifest.json'), 'utf8'));
