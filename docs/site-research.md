@@ -163,3 +163,32 @@ _Last updated: 2026-05-08_
 | v3.87 | Reverted v3.86 regression |
 | v3.88 | Executor Priority 4: search within root when no overlay (SSC in-DOM options) |
 | v3.89 | `highest_education_qualification` alias, block `degree_name` on `highest` fields |
+
+---
+
+## 9. Bihar RTPS — Transliteration Fix (v3.97)
+
+### Problem
+Hindi fields (आवेदक का नाम, पिता का नाम, माता का नाम) need Hindi script, not English.
+
+### Root Cause
+- English fields: `data-type="fullName"` — Google Transliteration control listens to keypress
+- Hindi fields: `data-type="text"` — paired with fullName by DOM order (next input)
+- Transliteration requires real keystrokes — cannot be triggered programmatically
+
+### Fix (v3.97)
+After filling each `fullName` field, call Google Transliteration API directly:
+```
+GET https://inputtools.google.com/request?text=SANDHYA+KUMARI&itc=hi-t-i0-und&num=1
+→ [SUCCESS,[[SANDHYA KUMARI,[संध्या कुमारी]]]]
+```
+Fill the next `data-type=text` input with the Hindi result.
+
+### Results
+- SANDHYA KUMARI → संध्या कुमारी ✓
+- SUDHIR PRASAD → सुधीर प्रसाद ✓  
+- LALITA DEVI → ललिता देवी ✓
+
+### Other ServicePlus platforms
+This fix applies to ALL ServicePlus-based state portals:
+Bihar, Jharkhand, Odisha, Chhattisgarh, Goa, Meghalaya, Mizoram, Nagaland, Sikkim, Tripura
