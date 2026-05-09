@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '3.84';
+const CURRENT_VERSION = '3.85';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -498,7 +498,7 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
     tabId: tab.id,
     fields: failedFields,
     backendUrl,
-    hostname: new URL(tab.url).hostname,
+    hostname: (() => { try { return new URL(tab.url).hostname; } catch(e) { console.warn('[CC] teach: cannot parse tab url, using empty hostname'); return ''; } })(),
     groqKey: groqKey || null,
     ts: Date.now(),
   };
