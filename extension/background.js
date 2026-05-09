@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.10");
+console.log("[CC] background.js loaded v4.11");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -8,10 +8,15 @@ let _lastTeachTs = 0;
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'TEACH_JOB') {
     const job = msg.job;
+    // Use sender tab ID if job tabId is missing/invalid
+    if (sender?.tab?.id && (!job.tabId || job.tabId === 0)) job.tabId = sender.tab.id;
     if (job.ts === _lastTeachTs || _teachRunning) { sendResponse({ ok: false }); return; }
     _lastTeachTs = job.ts;
     sendResponse({ ok: true });
     runTeachSession(job).catch(console.error);
+  }
+  if (msg.type === 'GET_TAB_ID') {
+    sendResponse({ tabId: sender?.tab?.id });
   }
   return true;
 });
@@ -24,8 +29,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (job.ts === _lastTeachTs) return;
   if (_teachRunning) return;
   _lastTeachTs = job.ts;
-  console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields');
-  chrome.storage.local.set({_cc_teach_debug: 'received:' + job.hostname + ':' + job.fields?.length});
+  console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields, tabId:', job.tabId);
+  chrome.storage.local.set({_cc_teach_debug: 'received:' + job.hostname + ':' + job.fields?.length + ':tab:' + job.tabId});
+  // If tabId is missing, find the tab by hostname (resolved inside runTeachSession which is async)
   chrome.storage.local.remove('_cc_teach_job');
   runTeachSession(job).catch(console.error);
 });
@@ -44,6 +50,14 @@ function stopKeepalive() {
 async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey }) {
   _teachRunning = true;
   startKeepalive();
+  // Resolve tabId if missing
+  if (!tabId || tabId === 0) {
+    try {
+      const foundTabs = await chrome.tabs.query({url: '*://' + hostname + '/*'});
+      if (foundTabs.length > 0) { tabId = foundTabs[0].id; console.log('[CC] resolved tabId from hostname:', tabId); }
+    } catch(e) { console.warn('[CC] tab query failed:', e.message); }
+  }
+  if (!tabId) { console.error('[CC] no tabId, aborting teach'); _teachRunning = false; stopKeepalive(); return; }
   // Native <select> and radio are handled by executor directly — only teach custom dropdowns
   const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'mat-radio'];
   const teachable = fields.filter(f => TEACHABLE_TYPES.includes(f.type));
