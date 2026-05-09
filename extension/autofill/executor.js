@@ -1,9 +1,9 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v3.99 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.00 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
-  const PRIORITY_KEYS = ['state', 'district', 'block', 'panchayat'];
+  const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
   const entries = Object.entries(mapping);
   entries.sort(([sa], [sb]) => {
     // Use label from filledBySource for priority matching (handles numeric IDs like #17391)
@@ -446,7 +446,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       delay += 5500; // 800ms stabilize + 10*300ms poll + 1000ms verify + 700ms buffer
     } else if (isDependent && filled > 0) {
       setTimeout(() => fillOne(selector, value, type), delay);
-      delay += 600;
+      delay += 2500; // cascading selects need time for onchange to load child options
     } else {
       try { filled += fillOne(selector, value, type) || 0; }
       catch(e) { console.debug('[CC] fillOne error on', selector, ':', e.message); }
