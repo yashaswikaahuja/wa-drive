@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.00");
+console.log("[CC] background.js loaded v4.01");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -31,7 +31,8 @@ function stopKeepalive() {
 async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey }) {
   _teachRunning = true;
   startKeepalive();
-  const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'select', 'mat-radio'];
+  // Native <select> and radio are handled by executor directly — only teach custom dropdowns
+  const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'mat-radio'];
   const teachable = fields.filter(f => TEACHABLE_TYPES.includes(f.type));
 
   if (teachable.length === 0) {
