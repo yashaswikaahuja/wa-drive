@@ -1,9 +1,21 @@
-console.log("[CC] background.js loaded v4.06");
+console.log("[CC] background.js loaded v4.07");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
 let _teachRunning = false;
 let _lastTeachTs = 0;
+// Also wake via message (more reliable than storage for sleeping SW)
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'TEACH_JOB') {
+    const job = msg.job;
+    if (job.ts === _lastTeachTs || _teachRunning) { sendResponse({ ok: false }); return; }
+    _lastTeachTs = job.ts;
+    sendResponse({ ok: true });
+    runTeachSession(job).catch(console.error);
+  }
+  return true;
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (!changes._cc_teach_job?.newValue) return;
