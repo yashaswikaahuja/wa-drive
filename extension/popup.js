@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.09';
+const CURRENT_VERSION = '4.10';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -502,14 +502,13 @@ async function startTeachMode(tab, failedFields, backendUrl, profile) {
     groqKey: groqKey || null,
     ts: Date.now(),
   };
-  // Try sendMessage first (wakes sleeping SW reliably), fall back to storage
-  console.log('[CC] popup: sending teach job to SW');
-  try {
-    await chrome.runtime.sendMessage({ type: 'TEACH_JOB', job });
-  } catch (e) {
-    console.warn('[CC] sendMessage failed, using storage fallback:', e.message);
-    await chrome.storage.local.set({ _cc_teach_job: job });
-  }
+  // Write to storage FIRST (synchronous-ish) before popup closes
+  console.log('[CC] popup: writing teach job');
+  chrome.storage.local.set({ _cc_teach_job: job }, () => {
+    console.log('[CC] teach job written to storage');
+  });
+  // Also try sendMessage to wake SW immediately
+  chrome.runtime.sendMessage({ type: 'TEACH_JOB', job }).catch(() => {});
 }
 
 // Runs in page context — injects overlay badge, waits for user interaction via sessionStorage polling
