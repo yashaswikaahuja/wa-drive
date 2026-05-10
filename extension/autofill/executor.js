@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.20 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.21 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
@@ -371,6 +371,26 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           if (opt2) { clearInterval(interval); applySelect(el, opt2); return; }
           if (++attempts >= 15) {
             clearInterval(interval);
+            // Groq AI fallback — ask AI to pick the best option
+            const groqKey = window._cc_groq_key;
+            if (groqKey && realOpts.length > 0) {
+              const optTexts = realOpts.map(o => o.text.trim()).join('\n');
+              fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                  messages: [{ role: 'user', content: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts }],
+                  max_tokens: 50,
+                })
+              }).then(r => r.json()).then(res => {
+                const aiText = res?.choices?.[0]?.message?.content?.trim();
+                if (aiText) {
+                  const aiOpt = realOpts.find(o => o.text.trim() === aiText) || realOpts.find(o => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
+                  if (aiOpt) { console.debug('[CC] Groq matched:', aiText, '->', aiOpt.text); applySelect(el, aiOpt); }
+                }
+              }).catch(() => {});
+            }
             console.debug('[CC] select no match after wait:', selector, 'value:', value, 'opts:', realOpts.slice(0,5).map(o=>o.text.trim()));
           }
         }, 200);

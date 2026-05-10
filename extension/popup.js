@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.20';
+const CURRENT_VERSION = '4.21';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -260,6 +260,15 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       delete mapping[field.selector];
       delete filledBySource[field.selector];
     }
+  }
+  // Set groqKey on page for AI-assisted option matching
+  if (groqKey) {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: 'MAIN',
+      func: (k) => { window._cc_groq_key = k; },
+      args: [groqKey],
+    }).catch(() => {});
   }
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
