@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.21 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.22 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
@@ -345,6 +345,16 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           // Step 5: One more delayed change (no duplicate guard needed — only fires once)
           setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 700);
 
+          // Step 6: Re-apply after DWR cascade may reset the value (ServicePlus pattern)
+          const _reapplyVal = opt.value; const _reapplyIdx = opt.index;
+          setTimeout(() => {
+            if (el.value !== _reapplyVal) {
+              el.selectedIndex = _reapplyIdx; el.value = _reapplyVal;
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              console.debug('[CC] re-applied after DWR reset:', selector, _reapplyVal);
+            }
+          }, 3500);
+
           console.debug('[CC] select applied:', selector, '->', opt.text.trim(), '(value:', opt.value, 'index:', opt.index, ')');
           return 1;
         }
@@ -470,7 +480,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       delay += 5500; // 800ms stabilize + 10*300ms poll + 1000ms verify + 700ms buffer
     } else if (isDependent && filled > 0) {
       setTimeout(() => fillOne(selector, value, type), delay);
-      delay += 2500; // cascading selects need time for onchange to load child options
+      delay += 5000; // cascading selects need time for DWR AJAX + re-apply (ServicePlus)
     } else {
       try { filled += fillOne(selector, value, type) || 0; }
       catch(e) { console.debug('[CC] fillOne error on', selector, ':', e.message); }
