@@ -534,6 +534,35 @@ app.get('/inbox/latest', (_req, res) => {
   res.json(msgs[0] || null);
 });
 
+
+// ── FormSession observability endpoints ──────────────────────────────────────
+const SESSIONS_FILE = '/opt/cybercontrol-hub/backend/data/sessions.json';
+function loadSessions() { return existsSync(SESSIONS_FILE) ? JSON.parse(readFileSync(SESSIONS_FILE,'utf8')) : []; }
+function saveSessions(s) { writeFileSync(SESSIONS_FILE, JSON.stringify(s.slice(-500), null, 2)); } // keep last 500
+
+app.post('/api/sessions', (req, res) => {
+  const session = { ...req.body, id: Date.now().toString(36), receivedAt: new Date().toISOString() };
+  const sessions = loadSessions();
+  sessions.unshift(session);
+  saveSessions(sessions);
+  res.json({ ok: true, id: session.id });
+});
+
+app.get('/api/sessions', (_req, res) => res.json(loadSessions().slice(0, 50)));
+
+app.get('/api/sessions/stats', (_req, res) => {
+  const sessions = loadSessions();
+  const byHostname = {};
+  sessions.forEach(s => {
+    const h = s.hostname || 'unknown';
+    if (!byHostname[h]) byHostname[h] = { sessions: 0, totalFilled: 0, totalFailed: 0 };
+    byHostname[h].sessions++;
+    byHostname[h].totalFilled += s.totalFilled || 0;
+    byHostname[h].totalFailed += s.totalFailed || 0;
+  });
+  res.json(byHostname);
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {

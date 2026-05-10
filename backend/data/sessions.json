@@ -1,0 +1,1474 @@
+[
+  {
+    "formKey": "7beu1w",
+    "semanticFormKey": "s_bid3kw",
+    "hostname": "ssc.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778431713884,
+    "records": [
+      {
+        "durationMs": 1,
+        "result": "skipped",
+        "selector": "#txtid",
+        "strategy": "textarea",
+        "ts": 1778431656839,
+        "type": "textarea",
+        "value": "C/O: Sudhir Prasad, Village Charwara, Atri, Gaya, Bihar - 823311"
+      },
+      {
+        "durationMs": 7,
+        "result": "filled",
+        "selector": "form-field-0",
+        "strategy": "text",
+        "ts": 1778431656847,
+        "type": "text",
+        "value": "729027826597"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "form-field-1",
+        "strategy": "text",
+        "ts": 1778431656849,
+        "type": "text",
+        "value": "729027826597"
+      },
+      {
+        "durationMs": 3,
+        "result": "filled",
+        "selector": "form-field-10",
+        "strategy": "text",
+        "ts": 1778431656852,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "form-field-11",
+        "strategy": "text",
+        "ts": 1778431656854,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "form-field-12",
+        "strategy": "text",
+        "ts": 1778431656856,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 4,
+        "result": "filled",
+        "selector": "form-field-15",
+        "strategy": "text",
+        "ts": 1778431656860,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "form-field-16",
+        "strategy": "text",
+        "ts": 1778431656862,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 0,
+        "result": "skipped",
+        "selector": "form-field-17",
+        "strategy": "textarea",
+        "ts": 1778431656862,
+        "type": "textarea",
+        "value": "C/O: Sudhir Prasad, Village Charwara, Atri, Gaya, Bihar - 823311"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "form-field-3",
+        "strategy": "text",
+        "ts": 1778431656864,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "form-field-4",
+        "strategy": "text",
+        "ts": 1778431656865,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "form-field-7",
+        "strategy": "text",
+        "ts": 1778431656865,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "form-field-9",
+        "strategy": "text",
+        "ts": 1778431656866,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      }
+    ],
+    "totalFilled": 11,
+    "totalFailed": 2,
+    "id": "mp00bpx0",
+    "receivedAt": "2026-05-10T16:48:35.316Z"
+  },
+  {
+    "formKey": "ys8dhr",
+    "semanticFormKey": "s_e9sctg",
+    "hostname": "serviceonline.bihar.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778431525618,
+    "records": [
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"1\"]",
+        "strategy": "select",
+        "ts": 1778431519577,
+        "type": "select",
+        "value": "Bihar"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#adharNo",
+        "strategy": "text",
+        "ts": 1778431519578,
+        "type": "text",
+        "value": "729027826597"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#mcListID",
+        "strategy": "select",
+        "ts": 1778431519579,
+        "type": "select",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 4,
+        "result": "filled",
+        "selector": "[id=\"17290_2\"]",
+        "strategy": "radio-click",
+        "ts": 1778431519583,
+        "type": "radio-click",
+        "value": "true"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"17291\"]",
+        "strategy": "text",
+        "ts": 1778431519583,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"17292\"]",
+        "strategy": "text",
+        "ts": 1778431519584,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"17293\"]",
+        "strategy": "text",
+        "ts": 1778431519586,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "[id=\"17294\"]",
+        "strategy": "text",
+        "ts": 1778431519589,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 102,
+        "result": "filled",
+        "selector": "[id=\"17296\"]",
+        "strategy": "select",
+        "ts": 1778431519691,
+        "type": "select",
+        "value": "NEEMCHAK BATHANI"
+      },
+      {
+        "durationMs": 4,
+        "result": "filled",
+        "selector": "[id=\"17299\"]",
+        "strategy": "text",
+        "ts": 1778431519695,
+        "type": "text",
+        "value": "charwara"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "[id=\"17300\"]",
+        "strategy": "text",
+        "ts": 1778431519698,
+        "type": "text",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"41565\"]",
+        "strategy": "text",
+        "ts": 1778431519700,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"65015\"]",
+        "strategy": "select",
+        "ts": 1778431519702,
+        "type": "select",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"75291\"]",
+        "strategy": "select",
+        "ts": 1778431519703,
+        "type": "select",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"76\"]",
+        "strategy": "select",
+        "ts": 1778431519703,
+        "type": "select",
+        "value": "NEEMCHAK BATHANI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"77\"]",
+        "strategy": "select",
+        "ts": 1778431519703,
+        "type": "select",
+        "value": "NEEMCHAK BATHANI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"78248\"]",
+        "strategy": "text",
+        "ts": 1778431519703,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"78250\"]",
+        "strategy": "text",
+        "ts": 1778431519705,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"78251\"]",
+        "strategy": "text",
+        "ts": 1778431519707,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"90867_additionalDoc\"]",
+        "strategy": "text",
+        "ts": 1778431519709,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"90869_additionalDoc\"]",
+        "strategy": "text",
+        "ts": 1778431519710,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 279,
+        "result": "filled",
+        "selector": "[id=\"17391\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431519856,
+        "type": "select",
+        "value": "Bihar"
+      },
+      {
+        "durationMs": 1019,
+        "result": "filled",
+        "selector": "[id=\"17297\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431520596,
+        "type": "select",
+        "value": "Gaya"
+      },
+      {
+        "durationMs": 1018,
+        "result": "filled",
+        "selector": "[id=\"17298\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431520596,
+        "type": "select",
+        "value": "ATRI"
+      },
+      {
+        "durationMs": 1018,
+        "result": "filled",
+        "selector": "[id=\"56886\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431520596,
+        "type": "select",
+        "value": "charwara"
+      }
+    ],
+    "totalFilled": 25,
+    "totalFailed": 0,
+    "id": "mp007ogc",
+    "receivedAt": "2026-05-10T16:45:26.796Z"
+  },
+  {
+    "formKey": "ys8dhr",
+    "semanticFormKey": "s_e9sctg",
+    "hostname": "serviceonline.bihar.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778431371212,
+    "records": [
+      {
+        "durationMs": 4,
+        "result": "filled",
+        "selector": "[id=\"1\"]",
+        "strategy": "select",
+        "ts": 1778431365444,
+        "type": "select",
+        "value": "Bihar"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#adharNo",
+        "strategy": "text",
+        "ts": 1778431365447,
+        "type": "text",
+        "value": "729027826597"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#mcListID",
+        "strategy": "select",
+        "ts": 1778431365449,
+        "type": "select",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 3,
+        "result": "filled",
+        "selector": "[id=\"17290_2\"]",
+        "strategy": "radio-click",
+        "ts": 1778431365452,
+        "type": "radio-click",
+        "value": "true"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"17291\"]",
+        "strategy": "text",
+        "ts": 1778431365453,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"17292\"]",
+        "strategy": "text",
+        "ts": 1778431365454,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 5,
+        "result": "filled",
+        "selector": "[id=\"17293\"]",
+        "strategy": "text",
+        "ts": 1778431365460,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "[id=\"17294\"]",
+        "strategy": "text",
+        "ts": 1778431365463,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"17296\"]",
+        "strategy": "select",
+        "ts": 1778431365464,
+        "type": "select",
+        "value": "NEEMCHAK BATHANI"
+      },
+      {
+        "durationMs": 3,
+        "result": "filled",
+        "selector": "[id=\"17299\"]",
+        "strategy": "text",
+        "ts": 1778431365467,
+        "type": "text",
+        "value": "charwara"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "[id=\"17300\"]",
+        "strategy": "text",
+        "ts": 1778431365470,
+        "type": "text",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"41565\"]",
+        "strategy": "text",
+        "ts": 1778431365471,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"65015\"]",
+        "strategy": "select",
+        "ts": 1778431365472,
+        "type": "select",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"75291\"]",
+        "strategy": "select",
+        "ts": 1778431365472,
+        "type": "select",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"76\"]",
+        "strategy": "select",
+        "ts": 1778431365472,
+        "type": "select",
+        "value": "NEEMCHAK BATHANI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"77\"]",
+        "strategy": "select",
+        "ts": 1778431365472,
+        "type": "select",
+        "value": "NEEMCHAK BATHANI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"78248\"]",
+        "strategy": "text",
+        "ts": 1778431365472,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"78250\"]",
+        "strategy": "text",
+        "ts": 1778431365473,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"78251\"]",
+        "strategy": "text",
+        "ts": 1778431365475,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "[id=\"90867_additionalDoc\"]",
+        "strategy": "text",
+        "ts": 1778431365476,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "[id=\"90869_additionalDoc\"]",
+        "strategy": "text",
+        "ts": 1778431365479,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 222,
+        "result": "filled",
+        "selector": "[id=\"17391\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431365667,
+        "type": "select",
+        "value": "Bihar"
+      },
+      {
+        "durationMs": 753,
+        "result": "filled",
+        "selector": "[id=\"17297\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431366198,
+        "type": "select",
+        "value": "Gaya"
+      },
+      {
+        "durationMs": 1066,
+        "result": "filled",
+        "selector": "[id=\"17298\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431366511,
+        "type": "select",
+        "value": "ATRI"
+      },
+      {
+        "durationMs": 1068,
+        "result": "filled",
+        "selector": "[id=\"56886\"]",
+        "strategy": "wait-engine",
+        "ts": 1778431366513,
+        "type": "select",
+        "value": "charwara"
+      }
+    ],
+    "totalFilled": 25,
+    "totalFailed": 0,
+    "id": "mp004d94",
+    "receivedAt": "2026-05-10T16:42:52.312Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778430704031,
+    "records": [
+      {
+        "durationMs": 9,
+        "result": "filled",
+        "selector": "#dateBirth",
+        "strategy": "text",
+        "ts": 1778430698863,
+        "type": "text",
+        "value": "14/01/2000"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#fatherFullName",
+        "strategy": "text",
+        "ts": 1778430698868,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 7,
+        "result": "filled",
+        "selector": "#gender",
+        "strategy": "select",
+        "ts": 1778430698877,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 5,
+        "result": "filled",
+        "selector": "#gender_id",
+        "strategy": "select",
+        "ts": 1778430698882,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 4,
+        "result": "filled",
+        "selector": "#nationality",
+        "strategy": "select",
+        "ts": 1778430698886,
+        "type": "select",
+        "value": "INDIAN"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_confirmfathername",
+        "strategy": "text",
+        "ts": 1778430698887,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_email_id",
+        "strategy": "text",
+        "ts": 1778430698899,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_fullname",
+        "strategy": "text",
+        "ts": 1778430698900,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_mothername",
+        "strategy": "text",
+        "ts": 1778430698901,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_mothername_id",
+        "strategy": "text",
+        "ts": 1778430698907,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#registration_phone_id",
+        "strategy": "text",
+        "ts": 1778430698909,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_retypefullname",
+        "strategy": "text",
+        "ts": 1778430698910,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      }
+    ],
+    "totalFilled": 12,
+    "totalFailed": 0,
+    "id": "mozzq2f8",
+    "receivedAt": "2026-05-10T16:31:45.093Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778430669605,
+    "records": [
+      {
+        "durationMs": 16,
+        "result": "filled",
+        "selector": "#dateBirth",
+        "strategy": "text",
+        "ts": 1778430664550,
+        "type": "text",
+        "value": "14/01/2000"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#fatherFullName",
+        "strategy": "text",
+        "ts": 1778430664556,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 9,
+        "result": "filled",
+        "selector": "#gender",
+        "strategy": "select",
+        "ts": 1778430664566,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 4,
+        "result": "filled",
+        "selector": "#gender_id",
+        "strategy": "select",
+        "ts": 1778430664571,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 3,
+        "result": "filled",
+        "selector": "#nationality",
+        "strategy": "select",
+        "ts": 1778430664574,
+        "type": "select",
+        "value": "INDIAN"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_confirmfathername",
+        "strategy": "text",
+        "ts": 1778430664575,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_email_id",
+        "strategy": "text",
+        "ts": 1778430664581,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_fullname",
+        "strategy": "text",
+        "ts": 1778430664582,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#registration_mothername",
+        "strategy": "text",
+        "ts": 1778430664584,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_mothername_id",
+        "strategy": "text",
+        "ts": 1778430664589,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_phone_id",
+        "strategy": "text",
+        "ts": 1778430664590,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_retypefullname",
+        "strategy": "text",
+        "ts": 1778430664591,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      }
+    ],
+    "totalFilled": 12,
+    "totalFailed": 0,
+    "id": "mozzpby8",
+    "receivedAt": "2026-05-10T16:31:10.784Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778430111029,
+    "records": [
+      {
+        "durationMs": 8,
+        "result": "filled",
+        "selector": "#dateBirth",
+        "strategy": "text",
+        "ts": 1778430105859,
+        "type": "text",
+        "value": "14/01/2000"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#fatherFullName",
+        "strategy": "text",
+        "ts": 1778430105865,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 7,
+        "result": "filled",
+        "selector": "#gender",
+        "strategy": "select",
+        "ts": 1778430105873,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 4,
+        "result": "filled",
+        "selector": "#gender_id",
+        "strategy": "select",
+        "ts": 1778430105877,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 3,
+        "result": "filled",
+        "selector": "#nationality",
+        "strategy": "select",
+        "ts": 1778430105880,
+        "type": "select",
+        "value": "INDIAN"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#registration_confirmfathername",
+        "strategy": "text",
+        "ts": 1778430105880,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_email_id",
+        "strategy": "text",
+        "ts": 1778430105886,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_fullname",
+        "strategy": "text",
+        "ts": 1778430105887,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#registration_mothername",
+        "strategy": "text",
+        "ts": 1778430105888,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#registration_mothername_id",
+        "strategy": "text",
+        "ts": 1778430105894,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_phone_id",
+        "strategy": "text",
+        "ts": 1778430105896,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_retypefullname",
+        "strategy": "text",
+        "ts": 1778430105897,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      }
+    ],
+    "totalFilled": 12,
+    "totalFailed": 0,
+    "id": "mozzdcwx",
+    "receivedAt": "2026-05-10T16:21:52.161Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778430073032,
+    "records": [
+      {
+        "durationMs": 8,
+        "result": "filled",
+        "selector": "#dateBirth",
+        "strategy": "text",
+        "ts": 1778430067941,
+        "type": "text",
+        "value": "14/01/2000"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#fatherFullName",
+        "strategy": "text",
+        "ts": 1778430067947,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#gender",
+        "strategy": "select",
+        "ts": 1778430067951,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#gender_id",
+        "strategy": "select",
+        "ts": 1778430067954,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#nationality",
+        "strategy": "select",
+        "ts": 1778430067956,
+        "type": "select",
+        "value": "INDIAN"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#registration_confirmfathername",
+        "strategy": "text",
+        "ts": 1778430067956,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_email_id",
+        "strategy": "text",
+        "ts": 1778430067964,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_fullname",
+        "strategy": "text",
+        "ts": 1778430067965,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_mothername",
+        "strategy": "text",
+        "ts": 1778430067966,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#registration_mothername_id",
+        "strategy": "text",
+        "ts": 1778430067972,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#registration_phone_id",
+        "strategy": "text",
+        "ts": 1778430067973,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#registration_retypefullname",
+        "strategy": "text",
+        "ts": 1778430067974,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      }
+    ],
+    "totalFilled": 12,
+    "totalFailed": 0,
+    "id": "mozzcjl6",
+    "receivedAt": "2026-05-10T16:21:14.155Z"
+  },
+  {
+    "formKey": "dny7q7",
+    "semanticFormKey": "s_grdx70",
+    "hostname": "btsc.pariksha.nic.in",
+    "profileId": "9823745234",
+    "startedAt": 1778415497174,
+    "records": [
+      {
+        "durationMs": 14,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_State_Code0",
+        "strategy": "select",
+        "ts": 1778415492089,
+        "type": "select",
+        "value": "Bihar"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_DDL_Village_Code",
+        "strategy": "select",
+        "ts": 1778415492090,
+        "type": "select",
+        "value": "charwara"
+      },
+      {
+        "durationMs": 8,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_DDL_YearofPassing_HS",
+        "strategy": "select",
+        "ts": 1778415492098,
+        "type": "select",
+        "value": "2015"
+      },
+      {
+        "durationMs": 2,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_GRV_Essentail_Qualification_ctl02_txt_other_uni_name",
+        "strategy": "text",
+        "ts": 1778415492100,
+        "type": "text",
+        "value": "+2H/S KHODAGANJ, NALANDA"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_Txt_Fat_hus_Name",
+        "strategy": "text",
+        "ts": 1778415492103,
+        "type": "text",
+        "value": "SUDHIR PRASAD"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_Txt_Mother_Name",
+        "strategy": "text",
+        "ts": 1778415492104,
+        "type": "text",
+        "value": "LALITA DEVI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_Txt_StreetNo_PO0",
+        "strategy": "text",
+        "ts": 1778415492106,
+        "type": "text",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 8,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_BoardName_HS",
+        "strategy": "select",
+        "ts": 1778415492116,
+        "type": "select",
+        "value": "BIHAR SCHOOL EXAMINATION BOARD"
+      },
+      {
+        "durationMs": 5,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_Is_Religion",
+        "strategy": "select",
+        "ts": 1778415492121,
+        "type": "select",
+        "value": "hindu"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_Is_citizenship",
+        "strategy": "select",
+        "ts": 1778415492121,
+        "type": "select",
+        "value": "INDIAN"
+      },
+      {
+        "durationMs": 6,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_Year",
+        "strategy": "select",
+        "ts": 1778415492127,
+        "type": "select",
+        "value": "2000"
+      },
+      {
+        "durationMs": 6,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_day",
+        "strategy": "select",
+        "ts": 1778415492133,
+        "type": "select",
+        "value": "14"
+      },
+      {
+        "durationMs": 7,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_month",
+        "strategy": "select",
+        "ts": 1778415492140,
+        "type": "select",
+        "value": "January"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_police_station",
+        "strategy": "select",
+        "ts": 1778415492140,
+        "type": "select",
+        "value": "Yamunapur naudiha"
+      },
+      {
+        "durationMs": 7,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_ddl_sex",
+        "strategy": "select",
+        "ts": 1778415492147,
+        "type": "select",
+        "value": "FEMALE"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_txt_Adress",
+        "strategy": "text",
+        "ts": 1778415492148,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_txt_ContactNo",
+        "strategy": "text",
+        "ts": 1778415492150,
+        "type": "text",
+        "value": "8727854089"
+      },
+      {
+        "durationMs": 1,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_txt_Email",
+        "strategy": "text",
+        "ts": 1778415492152,
+        "type": "text",
+        "value": "sandhyakumarisanya@gmail.com"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_txt_HouseNo_Village0",
+        "strategy": "text",
+        "ts": 1778415492153,
+        "type": "text",
+        "value": "charwara"
+      },
+      {
+        "durationMs": 0,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_txt_candidate_Name",
+        "strategy": "text",
+        "ts": 1778415492155,
+        "type": "text",
+        "value": "SANDHYA KUMARI"
+      },
+      {
+        "durationMs": 67,
+        "result": "filled",
+        "selector": "#ctl00_ContentPlaceHolder1_DDL_District_Code0",
+        "strategy": "wait-engine",
+        "ts": 1778415492156,
+        "type": "select",
+        "value": "Gaya"
+      }
+    ],
+    "totalFilled": 21,
+    "totalFailed": 0,
+    "id": "mozqo4lt",
+    "receivedAt": "2026-05-10T12:18:18.065Z"
+  },
+  {
+    "formKey": "ys8dhr",
+    "semanticFormKey": "s_e9sctg",
+    "hostname": "serviceonline.bihar.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778414504779,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozq2uu7",
+    "receivedAt": "2026-05-10T12:01:45.631Z"
+  },
+  {
+    "formKey": "7beu1w",
+    "semanticFormKey": "s_bid3kw",
+    "hostname": "ssc.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778413828685,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozpodev",
+    "receivedAt": "2026-05-10T11:50:29.866Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778409142510,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozmvx91",
+    "receivedAt": "2026-05-10T10:32:23.317Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778408698371,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozmmexc",
+    "receivedAt": "2026-05-10T10:24:59.664Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778408611108,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozmkj7o",
+    "receivedAt": "2026-05-10T10:23:31.908Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778408170650,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozmb3d0",
+    "receivedAt": "2026-05-10T10:16:11.460Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778408147236,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozmala8",
+    "receivedAt": "2026-05-10T10:15:48.032Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778407982967,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozm72ja",
+    "receivedAt": "2026-05-10T10:13:03.766Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778407683715,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozm0nml",
+    "receivedAt": "2026-05-10T10:08:04.509Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778407283802,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozls34e",
+    "receivedAt": "2026-05-10T10:01:24.686Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778407022968,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozlmhsx",
+    "receivedAt": "2026-05-10T09:57:03.777Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778406822549,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozli752",
+    "receivedAt": "2026-05-10T09:53:43.334Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778406743957,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozlgii8",
+    "receivedAt": "2026-05-10T09:52:24.752Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778406587961,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozld648",
+    "receivedAt": "2026-05-10T09:49:48.728Z"
+  },
+  {
+    "formKey": "2pqxz4",
+    "semanticFormKey": "s_domcio",
+    "hostname": "www.rrbapply.gov.in",
+    "profileId": "9823745234",
+    "startedAt": 1778406454856,
+    "records": [],
+    "totalFilled": 0,
+    "totalFailed": 0,
+    "id": "mozlabfm",
+    "receivedAt": "2026-05-10T09:47:35.650Z"
+  }
+]
