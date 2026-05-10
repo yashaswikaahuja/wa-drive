@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.33';
+const CURRENT_VERSION = '4.34';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -281,7 +281,12 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   // Poll until results stop changing or 60s max
   const ngDropdownCount = Object.values(mapping).filter(v => v.type === 'ng-dropdown').length;
   // Each ng-dropdown takes up to 5500ms; wait for all + 2s buffer, min 3s
-  const waitMs = Math.max(3000, ngDropdownCount * 5500 + 2000);
+  const cascadeCount = Object.values(mapping).filter((v,_,arr) => {
+    // count cascade/dependent fields
+    const label = (v.label||'').toLowerCase();
+    return ['district','sub_division','block','panchayat'].some(k=>label.includes(k));
+  }).length;
+  const waitMs = Math.max(5000, ngDropdownCount * 5500 + cascadeCount * 9000 + 2000);
   await new Promise(r => setTimeout(r, waitMs));
   const replayTelemetryResult = await chrome.scripting.executeScript({
     target: { tabId: tab.id },

@@ -1,8 +1,9 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.33 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.34 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
+  function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
 
   // ── WaitEngine — state-based waits replacing fixed setTimeout delays ──────
   function waitForOptions(selector, minCount, timeout) {
@@ -528,7 +529,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           if (!el) { console.debug('[CC] WaitEngine timeout for', _sel); return; }
           var _r = fillOne(_sel, _val, _type) || 0;
           filled += _r;
-          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now() });
+          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now() }); _flushRecords();
         });
       })();
       delay += 100; // minimal stagger to preserve ordering
@@ -537,7 +538,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         const _t0 = Date.now();
         const _r = fillOne(selector, value, type) || 0;
         filled += _r;
-        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', strategy: type, durationMs: Date.now()-_t0, ts: Date.now() });
+        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', strategy: type, durationMs: Date.now()-_t0, ts: Date.now() }); _flushRecords();
       }
       catch(e) {
         _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() });
