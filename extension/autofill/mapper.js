@@ -28,7 +28,8 @@ const FIELD_ALIASES = {
   village:        ['village', 'village_name', 'gram', 'gaon', 'txt_village', 'ddl_village'],
   post_office:    ['post_office', 'post', 'po', 'txt_post', 'post_name'],
   police_station: ['police_station', 'thana', 'ps', 'txt_ps', 'ddl_ps'],
-  block:          ['block', 'block_name', 'taluka', 'tehsil', 'txt_block', 'ddl_block'],
+  sub_division:   ['sub_division', 'subdivision', 'sub_div', 'anumandal', 'anchal', 'circle', 'txt_subdiv', 'ddl_subdiv', 'sub-division', 'अनुमंडल'],
+  block:          ['block', 'block_name', 'taluka', 'tehsil', 'prakhnd', 'txt_block', 'ddl_block', 'प्रखंड'],
   house_no:       ['house_no', 'house_number', 'house', 'flat_no', 'door_no', 'txt_house'],
   street:         ['street', 'street_name', 'road', 'lane', 'txt_street'],
   // roll_number intentionally excluded to avoid filling education table fields
