@@ -49,8 +49,25 @@ function fuzzyMatch(formFields, profile) {
     const labelEn = (field.label || '').replace(/[^\x00-\x7F]/g, ' ').trim();
     const ident = [labelEn, labelEn, field.placeholder, field.id, field.name]
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_');
-    // Skip verify/confirm mirror fields (UPSC OTR has 'Verify Name', 'Verify DOB' etc)
-    if (/^verify_|_and_verify|^confirm_|re_enter/i.test(ident) && !ident.includes('id')) continue;
+    // Re-type/confirm mirror fields — fill with same value as primary field
+    const isRetype = /retype|re_type|reenter|re_enter|retypeFullName|retypefullname|re_type_|retype_/i.test(ident) ||
+                     /^re_type|^retype|^re_enter|^reenter/i.test(ident) ||
+                     field.id?.toLowerCase().includes('retype') || field.name?.toLowerCase().includes('retype');
+    // Skip verify fields (SSC pattern) but NOT retype fields (RRB pattern)
+    if (/^verify_|_and_verify|^confirm_/i.test(ident) && !ident.includes('id') && !isRetype) continue;
+    if (isRetype) {
+      // Find what primary field this mirrors by stripping retype prefix
+      const baseIdent = ident.replace(/retype|re_type|reenter|re_enter/gi, '').replace(/^[_\s]+|[_\s]+$/g, '');
+      // Try to find matching profile value
+      for (const [key, aliases] of Object.entries(FIELD_ALIASES)) {
+        if (!profile[key]) continue;
+        if (aliases.some(a => baseIdent.includes(a)) || baseIdent.includes(key)) {
+          mapping[field.selector] = { value: profile[key], type: field.type };
+          break;
+        }
+      }
+      continue;
+    }
 
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
