@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.27';
+const CURRENT_VERSION = '4.28';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -130,7 +130,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       const saved = savedMapping[semanticKey];
       if (!saved) continue;
       const conf = calcConfidence(saved.fills || 0, saved.corrections || 0);
-      if (conf >= 0.4 && saved.profileKey && selectedProfile[saved.profileKey]) {
+      if (conf >= 0.2 && saved.profileKey && selectedProfile[saved.profileKey]) { // lowered from 0.4 — new mappings start at 0.3
         mapping[field.selector] = { value: selectedProfile[saved.profileKey], type: field.type };
         filledBySource[field.selector] = { label: field.label, semanticKey, profileKey: saved.profileKey, source: 'saved', confidence: conf };
       }
