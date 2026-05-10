@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.34';
+const CURRENT_VERSION = '4.35';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -321,7 +321,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       totalFilled: replayRecords.filter(r => r.result === 'filled').length,
       totalFailed: replayRecords.filter(r => r.result === 'skipped' || r.result === 'error').length,
     };
-    fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
+    await fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
   }
 
   // Unresolved detection — semantic field groups, not raw DOM nodes
