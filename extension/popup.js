@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.35';
+const CURRENT_VERSION = '4.36';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -272,6 +272,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   }
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
+    world: 'MAIN',
     func: fillFormFieldsSequential,
     args: [mapping, filledBySource, portalAdapters],
   });
