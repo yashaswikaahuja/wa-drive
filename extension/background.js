@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.22");
+console.log("[CC] background.js loaded v4.23");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -82,6 +82,20 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
 
   for (const field of teachable) {
     const label = normalizeFieldLabel(field.label);
+    notifyPopup({ type: 'TEACH_PROGRESS', status: `🤖 Auto-teaching "${label}" with AI...`, done: false });
+
+    // Try Groq auto-teach first
+    if (groqKey) {
+      const profileValue = field.profileValue || '';
+      const autoSuccess = await groqAutoTeach(tabId, { ...field, profileValue }, groqKey, backendUrl, hostname);
+      if (autoSuccess) {
+        notifyPopup({ type: 'TEACH_PROGRESS', status: `✓ AI learned "${label}" automatically!`, done: false });
+        await sleep(800);
+        continue;
+      }
+      console.log('[CC] Groq auto-teach failed, falling back to manual');
+    }
+
     notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Teach: "${label}" — click the dropdown, then select a value`, done: false });
 
     // Clear any stale result before injecting
@@ -191,6 +205,147 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
   stopKeepalive();
   _teachRunning = false;
   notifyPopup({ type: 'TEACH_PROGRESS', status: 'Teaching complete! Adapters saved.', done: true });
+}
+
+
+// ── groqAutoTeach — tries to fill a custom dropdown using Groq AI ──
+async function groqAutoTeach(tabId, field, groqKey, backendUrl, hostname) {
+  try {
+    // Step 1: Get DOM snapshot of the component (closed state)
+    const snap1 = await chrome.scripting.executeScript({
+      target: { tabId }, world: 'MAIN',
+      func: (f) => {
+        const compClass = f.componentClass || 'ng-dropdown';
+        const root = document.querySelectorAll('div.' + compClass)[f.domIndex ?? 0]
+          || document.querySelector('[class*="dropdown"],[class*="select"],[class*="picker"]');
+        if (!root) return null;
+        root.scrollIntoView({ block: 'center' });
+        return { html: root.outerHTML.slice(0, 1500), rect: JSON.stringify(root.getBoundingClientRect()) };
+      },
+      args: [field],
+    }).catch(() => null);
+    const closedHtml = snap1?.[0]?.result?.html;
+    if (!closedHtml) return false;
+
+    // Step 2: Ask Groq to identify trigger selector from closed state
+    const prompt1 = `You are analyzing a custom dropdown component in a government form.
+Field label: "${field.label}"
+Profile value to select: "${field.profileValue || ''}"
+Component HTML (closed state):
+${closedHtml}
+
+Reply with ONLY valid JSON (no markdown):
+{"triggerSelector":"CSS selector to click to open dropdown","componentClass":"root element class name"}`;
+
+    const r1 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'meta-llama/llama-4-scout-17b-16e-instruct', messages: [{ role: 'user', content: prompt1 }], max_tokens: 100 }),
+    }).then(r => r.json()).catch(() => null);
+
+    const txt1 = r1?.choices?.[0]?.message?.content?.trim() || '';
+    const m1 = txt1.match(/\{[^}]+\}/);
+    if (!m1) return false;
+    let hint;
+    try { hint = JSON.parse(m1[0]); } catch { return false; }
+    if (!hint.triggerSelector) return false;
+    console.log('[CC] Groq identified trigger:', hint.triggerSelector);
+
+    // Step 3: Click trigger to open dropdown
+    await chrome.scripting.executeScript({
+      target: { tabId }, world: 'MAIN',
+      func: (sel) => { document.querySelector(sel)?.click(); },
+      args: [hint.triggerSelector],
+    }).catch(() => {});
+    await sleep(800);
+
+    // Step 4: Snapshot open state (options visible)
+    const snap2 = await chrome.scripting.executeScript({
+      target: { tabId }, world: 'MAIN',
+      func: (f, trigSel) => {
+        const compClass = f.componentClass || 'ng-dropdown';
+        const root = document.querySelectorAll('div.' + compClass)[f.domIndex ?? 0];
+        // Also capture any newly added overlay/dropdown list
+        const overlay = Array.from(document.querySelectorAll('ul,div[class*="dropdown-list"],div[class*="options"],div[class*="menu"]'))
+          .find(el => el.offsetParent !== null && el.querySelectorAll('li,[class*="option"]').length > 0);
+        return {
+          rootHtml: root?.outerHTML?.slice(0, 800) || '',
+          overlayHtml: overlay?.outerHTML?.slice(0, 1200) || '',
+        };
+      },
+      args: [field, hint.triggerSelector],
+    }).catch(() => null);
+    const openState = snap2?.[0]?.result;
+    if (!openState) return false;
+
+    // Step 5: Ask Groq to identify option selector and which option to click
+    const prompt2 = `Custom dropdown is now open. Select the option matching "${field.profileValue || field.label}".
+Root HTML: ${openState.rootHtml}
+Options overlay HTML: ${openState.overlayHtml}
+
+Reply with ONLY valid JSON:
+{"optionSelector":"CSS selector for each option li/div","optionText":"exact text of option to click","verifySelector":"CSS selector showing selected value after close"}`;
+
+    const r2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'meta-llama/llama-4-scout-17b-16e-instruct', messages: [{ role: 'user', content: prompt2 }], max_tokens: 150 }),
+    }).then(r => r.json()).catch(() => null);
+
+    const txt2 = r2?.choices?.[0]?.message?.content?.trim() || '';
+    const m2 = txt2.match(/\{[^}]+\}/s);
+    if (!m2) return false;
+    let hint2;
+    try { hint2 = JSON.parse(m2[0]); } catch { return false; }
+    console.log('[CC] Groq identified option:', hint2.optionText, 'selector:', hint2.optionSelector);
+
+    // Step 6: Click the matching option
+    const clicked = await chrome.scripting.executeScript({
+      target: { tabId }, world: 'MAIN',
+      func: (optSel, optText) => {
+        const opts = Array.from(document.querySelectorAll(optSel));
+        const opt = opts.find(o => o.textContent.trim() === optText) || opts.find(o => o.textContent.trim().includes(optText.slice(0, 10)));
+        if (opt) { opt.click(); return opt.textContent.trim(); }
+        return null;
+      },
+      args: [hint2.optionSelector || 'li', hint2.optionText || ''],
+    }).catch(() => null);
+    const clickedText = clicked?.[0]?.result;
+    if (!clickedText) return false;
+    console.log('[CC] Groq clicked option:', clickedText);
+    await sleep(600);
+
+    // Step 7: Verify value changed
+    const verified = await chrome.scripting.executeScript({
+      target: { tabId }, world: 'MAIN',
+      func: (verifySel, expected) => {
+        const el = document.querySelector(verifySel);
+        return el ? el.textContent.trim() : null;
+      },
+      args: [hint2.verifySelector || hint.triggerSelector, clickedText],
+    }).catch(() => null);
+    const verifiedText = verified?.[0]?.result;
+    console.log('[CC] Groq verify:', verifiedText);
+
+    // Step 8: Save adapter
+    const adapter = {
+      componentClass: hint.componentClass || field.componentClass || 'ng-dropdown',
+      triggerSelector: hint.triggerSelector,
+      optionSelector: hint2.optionSelector || 'li',
+      verifySelector: hint2.verifySelector || hint.triggerSelector,
+      optionsContainer: '',
+      learnedBy: 'groq-ai',
+    };
+    await fetch(`${backendUrl}/adapters/${hostname}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(adapter),
+    }).catch(() => {});
+    console.log('[CC] Groq auto-teach saved adapter for', hostname);
+    return true;
+  } catch(e) {
+    console.warn('[CC] groqAutoTeach error:', e.message);
+    return false;
+  }
 }
 
 // ── teachOneField — runs in PAGE context (injected via executeScript func:) ──

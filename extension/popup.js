@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.22';
+const CURRENT_VERSION = '4.23';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -381,7 +381,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   const INTERACTIVE_TYPES = ['ng-dropdown','mat-select','mat-radio','mat-checkbox','select'];
   const failedFields = [
     ...allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type) && f.type !== 'ng-dropdown'),
-    ...ngDropdowns.map(f => ({ ...f, selector: null })),
+    ...ngDropdowns.map(f => ({ ...f, selector: null, profileValue: selectedProfile ? (selectedProfile[f.label?.toLowerCase().replace(/[^a-z0-9]/g,'_')] || '') : '' })),
   ];
   const unmappedTextFields = allUnresolved.filter(f => !INTERACTIVE_TYPES.includes(f.type));
 
