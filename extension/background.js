@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.18");
+console.log("[CC] background.js loaded v4.19");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -256,6 +256,8 @@ function teachOneField(field) {
     return;
   }
 
+  let triggerSelector = field.aiTrigger || '.value-area'; // declared here to avoid TDZ in _runTeach
+  let triggerCaptured = false;
   _runTeach(root);
   function _runTeach(root) {
 
@@ -308,8 +310,7 @@ function teachOneField(field) {
 
   const posInterval = setInterval(() => {}, 5000); // no-op, badge is fixed center-top
 
-  let triggerSelector = field.aiTrigger || '.value-area'; // use AI hint if available
-  let triggerCaptured = false;
+  // triggerSelector and triggerCaptured declared above _runTeach to avoid TDZ
 
   function cleanup() {
     clearInterval(posInterval);
