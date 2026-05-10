@@ -1,8 +1,48 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.32 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.33 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
+
+  // ── WaitEngine — state-based waits replacing fixed setTimeout delays ──────
+  function waitForOptions(selector, minCount, timeout) {
+    minCount = minCount || 1; timeout = timeout || 8000;
+    return new Promise(function(resolve) {
+      var deadline = Date.now() + timeout;
+      function check() {
+        var el = document.querySelector(selector);
+        var real = Array.from(el ? el.options || [] : []).filter(function(o) {
+          return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
+        });
+        if (real.length >= minCount) { mo.disconnect(); resolve(el); return; }
+        if (Date.now() > deadline) { mo.disconnect(); resolve(null); return; }
+      }
+      var mo = new MutationObserver(check);
+      mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class'] });
+      check(); // check immediately
+      // Polling fallback every 200ms
+      var poll = setInterval(function() {
+        if (Date.now() > deadline) { clearInterval(poll); mo.disconnect(); resolve(null); }
+        else check();
+      }, 200);
+      // Cleanup on resolve
+      var origResolve = resolve;
+      resolve = function(v) { clearInterval(poll); origResolve(v); };
+    });
+  }
+
+  function waitForDOMQuiet(ms) {
+    ms = ms || 300;
+    return new Promise(function(resolve) {
+      var last = Date.now();
+      var mo = new MutationObserver(function() { last = Date.now(); });
+      mo.observe(document.body, { childList: true, subtree: true });
+      var check = setInterval(function() {
+        if (Date.now() - last >= ms) { clearInterval(check); mo.disconnect(); resolve(); }
+      }, 50);
+      setTimeout(function() { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
+    });
+  }
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
   const entries = Object.entries(mapping);
@@ -480,8 +520,18 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       setTimeout(() => fillOne(selector, value, type), delay);
       delay += 5500; // 800ms stabilize + 10*300ms poll + 1000ms verify + 700ms buffer
     } else if (isDependent && filled > 0) {
-      setTimeout(() => fillOne(selector, value, type), delay);
-      delay += 5000; // cascading selects need time for DWR AJAX + re-apply (ServicePlus)
+      // WaitEngine: wait for options to load instead of fixed delay
+      const _sel = selector, _val = value, _type = type;
+      (function() {
+        var _t0 = Date.now();
+        waitForOptions(_sel, 1, 8000).then(function(el) {
+          if (!el) { console.debug('[CC] WaitEngine timeout for', _sel); return; }
+          var _r = fillOne(_sel, _val, _type) || 0;
+          filled += _r;
+          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now() });
+        });
+      })();
+      delay += 100; // minimal stagger to preserve ordering
     } else {
       try {
         const _t0 = Date.now();
