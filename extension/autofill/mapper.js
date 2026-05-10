@@ -192,16 +192,24 @@ async function aiMatch(formFields, profile, groqKey) {
     .filter(([k, v]) => v && k !== 'phone' && k !== 'updatedAt')
     .map(([k, v]) => `${k}: "${v}"`).join('\n');
 
-  const prompt = `You are a form field mapper. Given these HTML form fields and student profile data, return a JSON object mapping field index to profile key.
+  const prompt = `You are a form field mapper for Indian government forms. Map each form field to the correct student profile key.
+
+RULES:
+- Map ONLY when you are very confident the field should contain that profile value
+- "address" fields get the address value, NOT the name
+- "day/month/year" fields get the corresponding part of dob (format DD/MM/YYYY)
+- Skip fields like verification code, captcha, OTP, password
+- Skip fields with no matching profile data
+- Use EXACT profile key names
 
 Form fields:
 ${fieldDescriptions}
 
-Student profile:
+Student profile (key: value):
 ${profileKeys}
 
-Return ONLY a JSON object like: {"0": "name", "2": "dob", "5": "father_name"}
-Only include fields you are confident about. Use exact profile keys.`;
+Return ONLY a JSON object: {"fieldIndex": "profileKey"}
+Example: {"0": "name", "2": "dob", "5": "father_name"}`;
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
