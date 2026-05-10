@@ -1,7 +1,8 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.28 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.29 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
+  const _ccRecords = []; // ReplayRecord[] — structured observability
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
   const entries = Object.entries(mapping);
@@ -482,8 +483,16 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       setTimeout(() => fillOne(selector, value, type), delay);
       delay += 5000; // cascading selects need time for DWR AJAX + re-apply (ServicePlus)
     } else {
-      try { filled += fillOne(selector, value, type) || 0; }
-      catch(e) { console.debug('[CC] fillOne error on', selector, ':', e.message); }
+      try {
+        const _t0 = Date.now();
+        const _r = fillOne(selector, value, type) || 0;
+        filled += _r;
+        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', strategy: type, durationMs: Date.now()-_t0, ts: Date.now() });
+      }
+      catch(e) {
+        _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() });
+        console.debug('[CC] fillOne error on', selector, ':', e.message);
+      }
       // Fix #2: fill verify/confirm fields by label similarity (re-enter, confirm, verify)
       if (!selector.startsWith('form-field-') && !['select','radio','checkbox','mat-select','mat-radio','mat-checkbox'].includes(type)) {
         const SENSITIVE = ['aadhaar_number','mobile','email','pan_number'];
@@ -604,5 +613,6 @@ function fillFormFields(mapping) {
       }
     } catch { /* skip */ }
   }
+  sessionStorage.setItem('_cc_replay_records', JSON.stringify(_ccRecords));
   return filled;
 }

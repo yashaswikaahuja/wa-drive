@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.28';
+const CURRENT_VERSION = '4.29';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -58,7 +58,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     func: extractFormFieldsWithFingerprint,
   });
 
-  const { formFields, formKey } = fieldsResult?.[0]?.result ?? { formFields: [], formKey: '' };
+  const { formFields, formKey, semanticFormKey } = fieldsResult?.[0]?.result ?? { formFields: [], formKey: '', semanticFormKey: '' };
   if (!formFields.length) { showStatus('No form fields found on this page.', 'error'); return; }
 
   let mapping = {};
@@ -287,11 +287,28 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     target: { tabId: tab.id },
     func: () => {
       const v = sessionStorage.getItem('_cc_replay_results');
+      const records = sessionStorage.getItem('_cc_replay_records');
       sessionStorage.removeItem('_cc_replay_results');
-      return v ? JSON.parse(v) : {};
+      sessionStorage.removeItem('_cc_replay_records');
+      return { results: v ? JSON.parse(v) : {}, records: records ? JSON.parse(records) : [] };
     }
   });
-  const replayResults = replayTelemetryResult?.[0]?.result ?? {};
+  const replayResults = replayTelemetryResult?.[0]?.result?.results ?? {};
+  const replayRecords = replayTelemetryResult?.[0]?.result?.records ?? [];
+
+  // POST FormSession to backend for observability
+  if (backendUrl && formKey) {
+    const session = {
+      formKey, semanticFormKey,
+      hostname: new URL(tab.url).hostname,
+      profileId: selectedProfile?.phone || '',
+      startedAt: Date.now(),
+      records: replayRecords,
+      totalFilled: replayRecords.filter(r => r.result === 'filled').length,
+      totalFailed: replayRecords.filter(r => r.result === 'skipped' || r.result === 'error').length,
+    };
+    fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
+  }
 
   // Unresolved detection — semantic field groups, not raw DOM nodes
   const skipLabels = /^(yes|no|true|false|select|choose|dd.mm.yyyy|mm.yyyy|please select)$/i;

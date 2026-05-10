@@ -156,7 +156,19 @@ function extractFormFieldsWithFingerprint() {
   for (let i = 0; i < raw.length; i++) { hash = ((hash << 5) - hash) + raw.charCodeAt(i); hash |= 0; }
   const formKey = Math.abs(hash).toString(36);
 
-  return { formFields, formKey };
+  // ── Semantic formKey — stable across DOM changes, based on normalized labels ──
+  // Uses hostname + sorted normalized field labels (labels rarely change, selectors do)
+  const semanticLabels = formFields
+    .map(f => (f.label || '').toLowerCase().replace(/[^a-z\s]/g, '').trim())
+    .filter(l => l.length > 2)
+    .sort()
+    .slice(0, 15);
+  const semRaw = `${hostname}|${semanticLabels.join('|')}`;
+  let semHash = 0;
+  for (let i = 0; i < semRaw.length; i++) { semHash = ((semHash << 5) - semHash) + semRaw.charCodeAt(i); semHash |= 0; }
+  const semanticFormKey = 's_' + Math.abs(semHash).toString(36);
+
+  return { formFields, formKey, semanticFormKey };
 }
 
 // ── Correction observer (injected after autofill) ─────────────────────────────
