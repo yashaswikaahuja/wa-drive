@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.23");
+console.log("[CC] background.js loaded v4.24");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -248,7 +248,8 @@ Reply with ONLY valid JSON (no markdown):
     if (!m1) return false;
     let hint;
     try { hint = JSON.parse(m1[0]); } catch { return false; }
-    if (!hint.triggerSelector) return false;
+    // Reject garbage selectors from Groq
+    if (!hint.triggerSelector || ['#','select','input','label','.','*'].includes(hint.triggerSelector) || hint.triggerSelector.length < 2) return false;
     console.log('[CC] Groq identified trigger:', hint.triggerSelector);
 
     // Step 3: Click trigger to open dropdown

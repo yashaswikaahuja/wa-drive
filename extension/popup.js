@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.23';
+const CURRENT_VERSION = '4.24';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -380,7 +380,8 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   const INTERACTIVE_TYPES = ['ng-dropdown','mat-select','mat-radio','mat-checkbox','select'];
   const failedFields = [
-    ...allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type) && f.type !== 'ng-dropdown'),
+    // Only custom dropdowns need teaching — native selects are handled by executor+Groq
+    ...allUnresolved.filter(f => INTERACTIVE_TYPES.includes(f.type) && f.type !== 'ng-dropdown' && f.type !== 'select'),
     ...ngDropdowns.map(f => ({ ...f, selector: null, profileValue: selectedProfile ? (selectedProfile[f.label?.toLowerCase().replace(/[^a-z0-9]/g,'_')] || '') : '' })),
   ];
   const unmappedTextFields = allUnresolved.filter(f => !INTERACTIVE_TYPES.includes(f.type));
