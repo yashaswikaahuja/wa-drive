@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.31';
+const CURRENT_VERSION = '4.32';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -287,8 +287,9 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     target: { tabId: tab.id },
     world: 'MAIN',
     func: () => {
-      const records = window._cc_replay_records || [];
-      window._cc_replay_records = [];
+      const raw = document.body.getAttribute('data-cc-records');
+      document.body.removeAttribute('data-cc-records');
+      const records = raw ? JSON.parse(raw) : [];
       return { results: {}, records };
     }
   });
