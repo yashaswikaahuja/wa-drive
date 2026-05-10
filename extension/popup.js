@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.30';
+const CURRENT_VERSION = '4.31';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -272,7 +272,6 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   }
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    world: 'MAIN',
     func: fillFormFieldsSequential,
     args: [mapping, filledBySource, portalAdapters],
   });
@@ -288,14 +287,21 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     target: { tabId: tab.id },
     world: 'MAIN',
     func: () => {
-      const v = sessionStorage.getItem('_cc_replay_results');
-      const records = sessionStorage.getItem('_cc_replay_records');
-      sessionStorage.removeItem('_cc_replay_results');
-      sessionStorage.removeItem('_cc_replay_records');
-      return { results: v ? JSON.parse(v) : {}, records: records ? JSON.parse(records) : [] };
+      const records = window._cc_replay_records || [];
+      window._cc_replay_records = [];
+      return { results: {}, records };
     }
   });
-  const replayResults = replayTelemetryResult?.[0]?.result?.results ?? {};
+  // Also read _cc_replay_results from isolated world
+  const replayResultsRaw = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const v = sessionStorage.getItem('_cc_replay_results');
+      sessionStorage.removeItem('_cc_replay_results');
+      return v ? JSON.parse(v) : {};
+    }
+  }).catch(() => [{ result: {} }]);
+  const replayResults = replayResultsRaw?.[0]?.result ?? {};
   const replayRecords = replayTelemetryResult?.[0]?.result?.records ?? [];
 
   // POST FormSession to backend for observability

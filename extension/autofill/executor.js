@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.30 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.31 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   // Sort: fill state before district before block (dependent dropdowns)
@@ -613,6 +613,7 @@ function fillFormFields(mapping) {
       }
     } catch { /* skip */ }
   }
-  sessionStorage.setItem('_cc_replay_records', JSON.stringify(_ccRecords));
+  // Write to window so MAIN world executeScript can read it
+  try { window._cc_replay_records = _ccRecords; } catch {}
   return filled;
 }
