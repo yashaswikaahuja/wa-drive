@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.29';
+const CURRENT_VERSION = '4.30';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -272,6 +272,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   }
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
+    world: 'MAIN',
     func: fillFormFieldsSequential,
     args: [mapping, filledBySource, portalAdapters],
   });
@@ -285,6 +286,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   await new Promise(r => setTimeout(r, waitMs));
   const replayTelemetryResult = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
+    world: 'MAIN',
     func: () => {
       const v = sessionStorage.getItem('_cc_replay_results');
       const records = sessionStorage.getItem('_cc_replay_records');
