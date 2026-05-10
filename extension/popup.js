@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.38';
+const CURRENT_VERSION = '4.39';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -292,9 +292,9 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   const replayTelemetryResult = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
-      // Read from isolated world (same world as executor)
-      const raw = document.body.getAttribute('data-cc-records');
-      document.body.removeAttribute('data-cc-records');
+      // sessionStorage is shared between isolated world executeScript calls
+      const raw = sessionStorage.getItem('_cc_replay_records');
+      sessionStorage.removeItem('_cc_replay_records');
       const records = raw ? JSON.parse(raw) : [];
       return { results: {}, records };
     }
