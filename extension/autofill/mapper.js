@@ -56,14 +56,37 @@ function fuzzyMatch(formFields, profile) {
     // Skip verify fields (SSC pattern) but NOT retype fields (RRB pattern)
     if (/^verify_|_and_verify/i.test(ident) && !ident.includes('id') && !isRetype) continue;
     if (isRetype) {
-      // Find what primary field this mirrors by stripping retype prefix
+      // Find the primary field this mirrors by matching selector/id/label
       const baseIdent = ident.replace(/retype|re_type|reenter|re_enter|confirm/gi, '').replace(/^[_\s]+|[_\s]+$/g, '');
-      // Try to find matching profile value
-      for (const [key, aliases] of Object.entries(FIELD_ALIASES)) {
-        if (!profile[key]) continue;
-        if (aliases.some(a => baseIdent.includes(a)) || baseIdent.includes(key)) {
-          mapping[field.selector] = { value: profile[key], type: field.type };
-          break;
+      const baseId = (field.id || '').replace(/^c(?=[a-z])/i, '').replace(/^confirm/i, '').replace(/^retype/i, '');
+      // First: try to find already-mapped field with matching base id
+      let matched = false;
+      for (const [sel, val] of Object.entries(mapping)) {
+        const selId = sel.replace('#', '').replace(/\[.*\]/, '');
+        if (selId && baseId && selId.toLowerCase() === baseId.toLowerCase()) {
+          mapping[field.selector] = { value: val.value, type: field.type };
+          matched = true; break;
+        }
+      }
+      // Fallback: match by label similarity against already-mapped fields
+      if (!matched) {
+        for (const f2 of formFields) {
+          if (f2.selector === field.selector || !mapping[f2.selector]) continue;
+          const f2Label = (f2.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+          if (baseIdent && f2Label && (baseIdent.includes(f2Label) || f2Label.includes(baseIdent.split(' ')[0]))) {
+            mapping[field.selector] = { value: mapping[f2.selector].value, type: field.type };
+            matched = true; break;
+          }
+        }
+      }
+      // Last fallback: profile key lookup
+      if (!matched) {
+        for (const [key, aliases] of Object.entries(FIELD_ALIASES)) {
+          if (!profile[key]) continue;
+          if (aliases.some(a => baseIdent.includes(a)) || baseIdent.includes(key)) {
+            mapping[field.selector] = { value: profile[key], type: field.type };
+            break;
+          }
         }
       }
       continue;
