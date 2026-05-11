@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.64';
+const CURRENT_VERSION = '4.65';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -330,9 +330,13 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       runtimeVersion: chrome.runtime.getManifest().version,
       strategyVersion: '1.0',
       waitEngineVersion: '1.0',
-      records: replayRecords,
       totalFilled: replayRecords.filter(r => r.result === 'filled').length,
       totalFailed: replayRecords.filter(r => ['skipped','error','reset'].includes(r.result)).length,
+      // Enrich records with FieldIntent from filledBySource
+      records: replayRecords.map(r => {
+        const intent = filledBySource[r.selector];
+        return intent ? { ...r, intent: intent.profileKey, source: intent.source, confidence: intent.confidence } : r;
+      }),
     };
     await fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
   }
