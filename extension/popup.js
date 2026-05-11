@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.74';
+const CURRENT_VERSION = '4.75';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -47,7 +47,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   _autofillRunning = true;
   setTimeout(() => { _autofillRunning = false; }, 8000);
   if (!selectedProfile) return;
-  const { groqKey, backendUrl } = await chrome.storage.local.get(['groqKey', 'backendUrl']);
+  const { groqKey, backendUrl, operatorId } = await chrome.storage.local.get(['groqKey', 'backendUrl', 'operatorId']);
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
   showStatus('Analyzing form...', 'info');
@@ -381,6 +381,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       formKey, semanticFormKey,
       hostname: new URL(tab.url).hostname,
       profileId: selectedProfile?.phone || '',
+      operatorId: operatorId || 'anonymous',
       startedAt: Date.now(),
       runtimeVersion: chrome.runtime.getManifest().version,
       strategyVersion: '1.0',
@@ -538,7 +539,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       for (const f of failedFields) {
         fetch(`${backendUrl}/teaching/pending`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hostname, label: f.label, type: f.type, domIndex: f.domIndex, componentClass: f.componentClass }),
+          body: JSON.stringify({ hostname, label: f.label, type: f.type, domIndex: f.domIndex, componentClass: f.componentClass, operatorId: operatorId || 'anonymous' }),
         }).catch(() => {});
       }
     }
