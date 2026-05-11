@@ -1,7 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.65 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
-  window._cc_filling = true; // prevent correction observer loop
+  console.log('[CC] v4.66 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -133,21 +132,6 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       setTimeout(function() { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
     });
   }
-  function waitForElement(selector, timeout) {
-    timeout = timeout || 5000;
-    return new Promise(function(resolve) {
-      var el = document.querySelector(selector);
-      if (el) { resolve(el); return; }
-      var resolved = false;
-      var poll, mo;
-      function cleanup(val) { if(resolved)return; resolved=true; if(poll)clearInterval(poll); if(mo)mo.disconnect(); resolve(val); }
-      mo = new MutationObserver(function() { var el=document.querySelector(selector); if(el) cleanup(el); });
-      mo.observe(document.body, { childList: true, subtree: true });
-      poll = setInterval(function() { var el=document.querySelector(selector); if(el) cleanup(el); }, 200);
-      setTimeout(function() { cleanup(null); }, timeout);
-    });
-  }
-
   // Sort: fill state before district before block (dependent dropdowns)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
   const entries = Object.entries(mapping);
@@ -174,7 +158,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       } else {
         el = document.querySelector(selector);
       }
-      if (!el) return 0; // element not in DOM — caller handles retry via WaitEngine
+      if (!el) return 0;
       // Detect type from DOM directly (more reliable than passed type)
       const tagName = el.tagName.toLowerCase();
       const elType = tagName === 'select' ? 'select'
@@ -382,8 +366,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         // No adapter yet
         const _noAdapterLabel = filledBySource[selector]?.label || selector;
         _replayResults[_noAdapterLabel] = 'no-adapter';
-        window._cc_filling = false;
-  sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+        sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
         return 0;
       }
 
@@ -654,17 +637,6 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         filled += _r;
         const _el2 = document.querySelector(selector);
         const _failReason = !_r ? (_el2 ? 'no-option' : 'no-element') : null;
-        // Retry no-element fields: wait for element to appear then fill
-        if (!_r && !_el2 && !selector.startsWith('form-field-')) {
-          waitForElement(selector, 4000).then(function(foundEl) {
-            if (!foundEl) return;
-            const _r2 = fillOne(selector, value, type) || 0;
-            if (_r2) {
-              _ccRecords.push({ selector, value, type, result: 'filled', failReason: null, strategy: detectStrategy(foundEl, type), durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, sv: STRATEGY_VERSION });
-              _flushRecords();
-            }
-          });
-        }
         const _strategy = detectStrategy(_el2, type);
         const _recIdx = _ccRecords.length;
         _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _failReason, strategy: _strategy, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, sv: STRATEGY_VERSION }); _flushRecords();
