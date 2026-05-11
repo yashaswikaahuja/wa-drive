@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.77';
+const CURRENT_VERSION = '4.78';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -142,7 +142,25 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     }
   }
 
-  // Step 4: Fuzzy match for unmapped fields
+  // Step 4: For NEW forms (no saved mapping), AI maps all fields first
+  const isNewForm = !savedMapping || Object.keys(savedMapping).length === 0;
+  if (isNewForm && groqKey) {
+    const allUnmappedForAI = formFields.filter(f => !mapping[f.selector] && !/captcha|otp|token|password|security.code/i.test(f.label));
+    if (allUnmappedForAI.length > 0) {
+      showStatus(`AI mapping ${allUnmappedForAI.length} fields (new form)...`, 'info');
+      const aiFirst = await aiMatch(allUnmappedForAI, selectedProfile, groqKey);
+      for (const [sel, val] of Object.entries(aiFirst)) {
+        mapping[sel] = val;
+        const field = formFields.find(f => f.selector === sel);
+        if (field) {
+          const profileKey = Object.entries(selectedProfile).find(([, v]) => v === val.value)?.[0];
+          filledBySource[sel] = { label: field.label, semanticKey: getSemanticKey(field.label), profileKey, source: 'ai', confidence: 0.7 };
+        }
+      }
+    }
+  }
+
+  // Fuzzy match for remaining unmapped fields
   const unmapped1 = formFields.filter(f => !mapping[f.selector]);
   const fuzzyResult = fuzzyMatch(unmapped1, selectedProfile);
   for (const [sel, val] of Object.entries(fuzzyResult)) {
