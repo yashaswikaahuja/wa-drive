@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.56';
+const CURRENT_VERSION = '4.57';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -286,7 +286,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     const label = (v.label||'').toLowerCase();
     return ['district','sub_division','block','panchayat'].some(k=>label.includes(k));
   }).length;
-  const waitMs = Math.max(5000, ngDropdownCount * 5500 + cascadeCount * 9000 + 2000);
+  const waitMs = Math.max(8000, ngDropdownCount * 5500 + cascadeCount * 9000 + 2000); // min 8s to allow MAIN world re-fill + 6s verification
   await new Promise(r => setTimeout(r, waitMs));
 
   // Re-fill Angular reactive form fields that were reset (run in MAIN world for zone awareness)
