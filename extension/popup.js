@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.61';
+const CURRENT_VERSION = '4.62';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -115,9 +115,10 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   // Step 2: Load saved mapping with confidence scores
   let savedMapping = null;
-  if (backendUrl && formKey) {
+  const primaryKey = semanticFormKey || formKey; // semantic is primary identity
+  if (backendUrl && primaryKey) {
     try {
-      const res = await fetch(`${backendUrl}/mappings/${formKey}`);
+      const res = await fetch(`${backendUrl}/mappings/${primaryKey}`);
       const data = await res.json();
       if (data && typeof data === 'object') savedMapping = data;
     } catch { /* ignore */ }
@@ -555,7 +556,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: injectCorrectionObserver,
-        args: [mapping, filledBySource, selectedProfile, backendUrl, formKey],
+        args: [mapping, filledBySource, selectedProfile, backendUrl, primaryKey],
       });
     }
 
@@ -589,7 +590,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         }
       }
 
-      await saveLearning(backendUrl, formKey, filledBySource, selectedProfile, false);
+      await saveLearning(backendUrl, primaryKey, filledBySource, selectedProfile, false);
       showStatus('Learning saved!', 'success');
       document.getElementById('save-learning-btn').style.display = 'none';
     };
@@ -681,6 +682,7 @@ function showStatus(msg, type) {
 // ── Save Learning ─────────────────────────────────────────────────────────────
 async function saveLearning(backendUrl, formKey, filledBySource, profile, fromCorrection) {
   if (!backendUrl || !formKey) return;
+  // formKey here is now semanticFormKey (stable across DOM changes)
   const updates = {};
   for (const [, info] of Object.entries(filledBySource)) {
     if (!info.profileKey || !info.semanticKey) continue;
