@@ -1,6 +1,7 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.59 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.60 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  window._cc_filling = true; // prevent correction observer loop
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -381,7 +382,8 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         // No adapter yet
         const _noAdapterLabel = filledBySource[selector]?.label || selector;
         _replayResults[_noAdapterLabel] = 'no-adapter';
-        sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+        window._cc_filling = false;
+  sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
         return 0;
       }
 
