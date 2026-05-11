@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.43 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.44 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -658,6 +658,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           if (niv) niv.set.call(ex, value); else ex.value = value;
           ['input','change'].forEach(ev => ex.dispatchEvent(new Event(ev, { bubbles: true })));
           console.debug('[CC] filled verify field:', selector, '->', ex.id || ex.name, value.slice(0,4) + '***');
+          _ccRecords.push({ selector: '#'+(ex.id||ex.name||'verify'), value, type: 'text', result: 'filled', strategy: 'text-input', durationMs: 0, ts: Date.now() }); _flushRecords();
           filled++;
         }
       }
