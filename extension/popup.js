@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.71';
+const CURRENT_VERSION = '4.72';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -156,9 +156,11 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   // Step 5: Groq AI for still-unmapped fields
   const unmapped2 = formFields.filter(f => !mapping[f.selector]);
-  if (unmapped2.length > 0 && groqKey) {
+  // Only call Groq for fields worth mapping (skip verify/captcha/otp)
+  const worthMapping = unmapped2.filter(f => !/verify|confirm|captcha|otp|token|password/i.test(f.label));
+  if (worthMapping.length > 0 && groqKey) {
     showStatus(`AI mapping ${unmapped2.length} fields...`, 'info');
-    const aiMapping = await aiMatch(unmapped2, selectedProfile, groqKey);
+    const aiMapping = await aiMatch(worthMapping, selectedProfile, groqKey);
     for (const [sel, val] of Object.entries(aiMapping)) {
       mapping[sel] = val;
       const field = formFields.find(f => f.selector === sel);
