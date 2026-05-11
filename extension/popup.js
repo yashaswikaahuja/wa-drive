@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.67';
+const CURRENT_VERSION = '4.68';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -115,9 +115,10 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   // Step 2: Load saved mapping with confidence scores
   let savedMapping = null;
-  if (backendUrl && formKey) {
+  const primaryKey = semanticFormKey || formKey; // semantic is primary identity
+  if (backendUrl && primaryKey) {
     try {
-      const res = await fetch(`${backendUrl}/mappings/${formKey}`);
+      const res = await fetch(`${backendUrl}/mappings/${primaryKey}`);
       const data = await res.json();
       if (data && typeof data === 'object') savedMapping = data;
     } catch { /* ignore */ }
@@ -530,7 +531,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: injectCorrectionObserver,
-        args: [mapping, filledBySource, selectedProfile, backendUrl, formKey],
+        args: [mapping, filledBySource, selectedProfile, backendUrl, primaryKey],
       });
     }
 
@@ -564,7 +565,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         }
       }
 
-      await saveLearning(backendUrl, formKey, filledBySource, selectedProfile, false);
+      await saveLearning(backendUrl, primaryKey, filledBySource, selectedProfile, false);
       showStatus('Learning saved!', 'success');
       document.getElementById('save-learning-btn').style.display = 'none';
     };
