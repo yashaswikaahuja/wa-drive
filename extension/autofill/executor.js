@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.51 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.52 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -637,7 +637,19 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         filled += _r;
         const _el2 = document.querySelector(selector);
         const _failReason = !_r ? (_el2 ? 'no-option' : 'no-element') : null;
-        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _failReason, strategy: detectStrategy(_el2, type), durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, sv: STRATEGY_VERSION }); _flushRecords();
+        const _strategy = detectStrategy(_el2, type);
+        const _recIdx = _ccRecords.length;
+        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _failReason, strategy: _strategy, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, sv: STRATEGY_VERSION }); _flushRecords();
+        // Post-fill verification: check if Angular/framework reset the value
+        if (_r && _el2 && ['text','email','tel','number',''].includes(_el2.type||'')) {
+          setTimeout(() => {
+            const actual = _el2.value;
+            if (actual !== value && !actual.includes(value.slice(0,6))) {
+              _ccRecords[_recIdx] = { ..._ccRecords[_recIdx], result: 'reset', failReason: 'framework-reset', actualValue: actual };
+              _flushRecords();
+            }
+          }, 500);
+        }
       }
       catch(e) {
         _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() });
