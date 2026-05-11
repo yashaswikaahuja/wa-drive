@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.54';
+const CURRENT_VERSION = '4.55';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -288,6 +288,30 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   }).length;
   const waitMs = Math.max(5000, ngDropdownCount * 5500 + cascadeCount * 9000 + 2000);
   await new Promise(r => setTimeout(r, waitMs));
+
+  // Re-fill Angular reactive form fields that were reset (run in MAIN world for zone awareness)
+  if (Object.keys(mapping).length > 0) {
+    const angularRefills = Object.entries(mapping)
+      .filter(([sel, {type}]) => type === 'text' || type === 'email' || type === 'tel')
+      .map(([sel, {value}]) => ({ sel, value }));
+    if (angularRefills.length > 0) {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'MAIN',
+        func: (refills) => {
+          const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          refills.forEach(({sel, value}) => {
+            const el = document.querySelector(sel);
+            if (!el || el.value === value) return; // skip if already correct
+            if (niv) niv.set.call(el, value); else el.value = value;
+            ['input','change','blur'].forEach(ev => el.dispatchEvent(new Event(ev, {bubbles:true})));
+          });
+        },
+        args: [angularRefills],
+      }).catch(() => {});
+    }
+  }
+
   const replayTelemetryResult = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
