@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.42';
+const CURRENT_VERSION = '4.43';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -307,10 +307,16 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     }
   }).catch(() => [{ result: {} }]);
   const replayResults = replayResultsRaw?.[0]?.result ?? {};
-  // Read replay records from chrome.storage.local (shared between executeScript calls)
-  const _replayStorage = await chrome.storage.local.get('_cc_replay_records');
-  await chrome.storage.local.remove('_cc_replay_records');
-  const replayRecords = _replayStorage._cc_replay_records || [];
+  // Read replay records from DOM attribute (written by executor, shared between worlds)
+  const _replayDomResult = await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: () => {
+      const raw = document.body.getAttribute('data-cc-records');
+      document.body.removeAttribute('data-cc-records');
+      return raw ? JSON.parse(raw) : [];
+    }
+  }).catch(() => [{ result: [] }]);
+  const replayRecords = _replayDomResult?.[0]?.result || [];
 
   // POST FormSession to backend for observability
   if (backendUrl && formKey) {
