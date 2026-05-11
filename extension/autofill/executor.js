@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.49 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.50 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -304,8 +304,13 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
             session.pollTimer = setInterval(() => {
               if (session.cancelled || session.resolved) { clearInterval(session.pollTimer); return; }
               attempts++;
-              const searchRoot = activeOverlayRoot || document;
-              const opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              // Search in overlay root, then root component, then document
+              const searchRoot = activeOverlayRoot || root;
+              let opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              // Fallback: if root has no visible options, try document
+              if (opts.length === 0 && searchRoot !== document) {
+                opts = Array.from(document.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
+              }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
               console.log('[CC][poll] id='+session.id+' attempt='+attempts+' opts='+opts.length+' v='+v);
