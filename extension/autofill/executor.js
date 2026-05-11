@@ -1,9 +1,14 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.46 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.47 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
+
+  // ── Runtime version constants ─────────────────────────────────────────────
+  const RUNTIME_VERSION = '4.46';
+  const STRATEGY_VERSION = '1.0';
+  const WAIT_ENGINE_VERSION = '1.0';
 
   // ── Strategy Registry — named strategies with VerificationContracts ────────
   // Phase 2: strategies coexist with existing if/else logic (migration-safe)
@@ -87,25 +92,31 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
     minCount = minCount || 1; timeout = timeout || 8000;
     return new Promise(function(resolve) {
       var deadline = Date.now() + timeout;
+      var resolved = false;
+      var poll, mo;
+      function cleanup(val) {
+        if (resolved) return;
+        resolved = true;
+        if (poll) clearInterval(poll);
+        if (mo) mo.disconnect();
+        resolve(val);
+      }
       function check() {
+        if (resolved) return;
         var el = document.querySelector(selector);
         var real = Array.from(el ? el.options || [] : []).filter(function(o) {
           return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
         });
-        if (real.length >= minCount) { mo.disconnect(); resolve(el); return; }
-        if (Date.now() > deadline) { mo.disconnect(); resolve(null); return; }
+        if (real.length >= minCount) { cleanup(el); return; }
+        if (Date.now() > deadline) { cleanup(null); return; }
       }
-      var mo = new MutationObserver(check);
+      mo = new MutationObserver(check);
       mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class'] });
-      check(); // check immediately
-      // Polling fallback every 200ms
-      var poll = setInterval(function() {
-        if (Date.now() > deadline) { clearInterval(poll); mo.disconnect(); resolve(null); }
+      check();
+      poll = setInterval(function() {
+        if (Date.now() > deadline) cleanup(null);
         else check();
       }, 200);
-      // Cleanup on resolve
-      var origResolve = resolve;
-      resolve = function(v) { clearInterval(poll); origResolve(v); };
     });
   }
 
@@ -603,10 +614,10 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       (function() {
         var _t0 = Date.now();
         waitForOptions(_sel, 1, 8000).then(function(el) {
-          if (!el) { console.debug('[CC] WaitEngine timeout for', _sel); return; }
+          if (!el) { console.debug('[CC] WaitEngine timeout for', _sel); _ccRecords.push({ selector: _sel, value: _val, type: _type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', durationMs: 8000, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); return; }
           var _r = fillOne(_sel, _val, _type) || 0;
           filled += _r;
-          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now() }); _flushRecords();
+          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'wait-timeout', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, wv: WAIT_ENGINE_VERSION }); _flushRecords();
         });
       })();
       delay += 100; // minimal stagger to preserve ordering
@@ -615,7 +626,9 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         const _t0 = Date.now();
         const _r = fillOne(selector, value, type) || 0;
         filled += _r;
-        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', strategy: detectStrategy(document.querySelector(selector), type), durationMs: Date.now()-_t0, ts: Date.now() }); _flushRecords();
+        const _el2 = document.querySelector(selector);
+        const _failReason = !_r ? (_el2 ? 'no-option' : 'no-element') : null;
+        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _failReason, strategy: detectStrategy(_el2, type), durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, sv: STRATEGY_VERSION }); _flushRecords();
       }
       catch(e) {
         _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() });
@@ -658,7 +671,7 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
           if (niv) niv.set.call(ex, value); else ex.value = value;
           ['input','change'].forEach(ev => ex.dispatchEvent(new Event(ev, { bubbles: true })));
           console.debug('[CC] filled verify field:', selector, '->', ex.id || ex.name, value.slice(0,4) + '***');
-          _ccRecords.push({ selector: '#'+(ex.id||ex.name||'verify'), value, type: 'text', result: 'filled', strategy: 'text-input', durationMs: 0, ts: Date.now() }); _flushRecords();
+          _ccRecords.push({ selector: '#'+(ex.id||ex.name||'verify'), value, type: 'text', result: 'filled', strategy: 'text-input', durationMs: 0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
           filled++;
         }
       }
