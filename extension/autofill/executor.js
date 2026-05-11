@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.53 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.54 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -687,12 +687,17 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
                           (pk === 'pan_number' && /^[A-Z]{5}\d{4}[A-Z]$/.test(value));
             if (!valid) { console.debug('[CC] skipped verify fill: sensitive field failed validation', pk, value); continue; }
           }
-          const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
-                      Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
-          if (niv) niv.set.call(ex, value); else ex.value = value;
-          ['input','change'].forEach(ev => ex.dispatchEvent(new Event(ev, { bubbles: true })));
-          console.debug('[CC] filled verify field:', selector, '->', ex.id || ex.name, value.slice(0,4) + '***');
-          _ccRecords.push({ selector: '#'+(ex.id||ex.name||'verify'), value, type: 'text', result: 'filled', strategy: 'text-input', durationMs: 0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          // Delay verify fill to let Angular process primary field first
+          (function(_ex, _val) {
+            setTimeout(function() {
+              const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
+                          Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+              if (niv) niv.set.call(_ex, _val); else _ex.value = _val;
+              ['input','change','blur'].forEach(function(ev) { _ex.dispatchEvent(new Event(ev, { bubbles: true })); });
+              console.debug('[CC] filled verify field (delayed):', selector, '->', _ex.id || _ex.name, _val.slice(0,4) + '***');
+              _ccRecords.push({ selector: '#'+(_ex.id||_ex.name||'verify'), value: _val, type: 'text', result: 'filled', strategy: 'text-input', durationMs: 300, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+            }, 300);
+          })(ex, value);
           filled++;
         }
       }
