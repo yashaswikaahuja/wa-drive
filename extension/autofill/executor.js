@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.62 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.63 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   window._cc_filling = true; // prevent correction observer loop
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
