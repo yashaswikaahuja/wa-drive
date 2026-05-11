@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.47';
+const CURRENT_VERSION = '4.48';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -325,7 +325,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       hostname: new URL(tab.url).hostname,
       profileId: selectedProfile?.phone || '',
       startedAt: Date.now(),
-      runtimeVersion: '4.46',
+      runtimeVersion: chrome.runtime.getManifest().version,
       strategyVersion: '1.0',
       waitEngineVersion: '1.0',
       records: replayRecords,

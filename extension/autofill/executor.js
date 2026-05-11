@@ -1,12 +1,12 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.47 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.48 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
 
   // ── Runtime version constants ─────────────────────────────────────────────
-  const RUNTIME_VERSION = '4.46';
+  const RUNTIME_VERSION = '4.47';
   const STRATEGY_VERSION = '1.0';
   const WAIT_ENGINE_VERSION = '1.0';
 
