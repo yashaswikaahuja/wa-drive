@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.57 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.58 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -643,10 +643,13 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         // Post-fill verification: check if Angular/framework reset the value
         // Delay 6s to allow MAIN world re-fill to complete first
         if (_r && _el2 && ['text','email','tel','number',''].includes(_el2.type||'')) {
+          const _fillTime = Date.now();
           setTimeout(() => {
             const actual = _el2.value;
             if (actual !== value && !actual.includes(value.slice(0,6))) {
-              _ccRecords[_recIdx] = { ..._ccRecords[_recIdx], result: 'reset', failReason: 'framework-reset', actualValue: actual };
+              // Distinguish: never accepted (custom-input) vs accepted then reset (framework-reset)
+              const _reason = actual === '' ? 'custom-input-rejected' : 'framework-reset';
+              _ccRecords[_recIdx] = { ..._ccRecords[_recIdx], result: 'reset', failReason: _reason, actualValue: actual };
               _flushRecords();
             }
           }, 6000);

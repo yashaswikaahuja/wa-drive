@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.57';
+const CURRENT_VERSION = '4.58';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -287,7 +287,29 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     return ['district','sub_division','block','panchayat'].some(k=>label.includes(k));
   }).length;
   const waitMs = Math.max(8000, ngDropdownCount * 5500 + cascadeCount * 9000 + 2000); // min 8s to allow MAIN world re-fill + 6s verification
-  await new Promise(r => setTimeout(r, waitMs));
+  // Re-fill Angular fields at 2s (before 6s verification check in executor)
+  await new Promise(r => setTimeout(r, 2000));
+  if (Object.keys(mapping).length > 0) {
+    const _earlyRefills = Object.entries(mapping)
+      .filter(([, {type}]) => type === 'text' || type === 'email' || type === 'tel')
+      .map(([sel, {value}]) => ({ sel, value }));
+    if (_earlyRefills.length > 0) {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id }, world: 'MAIN',
+        func: (refills) => {
+          const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          refills.forEach(({sel, value}) => {
+            const el = document.querySelector(sel);
+            if (!el || el.value === value) return;
+            if (niv) niv.set.call(el, value); else el.value = value;
+            ['input','change','blur'].forEach(ev => el.dispatchEvent(new Event(ev, {bubbles:true})));
+          });
+        },
+        args: [_earlyRefills],
+      }).catch(() => {});
+    }
+  }
+  await new Promise(r => setTimeout(r, waitMs - 2000));
 
   // Re-fill Angular reactive form fields that were reset (run in MAIN world for zone awareness)
   if (Object.keys(mapping).length > 0) {
