@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.66';
+const CURRENT_VERSION = '4.67';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -115,10 +115,9 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   // Step 2: Load saved mapping with confidence scores
   let savedMapping = null;
-  const primaryKey = semanticFormKey || formKey; // semantic is primary identity
-  if (backendUrl && primaryKey) {
+  if (backendUrl && formKey) {
     try {
-      const res = await fetch(`${backendUrl}/mappings/${primaryKey}`);
+      const res = await fetch(`${backendUrl}/mappings/${formKey}`);
       const data = await res.json();
       if (data && typeof data === 'object') savedMapping = data;
     } catch { /* ignore */ }
@@ -288,7 +287,52 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     return ['district','sub_division','block','panchayat'].some(k=>label.includes(k));
   }).length;
   const waitMs = Math.max(8000, ngDropdownCount * 5500 + cascadeCount * 9000 + 2000); // min 8s to allow MAIN world re-fill + 6s verification
-  await new Promise(r => setTimeout(r, waitMs));
+  // Re-fill Angular fields at 2s (before 6s verification check in executor)
+  await new Promise(r => setTimeout(r, 2000));
+  if (Object.keys(mapping).length > 0) {
+    const _earlyRefills = Object.entries(mapping)
+      .filter(([, {type}]) => type === 'text' || type === 'email' || type === 'tel')
+      .map(([sel, {value}]) => ({ sel, value }));
+    if (_earlyRefills.length > 0) {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id }, world: 'MAIN',
+        func: (refills) => {
+          const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          refills.forEach(({sel, value}) => {
+            const el = document.querySelector(sel);
+            if (!el || el.value === value) return;
+            if (niv) niv.set.call(el, value); else el.value = value;
+            ['input','change','blur'].forEach(ev => el.dispatchEvent(new Event(ev, {bubbles:true})));
+          });
+        },
+        args: [_earlyRefills],
+      }).catch(() => {});
+    }
+  }
+  await new Promise(r => setTimeout(r, waitMs - 2000));
+
+  // Re-fill Angular reactive form fields that were reset (run in MAIN world for zone awareness)
+  if (Object.keys(mapping).length > 0) {
+    const angularRefills = Object.entries(mapping)
+      .filter(([sel, {type}]) => type === 'text' || type === 'email' || type === 'tel')
+      .map(([sel, {value}]) => ({ sel, value }));
+    if (angularRefills.length > 0) {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'MAIN',
+        func: (refills) => {
+          const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          refills.forEach(({sel, value}) => {
+            const el = document.querySelector(sel);
+            if (!el || el.value === value) return; // skip if already correct
+            if (niv) niv.set.call(el, value); else el.value = value;
+            ['input','change','blur'].forEach(ev => el.dispatchEvent(new Event(ev, {bubbles:true})));
+          });
+        },
+        args: [angularRefills],
+      }).catch(() => {});
+    }
+  }
 
   const replayTelemetryResult = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
@@ -330,13 +374,9 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       runtimeVersion: chrome.runtime.getManifest().version,
       strategyVersion: '1.0',
       waitEngineVersion: '1.0',
+      records: replayRecords,
       totalFilled: replayRecords.filter(r => r.result === 'filled').length,
       totalFailed: replayRecords.filter(r => ['skipped','error','reset'].includes(r.result)).length,
-      // Enrich records with FieldIntent from filledBySource
-      records: replayRecords.map(r => {
-        const intent = filledBySource[r.selector];
-        return intent ? { ...r, intent: intent.profileKey, source: intent.source, confidence: intent.confidence } : r;
-      }),
     };
     await fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
   }
@@ -490,7 +530,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       chrome.scripting.executeScript({
         target: { tabId: tab.id },
         func: injectCorrectionObserver,
-        args: [mapping, filledBySource, selectedProfile, backendUrl, primaryKey],
+        args: [mapping, filledBySource, selectedProfile, backendUrl, formKey],
       });
     }
 
@@ -524,7 +564,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         }
       }
 
-      await saveLearning(backendUrl, primaryKey, filledBySource, selectedProfile, false);
+      await saveLearning(backendUrl, formKey, filledBySource, selectedProfile, false);
       showStatus('Learning saved!', 'success');
       document.getElementById('save-learning-btn').style.display = 'none';
     };
@@ -616,7 +656,6 @@ function showStatus(msg, type) {
 // ── Save Learning ─────────────────────────────────────────────────────────────
 async function saveLearning(backendUrl, formKey, filledBySource, profile, fromCorrection) {
   if (!backendUrl || !formKey) return;
-  // formKey here is now semanticFormKey (stable across DOM changes)
   const updates = {};
   for (const [, info] of Object.entries(filledBySource)) {
     if (!info.profileKey || !info.semanticKey) continue;

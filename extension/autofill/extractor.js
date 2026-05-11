@@ -188,8 +188,6 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
       if (!info) continue;
 
       el.addEventListener('change', () => {
-        // Skip if executor is currently filling (avoid loop)
-        if (window._cc_filling) return;
         const newVal = el.value;
         if (newVal === originalValue) return;
         const correctedKey = Object.entries(profile).find(([, v]) => v === newVal)?.[0];
