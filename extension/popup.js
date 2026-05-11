@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.60';
+const CURRENT_VERSION = '4.61';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -309,7 +309,32 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       }).catch(() => {});
     }
   }
-  await new Promise(r => setTimeout(r, waitMs - 2000));
+  // At 4s: execCommand retry for fields that rejected deterministic assignment
+  await new Promise(r => setTimeout(r, 2000));
+  if (Object.keys(mapping).length > 0) {
+    const _execRetries = Object.entries(mapping)
+      .filter(([, {type}]) => type === 'text' || type === 'email' || type === 'tel')
+      .map(([sel, {value}]) => ({ sel, value }));
+    if (_execRetries.length > 0) {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'MAIN',
+        func: (retries) => {
+          retries.forEach(({sel, value}) => {
+            const el = document.querySelector(sel);
+            if (!el || el.value === value || el.value.includes(value.slice(0,6))) return; // already filled
+            // execCommand fallback for interaction-controlled inputs
+            el.focus();
+            if (el.value) el.select();
+            document.execCommand('insertText', false, value);
+            el.dispatchEvent(new Event('blur', {bubbles:true}));
+          });
+        },
+        args: [_execRetries],
+      }).catch(() => {});
+    }
+  }
+  await new Promise(r => setTimeout(r, waitMs - 4000));
 
   // Re-fill Angular reactive form fields that were reset (run in MAIN world for zone awareness)
   if (Object.keys(mapping).length > 0) {
