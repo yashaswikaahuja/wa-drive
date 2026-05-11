@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.48';
+const CURRENT_VERSION = '4.49';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -329,7 +329,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       strategyVersion: '1.0',
       waitEngineVersion: '1.0',
       records: replayRecords,
-      totalFilled: replayRecords.filter(r => r.result === 'filled').length,
+      totalFilled: result?.[0]?.result || replayRecords.filter(r => r.result === 'filled').length,
       totalFailed: replayRecords.filter(r => r.result === 'skipped' || r.result === 'error').length,
     };
     await fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});

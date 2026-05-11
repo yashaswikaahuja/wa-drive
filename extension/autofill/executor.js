@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.48 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.49 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -217,6 +217,10 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
             window._ccReplaySessions.delete(_label);
             _replayResults[_label] = result;
             sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
+            // Record ng-dropdown fill in replay records
+            const _isOk = result === 'ok';
+            _ccRecords.push({ selector, value, type: 'ng-dropdown', result: _isOk ? 'filled' : 'skipped', failReason: _isOk ? null : result, strategy: 'ng-dropdown-click', durationMs: Date.now()-session.startedAt, ts: Date.now(), rv: RUNTIME_VERSION });
+            _flushRecords();
             console.log('[CC][session-cleanup] id='+session.id+' label='+_label+' result='+result+' duration='+(Date.now()-session.startedAt)+'ms');
           }
 
