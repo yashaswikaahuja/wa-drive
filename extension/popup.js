@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.72';
+const CURRENT_VERSION = '4.73';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -532,6 +532,16 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     const teachBtn = document.getElementById('teach-btn');
     teachBtn.style.display = 'block';
     teachBtn.onclick = () => startTeachMode(tab, failedFields, backendUrl, selectedProfile, groqKey);
+    // Save unresolved fields as async teaching tasks
+    if (backendUrl && failedFields.length > 0) {
+      const hostname = new URL(tab.url).hostname;
+      for (const f of failedFields) {
+        fetch(`${backendUrl}/teaching/pending`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hostname, label: f.label, type: f.type, domIndex: f.domIndex, componentClass: f.componentClass }),
+        }).catch(() => {});
+      }
+    }
   }
 
   if (count > 0) {
