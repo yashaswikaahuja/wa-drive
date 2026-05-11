@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.69';
+const CURRENT_VERSION = '4.70';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -379,7 +379,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       runtimeVersion: chrome.runtime.getManifest().version,
       strategyVersion: '1.0',
       waitEngineVersion: '1.0',
-      records: replayRecords,
+      records: replayRecords.map(r => { const i=filledBySource[r.selector]; return i ? {...r, intent:i.profileKey, source:i.source, confidence:i.confidence} : r; }),
       totalFilled: replayRecords.filter(r => r.result === 'filled').length,
       totalFailed: replayRecords.filter(r => ['skipped','error','reset'].includes(r.result)).length,
     };
