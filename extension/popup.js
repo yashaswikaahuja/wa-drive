@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.70';
+const CURRENT_VERSION = '4.71';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -275,6 +275,10 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       args: [groqKey],
     }).catch(() => {});
   }
+  // ── PLANNER/RUNTIME BOUNDARY ─────────────────────────────────────────────
+  // Above: Planner (mapping + filledBySource = FillPlan)
+  // Below: Runtime (deterministic executor consumes FillPlan)
+  const _planSize = Object.keys(mapping).length;
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: fillFormFieldsSequential,
@@ -380,6 +384,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       strategyVersion: '1.0',
       waitEngineVersion: '1.0',
       records: replayRecords.map(r => { const i=filledBySource[r.selector]; return i ? {...r, intent:i.profileKey, source:i.source, confidence:i.confidence} : r; }),
+      planSize: _planSize,
       totalFilled: replayRecords.filter(r => r.result === 'filled').length,
       totalFailed: replayRecords.filter(r => ['skipped','error','reset'].includes(r.result)).length,
     };
