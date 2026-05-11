@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.44 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.45 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -137,8 +137,8 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   let delay = 0;
 
   function fillOne(selector, value, type) {
+    let el; // declared outside try so catch block can access it
     try {
-      let el;
       if (selector.startsWith('form-field-')) {
         const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
         el = all[parseInt(selector.split('-')[2])];
