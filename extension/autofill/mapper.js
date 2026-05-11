@@ -50,14 +50,14 @@ function fuzzyMatch(formFields, profile) {
     const ident = [labelEn, labelEn, field.placeholder, field.id, field.name]
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_');
     // Re-type/confirm mirror fields — fill with same value as primary field
-    const isRetype = /retype|re_type|reenter|re_enter|retypeFullName|retypefullname|re_type_|retype_/i.test(ident) ||
-                     /^re_type|^retype|^re_enter|^reenter/i.test(ident) ||
-                     field.id?.toLowerCase().includes('retype') || field.name?.toLowerCase().includes('retype');
+    const isRetype = /retype|re_type|reenter|re_enter|confirm|retypeFullName|retypefullname|re_type_|retype_/i.test(ident) ||
+                     /^re_type|^retype|^re_enter|^reenter|^confirm/i.test(ident) ||
+                     field.id?.toLowerCase().includes('retype') || field.name?.toLowerCase().includes('retype') || field.id?.toLowerCase().startsWith('c') && field.id?.length > 2;
     // Skip verify fields (SSC pattern) but NOT retype fields (RRB pattern)
-    if (/^verify_|_and_verify|^confirm_/i.test(ident) && !ident.includes('id') && !isRetype) continue;
+    if (/^verify_|_and_verify/i.test(ident) && !ident.includes('id') && !isRetype) continue;
     if (isRetype) {
       // Find what primary field this mirrors by stripping retype prefix
-      const baseIdent = ident.replace(/retype|re_type|reenter|re_enter/gi, '').replace(/^[_\s]+|[_\s]+$/g, '');
+      const baseIdent = ident.replace(/retype|re_type|reenter|re_enter|confirm/gi, '').replace(/^[_\s]+|[_\s]+$/g, '');
       // Try to find matching profile value
       for (const [key, aliases] of Object.entries(FIELD_ALIASES)) {
         if (!profile[key]) continue;
