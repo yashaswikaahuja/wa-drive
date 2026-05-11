@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.50';
+const CURRENT_VERSION = '4.51';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -229,7 +229,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         'year of passing': 'year_of_passing',
         'matriculation (10th class) year of passing': 'passing_year_10th',
         'matriculation (10th class) education board': 'board_10th',
-        'your highest level of educational qualification': 'course_name',
+        'your highest level of educational qualification': 'highest_education_qualification',
         'nationality': 'nationality',
         'religion': 'religion',
       };
