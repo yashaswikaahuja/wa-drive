@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.68';
+const CURRENT_VERSION = '4.69';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -115,13 +115,17 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   // Step 2: Load saved mapping with confidence scores
   let savedMapping = null;
-  const primaryKey = semanticFormKey || formKey; // semantic is primary identity
-  if (backendUrl && primaryKey) {
-    try {
-      const res = await fetch(`${backendUrl}/mappings/${primaryKey}`);
-      const data = await res.json();
-      if (data && typeof data === 'object') savedMapping = data;
-    } catch { /* ignore */ }
+  const primaryKey = semanticFormKey || formKey;
+  if (backendUrl) {
+    // Try semantic key first, fall back to structural key
+    for (const key of [primaryKey, formKey]) {
+      if (!key) continue;
+      try {
+        const res = await fetch(`${backendUrl}/mappings/${key}`);
+        const data = await res.json();
+        if (data && typeof data === 'object' && Object.keys(data).length > 0) { savedMapping = data; break; }
+      } catch { /* ignore */ }
+    }
   }
 
   // Step 3: Apply saved mappings (confidence > 0.4)
