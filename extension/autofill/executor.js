@@ -1,9 +1,9 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.41 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.42 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
-  function _flushRecords() { try { sessionStorage.setItem('_cc_replay_records', JSON.stringify(_ccRecords)); } catch {} }
+  function _flushRecords() { try { chrome.storage.local.set({ _cc_replay_records: _ccRecords }); } catch {} }
 
   // ── Strategy Registry — named strategies with VerificationContracts ────────
   // Phase 2: strategies coexist with existing if/else logic (migration-safe)
@@ -741,7 +741,7 @@ function fillFormFields(mapping) {
       }
     } catch { /* skip */ }
   }
-  // Final flush to sessionStorage
-  try { sessionStorage.setItem('_cc_replay_records', JSON.stringify(_ccRecords)); } catch {}
+  // Final flush to chrome.storage.local (shared between executeScript calls)
+  try { chrome.storage.local.set({ _cc_replay_records: _ccRecords }); } catch {}
   return filled;
 }
