@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.97';
+const CURRENT_VERSION = '4.98';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -457,6 +457,33 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       totalFailed: replayRecords.filter(r => ['skipped','error','reset'].includes(r.result)).length,
     };
     await fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
+
+    // ── Failure Display: show operator what needs manual attention ──
+    const failures = replayRecords.filter(r => r.result !== 'filled');
+    if (failures.length > 0) {
+      const failDiv = document.getElementById('failed-fields-list') || (() => {
+        const d = document.createElement('div');
+        d.id = 'failed-fields-list';
+        d.style.cssText = 'margin-top:8px;';
+        document.getElementById('result-panel')?.appendChild(d);
+        return d;
+      })();
+      const reasonMap = {
+        'custom-input-rejected': { color: '#dc2626', action: 'Fill manually (custom input)' },
+        'framework-reset': { color: '#dc2626', action: 'Fill manually (form rejected value)' },
+        'no-element': { color: '#888', action: 'Field not found on page' },
+        'no-option': { color: '#f59e0b', action: 'Dropdown option unavailable' },
+        'wait-timeout': { color: '#f59e0b', action: 'Field loading timed out' },
+      };
+      failDiv.innerHTML = '<div style="font-size:11px;color:#f87171;margin:6px 0 4px;font-weight:bold;">⚠ Needs Manual Input:</div>' +
+        failures.map(r => {
+          const label = filledBySource[r.selector]?.label || r.selector?.replace('#','') || 'Unknown';
+          const info = reasonMap[r.failReason] || { color: '#f59e0b', action: r.failReason || 'Check this field' };
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;margin:2px 0;background:rgba(220,38,38,0.1);border-radius:4px;font-size:11px;">' +
+            '<span style="color:#fff;">' + label.slice(0,30) + '</span>' +
+            '<span style="color:' + info.color + ';font-size:10px;">' + info.action + '</span></div>';
+        }).join('');
+    }
     // Auto-save mapping after successful fill (so next time uses saved data, not AI)
     if (isNewForm && Object.keys(filledBySource).length > 0) {
       await saveLearning(backendUrl, primaryKey, filledBySource, selectedProfile, false).catch(() => {});
