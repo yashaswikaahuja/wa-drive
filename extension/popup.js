@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.79';
+const CURRENT_VERSION = '4.80';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -163,8 +163,8 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     }
   }
 
-  // Fuzzy match for remaining unmapped fields
-  const unmapped1 = formFields.filter(f => !mapping[f.selector]);
+  // Fuzzy match for remaining unmapped fields (skip if AI already ran on new form)
+  const unmapped1 = isNewForm && groqKey ? [] : formFields.filter(f => !mapping[f.selector]);
   const fuzzyResult = fuzzyMatch(unmapped1, selectedProfile);
   for (const [sel, val] of Object.entries(fuzzyResult)) {
     mapping[sel] = val;
