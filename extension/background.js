@@ -2,7 +2,7 @@
 function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
 
-console.log("[CC] background.js loaded v5.14");
+console.log("[CC] background.js loaded v5.15");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -33,62 +33,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     runTeachSession(job).catch(console.error);
   }
   if (msg.type === 'AUTOFILL_TRIGGER') {
+    // Store trigger and open popup — popup handles the full pipeline
     const { profileId } = msg;
     const tabId = sender?.tab?.id;
-    if (!profileId || !tabId) { sendResponse({ ok: false, error: 'missing data' }); return; }
-    // Store trigger info and run pipeline directly on the sender's tab
-    (async () => {
-      try {
-        const { backendUrl, groqKey } = await chrome.storage.local.get(['backendUrl', 'groqKey']);
-        if (!backendUrl) { sendResponse({ ok: false, error: 'no backend URL' }); return; }
-        const profileRes = await fetch(backendUrl + '/profiles/' + profileId);
-        const profile = await profileRes.json();
-        if (!profile?.name) { sendResponse({ ok: false, error: 'profile not found' }); return; }
-        // Inject scripts and run full pipeline on page
-        await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
-        const result = await chrome.scripting.executeScript({
-          target: { tabId },
-          args: [profile, backendUrl, groqKey],
-          func: async (prof, bUrl, gKey) => {
-            const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
-            if (!formFields.length) return { ok: false, error: 'no fields' };
-            const pk = semanticFormKey || formKey;
-            let saved = null;
-            for (const k of [pk, formKey]) {
-              if (!k) continue;
-              try { const r = await fetch(bUrl+'/mappings/'+k); const d = await r.json(); if (d && typeof d==='object' && Object.keys(d).length>0) { saved=d; break; } } catch {}
-            }
-            let mapping = {}, fbs = {};
-            const gsk = l => (l||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
-            // Saved mappings
-            if (saved) {
-              for (const f of formFields) {
-                const sk = gsk(f.label); const s = saved[sk];
-                if (s && s.profileKey && prof[s.profileKey]) {
-                  mapping[f.selector] = { value: prof[s.profileKey], type: f.type };
-                  fbs[f.selector] = { label: f.label, semanticKey: sk, profileKey: s.profileKey, source: 'saved' };
-                }
-              }
-            }
-            // AI for new
-            const isNew = !saved || Object.keys(saved).length===0;
-            if (isNew && gKey) {
-              const um = formFields.filter(f => !mapping[f.selector] && !/captcha|otp|token|password/i.test(f.label));
-              if (um.length > 0) { const ai = await aiMatch(um, prof, gKey); for (const [s,v] of Object.entries(ai)) { mapping[s]=v; const ff=formFields.find(x=>x.selector===s); if(ff) fbs[s]={label:ff.label,source:'ai'}; } }
-            }
-            // Fuzzy for known
-            if (!isNew) { const um=formFields.filter(f=>!mapping[f.selector]); const fz=fuzzyMatch(um,prof); for(const[s,v]of Object.entries(fz)){mapping[s]=v;} }
-            // Adapters
-            let adp = {};
-            try { const r = await fetch(bUrl+'/adapters/'+location.hostname); adp = await r.json(); } catch {}
-            // Fill
-            const filled = fillFormFieldsSequential(mapping, fbs, adp);
-            return { ok: true, filled, fields: Object.keys(mapping).length };
-          }
-        });
-        sendResponse(result?.[0]?.result || { ok: false, error: 'no result' });
-      } catch(e) { sendResponse({ ok: false, error: e.message }); }
-    })();
+    chrome.storage.local.set({ _cc_float_trigger: { profileId, tabId, ts: Date.now() } });
+    // Open popup programmatically (Chrome 99+)
+    chrome.action.openPopup().catch(() => {});
+    sendResponse({ ok: true, status: 'popup triggered' });
     return true;
   }
   if (msg.type === 'GET_TAB_ID') {

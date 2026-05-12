@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '5.14';
+const CURRENT_VERSION = '5.15';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -42,6 +42,19 @@ document.getElementById('refresh-btn').addEventListener('click', () => {
 });
 
 let _autofillRunning = false;
+// Auto-fill if triggered from floating button
+chrome.storage.local.get('_cc_float_trigger', (data) => {
+  const trigger = data._cc_float_trigger;
+  if (trigger && Date.now() - trigger.ts < 5000) {
+    chrome.storage.local.remove('_cc_float_trigger');
+    // Auto-select profile and click autofill after profiles load
+    setTimeout(() => {
+      const card = Array.from(document.querySelectorAll('.profile-card')).find(c => c.textContent.includes(trigger.profileId));
+      if (card) { card.click(); setTimeout(() => document.getElementById('autofill-btn')?.click(), 300); }
+    }, 500);
+  }
+});
+
 document.getElementById('autofill-btn').addEventListener('click', async () => {
   if (_autofillRunning) return;
   _autofillRunning = true;
