@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.96 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.97 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -800,6 +800,17 @@ function fillFormFields(mapping) {
       // Find primary field by stripping confirm prefix from ID
       var baseId = id.replace(/^c(?=[a-z])/,'').replace(/^confirm_?/i,'').replace(/^retype_?/i,'').replace(/^re_?type_?/i,'').replace(/^re_?enter_?/i,'').replace(/^verify_?/i,'');
       var primary = document.getElementById(baseId) || document.querySelector('[id$="'+baseId+'"]') || document.querySelector('[name="'+baseId+'"]');
+      // Also try matching by placeholder pattern (both DOB fields have DD/MM)
+      if (!primary || !primary.value) {
+        var ph = (el.placeholder || '').toLowerCase();
+        if (ph.includes('dd/mm') || ph.includes('dd-mm')) {
+          // Find any filled input with same placeholder pattern
+          var allFilled = Array.from(document.querySelectorAll('input[type=text]')).filter(function(inp) {
+            return inp !== el && inp.value && (inp.placeholder || '').toLowerCase().match(/dd.mm/);
+          });
+          if (allFilled.length > 0) primary = allFilled[0];
+        }
+      }
       if (!primary || !primary.value) return;
       // Propagate settled DOM value
       var niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
