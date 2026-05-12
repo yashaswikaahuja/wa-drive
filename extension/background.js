@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v5.04");
+console.log("[CC] background.js loaded v5.05");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -32,15 +32,85 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     // Triggered from floating button, dashboard, or mobile
     const { profileId, tabId: triggerTabId } = msg;
     const targetTabId = triggerTabId || sender?.tab?.id;
-    if (!targetTabId || !profileId) { sendResponse({ ok: false, error: 'missing tabId or profileId' }); return; }
+    if (!profileId) { sendResponse({ ok: false, error: 'missing profileId' }); return; }
     (async () => {
       try {
         const { backendUrl, groqKey } = await chrome.storage.local.get(['backendUrl', 'groqKey']);
-        const profileRes = await fetch(backendUrl + '/profiles/' + profileId);
+        if (!backendUrl) { sendResponse({ ok: false, error: 'no backend URL configured' }); return; }
+        // Get profile
+        const profileRes = await fetch();
         const profile = await profileRes.json();
-        // generateFillPlan is in planner.js (loaded via importScripts or inline)
-        // For now, send back acknowledgment - full integration in next step
-        sendResponse({ ok: true, status: 'trigger received', targetTabId });
+        if (!profile || !profile.name) { sendResponse({ ok: false, error: 'profile not found' }); return; }
+        // Resolve tab ID
+        let tabId = targetTabId;
+        if (!tabId) {
+          const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+          tabId = tabs[0]?.id;
+        }
+        if (!tabId) { sendResponse({ ok: false, error: 'no active tab' }); return; }
+        // Run extractor
+        const fieldsResult = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: extractFormFieldsWithFingerprint,
+        });
+        const { formFields, formKey, semanticFormKey } = fieldsResult?.[0]?.result ?? { formFields: [], formKey: '', semanticFormKey: '' };
+        if (!formFields.length) { sendResponse({ ok: false, error: 'no form fields found' }); return; }
+        // Run planner (inline since importScripts not available in MV3 SW)
+        const primaryKey = semanticFormKey || formKey;
+        let savedMapping = null;
+        for (const key of [primaryKey, formKey]) {
+          if (!key) continue;
+          try { const r = await fetch(); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) { savedMapping = d; break; } } catch {}
+        }
+        let mapping = {};
+        let filledBySource = {};
+        // Apply saved mappings
+        if (savedMapping) {
+          for (const field of formFields) {
+            const sk = getSemanticKey(field.label);
+            const saved = savedMapping[sk];
+            if (!saved) continue;
+            const conf = calcConfidence(saved.fills || 0, saved.corrections || 0);
+            if (conf >= 0.2 && saved.profileKey && profile[saved.profileKey]) {
+              mapping[field.selector] = { value: profile[saved.profileKey], type: field.type };
+              filledBySource[field.selector] = { label: field.label, semanticKey: sk, profileKey: saved.profileKey, source: 'saved', confidence: conf };
+            }
+          }
+        }
+        // AI for new forms
+        const isNewForm = !savedMapping || Object.keys(savedMapping).length === 0;
+        if (isNewForm && groqKey) {
+          const unmapped = formFields.filter(f => !mapping[f.selector] && !/captcha|otp|token|password/i.test(f.label));
+          if (unmapped.length > 0) {
+            const aiResult = await aiMatch(unmapped, profile, groqKey);
+            for (const [sel, val] of Object.entries(aiResult)) {
+              mapping[sel] = val;
+              const field = formFields.find(f => f.selector === sel);
+              if (field) { const pk = Object.entries(profile).find(([,v]) => v === val.value)?.[0]; filledBySource[sel] = { label: field.label, profileKey: pk, source: 'ai', confidence: 0.7 }; }
+            }
+          }
+        }
+        // Fuzzy for remaining (known forms only)
+        if (!isNewForm) {
+          const unmapped = formFields.filter(f => !mapping[f.selector]);
+          const fuzzy = fuzzyMatch(unmapped, profile);
+          for (const [sel, val] of Object.entries(fuzzy)) { mapping[sel] = val; }
+        }
+        // Load adapters
+        let portalAdapters = {};
+        try { const h = new URL((await chrome.tabs.get(tabId)).url).hostname; const r = await fetch(); portalAdapters = await r.json(); } catch {}
+        // Execute fill
+        const result = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: fillFormFieldsSequential,
+          args: [mapping, filledBySource, portalAdapters],
+        });
+        const filled = result?.[0]?.result || 0;
+        // Auto-save mapping for new forms
+        if (isNewForm && Object.keys(filledBySource).length > 0) {
+          await saveLearning(backendUrl, primaryKey, filledBySource, profile, false).catch(() => {});
+        }
+        sendResponse({ ok: true, filled, fields: Object.keys(mapping).length });
       } catch(e) { sendResponse({ ok: false, error: e.message }); }
     })();
     return true;
