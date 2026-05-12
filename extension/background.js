@@ -1,9 +1,9 @@
-importScripts("autofill/extractor.js", "autofill/mapper.js", "autofill/executor.js", "autofill/planner.js");
+importScripts("autofill/mapper.js", "autofill/planner.js");
 // Helper functions for AUTOFILL_TRIGGER handler
 function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
 
-console.log("[CC] background.js loaded v5.11");
+console.log("[CC] background.js loaded v5.12");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
