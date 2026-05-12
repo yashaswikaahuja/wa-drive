@@ -246,10 +246,10 @@ RULES:
 - Use EXACT profile key names from the list below
 
 Form fields:
-\${fieldDescriptions}
+${fieldDescriptions}
 
 Available profile keys and values:
-\${profileKeys}
+${profileKeys}
 
 Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
 
