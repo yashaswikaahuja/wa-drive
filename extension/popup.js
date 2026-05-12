@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.80';
+const CURRENT_VERSION = '4.81';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -158,6 +158,37 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         if (field) {
           const profileKey = Object.entries(selectedProfile).find(([, v]) => v === val.value)?.[0];
           filledBySource[sel] = { label: field.label, semanticKey: getSemanticKey(field.label), profileKey, source: 'ai', confidence: 0.7 };
+        }
+      }
+    }
+  }
+
+  // Fill retype/confirm fields by matching to already-mapped primary fields
+  for (const field of formFields) {
+    if (mapping[field.selector]) continue;
+    const ident = (field.label || '').toLowerCase() + ' ' + (field.id || '') + ' ' + (field.name || '');
+    const isConfirm = /retype|re.type|confirm|re.enter|verify/i.test(ident);
+    if (!isConfirm) continue;
+    const baseId = (field.id || '').replace(/^c(?=[a-z])/i, '').replace(/^confirm/i, '').replace(/^retype/i, '').replace(/^re_?type_?/i, '');
+    const baseLabel = ident.replace(/retype|re.type|confirm|re.enter|verify/gi, '').replace(/[^a-z0-9]/g, ' ').trim();
+    // Match by ID
+    for (const [sel, val] of Object.entries(mapping)) {
+      const selId = sel.replace(/^#/, '').replace(/\[.*\]/, '');
+      if (baseId && selId && selId.toLowerCase() === baseId.toLowerCase()) {
+        mapping[field.selector] = { value: val.value, type: field.type };
+        filledBySource[field.selector] = { label: field.label, semanticKey: baseLabel, profileKey: filledBySource[sel]?.profileKey, source: 'confirm-mirror', confidence: 1 };
+        break;
+      }
+    }
+    // Match by label similarity
+    if (!mapping[field.selector]) {
+      for (const f2 of formFields) {
+        if (!mapping[f2.selector] || f2.selector === field.selector) continue;
+        const f2Label = (f2.label || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        if (baseLabel && f2Label && (f2Label.includes(baseLabel.split(' ')[0]) || baseLabel.includes(f2Label.split(' ')[0]))) {
+          mapping[field.selector] = { value: mapping[f2.selector].value, type: field.type };
+          filledBySource[field.selector] = { label: field.label, semanticKey: baseLabel, profileKey: filledBySource[f2.selector]?.profileKey, source: 'confirm-mirror', confidence: 0.9 };
+          break;
         }
       }
     }
