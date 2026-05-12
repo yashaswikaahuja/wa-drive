@@ -237,7 +237,10 @@ async function aiMatch(formFields, profile, groqKey) {
 RULES:
 - Map ONLY when you are very confident the field should contain that profile value
 - "address" fields get the address value, NOT the name
-- "day/month/year" fields get the corresponding part of dob (format DD/MM/YYYY)
+- DOB HANDLING:
+  - Single "date of birth" text field → use "dob" key (fills full date like "14/01/2000")
+  - SEPARATE day/month/year dropdown/select fields → use "dob__day", "dob__month", "dob__year"
+  - Only use split keys when the form has 3 separate fields for day, month, year
 - NAME SPLITTING: if profile has "name" as full name (e.g. "SANDHYA KUMARI"):
   - "first name" field → use value "SANDHYA" (first word of name)
   - "last name" / "surname" field → use value "KUMARI" (last word of name)
