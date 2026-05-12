@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.81';
+const CURRENT_VERSION = '4.82';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -144,6 +144,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
 
   // Step 4: For NEW forms (no saved mapping), AI maps all fields first
   const isNewForm = !savedMapping || Object.keys(savedMapping).length === 0;
+  console.log('[CC] isNewForm:', isNewForm, 'groqKey:', !!groqKey, 'savedMapping:', savedMapping);
   if (isNewForm && groqKey) {
     const allUnmappedForAI = formFields.filter(f => !mapping[f.selector] && !/captcha|otp|token|password|security.code/i.test(f.label));
     if (allUnmappedForAI.length > 0) {
