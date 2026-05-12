@@ -103,13 +103,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     }
   }
 
-  // Init after DOM ready, re-check on SPA navigation
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else setTimeout(init, 1000);
-
-  // Re-check on SPA route changes
-  let lastUrl = location.href;
-  new MutationObserver(() => {
-    if (location.href !== lastUrl) { lastUrl = location.href; setTimeout(init, 1500); }
-  }).observe(document.body, { childList: true, subtree: true });
+  // Retry init until fields appear (Angular/SPA may render late)
+  function tryInit() {
+    if (document.getElementById('cc-float-btn')) return; // already injected
+    if (countFormFields() >= 5) { injectButton(); return; }
+  }
+  // Check every 2s for up to 30s
+  let attempts = 0;
+  const retryInterval = setInterval(() => {
+    tryInit();
+    if (++attempts > 15 || document.getElementById('cc-float-btn')) clearInterval(retryInterval);
+  }, 2000);
+  // Also check on DOM mutations (SPA navigation)
+  new MutationObserver(() => tryInit()).observe(document.body || document.documentElement, { childList: true, subtree: true });
 })();
