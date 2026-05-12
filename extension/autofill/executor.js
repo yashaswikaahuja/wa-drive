@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.83 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.84 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -659,8 +659,8 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() });
         console.debug('[CC] fillOne error on', selector, ':', e.message);
       }
-      // Fix #2: fill verify/confirm fields by label similarity (re-enter, confirm, verify)
-      if (!selector.startsWith('form-field-') && !['select','radio','checkbox','mat-select','mat-radio','mat-checkbox'].includes(type)) {
+      // Fix #2: DISABLED — confirm-mirror pass (2s post-fill) handles this now
+      if (false && !selector.startsWith('form-field-') && !['select','radio','checkbox','mat-select','mat-radio','mat-checkbox'].includes(type)) {
         const SENSITIVE = ['aadhaar_number','mobile','email','pan_number'];
         const info2 = filledBySource[selector];
         const isSensitive = info2 && SENSITIVE.includes(info2.profileKey);
