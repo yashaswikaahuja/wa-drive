@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v4.99");
+console.log("[CC] background.js loaded v5.00");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -27,6 +27,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     _lastTeachTs = job.ts;
     sendResponse({ ok: true });
     runTeachSession(job).catch(console.error);
+  }
+  if (msg.type === 'AUTOFILL_TRIGGER') {
+    // Triggered from floating button, dashboard, or mobile
+    const { profileId, tabId: triggerTabId } = msg;
+    const targetTabId = triggerTabId || sender?.tab?.id;
+    if (!targetTabId || !profileId) { sendResponse({ ok: false, error: 'missing tabId or profileId' }); return; }
+    (async () => {
+      try {
+        const { backendUrl, groqKey } = await chrome.storage.local.get(['backendUrl', 'groqKey']);
+        const profileRes = await fetch(backendUrl + '/profiles/' + profileId);
+        const profile = await profileRes.json();
+        // generateFillPlan is in planner.js (loaded via importScripts or inline)
+        // For now, send back acknowledgment - full integration in next step
+        sendResponse({ ok: true, status: 'trigger received', targetTabId });
+      } catch(e) { sendResponse({ ok: false, error: e.message }); }
+    })();
+    return true;
   }
   if (msg.type === 'GET_TAB_ID') {
     sendResponse({ tabId: sender?.tab?.id });
