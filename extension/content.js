@@ -106,7 +106,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // Retry init until fields appear (Angular/SPA may render late)
   function tryInit() {
     if (document.getElementById('cc-float-btn')) return; // already injected
-    if (countFormFields() >= 5) { injectButton(); return; }
+    if (countFormFields() >= 2) { injectButton(); return; }
   }
   // Check every 2s for up to 30s
   let attempts = 0;
