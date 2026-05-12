@@ -8,6 +8,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (window._ccFloatingInit) return;
   window._ccFloatingInit = true;
 
+  // Guard: check if extension context is still valid
+  function isContextValid() {
+    try { return !!chrome.runtime?.id; } catch { return false; }
+  }
+  function safeRemove() {
+    const el = document.getElementById('cc-float-container');
+    if (el) el.remove();
+  }
+
   function countFormFields() {
     return Array.from(document.querySelectorAll('input,select,textarea')).filter(el =>
       el.offsetParent !== null && el.type !== 'hidden' && el.type !== 'submit' && el.type !== 'button'
@@ -58,7 +67,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     });
 
     async function loadProfiles() {
-      const { backendUrl } = await chrome.storage.local.get('backendUrl');
+      if (!isContextValid()) { safeRemove(); return; }
+      let backendUrl;
+      try { ({ backendUrl } = await chrome.storage.local.get('backendUrl')); } catch { safeRemove(); return; }
       if (!backendUrl) { showStatus('Set backend URL in extension settings'); return; }
       try {
         const res = await fetch(`${backendUrl}/profiles`);
@@ -89,15 +100,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     search.addEventListener('input', () => renderProfiles(search.value));
 
     async function triggerFill(profileId) {
+      if (!isContextValid()) { safeRemove(); return; }
       showStatus('⚡ Filling...');
       // Store selected profile and trigger autofill via background
-      chrome.storage.local.set({ _cc_float_trigger: { profileId, ts: Date.now() } }, () => {
-        chrome.runtime.sendMessage({ type: 'AUTOFILL_TRIGGER', profileId, tabId: null }, (resp) => {
+      try {
+        chrome.storage.local.set({ _cc_float_trigger: { profileId, ts: Date.now() } }, () => {
+          if (chrome.runtime.lastError) { safeRemove(); return; }
+          chrome.runtime.sendMessage({ type: 'AUTOFILL_TRIGGER', profileId, tabId: null }, (resp) => {
           if (resp?.ok) showStatus('✓ Filled ' + (resp.filled || '') + ' fields');
           else showStatus('⚠ ' + (resp?.error || 'Failed'));
           setTimeout(() => { panel.style.display = 'none'; statusDiv.style.display = 'none'; }, 3000);
+          });
         });
-      });
+      } catch { safeRemove(); }
     }
 
     function showStatus(msg) {
