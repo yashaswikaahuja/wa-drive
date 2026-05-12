@@ -18,3 +18,5 @@ uploads/
 # dist/
 .github/
 WORKER_SECRET*
+.vercel
+frontend/dist
