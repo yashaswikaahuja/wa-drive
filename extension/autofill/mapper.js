@@ -243,12 +243,18 @@ RULES:
   - "last name" / "surname" field → use value "KUMARI" (last word of name)
   - "middle name" field → use value "" (empty if only 2 words) or middle word if 3+ words
   - "full name" field → use the complete name value
-- ADDRESS SPLITTING: if profile has "address" as full address:
-  - "house no" / "house number" field → extract house/flat number from address
-  - "street" / "road" / "lane" field → extract street from address
-  - "locality" / "area" field → extract locality from address
-  - "city" / "town" field → use district or city from address
-  - "full address" field → use complete address value
+- ADDRESS FIELDS: use specific profile keys for address parts:
+  - "post office" field → use "post_office" key
+  - "village" / "gram" / "town" field → use "village" key
+  - "police station" / "thana" field → use "police_station" key
+  - "block" / "tehsil" / "taluka" field → use "block" key
+  - "district" / "jila" field → use "district" key
+  - "state" / "rajya" field → use "state" key
+  - "pin code" / "pincode" / "zip" field → use "pincode" or "pin_code" key
+  - "C/O" / "care of" / "S/O" / "D/O" / "guardian" field → use "father_name" key
+  - "full address" / "permanent address" / "correspondence address" field → use "address" key
+  - "house no" / "flat no" field → skip if not in profile
+  - "landmark" field → skip if not in profile
 - CONFIRM/RETYPE fields: map to the SAME key as their primary field
   - "confirm first name" → same as "first name"
   - "retype email" → same as "email"
