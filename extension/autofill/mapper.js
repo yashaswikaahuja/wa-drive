@@ -238,18 +238,34 @@ RULES:
 - Map ONLY when you are very confident the field should contain that profile value
 - "address" fields get the address value, NOT the name
 - "day/month/year" fields get the corresponding part of dob (format DD/MM/YYYY)
-- Skip fields like verification code, captcha, OTP, password
+- NAME SPLITTING: if profile has "name" as full name (e.g. "SANDHYA KUMARI"):
+  - "first name" field → use value "SANDHYA" (first word of name)
+  - "last name" / "surname" field → use value "KUMARI" (last word of name)
+  - "middle name" field → use value "" (empty if only 2 words) or middle word if 3+ words
+  - "full name" field → use the complete name value
+- ADDRESS SPLITTING: if profile has "address" as full address:
+  - "house no" / "house number" field → extract house/flat number from address
+  - "street" / "road" / "lane" field → extract street from address
+  - "locality" / "area" field → extract locality from address
+  - "city" / "town" field → use district or city from address
+  - "full address" field → use complete address value
+- CONFIRM/RETYPE fields: map to the SAME key as their primary field
+  - "confirm first name" → same as "first name"
+  - "retype email" → same as "email"
+  - "re-enter mobile" → same as "mobile"
+- Skip fields like verification code, captcha, OTP, password, security code
 - Skip fields with no matching profile data
 - Use EXACT profile key names
+- For split values, use format: "name__first", "name__last", "name__middle", "dob__day", "dob__month", "dob__year"
 
 Form fields:
-${fieldDescriptions}
+\${fieldDescriptions}
 
 Student profile (key: value):
-${profileKeys}
+\${profileKeys}
 
 Return ONLY a JSON object: {"fieldIndex": "profileKey"}
-Example: {"0": "name", "2": "dob", "5": "father_name"}`;
+Examples: {"0": "name__first", "1": "name__last", "3": "dob", "5": "father_name", "7": "email", "8": "email"}`;
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -267,10 +283,22 @@ Example: {"0": "name", "2": "dob", "5": "father_name"}`;
     if (!match) return {};
     const indexMap = JSON.parse(match[0]);
     const mapping = {};
+    const nameParts = (profile.name || '').trim().split(/\s+/);
+    const dobParts = (profile.dob || '').split('/'); // DD/MM/YYYY
     for (const [idx, profileKey] of Object.entries(indexMap)) {
       const field = formFields[parseInt(idx)];
-      if (field && profile[profileKey]) {
-        mapping[field.selector] = { value: profile[profileKey], type: field.type };
+      if (!field) continue;
+      let value = null;
+      // Handle split keys
+      if (profileKey === 'name__first') value = nameParts[0] || '';
+      else if (profileKey === 'name__last') value = nameParts[nameParts.length - 1] || '';
+      else if (profileKey === 'name__middle') value = nameParts.length >= 3 ? nameParts.slice(1, -1).join(' ') : '';
+      else if (profileKey === 'dob__day') value = dobParts[0] || '';
+      else if (profileKey === 'dob__month') value = dobParts[1] || '';
+      else if (profileKey === 'dob__year') value = dobParts[2] || '';
+      else if (profile[profileKey]) value = profile[profileKey];
+      if (value !== null && value !== undefined) {
+        mapping[field.selector] = { value, type: field.type };
       }
     }
     return mapping;
