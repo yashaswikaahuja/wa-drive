@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.91';
+const CURRENT_VERSION = '4.92';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -445,6 +445,10 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       totalFailed: replayRecords.filter(r => ['skipped','error','reset'].includes(r.result)).length,
     };
     await fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
+    // Auto-save mapping after successful fill (so next time uses saved data, not AI)
+    if (isNewForm && Object.keys(filledBySource).length > 0) {
+      await saveLearning(backendUrl, primaryKey, filledBySource, selectedProfile, false).catch(() => {});
+    }
   }
 
   // Unresolved detection — semantic field groups, not raw DOM nodes
