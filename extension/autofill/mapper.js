@@ -294,7 +294,11 @@ Examples: {"0": "name__first", "1": "name__last", "3": "dob", "5": "father_name"
       else if (profileKey === 'name__last') value = nameParts[nameParts.length - 1] || '';
       else if (profileKey === 'name__middle') value = nameParts.length >= 3 ? nameParts.slice(1, -1).join(' ') : '';
       else if (profileKey === 'dob__day') value = dobParts[0] || '';
-      else if (profileKey === 'dob__month') value = dobParts[1] || '';
+      else if (profileKey === 'dob__month') {
+        const _m = parseInt(dobParts[1] || '0');
+        const _months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        value = _months[_m] || dobParts[1] || '';
+      }
       else if (profileKey === 'dob__year') value = dobParts[2] || '';
       else if (profile[profileKey]) value = profile[profileKey];
       if (value !== null && value !== undefined) {
