@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.94';
+const CURRENT_VERSION = '4.95';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -189,6 +189,18 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
         if (baseLabel && f2Label && (f2Label.includes(baseLabel.split(' ')[0]) || baseLabel.includes(f2Label.split(' ')[0]))) {
           mapping[field.selector] = { value: mapping[f2.selector].value, type: field.type };
           filledBySource[field.selector] = { label: field.label, semanticKey: baseLabel, profileKey: filledBySource[f2.selector]?.profileKey, source: 'confirm-mirror', confidence: 0.9 };
+          break;
+        }
+      }
+    }
+    // Match by intent: find any mapped field with same semantic meaning
+    if (!mapping[field.selector] && baseLabel) {
+      for (const [sel, info] of Object.entries(filledBySource)) {
+        if (!mapping[sel] || sel === field.selector) continue;
+        const infoLabel = (info.semanticKey || info.label || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        if (infoLabel && baseLabel && (infoLabel.includes(baseLabel) || baseLabel.includes(infoLabel))) {
+          mapping[field.selector] = { value: mapping[sel].value, type: field.type };
+          filledBySource[field.selector] = { label: field.label, semanticKey: baseLabel, profileKey: info.profileKey, source: 'confirm-mirror', confidence: 0.85 };
           break;
         }
       }
