@@ -232,49 +232,26 @@ async function aiMatch(formFields, profile, groqKey) {
     .filter(([k, v]) => v && k !== 'phone' && k !== 'updatedAt')
     .map(([k, v]) => `${k}: "${v}"`).join('\n');
 
-  const prompt = `You are a form field mapper for Indian government forms. Map each form field to the correct student profile key.
+  const prompt = `You are a form field mapper. Given form fields and a student profile, return a JSON object mapping field index to profile key.
 
 RULES:
-- Map ONLY when you are very confident the field should contain that profile value
-- "address" fields get the address value, NOT the name
-- DOB HANDLING:
-  - Single "date of birth" text field → use "dob" key (fills full date like "14/01/2000")
-  - SEPARATE day/month/year dropdown/select fields → use "dob__day", "dob__month", "dob__year"
-  - Only use split keys when the form has 3 separate fields for day, month, year
-- NAME SPLITTING: if profile has "name" as full name (e.g. "SANDHYA KUMARI"):
-  - "first name" field → use value "SANDHYA" (first word of name)
-  - "last name" / "surname" field → use value "KUMARI" (last word of name)
-  - "middle name" field → use value "" (empty if only 2 words) or middle word if 3+ words
-  - "full name" field → use the complete name value
-- ADDRESS FIELDS: use specific profile keys for address parts:
-  - "post office" field → use "post_office" key
-  - "village" / "gram" / "town" field → use "village" key
-  - "police station" / "thana" field → use "police_station" key
-  - "block" / "tehsil" / "taluka" field → use "block" key
-  - "district" / "jila" field → use "district" key
-  - "state" / "rajya" field → use "state" key
-  - "pin code" / "pincode" / "zip" field → use "pincode" or "pin_code" key
-  - "C/O" / "care of" / "S/O" / "D/O" / "guardian" field → use "father_name" key
-  - "full address" / "permanent address" / "correspondence address" field → use "address" key
-  - "house no" / "flat no" field → skip if not in profile
-  - "landmark" field → skip if not in profile
-- CONFIRM/RETYPE fields: map to the SAME key as their primary field
-  - "confirm first name" → same as "first name"
-  - "retype email" → same as "email"
-  - "re-enter mobile" → same as "mobile"
-- Skip fields like verification code, captcha, OTP, password, security code
-- Skip fields with no matching profile data
-- Use EXACT profile key names
-- For split values, use format: "name__first", "name__last", "name__middle", "dob__day", "dob__month", "dob__year"
+- Return ONLY a valid JSON object, nothing else
+- Map each field to the profile key whose VALUE should fill that field
+- "first name" fields → use "name__first" (first word of name)
+- "last name" / "surname" fields → use "name__last" (last word of name)
+- Separate day/month/year dropdowns → use "dob__day", "dob__month", "dob__year"
+- Single "date of birth" text field → use "dob"
+- Confirm/retype fields → same key as primary field
+- Skip: captcha, OTP, verification code, password, file upload
+- Use EXACT profile key names from the list below
 
 Form fields:
 \${fieldDescriptions}
 
-Student profile (key: value):
+Available profile keys and values:
 \${profileKeys}
 
-Return ONLY a JSON object: {"fieldIndex": "profileKey"}
-Examples: {"0": "name__first", "1": "name__last", "3": "dob", "5": "father_name", "7": "email", "8": "email"}`;
+Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
