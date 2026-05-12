@@ -1,0 +1,18 @@
+{
+  "angular-ng-select": {
+    "family": "angular-ng-select",
+    "detection": {
+      "selector": "div.ng-dropdown",
+      "framework": "angular"
+    },
+    "triggerSelector": ".value-area",
+    "optionSelector": "li",
+    "verifySelector": ".value-area",
+    "teleportsToBody": false,
+    "resetBehavior": "none",
+    "crossSite": true,
+    "learnedFrom": "ssc.gov.in",
+    "successCount": 22,
+    "confidence": 0.95
+  }
+}

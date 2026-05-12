@@ -1,324 +1,70 @@
 {
-  "xwsz8v": {
-    "7 mothers name": {
-      "profileKey": "father_name",
-      "fills": 1.8,
-      "corrections": 843,
-      "lastSeen": "2026-05-07"
-    },
-    "12 candidates mobile number": {
-      "profileKey": "roll_no_12th",
-      "fills": 1.8,
-      "corrections": 239,
-      "lastSeen": "2026-05-07"
-    },
-    "13 candidates email id": {
-      "profileKey": "mobile",
-      "fills": 1.8,
-      "corrections": 249,
-      "lastSeen": "2026-05-07"
-    },
-    "9 roll number": {
-      "profileKey": "mother_name",
-      "fills": 0.8,
-      "corrections": 242,
-      "lastSeen": "2026-05-07"
-    },
-    "a verify roll number": {
-      "profileKey": "roll_no_12th",
-      "fills": 0.8,
-      "corrections": 146,
-      "lastSeen": "2026-05-07"
-    },
-    "6 fathers name": {
-      "profileKey": "date",
-      "fills": 1.8,
-      "corrections": 132,
-      "lastSeen": "2026-05-07"
-    },
-    "a verify aadhaar details uid vid": {
-      "profileKey": "aadhaar_number",
-      "fills": 0.8,
-      "corrections": 106,
-      "lastSeen": "2026-05-07"
-    },
-    "11 enter your aadhaar details uid vid": {
-      "profileKey": "aadhaar_number",
-      "fills": 0.3,
-      "corrections": 198,
-      "lastSeen": "2026-05-07"
-    },
-    "a verify fathers name": {
-      "profileKey": "father_name",
-      "fills": 0.3,
-      "corrections": 99,
-      "lastSeen": "2026-05-07"
-    },
-    "a verify mothers name": {
-      "profileKey": "mother_name",
-      "fills": 0.3,
-      "corrections": 99,
-      "lastSeen": "2026-05-07"
-    },
-    "2 candidate name as per matriculation certificate": {
-      "profileKey": "name",
-      "fills": 0.3,
-      "corrections": 99,
-      "lastSeen": "2026-05-07"
-    },
-    "a verify candidate name as per matriculation certificate": {
-      "profileKey": "name",
-      "fills": 0.3,
-      "corrections": 99,
-      "lastSeen": "2026-05-07"
-    },
-    "ddmmyyyy": {
-      "profileKey": "dob",
-      "fills": 1.3,
-      "corrections": 105,
-      "lastSeen": "2026-05-07"
-    }
-  },
-  "7beu1w": {
-    "7 mothers name": {
-      "profileKey": "father_name",
-      "fills": 1.7000000000000002,
-      "corrections": 97,
-      "lastSeen": "2026-05-10"
-    },
-    "10 matriculation 10th class roll number": {
-      "profileKey": "mother_name",
-      "fills": 1.4000000000000001,
-      "corrections": 89,
-      "lastSeen": "2026-05-10"
-    },
-    "12 scribes mobile number": {
-      "profileKey": "roll_no_10th",
-      "fills": 1.7000000000000002,
-      "corrections": 61,
-      "lastSeen": "2026-05-10"
-    },
-    "13 scribes email id": {
-      "profileKey": "mobile",
-      "fills": 1.7000000000000002,
-      "corrections": 97,
-      "lastSeen": "2026-05-10"
-    },
-    "a address": {
-      "profileKey": "email",
-      "fills": 1.4000000000000001,
-      "corrections": 97,
-      "lastSeen": "2026-05-10"
-    },
-    "d pin code": {
-      "profileKey": "pin_code",
-      "fills": 1.4000000000000001,
-      "corrections": 6,
-      "lastSeen": "2026-05-07"
-    },
-    "1 enter your aadhaar details uid vid": {
-      "profileKey": "aadhaar_number",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "2 verify aadhaar details uid vid": {
-      "profileKey": "aadhaar_number",
-      "fills": 2.2,
-      "corrections": 1,
-      "lastSeen": "2026-05-09"
-    },
-    "6 fathers name": {
-      "profileKey": "father_name",
-      "fills": 1.2,
-      "corrections": 2,
-      "lastSeen": "2026-05-09"
-    },
-    "a verify fathers name": {
-      "profileKey": "father_name",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "a verify mothers name": {
-      "profileKey": "mother_name",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "3 scribes name as per matriculation certificate": {
-      "profileKey": "name",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "gender": {
-      "profileKey": "gender",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "a  gender": {
-      "profileKey": "gender",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "your highest level of educational qualification": {
-      "profileKey": "course_name",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "matriculation (10th class) education board": {
-      "profileKey": "board_10th",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "a  matriculation 10th class education board": {
-      "profileKey": "board_10th",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "matriculation (10th class) year of passing": {
-      "profileKey": "passing_year_10th",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "state/ut": {
-      "profileKey": "state",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "district": {
-      "profileKey": "district",
-      "fills": 1.2,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "a verify scribes name as per matriculation certificate": {
-      "profileKey": "name",
-      "fills": 0.8999999999999999,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    },
-    "a new name changed name": {
-      "profileKey": "name",
-      "fills": 1.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-09"
-    }
-  },
-  "r7799j": {
-    "india": {
-      "profileKey": "nationality",
-      "fills": 0.3,
-      "corrections": 0,
-      "lastSeen": "2026-05-07"
-    },
-    "bihar": {
-      "profileKey": "state",
-      "fills": 0.3,
-      "corrections": 0,
-      "lastSeen": "2026-05-07"
-    },
-    "gaya": {
-      "profileKey": "district",
-      "fills": 0.3,
-      "corrections": 0,
-      "lastSeen": "2026-05-07"
-    }
-  },
-  "oai4f": {
-    "enter from station input is mandatory": {
-      "profileKey": "from_1778205088938",
-      "fills": 0.3,
-      "corrections": 0,
-      "lastSeen": "2026-05-08"
-    },
-    "enter to station input is mandatory": {
-      "profileKey": "to_1778205099638",
-      "fills": 0.3,
-      "corrections": 0,
-      "lastSeen": "2026-05-08"
-    },
-    "all classes": {
-      "profileKey": "classes_1778205186784",
-      "fills": 0.3,
-      "corrections": 0,
-      "lastSeen": "2026-05-08"
-    }
-  },
-  "2pqxz4": {
+  "s_domcio": {
     "select your country of nationality": {
       "profileKey": "nationality",
-      "fills": 1.6,
+      "fills": 0.3,
       "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "retype full name": {
-      "profileKey": "name",
-      "fills": 0.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "retype date of birth": {
-      "profileKey": "dob",
-      "fills": 0.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "select gender": {
-      "profileKey": "gender",
-      "fills": 0.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "retype fathers name": {
-      "profileKey": "father_name",
-      "fills": 1.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "mother_name": {
-      "profileKey": "mother_name",
-      "fills": 0.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "retype mothers name": {
-      "profileKey": "mother_name",
-      "fills": 1.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "email": {
-      "profileKey": "email",
-      "fills": 1.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
-    },
-    "mobile": {
-      "profileKey": "mobile",
-      "fills": 1.6,
-      "corrections": 0,
-      "lastSeen": "2026-05-10"
+      "lastSeen": "2026-05-12"
     },
     "name": {
       "profileKey": "name",
-      "fills": 0.6,
+      "fills": 0.3,
       "corrections": 0,
-      "lastSeen": "2026-05-10"
+      "lastSeen": "2026-05-12"
+    },
+    "select gender": {
+      "profileKey": "gender",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
     },
     "father_name": {
       "profileKey": "father_name",
-      "fills": 0.6,
+      "fills": 0.3,
       "corrections": 0,
-      "lastSeen": "2026-05-10"
+      "lastSeen": "2026-05-12"
+    },
+    "mother_name": {
+      "profileKey": "mother_name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
+    },
+    "email": {
+      "profileKey": "email_id",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
+    },
+    "mobile": {
+      "profileKey": "mobile",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
+    },
+    "full name   registration fullname registration fullname": {
+      "profileKey": "name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
+    },
+    "father s name   registration fathername registration fathername": {
+      "profileKey": "father_name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
+    },
+    "mother s name   registration mothername registration mothername": {
+      "profileKey": "mother_name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
+    },
+    "retype date of birth": {
+      "profileKey": "dob",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-12"
     }
   }
 }

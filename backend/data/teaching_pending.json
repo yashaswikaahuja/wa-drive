@@ -1,0 +1,22 @@
+[
+  {
+    "hostname": "sso.rajasthan.gov.in",
+    "label": "State",
+    "type": "ng-dropdown",
+    "domIndex": 0,
+    "componentClass": "select2-selection",
+    "operatorId": "anonymous",
+    "id": "mp279g6m",
+    "createdAt": "2026-05-12T05:38:19.054Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "sso.rajasthan.gov.in",
+    "label": "--SELECT STATE--",
+    "type": "mat-select",
+    "operatorId": "anonymous",
+    "id": "mp279g53",
+    "createdAt": "2026-05-12T05:38:18.999Z",
+    "status": "pending"
+  }
+]

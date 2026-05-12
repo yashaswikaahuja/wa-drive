@@ -563,6 +563,52 @@ app.get('/api/sessions/stats', (_req, res) => {
   res.json(byHostname);
 });
 
+
+// ── Async Teaching endpoints ─────────────────────────────────────────────────
+const TEACHING_FILE = '/opt/cybercontrol-hub/backend/data/teaching_pending.json';
+function loadTeaching() { return existsSync(TEACHING_FILE) ? JSON.parse(readFileSync(TEACHING_FILE,'utf8')) : []; }
+function saveTeaching(t) { writeFileSync(TEACHING_FILE, JSON.stringify(t.slice(-200), null, 2)); }
+
+app.post('/api/teaching/pending', (req, res) => {
+  const tasks = loadTeaching();
+  const task = { ...req.body, id: Date.now().toString(36), createdAt: new Date().toISOString(), status: 'pending' };
+  tasks.unshift(task);
+  saveTeaching(tasks);
+  res.json({ ok: true, id: task.id });
+});
+
+app.get('/api/teaching/pending', (_req, res) => {
+  res.json(loadTeaching().filter(t => t.status === 'pending'));
+});
+
+app.post('/api/teaching/complete', (req, res) => {
+  const tasks = loadTeaching();
+  const task = tasks.find(t => t.id === req.body.id);
+  if (task) { task.status = 'completed'; task.completedAt = new Date().toISOString(); task.adapter = req.body.adapter; }
+  saveTeaching(tasks);
+  res.json({ ok: true });
+});
+
+
+// ── Widget Profile endpoints ─────────────────────────────────────────────────
+const WIDGETS_FILE = '/opt/cybercontrol-hub/backend/data/widget_profiles.json';
+function loadWidgets() { return existsSync(WIDGETS_FILE) ? JSON.parse(readFileSync(WIDGETS_FILE,'utf8')) : {}; }
+function saveWidgets(w) { writeFileSync(WIDGETS_FILE, JSON.stringify(w, null, 2)); }
+
+app.get('/api/widgets', (_req, res) => res.json(loadWidgets()));
+
+app.get('/api/widgets/:family', (req, res) => {
+  const widgets = loadWidgets();
+  res.json(widgets[req.params.family] || null);
+});
+
+app.post('/api/widgets/:family', (req, res) => {
+  const widgets = loadWidgets();
+  widgets[req.params.family] = { ...req.body, family: req.params.family, updatedAt: new Date().toISOString() };
+  saveWidgets(widgets);
+  res.json({ ok: true });
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
