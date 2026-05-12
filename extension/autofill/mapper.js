@@ -92,6 +92,8 @@ function fuzzyMatch(formFields, profile) {
       continue;
     }
 
+    // Skip yes/no question radio buttons (not data fields)
+    if (field.type === 'radio' && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
