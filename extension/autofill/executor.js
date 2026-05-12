@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.82 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.83 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -785,6 +785,31 @@ function fillFormFields(mapping) {
       }
     } catch { /* skip */ }
   }
+  // ── Confirm/Retype propagation pass ─────────────────────────────────────────
+  // After primary fills settle, mirror DOM values into confirm/retype fields
+  setTimeout(function() {
+    var confirmPatterns = /^c(?=[a-z])|^confirm|^retype|^re_?type|^re_?enter|^verify/i;
+    var allInputs = Array.from(document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number]'));
+    allInputs.forEach(function(el) {
+      if (!el.id && !el.name) return;
+      var id = (el.id || el.name || '').toLowerCase();
+      var label = (function() { if(el.id){var l=document.querySelector('label[for="'+el.id+'"]');if(l)return l.textContent.toLowerCase();} return ''; })();
+      var isConfirm = confirmPatterns.test(id) || /confirm|retype|re.type|re.enter|verify/i.test(label);
+      if (!isConfirm) return;
+      if (el.value) return; // already filled, skip
+      // Find primary field by stripping confirm prefix from ID
+      var baseId = id.replace(/^c(?=[a-z])/,'').replace(/^confirm_?/i,'').replace(/^retype_?/i,'').replace(/^re_?type_?/i,'').replace(/^re_?enter_?/i,'').replace(/^verify_?/i,'');
+      var primary = document.getElementById(baseId) || document.querySelector('[id$="'+baseId+'"]') || document.querySelector('[name="'+baseId+'"]');
+      if (!primary || !primary.value) return;
+      // Propagate settled DOM value
+      var niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      if (niv) niv.set.call(el, primary.value); else el.value = primary.value;
+      ['input','change','blur'].forEach(function(ev) { el.dispatchEvent(new Event(ev, {bubbles:true})); });
+      _ccRecords.push({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0, ts: Date.now(), rv: RUNTIME_VERSION });
+      _flushRecords();
+    });
+  }, 2000);
+
   // Final flush via DOM attribute (shared between all worlds and executeScript calls)
   try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {}
   return filled;
