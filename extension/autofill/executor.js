@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v4.95 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v4.96 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -808,7 +808,7 @@ function fillFormFields(mapping) {
       _ccRecords.push({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0, ts: Date.now(), rv: RUNTIME_VERSION });
       _flushRecords();
     });
-  }, 2000);
+  }, 4000);
 
   // ── Mirror Observer: sync derived fields when operator fills primary manually ──
   setTimeout(function() {
