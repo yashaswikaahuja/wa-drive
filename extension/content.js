@@ -90,10 +90,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
     async function triggerFill(profileId) {
       showStatus('⚡ Filling...');
-      chrome.runtime.sendMessage({ type: 'AUTOFILL_TRIGGER', profileId, tabId: null }, (resp) => {
-        if (resp?.ok) showStatus('✓ Fill triggered');
-        else showStatus('⚠ ' + (resp?.error || 'Failed'));
-        setTimeout(() => { panel.style.display = 'none'; statusDiv.style.display = 'none'; }, 2000);
+      // Store selected profile and trigger autofill via background
+      chrome.storage.local.set({ _cc_float_trigger: { profileId, ts: Date.now() } }, () => {
+        chrome.runtime.sendMessage({ type: 'AUTOFILL_TRIGGER', profileId, tabId: null }, (resp) => {
+          if (resp?.ok) showStatus('✓ Filled ' + (resp.filled || '') + ' fields');
+          else showStatus('⚠ ' + (resp?.error || 'Failed'));
+          setTimeout(() => { panel.style.display = 'none'; statusDiv.style.display = 'none'; }, 3000);
+        });
       });
     }
 
