@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v5.05");
+console.log("[CC] background.js loaded v5.06");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const { backendUrl, groqKey } = await chrome.storage.local.get(['backendUrl', 'groqKey']);
         if (!backendUrl) { sendResponse({ ok: false, error: 'no backend URL configured' }); return; }
         // Get profile
-        const profileRes = await fetch();
+        const profileRes = await fetch(backendUrl + '/profiles/' + profileId);
         const profile = await profileRes.json();
         if (!profile || !profile.name) { sendResponse({ ok: false, error: 'profile not found' }); return; }
         // Resolve tab ID
@@ -60,7 +60,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         let savedMapping = null;
         for (const key of [primaryKey, formKey]) {
           if (!key) continue;
-          try { const r = await fetch(); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) { savedMapping = d; break; } } catch {}
+          try { const r = await fetch(backendUrl + '/mappings/' + key); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) { savedMapping = d; break; } } catch {}
         }
         let mapping = {};
         let filledBySource = {};
@@ -98,7 +98,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }
         // Load adapters
         let portalAdapters = {};
-        try { const h = new URL((await chrome.tabs.get(tabId)).url).hostname; const r = await fetch(); portalAdapters = await r.json(); } catch {}
+        try { const h = new URL((await chrome.tabs.get(tabId)).url).hostname; const r = await fetch(backendUrl + '/adapters/' + h); portalAdapters = await r.json(); } catch {}
         // Execute fill
         const result = await chrome.scripting.executeScript({
           target: { tabId },
