@@ -2,7 +2,7 @@
 function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
 
-console.log("[CC] background.js loaded v5.07");
+console.log("[CC] background.js loaded v5.08");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
