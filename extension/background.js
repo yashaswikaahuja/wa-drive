@@ -1,4 +1,4 @@
-console.log("[CC] background.js loaded v5.00");
+console.log("[CC] background.js loaded v5.01");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
