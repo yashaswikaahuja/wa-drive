@@ -282,8 +282,8 @@ Examples: {"0": "name__first", "1": "name__last", "3": "dob", "5": "father_name"
       headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 200,
+        messages: [{ role: 'system', content: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.' }, { role: 'user', content: prompt }],
+        max_tokens: 300,
       }),
     });
     const data = await res.json();
