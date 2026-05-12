@@ -3,7 +3,7 @@ importScripts("autofill/extractor.js", "autofill/mapper.js", "autofill/executor.
 function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
 
-console.log("[CC] background.js loaded v5.09");
+console.log("[CC] background.js loaded v5.10");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -95,12 +95,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             }
           }
         }
-        // Fuzzy for remaining (known forms only)
-        if (!isNewForm) {
-          const unmapped = formFields.filter(f => !mapping[f.selector]);
-          const fuzzy = fuzzyMatch(unmapped, profile);
-          for (const [sel, val] of Object.entries(fuzzy)) { mapping[sel] = val; }
-        }
+        // Skip fuzzy match — saved mappings + AI are sufficient
+        // Fuzzy causes wrong mappings; only use for forms with no saved data and no AI
         // Load adapters
         let portalAdapters = {};
         try { const h = new URL((await chrome.tabs.get(tabId)).url).hostname; const r = await fetch(backendUrl + '/adapters/' + h); portalAdapters = await r.json(); } catch {}
