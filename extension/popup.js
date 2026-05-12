@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '4.78';
+const CURRENT_VERSION = '4.79';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -148,7 +148,10 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     const allUnmappedForAI = formFields.filter(f => !mapping[f.selector] && !/captcha|otp|token|password|security.code/i.test(f.label));
     if (allUnmappedForAI.length > 0) {
       showStatus(`AI mapping ${allUnmappedForAI.length} fields (new form)...`, 'info');
+      console.log('[CC] AI-first: calling aiMatch for', allUnmappedForAI.length, 'fields');
       const aiFirst = await aiMatch(allUnmappedForAI, selectedProfile, groqKey);
+      console.log('[CC] AI-first result:', Object.keys(aiFirst).length, 'mappings returned');
+      if (Object.keys(aiFirst).length === 0) console.warn('[CC] AI returned empty - check groqKey and model availability');
       for (const [sel, val] of Object.entries(aiFirst)) {
         mapping[sel] = val;
         const field = formFields.find(f => f.selector === sel);
