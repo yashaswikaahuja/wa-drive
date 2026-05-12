@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { API_BASE_URL } from '../utils/helpers';
 
 type FieldMapping = { profileKey: string; fills: number; corrections: number; lastSeen?: string };
@@ -15,7 +15,7 @@ const PROFILE_KEY_LABELS: Record<string, string> = {
 };
 
 export default function MappingsPage() {
-  const navigate = useNavigate();
+  
   const [formKeys, setFormKeys] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [mapping, setMapping] = useState<FormMapping>({});
@@ -75,12 +75,9 @@ export default function MappingsPage() {
   const entries = Object.entries(mapping).filter(([k]) => k !== 'savedAt');
 
   return (
-    <div className="min-h-screen bg-[#0c1322] text-[#dce2f7] font-['Inter',sans-serif] flex flex-col">
-      <div className="bg-[#1e293b] border-b border-[#334155] px-4 h-10 flex items-center gap-3 shrink-0">
-        <button onClick={() => navigate('/')} className="text-[#94a3b8] hover:text-white">
-          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-        </button>
-        <span className="text-sm font-bold uppercase tracking-wider">Learned Form Mappings</span>
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="px-4 md:px-6 py-3 border-b border-border flex items-center gap-3 shrink-0">
+        <h1 className="text-base font-bold text-white">Form Mappings</h1>
         <span className="text-[11px] text-[#64748b]">{formKeys.length} forms</span>
       </div>
 

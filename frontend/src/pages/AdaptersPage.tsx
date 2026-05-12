@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import { API_BASE_URL } from '../utils/helpers';
 
 type Adapter = {
@@ -18,7 +18,7 @@ const FIELDS: [keyof Adapter, string][] = [
 ];
 
 export default function AdaptersPage() {
-  const navigate = useNavigate();
+  
   const [data, setData] = useState<Store>({});
   const [edits, setEdits] = useState<Record<string, Partial<Adapter>>>({});
   const [loading, setLoading] = useState(true);
@@ -72,15 +72,14 @@ export default function AdaptersPage() {
   const total = Object.values(data).reduce((s, h) => s + Object.keys(h).length, 0);
 
   return (
-    <div className="min-h-screen bg-[#0c1322] text-[#dce2f7] font-['Inter',sans-serif] flex flex-col">
-      <div className="bg-[#1e293b] border-b border-[#334155] px-4 h-10 flex items-center gap-3 shrink-0">
-        <button onClick={() => navigate('/')} className="text-[#94a3b8] hover:text-white">
-          <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-        </button>
-        <span className="text-sm font-bold uppercase tracking-wider">Adapter Manager</span>
-        <span className="text-[11px] text-[#64748b]">{total} adapter{total !== 1 ? 's' : ''}</span>
-        <button onClick={load} className="ml-auto text-[#94a3b8] hover:text-white" title="Refresh">
-          <span className="material-symbols-outlined text-[20px]">refresh</span>
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="px-4 md:px-6 py-3 border-b border-border flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          <h1 className="text-base font-bold text-white">Adapters</h1>
+          <span className="text-[11px] text-[#64748b]">{total} adapter{total !== 1 ? "s" : ""}</span>
+        </div>
+        <button onClick={load} className="btn-ghost p-1.5" title="Refresh">
+          <span className="material-symbols-outlined text-[18px]">refresh</span>
         </button>
       </div>
 
