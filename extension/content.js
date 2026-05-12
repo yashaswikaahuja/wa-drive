@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   function init() {
-    if (countFormFields() < 5) return;
+    if (countFormFields() < 2) return;
     injectButton();
   }
 
