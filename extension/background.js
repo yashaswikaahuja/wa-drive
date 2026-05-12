@@ -1,9 +1,8 @@
-importScripts("autofill/mapper.js", "autofill/planner.js");
 // Helper functions for AUTOFILL_TRIGGER handler
 function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
 
-console.log("[CC] background.js loaded v5.12");
+console.log("[CC] background.js loaded v5.13");
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -48,25 +47,59 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         let tabId = triggerTabId || sender?.tab?.id;
         if (!tabId) { const tabs = await chrome.tabs.query({ active: true, currentWindow: true }); tabId = tabs[0]?.id; }
         if (!tabId) { sendResponse({ ok: false, error: 'no active tab' }); return; }
-        // Use planner
-        const plan = await generateFillPlan({ tabId, profile, backendUrl, groqKey });
-        if (plan.error) { sendResponse({ ok: false, error: plan.error }); return; }
-        // Execute
-        const result = await chrome.scripting.executeScript({
+        // Inject and run the full autofill pipeline on the page
+        // This injects extractor+mapper+executor and runs them — same as popup does
+        await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
+        // Run the pipeline
+        const pipelineResult = await chrome.scripting.executeScript({
           target: { tabId },
-          func: fillFormFieldsSequential,
-          args: [plan.mapping, plan.filledBySource, plan.portalAdapters],
+          func: async (profileData, backendUrlArg, groqKeyArg) => {
+            // Extract fields
+            const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
+            if (!formFields.length) return { ok: false, error: 'no fields' };
+            const primaryKey = semanticFormKey || formKey;
+            // Load saved mappings
+            let savedMapping = null;
+            try { const r = await fetch(backendUrlArg + '/mappings/' + primaryKey); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) savedMapping = d; } catch {}
+            if (!savedMapping) { try { const r = await fetch(backendUrlArg + '/mappings/' + formKey); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) savedMapping = d; } catch {} }
+            // Apply saved
+            let mapping = {}; let filledBySource = {};
+            if (savedMapping) {
+              for (const f of formFields) {
+                const sk = f.label?.toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim() || '';
+                const saved = savedMapping[sk];
+                if (saved && saved.profileKey && profileData[saved.profileKey]) {
+                  mapping[f.selector] = { value: profileData[saved.profileKey], type: f.type };
+                  filledBySource[f.selector] = { label: f.label, semanticKey: sk, profileKey: saved.profileKey, source: 'saved', confidence: 1 };
+                }
+              }
+            }
+            // AI for new forms
+            const isNewForm = !savedMapping || Object.keys(savedMapping).length === 0;
+            if (isNewForm && groqKeyArg) {
+              const unmapped = formFields.filter(f => !mapping[f.selector] && !/captcha|otp|token|password/i.test(f.label));
+              if (unmapped.length > 0) {
+                const aiResult = await aiMatch(unmapped, profileData, groqKeyArg);
+                for (const [sel, val] of Object.entries(aiResult)) { mapping[sel] = val; }
+              }
+            }
+            // Fuzzy for known forms
+            if (!isNewForm) {
+              const unmapped = formFields.filter(f => !mapping[f.selector]);
+              const fuzzy = fuzzyMatch(unmapped, profileData);
+              for (const [sel, val] of Object.entries(fuzzy)) { mapping[sel] = val; }
+            }
+            // Load adapters
+            let adapters = {};
+            try { const h = location.hostname; const r = await fetch(backendUrlArg + '/adapters/' + h); adapters = await r.json(); } catch {}
+            // Fill
+            const filled = fillFormFieldsSequential(mapping, filledBySource, adapters);
+            return { ok: true, filled, fields: Object.keys(mapping).length, primaryKey, isNewForm };
+          },
+          args: [profile, backendUrl, groqKey],
         });
-        const filled = result?.[0]?.result || 0;
-        // Auto-save
-        if (plan.isNewForm && Object.keys(plan.filledBySource).length > 0) {
-          const updates = {};
-          for (const [, info] of Object.entries(plan.filledBySource)) {
-            if (info.profileKey && info.semanticKey) updates[info.semanticKey] = { profileKey: info.profileKey, delta: { fills: 0.3, corrections: 0 } };
-          }
-          if (Object.keys(updates).length > 0) fetch(backendUrl + '/mappings/' + plan.primaryKey, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates, formKey: plan.primaryKey }) }).catch(() => {});
-        }
-        sendResponse({ ok: true, filled, fields: Object.keys(plan.mapping).length });
+        const pResult = pipelineResult?.[0]?.result || { ok: false };
+        sendResponse(pResult);
       } catch(e) { sendResponse({ ok: false, error: e.message }); }
     })();
     return true;
