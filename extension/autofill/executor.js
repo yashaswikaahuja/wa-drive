@@ -140,16 +140,21 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
   // Sort by DOM order (sequential top-to-bottom filling)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
   const entries = Object.entries(mapping);
-  // Extract DOM index for sorting
-  function domIndex(sel) {
-    if (sel.startsWith('form-field-')) return parseInt(sel.split('-')[2]);
-    if (sel.startsWith('ng-dropdown-')) return 1000 + parseInt(sel.split('-')[2]);
-    const el = document.querySelector(sel);
-    if (!el) return 9999;
-    const all = document.querySelectorAll('input,select,textarea,div.ng-dropdown');
-    return Array.from(all).indexOf(el);
+  // Sort by actual DOM position (compareDocumentPosition)
+  function getEl(sel) {
+    if (sel.startsWith('form-field-')) {
+      const all = document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],input[type=radio],input[type=checkbox],input:not([type]),textarea,select');
+      return all[parseInt(sel.split('-')[2])];
+    }
+    if (sel.startsWith('ng-dropdown-')) return document.querySelectorAll('div.ng-dropdown')[parseInt(sel.split('-')[2])];
+    return document.querySelector(sel);
   }
-  entries.sort(([sa], [sb]) => domIndex(sa) - domIndex(sb));
+  entries.sort(([sa], [sb]) => {
+    const a = getEl(sa), b = getEl(sb);
+    if (!a || !b) return 0;
+    if (a === b) return 0;
+    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  });
 
   let filled = 0;
   let delay = 0;
