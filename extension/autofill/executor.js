@@ -706,22 +706,15 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
 
 
   // ── Operator Correction Observer ─────────────────────────────────────────
-  // After runtime settles, snapshot filled values and watch for operator changes.
-  // Runs AFTER fillSequential + confirm-mirror settle (10s delay).
+  // After runtime settles, snapshot filled values.
+  // On form submit or page unload, capture final state and POST corrections.
   setTimeout(() => {
+    const _ccBackendUrl = document.body.getAttribute('data-cc-backend') || '';
+    const _ccFormKey = document.body.getAttribute('data-cc-formkey') || '';
     const snapshot = {};
     const fieldMeta = {};
-    // Snapshot all fields that were in the mapping
     for (const [selector, fieldData] of entries) {
-      let el;
-      if (selector.startsWith('form-field-')) {
-        const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
-        el = all[parseInt(selector.split('-')[2])];
-      } else if (selector.startsWith('ng-dropdown-')) {
-        el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
-      } else {
-        el = document.querySelector(selector);
-      }
+      let el = getEl(selector);
       if (!el) continue;
       const val = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
         : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
@@ -738,61 +731,54 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
         autofilledValue: fieldData.value
       };
     }
-    // Watch for changes
-    function checkCorrections() {
+
+    function captureCorrections(trigger) {
       const corrections = [];
       for (const [selector, originalVal] of Object.entries(snapshot)) {
-        let el;
-        if (selector.startsWith('form-field-')) {
-          const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
-          el = all[parseInt(selector.split('-')[2])];
-        } else if (selector.startsWith('ng-dropdown-')) {
-          el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
-        } else {
-          el = document.querySelector(selector);
-        }
+        let el = getEl(selector);
         if (!el) continue;
         const currentVal = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
           : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
           : el.value || '';
         if (currentVal !== originalVal && currentVal !== '') {
           const meta = fieldMeta[selector] || {};
-          const wasEmpty = !originalVal || originalVal === '';
           corrections.push({
-            selector,
-            field: meta.label,
-            semanticKey: meta.semanticKey,
-            profileKey: meta.profileKey,
-            autofilledValue: meta.autofilledValue,
-            snapshotValue: originalVal,
-            finalOperatorValue: currentVal,
-            correctionType: wasEmpty ? 'completion' : 'override',
-            originalResult: meta.originalResult,
-            plugin: meta.plugin,
-            strategy: meta.strategy,
-            ts: Date.now()
+            selector, field: meta.label, semanticKey: meta.semanticKey, profileKey: meta.profileKey,
+            autofilledValue: meta.autofilledValue, snapshotValue: originalVal, finalOperatorValue: currentVal,
+            correctionType: (!originalVal || originalVal === '') ? 'completion' : 'override',
+            originalResult: meta.originalResult, plugin: meta.plugin, strategy: meta.strategy,
+            trigger, ts: Date.now()
           });
         }
       }
       return corrections;
     }
-    // Store check function on window for external trigger
-    window._ccCheckCorrections = checkCorrections;
-    // Periodic check every 30s + beforeunload
-    const _corrInterval = setInterval(() => {
-      const c = checkCorrections();
-      if (c.length > 0) {
-        document.body.setAttribute('data-cc-corrections', JSON.stringify(c));
+
+    function postCorrections(trigger) {
+      const corrections = captureCorrections(trigger);
+      if (corrections.length === 0) return;
+      document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections));
+      if (_ccBackendUrl) {
+        fetch(_ccBackendUrl + '/corrections', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hostname: location.hostname, semanticFormKey: _ccFormKey, trigger, corrections })
+        }).catch(() => {});
       }
-    }, 30000);
-    window.addEventListener('beforeunload', () => {
-      clearInterval(_corrInterval);
-      const c = checkCorrections();
-      if (c.length > 0) {
-        document.body.setAttribute('data-cc-corrections', JSON.stringify(c));
+    }
+
+    // Detect submit button clicks
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button,input[type="submit"],[type="submit"],.btn-submit,.submit-btn');
+      if (!btn) return;
+      const txt = (btn.textContent || btn.value || '').toLowerCase();
+      if (/submit|save|next|continue|proceed|finalize/i.test(txt) || btn.type === 'submit') {
+        postCorrections('submit');
       }
-    });
-  }, 10000); // Start observing 10s after fill begins (after confirm-mirror + verification settle)
+    }, true);
+
+    // Fallback: beforeunload
+    window.addEventListener('beforeunload', () => postCorrections('unload'));
+  }, 10000);
 
   // ── Confirm/Retype propagation pass ─────────────────────────────────────────
   // After primary fills settle, mirror DOM values into confirm/retype fields
