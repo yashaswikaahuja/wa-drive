@@ -626,6 +626,62 @@ app.post('/api/widgets/:family', (req, res) => {
   res.json({ ok: true });
 });
 
+
+// ── /api/ai/plan — Provider-independent AI boundary ────────────────────────
+// Schema: EXECUTION_SCHEMA v1.0
+// Request: { schemaVersion, observation: {fields, profile, formKey, hostname}, mode: "plan"|"step", provider: "groq"|"local" }
+// Response: { actions: [{type, target, value}], confidence, provider, reasoningId }
+app.post('/api/ai/plan', async (req, res) => {
+  const { schemaVersion, observation, mode, provider, apiKey } = req.body;
+  if (!observation || !observation.fields || !observation.profile) {
+    return res.status(400).json({ error: 'Missing observation.fields or observation.profile' });
+  }
+  const providerName = provider || 'groq';
+  try {
+    if (providerName === 'groq') {
+      const key = apiKey || process.env.GROQ_API_KEY;
+      if (!key) return res.status(400).json({ error: 'No API key for groq provider' });
+      // Build prompt from observation
+      const fields = observation.fields;
+      const profile = observation.profile;
+      const fieldList = fields.map(f => `- ${f.label} (type: ${f.type}, selector: ${f.selector})`).join('\n');
+      const profileKeys = Object.entries(profile).filter(([,v]) => v).map(([k,v]) => `${k}: ${v}`).join('\n');
+      const messages = [
+        { role: 'system', content: 'You are a form-filling assistant. Given form fields and a user profile, return a JSON array of actions. Use ONLY these action types: fill_text, select_option, skip. Return ONLY valid JSON array, no explanation.\n\nRules:\n- If field label contains name and profile has full name, split into first/last if needed\n- For DOB fields: use dd/mm/yyyy or split into day/month/year\n- Skip fields with no matching profile data\n- Skip captcha, OTP, password fields\n- Each action: {"type":"fill_text"|"select_option"|"skip","target":"<selector>","value":"<value>","reason":"<why>"}' },
+        { role: 'user', content: `Form: ${observation.hostname || 'unknown'} (${observation.formKey || ''})\n\nFields:\n${fieldList}\n\nProfile:\n${profileKeys}\n\nReturn JSON array of actions.` }
+      ];
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'meta-llama/llama-4-scout-17b-16e-instruct', messages, max_tokens: 2000, temperature: 0.1 })
+      });
+      const groqData = await groqRes.json();
+      const content = groqData.choices?.[0]?.message?.content || '';
+      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return res.json({ actions: [], confidence: 0, provider: 'groq', error: 'no-json-in-response', reasoningId: Date.now().toString(36) });
+      const actions = JSON.parse(jsonMatch[0]);
+      const VALID_TYPES = ['fill_text', 'select_option', 'click_dropdown', 'click_option', 'click_button', 'scroll_to', 'wait', 'skip'];
+      const validated = actions.filter(a => VALID_TYPES.includes(a.type));
+      return res.json({
+        actions: validated,
+        confidence: validated.length / Math.max(actions.length, 1),
+        provider: 'groq',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        schemaVersion: '1.0',
+        mode: mode || 'plan',
+        reasoningId: Date.now().toString(36)
+      });
+    } else if (providerName === 'local') {
+      // Future: local model endpoint
+      return res.json({ actions: [], confidence: 0, provider: 'local', error: 'local provider not configured', reasoningId: Date.now().toString(36) });
+    } else {
+      return res.status(400).json({ error: `Unknown provider: ${providerName}` });
+    }
+  } catch (e) {
+    return res.status(500).json({ error: e.message, provider: providerName });
+  }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
