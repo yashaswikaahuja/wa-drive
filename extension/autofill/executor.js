@@ -1,6 +1,6 @@
 function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v5.16 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] v5.17 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
@@ -9,6 +9,11 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   const RUNTIME_VERSION = '4.47';
   const STRATEGY_VERSION = '1.0';
   const WAIT_ENGINE_VERSION = '1.0';
+
+  // Plugin dispatch (Phase 1: cascade-select)
+  const _CC_USE_PLUGINS = true;
+  const _CC_LEGACY_COMPARE = true;
+
 
   // ── Strategy Registry — named strategies with VerificationContracts ────────
   // Phase 2: strategies coexist with existing if/else logic (migration-safe)
@@ -618,15 +623,27 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       setTimeout(() => fillOne(selector, value, type), delay);
       delay += 5500; // 800ms stabilize + 10*300ms poll + 1000ms verify + 700ms buffer
     } else if (isDependent && filled > 0) {
-      // WaitEngine: wait for options to load instead of fixed delay
+      // Plugin dispatch for cascade fields
       const _sel = selector, _val = value, _type = type;
+      const _fieldCtx = { type: _type, label: filledBySource[selector]?.label || selector, profileKey: filledBySource[selector]?.profileKey || '', selector: _sel };
       (function() {
         var _t0 = Date.now();
         waitForOptions(_sel, 1, 8000).then(function(el) {
           if (!el) { console.debug('[CC] WaitEngine timeout for', _sel); _ccRecords.push({ selector: _sel, value: _val, type: _type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', durationMs: 8000, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); return; }
+          var _plugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
+          if (_plugin) {
+            var _ctx = { profileKey: _fieldCtx.profileKey, parentValues: {}, attempt: 1 };
+            var _pResult = _plugin.fill(el, _val, _ctx);
+            var _r = _pResult.success ? 1 : 0;
+            filled += _r;
+            var _deps = _plugin.meta.getDependsOn ? _plugin.meta.getDependsOn(_fieldCtx.profileKey) : [];
+            _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _plugin.id, plugin: _plugin.id, dependsOn: _deps, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, wv: WAIT_ENGINE_VERSION }); _flushRecords();
+            if (_CC_LEGACY_COMPARE) console.debug('[CC][plugin]', _plugin.id, _sel, _pResult);
+            return;
+          }
           var _r = fillOne(_sel, _val, _type) || 0;
           filled += _r;
-          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'wait-timeout', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, wv: WAIT_ENGINE_VERSION }); _flushRecords();
+          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'no-option', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, wv: WAIT_ENGINE_VERSION }); _flushRecords();
         });
       })();
       delay += 100; // minimal stagger to preserve ordering

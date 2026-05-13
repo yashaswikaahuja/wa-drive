@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '5.16';
+const CURRENT_VERSION = '5.17';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -358,6 +358,8 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   // ── PLANNER/RUNTIME BOUNDARY ─────────────────────────────────────────────
   // Above: Planner (mapping + filledBySource = FillPlan)
   // Below: Runtime (deterministic executor consumes FillPlan)
+  // Inject plugin files into page before executor runs
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js'] });
   const _planSize = Object.keys(mapping).length;
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
