@@ -619,23 +619,33 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       setTimeout(() => fillOne(selector, value, type), delay);
       delay += 800;
     } else if (isNgDropdown) {
-      // ng-dropdown: async click sequence — must be sequential, not concurrent
+      // ng-dropdown: plugin handles full interaction
       const _ngSel = selector, _ngVal = value, _ngType = type;
-      setTimeout(() => {
+      setTimeout(async () => {
         let _ngEl;
         if (_ngSel.startsWith('ng-dropdown-')) _ngEl = document.querySelectorAll('div.ng-dropdown')[parseInt(_ngSel.split('-')[2])];
         else _ngEl = document.querySelector(_ngSel);
+        if (!_ngEl) { _ccRecords.push({ selector: _ngSel, value: _ngVal, type: _ngType, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); return; }
         const _ngFieldCtx = { type: _ngType, label: filledBySource[_ngSel]?.label || _ngSel, profileKey: filledBySource[_ngSel]?.profileKey || '', selector: _ngSel };
         const _ngPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(_ngEl, _ngFieldCtx) : null;
-        if (_ngPlugin && _CC_LEGACY_COMPARE) console.debug('[CC][plugin-claim] ng-dropdown claimed by:', _ngPlugin.id, _ngSel);
-        // Still use fillOne for full async session logic — plugin claims for replay attribution
         const _t0 = Date.now();
-        const _r = fillOne(_ngSel, _ngVal, _ngType);
         if (_ngPlugin) {
-          _ccRecords.push({ selector: _ngSel, value: _ngVal, type: _ngType, result: _r ? 'filled' : 'pending', strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, dependsOn: [], durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          try {
+            const _ctx = { profileKey: _ngFieldCtx.profileKey, portalAdapters: portalAdapters || {}, attempt: 1 };
+            const _pResult = await _ngPlugin.fill(_ngEl, _ngVal, _ctx);
+            const _r = _pResult.success ? 1 : 0;
+            filled += _r;
+            _ccRecords.push({ selector: _ngSel, value: _ngVal, type: _ngType, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, dependsOn: [], durationMs: Date.now()-_t0, waitMs: _pResult.waitMs || 0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+            console.debug('[CC][plugin]', _ngPlugin.id, _ngSel, _pResult.success ? 'OK' : _pResult.reason);
+          } catch(e) {
+            console.debug('[CC][plugin-error]', _ngSel, e.message);
+            fillOne(_ngSel, _ngVal, _ngType);
+          }
+        } else {
+          fillOne(_ngSel, _ngVal, _ngType);
         }
       }, delay);
-      delay += 5500; // 800ms stabilize + 10*300ms poll + 1000ms verify + 700ms buffer
+      delay += 5500;
     } else if (isDependent && filled > 0) {
       // Plugin dispatch for cascade fields
       const _sel = selector, _val = value, _type = type;
