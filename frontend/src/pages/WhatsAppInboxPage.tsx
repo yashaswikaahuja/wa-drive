@@ -153,7 +153,17 @@ export default function WhatsAppInboxPage() {
     try {
       const { data } = await axios.get<unknown[]>(`${API_BASE_URL}/drive/files`);
       const incoming = data.map(f => normalizeWhatsAppFile(f as Parameters<typeof normalizeWhatsAppFile>[0])).filter((f): f is WhatsAppFile => f !== null);
-      if (!incoming.length) return;
+      if (!incoming.length) {
+        // Fallback: load from inbox endpoint
+        const baseUrl = API_BASE_URL.replace('/api', '');
+        const { data: inboxData } = await axios.get<any[]>(`${baseUrl}/inbox/list`);
+        const inboxFiles = (inboxData || []).filter((f: any) => f.file && f.filePath).map((f: any) => ({
+          id: f.id, fileName: f.file, fileUrl: `${baseUrl}/inbox/file/${f.filePath}`,
+          customerId: 'whatsapp', customerName: 'WhatsApp', timestamp: f.time, profilePicUrl: null
+        }));
+        if (inboxFiles.length > 0) useWhatsAppStore.getState().setFiles(inboxFiles);
+        return;
+      }
       const current = useWhatsAppStore.getState().files;
       const byId = new Map(current.map(f => [f.id, f]));
       const byName = new Map(current.map(f => [f.fileName, f]));
