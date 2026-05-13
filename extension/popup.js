@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '5.22';
+const CURRENT_VERSION = '5.23';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -281,25 +281,33 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     for (const ngf of ngFields) {
       if (ngf.filled) continue;
       const adapter = portalAdapters?.['ng-dropdown'] || {};
-      // Verify/confirm fields: mirror value from the corresponding base ng-dropdown
+      // Verify/confirm fields: map directly from profile (same as base fields)
       if (ngf.isVerify) {
-        // Strip "verify"/"confirm" words to get base concept e.g. "Verify Gender" -> "gender"
-        const baseNorm = ngf.label.replace(/^\d+\.\s*/, '').replace(/\*$/, '').trim()
-          .toLowerCase().replace(/verify|confirm/gi, '').replace(/[^a-z0-9\s]/g, '').trim();
-        // Find matching base field in ngFields (non-verify, same concept)
-        const baseNgf = ngFields.find(f => !f.isVerify && (() => {
-          const bl = f.label.replace(/^\d+\.\s*/, '').replace(/\*$/, '').trim().toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-          return bl && baseNorm && (bl.includes(baseNorm) || baseNorm.includes(bl));
-        })());
-        if (baseNgf) {
-          const baseSel = `ng-dropdown-${baseNgf.domIndex}`;
-          const baseVal = mapping[baseSel];
-          if (baseVal) {
-            const sel = `ng-dropdown-${ngf.domIndex}`;
-            mapping[sel] = { value: baseVal.value, type: 'ng-dropdown' };
-            filledBySource[sel] = { label: ngf.label, semanticKey: baseNorm, profileKey: filledBySource[baseSel]?.profileKey, source: 'verify-mirror', confidence: 1 };
-            console.log('[CC] verify-mirror:', ngf.label, '->', baseVal.value);
-          }
+        // Strip verify/confirm to get base concept, then map to profile key
+        const verifyNorm = ngf.label.replace(/^\d+\.\s*/, '').replace(/^[a-z]\.\s*/i, '').replace(/\*$/, '').trim()
+          .toLowerCase().replace(/verify|confirm|re.?enter|re.?type/gi, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        // Use same LABEL_MAP + fuzzy lookup as base fields
+        // (LABEL_MAP defined below, so inline the lookup here)
+        const VERIFY_MAP = {
+          'gender': 'gender', 'state ut': 'state', 'state': 'state', 'district': 'district',
+          'year of passing': 'year_of_passing', 'highest level of educational qualification': 'highest_education_qualification',
+          'highest education qualification': 'highest_education_qualification',
+          'nationality': 'nationality', 'religion': 'religion',
+          'matriculation 10th class year of passing': 'passing_year_10th',
+          'matriculation 10th class education board': 'board_10th',
+        };
+        let vProfileKey = VERIFY_MAP[verifyNorm];
+        if (!vProfileKey) {
+          vProfileKey = Object.keys(selectedProfile).find(k => {
+            const nk = k.toLowerCase().replace(/_/g, ' ');
+            return verifyNorm === nk || verifyNorm.includes(nk) || nk.includes(verifyNorm.split(' ')[0]);
+          });
+        }
+        if (vProfileKey && selectedProfile[vProfileKey]) {
+          const sel = `ng-dropdown-${ngf.domIndex}`;
+          mapping[sel] = { value: selectedProfile[vProfileKey], type: 'ng-dropdown' };
+          filledBySource[sel] = { label: ngf.label, semanticKey: verifyNorm, profileKey: vProfileKey, source: 'verify-direct', confidence: 1 };
+          console.log('[CC] verify-direct:', ngf.label, '->', selectedProfile[vProfileKey]);
         }
         continue;
       }
@@ -363,7 +371,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   // Call fillFormFieldsSequential which is now in the page's ISOLATED world
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: (m, fbs, pa) => fillFormFieldsSequential(m, fbs, pa),
+    func: async (m, fbs, pa) => await fillFormFieldsSequential(m, fbs, pa),
     args: [mapping, filledBySource, portalAdapters],
   });
 

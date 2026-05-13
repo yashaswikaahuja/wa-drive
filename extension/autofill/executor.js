@@ -1,4 +1,4 @@
-function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
+async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   portalAdapters = portalAdapters || {};
   console.log('[CC] v5.17 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
@@ -608,224 +608,91 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
     return 0;
   }
 
-  for (const [selector, fieldData] of entries) {
-    const { value, type } = fieldData;
-    const isMatSelect = type === 'mat-select' || type === 'mat-radio';
-    const isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
-    const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
-    const isDependent = PRIORITY_KEYS.some(k => fieldLabel.includes(k) || selector.toLowerCase().includes(k));
-    if (isMatSelect) {
-      // mat-select needs real click simulation with delay between each
-      setTimeout(() => fillOne(selector, value, type), delay);
-      delay += 800;
-    } else if (isNgDropdown) {
-      // ng-dropdown: plugin handles full interaction
-      const _ngSel = selector, _ngVal = value, _ngType = type;
-      setTimeout(async () => {
-        let _ngEl;
-        if (_ngSel.startsWith('ng-dropdown-')) _ngEl = document.querySelectorAll('div.ng-dropdown')[parseInt(_ngSel.split('-')[2])];
-        else _ngEl = document.querySelector(_ngSel);
-        if (!_ngEl) { _ccRecords.push({ selector: _ngSel, value: _ngVal, type: _ngType, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); return; }
-        const _ngFieldCtx = { type: _ngType, label: filledBySource[_ngSel]?.label || _ngSel, profileKey: filledBySource[_ngSel]?.profileKey || '', selector: _ngSel };
-        const _ngPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(_ngEl, _ngFieldCtx) : null;
-        const _t0 = Date.now();
-        if (_ngPlugin) {
-          try {
-            const _ctx = { profileKey: _ngFieldCtx.profileKey, portalAdapters: portalAdapters || {}, attempt: 1 };
-            const _pResult = await _ngPlugin.fill(_ngEl, _ngVal, _ctx);
-            const _r = _pResult.success ? 1 : 0;
-            filled += _r;
-            _ccRecords.push({ selector: _ngSel, value: _ngVal, type: _ngType, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, dependsOn: [], durationMs: Date.now()-_t0, waitMs: _pResult.waitMs || 0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
-            console.debug('[CC][plugin]', _ngPlugin.id, _ngSel, _pResult.success ? 'OK' : _pResult.reason);
-          } catch(e) {
-            console.debug('[CC][plugin-error]', _ngSel, e.message);
-            fillOne(_ngSel, _ngVal, _ngType);
-          }
-        } else {
-          fillOne(_ngSel, _ngVal, _ngType);
-        }
-      }, delay);
-      delay += 5500;
-    } else if (isDependent && filled > 0) {
-      // Plugin dispatch for cascade fields
-      const _sel = selector, _val = value, _type = type;
-      const _fieldCtx = { type: _type, label: filledBySource[selector]?.label || selector, profileKey: filledBySource[selector]?.profileKey || '', selector: _sel };
-      (function() {
-        var _t0 = Date.now();
-        waitForOptions(_sel, 1, 8000).then(function(el) {
-          if (!el) { console.debug('[CC] WaitEngine timeout for', _sel); _ccRecords.push({ selector: _sel, value: _val, type: _type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', durationMs: 8000, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); return; }
-          var _plugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
-          if (_plugin) {
-            var _ctx = { profileKey: _fieldCtx.profileKey, parentValues: {}, attempt: 1 };
-            var _pResult = _plugin.fill(el, _val, _ctx);
-            var _r = _pResult.success ? 1 : 0;
-            filled += _r;
-            var _deps = _plugin.meta.getDependsOn ? _plugin.meta.getDependsOn(_fieldCtx.profileKey) : [];
-            _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _plugin.id, plugin: _plugin.id, dependsOn: _deps, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, wv: WAIT_ENGINE_VERSION }); _flushRecords();
-            if (_CC_LEGACY_COMPARE) console.debug('[CC][plugin]', _plugin.id, _sel, _pResult);
-            return;
-          }
-          var _r = fillOne(_sel, _val, _type) || 0;
-          filled += _r;
-          _ccRecords.push({ selector: _sel, value: _val, type: _type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'no-option', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, wv: WAIT_ENGINE_VERSION }); _flushRecords();
-        });
-      })();
-      delay += 100; // minimal stagger to preserve ordering
-    } else {
-      try {
-        const _t0 = Date.now();
-        const _r = fillOne(selector, value, type) || 0;
-        filled += _r;
-        const _el2 = document.querySelector(selector);
-        const _failReason = !_r ? (_el2 ? 'no-option' : 'no-element') : null;
-        const _strategy = detectStrategy(_el2, type);
-        const _recIdx = _ccRecords.length;
-        _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _failReason, strategy: _strategy, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, sv: STRATEGY_VERSION }); _flushRecords();
-        // Post-fill verification: check if Angular/framework reset the value
-        // Delay 6s to allow MAIN world re-fill to complete first
-        if (_r && _el2 && ['text','email','tel','number',''].includes(_el2.type||'')) {
-          const _fillTime = Date.now();
-          setTimeout(() => {
-            const actual = _el2.value;
-            if (actual !== value && !actual.includes(value.slice(0,6))) {
-              // Distinguish: never accepted (custom-input) vs accepted then reset (framework-reset)
-              const _reason = actual === '' ? 'custom-input-rejected' : 'framework-reset';
-              _ccRecords[_recIdx] = { ..._ccRecords[_recIdx], result: 'reset', failReason: _reason, actualValue: actual };
-              _flushRecords();
-            }
-          }, 6000);
-        }
-      }
-      catch(e) {
-        _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() });
-        console.debug('[CC] fillOne error on', selector, ':', e.message);
-      }
-      // Fix #2: DISABLED — confirm-mirror pass (2s post-fill) handles this now
-      if (false && !selector.startsWith('form-field-') && !['select','radio','checkbox','mat-select','mat-radio','mat-checkbox'].includes(type)) {
-        const SENSITIVE = ['aadhaar_number','mobile','email','pan_number'];
-        const info2 = filledBySource[selector];
-        const isSensitive = info2 && SENSITIVE.includes(info2.profileKey);
-        // Same-selector duplicates
-        const extras = Array.from(document.querySelectorAll(selector)).slice(1);
-        // Label-similarity: find inputs whose label contains re/confirm/verify + base label word
-        const baseLabel = (info2 && info2.label || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (baseLabel.length > 2) {
-          document.querySelectorAll('input[type=text],input[type=tel],input[type=email],input[type=number]').forEach(inp => {
-            if (extras.includes(inp)) return;
-            const lbl = (() => {
-              if (inp.id) { const l = document.querySelector('label[for="' + inp.id + '"]'); if (l) return l.textContent.toLowerCase(); }
-              const td = inp.closest('td'); if (td && td.previousElementSibling) return td.previousElementSibling.textContent.toLowerCase();
-              return inp.placeholder.toLowerCase();
-            })();
-            const isVerify = /re.?enter|re.?type|confirm|verify/.test(lbl);
-            const hasBase = lbl.replace(/[^a-z0-9]/g, '').includes(baseLabel.slice(0, 6));
-            if (isVerify && hasBase) extras.push(inp);
-          });
-        }
-        for (const ex of extras) {
-          // Strict validation for sensitive fields before filling verify
-          if (isSensitive) {
-            const pk = info2.profileKey;
-            const valid = (pk === 'aadhaar_number' && /^\d{12}$/.test(value)) ||
-                          (pk === 'mobile' && /^\d{10}$/.test(value)) ||
-                          (pk === 'email' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) ||
-                          (pk === 'pan_number' && /^[A-Z]{5}\d{4}[A-Z]$/.test(value));
-            if (!valid) { console.debug('[CC] skipped verify fill: sensitive field failed validation', pk, value); continue; }
-          }
-          // Delay verify fill to let Angular process primary field first
-          (function(_ex, _val) {
-            setTimeout(function() {
-              const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
-                          Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
-              if (niv) niv.set.call(_ex, _val); else _ex.value = _val;
-              ['input','change','blur'].forEach(function(ev) { _ex.dispatchEvent(new Event(ev, { bubbles: true })); });
-              console.debug('[CC] filled verify field (delayed):', selector, '->', _ex.id || _ex.name, _val.slice(0,4) + '***');
-              _ccRecords.push({ selector: '#'+(_ex.id||_ex.name||'verify'), value: _val, type: 'text', result: 'filled', strategy: 'text-input', durationMs: 300, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
-            }, 300);
-          })(ex, value);
-          filled++;
-        }
-      }
-    }
-  }
-  return filled;
-}
-function fillFormFields(mapping) {
-  let filled = 0;
-  for (const [selector, { value, type }] of Object.entries(mapping)) {
-    try {
+  // ── Sequential DOM-order filling with scroll ──────────────────────────────
+  // Fill fields one-by-one in DOM order. Scroll to each field before filling.
+  // This ensures strict-validation forms accept values (fields must be filled in order).
+  async function fillSequential() {
+    for (const [selector, fieldData] of entries) {
+      const { value, type } = fieldData;
+      const isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
+      const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
+      const isDependent = PRIORITY_KEYS.some(k => fieldLabel.includes(k) || selector.toLowerCase().includes(k));
+
+      // Resolve element
       let el;
       if (selector.startsWith('form-field-')) {
-        const all = document.querySelectorAll(
-          'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
-          'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
-        );
+        const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
         el = all[parseInt(selector.split('-')[2])];
+      } else if (selector.startsWith('ng-dropdown-')) {
+        el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
       } else {
         el = document.querySelector(selector);
       }
-      if (!el) continue;
 
-      if (type === 'select') {
-        const opts = Array.from(el.options).filter(o => o.value && o.value !== '0' && o.value !== '-1');
-        const v = value.toLowerCase().trim();
-        // For month fields, also try numeric and short name
-        const extraValues = [];
-        if (mapping[selector]?.monthNum) {
-          extraValues.push(mapping[selector].monthNum.toString());
-          extraValues.push(mapping[selector].monthShort?.toLowerCase());
-        }
-        // 1. Exact value match
-        let opt = opts.find(o => o.value.toLowerCase() === v);
-        // 2. Exact text match
-        if (!opt) opt = opts.find(o => o.text.toLowerCase().trim() === v);
-        // 3. Extra values (month number/short)
-        if (!opt && extraValues.length) opt = opts.find(o => extraValues.includes(o.value.toLowerCase()) || extraValues.includes(o.text.toLowerCase().trim()));
-        // 4. Text starts with value
-        if (!opt) opt = opts.find(o => o.text.toLowerCase().trim().startsWith(v));
-        // 5. Value starts with text
-        if (!opt) opt = opts.find(o => v.startsWith(o.text.toLowerCase().trim()) && o.text.length > 2);
-        // 6. Text contains value
-        if (!opt) opt = opts.find(o => o.text.toLowerCase().includes(v));
-        // 7. Value contains text
-        if (!opt) opt = opts.find(o => v.includes(o.text.toLowerCase().trim()) && o.text.length > 2);
-        // 8. First word match
-        if (!opt) {
-          const firstWord = v.split(/\s+/)[0];
-          opt = opts.find(o => o.text.toLowerCase().startsWith(firstWord) && firstWord.length > 2);
-        }
-        if (opt) {
-          el.value = opt.value;
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          setTimeout(() => el.dispatchEvent(new Event('change', { bubbles: true })), 300);
-          filled++;
-        }
-
-      } else if (elType === 'radio') {
-        // Find radio with matching value or label
-        const radios = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
-        const match = Array.from(radios).find(r =>
-          r.value.toLowerCase() === value.toLowerCase() ||
-          r.value.toLowerCase().startsWith(value.toLowerCase()[0])
-        );
-        if (match) { match.checked = true; match.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
-
-      } else if (elType === 'checkbox') {
-        const truthy = ['yes', 'true', '1', 'checked'].includes(value.toLowerCase());
-        if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
-
-      } else {
-        el.value = value;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        // React/Vue compatibility
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-        if (nativeInputValueSetter) { nativeInputValueSetter.set.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })); }
-        filled++;
+      // Scroll into view
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        await new Promise(r => setTimeout(r, 300));
       }
-    } catch { /* skip */ }
+
+      const _t0 = Date.now();
+      const _fieldCtx = { type, label: filledBySource[selector]?.label || selector, profileKey: filledBySource[selector]?.profileKey || '', selector };
+
+      if (isNgDropdown) {
+        // ng-dropdown: use plugin if available
+        if (!el) { _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); continue; }
+        const _ngPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
+        if (_ngPlugin) {
+          try {
+            const _ctx = { profileKey: _fieldCtx.profileKey, portalAdapters: portalAdapters || {}, attempt: 1 };
+            const _pResult = await _ngPlugin.fill(el, value, _ctx);
+            const _r = _pResult.success ? 1 : 0;
+            filled += _r;
+            _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          } catch(e) {
+            fillOne(selector, value, type);
+          }
+        } else {
+          fillOne(selector, value, type);
+        }
+        await new Promise(r => setTimeout(r, 500));
+      } else if (isDependent && filled > 0) {
+        // Cascade: wait for options then fill (plugin or legacy)
+        const waitedEl = await waitForOptions(selector, 1, 8000);
+        if (!waitedEl) {
+          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', durationMs: 8000, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          continue;
+        }
+        const _plugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(waitedEl, _fieldCtx) : null;
+        if (_plugin) {
+          const _pResult = _plugin.fill(waitedEl, value, { profileKey: _fieldCtx.profileKey, parentValues: {}, attempt: 1 });
+          const _r = _pResult.success ? 1 : 0;
+          filled += _r;
+          const _deps = _plugin.meta.getDependsOn ? _plugin.meta.getDependsOn(_fieldCtx.profileKey) : [];
+          _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _plugin.id, plugin: _plugin.id, dependsOn: _deps, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+        } else {
+          const _r = fillOne(selector, value, type) || 0;
+          filled += _r;
+          _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'no-option', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+        }
+        await new Promise(r => setTimeout(r, 200));
+      } else {
+        // Standard field: fill immediately
+        try {
+          const _r = fillOne(selector, value, type) || 0;
+          filled += _r;
+          const _el2 = el || document.querySelector(selector);
+          const _strategy = detectStrategy(_el2, type);
+          _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? (_el2 ? null : 'no-element') : (_el2 ? 'no-option' : 'no-element'), strategy: _strategy, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+        } catch(e) {
+          _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() }); _flushRecords();
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+    }
   }
+  await fillSequential();
+
   // ── Confirm/Retype propagation pass ─────────────────────────────────────────
   // After primary fills settle, mirror DOM values into confirm/retype fields
   setTimeout(function() {
