@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '5.28';
+const CURRENT_VERSION = '5.29';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -373,7 +373,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   // Below: Runtime (deterministic executor consumes FillPlan)
   // Inject plugins + executor as files into page (shared ISOLATED world scope)
   const _planSize = Object.keys(mapping).length;
-  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/executor.js'] });
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/executor.js'] });
   // Call fillFormFieldsSequential which is now in the page's ISOLATED world
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },

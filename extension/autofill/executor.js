@@ -649,7 +649,25 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
       const _t0 = Date.now();
       const _fieldCtx = { type, label: filledBySource[selector]?.label || selector, profileKey: filledBySource[selector]?.profileKey || '', selector };
 
-      if (isNgDropdown) {
+      if (fieldData.type === 'button') {
+        // Phase boundary: button-click plugin
+        const _btnPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
+        if (_btnPlugin) {
+          const _pResult = _btnPlugin.fill(el, value, { attempt: 1 });
+          // Wait for DOM to stabilize after transition
+          await waitForDOMQuiet(800);
+          // Re-extract visible fields after transition (graph rebuild)
+          const newFields = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,div.ng-dropdown');
+          const newFieldCount = newFields.length;
+          _ccRecords.push({ selector, value, type: 'button', result: 'filled', strategy: 'plugin:button-click', plugin: 'button-click', role: fieldData.role || 'navigation', newFieldCount, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          console.debug('[CC][plugin] button-click', selector, 'newFields:', newFieldCount);
+        } else {
+          // Fallback: just click
+          if (el) el.click();
+          await waitForDOMQuiet(800);
+        }
+        await new Promise(r => setTimeout(r, 500));
+      } else if (isNgDropdown) {
         // ng-dropdown: use plugin if available
         if (!el) { _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); continue; }
         const _ngPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
