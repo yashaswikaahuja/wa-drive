@@ -418,5 +418,151 @@
       "corrections": 0,
       "lastSeen": "2026-05-13"
     }
+  },
+  "s_bid3kw": {
+    "1 enter your aadhaar details uid vid": {
+      "profileKey": "aadhaar_number",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "2 verify aadhaar details uid vid": {
+      "profileKey": "aadhaar_number",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a new name changed name": {
+      "profileKey": "name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "b verify new namechanged name": {
+      "profileKey": "name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "6 fathers name": {
+      "profileKey": "father_name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a verify fathers name": {
+      "profileKey": "father_name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "7 mothers name": {
+      "profileKey": "mother_name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a verify mothers name": {
+      "profileKey": "mother_name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "10 matriculation 10th class roll number": {
+      "profileKey": "roll_no_10th",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a verify roll number": {
+      "profileKey": "roll_no_10th",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "12 scribes mobile number": {
+      "profileKey": "mobile",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "13 scribes email id": {
+      "profileKey": "email_id",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a address": {
+      "profileKey": "address",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "d pin code": {
+      "profileKey": "pin_code",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a   scribe s name  as per matriculation certificate": {
+      "profileKey": "aadhaar_number",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "3 scribes name as per matriculation certificate": {
+      "profileKey": "name",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "gender": {
+      "profileKey": "gender",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a  gender": {
+      "profileKey": "gender",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "your highest level of educational qualification": {
+      "profileKey": "highest_education_qualification",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "matriculation (10th class) education board": {
+      "profileKey": "board_10th",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "a  matriculation 10th class education board": {
+      "profileKey": "board_10th",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "matriculation (10th class) year of passing": {
+      "profileKey": "passing_year_10th",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "state/ut": {
+      "profileKey": "state",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    },
+    "district": {
+      "profileKey": "district",
+      "fills": 0.3,
+      "corrections": 0,
+      "lastSeen": "2026-05-13"
+    }
   }
 }
