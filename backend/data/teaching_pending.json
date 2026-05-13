@@ -1,5 +1,93 @@
 [
   {
+    "hostname": "ssc.gov.in",
+    "label": "c. District (11)",
+    "type": "ng-dropdown",
+    "domIndex": 11,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csiss",
+    "createdAt": "2026-05-13T01:00:53.164Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "9. Matriculation (10th class) Education Board",
+    "type": "ng-dropdown",
+    "domIndex": 4,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csis8",
+    "createdAt": "2026-05-13T01:00:53.144Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "b. State/UT (10)",
+    "type": "ng-dropdown",
+    "domIndex": 10,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csidu",
+    "createdAt": "2026-05-13T01:00:52.626Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "11. Matriculation (10th class) Year of Passing",
+    "type": "ng-dropdown",
+    "domIndex": 6,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csidt",
+    "createdAt": "2026-05-13T01:00:52.625Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "c. District",
+    "type": "ng-dropdown",
+    "domIndex": 9,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csidr",
+    "createdAt": "2026-05-13T01:00:52.623Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "b. State/UT",
+    "type": "ng-dropdown",
+    "domIndex": 8,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csidp",
+    "createdAt": "2026-05-13T01:00:52.621Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "5. Gender",
+    "type": "ng-dropdown",
+    "domIndex": 0,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csidn",
+    "createdAt": "2026-05-13T01:00:52.619Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "8.Your Highest Level of Educational Qualification",
+    "type": "ng-dropdown",
+    "domIndex": 2,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3csidk",
+    "createdAt": "2026-05-13T01:00:52.616Z",
+    "status": "pending"
+  },
+  {
     "hostname": "www.apprenticeshipindia.gov.in",
     "label": "Login as a candidate (50)",
     "type": "ng-dropdown",

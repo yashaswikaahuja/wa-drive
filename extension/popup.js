@@ -358,12 +358,13 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   // ── PLANNER/RUNTIME BOUNDARY ─────────────────────────────────────────────
   // Above: Planner (mapping + filledBySource = FillPlan)
   // Below: Runtime (deterministic executor consumes FillPlan)
-  // Inject plugin files into page before executor runs
-  try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js'] }); } catch(e) { console.warn('[CC] Plugin injection failed (non-fatal):', e.message); }
+  // Inject plugins + executor as files into page (shared ISOLATED world scope)
   const _planSize = Object.keys(mapping).length;
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/executor.js'] });
+  // Call fillFormFieldsSequential which is now in the page's ISOLATED world
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
-    func: fillFormFieldsSequential,
+    func: (m, fbs, pa) => fillFormFieldsSequential(m, fbs, pa),
     args: [mapping, filledBySource, portalAdapters],
   });
 
