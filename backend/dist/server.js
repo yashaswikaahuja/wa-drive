@@ -682,6 +682,48 @@ app.post('/api/ai/plan', async (req, res) => {
   }
 });
 
+
+// ── /api/training/episodes — Convert runtime traces into trainable episodes ──
+app.get('/api/training/episodes', (_req, res) => {
+  const sessions = loadSessions();
+  const corrections = loadCorrections();
+  const corrByHost = {};
+  for (const batch of corrections) {
+    const key = batch.hostname + '|' + (batch.semanticFormKey || '');
+    if (!corrByHost[key]) corrByHost[key] = [];
+    corrByHost[key].push(...(batch.corrections || []));
+  }
+  const episodes = sessions.slice(0, 100).map(session => {
+    const key = session.hostname + '|' + (session.semanticFormKey || '');
+    const sessionCorrections = corrByHost[key] || [];
+    const steps = (session.records || []).map(r => ({
+      observation: { selector: r.selector, type: r.type },
+      action: {
+        type: r.strategy && r.strategy.startsWith('plugin:') ? r.strategy.replace('plugin:','') : (r.type === 'ng-dropdown' ? 'click_dropdown' : r.type === 'select' ? 'select_option' : 'fill_text'),
+        target: r.selector,
+        value: r.value
+      },
+      result: { outcome: r.result, failReason: r.failReason || null, durationMs: r.durationMs || 0 },
+      reward: r.result === 'filled' ? 1.0 : r.result === 'skipped' ? 0.0 : -0.5,
+      plugin: r.plugin || null,
+      strategy: r.strategy || null
+    }));
+    const supervisionSignals = sessionCorrections.map(c => ({
+      field: c.field, selector: c.selector, semanticKey: c.semanticKey,
+      autofilledValue: c.autofilledValue, operatorValue: c.finalOperatorValue,
+      correctionType: c.correctionType, trigger: c.trigger
+    }));
+    return {
+      schemaVersion: '1.0', episodeId: session.id, hostname: session.hostname,
+      semanticFormKey: session.semanticFormKey || '', runtimeVersion: session.runtimeVersion,
+      totalFilled: session.totalFilled, totalFailed: session.totalFailed,
+      steps, corrections: supervisionSignals, hasCorrections: supervisionSignals.length > 0,
+      timestamp: session.receivedAt
+    };
+  });
+  res.json({ schemaVersion: '1.0', totalEpisodes: episodes.length, episodes });
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
