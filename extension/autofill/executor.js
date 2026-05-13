@@ -620,7 +620,21 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
       delay += 800;
     } else if (isNgDropdown) {
       // ng-dropdown: async click sequence — must be sequential, not concurrent
-      setTimeout(() => fillOne(selector, value, type), delay);
+      const _ngSel = selector, _ngVal = value, _ngType = type;
+      setTimeout(() => {
+        let _ngEl;
+        if (_ngSel.startsWith('ng-dropdown-')) _ngEl = document.querySelectorAll('div.ng-dropdown')[parseInt(_ngSel.split('-')[2])];
+        else _ngEl = document.querySelector(_ngSel);
+        const _ngFieldCtx = { type: _ngType, label: filledBySource[_ngSel]?.label || _ngSel, profileKey: filledBySource[_ngSel]?.profileKey || '', selector: _ngSel };
+        const _ngPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(_ngEl, _ngFieldCtx) : null;
+        if (_ngPlugin && _CC_LEGACY_COMPARE) console.debug('[CC][plugin-claim] ng-dropdown claimed by:', _ngPlugin.id, _ngSel);
+        // Still use fillOne for full async session logic — plugin claims for replay attribution
+        const _t0 = Date.now();
+        const _r = fillOne(_ngSel, _ngVal, _ngType);
+        if (_ngPlugin) {
+          _ccRecords.push({ selector: _ngSel, value: _ngVal, type: _ngType, result: _r ? 'filled' : 'pending', strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, dependsOn: [], durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+        }
+      }, delay);
       delay += 5500; // 800ms stabilize + 10*300ms poll + 1000ms verify + 700ms buffer
     } else if (isDependent && filled > 0) {
       // Plugin dispatch for cascade fields

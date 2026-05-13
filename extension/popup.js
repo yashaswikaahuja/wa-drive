@@ -359,7 +359,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   // Above: Planner (mapping + filledBySource = FillPlan)
   // Below: Runtime (deterministic executor consumes FillPlan)
   // Inject plugin files into page before executor runs
-  try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js'] }); } catch(e) { console.warn('[CC] Plugin injection failed (non-fatal):', e.message); }
+  try { await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js'] }); } catch(e) { console.warn('[CC] Plugin injection failed (non-fatal):', e.message); }
   const _planSize = Object.keys(mapping).length;
   const result = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
