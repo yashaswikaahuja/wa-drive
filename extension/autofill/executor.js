@@ -704,6 +704,96 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
   }
   await fillSequential();
 
+
+  // ── Operator Correction Observer ─────────────────────────────────────────
+  // After runtime settles, snapshot filled values and watch for operator changes.
+  // Runs AFTER fillSequential + confirm-mirror settle (10s delay).
+  setTimeout(() => {
+    const snapshot = {};
+    const fieldMeta = {};
+    // Snapshot all fields that were in the mapping
+    for (const [selector, fieldData] of entries) {
+      let el;
+      if (selector.startsWith('form-field-')) {
+        const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
+        el = all[parseInt(selector.split('-')[2])];
+      } else if (selector.startsWith('ng-dropdown-')) {
+        el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
+      } else {
+        el = document.querySelector(selector);
+      }
+      if (!el) continue;
+      const val = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
+        : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
+        : el.value || '';
+      snapshot[selector] = val;
+      const rec = _ccRecords.find(r => r.selector === selector);
+      fieldMeta[selector] = {
+        label: filledBySource[selector]?.label || selector,
+        semanticKey: filledBySource[selector]?.semanticKey || '',
+        profileKey: filledBySource[selector]?.profileKey || '',
+        plugin: rec?.plugin || null,
+        strategy: rec?.strategy || '',
+        originalResult: rec?.result || 'unknown',
+        autofilledValue: fieldData.value
+      };
+    }
+    // Watch for changes
+    function checkCorrections() {
+      const corrections = [];
+      for (const [selector, originalVal] of Object.entries(snapshot)) {
+        let el;
+        if (selector.startsWith('form-field-')) {
+          const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
+          el = all[parseInt(selector.split('-')[2])];
+        } else if (selector.startsWith('ng-dropdown-')) {
+          el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
+        } else {
+          el = document.querySelector(selector);
+        }
+        if (!el) continue;
+        const currentVal = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
+          : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
+          : el.value || '';
+        if (currentVal !== originalVal && currentVal !== '') {
+          const meta = fieldMeta[selector] || {};
+          const wasEmpty = !originalVal || originalVal === '';
+          corrections.push({
+            selector,
+            field: meta.label,
+            semanticKey: meta.semanticKey,
+            profileKey: meta.profileKey,
+            autofilledValue: meta.autofilledValue,
+            snapshotValue: originalVal,
+            finalOperatorValue: currentVal,
+            correctionType: wasEmpty ? 'completion' : 'override',
+            originalResult: meta.originalResult,
+            plugin: meta.plugin,
+            strategy: meta.strategy,
+            ts: Date.now()
+          });
+        }
+      }
+      return corrections;
+    }
+    // Store check function on window for external trigger
+    window._ccCheckCorrections = checkCorrections;
+    // Periodic check every 30s + beforeunload
+    const _corrInterval = setInterval(() => {
+      const c = checkCorrections();
+      if (c.length > 0) {
+        document.body.setAttribute('data-cc-corrections', JSON.stringify(c));
+      }
+    }, 30000);
+    window.addEventListener('beforeunload', () => {
+      clearInterval(_corrInterval);
+      const c = checkCorrections();
+      if (c.length > 0) {
+        document.body.setAttribute('data-cc-corrections', JSON.stringify(c));
+      }
+    });
+  }, 10000); // Start observing 10s after fill begins (after confirm-mirror + verification settle)
+
   // ── Confirm/Retype propagation pass ─────────────────────────────────────────
   // After primary fills settle, mirror DOM values into confirm/retype fields
   setTimeout(function() {

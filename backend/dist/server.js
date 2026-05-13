@@ -550,6 +550,23 @@ app.post('/api/sessions', (req, res) => {
 
 app.get('/api/sessions', (_req, res) => res.json(loadSessions().slice(0, 50)));
 
+
+// ── Corrections (operator supervision signal) ──────────────────────────────
+const correctionsPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../backend/data/corrections.json');
+function loadCorrections() { try { return JSON.parse(readFileSync(correctionsPath, 'utf8')); } catch { return []; } }
+function saveCorrections(d) { writeFileSync(correctionsPath, JSON.stringify(d, null, 2)); }
+
+app.post('/api/corrections', (req, res) => {
+  const record = { ...req.body, id: Date.now().toString(36), receivedAt: new Date().toISOString() };
+  const corrections = loadCorrections();
+  corrections.unshift(record);
+  if (corrections.length > 500) corrections.length = 500;
+  saveCorrections(corrections);
+  res.json({ ok: true, id: record.id });
+});
+
+app.get('/api/corrections', (_req, res) => res.json(loadCorrections().slice(0, 100)));
+
 app.get('/api/sessions/stats', (_req, res) => {
   const sessions = loadSessions();
   const byHostname = {};

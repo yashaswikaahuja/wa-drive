@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '5.26';
+const CURRENT_VERSION = '5.27';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -375,7 +375,33 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     args: [mapping, filledBySource, portalAdapters],
   });
 
-  // Read replay telemetry written by executor
+  
+  // ── Operator Correction Capture ──────────────────────────────────────────
+  // After fill settles, periodically check for operator corrections and POST them
+  const _correctionInterval = setInterval(async () => {
+    try {
+      const corrResult = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => document.body.getAttribute('data-cc-corrections')
+      });
+      const corrJson = corrResult?.[0]?.result;
+      if (corrJson) {
+        const corrections = JSON.parse(corrJson);
+        if (corrections.length > 0) {
+          await fetch(`${backendUrl}/corrections`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hostname: new URL(tab.url).hostname, semanticFormKey: primaryKey || '', corrections })
+          }).catch(() => {});
+          console.log('[CC] Posted', corrections.length, 'corrections');
+        }
+      }
+    } catch {}
+  }, 15000);
+  // Stop checking after 5 minutes
+  setTimeout(() => clearInterval(_correctionInterval), 300000);
+
+// Read replay telemetry written by executor
   // Wait for all ng-dropdowns to finish (each takes up to 5500ms)
   // Poll until results stop changing or 60s max
   const ngDropdownCount = Object.values(mapping).filter(v => v.type === 'ng-dropdown').length;
