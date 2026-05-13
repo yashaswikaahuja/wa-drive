@@ -13,13 +13,5 @@
       "failureCount": 0,
       "stale": false
     }
-  },
-  "ssc.gov.in": {
-    "ng-dropdown": {
-      "triggerSelector": ".select-type",
-      "optionSelector": "li",
-      "optionsContainer": "app-dropdown",
-      "verifySelector": ".select-type"
-    }
   }
 }

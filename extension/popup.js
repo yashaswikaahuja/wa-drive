@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '5.21';
+const CURRENT_VERSION = '5.22';
 let selectedProfile = null;
 
 // Check for updates on every popup open
@@ -260,8 +260,8 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     } catch (e) { console.warn('[CC] adapter fetch failed:', e.message); }
   }
 
-  // Step 5c: Add ng-dropdown fields into mapping if adapter exists
-  if (portalAdapters && Object.keys(portalAdapters).length > 0) {
+  // Step 5c: Add ng-dropdown fields into mapping (plugin handles interaction)
+  {
     const ngResult = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: () => {
@@ -280,8 +280,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     const ngFields = ngResult?.[0]?.result || [];
     for (const ngf of ngFields) {
       if (ngf.filled) continue;
-      const adapter = portalAdapters['ng-dropdown'];
-      if (!adapter) continue;
+      const adapter = portalAdapters?.['ng-dropdown'] || {};
       // Verify/confirm fields: mirror value from the corresponding base ng-dropdown
       if (ngf.isVerify) {
         // Strip "verify"/"confirm" words to get base concept e.g. "Verify Gender" -> "gender"

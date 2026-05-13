@@ -1,6 +1,50 @@
 [
   {
     "hostname": "ssc.gov.in",
+    "label": "4. Gender",
+    "type": "ng-dropdown",
+    "domIndex": 0,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3wi6vf",
+    "createdAt": "2026-05-13T10:12:43.467Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "8. Matriculation (10th class) Education Board",
+    "type": "ng-dropdown",
+    "domIndex": 2,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3wi6vd",
+    "createdAt": "2026-05-13T10:12:43.465Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "11. Highest Level of Education Qualification",
+    "type": "ng-dropdown",
+    "domIndex": 6,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3wi6v7",
+    "createdAt": "2026-05-13T10:12:43.459Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
+    "label": "10. Year of Passing",
+    "type": "ng-dropdown",
+    "domIndex": 4,
+    "componentClass": "ng-dropdown",
+    "operatorId": "anonymous",
+    "id": "mp3wi6v3",
+    "createdAt": "2026-05-13T10:12:43.455Z",
+    "status": "pending"
+  },
+  {
+    "hostname": "ssc.gov.in",
     "label": "b. State/UT (10)",
     "type": "ng-dropdown",
     "domIndex": 10,
