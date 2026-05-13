@@ -137,17 +137,19 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
       setTimeout(function() { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
     });
   }
-  // Sort: fill state before district before block (dependent dropdowns)
+  // Sort by DOM order (sequential top-to-bottom filling)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
   const entries = Object.entries(mapping);
-  entries.sort(([sa], [sb]) => {
-    // Use label from filledBySource for priority matching (handles numeric IDs like #17391)
-    const labelA = (filledBySource[sa]?.label || sa).toLowerCase();
-    const labelB = (filledBySource[sb]?.label || sb).toLowerCase();
-    const pa = PRIORITY_KEYS.findIndex(k => labelA.includes(k) || sa.toLowerCase().includes(k));
-    const pb = PRIORITY_KEYS.findIndex(k => labelB.includes(k) || sb.toLowerCase().includes(k));
-    return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
-  });
+  // Extract DOM index for sorting
+  function domIndex(sel) {
+    if (sel.startsWith('form-field-')) return parseInt(sel.split('-')[2]);
+    if (sel.startsWith('ng-dropdown-')) return 1000 + parseInt(sel.split('-')[2]);
+    const el = document.querySelector(sel);
+    if (!el) return 9999;
+    const all = document.querySelectorAll('input,select,textarea,div.ng-dropdown');
+    return Array.from(all).indexOf(el);
+  }
+  entries.sort(([sa], [sb]) => domIndex(sa) - domIndex(sb));
 
   let filled = 0;
   let delay = 0;
