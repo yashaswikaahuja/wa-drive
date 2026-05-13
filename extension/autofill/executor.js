@@ -582,13 +582,17 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
       } else {
         // Angular/React compatible input filling
-        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
-                    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+        const isTextarea = el.tagName === 'TEXTAREA';
+        const niv = isTextarea
+          ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')
+          : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        el.focus();
         if (niv) niv.set.call(el, value);
         else el.value = value;
-        ['input','change','keyup','keydown'].forEach(ev => {
-          el.dispatchEvent(new Event(ev, { bubbles: true }));
-        });
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
+        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
         // Also simulate keyboard events for Angular
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
         // ServicePlus: transliterate English→Hindi for paired Hindi field
