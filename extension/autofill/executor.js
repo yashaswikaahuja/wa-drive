@@ -654,12 +654,13 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
         const _btnPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
         if (_btnPlugin) {
           const _pResult = _btnPlugin.fill(el, value, { attempt: 1 });
+          const _preCount = document.querySelectorAll("input,select,textarea,div.ng-dropdown").length;
           // Wait for DOM to stabilize after transition
           await waitForDOMQuiet(800);
           // Re-extract visible fields after transition (graph rebuild)
           const newFields = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,div.ng-dropdown');
           const newFieldCount = newFields.length;
-          _ccRecords.push({ selector, value, type: 'button', result: 'filled', strategy: 'plugin:button-click', plugin: 'button-click', role: fieldData.role || 'navigation', newFieldCount, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          _ccRecords.push({ selector, value, type: 'button', result: 'filled', strategy: 'plugin:button-click', plugin: 'button-click', role: fieldData.role || 'navigation', newFieldCount, transitionOutcome: newFieldCount > _preCount ? "transition_success" : newFieldCount === _preCount ? "transition_no_change" : "transition_partial", durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
           console.debug('[CC][plugin] button-click', selector, 'newFields:', newFieldCount);
         } else {
           // Fallback: just click

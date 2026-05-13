@@ -798,7 +798,7 @@ app.get('/api/extension/version', (req, res) => {
 });
 app.get('/api/extension/download', (_req, res) => {
     const zipPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../extension.zip');
-    res.download(zipPath, 'cybercontrol-autofill.zip');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate'); res.setHeader('Pragma', 'no-cache'); res.download(zipPath, 'cybercontrol-autofill.zip');
 });
 httpServer.listen(PORT, () => console.log(`[Hub] Running on http://localhost:${PORT}`));
 process.on('SIGINT', () => httpServer.close(() => process.exit(0)));
