@@ -36,6 +36,7 @@ function authMiddleware(req, res, next) {
 // ── Rate Limiting ──────────────────────────────────────────────────────────
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many attempts, try again later' } });
 
+
 // ── Audit Helper ───────────────────────────────────────────────────────────
 async function auditLog(workspaceId, userId, eventType, entityType, entityId, metadata) {
   try { await pool.query('INSERT INTO audit_events (workspace_id, user_id, event_type, entity_type, entity_id, metadata) VALUES ($1,$2,$3,$4,$5,$6)', [workspaceId, userId, eventType, entityType, entityId, metadata ? JSON.stringify(metadata) : null]); } catch {}
@@ -60,6 +61,61 @@ const WORKER_SECRET = process.env['WORKER_SECRET'] ?? 'worker-secret';
 const PORT = Number(process.env['PORT'] ?? 3000);
 const app = express();
 app.use(compression());
+
+// ── Lightweight Performance Observability ──────────────────────────────────
+const _metricsLog = []; // ring buffer of recent slow requests
+const _MAX_METRICS = 500;
+const _SLOW_THRESHOLD_MS = 200;
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (duration > _SLOW_THRESHOLD_MS) {
+      const entry = {
+        method: req.method,
+        path: req.path,
+        status: res.statusCode,
+        duration,
+        ts: new Date().toISOString(),
+        size: res.get('Content-Length') || 0,
+      };
+      _metricsLog.push(entry);
+      if (_metricsLog.length > _MAX_METRICS) _metricsLog.shift();
+      console.warn(`[SLOW] ${req.method} ${req.path} ${duration}ms (${res.statusCode})`);
+    }
+  });
+  next();
+});
+
+// Admin-only metrics endpoint
+app.get('/api/admin/metrics', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'admin only' });
+  const now = Date.now();
+  const recent = _metricsLog.filter(m => now - new Date(m.ts).getTime() < 3600000);
+  // Aggregate by endpoint
+  const byEndpoint = {};
+  recent.forEach(m => {
+    const key = m.method + ' ' + m.path.replace(/\/[0-9a-f-]{36}/, '/:id');
+    if (!byEndpoint[key]) byEndpoint[key] = { count: 0, totalMs: 0, maxMs: 0, errors: 0 };
+    byEndpoint[key].count++;
+    byEndpoint[key].totalMs += m.duration;
+    byEndpoint[key].maxMs = Math.max(byEndpoint[key].maxMs, m.duration);
+    if (m.status >= 400) byEndpoint[key].errors++;
+  });
+  const summary = Object.entries(byEndpoint).map(([k, v]) => ({
+    endpoint: k, count: v.count, avgMs: Math.round(v.totalMs / v.count), maxMs: v.maxMs, errors: v.errors
+  })).sort((a, b) => b.avgMs - a.avgMs);
+  res.json({
+    windowHours: 1,
+    slowThresholdMs: _SLOW_THRESHOLD_MS,
+    totalSlowRequests: recent.length,
+    byEndpoint: summary,
+    recent: recent.slice(-50).reverse(),
+  });
+});
+
+
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 app.use((req, res, next) => {
