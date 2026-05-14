@@ -794,7 +794,7 @@ app.get('/api/training/episodes', authMiddleware, async (_req, res) => {
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
 
-app.post('/auth/register', authLimiter, async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, phone, password, name } = req.body;
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -829,7 +829,7 @@ app.post('/auth/register', authLimiter, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/auth/login', authLimiter, async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, phone, password } = req.body;
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
   try {
@@ -854,7 +854,7 @@ app.post('/auth/login', authLimiter, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/auth/refresh', async (req, res) => {
+app.post('/api/auth/refresh', async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) return res.status(400).json({ error: 'refreshToken required' });
   try {
@@ -875,7 +875,7 @@ app.post('/auth/refresh', async (req, res) => {
   } catch (e) { return res.status(401).json({ error: 'Invalid refresh token' }); }
 });
 
-app.post('/auth/logout', authMiddleware, async (req, res) => {
+app.post('/api/auth/logout', authMiddleware, async (req, res) => {
   try {
     await pool.query("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", [req.user.userId]);
     await auditLog(req.user.workspaceId, req.user.userId, 'logout', 'user', req.user.userId, null);
@@ -883,7 +883,7 @@ app.post('/auth/logout', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/auth/me', authMiddleware, async (req, res) => {
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
     const result = await pool.query("SELECT id, workspace_id, email, phone, name, role, status, created_at FROM users WHERE id = $1", [req.user.userId]);
     if (!result.rows.length) return res.status(404).json({ error: 'User not found' });

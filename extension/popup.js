@@ -62,7 +62,7 @@ document.addEventListener('click', async (e) => {
 chrome.storage.local.get(['backendUrl'], async (result) => {
   if (!result.backendUrl) return;
   try {
-    const _vbase = result.backendUrl.replace(/\/api$/, '');
+    const _vbase = result.backendUrl;
     const res = await fetch(`${_vbase}/api/extension/version`);
     const { version, download_url } = await res.json();
     if (version && version !== CURRENT_VERSION) {
