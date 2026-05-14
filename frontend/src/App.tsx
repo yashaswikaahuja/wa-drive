@@ -24,6 +24,7 @@ export default function App() {
       const API = import.meta.env.VITE_API_URL || 'https://glasgow-tyler-norm-foot.trycloudflare.com/api';
       fetch(API + '/drive/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken }) });
       window.history.replaceState(null, '', '/app/settings');
+      setTimeout(() => window.location.href = '/app/settings', 1500);
       return <div className="min-h-screen flex items-center justify-center bg-[#080d19] text-green-400 text-lg">✅ Google Drive connected! Redirecting...</div>;
     }
   }
