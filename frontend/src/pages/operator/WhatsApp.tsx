@@ -215,7 +215,7 @@ export default function WhatsApp() {
       {viewerFile && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setViewerFile(null)}>
           <div className="absolute top-4 right-4 flex gap-3 z-10">
-            <a href={viewerFile.fileUrl?.replace('sz=w200','sz=w1200')} download className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">Download</a>
+            <a href={(() => { const did = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; return did ? `https://drive.google.com/uc?export=download&id=${did}` : viewerFile.fileUrl || ''; })()} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">Download</a>
             <button onClick={() => setViewerFile(null)} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">✕ Close</button>
           </div>
           <div className="absolute top-4 left-4 z-10">
@@ -225,10 +225,13 @@ export default function WhatsApp() {
           <div onClick={e => e.stopPropagation()} className="max-w-[90vw] max-h-[85vh]">
             {(() => {
               const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
-              const fullUrl = viewerFile.fileUrl?.replace('sz=w200','sz=w1200') || '';
-              if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={fullUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
-              if (['mp4','3gp','mov','avi','webm'].includes(ext)) return <video src={fullUrl} controls className="max-w-full max-h-[85vh] rounded-lg" />;
-              return <div className="bg-[#1a2236] rounded-xl p-8 text-center"><span className="text-4xl block mb-3">{docTitle(viewerFile.fileName || '').icon}</span><p className="text-white">{viewerFile.fileName}</p><a href={fullUrl} download className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Download File</a></div>;
+              const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || '';
+              const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
+              const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
+              if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
+              if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" allow="autoplay; fullscreen" allowFullScreen /> : <video src={imgUrl} controls className="max-w-full max-h-[85vh] rounded-lg" />;
+              if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" title="PDF" /> : <div className="bg-[#1a2236] rounded-xl p-8 text-center"><p className="text-white">PDF preview unavailable</p></div>;
+              return <div className="bg-[#1a2236] rounded-xl p-8 text-center"><span className="text-4xl block mb-3">{docTitle(viewerFile.fileName || '').icon}</span><p className="text-white">{viewerFile.fileName}</p></div>;
             })()}
           </div>
         </div>
