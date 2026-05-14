@@ -1,35 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useGoogleLogin } from '@react-oauth/google';
 import api, { API_URL } from '../../lib/api';
 import { useAuthStore } from '../../stores/auth';
-
-const GOOGLE_CLIENT_ID = '62092486976-jhsn62q3ufj4dvr42c1hpubnujasaqok.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
   const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('disconnected');
 
-  // Handle OAuth callback (token in URL hash after redirect)
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('access_token=')) {
-      const params = new URLSearchParams(hash.slice(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        setDriveStatus('loading');
-        api.post('/drive/token', { accessToken }).then(() => {
-          setDriveStatus('connected');
-          window.history.replaceState(null, '', '/app/settings');
-        }).catch(() => setDriveStatus('disconnected'));
-      }
-    }
-  }, []);
-
-  const handleGoogleDriveConnect = () => {
-    const redirectUri = window.location.origin;
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
-    window.location.href = authUrl;
-  };
+  const login = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/drive.file',
+    onSuccess: (res) => {
+      setDriveStatus('loading');
+      fetch(API_URL + '/drive/token', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: res.access_token })
+      }).then(() => setDriveStatus('connected')).catch(() => setDriveStatus('disconnected'));
+    },
+    onError: () => setDriveStatus('disconnected'),
+  });
 
   return (
     <div className="max-w-lg">
@@ -53,7 +41,7 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <span className={`w-2.5 h-2.5 rounded-full ${driveStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="text-sm text-white">{driveStatus === 'connected' ? 'Connected' : 'Disconnected'}</span>
-          <button onClick={handleGoogleDriveConnect} disabled={driveStatus === 'loading'}
+          <button onClick={() => login()} disabled={driveStatus === 'loading'}
             className="ml-auto px-4 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {driveStatus === 'loading' ? 'Connecting...' : driveStatus === 'connected' ? 'Reconnect' : 'Connect Drive'}
           </button>
