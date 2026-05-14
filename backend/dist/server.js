@@ -1,3 +1,4 @@
+import dotenv from "dotenv"; dotenv.config({ path: "/opt/cybercontrol-hub/backend/.env" });
 import express from 'express';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
