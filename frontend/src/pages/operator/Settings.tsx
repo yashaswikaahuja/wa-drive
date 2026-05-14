@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api, { API_URL } from '../../lib/api';
 import { useAuthStore } from '../../stores/auth';
 
@@ -9,28 +9,26 @@ export default function Settings() {
   const { user, logout } = useAuthStore();
   const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('disconnected');
 
-  const handleGoogleDriveConnect = () => {
-    setDriveStatus('loading');
-    const redirectUri = window.location.origin;
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
+  // Handle OAuth callback (token in URL hash after redirect)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('access_token=')) {
+      const params = new URLSearchParams(hash.slice(1));
+      const accessToken = params.get('access_token');
+      if (accessToken) {
+        setDriveStatus('loading');
+        api.post('/drive/token', { accessToken }).then(() => {
+          setDriveStatus('connected');
+          window.history.replaceState(null, '', '/app/settings');
+        }).catch(() => setDriveStatus('disconnected'));
+      }
+    }
+  }, []);
 
-    // Open popup for OAuth
-    const popup = window.open(authUrl, 'google-auth', 'width=500,height=600');
-    const interval = setInterval(() => {
-      try {
-        if (popup?.closed) { clearInterval(interval); setDriveStatus('disconnected'); return; }
-        const url = popup?.location?.href;
-        if (url && url.includes('access_token=')) {
-          clearInterval(interval);
-          const params = new URLSearchParams(url.split('#')[1]);
-          const accessToken = params.get('access_token');
-          popup?.close();
-          if (accessToken) {
-            api.post('/drive/token', { accessToken }).then(() => setDriveStatus('connected')).catch(() => setDriveStatus('disconnected'));
-          }
-        }
-      } catch {}
-    }, 500);
+  const handleGoogleDriveConnect = () => {
+    const redirectUri = window.location.origin + '/app/settings';
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
+    window.location.href = authUrl;
   };
 
   return (
