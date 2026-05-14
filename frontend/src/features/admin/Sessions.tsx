@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../../lib/api';
+import api from '../../shared/api';
 
 interface Session {
   id: string; hostname: string; semanticFormKey: string; runtimeVersion: string;

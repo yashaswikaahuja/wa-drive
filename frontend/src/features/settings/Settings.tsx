@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
-import api, { API_URL } from '../../lib/api';
-import { useAuthStore } from '../../stores/auth';
+import api, { API_URL } from '../../shared/api';
+import { useAuthStore } from '../../features/auth/store';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../lib/api';
+import api from '../../shared/api';
 
 interface Profile { id: string; name: string; primary_contact_phone: string; }
 interface Service { id: string; label: string; icon: string; execution_type: string; }

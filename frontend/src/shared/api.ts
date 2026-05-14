@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../features/auth/store';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'https://glasgow-tyler-norm-foot.trycloudflare.com/api';
 

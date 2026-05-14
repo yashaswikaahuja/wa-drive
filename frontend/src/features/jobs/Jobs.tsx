@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../../lib/api';
+import api from '../../shared/api';
 
 interface Job {
   id: string; status: string; service_type: string; service_label: string;

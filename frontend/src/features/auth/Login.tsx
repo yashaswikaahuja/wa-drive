@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../auth/store';
 import axios from 'axios';
-import { API_URL } from '../lib/api';
+import { API_URL } from '../../shared/api';
 
 export default function Login() {
   const [identity, setIdentity] = useState('');

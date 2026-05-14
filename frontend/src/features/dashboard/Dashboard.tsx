@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../../lib/api';
+import api from '../../shared/api';
 
 export default function Dashboard() {
   const [stats, setStats] = useState<any>({ sessions: 0, filled: 0, corrections: 0, profiles: 0, jobs: 0, jobsQueued: 0 });

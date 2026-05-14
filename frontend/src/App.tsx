@@ -1,20 +1,20 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
-import { useAuthStore } from './stores/auth';
-import Login from './pages/Login';
-import Layout from './components/Layout';
+import { useAuthStore } from './features/auth/store';
+import Login from './features/auth/Login';
+import Layout from './shared/Layout';
 
 // Lazy-loaded routes — each becomes a separate chunk
-const Dashboard = lazy(() => import('./pages/operator/Dashboard'));
-const Customers = lazy(() => import('./pages/operator/Customers'));
-const Jobs = lazy(() => import('./pages/operator/Jobs'));
-const NewJob = lazy(() => import('./pages/operator/NewJob'));
-const WhatsApp = lazy(() => import('./pages/operator/WhatsApp'));
-const Stitch = lazy(() => import('./pages/operator/Stitch'));
-const Settings = lazy(() => import('./pages/operator/Settings'));
-const Overview = lazy(() => import('./pages/admin/Overview'));
-const Sessions = lazy(() => import('./pages/admin/Sessions'));
-const Corrections = lazy(() => import('./pages/admin/Corrections'));
+const Dashboard = lazy(() => import('./features/dashboard/Dashboard'));
+const Customers = lazy(() => import('./features/customers/Customers'));
+const Jobs = lazy(() => import('./features/jobs/Jobs'));
+const NewJob = lazy(() => import('./features/jobs/NewJob'));
+const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
+const Stitch = lazy(() => import('./features/services/Stitch'));
+const Settings = lazy(() => import('./features/settings/Settings'));
+const Overview = lazy(() => import('./features/admin/Overview'));
+const Sessions = lazy(() => import('./features/admin/Sessions'));
+const Corrections = lazy(() => import('./features/admin/Corrections'));
 
 function PageLoader() {
   return (

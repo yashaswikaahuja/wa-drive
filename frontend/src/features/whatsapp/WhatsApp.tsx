@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
-import api, { API_URL } from '../../lib/api';
+import api, { API_URL } from '../../shared/api';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;

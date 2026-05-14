@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { memo, useMemo } from 'react';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore } from '../features/auth/store';
 
 const OPERATOR_NAV = [
   { path: '/app', icon: '📊', label: 'Dashboard', end: true },
