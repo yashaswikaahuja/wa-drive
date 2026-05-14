@@ -9,6 +9,7 @@ const Dashboard = lazy(() => import('./features/dashboard/Dashboard'));
 const Customers = lazy(() => import('./features/customers/Customers'));
 const Jobs = lazy(() => import('./features/jobs/Jobs'));
 const NewJob = lazy(() => import('./features/jobs/NewJob'));
+const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const Stitch = lazy(() => import('./features/services/Stitch'));
 const Settings = lazy(() => import('./features/settings/Settings'));
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/app/customers" element={<Suspense fallback={<PageLoader />}><Customers /></Suspense>} />
           <Route path="/app/jobs" element={<Suspense fallback={<PageLoader />}><Jobs /></Suspense>} />
           <Route path="/app/jobs/new" element={<Suspense fallback={<PageLoader />}><NewJob /></Suspense>} />
+          <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/stitch" element={<Suspense fallback={<PageLoader />}><Stitch /></Suspense>} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />

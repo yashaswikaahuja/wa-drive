@@ -72,8 +72,104 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'GET_TAB_ID') {
     sendResponse({ tabId: sender?.tab?.id });
   }
+  if (msg.type === 'DISPATCH_JOB') {
+    // Phase A: extension receives dispatch envelope, runs runtime, reports back
+    // Envelope: { type, version, jobId, sessionId, serviceType, executionType, payload }
+    const env = msg.envelope || msg;
+    if (!env.jobId || !env.sessionId) { sendResponse({ ok: false, error: 'missing jobId/sessionId' }); return true; }
+    if (env.executionType !== 'form_filling') { sendResponse({ ok: false, error: 'unsupported executionType: ' + env.executionType }); return true; }
+    const tabId = sender?.tab?.id;
+    if (!tabId) { sendResponse({ ok: false, error: 'no tab' }); return true; }
+    sendResponse({ ok: true, accepted: true });
+    runJobDispatch(env, tabId).catch(e => console.error('[CC] DISPATCH_JOB error:', e));
+    return true;
+  }
   return true;
 });
+
+// ── Phase A: Job Dispatch Runner ───────────────────────────────────────────
+// Extension stays dumb: receives envelope, runs deterministic runtime, reports terminal result.
+// No knowledge of jobs/customers/mappings/tenancy.
+async function runJobDispatch(envelope, tabId) {
+  const { jobId, sessionId, payload } = envelope;
+  const profile = payload?.profile || {};
+  const { backendUrl, accessToken } = await chrome.storage.local.get(['backendUrl', 'accessToken']);
+  if (!backendUrl || !accessToken) { console.error('[CC] DISPATCH_JOB: not authenticated'); return; }
+
+  // Helper: report progress to backend
+  async function reportProgress(body) {
+    try {
+      await fetch(backendUrl + '/jobs/' + jobId + '/progress', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify({ sessionId, ...body }),
+      });
+    } catch (e) { console.warn('[CC] progress report failed:', e.message); }
+  }
+
+  // Inject runtime + run autofill pipeline (reuse existing executor)
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
+
+    const result = await chrome.scripting.executeScript({
+      target: { tabId },
+      args: [profile, backendUrl, accessToken],
+      func: async (prof, bUrl, aToken) => {
+        const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + aToken };
+        const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
+        if (!formFields.length) return { ok: false, error: 'no fields detected' };
+        const pk = semanticFormKey || formKey;
+        // Try saved mappings first
+        let saved = null;
+        try { const r = await fetch(bUrl + '/mappings/' + pk, { headers }); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) saved = d; } catch {}
+        let mapping = {}, fbs = {};
+        const gsk = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        if (saved) {
+          for (const f of formFields) {
+            const sk = gsk(f.label); const s = saved[sk];
+            if (s && s.profileKey && prof[s.profileKey]) {
+              mapping[f.selector] = { value: prof[s.profileKey], type: f.type };
+              fbs[f.selector] = { label: f.label, semanticKey: sk, profileKey: s.profileKey, source: 'saved' };
+            }
+          }
+        }
+        // Fuzzy fill remaining
+        const um = formFields.filter(f => !mapping[f.selector]);
+        if (um.length > 0) {
+          const fz = fuzzyMatch(um, prof);
+          for (const [s, v] of Object.entries(fz)) { mapping[s] = v; const ff = formFields.find(x => x.selector === s); if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' }; }
+        }
+        // Adapters
+        let adp = {};
+        try { const r = await fetch(bUrl + '/adapters/' + location.hostname, { headers }); adp = await r.json(); } catch {}
+        // Run executor (returns total filled)
+        const filled = await fillFormFieldsSequential(mapping, fbs, adp);
+        const records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]');
+        const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
+        return { ok: true, filled: filled || 0, failed, fields: Object.keys(mapping).length, records, primaryKey: pk };
+      },
+    });
+
+    const r = result?.[0]?.result || { ok: false };
+    if (r.ok) {
+      // Report final state — runtime done, transition to needs_review
+      await reportProgress({
+        totalFilled: r.filled,
+        totalFailed: r.failed,
+        records: r.records || [],
+        status: 'needs_review',
+      });
+      console.log('[CC] DISPATCH_JOB completed: filled=' + r.filled + ' failed=' + r.failed);
+    } else {
+      await reportProgress({ status: 'failed', failReason: r.error || 'execution failed' });
+      console.error('[CC] DISPATCH_JOB failed:', r.error);
+    }
+  } catch (e) {
+    await reportProgress({ status: 'failed', failReason: e.message });
+    console.error('[CC] DISPATCH_JOB exception:', e);
+  }
+}
+
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;

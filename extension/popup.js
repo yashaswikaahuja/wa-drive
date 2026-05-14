@@ -1,4 +1,4 @@
-const CURRENT_VERSION = '5.30';
+const CURRENT_VERSION = '5.31';
 let selectedProfile = null;
 
 // ── Auth Gate ──────────────────────────────────────────────────────────────

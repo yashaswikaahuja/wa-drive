@@ -1,0 +1,42 @@
+[
+  {
+    "id": "283ab4f2-d568-4e76-9557-064d078e885d",
+    "customerId": "160370253656172",
+    "customerName": "Legend",
+    "fileName": "160370253656172_20260514_173901_photo.jpg",
+    "fileUrl": "https://drive.google.com/thumbnail?id=10lgDdf5xK7ZhCPhOPSDBHJ1ODOBzWQHp&sz=w200",
+    "filePath": "10lgDdf5xK7ZhCPhOPSDBHJ1ODOBzWQHp",
+    "type": "whatsapp_image",
+    "timestamp": "2026-05-14T17:39:07.523Z"
+  },
+  {
+    "id": "220851a0-2988-4e8e-9ff5-0e20739cf9fd",
+    "customerId": "160370253656172",
+    "customerName": "Legend",
+    "fileName": "160370253656172_20260514_174007_photo.jpg",
+    "fileUrl": "https://drive.google.com/thumbnail?id=1Z785OXthws8sKJgu34WB-fa5vgWduN0_&sz=w200",
+    "filePath": "1Z785OXthws8sKJgu34WB-fa5vgWduN0_",
+    "type": "whatsapp_image",
+    "timestamp": "2026-05-14T17:40:12.329Z"
+  },
+  {
+    "id": "fd1eed50-65e2-4897-bab0-f8c6357f7fdc",
+    "customerId": "160370253656172",
+    "customerName": "Legend",
+    "fileName": "160370253656172_20260514_175931_video.mp4",
+    "fileUrl": "https://drive.google.com/thumbnail?id=1cxZrLOGa3zUGkUDe1BcxO7dKTi8a_l68&sz=w200",
+    "filePath": "1cxZrLOGa3zUGkUDe1BcxO7dKTi8a_l68",
+    "type": "whatsapp_image",
+    "timestamp": "2026-05-14T17:59:42.296Z"
+  },
+  {
+    "id": "d4b3b381-d221-4e69-9b5a-447634fd25aa",
+    "customerId": "160370253656172",
+    "customerName": "Legend",
+    "fileName": "160370253656172_20260514_175940_video.mp4",
+    "fileUrl": "https://drive.google.com/thumbnail?id=125VPuLKPXFwjvAA5v8VQ0KrgxGZcZUgh&sz=w200",
+    "filePath": "125VPuLKPXFwjvAA5v8VQ0KrgxGZcZUgh",
+    "type": "whatsapp_image",
+    "timestamp": "2026-05-14T17:59:48.421Z"
+  }
+]

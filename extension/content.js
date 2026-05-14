@@ -8,6 +8,43 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (window._ccFloatingInit) return;
   window._ccFloatingInit = true;
 
+  // ── Phase A: Job Dispatch Detection ────────────────────────────────────────
+  // Frontend opens form URL with ?cc_job=<jobId>. Content script detects this and
+  // signals background to fetch dispatch envelope and run the runtime.
+  function checkJobDispatch() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const jobId = params.get('cc_job');
+      if (!jobId) return;
+      // Strip param so it doesn't fire twice on reload
+      const url = new URL(window.location.href);
+      url.searchParams.delete('cc_job');
+      window.history.replaceState(null, '', url.toString());
+      // Fetch envelope from backend, then send to background
+      chrome.storage.local.get(['backendUrl', 'accessToken'], async ({ backendUrl, accessToken }) => {
+        if (!backendUrl || !accessToken) { console.warn('[CC] cc_job param but not authenticated'); return; }
+        try {
+          const r = await fetch(backendUrl + '/jobs/' + jobId + '/dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+          });
+          const d = await r.json();
+          if (!d.ok || !d.dispatch) { console.error('[CC] dispatch failed:', d); return; }
+          const envelope = { type: 'DISPATCH_JOB', version: '1.0', ...d.dispatch };
+          // Wait briefly for page DOM to be ready
+          setTimeout(() => {
+            chrome.runtime.sendMessage(envelope, (resp) => {
+              if (chrome.runtime.lastError) console.error('[CC] dispatch sendMessage failed:', chrome.runtime.lastError);
+              else console.log('[CC] dispatch accepted:', resp);
+            });
+          }, 1500);
+        } catch (e) { console.error('[CC] cc_job dispatch error:', e); }
+      });
+    } catch (e) { console.warn('[CC] checkJobDispatch failed:', e.message); }
+  }
+  checkJobDispatch();
+
+
   // Guard: check if extension context is still valid
   function isContextValid() {
     try { return !!chrome.runtime?.id; } catch { return false; }

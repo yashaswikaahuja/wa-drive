@@ -13,9 +13,11 @@ const STATUS_STYLE: Record<string, string> = {
   needs_review: 'bg-orange-500/20 text-orange-400',
   completed: 'bg-green-500/20 text-green-400',
   cancelled: 'bg-red-500/20 text-red-400',
+  failed: 'bg-red-500/20 text-red-400',
 };
 const STATUS_LABEL: Record<string, string> = {
-  queued: 'Queued', in_progress: 'In Progress', needs_review: 'Needs Review', completed: 'Completed', cancelled: 'Cancelled',
+  queued: 'Queued', in_progress: 'In Progress', needs_review: 'Review Required',
+  completed: 'Completed', cancelled: 'Cancelled', failed: 'Failed',
 };
 
 export default function Jobs() {
@@ -25,8 +27,6 @@ export default function Jobs() {
 
   const load = () => { api.get(filter ? `/jobs?status=${filter}` : '/jobs').then(r => setJobs(r.data)).catch(() => {}); };
   useEffect(load, [filter]);
-
-  const update = async (id: string, status: string) => { await api.patch(`/jobs/${id}`, { status }); load(); };
 
   return (
     <div>
@@ -46,20 +46,17 @@ export default function Jobs() {
       ) : (
         <div className="space-y-2">
           {jobs.map(j => (
-            <div key={j.id} className="bg-[#0d1220] border border-white/5 rounded-xl p-4">
+            <div key={j.id} onClick={() => navigate(`/app/jobs/${j.id}`)}
+              className="bg-[#0d1220] border border-white/5 rounded-xl p-4 cursor-pointer hover:border-blue-500/30 transition">
               <div className="flex items-center gap-3">
                 <span className="text-xl">{j.service_icon}</span>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-white">{j.customer_name}</p>
                   <p className="text-xs text-gray-500">{j.service_label}</p>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-medium ${STATUS_STYLE[j.status]}`}>{STATUS_LABEL[j.status]}</span>
-              </div>
-              <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
-                {j.status === 'queued' && <Btn onClick={() => update(j.id, 'in_progress')} label="▶ Start" />}
-                {j.status === 'in_progress' && <Btn onClick={() => update(j.id, 'needs_review')} label="👁 Review" />}
-                {j.status === 'needs_review' && <Btn onClick={() => update(j.id, 'completed')} label="✓ Complete" />}
-                {!['completed','cancelled'].includes(j.status) && <Btn onClick={() => update(j.id, 'cancelled')} label="✕ Cancel" red />}
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-medium ${STATUS_STYLE[j.status] || 'bg-white/5 text-gray-400'}`}>
+                  {STATUS_LABEL[j.status] || j.status}
+                </span>
               </div>
             </div>
           ))}
@@ -67,8 +64,4 @@ export default function Jobs() {
       )}
     </div>
   );
-}
-
-function Btn({ onClick, label, red }: { onClick: () => void; label: string; red?: boolean }) {
-  return <button onClick={onClick} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${red ? 'text-red-400 hover:bg-red-500/10' : 'text-blue-400 hover:bg-blue-500/10'}`}>{label}</button>;
 }
