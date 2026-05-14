@@ -21,12 +21,12 @@ export default function WhatsApp() {
   useEffect(() => {
     api.get('/whatsapp/status').then(r => setConnected(r.data.connected)).catch(() => {});
 
-    // Load existing inbox messages
-    api.get('/inbox/list').then(r => {
-      const msgs: Message[] = r.data.map((m: any) => ({
-        id: m.id, phone: m.phone || 'unknown', name: m.senderName || m.phone || 'Unknown',
-        fileName: m.file || undefined, text: m.text || undefined,
-        isImage: m.isImage, timestamp: m.time, fileUrl: m.filePath ? API_URL.replace('/api','') + '/inbox/file/' + m.id : undefined
+    // Load existing files from persistent store
+    api.get('/files').then(r => {
+      const msgs: Message[] = r.data.map((f: any) => ({
+        id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
+        fileName: f.fileName, fileUrl: f.fileUrl, isImage: f.type === 'whatsapp_image',
+        timestamp: f.timestamp
       }));
       groupMessages(msgs);
     }).catch(() => {});

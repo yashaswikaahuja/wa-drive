@@ -1,4 +1,5 @@
 import dotenv from "dotenv"; dotenv.config({ path: "/opt/cybercontrol-hub/backend/.env" });
+import { saveWhatsAppFile } from "./db.js";
 import express from 'express';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
@@ -385,6 +386,8 @@ app.post('/api/worker/upload', upload.single('file'), async (req, res) => {
             timestamp: new Date().toISOString(),
             profilePicUrl: profilePicUrl || null,
         });
+        // Persist file record for /api/files endpoint
+        await saveWhatsAppFile(phone, senderName, fileName, `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, fileId);
         res.json({ fileUrl: file.data.webContentLink, fileId });
     }
     catch (e) {
