@@ -4,134 +4,45 @@
   <meta charset="utf-8">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-    body { width: 320px; background: #0f172a; color: #e2e8f0; }
-    .header { background: #1e293b; padding: 12px 16px; border-bottom: 1px solid #334155; }
-    .header h1 { font-size: 14px; font-weight: 700; color: #60a5fa; }
-    .header span { font-size: 10px; color: #64748b; }
-    .section { padding: 12px 16px; }
-    .label { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
-    input { width: 100%; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 7px 10px; color: #e2e8f0; font-size: 12px; outline: none; margin-bottom: 6px; }
-    input:focus { border-color: #3b82f6; }
-    .btn { width: 100%; padding: 9px; border-radius: 6px; border: none; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
-    .btn-primary { background: #2563eb; color: white; }
-    .btn-primary:hover:not(:disabled) { background: #1d4ed8; }
-    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-sm { background: #1e293b; color: #94a3b8; border: 1px solid #334155; font-size: 11px; padding: 6px; margin-top: 6px; }
-    .btn-sm:hover { color: white; }
-    .btn-teach { background: #dc2626; color: white; border: none; font-size: 11px; padding: 7px; margin-top: 6px; border-radius: 6px; }
-    .btn-save { background: #7c3aed; color: white; border: none; font-size: 11px; padding: 7px; margin-top: 6px; border-radius: 6px; }
-    .profile-card { background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
-    .profile-card:hover, .profile-card.selected { border-color: #3b82f6; background: #1e3a5f; }
-    .profile-name { font-size: 12px; font-weight: 600; }
-    .profile-meta { font-size: 10px; color: #64748b; margin-top: 2px; }
-    .status { padding: 7px 10px; border-radius: 6px; font-size: 11px; text-align: center; margin-top: 8px; }
-    .success { background: #064e3b; color: #6ee7b7; }
-    .error { background: #450a0a; color: #fca5a5; }
-    .info { background: #1e3a5f; color: #93c5fd; }
-    hr { border: none; border-top: 1px solid #334155; margin: 4px 0; }
-    .profiles-list { max-height: 180px; overflow-y: auto; }
-    .empty { text-align: center; padding: 16px; color: #475569; font-size: 11px; }
-
-    /* Result panel */
-    #result-panel { display:none; margin-top: 8px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; padding: 10px; }
-    .result-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
-    .result-ok { color: #6ee7b7; }
-    .result-warn { color: #fbbf24; }
-    .result-fail { color: #f87171; }
-    #unresolved-list { margin-top: 6px; }
-    .unresolved-item { font-size: 10px; padding: 3px 6px; background: #450a0a; border-radius: 4px; margin-bottom: 3px; display: flex; justify-content: space-between; }
-    .adapter-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
-    .adapter-learned { background: #064e3b; color: #6ee7b7; }
-    .adapter-missing { background: #451a03; color: #fbbf24; }
-    /* Login screen */
-    #login-screen { padding: 16px; }
-    #login-screen h2 { font-size: 13px; color: #60a5fa; margin-bottom: 12px; }
-    #login-screen .error-msg { color: #f87171; font-size: 11px; margin-top: 6px; display: none; }
-    #main-app { display: none; }
-    .user-badge { font-size: 10px; color: #6ee7b7; float: right; cursor: pointer; }
-    .user-badge:hover { color: #f87171; }
+    body { width: 280px; background: #0f172a; color: #e2e8f0; padding: 16px; }
+    .header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .logo { width: 32px; height: 32px; border-radius: 8px; background: rgba(96,165,250,0.2); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .title { font-size: 13px; font-weight: 700; color: #60a5fa; }
+    .subtitle { font-size: 10px; color: #64748b; }
+    .status-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+    .status-row { display: flex; align-items: center; gap: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.green { background: #22c55e; }
+    .dot.red { background: #ef4444; }
+    .status-text { font-size: 12px; font-weight: 600; }
+    .status-detail { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+    .open-link { display: block; width: 100%; margin-top: 10px; padding: 9px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; text-align: center; cursor: pointer; text-decoration: none; }
+    .open-link:hover { background: #1d4ed8; }
+    .ver { font-size: 9px; color: #64748b; text-align: center; margin-top: 12px; }
+    a { color: inherit; }
   </style>
 </head>
 <body>
-  <!-- Login Screen -->
-  <div id="login-screen">
-    <div class="header">
-      <h1>⚡ CyberControl AutoFill</h1>
-      <span>Login to continue</span>
-    </div>
-    <div class="section">
-      <div class="label">Backend URL</div>
-      <input type="text" id="login-backend-url" placeholder="https://xxx.trycloudflare.com" />
-      <div class="label">Email or Phone</div>
-      <input type="text" id="login-identity" placeholder="email@example.com or 98xxxxxxxx" />
-      <div class="label">Password</div>
-      <input type="password" id="login-password" placeholder="Password" />
-      <button class="btn btn-primary" id="login-btn">🔐 Login</button>
-      <div class="error-msg" id="login-error"></div>
-    </div>
-  </div>
-
-  <!-- Main App (shown after auth) -->
-  <div id="main-app">
   <div class="header">
-    <h1>⚡ CyberControl AutoFill <span class="user-badge" id="user-badge" title="Click to logout"></span></h1>
-    <span>SSC · Railway · RTPS · BTSC · Bank</span>
-  </div>
-
-  <div id="update-banner" style="display:none; background:#7c3aed; color:white; padding:8px 12px; font-size:11px; text-align:center;">
-    🆕 New version available! <a id="update-link" href="#" target="_blank" style="color:#e9d5ff; font-weight:bold;">Download Update</a> → reload extension
-  </div>
-
-  <div class="section">
-    <div class="label">Backend URL</div>
-    <input type="text" id="backend-url" placeholder="https://xxx.trycloudflare.com/api" />
-    <div class="label">Groq API Key (for AI matching)</div>
-    <input type="password" id="groq-key" placeholder="gsk_..." />
-    <button class="btn btn-sm" id="save-settings">💾 Save Settings</button>
-  </div>
-
-  <hr>
-
-  <div class="section">
-    <div class="label">Student Profile</div>
-    <div class="profiles-list" id="profiles-list">
-      <div class="empty">Enter backend URL and save settings.</div>
+    <div class="logo">⚡</div>
+    <div>
+      <div class="title">CyberControl AutoFill</div>
+      <div class="subtitle">Connected runtime client</div>
     </div>
-    <button class="btn btn-sm" id="refresh-btn">🔄 Refresh</button>
   </div>
 
-  <hr>
-
-  <div class="section">
-    <button class="btn btn-primary" id="autofill-btn" disabled>⚡ Auto-fill This Form</button>
-
-    <!-- Result panel shown after autofill -->
-    <div id="result-panel">
-      <div class="result-row">
-        <span>✓ Text / Select fields filled</span>
-        <span class="result-ok" id="count-filled">0</span>
-      </div>
-      <div class="result-row" id="row-unresolved" style="display:none">
-        <span>⚠ Interactive fields unresolved</span>
-        <span class="result-warn" id="count-unresolved">0</span>
-      </div>
-      <div id="unresolved-list"></div>
+  <div class="status-card">
+    <div class="status-row">
+      <div class="dot red" id="conn-dot"></div>
+      <div class="status-text" id="conn-text">Not connected</div>
     </div>
-
-    <button class="btn btn-teach btn-secondary" id="teach-btn" style="display:none;">⚠ Teach Failed Fields</button>
-    <button class="btn btn-save btn-secondary" id="save-learning-btn" style="display:none;">🧠 Save Mapping</button>
-    <div id="status" style="display:none" class="status"></div>
+    <div class="status-detail" id="conn-detail">Login to CyberControl in your browser</div>
   </div>
 
-  </div><!-- /main-app -->
-  <script src="shared/apiClient.js"></script>
-  <script src="shared/label-utils.js"></script>
-  <script src="autofill/mapper.js"></script>
-  <script src="autofill/extractor.js"></script>
-  <script src="autofill/executor.js"></script>
-  <script src="runtime/teach-runtime.js"></script>
-  <script src="runtime/correction-runtime.js"></script>
+  <a href="https://frontend-pi-ochre-71.vercel.app" target="_blank" class="open-link">Open CyberControl Workspace →</a>
+
+  <div class="ver" id="ver">v5.32</div>
+
   <script src="popup.js"></script>
-<script src="autofill/planner.js"></script>
 </body>
 </html>
