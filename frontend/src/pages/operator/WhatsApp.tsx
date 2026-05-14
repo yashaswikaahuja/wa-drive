@@ -143,18 +143,50 @@ export default function WhatsApp() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {[...activeChat.messages].reverse().map(msg => (
-                <div key={msg.id} className="max-w-[70%]">
-                  <div className="bg-[#1a2236] rounded-lg p-3">
-                    {msg.isImage && msg.fileUrl && <a href={msg.fileUrl} target="_blank" rel="noreferrer"><img src={msg.fileUrl} className="rounded max-w-full max-h-48 mb-2 cursor-pointer hover:opacity-80" /></a>}
-                    {msg.fileName && !msg.isImage && (
-                      <a href={msg.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-400 hover:underline">📄 {msg.fileName}</a>
+              {[...activeChat.messages].reverse().map(msg => {
+                const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
+                const isImg = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
+                const isVideo = ['mp4','3gp','mov','avi','mkv','webm'].includes(ext);
+                const isPdf = ext === 'pdf';
+                const isAudio = ['mp3','ogg','wav','aac','m4a','opus'].includes(ext);
+                const thumbUrl = msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl;
+                return (
+                <div key={msg.id} className="max-w-[75%]">
+                  <div className="bg-[#1a2236] rounded-lg overflow-hidden">
+                    {isImg && thumbUrl && (
+                      <a href={thumbUrl} target="_blank" rel="noreferrer">
+                        <img src={thumbUrl} className="w-full max-h-56 object-cover cursor-pointer hover:opacity-90" />
+                      </a>
                     )}
-                    {msg.text && <p className="text-sm text-gray-300">{msg.text}</p>}
+                    {isVideo && (
+                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="block relative">
+                        <div className="w-full h-40 bg-black/50 flex items-center justify-center"><span className="text-4xl">▶️</span></div>
+                      </a>
+                    )}
+                    {isPdf && (
+                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 hover:bg-white/5">
+                        <span className="text-3xl">📕</span>
+                        <div><p className="text-sm text-white">{msg.fileName}</p><p className="text-[10px] text-gray-500">PDF Document</p></div>
+                      </a>
+                    )}
+                    {isAudio && (
+                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 hover:bg-white/5">
+                        <span className="text-3xl">🎵</span>
+                        <div><p className="text-sm text-white">{msg.fileName}</p><p className="text-[10px] text-gray-500">Audio</p></div>
+                      </a>
+                    )}
+                    {!isImg && !isVideo && !isPdf && !isAudio && msg.fileName && (
+                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 hover:bg-white/5">
+                        <span className="text-3xl">📄</span>
+                        <div><p className="text-sm text-white">{msg.fileName}</p><p className="text-[10px] text-gray-500">{ext.toUpperCase()} File</p></div>
+                      </a>
+                    )}
+                    {msg.text && <p className="text-sm text-gray-300 p-3">{msg.text}</p>}
                   </div>
                   <p className="text-[10px] text-gray-600 mt-1">{new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}
