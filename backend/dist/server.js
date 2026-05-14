@@ -73,8 +73,11 @@ app.use(express.json());
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/process', processRoutes);
-app.use('/api/profiles', profilesRoutes);
-app.use('/api/mappings', mappingsRoutes);
+// Inject pool into req for route handlers
+app.use((req, res, next) => { req.pool = pool; next(); });
+
+app.use('/api/profiles', authMiddleware, profilesRoutes);
+app.use('/api/mappings', authMiddleware, mappingsRoutes);
 app.get('/api/adapters/validate', async (req, res) => {
   if (req.headers['x-admin-token'] !== ADMIN_TOKEN) return res.status(401).json({ error: 'unauthorized' });
   if (_validating) return res.json({ error: 'already running' });
@@ -580,15 +583,26 @@ const SESSIONS_FILE = '/opt/cybercontrol-hub/backend/data/sessions.json';
 function loadSessions() { return existsSync(SESSIONS_FILE) ? JSON.parse(readFileSync(SESSIONS_FILE,'utf8')) : []; }
 function saveSessions(s) { writeFileSync(SESSIONS_FILE, JSON.stringify(s.slice(-500), null, 2)); } // keep last 500
 
-app.post('/api/sessions', (req, res) => {
-  const session = { ...req.body, id: Date.now().toString(36), receivedAt: new Date().toISOString() };
-  const sessions = loadSessions();
-  sessions.unshift(session);
-  saveSessions(sessions);
-  res.json({ ok: true, id: session.id });
+app.post('/api/sessions', authMiddleware, async (req, res) => {
+  try {
+    const { hostname, semanticFormKey, runtimeVersion, totalFilled, totalFailed, records } = req.body;
+    const { rows } = await pool.query(
+      "INSERT INTO sessions (workspace_id, user_id, hostname, semantic_form_key, runtime_version, schema_version, total_filled, total_failed, records) VALUES ($1,$2,$3,$4,$5,'1.0',$6,$7,$8) RETURNING id",
+      [req.user.workspaceId, req.user.userId, hostname, semanticFormKey || null, runtimeVersion, totalFilled || 0, totalFailed || 0, JSON.stringify(records || [])]
+    );
+    res.json({ ok: true, id: rows[0].id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/sessions', (_req, res) => res.json(loadSessions().slice(0, 50)));
+app.get('/api/sessions', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", runtime_version as \"runtimeVersion\", total_filled as \"totalFilled\", total_failed as \"totalFailed\", records, submitted_at, created_at as \"receivedAt\" FROM sessions WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 50",
+      [req.user.workspaceId]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 
 // ── Corrections (operator supervision signal) ──────────────────────────────
@@ -596,16 +610,26 @@ const correctionsPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../
 function loadCorrections() { try { return JSON.parse(readFileSync(correctionsPath, 'utf8')); } catch { return []; } }
 function saveCorrections(d) { writeFileSync(correctionsPath, JSON.stringify(d, null, 2)); }
 
-app.post('/api/corrections', (req, res) => {
-  const record = { ...req.body, id: Date.now().toString(36), receivedAt: new Date().toISOString() };
-  const corrections = loadCorrections();
-  corrections.unshift(record);
-  if (corrections.length > 500) corrections.length = 500;
-  saveCorrections(corrections);
-  res.json({ ok: true, id: record.id });
+app.post('/api/corrections', authMiddleware, async (req, res) => {
+  try {
+    const { hostname, semanticFormKey, trigger, corrections } = req.body;
+    const { rows } = await pool.query(
+      "INSERT INTO corrections (workspace_id, user_id, hostname, semantic_form_key, trigger, runtime_version, corrections) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
+      [req.user.workspaceId, req.user.userId, hostname, semanticFormKey || null, trigger, req.body.runtimeVersion || null, JSON.stringify(corrections || [])]
+    );
+    res.json({ ok: true, id: rows[0].id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/corrections', (_req, res) => res.json(loadCorrections().slice(0, 100)));
+app.get('/api/corrections', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", trigger, corrections, created_at as \"receivedAt\" FROM corrections WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 100",
+      [req.user.workspaceId]
+    );
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.get('/api/sessions/stats', (_req, res) => {
   const sessions = loadSessions();
@@ -724,7 +748,8 @@ app.post('/api/ai/plan', async (req, res) => {
 
 
 // ── /api/training/episodes — Convert runtime traces into trainable episodes ──
-app.get('/api/training/episodes', (_req, res) => {
+app.get('/api/training/episodes', authMiddleware, async (_req, res) => {
+  const req = _req;
   const sessions = loadSessions();
   const corrections = loadCorrections();
   const corrByHost = {};
