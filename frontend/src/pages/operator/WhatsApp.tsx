@@ -150,40 +150,35 @@ export default function WhatsApp() {
                 const isPdf = ext === 'pdf';
                 const isAudio = ['mp3','ogg','wav','aac','m4a','opus'].includes(ext);
                 const thumbUrl = msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl;
-                return (
-                <div key={msg.id} className="max-w-[75%]">
-                  <div className="bg-[#1a2236] rounded-lg overflow-hidden">
-                    {isImg && thumbUrl && (
-                      <a href={thumbUrl} target="_blank" rel="noreferrer">
-                        <img src={thumbUrl} className="max-w-[280px] max-h-[280px] object-contain rounded cursor-pointer hover:opacity-90" />
-                      </a>
-                    )}
-                    {isVideo && (
-                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="block relative">
-                        <div className="w-full h-40 bg-black/50 flex items-center justify-center"><span className="text-4xl">▶️</span></div>
-                      </a>
-                    )}
-                    {isPdf && (
-                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 hover:bg-white/5">
-                        <span className="text-3xl">📕</span>
-                        <div><p className="text-sm text-white">{msg.fileName}</p><p className="text-[10px] text-gray-500">PDF Document</p></div>
-                      </a>
-                    )}
-                    {isAudio && (
-                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 hover:bg-white/5">
-                        <span className="text-3xl">🎵</span>
-                        <div><p className="text-sm text-white">{msg.fileName}</p><p className="text-[10px] text-gray-500">Audio</p></div>
-                      </a>
-                    )}
-                    {!isImg && !isVideo && !isPdf && !isAudio && msg.fileName && (
-                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 p-3 hover:bg-white/5">
-                        <span className="text-3xl">📄</span>
-                        <div><p className="text-sm text-white">{msg.fileName}</p><p className="text-[10px] text-gray-500">{ext.toUpperCase()} File</p></div>
-                      </a>
-                    )}
-                    {msg.text && <p className="text-sm text-gray-300 p-3">{msg.text}</p>}
+                const typeLabel = isImg ? 'Photo' : isVideo ? 'Video' : isPdf ? 'PDF Document' : isAudio ? 'Audio' : ext ? ext.toUpperCase()+' File' : 'Message';
+                const typeIcon = isImg ? '🖼️' : isVideo ? '🎬' : isPdf ? '📕' : isAudio ? '🎵' : '📄';
+                const timeAgo = (() => { const d=Date.now()-new Date(msg.timestamp).getTime(); return d<60000?'just now':d<3600000?Math.floor(d/60000)+'m ago':d<86400000?Math.floor(d/3600000)+'h ago':new Date(msg.timestamp).toLocaleDateString(); })();
+                if (msg.text && !msg.fileName) return (
+                  <div key={msg.id} className="bg-[#1a2236] rounded-lg px-3 py-2 max-w-[80%]">
+                    <p className="text-sm text-gray-300">{msg.text}</p>
+                    <p className="text-[10px] text-gray-600 mt-1">{timeAgo}</p>
                   </div>
-                  <p className="text-[10px] text-gray-600 mt-1">{new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+                );
+                return (
+                <div key={msg.id} className="bg-[#1a2236] border border-white/5 rounded-lg p-2.5 flex gap-3 max-w-[420px] hover:border-blue-500/20 transition group">
+                  {/* Thumbnail */}
+                  <a href={thumbUrl} target="_blank" rel="noreferrer" className="shrink-0">
+                    {isImg ? (
+                      <img src={thumbUrl} className="w-16 h-16 object-cover rounded-md" />
+                    ) : (
+                      <div className="w-16 h-16 rounded-md bg-white/5 flex items-center justify-center text-2xl">{typeIcon}</div>
+                    )}
+                  </a>
+                  {/* Metadata */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-white truncate">{msg.fileName || 'Unknown'}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{typeLabel} · {timeAgo}</p>
+                    {/* Actions */}
+                    <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
+                      <a href={thumbUrl} target="_blank" rel="noreferrer" className="text-[10px] px-2 py-0.5 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</a>
+                      <a href={thumbUrl} download className="text-[10px] px-2 py-0.5 rounded bg-white/5 text-gray-400 hover:text-white">Download</a>
+                    </div>
+                  </div>
                 </div>
                 );
               })}
