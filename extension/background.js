@@ -22,6 +22,33 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 // Also wake via message (more reliable than storage for sleeping SW)
+
+// ── Auth State Management ──────────────────────────────────────────────────
+// Background owns auth state. On startup, validate and refresh token.
+async function validateAuth() {
+  const { accessToken, refreshToken, backendUrl } = await chrome.storage.local.get(['accessToken', 'refreshToken', 'backendUrl']);
+  if (!accessToken || !backendUrl) return;
+  try {
+    const res = await fetch(backendUrl + '/auth/me', { headers: { 'Authorization': 'Bearer ' + accessToken } });
+    if (res.ok) { console.log('[CC] Auth valid'); return; }
+    // Try refresh
+    if (refreshToken) {
+      const rRes = await fetch(backendUrl + '/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
+      if (rRes.ok) {
+        const data = await rRes.json();
+        await chrome.storage.local.set({ accessToken: data.accessToken, refreshToken: data.refreshToken });
+        console.log('[CC] Auth refreshed');
+      } else {
+        await chrome.storage.local.remove(['accessToken', 'refreshToken', 'user']);
+        console.log('[CC] Auth expired, cleared');
+      }
+    }
+  } catch (e) { console.log('[CC] Auth check failed:', e.message); }
+}
+validateAuth();
+// Re-validate every 10 minutes
+setInterval(validateAuth, 10 * 60 * 1000);
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'TEACH_JOB') {
     const job = msg.job;

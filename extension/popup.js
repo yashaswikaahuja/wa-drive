@@ -1,5 +1,62 @@
-const CURRENT_VERSION = '5.29';
+const CURRENT_VERSION = '5.30';
 let selectedProfile = null;
+
+// ── Auth Gate ──────────────────────────────────────────────────────────────
+(async () => {
+  const { accessToken, user, backendUrl } = await chrome.storage.local.get(['accessToken', 'user', 'backendUrl']);
+  if (accessToken && backendUrl) {
+    // Validate token
+    try {
+      const res = await fetch(backendUrl + '/auth/me', { headers: { 'Authorization': 'Bearer ' + accessToken } });
+      if (res.ok) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+        const u = user || await res.json();
+        document.getElementById('user-badge').textContent = '👤 ' + (u.name || u.email || 'User') + ' ✕';
+        return;
+      }
+    } catch {}
+    // Try refresh
+    const refreshed = await apiClient.refresh();
+    if (refreshed) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('main-app').style.display = 'block';
+      if (user) document.getElementById('user-badge').textContent = '👤 ' + (user.name || 'User') + ' ✕';
+      return;
+    }
+  }
+  // Show login
+  document.getElementById('login-screen').style.display = 'block';
+  document.getElementById('main-app').style.display = 'none';
+  if (backendUrl) document.getElementById('login-backend-url').value = backendUrl;
+})();
+
+// Login handler
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const backendUrl = document.getElementById('login-backend-url').value.trim().replace(/\/+$/, '');
+  const identity = document.getElementById('login-identity').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!backendUrl || !identity || !password) { errEl.textContent = 'All fields required'; errEl.style.display = 'block'; return; }
+  try {
+    await chrome.storage.local.set({ backendUrl });
+    const data = await apiClient.login(identity.includes('@') ? identity : null, identity.includes('@') ? null : identity, password);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'block';
+    document.getElementById('user-badge').textContent = '👤 ' + (data.user.name || identity) + ' ✕';
+    location.reload();
+  } catch (e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+});
+
+// Logout handler
+document.addEventListener('click', async (e) => {
+  if (e.target.id === 'user-badge') {
+    await apiClient.logout();
+    location.reload();
+  }
+});
+
 
 // Check for updates on every popup open
 chrome.storage.local.get(['backendUrl'], async (result) => {
@@ -134,7 +191,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
     for (const key of [primaryKey, formKey]) {
       if (!key) continue;
       try {
-        const res = await fetch(`${backendUrl}/mappings/${key}`);
+        const res = await apiClient.request(`/mappings/${key}`);
         const data = await res.json();
         if (data && typeof data === 'object' && Object.keys(data).length > 0) { savedMapping = data; break; }
       } catch { /* ignore */ }
@@ -254,7 +311,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
   if (backendUrl) {
     try {
       const hostname = new URL(tab.url).hostname;
-      const ar = await fetch(`${backendUrl}/adapters/${hostname}`);
+      const ar = await apiClient.request(`/adapters/${hostname}`);
       portalAdapters = await ar.json();
       console.log('[CC] portalAdapters loaded:', Object.keys(portalAdapters));
     } catch (e) { console.warn('[CC] adapter fetch failed:', e.message); }
@@ -486,7 +543,7 @@ document.getElementById('autofill-btn').addEventListener('click', async () => {
       totalFilled: replayRecords.filter(r => r.result === 'filled').length,
       totalFailed: replayRecords.filter(r => ['skipped','error','reset'].includes(r.result)).length,
     };
-    await fetch(`${backendUrl}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(session) }).catch(() => {});
+    await apiClient.post('/sessions', session).catch(() => {});
 
     // ── Failure Display: show operator what needs manual attention ──
     const failures = replayRecords.filter(r => r.result !== 'filled');
@@ -767,7 +824,7 @@ async function loadProfiles(backendUrl) {
   const list = document.getElementById('profiles-list');
   list.innerHTML = '<div class="empty">Loading...</div>';
   try {
-    const res = await fetch(`${backendUrl}/profiles`);
+    const res = await apiClient.request('/profiles');
     const profiles = await res.json();
     if (!Array.isArray(profiles) || !profiles.length) {
       list.innerHTML = '<div class="empty">No profiles saved yet.<br>Use CyberControl to save student profiles.</div>';
@@ -815,7 +872,7 @@ async function saveLearning(backendUrl, formKey, filledBySource, profile, fromCo
     };
   }
   if (Object.keys(updates).length > 0) {
-    fetch(`${backendUrl}/mappings/${formKey}`, {
+    apiClient.post(`/mappings/${formKey}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates, formKey }),
     }).catch(() => {});

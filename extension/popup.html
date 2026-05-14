@@ -43,11 +43,38 @@
     .adapter-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
     .adapter-learned { background: #064e3b; color: #6ee7b7; }
     .adapter-missing { background: #451a03; color: #fbbf24; }
+    /* Login screen */
+    #login-screen { padding: 16px; }
+    #login-screen h2 { font-size: 13px; color: #60a5fa; margin-bottom: 12px; }
+    #login-screen .error-msg { color: #f87171; font-size: 11px; margin-top: 6px; display: none; }
+    #main-app { display: none; }
+    .user-badge { font-size: 10px; color: #6ee7b7; float: right; cursor: pointer; }
+    .user-badge:hover { color: #f87171; }
   </style>
 </head>
 <body>
+  <!-- Login Screen -->
+  <div id="login-screen">
+    <div class="header">
+      <h1>⚡ CyberControl AutoFill</h1>
+      <span>Login to continue</span>
+    </div>
+    <div class="section">
+      <div class="label">Backend URL</div>
+      <input type="text" id="login-backend-url" placeholder="https://xxx.trycloudflare.com" />
+      <div class="label">Email or Phone</div>
+      <input type="text" id="login-identity" placeholder="email@example.com or 98xxxxxxxx" />
+      <div class="label">Password</div>
+      <input type="password" id="login-password" placeholder="Password" />
+      <button class="btn btn-primary" id="login-btn">🔐 Login</button>
+      <div class="error-msg" id="login-error"></div>
+    </div>
+  </div>
+
+  <!-- Main App (shown after auth) -->
+  <div id="main-app">
   <div class="header">
-    <h1>⚡ CyberControl AutoFill</h1>
+    <h1>⚡ CyberControl AutoFill <span class="user-badge" id="user-badge" title="Click to logout"></span></h1>
     <span>SSC · Railway · RTPS · BTSC · Bank</span>
   </div>
 
@@ -96,6 +123,8 @@
     <div id="status" style="display:none" class="status"></div>
   </div>
 
+  </div><!-- /main-app -->
+  <script src="shared/apiClient.js"></script>
   <script src="shared/label-utils.js"></script>
   <script src="autofill/mapper.js"></script>
   <script src="autofill/extractor.js"></script>
