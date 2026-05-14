@@ -42,15 +42,15 @@ function normalizeWhatsAppFiles(files: RawWhatsAppFile[]): WhatsAppFile[] {
 }
 
 export async function fetchWhatsAppFiles(): Promise<WhatsAppFile[]> {
-  const { data } = await api.get<RawWhatsAppFile[]>(`${API_BASE_URL}/files?type=whatsapp_image`);
+  const { data } = await api.get<RawWhatsAppFile[]>('/files?type=whatsapp_image');
   return normalizeWhatsAppFiles(data);
 }
 
 export async function fetchWhatsAppStatus(): Promise<boolean> {
-  const { data } = await api.get<{ connected: boolean }>(`${API_BASE_URL}/whatsapp/status`);
+  const { data } = await api.get<{ connected: boolean }>('/whatsapp/status');
   return data.connected;
 }
 
 export async function deleteWhatsAppFile(id: string): Promise<void> {
-  await api.delete(`${API_BASE_URL}/files/${id}`);
+  await api.delete(`/files/${id}`);
 }
