@@ -14,8 +14,12 @@ export default function WhatsApp() {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Check status
+    // Check status + load existing files
     api.get('/whatsapp/status').then(r => { setConnected(r.data.connected); setLoading(false); }).catch(() => setLoading(false));
+    api.get('/inbox/list').then(r => {
+      const inbox = r.data.filter((m: any) => m.filePath);
+      setFiles(inbox.map((m: any) => ({ id: m.id, fileName: m.file || m.filePath, from: m.from || '', timestamp: m.time || '' })));
+    }).catch(() => {});
 
     // Connect socket
     const baseUrl = API_URL.replace('/api', '');
