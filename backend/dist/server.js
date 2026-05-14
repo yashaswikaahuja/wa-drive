@@ -1,6 +1,7 @@
 import dotenv from "dotenv"; dotenv.config({ path: "/opt/cybercontrol-hub/backend/.env" });
 import { saveWhatsAppFile } from "./db.js";
 import express from 'express';
+import compression from 'compression';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -58,6 +59,7 @@ import adaptersRoutes from './api/routes/adapters.routes.js';
 const WORKER_SECRET = process.env['WORKER_SECRET'] ?? 'worker-secret';
 const PORT = Number(process.env['PORT'] ?? 3000);
 const app = express();
+app.use(compression());
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, { cors: { origin: '*', methods: ['GET', 'POST'] } });
 app.use((req, res, next) => {
@@ -235,7 +237,12 @@ app.delete('/api/drive/files/:fileId', async (req, res) => {
         res.status(500).json({ error: 'Failed to delete' });
     }
 });
+let _driveFilesCache = { data: null, expires: 0 };
 app.get('/api/drive/files', async (_req, res) => {
+    // 60s cache to avoid repeated Drive API hits
+    if (_driveFilesCache.data && Date.now() < _driveFilesCache.expires) {
+      return res.json(_driveFilesCache.data);
+    }
     const drive = getDrive();
     if (!drive) {
         res.json([]);
@@ -281,6 +288,7 @@ app.get('/api/drive/files', async (_req, res) => {
             }
         }
         allFiles.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        _driveFilesCache = { data: allFiles, expires: Date.now() + 60000 };
         res.json(allFiles);
     }
     catch {
@@ -599,11 +607,26 @@ app.post('/api/sessions', authMiddleware, async (req, res) => {
 
 app.get('/api/sessions', authMiddleware, async (req, res) => {
   try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    // Summary only — no records JSONB
     const { rows } = await pool.query(
-      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", runtime_version as \"runtimeVersion\", total_filled as \"totalFilled\", total_failed as \"totalFailed\", records, submitted_at, created_at as \"receivedAt\" FROM sessions WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 50",
-      [req.user.workspaceId]
+      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", runtime_version as \"runtimeVersion\", total_filled as \"totalFilled\", total_failed as \"totalFailed\", submitted_at, created_at as \"receivedAt\" FROM sessions WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+      [req.user.workspaceId, limit, offset]
     );
     res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Drill-down endpoint with full records
+app.get('/api/sessions/:id', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", runtime_version as \"runtimeVersion\", total_filled as \"totalFilled\", total_failed as \"totalFailed\", records, submitted_at, created_at as \"receivedAt\" FROM sessions WHERE id = $1 AND workspace_id = $2",
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -626,11 +649,25 @@ app.post('/api/corrections', authMiddleware, async (req, res) => {
 
 app.get('/api/corrections', authMiddleware, async (req, res) => {
   try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    // Summary: count of corrections, not full JSONB
     const { rows } = await pool.query(
-      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", trigger, corrections, created_at as \"receivedAt\" FROM corrections WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT 100",
-      [req.user.workspaceId]
+      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", trigger, jsonb_array_length(corrections) as \"correctionCount\", created_at as \"receivedAt\" FROM corrections WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+      [req.user.workspaceId, limit, offset]
     );
     res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/corrections/:id', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      "SELECT id, hostname, semantic_form_key as \"semanticFormKey\", trigger, corrections, created_at as \"receivedAt\" FROM corrections WHERE id = $1 AND workspace_id = $2",
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -955,6 +992,30 @@ app.patch('/api/jobs/:id', authMiddleware, async (req, res) => {
     if (!rowCount) return res.status(404).json({ error: 'Job not found' });
     await auditLog(req.user.workspaceId, req.user.userId, 'job_update', 'job', req.params.id, { status });
     res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// Aggregated dashboard stats — single query, counts only
+app.get('/api/dashboard/stats', authMiddleware, async (req, res) => {
+  try {
+    const ws = req.user.workspaceId;
+    const [sessions, corrections, profiles, jobs] = await Promise.all([
+      pool.query("SELECT COUNT(*) as total, COALESCE(SUM(total_filled), 0) as filled, COALESCE(SUM(total_failed), 0) as failed FROM sessions WHERE workspace_id = $1", [ws]),
+      pool.query("SELECT COUNT(*) as total FROM corrections WHERE workspace_id = $1", [ws]),
+      pool.query("SELECT COUNT(*) as total FROM profiles WHERE workspace_id = $1 AND deleted_at IS NULL", [ws]),
+      pool.query("SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = 'queued') as queued, COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress FROM jobs WHERE workspace_id = $1", [ws]),
+    ]);
+    res.json({
+      sessions: parseInt(sessions.rows[0].total),
+      filled: parseInt(sessions.rows[0].filled),
+      failed: parseInt(sessions.rows[0].failed),
+      corrections: parseInt(corrections.rows[0].total),
+      profiles: parseInt(profiles.rows[0].total),
+      jobs: parseInt(jobs.rows[0].total),
+      jobsQueued: parseInt(jobs.rows[0].queued),
+      jobsInProgress: parseInt(jobs.rows[0].in_progress),
+    });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -6,14 +6,9 @@ export default function Overview() {
 
   useEffect(() => {
     Promise.all([
-      api.get('/sessions').then(r => r.data),
-      api.get('/corrections').then(r => r.data),
-      api.get('/profiles').then(r => r.data),
-      api.get('/jobs').then(r => r.data),
-    ]).then(([sessions, corrections, profiles, jobs]) => {
-      const filled = sessions.reduce((s: number, x: any) => s + (x.totalFilled || 0), 0);
-      const failed = sessions.reduce((s: number, x: any) => s + (x.totalFailed || 0), 0);
-      // Top forms by session count
+      api.get('/dashboard/stats').then(r => r.data),
+      api.get('/sessions?limit=20').then(r => r.data),
+    ]).then(([stats, sessions]) => {
       const formCounts: Record<string, { host: string; count: number }> = {};
       sessions.forEach((s: any) => {
         const key = s.hostname || 'unknown';
@@ -21,7 +16,7 @@ export default function Overview() {
         formCounts[key].count++;
       });
       const topForms = Object.values(formCounts).sort((a, b) => b.count - a.count).slice(0, 5);
-      setData({ sessions: sessions.length, filled, failed, corrections: corrections.length, profiles: profiles.length, jobs: jobs.length, topForms });
+      setData({ ...stats, topForms });
     }).catch(() => {});
   }, []);
 

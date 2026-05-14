@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import api, { API_URL } from '../../lib/api';
 
@@ -8,14 +8,13 @@ interface Message {
 }
 interface Chat { phone: string; name: string; lastTime: string; messages: Message[]; newCount: number; }
 
-// Infer semantic document title from filename
 function docTitle(fileName: string): { title: string; badge: string; icon: string } {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return { title: 'Photo', badge: 'IMG', icon: '🖼️' };
   if (['mp4','3gp','mov','avi','webm'].includes(ext)) return { title: 'Video', badge: 'VID', icon: '🎬' };
   if (ext === 'pdf') return { title: 'PDF Document', badge: 'PDF', icon: '📕' };
   if (['mp3','ogg','wav','aac','opus'].includes(ext)) return { title: 'Audio', badge: 'AUD', icon: '🎵' };
-  return { title: 'Document', badge: ext.toUpperCase() or 'FILE', icon: '📄' };
+  return { title: 'Document', badge: ext.toUpperCase() || 'FILE', icon: '📄' };
 }
 
 function timeAgo(ts: string): string {
@@ -23,13 +22,89 @@ function timeAgo(ts: string): string {
   if (d < 60000) return 'just now';
   if (d < 3600000) return Math.floor(d / 60000) + 'm ago';
   if (d < 86400000) return Math.floor(d / 3600000) + 'h ago';
-  const date = new Date(ts);
-  const today = new Date(); today.setHours(0,0,0,0);
-  const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
-  if (date >= today) return 'Today';
-  if (date >= yesterday) return 'Yesterday';
-  return date.toLocaleDateString();
+  return new Date(ts).toLocaleDateString();
 }
+
+// Lazy thumbnail with intersection observer — only loads when visible
+const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?: string }) => {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!ref.current || visible) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setVisible(true); obs.disconnect(); }
+    }, { rootMargin: '100px' });
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [visible]);
+
+  const isImg = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
+  const isVideo = ['mp4','3gp','mov','avi','webm'].includes(ext);
+
+  return (
+    <div ref={ref} className="w-[72px] h-[72px] rounded-xl bg-white/5 relative overflow-hidden">
+      {visible && src && (
+        <>
+          <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt} />
+          {ext === 'pdf' && <span className="absolute bottom-1 right-1 text-[8px] px-1 py-0.5 rounded bg-red-600/80 text-white font-bold">PDF</span>}
+          {isVideo && <span className="absolute inset-0 flex items-center justify-center"><span className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">▶</span></span>}
+        </>
+      )}
+    </div>
+  );
+});
+
+// Memoized message card — only re-renders if msg changes
+const MessageCard = memo(({ msg, onClick }: { msg: Message; onClick: (m: Message) => void }) => {
+  const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
+  const thumbUrl = msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl;
+  const { title, badge } = docTitle(msg.fileName || '');
+
+  if (msg.text && !msg.fileName) return (
+    <div className="bg-[#1a2236] rounded-lg px-3 py-2 max-w-[80%]">
+      <p className="text-sm text-gray-300">{msg.text}</p>
+      <p className="text-[10px] text-gray-600 mt-1">{timeAgo(msg.timestamp)}</p>
+    </div>
+  );
+
+  return (
+    <div className="bg-[#1a2236] border border-white/5 rounded-xl p-3 flex gap-3 max-w-[480px] hover:border-blue-500/20 transition group">
+      <div onClick={() => onClick(msg)} className="shrink-0 cursor-pointer">
+        <LazyThumbnail src={thumbUrl} ext={ext} alt={title} />
+      </div>
+      <div className="flex-1 min-w-0 flex flex-col justify-between">
+        <div>
+          <p className="text-sm font-medium text-white">{title}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}</p>
+        </div>
+        <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
+          <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
+        </div>
+      </div>
+      <div className="shrink-0">
+        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400">NEW</span>
+      </div>
+    </div>
+  );
+});
+
+// Memoized chat list item
+const ChatItem = memo(({ chat, selected, onClick }: { chat: Chat; selected: boolean; onClick: (phone: string) => void }) => (
+  <div onClick={() => onClick(chat.phone)}
+    className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selected ? 'bg-blue-600/10' : ''}`}>
+    <div className="flex items-center gap-2.5">
+      <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 text-xs font-bold shrink-0">
+        {chat.name[0]?.toUpperCase() || '?'}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-white font-medium truncate">{chat.name}</p>
+        <p className="text-[11px] text-gray-500">{chat.newCount} document{chat.newCount !== 1 ? 's' : ''}</p>
+      </div>
+      <span className="text-[10px] text-gray-600 shrink-0">{timeAgo(chat.lastTime)}</span>
+    </div>
+  </div>
+));
 
 export default function WhatsApp() {
   const [connected, setConnected] = useState(false);
@@ -61,7 +136,7 @@ export default function WhatsApp() {
     return () => { socket.disconnect(); };
   }, []);
 
-  const groupMessages = (msgs: Message[]) => {
+  const groupMessages = useCallback((msgs: Message[]) => {
     const map = new Map<string, Chat>();
     msgs.forEach(m => {
       const key = m.phone;
@@ -72,9 +147,9 @@ export default function WhatsApp() {
       chat.newCount = chat.messages.length;
     });
     setChats(map);
-  };
+  }, []);
 
-  const addMessage = (msg: Message) => {
+  const addMessage = useCallback((msg: Message) => {
     setChats(prev => {
       const map = new Map(prev);
       const key = msg.phone;
@@ -85,12 +160,16 @@ export default function WhatsApp() {
       chat.newCount++;
       return map;
     });
-  };
+  }, []);
 
-  const handleShowQR = async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); };
+  const handleShowQR = useCallback(async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); }, []);
+  const handleSelectChat = useCallback((phone: string) => setSelectedChat(phone), []);
+  const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
+  const handleCloseViewer = useCallback(() => setViewerFile(null), []);
 
-  const sortedChats = Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime));
+  const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
+  const reversedMessages = useMemo(() => activeChat ? [...activeChat.messages].reverse() : [], [activeChat]);
 
   if (!connected) {
     return (
@@ -110,7 +189,6 @@ export default function WhatsApp() {
 
   return (
     <div className="h-[calc(100vh-48px)] flex">
-      {/* Chat List */}
       <div className="w-72 border-r border-white/5 flex flex-col">
         <div className="p-3 border-b border-white/5 flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
@@ -121,27 +199,11 @@ export default function WhatsApp() {
           {sortedChats.length === 0 ? (
             <p className="text-center text-gray-600 text-xs py-8">No documents received</p>
           ) : sortedChats.map(chat => (
-            <div key={chat.phone} onClick={() => setSelectedChat(chat.phone)}
-              className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selectedChat === chat.phone ? 'bg-blue-600/10' : ''}`}>
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 text-xs font-bold shrink-0">
-                  {chat.name[0]?.toUpperCase() || '?'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{chat.name}</p>
-                  <p className="text-[11px] text-gray-500">{chat.newCount} document{chat.newCount !== 1 ? 's' : ''}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-[10px] text-gray-600">{timeAgo(chat.lastTime)}</span>
-                  {chat.newCount > 0 && <div className="w-4 h-4 rounded-full bg-blue-500 text-[9px] text-white flex items-center justify-center mt-1 ml-auto">{chat.newCount}</div>}
-                </div>
-              </div>
-            </div>
+            <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} />
           ))}
         </div>
       </div>
 
-      {/* Document Panel */}
       <div className="flex-1 flex flex-col">
         {!activeChat ? (
           <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">Select a customer to view documents</div>
@@ -157,66 +219,18 @@ export default function WhatsApp() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {[...activeChat.messages].reverse().map(msg => {
-                if (msg.text && !msg.fileName) return (
-                  <div key={msg.id} className="bg-[#1a2236] rounded-lg px-3 py-2 max-w-[80%]">
-                    <p className="text-sm text-gray-300">{msg.text}</p>
-                    <p className="text-[10px] text-gray-600 mt-1">{timeAgo(msg.timestamp)}</p>
-                  </div>
-                );
-                const { title, badge, icon } = docTitle(msg.fileName || '');
-                const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
-                const isImg = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
-                const thumbUrl = msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl;
-                return (
-                  <div key={msg.id} className="bg-[#1a2236] border border-white/5 rounded-xl p-3 flex gap-3 max-w-[480px] hover:border-blue-500/20 transition group">
-                    {/* Thumbnail */}
-                    <a href={thumbUrl} target="_blank" rel="noreferrer" className="shrink-0">
-                      {thumbUrl ? (
-                        <div className="relative">
-                          <img src={thumbUrl} className="w-[72px] h-[72px] object-cover rounded-xl bg-white/5" loading="lazy" />
-                          {ext === 'pdf' && <span className="absolute bottom-1 right-1 text-[8px] px-1 py-0.5 rounded bg-red-600/80 text-white font-bold">PDF</span>}
-                          {['mp4','3gp','mov','avi','webm'].includes(ext) && <span className="absolute inset-0 flex items-center justify-center"><span className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">▶</span></span>}
-                        </div>
-                      ) : (
-                        <div className="w-[72px] h-[72px] rounded-xl bg-white/5 flex flex-col items-center justify-center">
-                          <span className="text-2xl">{icon}</span>
-                          <span className="text-[9px] text-gray-500 mt-1">{badge}</span>
-                        </div>
-                      )}
-                    </div>
-                    {/* Content */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-white">{title}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}</p>
-                      </div>
-                      {/* Actions */}
-                      <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
-                        <button onClick={() => setViewerFile(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
-                        <a href={thumbUrl} download className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-gray-400 hover:text-white">Download</a>
-                        <button className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-gray-400 hover:text-white">Link</button>
-                      </div>
-                    </div>
-                    {/* Status badge */}
-                    <div className="shrink-0">
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400">NEW</span>
-                    </div>
-                  </div>
-                );
-              })}
+              {reversedMessages.map(msg => (
+                <MessageCard key={msg.id} msg={msg} onClick={handleOpenFile} />
+              ))}
             </div>
           </>
         )}
       </div>
-    </div>
 
-      {/* Document Viewer Modal */}
       {viewerFile && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setViewerFile(null)}>
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={handleCloseViewer}>
           <div className="absolute top-4 right-4 flex gap-3 z-10">
-            <a href={(() => { const did = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; return did ? `https://drive.google.com/uc?export=download&id=${did}` : viewerFile.fileUrl || ''; })()} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">Download</a>
-            <button onClick={() => setViewerFile(null)} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">✕ Close</button>
+            <button onClick={handleCloseViewer} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">✕ Close</button>
           </div>
           <div className="absolute top-4 left-4 z-10">
             <p className="text-white text-sm font-medium">{docTitle(viewerFile.fileName || '').title}</p>
