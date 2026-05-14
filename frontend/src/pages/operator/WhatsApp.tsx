@@ -146,9 +146,9 @@ export default function WhatsApp() {
               {[...activeChat.messages].reverse().map(msg => (
                 <div key={msg.id} className="max-w-[70%]">
                   <div className="bg-[#1a2236] rounded-lg p-3">
-                    {msg.isImage && msg.fileUrl && <img src={msg.fileUrl} className="rounded max-w-full max-h-48 mb-2" />}
+                    {msg.isImage && msg.fileUrl && <a href={msg.fileUrl} target="_blank" rel="noreferrer"><img src={msg.fileUrl} className="rounded max-w-full max-h-48 mb-2 cursor-pointer hover:opacity-80" /></a>}
                     {msg.fileName && !msg.isImage && (
-                      <div className="flex items-center gap-2 text-sm text-blue-400">📄 {msg.fileName}</div>
+                      <a href={msg.fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-sm text-blue-400 hover:underline">📄 {msg.fileName}</a>
                     )}
                     {msg.text && <p className="text-sm text-gray-300">{msg.text}</p>}
                   </div>
