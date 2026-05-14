@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import api, { API_URL } from '../../lib/api';
 import { useAuthStore } from '../../stores/auth';
@@ -6,6 +6,13 @@ import { useAuthStore } from '../../stores/auth';
 export default function Settings() {
   const { user, logout } = useAuthStore();
   const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('disconnected');
+
+  // Check Drive connection on mount
+  useEffect(() => {
+    fetch(API_URL + '/drive/files').then(r => r.json()).then(d => {
+      if (Array.isArray(d) && d.length > 0) setDriveStatus('connected');
+    }).catch(() => {});
+  }, []);
 
   const login = useGoogleLogin({
     scope: 'https://www.googleapis.com/auth/drive.file',
