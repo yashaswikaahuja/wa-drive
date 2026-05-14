@@ -6,6 +6,8 @@ import Dashboard from './pages/operator/Dashboard';
 import Customers from './pages/operator/Customers';
 import Jobs from './pages/operator/Jobs';
 import NewJob from './pages/operator/NewJob';
+import WhatsApp from './pages/operator/WhatsApp';
+import Stitch from './pages/operator/Stitch';
 import Overview from './pages/admin/Overview';
 import Sessions from './pages/admin/Sessions';
 import Corrections from './pages/admin/Corrections';
@@ -22,6 +24,8 @@ export default function App() {
           <Route path="/app/customers" element={<Customers />} />
           <Route path="/app/jobs" element={<Jobs />} />
           <Route path="/app/jobs/new" element={<NewJob />} />
+          <Route path="/app/whatsapp" element={<WhatsApp />} />
+          <Route path="/app/stitch" element={<Stitch />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Placeholder title="Settings" />} />
           <Route path="/admin" element={<Overview />} />

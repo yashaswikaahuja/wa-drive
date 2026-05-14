@@ -5,6 +5,7 @@ const OPERATOR_NAV = [
   { path: '/app', icon: '📊', label: 'Dashboard', end: true },
   { path: '/app/customers', icon: '👥', label: 'Customers' },
   { path: '/app/jobs', icon: '📋', label: 'Jobs' },
+  { path: '/app/whatsapp', icon: '💬', label: 'WhatsApp' },
   { path: '/app/documents', icon: '📄', label: 'Documents' },
   { path: '/app/settings', icon: '⚙️', label: 'Settings' },
 ];
