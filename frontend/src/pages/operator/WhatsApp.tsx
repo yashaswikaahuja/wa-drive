@@ -155,7 +155,7 @@ export default function WhatsApp() {
                   <div className="bg-[#1a2236] rounded-lg overflow-hidden">
                     {isImg && thumbUrl && (
                       <a href={thumbUrl} target="_blank" rel="noreferrer">
-                        <img src={thumbUrl} className="w-full max-h-56 object-cover cursor-pointer hover:opacity-90" />
+                        <img src={thumbUrl} className="max-w-[280px] max-h-[280px] object-contain rounded cursor-pointer hover:opacity-90" />
                       </a>
                     )}
                     {isVideo && (
