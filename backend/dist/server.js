@@ -1075,6 +1075,110 @@ app.get('/api/dashboard/stats', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Phase A: Service Execution Dispatch ───────────────────────────────────
+// Backend orchestrates: creates session, transitions job state, returns dispatch payload.
+// Frontend never owns execution logic.
+
+// POST /api/jobs/:id/dispatch — start job execution
+app.post('/api/jobs/:id/dispatch', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Load job + profile + service in one query
+    const { rows } = await client.query(`
+      SELECT j.id, j.status, j.metadata, j.service_type,
+             p.id as profile_id, p.name as profile_name, p.data as profile_data, p.primary_contact_phone,
+             st.label as service_label, st.execution_type, st.requires_extension, st.config as service_config
+      FROM jobs j
+      JOIN profiles p ON j.profile_id = p.id
+      JOIN service_types st ON j.service_type = st.id
+      WHERE j.id = $1 AND j.workspace_id = $2
+    `, [req.params.id, req.user.workspaceId]);
+    if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Job not found' }); }
+    const job = rows[0];
+    if (job.status !== 'queued' && job.status !== 'failed') {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: `Job is ${job.status}, cannot dispatch` });
+    }
+    // Create session
+    const sessionResult = await client.query(`
+      INSERT INTO sessions (workspace_id, user_id, profile_id, hostname, runtime_version, schema_version, total_filled, total_failed, records)
+      VALUES ($1,$2,$3,$4,$5,'1.0',0,0,'[]'::jsonb) RETURNING id
+    `, [req.user.workspaceId, req.user.userId, job.profile_id, job.metadata?.hostname || '', '5.30']);
+    const sessionId = sessionResult.rows[0].id;
+    // Transition job
+    await client.query(
+      "UPDATE jobs SET status = 'in_progress', session_id = $1, started_at = now(), updated_at = now() WHERE id = $2",
+      [sessionId, job.id]
+    );
+    await client.query('COMMIT');
+    await auditLog(req.user.workspaceId, req.user.userId, 'job_dispatch', 'job', job.id, { sessionId });
+    // Build dispatch payload — what the extension needs to execute
+    const payload = {
+      jobId: job.id,
+      sessionId,
+      serviceType: job.service_type,
+      executionType: job.execution_type,
+      requiresExtension: job.requires_extension,
+      profile: job.profile_data || {},
+      profileName: job.profile_name,
+      profilePhone: job.primary_contact_phone,
+      serviceLabel: job.service_label,
+      metadata: job.metadata || {},
+      // For form_filling: include hostname/url if specified in job metadata
+      formUrl: job.metadata?.formUrl || null,
+    };
+    // Emit to socket subscribers (frontend listening on job:{id} channel)
+    io.emit(`job:${job.id}:dispatched`, { jobId: job.id, sessionId, status: 'in_progress' });
+    res.json({ ok: true, dispatch: payload });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
+// PATCH /api/jobs/:id/progress — extension reports progress
+app.patch('/api/jobs/:id/progress', authMiddleware, async (req, res) => {
+  const { sessionId, totalFilled, totalFailed, records, currentField, status, failReason } = req.body;
+  try {
+    // Verify job belongs to workspace
+    const { rows } = await pool.query(
+      "SELECT id, status FROM jobs WHERE id = $1 AND workspace_id = $2",
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Job not found' });
+    // Update session if provided
+    if (sessionId && (totalFilled !== undefined || records)) {
+      const updates = [];
+      const params = [];
+      let pi = 1;
+      if (totalFilled !== undefined) { updates.push(`total_filled = $${pi}`); params.push(totalFilled); pi++; }
+      if (totalFailed !== undefined) { updates.push(`total_failed = $${pi}`); params.push(totalFailed); pi++; }
+      if (records) { updates.push(`records = $${pi}::jsonb`); params.push(JSON.stringify(records)); pi++; }
+      if (updates.length) {
+        params.push(sessionId, req.user.workspaceId);
+        await pool.query(`UPDATE sessions SET ${updates.join(', ')} WHERE id = $${pi} AND workspace_id = $${pi+1}`, params);
+      }
+    }
+    // Transition job status if requested
+    if (status) {
+      const VALID = ['in_progress', 'needs_review', 'completed', 'failed'];
+      if (!VALID.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+      const updates = ['status = $1', 'updated_at = now()'];
+      const params = [status];
+      let pi = 2;
+      if (status === 'completed' || status === 'failed') { updates.push('completed_at = now()'); }
+      if (failReason) { updates.push(`notes = $${pi}`); params.push(failReason); pi++; }
+      params.push(req.params.id, req.user.workspaceId);
+      await pool.query(`UPDATE jobs SET ${updates.join(', ')} WHERE id = $${pi} AND workspace_id = $${pi+1}`, params);
+    }
+    // Emit progress to frontend subscribers
+    io.emit(`job:${req.params.id}:progress`, { jobId: req.params.id, totalFilled, totalFailed, currentField, status });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
