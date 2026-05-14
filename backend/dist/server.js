@@ -891,6 +891,70 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SERVICES + JOBS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/services — list available service types
+app.get('/api/services', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query("SELECT id, label, icon, execution_type, requires_extension, requires_review, requires_documents, requires_whatsapp FROM service_types WHERE active = true ORDER BY sort_order");
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/jobs — create new job
+app.post('/api/jobs', authMiddleware, async (req, res) => {
+  const { profileId, serviceType, metadata, notes } = req.body;
+  if (!profileId || !serviceType) return res.status(400).json({ error: 'profileId and serviceType required' });
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO jobs (workspace_id, user_id, profile_id, service_type, metadata, notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, status, created_at",
+      [req.user.workspaceId, req.user.userId, profileId, serviceType, metadata ? JSON.stringify(metadata) : null, notes || null]
+    );
+    await auditLog(req.user.workspaceId, req.user.userId, 'job_create', 'job', rows[0].id, { serviceType, profileId });
+    res.json({ ok: true, job: rows[0] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/jobs — list jobs for workspace
+app.get('/api/jobs', authMiddleware, async (req, res) => {
+  const status = req.query.status;
+  try {
+    let q = "SELECT j.id, j.status, j.service_type, j.metadata, j.notes, j.started_at, j.completed_at, j.created_at, j.updated_at, p.name as customer_name, p.primary_contact_phone as customer_phone, st.label as service_label, st.icon as service_icon FROM jobs j JOIN profiles p ON j.profile_id = p.id JOIN service_types st ON j.service_type = st.id WHERE j.workspace_id = $1";
+    const params = [req.user.workspaceId];
+    if (status) { q += " AND j.status = $2"; params.push(status); }
+    q += " ORDER BY j.created_at DESC LIMIT 100";
+    const { rows } = await pool.query(q, params);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/jobs/:id — update job status
+app.patch('/api/jobs/:id', authMiddleware, async (req, res) => {
+  const { status, notes, sessionId } = req.body;
+  if (!status) return res.status(400).json({ error: 'status required' });
+  const VALID = ['queued', 'in_progress', 'needs_review', 'completed', 'cancelled'];
+  if (!VALID.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  try {
+    const updates = ["status = $1", "updated_at = now()"];
+    const params = [status];
+    let pi = 2;
+    if (status === 'in_progress') { updates.push(`started_at = now()`); }
+    if (status === 'completed' || status === 'cancelled') { updates.push(`completed_at = now()`); }
+    if (notes) { updates.push(`notes = $${pi}`); params.push(notes); pi++; }
+    if (sessionId) { updates.push(`session_id = $${pi}`); params.push(sessionId); pi++; }
+    params.push(req.params.id, req.user.workspaceId);
+    const { rowCount } = await pool.query(
+      `UPDATE jobs SET ${updates.join(', ')} WHERE id = $${pi} AND workspace_id = $${pi+1}`, params
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Job not found' });
+    await auditLog(req.user.workspaceId, req.user.userId, 'job_update', 'job', req.params.id, { status });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {

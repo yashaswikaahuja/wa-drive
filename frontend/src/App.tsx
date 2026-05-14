@@ -4,10 +4,11 @@ import Login from './pages/Login';
 import Layout from './components/Layout';
 import Dashboard from './pages/operator/Dashboard';
 import Customers from './pages/operator/Customers';
+import Jobs from './pages/operator/Jobs';
+import NewJob from './pages/operator/NewJob';
 
 export default function App() {
   const { isAuthenticated } = useAuthStore();
-
   if (!isAuthenticated) return <Login />;
 
   return (
@@ -16,7 +17,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/app" element={<Dashboard />} />
           <Route path="/app/customers" element={<Customers />} />
-          <Route path="/app/jobs" element={<Placeholder title="Jobs" />} />
+          <Route path="/app/jobs" element={<Jobs />} />
+          <Route path="/app/jobs/new" element={<NewJob />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Placeholder title="Settings" />} />
           <Route path="/admin" element={<Placeholder title="Admin Overview" />} />
@@ -32,9 +34,5 @@ export default function App() {
 }
 
 function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <p className="text-gray-500 text-lg">{title} — coming soon</p>
-    </div>
-  );
+  return <div className="flex items-center justify-center h-64"><p className="text-gray-500 text-lg">{title} — coming soon</p></div>;
 }
