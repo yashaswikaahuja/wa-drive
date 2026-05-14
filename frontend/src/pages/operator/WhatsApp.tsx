@@ -22,7 +22,7 @@ export default function WhatsApp() {
     api.get('/whatsapp/status').then(r => setConnected(r.data.connected)).catch(() => {});
 
     // Load existing files from persistent store
-    api.get('/files').then(r => {
+    api.get('/drive/files').then(r => {
       const msgs: Message[] = r.data.map((f: any) => ({
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
         fileName: f.fileName, fileUrl: f.fileUrl, isImage: f.type === 'whatsapp_image',
