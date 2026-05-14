@@ -2,99 +2,163 @@ import { useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import api, { API_URL } from '../../lib/api';
 
-interface ReceivedFile {
-  id: string; fileName: string; from: string; timestamp: string; fileUrl?: string;
+interface Message {
+  id: string; phone: string; name: string; fileName?: string; text?: string;
+  fileUrl?: string; isImage?: boolean; timestamp: string; type?: string;
+}
+
+interface Chat {
+  phone: string; name: string; lastMessage: string; lastTime: string; messages: Message[];
 }
 
 export default function WhatsApp() {
   const [connected, setConnected] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
-  const [files, setFiles] = useState<ReceivedFile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [chats, setChats] = useState<Map<string, Chat>>(new Map());
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    // Check status + load existing files
-    api.get('/whatsapp/status').then(r => { setConnected(r.data.connected); setLoading(false); }).catch(() => setLoading(false));
+    api.get('/whatsapp/status').then(r => setConnected(r.data.connected)).catch(() => {});
+
+    // Load existing inbox messages
     api.get('/inbox/list').then(r => {
-      const inbox = r.data.filter((m: any) => m.filePath);
-      setFiles(inbox.map((m: any) => ({ id: m.id, fileName: m.file || m.filePath, from: m.from || '', timestamp: m.time || '' })));
+      const msgs: Message[] = r.data.map((m: any) => ({
+        id: m.id, phone: m.phone || 'unknown', name: m.senderName || m.phone || 'Unknown',
+        fileName: m.file || undefined, text: m.text || undefined,
+        isImage: m.isImage, timestamp: m.time, fileUrl: m.filePath ? API_URL.replace('/api','') + '/inbox/file/' + m.id : undefined
+      }));
+      groupMessages(msgs);
     }).catch(() => {});
 
-    // Connect socket
+    // Socket for real-time
     const baseUrl = API_URL.replace('/api', '');
     const socket = io(baseUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
-    socket.on('connection:status', (data: any) => {
-      setConnected(data.connected);
-      if (data.connected) setQrCode(null);
-    });
-    socket.on('qr', (data: any) => { setQrCode(data.qr || data); });
+    socket.on('connection:status', (data: any) => { setConnected(data.connected); if (data.connected) setQrCode(null); });
+    socket.on('qr', (data: any) => setQrCode(data.qr || data));
     socket.on('new_whatsapp_file', (file: any) => {
-      setFiles(prev => [{ id: file.id || Date.now().toString(), fileName: file.fileName, from: file.from || file.sender || '', timestamp: file.timestamp || new Date().toISOString(), fileUrl: file.fileUrl }, ...prev]);
+      const msg: Message = {
+        id: file.id || Date.now().toString(), phone: file.phoneNumber || file.customerId || 'unknown',
+        name: file.customerName || file.phoneNumber || 'Unknown', fileName: file.fileName,
+        fileUrl: file.fileUrl, isImage: file.type === 'image', timestamp: file.timestamp || new Date().toISOString()
+      };
+      addMessage(msg);
     });
 
     return () => { socket.disconnect(); };
   }, []);
 
-  const handleGetQR = async () => {
-    try {
-      const r = await api.get('/whatsapp/qr');
-      if (r.data.qrCode) setQrCode(r.data.qrCode);
-    } catch {}
+  const groupMessages = (msgs: Message[]) => {
+    const map = new Map<string, Chat>();
+    msgs.forEach(m => {
+      const key = m.phone;
+      if (!map.has(key)) map.set(key, { phone: key, name: m.name, lastMessage: '', lastTime: m.timestamp, messages: [] });
+      const chat = map.get(key)!;
+      chat.messages.push(m);
+      if (m.timestamp > chat.lastTime) { chat.lastTime = m.timestamp; chat.lastMessage = m.fileName || m.text || ''; }
+    });
+    setChats(map);
   };
 
-  const handleReconnect = async () => { await api.post('/whatsapp/reinit', {}); };
-  const handleLogout = async () => { await api.post('/whatsapp/logout', {}); setConnected(false); };
+  const addMessage = (msg: Message) => {
+    setChats(prev => {
+      const map = new Map(prev);
+      const key = msg.phone;
+      if (!map.has(key)) map.set(key, { phone: key, name: msg.name, lastMessage: '', lastTime: msg.timestamp, messages: [] });
+      const chat = map.get(key)!;
+      chat.messages.unshift(msg);
+      chat.lastMessage = msg.fileName || msg.text || '';
+      chat.lastTime = msg.timestamp;
+      return map;
+    });
+  };
+
+  const handleShowQR = async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); };
+
+  const sortedChats = Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime));
+  const activeChat = selectedChat ? chats.get(selectedChat) : null;
+
+  // Not connected - show QR
+  if (!connected) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center">
+        <h2 className="text-lg font-bold text-white mb-4">Connect WhatsApp</h2>
+        {qrCode ? (
+          <div className="bg-white p-4 rounded-lg mb-4">
+            <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
+          </div>
+        ) : (
+          <button onClick={handleShowQR} className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700">Show QR Code</button>
+        )}
+        <p className="text-xs text-gray-500 mt-2">Scan with WhatsApp to connect</p>
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <h1 className="text-xl font-bold text-white mb-6">WhatsApp</h1>
-
-      {/* Connection Status */}
-      <div className="bg-[#0d1220] border border-white/5 rounded-xl p-5 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span className="text-sm text-white font-medium">{connected ? 'Connected' : 'Disconnected'}</span>
-          </div>
-          <div className="flex gap-2">
-            {!connected && <button onClick={handleGetQR} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700">Show QR</button>}
-            {!connected && <button onClick={handleReconnect} className="px-3 py-1.5 bg-white/5 text-gray-400 text-xs rounded-lg hover:text-white">Reconnect</button>}
-            {connected && <button onClick={handleLogout} className="px-3 py-1.5 bg-red-600/20 text-red-400 text-xs rounded-lg hover:bg-red-600/30">Disconnect</button>}
-          </div>
+    <div className="h-[calc(100vh-48px)] flex">
+      {/* Chat List (left) */}
+      <div className="w-72 border-r border-white/5 flex flex-col">
+        <div className="p-3 border-b border-white/5 flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+          <span className="text-sm text-white font-medium">WhatsApp</span>
+          <span className="text-[10px] text-gray-500 ml-auto">{sortedChats.length} chats</span>
         </div>
-
-        {/* QR Code */}
-        {qrCode && !connected && (
-          <div className="mt-4 flex flex-col items-center">
-            <p className="text-xs text-gray-500 mb-3">Scan with WhatsApp to connect</p>
-            <div className="bg-white p-4 rounded-lg">
-              <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Received Files */}
-      <h2 className="text-sm font-medium text-gray-400 mb-3">Received Files</h2>
-      {files.length === 0 ? (
-        <p className="text-gray-600 text-sm text-center py-8">No files received yet. Documents sent via WhatsApp will appear here.</p>
-      ) : (
-        <div className="space-y-2">
-          {files.map(f => (
-            <div key={f.id} className="bg-[#0d1220] border border-white/5 rounded-xl p-4 flex items-center gap-3">
-              <span className="text-lg">📄</span>
-              <div className="flex-1">
-                <p className="text-sm text-white">{f.fileName}</p>
-                <p className="text-xs text-gray-500">From: {f.from}</p>
+        <div className="flex-1 overflow-y-auto">
+          {sortedChats.length === 0 ? (
+            <p className="text-center text-gray-600 text-xs py-8">No messages yet</p>
+          ) : sortedChats.map(chat => (
+            <div key={chat.phone} onClick={() => setSelectedChat(chat.phone)}
+              className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selectedChat === chat.phone ? 'bg-blue-600/10' : ''}`}>
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 text-xs font-bold shrink-0">
+                  {chat.name[0]?.toUpperCase() || '?'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{chat.name}</p>
+                  <p className="text-[11px] text-gray-500 truncate">{chat.lastMessage || 'No messages'}</p>
+                </div>
+                <span className="text-[10px] text-gray-600 shrink-0">{new Date(chat.lastTime).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
               </div>
-              <p className="text-[10px] text-gray-600">{new Date(f.timestamp).toLocaleTimeString()}</p>
             </div>
           ))}
         </div>
-      )}
+      </div>
+
+      {/* Chat View (right) */}
+      <div className="flex-1 flex flex-col">
+        {!activeChat ? (
+          <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">Select a chat</div>
+        ) : (
+          <>
+            <div className="h-14 px-4 flex items-center gap-3 border-b border-white/5 shrink-0">
+              <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 font-bold text-sm">
+                {activeChat.name[0]?.toUpperCase()}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white">{activeChat.name}</p>
+                <p className="text-[10px] text-gray-500">{activeChat.phone}</p>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {[...activeChat.messages].reverse().map(msg => (
+                <div key={msg.id} className="max-w-[70%]">
+                  <div className="bg-[#1a2236] rounded-lg p-3">
+                    {msg.isImage && msg.fileUrl && <img src={msg.fileUrl} className="rounded max-w-full max-h-48 mb-2" />}
+                    {msg.fileName && !msg.isImage && (
+                      <div className="flex items-center gap-2 text-sm text-blue-400">📄 {msg.fileName}</div>
+                    )}
+                    {msg.text && <p className="text-sm text-gray-300">{msg.text}</p>}
+                  </div>
+                  <p className="text-[10px] text-gray-600 mt-1">{new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</p>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
