@@ -26,7 +26,7 @@ export default function Settings() {
   }, []);
 
   const handleGoogleDriveConnect = () => {
-    const redirectUri = window.location.origin + '/app/settings';
+    const redirectUri = window.location.origin;
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=consent`;
     window.location.href = authUrl;
   };

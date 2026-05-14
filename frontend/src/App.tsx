@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
 import Login from './pages/Login';
@@ -15,6 +16,23 @@ import Corrections from './pages/admin/Corrections';
 
 export default function App() {
   const { isAuthenticated } = useAuthStore();
+  // Handle Google OAuth callback (token in URL hash)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('access_token=')) {
+      const params = new URLSearchParams(hash.slice(1));
+      const accessToken = params.get('access_token');
+      if (accessToken) {
+        import('./lib/api').then(({ default: api }) => {
+          api.post('/drive/token', { accessToken }).then(() => {
+            window.history.replaceState(null, '', '/app/settings');
+            window.location.reload();
+          }).catch(() => {});
+        });
+      }
+    }
+  }, []);
+
   if (!isAuthenticated) return <Login />;
 
   return (
