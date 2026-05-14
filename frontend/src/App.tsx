@@ -6,6 +6,9 @@ import Dashboard from './pages/operator/Dashboard';
 import Customers from './pages/operator/Customers';
 import Jobs from './pages/operator/Jobs';
 import NewJob from './pages/operator/NewJob';
+import Overview from './pages/admin/Overview';
+import Sessions from './pages/admin/Sessions';
+import Corrections from './pages/admin/Corrections';
 
 export default function App() {
   const { isAuthenticated } = useAuthStore();
@@ -21,10 +24,10 @@ export default function App() {
           <Route path="/app/jobs/new" element={<NewJob />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Placeholder title="Settings" />} />
-          <Route path="/admin" element={<Placeholder title="Admin Overview" />} />
-          <Route path="/admin/corrections" element={<Placeholder title="Corrections" />} />
+          <Route path="/admin" element={<Overview />} />
+          <Route path="/admin/corrections" element={<Corrections />} />
+          <Route path="/admin/sessions" element={<Sessions />} />
           <Route path="/admin/mappings" element={<Placeholder title="Mappings" />} />
-          <Route path="/admin/sessions" element={<Placeholder title="Sessions" />} />
           <Route path="/admin/operators" element={<Placeholder title="Operators" />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Route>
