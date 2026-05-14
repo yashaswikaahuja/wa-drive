@@ -1,4 +1,43 @@
 import express from 'express';
+import pg from 'pg';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
+const { Pool } = pg;
+
+// ── Database Pool ──────────────────────────────────────────────────────────
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// ── JWT Config ─────────────────────────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret';
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY = '7d';
+
+function signAccessToken(payload) { return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY }); }
+function signRefreshToken(payload) { return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY }); }
+
+// ── Auth Middleware ────────────────────────────────────────────────────────
+function authMiddleware(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Bearer ')) return res.status(401).json({ error: 'No token' });
+  try {
+    const decoded = jwt.verify(header.slice(7), JWT_SECRET);
+    req.user = { userId: decoded.userId, workspaceId: decoded.workspaceId, role: decoded.role, sessionId: decoded.sessionId };
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+// ── Rate Limiting ──────────────────────────────────────────────────────────
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many attempts, try again later' } });
+
+// ── Audit Helper ───────────────────────────────────────────────────────────
+async function auditLog(workspaceId, userId, eventType, entityType, entityId, metadata) {
+  try { await pool.query('INSERT INTO audit_events (workspace_id, user_id, event_type, entity_type, entity_id, metadata) VALUES ($1,$2,$3,$4,$5,$6)', [workspaceId, userId, eventType, entityType, entityId, metadata ? JSON.stringify(metadata) : null]); } catch {}
+}
+
 import { writeFileSync, readFileSync, existsSync, mkdirSync, renameSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -722,6 +761,108 @@ app.get('/api/training/episodes', (_req, res) => {
     };
   });
   res.json({ schemaVersion: '1.0', totalEpisodes: episodes.length, episodes });
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUTH ROUTES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+app.post('/auth/register', authLimiter, async (req, res) => {
+  const { email, phone, password, name } = req.body;
+  if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  try {
+    const hash = await bcrypt.hash(password, 12);
+    // Create workspace + user in transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const wsResult = await client.query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id", [name || email || phone]);
+      const workspaceId = wsResult.rows[0].id;
+      const userResult = await client.query(
+        "INSERT INTO users (workspace_id, email, phone, password_hash, name, role) VALUES ($1,$2,$3,$4,$5,'admin') RETURNING id",
+        [workspaceId, email || null, phone || null, hash, name || null]
+      );
+      const userId = userResult.rows[0].id;
+      await client.query('COMMIT');
+      // Issue tokens
+      const payload = { userId, workspaceId, role: 'admin' };
+      const accessToken = signAccessToken(payload);
+      const refreshToken = signRefreshToken(payload);
+      // Store refresh session
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const sessResult = await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3) RETURNING id", [userId, refreshToken, expiresAt]);
+      await auditLog(workspaceId, userId, 'register', 'user', userId, { email, phone });
+      res.json({ ok: true, accessToken, refreshToken, user: { id: userId, workspaceId, email, phone, name, role: 'admin' } });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      if (e.code === '23505') return res.status(409).json({ error: 'Email or phone already registered' });
+      throw e;
+    } finally { client.release(); }
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/auth/login', authLimiter, async (req, res) => {
+  const { email, phone, password } = req.body;
+  if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
+  try {
+    const field = email ? 'email' : 'phone';
+    const value = email || phone;
+    const result = await pool.query(`SELECT id, workspace_id, password_hash, name, role, status FROM users WHERE ${field} = $1 AND deleted_at IS NULL`, [value]);
+    if (!result.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+    const user = result.rows[0];
+    if (user.status !== 'active') return res.status(403).json({ error: 'Account not active' });
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      await auditLog(user.workspace_id, user.id, 'login_failed', 'user', user.id, { field, value });
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    const payload = { userId: user.id, workspaceId: user.workspace_id, role: user.role };
+    const accessToken = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const sessResult = await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3) RETURNING id", [user.id, refreshToken, expiresAt]);
+    await auditLog(user.workspace_id, user.id, 'login', 'user', user.id, { field });
+    res.json({ ok: true, accessToken, refreshToken, user: { id: user.id, workspaceId: user.workspace_id, name: user.name, role: user.role } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/auth/refresh', async (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(400).json({ error: 'refreshToken required' });
+  try {
+    const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    // Verify session exists and not revoked
+    const sessResult = await pool.query("SELECT id, user_id FROM auth_sessions WHERE refresh_token = $1 AND revoked_at IS NULL AND expires_at > now()", [refreshToken]);
+    if (!sessResult.rows.length) return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    const sess = sessResult.rows[0];
+    // Rotate: revoke old, issue new
+    await pool.query("UPDATE auth_sessions SET revoked_at = now() WHERE id = $1", [sess.id]);
+    const payload = { userId: decoded.userId, workspaceId: decoded.workspaceId, role: decoded.role };
+    const newAccessToken = signAccessToken(payload);
+    const newRefreshToken = signRefreshToken(payload);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [decoded.userId, newRefreshToken, expiresAt]);
+    await auditLog(decoded.workspaceId, decoded.userId, 'token_refresh', 'auth_session', sess.id, null);
+    res.json({ ok: true, accessToken: newAccessToken, refreshToken: newRefreshToken });
+  } catch (e) { return res.status(401).json({ error: 'Invalid refresh token' }); }
+});
+
+app.post('/auth/logout', authMiddleware, async (req, res) => {
+  try {
+    await pool.query("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", [req.user.userId]);
+    await auditLog(req.user.workspaceId, req.user.userId, 'logout', 'user', req.user.userId, null);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query("SELECT id, workspace_id, email, phone, name, role, status, created_at FROM users WHERE id = $1", [req.user.userId]);
+    if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
