@@ -23,12 +23,10 @@ export default function App() {
       const params = new URLSearchParams(hash.slice(1));
       const accessToken = params.get('access_token');
       if (accessToken) {
-        import('./lib/api').then(({ default: api }) => {
-          api.post('/drive/token', { accessToken }).then(() => {
-            window.history.replaceState(null, '', '/app/settings');
-            window.location.reload();
-          }).catch(() => {});
-        });
+        const API = import.meta.env.VITE_API_URL || 'https://glasgow-tyler-norm-foot.trycloudflare.com/api';
+        fetch(API + '/drive/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken }) })
+          .then(() => { window.history.replaceState(null, '', '/app/settings'); alert('Google Drive connected!'); })
+          .catch(() => alert('Drive connection failed'));
       }
     }
   }, []);
