@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
 import Login from './pages/Login';
@@ -16,20 +15,18 @@ import Corrections from './pages/admin/Corrections';
 
 export default function App() {
   const { isAuthenticated } = useAuthStore();
-  // Handle Google OAuth callback (token in URL hash)
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes('access_token=')) {
-      const params = new URLSearchParams(hash.slice(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        const API = import.meta.env.VITE_API_URL || 'https://glasgow-tyler-norm-foot.trycloudflare.com/api';
-        fetch(API + '/drive/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken }) })
-          .then(() => { window.history.replaceState(null, '', '/app/settings'); alert('Google Drive connected!'); })
-          .catch(() => alert('Drive connection failed'));
-      }
+  // Handle Google OAuth callback BEFORE anything else
+  const hash = window.location.hash;
+  if (hash.includes('access_token=')) {
+    const params = new URLSearchParams(hash.slice(1));
+    const accessToken = params.get('access_token');
+    if (accessToken) {
+      const API = import.meta.env.VITE_API_URL || 'https://glasgow-tyler-norm-foot.trycloudflare.com/api';
+      fetch(API + '/drive/token', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken }) });
+      window.history.replaceState(null, '', '/app/settings');
+      return <div className="min-h-screen flex items-center justify-center bg-[#080d19] text-green-400 text-lg">✅ Google Drive connected! Redirecting...</div>;
     }
-  }, []);
+  }
 
   if (!isAuthenticated) return <Login />;
 
