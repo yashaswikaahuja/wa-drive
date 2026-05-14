@@ -177,8 +177,12 @@ export default function WhatsApp() {
                   <div key={msg.id} className="bg-[#1a2236] border border-white/5 rounded-xl p-3 flex gap-3 max-w-[480px] hover:border-blue-500/20 transition group">
                     {/* Thumbnail */}
                     <a href={thumbUrl} target="_blank" rel="noreferrer" className="shrink-0">
-                      {isImg && thumbUrl ? (
-                        <img src={thumbUrl} className="w-[72px] h-[72px] object-cover rounded-xl" />
+                      {thumbUrl ? (
+                        <div className="relative">
+                          <img src={thumbUrl} className="w-[72px] h-[72px] object-cover rounded-xl bg-white/5" loading="lazy" />
+                          {ext === 'pdf' && <span className="absolute bottom-1 right-1 text-[8px] px-1 py-0.5 rounded bg-red-600/80 text-white font-bold">PDF</span>}
+                          {['mp4','3gp','mov','avi','webm'].includes(ext) && <span className="absolute inset-0 flex items-center justify-center"><span className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">▶</span></span>}
+                        </div>
                       ) : (
                         <div className="w-[72px] h-[72px] rounded-xl bg-white/5 flex flex-col items-center justify-center">
                           <span className="text-2xl">{icon}</span>
