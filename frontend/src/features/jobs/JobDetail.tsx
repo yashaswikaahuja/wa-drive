@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import api, { API_URL } from '../../shared/api';
+import { extensionBridge } from '../../shared/extensionBridge';
 
 interface JobDetail {
   id: string;
@@ -98,12 +99,14 @@ export default function JobDetail() {
         // Save to job metadata so future dispatches don't re-prompt
         try { await api.patch(`/jobs/${job.id}`, { notes: job.notes || '' }); } catch {}
       }
-      // Append cc_job param so extension auto-triggers dispatch
-      const url = new URL(formUrl);
-      url.searchParams.set('cc_job', job.id);
-      window.open(url.toString(), '_blank');
-      // Backend will be hit by the extension after the form loads.
-      // Reload from REST to pick up state changes.
+      // Call backend dispatch first to create session + get envelope
+      const dispatchResp = await api.post(`/jobs/${job.id}/dispatch`);
+      const envelope = { type: 'DISPATCH_JOB', version: '1.0', ...dispatchResp.data.dispatch };
+      // Send to extension which opens form + runs runtime
+      const result = await extensionBridge.openAndDispatch(envelope, formUrl);
+      if (!result.ok) {
+        setError('Extension not connected. Make sure CyberControl extension is installed.');
+      }
       setTimeout(loadJob, 2000);
     } catch (e: any) {
       setError(e.message || 'Failed to start');

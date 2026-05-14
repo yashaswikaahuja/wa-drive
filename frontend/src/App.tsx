@@ -1,6 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
+import { useEffect } from 'react';
 import { useAuthStore } from './features/auth/store';
+import { extensionBridge } from './shared/extensionBridge';
+import { API_URL } from './shared/api';
 import Login from './features/auth/Login';
 import Layout from './shared/Layout';
 
@@ -26,7 +29,12 @@ function PageLoader() {
 }
 
 export default function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, accessToken, refreshToken, user } = useAuthStore();
+  useEffect(() => {
+    if (isAuthenticated && accessToken) {
+      extensionBridge.connect({ accessToken, refreshToken, user, backendUrl: API_URL }).catch(() => {});
+    }
+  }, [isAuthenticated, accessToken]);
   if (!isAuthenticated) return <Login />;
 
   return (

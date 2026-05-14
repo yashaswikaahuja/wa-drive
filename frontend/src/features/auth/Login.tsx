@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuthStore } from '../auth/store';
+import { extensionBridge } from '../../shared/extensionBridge';
 import axios from 'axios';
 import { API_URL } from '../../shared/api';
 
@@ -23,6 +24,13 @@ export default function Login() {
       });
       setTokens(res.data.accessToken, res.data.refreshToken);
       setUser(res.data.user);
+      // Auto-connect extension (zero-config)
+      extensionBridge.connect({
+        accessToken: res.data.accessToken,
+        refreshToken: res.data.refreshToken,
+        user: res.data.user,
+        backendUrl: API_URL,
+      }).catch(() => {});
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed');
     } finally { setLoading(false); }

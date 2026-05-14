@@ -171,6 +171,56 @@ async function runJobDispatch(envelope, tabId) {
 }
 
 
+
+// ── Frontend Bridge: zero-config auth handshake ────────────────────────────
+// Frontend sends { type: 'CONNECT', token, refreshToken, user, backendUrl }
+// Extension stores credentials so it can act on behalf of the operator without popup config.
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'CONNECT') {
+    const { token, refreshToken, user, backendUrl } = msg;
+    if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
+    chrome.storage.local.set({
+      accessToken: token,
+      refreshToken: refreshToken || null,
+      user: user || null,
+      backendUrl,
+    }, () => sendResponse({ ok: true, version: chrome.runtime.getManifest().version }));
+    return true;
+  }
+  if (msg.type === 'PING') {
+    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    return true;
+  }
+  if (msg.type === 'DISPATCH_JOB_DIRECT') {
+    // Frontend sends dispatch envelope directly + tabId (the form tab to operate on)
+    const { envelope, tabId } = msg;
+    if (!envelope || !tabId) { sendResponse({ ok: false, error: 'missing envelope or tabId' }); return; }
+    sendResponse({ ok: true, accepted: true });
+    runJobDispatch(envelope, tabId).catch(e => console.error('[CC] direct dispatch error:', e));
+    return true;
+  }
+  if (msg.type === 'OPEN_AND_DISPATCH') {
+    // Frontend asks extension to open form URL and run dispatch in that new tab
+    const { envelope, formUrl } = msg;
+    if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
+    chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
+      if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
+      // Wait for tab to finish loading then dispatch
+      const listener = (tabId, info) => {
+        if (tabId === tab.id && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          setTimeout(() => runJobDispatch(envelope, tab.id).catch(e => console.error('[CC] open+dispatch error:', e)), 1500);
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      sendResponse({ ok: true, tabId: tab.id });
+    });
+    return true;
+  }
+  sendResponse({ ok: false, error: 'unknown message type' });
+  return true;
+});
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (!changes._cc_teach_job?.newValue) return;

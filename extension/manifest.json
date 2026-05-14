@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.31",
+  "version": "5.32",
   "description": "Auto-fill SSC/Railway/NEET forms from CyberControl student profiles",
   "permissions": [
     "storage",
@@ -30,5 +30,12 @@
       ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://frontend-pi-ochre-71.vercel.app/*",
+      "https://*.vercel.app/*",
+      "http://localhost:5173/*"
+    ]
+  }
 }
