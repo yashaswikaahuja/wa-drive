@@ -71,7 +71,7 @@ export default function WhatsApp() {
           <div className="mt-4 flex flex-col items-center">
             <p className="text-xs text-gray-500 mb-3">Scan with WhatsApp to connect</p>
             <div className="bg-white p-4 rounded-lg">
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
+              <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
             </div>
           </div>
         )}
