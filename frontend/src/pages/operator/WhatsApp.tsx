@@ -10,18 +10,12 @@ interface Chat { phone: string; name: string; lastTime: string; messages: Messag
 
 // Infer semantic document title from filename
 function docTitle(fileName: string): { title: string; badge: string; icon: string } {
-  const f = fileName.toLowerCase();
-  if (/aadhaar|aadhar|uid|vid/.test(f)) return { title: 'Aadhaar Card', badge: 'ID', icon: '🪪' };
-  if (/passport/.test(f)) return { title: 'Passport', badge: 'ID', icon: '📘' };
-  if (/signature|sign/.test(f)) return { title: 'Signature', badge: 'DOC', icon: '✍️' };
-  if (/certificate|cert|marksheet/.test(f)) return { title: 'Certificate', badge: 'DOC', icon: '📜' };
-  if (/resume|cv/.test(f)) return { title: 'Resume', badge: 'DOC', icon: '📋' };
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return { title: 'Photo', badge: 'IMG', icon: '🖼️' };
   if (['mp4','3gp','mov','avi','webm'].includes(ext)) return { title: 'Video', badge: 'VID', icon: '🎬' };
   if (ext === 'pdf') return { title: 'PDF Document', badge: 'PDF', icon: '📕' };
   if (['mp3','ogg','wav','aac','opus'].includes(ext)) return { title: 'Audio', badge: 'AUD', icon: '🎵' };
-  return { title: 'Document', badge: ext.toUpperCase() || 'FILE', icon: '📄' };
+  return { title: 'Document', badge: ext.toUpperCase() or 'FILE', icon: '📄' };
 }
 
 function timeAgo(ts: string): string {
