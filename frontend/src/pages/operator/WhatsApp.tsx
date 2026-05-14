@@ -36,6 +36,7 @@ export default function WhatsApp() {
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [viewerFile, setViewerFile] = useState<Message | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -183,7 +184,7 @@ export default function WhatsApp() {
                           <span className="text-[9px] text-gray-500 mt-1">{badge}</span>
                         </div>
                       )}
-                    </a>
+                    </div>
                     {/* Content */}
                     <div className="flex-1 min-w-0 flex flex-col justify-between">
                       <div>
@@ -192,7 +193,7 @@ export default function WhatsApp() {
                       </div>
                       {/* Actions */}
                       <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
-                        <a href={thumbUrl} target="_blank" rel="noreferrer" className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</a>
+                        <button onClick={() => setViewerFile(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
                         <a href={thumbUrl} download className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-gray-400 hover:text-white">Download</a>
                         <button className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 text-gray-400 hover:text-white">Link</button>
                       </div>
@@ -208,6 +209,30 @@ export default function WhatsApp() {
           </>
         )}
       </div>
+    </div>
+
+      {/* Document Viewer Modal */}
+      {viewerFile && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setViewerFile(null)}>
+          <div className="absolute top-4 right-4 flex gap-3 z-10">
+            <a href={viewerFile.fileUrl?.replace('sz=w200','sz=w1200')} download className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">Download</a>
+            <button onClick={() => setViewerFile(null)} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">✕ Close</button>
+          </div>
+          <div className="absolute top-4 left-4 z-10">
+            <p className="text-white text-sm font-medium">{docTitle(viewerFile.fileName || '').title}</p>
+            <p className="text-gray-400 text-xs">{timeAgo(viewerFile.timestamp)} · {viewerFile.name}</p>
+          </div>
+          <div onClick={e => e.stopPropagation()} className="max-w-[90vw] max-h-[85vh]">
+            {(() => {
+              const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
+              const fullUrl = viewerFile.fileUrl?.replace('sz=w200','sz=w1200') || '';
+              if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={fullUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
+              if (['mp4','3gp','mov','avi','webm'].includes(ext)) return <video src={fullUrl} controls className="max-w-full max-h-[85vh] rounded-lg" />;
+              return <div className="bg-[#1a2236] rounded-xl p-8 text-center"><span className="text-4xl block mb-3">{docTitle(viewerFile.fileName || '').icon}</span><p className="text-white">{viewerFile.fileName}</p><a href={fullUrl} download className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">Download File</a></div>;
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
