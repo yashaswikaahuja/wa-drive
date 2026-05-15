@@ -210,22 +210,97 @@ export default function WhatsApp() {
       // Multi-document extraction — call extract per doc, merge results
       const docs = Array.from(selectedDocs.values()).filter(d => d.fileName && !['mp4','3gp','mov','avi','webm','mp3','ogg','wav'].includes(d.fileName.split('.').pop()?.toLowerCase() || ''));
       if (docs.length === 0) { setExtractError('No images or PDFs in selection'); setExtracting(false); return; }
-      const results: any[] = await Promise.all(
-        docs.map(d => api.post('/process/extract', { fileId: d.id }).then(r => ({ doc: d, result: r.data })).catch(() => null))
-      );
+      // Run extractions sequentially to avoid Groq rate limits
+      const results: any[] = [];
+      for (const d of docs) {
+        try {
+          const r = await api.post('/process/extract', { fileId: d.id });
+          results.push({ doc: d, result: r.data });
+        } catch (e: any) {
+          results.push({ doc: d, result: { error: e.message } });
+        }
+      }
+      // Priority-based merge: each field has a "best source" priority by doc type.
+      // Higher priority document types overwrite lower for the same field.
+      const TYPE_PRIORITY: Record<string, number> = {
+        aadhaar: 100, pan: 95, passport: 95, voter_id: 90, driving_license: 90,
+        marksheet_postgrad: 85, marksheet_graduation: 85, marksheet_12th: 80, marksheet_10th: 75,
+        admit_card: 70, certificate: 65, bank_passbook: 60, ration_card: 55,
+        result: 50, form: 40, other: 20, photo: 10, signature: 10,
+      };
+      // Field-specific priority overrides (e.g., name from Aadhaar > name from admit card)
+      const FIELD_PREFERRED_TYPE: Record<string, string[]> = {
+        // Identity fields prefer Aadhaar/PAN/Passport
+        name: ['aadhaar', 'pan', 'passport', 'voter_id', 'driving_license'],
+        father_name: ['aadhaar', 'pan'],
+        dob: ['aadhaar', 'passport', 'pan'],
+        gender: ['aadhaar', 'passport'],
+        address: ['aadhaar', 'voter_id', 'passport'],
+        permanent_address: ['aadhaar', 'voter_id', 'passport'],
+        // Marksheet fields prefer their specific marksheet type
+        passing_year_10th: ['marksheet_10th'],
+        marks_10th: ['marksheet_10th'],
+        percentage_10th: ['marksheet_10th'],
+        board_10th: ['marksheet_10th'],
+        passing_year_12th: ['marksheet_12th'],
+        marks_12th: ['marksheet_12th'],
+        percentage_12th: ['marksheet_12th'],
+        board_12th: ['marksheet_12th'],
+        // Exam fields prefer admit card
+        roll_number: ['admit_card', 'marksheet_10th', 'marksheet_12th', 'marksheet_graduation'],
+        registration_number: ['admit_card'],
+        exam_name: ['admit_card'],
+        exam_date: ['admit_card'],
+        exam_center: ['admit_card'],
+        application_number: ['admit_card', 'form'],
+      };
+
       const merged: Record<string, any> = {};
       const errors: string[] = [];
+
       for (const r of results) {
         if (!r) continue;
-        if (r.result?.error) { errors.push(r.doc.fileName + ': ' + (r.result.message || r.result.error)); continue; }
+        if (r.result?.error) {
+          errors.push(r.doc.fileName + ': ' + (r.result.message || r.result.error));
+          continue;
+        }
         if (!r.result?.suggested) continue;
+        const docType = r.result.suggested.document_type?.value || 'other';
+        const docPriority = TYPE_PRIORITY[docType] || 30;
+
         for (const [k, v] of Object.entries(r.result.suggested)) {
+          if (k === 'document_type') continue;  // skip the type marker itself
           const fieldInfo = v as any;
-          if (!merged[k] || (fieldInfo.value && fieldInfo.value.length > (merged[k].value?.length || 0))) {
-            merged[k] = { ...fieldInfo, documentId: r.doc.id };
+          if (!fieldInfo.value || !String(fieldInfo.value).trim()) continue;
+
+          const existing = merged[k];
+
+          // No existing value — accept it
+          if (!existing) {
+            merged[k] = { ...fieldInfo, documentId: r.doc.id, sourceDocType: docType, _priority: docPriority };
+            continue;
+          }
+
+          // Field has preferred doc types — check those first
+          const preferred = FIELD_PREFERRED_TYPE[k];
+          if (preferred) {
+            const existingPreferredIdx = preferred.indexOf(existing.sourceDocType);
+            const newPreferredIdx = preferred.indexOf(docType);
+            if (newPreferredIdx !== -1 && (existingPreferredIdx === -1 || newPreferredIdx < existingPreferredIdx)) {
+              merged[k] = { ...fieldInfo, documentId: r.doc.id, sourceDocType: docType, _priority: docPriority };
+              continue;
+            }
+            if (existingPreferredIdx !== -1 && newPreferredIdx === -1) continue;  // existing wins
+          }
+
+          // Fall back to general type priority
+          if (docPriority > (existing._priority || 0)) {
+            merged[k] = { ...fieldInfo, documentId: r.doc.id, sourceDocType: docType, _priority: docPriority };
           }
         }
       }
+      // Strip internal merge metadata before showing to operator
+      Object.values(merged).forEach((v: any) => { delete v._priority; delete v.sourceDocType; });
       // Remove document_type from saved fields (it's just a classification, not profile data)
       delete merged.document_type;
       if (Object.keys(merged).length === 0) {
