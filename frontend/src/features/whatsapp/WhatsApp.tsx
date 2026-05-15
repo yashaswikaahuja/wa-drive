@@ -301,6 +301,14 @@ export default function WhatsApp() {
       }
       // Strip internal merge metadata before showing to operator
       Object.values(merged).forEach((v: any) => { delete v._priority; delete v.sourceDocType; });
+      // Debug log so operator can inspect in browser devtools (F12)
+      console.log('[Build Profile] Per-document results:', results.map((r: any) => ({
+        file: r?.doc?.fileName,
+        type: r?.result?.suggested?.document_type?.value,
+        fields: r?.result?.suggested ? Object.keys(r.result.suggested) : null,
+        error: r?.result?.error || r?.result?.message,
+      })));
+      console.log('[Build Profile] Merged fields:', Object.keys(merged), merged);
       // Remove document_type from saved fields (it's just a classification, not profile data)
       delete merged.document_type;
       if (Object.keys(merged).length === 0) {
