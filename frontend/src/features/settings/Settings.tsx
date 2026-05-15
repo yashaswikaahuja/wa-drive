@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useGoogleLogin } from '@react-oauth/google';
 import api, { API_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
 
@@ -9,22 +8,40 @@ export default function Settings() {
 
   // Check Drive connection on mount
   useEffect(() => {
-    fetch(API_URL + '/drive/files').then(r => r.json()).then(d => {
-      if (Array.isArray(d) && d.length > 0) setDriveStatus('connected');
-    }).catch(() => {});
+    fetch(API_URL + '/drive/status')
+      .then(r => r.json())
+      .then(d => setDriveStatus(d.connected ? 'connected' : 'disconnected'))
+      .catch(() => setDriveStatus('disconnected'));
   }, []);
 
-  const login = useGoogleLogin({
-    scope: 'https://www.googleapis.com/auth/drive.file',
-    onSuccess: (res) => {
-      setDriveStatus('loading');
-      fetch(API_URL + '/drive/token', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken: res.access_token })
-      }).then(() => setDriveStatus('connected')).catch(() => setDriveStatus('disconnected'));
-    },
-    onError: () => setDriveStatus('disconnected'),
-  });
+  // Listen for DRIVE_CONNECTED message from the OAuth popup
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.data?.type === 'DRIVE_CONNECTED') setDriveStatus('connected');
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  function connectDrive() {
+    setDriveStatus('loading');
+    // Open backend OAuth redirect in a popup — backend handles code exchange and token storage
+    const popup = window.open(
+      API_URL.replace('/api', '') + '/api/drive/auth',
+      'drive-auth',
+      'width=500,height=600,left=200,top=100'
+    );
+    // Fallback: if popup closed without message, re-check status
+    const timer = setInterval(() => {
+      if (popup?.closed) {
+        clearInterval(timer);
+        fetch(API_URL + '/drive/status')
+          .then(r => r.json())
+          .then(d => setDriveStatus(d.connected ? 'connected' : 'disconnected'))
+          .catch(() => setDriveStatus('disconnected'));
+      }
+    }, 500);
+  }
 
   return (
     <div className="max-w-lg">
@@ -48,11 +65,14 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           <span className={`w-2.5 h-2.5 rounded-full ${driveStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
           <span className="text-sm text-white">{driveStatus === 'connected' ? 'Connected' : 'Disconnected'}</span>
-          <button onClick={() => login()} disabled={driveStatus === 'loading'}
+          <button onClick={connectDrive} disabled={driveStatus === 'loading'}
             className="ml-auto px-4 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {driveStatus === 'loading' ? 'Connecting...' : driveStatus === 'connected' ? 'Reconnect' : 'Connect Drive'}
           </button>
         </div>
+        {driveStatus === 'connected' && (
+          <p className="text-xs text-green-400/70 mt-2">✓ Auto-refresh active — stays connected permanently</p>
+        )}
       </div>
 
       {/* Backend Info */}

@@ -75,8 +75,11 @@ function connectHub() {
   hub.on('connect', () => {
     console.log('[Worker] Hub connected');
     hub.emit('worker:register', { secret: WORKER_SECRET });
-    setTimeout(() => hub.emit('connection:status', { connected: isWhatsAppConnected }), 500);
-    // Heartbeat: re-send status every 30s so hub always knows real state
+    // Re-send current state — if QR is pending, frontend gets it immediately on reconnect
+    const statusPayload = lastQrDataUrl && !isWhatsAppConnected
+      ? { connected: false, qrCode: lastQrDataUrl }
+      : { connected: isWhatsAppConnected };
+    setTimeout(() => hub.emit('connection:status', statusPayload), 500);
     setInterval(() => hub.emit('connection:status', { connected: isWhatsAppConnected }), 30_000);
   });
   hub.on('disconnect',    (r) => console.log('[Worker] Hub disconnected:', r));
@@ -195,6 +198,7 @@ async function downloadWithRetry(msg: proto.IWebMessageInfo): Promise<Buffer | n
 
 let currentSock: WASocket | null = null;
 let reconnectDelay = 5000;
+let lastQrDataUrl: string | null = null; // cache so hub reconnect can re-emit it
 
 async function startBaileys() {
   if (currentSock) { try { currentSock.end(undefined); } catch { /* ignore */ } currentSock = null; }
@@ -218,22 +222,32 @@ async function startBaileys() {
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
       qrcodeTerminal.generate(qr, { small: true });
-      try { hub.emit('connection:status', { connected: false, qrCode: await qrcode.toDataURL(qr) }); }
-      catch { hub.emit('connection:status', { connected: false }); }
+      try {
+        lastQrDataUrl = await qrcode.toDataURL(qr);
+        hub.emit('connection:status', { connected: false, qrCode: lastQrDataUrl });
+      } catch { hub.emit('connection:status', { connected: false }); }
     }
     if (connection === 'open') {
       console.log('[Worker] WhatsApp connected ✓');
       isWhatsAppConnected = true;
+      lastQrDataUrl = null; // clear cached QR on successful connect
       reconnectDelay = 5000;
       hub.emit('connection:status', { connected: true });
     }
     if (connection === 'close') {
       const code = (lastDisconnect?.error as any)?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
-      console.log(`[Worker] Closed (code=${code}), reconnect=${shouldReconnect}, delay=${reconnectDelay}ms`);
+      const isLoggedOut = code === DisconnectReason.loggedOut;
+      console.log(`[Worker] Closed (code=${code}), loggedOut=${isLoggedOut}, delay=${reconnectDelay}ms`);
       isWhatsAppConnected = false;
       hub.emit('connection:status', { connected: false });
-      if (shouldReconnect) { setTimeout(startBaileys, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 60000); }
+      if (isLoggedOut) {
+        // Wipe saved session so next start shows QR
+        import('fs/promises').then(({ rm }) => rm(AUTH_DIR, { recursive: true, force: true }).catch(() => {}));
+        console.log('[Worker] Logged out — auth cleared. Restart worker to re-pair.');
+      } else {
+        setTimeout(startBaileys, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 30_000); // cap at 30s
+      }
     }
   });
 
@@ -307,6 +321,31 @@ async function startBaileys() {
     }
   });
 }
+
+// ── Graceful shutdown ────────────────────────────────────────────────────────
+process.on('SIGTERM', () => {
+  console.log('[Worker] SIGTERM received — shutting down');
+  if (currentSock) { try { currentSock.end(undefined); } catch {} }
+  hub.disconnect();
+  process.exit(0);
+});
+
+// ── Zombie heartbeat ─────────────────────────────────────────────────────────
+// If WhatsApp shows connected but socket is actually dead, force reconnect.
+// Baileys keepAliveIntervalMs handles pings, but this catches cases where
+// the socket hangs without firing connection.update (code 408 zombie state).
+setInterval(() => {
+  if (!isWhatsAppConnected) return; // already disconnected, backoff handles it
+  if (!currentSock) { isWhatsAppConnected = false; startBaileys().catch(console.error); return; }
+  // Check if the underlying WS is still open (Baileys uses .isOpen not .readyState)
+  const ws = (currentSock as any).ws;
+  if (ws && ws.isOpen === false) {
+    console.log('[Worker] Zombie detected (ws.readyState=' + ws.readyState + ') — forcing reconnect');
+    isWhatsAppConnected = false;
+    reconnectDelay = 5_000; // reset backoff for zombie recovery
+    startBaileys().catch(console.error);
+  }
+}, 60_000); // check every 60s
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 

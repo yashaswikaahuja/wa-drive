@@ -1,12 +1,38 @@
 /**
- * Frontend ↔ Extension Bridge
- * Auto-connects extension on login + token refresh. No popup config needed.
+ * Frontend ↔ Extension Bridge (postMessage-based)
+ *
+ * Works from ANY URL — no externally_connectable whitelist needed.
+ * The content script in the extension relays window.postMessage → chrome.runtime.sendMessage.
+ *
+ * Flow:
+ *   frontend → window.postMessage({ _cc: true, type, ...payload })
+ *   content.js → chrome.runtime.sendMessage(background)
+ *   background → response
+ *   content.js → window.postMessage({ _cc_reply: true, _reqId, response })
+ *   frontend → resolves promise
  */
 
-const EXTENSION_ID = 'llphjmofhplaokidflpbpfjcalegabpo';
+let _reqCounter = 0;
 
-declare global {
-  interface Window { chrome?: any; }
+function sendToExtension(msg: Record<string, unknown>, timeoutMs = 5000): Promise<any> {
+  return new Promise((resolve) => {
+    const reqId = ++_reqCounter;
+    const timer = setTimeout(() => {
+      window.removeEventListener('message', handler);
+      resolve({ ok: false, error: 'Extension not responding — ensure CyberControl extension is installed and enabled' });
+    }, timeoutMs);
+
+    function handler(event: MessageEvent) {
+      if (!event.data?._cc_reply || event.data._reqId !== reqId) return;
+      clearTimeout(timer);
+      window.removeEventListener('message', handler);
+      if (event.data.err) resolve({ ok: false, error: event.data.err });
+      else resolve(event.data.response ?? { ok: false });
+    }
+
+    window.addEventListener('message', handler);
+    window.postMessage({ _cc: true, _reqId: reqId, ...msg }, '*');
+  });
 }
 
 interface ConnectPayload {
@@ -18,52 +44,27 @@ interface ConnectPayload {
 
 export const extensionBridge = {
   isAvailable(): boolean {
-    return !!(window.chrome && window.chrome.runtime && window.chrome.runtime.sendMessage);
+    // Extension is available if content script is injected (we can't know for sure
+    // until we try, so always return true and let the timeout handle it)
+    return true;
   },
 
   async ping(): Promise<{ ok: boolean; version?: string }> {
-    if (!this.isAvailable()) return { ok: false };
-    return new Promise((resolve) => {
-      try {
-        window.chrome.runtime.sendMessage(EXTENSION_ID, { type: 'PING' }, (resp: any) => {
-          if (window.chrome.runtime.lastError) resolve({ ok: false });
-          else resolve(resp || { ok: false });
-        });
-      } catch { resolve({ ok: false }); }
-    });
+    return sendToExtension({ type: 'PING' }, 2000);
   },
 
   async connect(payload: ConnectPayload): Promise<{ ok: boolean; error?: string; version?: string }> {
-    if (!this.isAvailable()) return { ok: false, error: 'Chrome extension API not available' };
-    return new Promise((resolve) => {
-      try {
-        window.chrome.runtime.sendMessage(EXTENSION_ID, {
-          type: 'CONNECT',
-          token: payload.accessToken,
-          refreshToken: payload.refreshToken,
-          user: payload.user,
-          backendUrl: payload.backendUrl,
-        }, (resp: any) => {
-          if (window.chrome.runtime.lastError) resolve({ ok: false, error: window.chrome.runtime.lastError.message });
-          else resolve(resp || { ok: false });
-        });
-      } catch (e: any) { resolve({ ok: false, error: e.message }); }
+    return sendToExtension({
+      type: 'CONNECT',
+      token: payload.accessToken,
+      refreshToken: payload.refreshToken,
+      user: payload.user,
+      backendUrl: payload.backendUrl,
     });
   },
 
   async openAndDispatch(envelope: any, formUrl: string): Promise<{ ok: boolean; tabId?: number; error?: string }> {
-    if (!this.isAvailable()) return { ok: false, error: 'Extension not available' };
-    return new Promise((resolve) => {
-      try {
-        window.chrome.runtime.sendMessage(EXTENSION_ID, {
-          type: 'OPEN_AND_DISPATCH',
-          envelope,
-          formUrl,
-        }, (resp: any) => {
-          if (window.chrome.runtime.lastError) resolve({ ok: false, error: window.chrome.runtime.lastError.message });
-          else resolve(resp || { ok: false });
-        });
-      } catch (e: any) { resolve({ ok: false, error: e.message }); }
-    });
+    // Longer timeout — opening a tab takes time
+    return sendToExtension({ type: 'OPEN_AND_DISPATCH', envelope, formUrl }, 8000);
   },
 };

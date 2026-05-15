@@ -30,6 +30,7 @@ function timeAgo(ts: string): string {
 
 const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?: string }) => {
   const [visible, setVisible] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!ref.current || visible) return;
@@ -39,15 +40,26 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
     obs.observe(ref.current);
     return () => obs.disconnect();
   }, [visible]);
+  const isImage = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
   const isVideo = ['mp4','3gp','mov','avi','webm'].includes(ext);
+  const { icon, badge } = docTitle(alt || ('file.' + ext));
   return (
-    <div ref={ref} className="w-[72px] h-[72px] rounded-xl bg-white/5 relative overflow-hidden">
-      {visible && src && (
+    <div ref={ref} className="w-[72px] h-[72px] rounded-xl bg-white/5 relative overflow-hidden flex items-center justify-center">
+      {visible && src && isImage && !imgError ? (
         <>
-          <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt} />
-          {ext === 'pdf' && <span className="absolute bottom-1 right-1 text-[8px] px-1 py-0.5 rounded bg-red-600/80 text-white font-bold">PDF</span>}
-          {isVideo && <span className="absolute inset-0 flex items-center justify-center"><span className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">▶</span></span>}
+          <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt}
+            onError={() => setImgError(true)} />
         </>
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-1">
+          <span className="text-2xl">{isVideo ? '🎬' : icon}</span>
+          <span className="text-[8px] px-1 py-0.5 rounded bg-white/10 text-gray-400 font-bold">{badge}</span>
+        </div>
+      )}
+      {isVideo && visible && src && !imgError && (
+        <span className="absolute inset-0 flex items-center justify-center">
+          <span className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">▶</span>
+        </span>
       )}
     </div>
   );
@@ -112,6 +124,7 @@ const ChatItem = memo(({ chat, selected, onClick }: any) => (
 export default function WhatsApp() {
   const [connected, setConnected] = useState(false);
   const [qrCode, setQrCode] = useState<string | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [viewerFile, setViewerFile] = useState<Message | null>(null);
@@ -137,7 +150,16 @@ export default function WhatsApp() {
     const baseUrl = API_URL.replace('/api', '');
     const socket = io(baseUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
-    socket.on('connection:status', (data: any) => { setConnected(data.connected); if (data.connected) setQrCode(null); });
+    socket.on('connection:status', (data: any) => {
+      setConnected(data.connected);
+      if (data.connected) {
+        setQrCode(null);
+        setReconnecting(false);
+      } else {
+        setReconnecting(true);
+        if (data.qrCode) setQrCode(data.qrCode);
+      }
+    });
     socket.on('qr', (data: any) => setQrCode(data.qr || data));
     socket.on('new_whatsapp_file', (file: any) => {
       addMessage({ id: file.id || Date.now().toString(), phone: file.phoneNumber || file.customerId || 'unknown',
@@ -174,6 +196,15 @@ export default function WhatsApp() {
   }, []);
 
   const handleShowQR = useCallback(async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); }, []);
+
+  // If disconnected with no QR yet, request current state from backend via socket
+  useEffect(() => {
+    if (connected || qrCode) return;
+    const socket = socketRef.current;
+    if (!socket) return;
+    // Ask backend to re-send current connection:status (which includes QR if available)
+    socket.emit('request:status');
+  }, [connected, qrCode]);
 
   const handleSelectChat = useCallback((phone: string) => {
     setSelectedChat(phone);
@@ -353,6 +384,11 @@ export default function WhatsApp() {
           <div className="bg-white p-4 rounded-lg mb-4">
             <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
           </div>
+        ) : reconnecting ? (
+          <div className="flex flex-col items-center gap-3 mb-4">
+            <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            <p className="text-sm text-gray-400">Reconnecting… QR will appear shortly</p>
+          </div>
         ) : (
           <button onClick={handleShowQR} className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700">Show QR Code</button>
         )}
@@ -468,7 +504,7 @@ export default function WhatsApp() {
             {(() => {
               const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
               const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || '';
-              const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
+              const imgUrl = driveId ? `https://drive.google.com/uc?export=view&id=${driveId}` : viewerFile.fileUrl || '';
               const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
               if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
               if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" /> : null;

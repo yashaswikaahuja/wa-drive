@@ -580,6 +580,24 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
         if (!booleanLike.includes(value.toLowerCase())) { console.debug('[CC] skipped checkbox with non-boolean value:', value); return 0; }
         const truthy = ['yes','true','1','checked','on'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
+      } else if (el.getAttribute('matdatepicker') !== null || el.getAttribute('matInput') !== null && el.closest('mat-datepicker-toggle,mat-form-field') && (el.type === 'text' || el.type === 'date')) {
+        // ── Angular Material mat-datepicker ──────────────────────────────────
+        // mat-datepicker binds to a plain <input matInput [matDatepicker]="...">
+        // Setting .value alone doesn't update the Angular FormControl.
+        // We must: 1) set via native setter, 2) fire input+change, 3) fire a
+        // synthetic MatDatepickerInputEvent so Angular's ControlValueAccessor picks it up.
+        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        el.focus();
+        if (niv) niv.set.call(el, value); else el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        // Angular Material listens for 'dateChange' and 'dateInput' on the host element
+        el.dispatchEvent(new CustomEvent('dateChange', { bubbles: true, detail: { value } }));
+        el.dispatchEvent(new CustomEvent('dateInput', { bubbles: true, detail: { value } }));
+        // Also try keyboard simulation — some Angular versions only update on keyup
+        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) || 'Enter' }));
+        el.blur();
+        return 1;
       } else {
         // Angular/React compatible input filling
         const isTextarea = el.tagName === 'TEXTAREA';

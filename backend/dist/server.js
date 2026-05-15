@@ -1,4 +1,4 @@
-import dotenv from "dotenv"; dotenv.config({ path: "/opt/cybercontrol-hub/backend/.env" });
+import dotenv from "dotenv"; dotenv.config();
 import { saveWhatsAppFile } from "./db.js";
 import express from 'express';
 import { spawnSync } from 'child_process';
@@ -15,30 +15,41 @@ const { Pool } = pg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 
-// ── Drive Token Persistence ────────────────────────────────────────────────
-// Persist drive access token to database so it survives backend restarts.
-let _driveTokenLoaded = false;
+// ── Drive — persistent OAuth2 client with auto-refresh ──────────────────────
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI  || 'http://localhost:3000/api/drive/callback';
+
+const oauth2Client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+
+// Auto-persist whenever googleapis refreshes the access token
+oauth2Client.on('tokens', async (tokens) => {
+  try {
+    if (tokens.refresh_token)
+      await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_refresh_token',$1,now()) ON CONFLICT(key) DO UPDATE SET value=$1,updated_at=now()`, [tokens.refresh_token]);
+    if (tokens.access_token)
+      await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_access_token',$1,now()) ON CONFLICT(key) DO UPDATE SET value=$1,updated_at=now()`, [tokens.access_token]);
+    console.log('[Drive] Tokens auto-refreshed and saved');
+  } catch(e) { console.warn('[Drive] Token persist failed:', e.message); }
+});
+
 async function loadDriveTokenFromDB() {
   try {
-    const r = await pool.query("SELECT value FROM app_secrets WHERE key = 'drive_access_token'");
-    if (r.rows.length && r.rows[0].value) {
-      driveAccessToken = r.rows[0].value;
-      app.locals.driveAccessToken = driveAccessToken;
-      console.log('[Drive] Loaded token from DB');
+    const r = await pool.query(`SELECT key,value FROM app_secrets WHERE key IN ('drive_refresh_token','drive_access_token')`);
+    const map = {};
+    for (const row of r.rows) map[row.key] = row.value;
+    if (map['drive_refresh_token']) {
+      oauth2Client.setCredentials({ refresh_token: map['drive_refresh_token'], access_token: map['drive_access_token'] || undefined });
+      console.log('[Drive] Tokens loaded from DB — auto-refresh active');
     }
-  } catch (e) { console.warn('[Drive] Token load failed:', e.message); }
-  _driveTokenLoaded = true;
-}
-async function persistDriveToken(token) {
-  try {
-    if (token) {
-      await pool.query("INSERT INTO app_secrets (key, value, updated_at) VALUES ('drive_access_token', $1, now()) ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = now()", [token]);
-    } else {
-      await pool.query("DELETE FROM app_secrets WHERE key = 'drive_access_token'");
-    }
-  } catch (e) { console.warn('[Drive] Token persist failed:', e.message); }
+  } catch(e) { console.warn('[Drive] Token load failed:', e.message); }
 }
 loadDriveTokenFromDB();
+
+// Legacy compat — kept so worker socket emit still works
+async function persistDriveToken(token) {
+  if (token) await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_access_token',$1,now()) ON CONFLICT(key) DO UPDATE SET value=$1,updated_at=now()`, [token]).catch(()=>{});
+}
 
 // ── JWT Config ─────────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
@@ -77,6 +88,9 @@ import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { google } from 'googleapis';
+import { OAuth2Client as GoogleOAuth2Client } from 'google-auth-library';
+const googleAuthClient = new GoogleOAuth2Client(GOOGLE_CLIENT_ID);
+
 import multer from 'multer';
 import { Readable } from 'stream';
 import sharp from 'sharp';
@@ -209,12 +223,11 @@ let workerSocket = null;
 export function getHubStatus() { return { connected: workerConnected, qrCode: lastQrCode }; }
 // ── Drive helpers ────────────────────────────────────────────────────────────
 function getDrive() {
-    if (!driveAccessToken)
-        return null;
-    const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: driveAccessToken });
-    return google.drive({ version: 'v3', auth });
+    const creds = oauth2Client.credentials;
+    if (!creds.refresh_token && !creds.access_token) return null;
+    return google.drive({ version: 'v3', auth: oauth2Client });
 }
+function getDriveAccessToken() { return oauth2Client.credentials.access_token || null; }
 
 app.use('/api/adapters', adaptersRoutes);
 
@@ -302,12 +315,46 @@ function mimeToType(mime) {
     return 'file';
 }
 // ── Routes ───────────────────────────────────────────────────────────────────
+// OAuth2 auth-code flow: Step 1 — redirect to Google consent
+app.get('/api/drive/auth', (_req, res) => {
+    const url = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: ['https://www.googleapis.com/auth/drive.file'],
+    });
+    res.redirect(url);
+});
+
+// Step 2 — Google redirects here with ?code=
+app.get('/api/drive/callback', async (req, res) => {
+    const code = req.query.code;
+    if (!code) { res.status(400).send('Missing code'); return; }
+    try {
+        const { tokens } = await oauth2Client.getToken(code);
+        oauth2Client.setCredentials(tokens);
+        if (tokens.refresh_token)
+            await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_refresh_token',$1,now()) ON CONFLICT(key) DO UPDATE SET value=$1,updated_at=now()`, [tokens.refresh_token]);
+        if (tokens.access_token)
+            await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_access_token',$1,now()) ON CONFLICT(key) DO UPDATE SET value=$1,updated_at=now()`, [tokens.access_token]);
+        console.log('[Drive] Connected — refresh_token saved to DB');
+        res.send('<script>window.opener?.postMessage({type:"DRIVE_CONNECTED"},"*");window.close();</script>');
+    } catch(e) {
+        console.error('[Drive] Callback error:', e.message);
+        res.status(500).send('OAuth failed: ' + e.message);
+    }
+});
+
+// Status check
+app.get('/api/drive/status', (_req, res) => {
+    const connected = !!(oauth2Client.credentials.refresh_token || oauth2Client.credentials.access_token);
+    res.json({ connected });
+});
+
+// Legacy token endpoint (backward compat)
 app.post('/api/drive/token', async (req, res) => {
     const { accessToken } = req.body;
-    driveAccessToken = accessToken ?? null;
-    app.locals.driveAccessToken = driveAccessToken;
-    workerSocket?.emit('drive:token', driveAccessToken);
-    await persistDriveToken(driveAccessToken);
+    if (accessToken) oauth2Client.setCredentials({ ...oauth2Client.credentials, access_token: accessToken });
+    await persistDriveToken(accessToken);
     res.json({ ok: true });
 });
 app.delete('/api/drive/files/:fileId', async (req, res) => {
@@ -368,7 +415,7 @@ app.get('/api/drive/files', async (_req, res) => {
                     id: f.id, customerId: folder.name,
                     customerName: meta.customerName ?? `Guest ${(folder.name ?? '').slice(-4)}`,
                     fileName: f.name,
-                    fileUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w200`,
+            fileUrl: `https://drive.google.com/uc?export=view&id=${f.id}`,
                     profilePicUrl: meta.profilePicUrl ?? null,
                     timestamp: f.createdTime,
                 });
@@ -475,14 +522,14 @@ app.post('/api/worker/upload', upload.single('file'), async (req, res) => {
             customerName: senderName,
             phoneNumber: phone,
             fileName,
-            fileUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`,
+            fileUrl: `https://drive.google.com/uc?export=view&id=${fileId}`,
             type: mimeToType(mimetype),
             size: fileSize,
             timestamp: new Date().toISOString(),
             profilePicUrl: profilePicUrl || null,
         });
         // Persist file record for /api/files endpoint
-        await saveWhatsAppFile(phone, senderName, fileName, `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, fileId);
+        await saveWhatsAppFile(phone, senderName, fileName, `https://drive.google.com/uc?export=view&id=${fileId}`, fileId);
         res.json({ fileUrl: file.data.webContentLink, fileId });
     }
     catch (e) {
@@ -520,7 +567,7 @@ app.post('/api/remove-bg', (req, res, next) => {
             filename = req.file.originalname ?? filename;
         }
         else if (req.body?.fileId) {
-            const { driveAccessToken } = req.app.locals;
+            const driveAccessToken = getDriveAccessToken();
             if (!driveAccessToken) {
                 res.status(401).json({ error: 'Not connected to Google Drive' });
                 return;
@@ -920,6 +967,57 @@ app.get('/api/training/episodes', authMiddleware, async (_req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTH ROUTES
 // ═══════════════════════════════════════════════════════════════════════════════
+
+
+// ── Google OAuth Login ────────────────────────────────────────────────────────
+// Frontend sends Google credential (JWT from One Tap / Sign-In button).
+// Backend verifies it, finds or creates user, returns app JWT tokens.
+app.post('/api/auth/google', authLimiter, async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) return res.status(400).json({ error: 'Missing credential' });
+  try {
+    const ticket = await googleAuthClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+    const payload = ticket.getPayload();
+    if (!payload?.email) return res.status(400).json({ error: 'No email in Google token' });
+    const { email, name, picture, sub: googleId } = payload;
+
+    // Find existing user
+    let userRow = (await pool.query(
+      'SELECT id, workspace_id, name, role, status FROM users WHERE email = $1 AND deleted_at IS NULL',
+      [email]
+    )).rows[0];
+
+    if (!userRow) {
+      // Auto-register: create workspace + user
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const ws = await client.query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id", [name || email]);
+        const workspaceId = ws.rows[0].id;
+        const u = await client.query(
+          "INSERT INTO users (workspace_id, email, name, role, status, password_hash) VALUES ($1,$2,$3,'admin','active','') RETURNING id, workspace_id, name, role",
+          [workspaceId, email, name || email]
+        );
+        await client.query('COMMIT');
+        userRow = u.rows[0];
+      } catch(e) { await client.query('ROLLBACK'); throw e; }
+      finally { client.release(); }
+    }
+
+    if (userRow.status && userRow.status !== 'active')
+      return res.status(403).json({ error: 'Account not active' });
+
+    const tokenPayload = { userId: userRow.id, workspaceId: userRow.workspace_id, role: userRow.role };
+    const accessToken = signAccessToken(tokenPayload);
+    const refreshToken = signRefreshToken(tokenPayload);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [userRow.id, refreshToken, expiresAt]);
+    res.json({ ok: true, accessToken, refreshToken, user: { id: userRow.id, workspaceId: userRow.workspace_id, email, name: userRow.name || name, role: userRow.role } });
+  } catch(e) {
+    console.error('[Auth] Google login error:', e.message);
+    res.status(401).json({ error: 'Google authentication failed' });
+  }
+});
 
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, phone, password, name } = req.body;
@@ -1486,6 +1584,10 @@ Extraction rules:
 });
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+// Extension needs Groq key to run AI field mapping
+app.get('/api/settings/groq-key', authMiddleware, (_req, res) => {
+  res.json({ key: process.env.GROQ_API_KEY || '' });
+});
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
     // Auto-register worker if auth secret matches (handles cases where worker:register event is lost)
@@ -1494,7 +1596,7 @@ io.on('connection', (socket) => {
         workerConnected = false;
         console.log('[Hub] Worker auto-registered via auth');
         if (driveAccessToken)
-            socket.emit('drive:token', driveAccessToken);
+            socket.emit('drive:token', getDriveAccessToken());
     }
     socket.on('worker:register', ({ secret }) => {
         if (secret !== WORKER_SECRET) {
@@ -1504,7 +1606,7 @@ io.on('connection', (socket) => {
         workerSocket = socket;
         console.log('[Hub] Worker registered');
         if (driveAccessToken)
-            socket.emit('drive:token', driveAccessToken);
+            socket.emit('drive:token', getDriveAccessToken());
     });
     socket.on('connection:status', (payload) => {
         workerConnected = payload.connected;
@@ -1513,6 +1615,10 @@ io.on('connection', (socket) => {
         else if (payload.qrCode)
             lastQrCode = payload.qrCode;
         io.emit('connection:status', payload);
+    });
+    // Frontend requests current state (e.g. after reconnect with no QR yet)
+    socket.on('request:status', () => {
+        socket.emit('connection:status', { connected: workerConnected, ...(lastQrCode ? { qrCode: lastQrCode } : {}) });
     });
     socket.on('new_whatsapp_file', (file) => {
         io.emit('new_whatsapp_file', file);

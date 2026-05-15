@@ -3,6 +3,56 @@ function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a
 function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
 
 console.log("[CC] background.js loaded v5.17");
+
+// ── Auto-inject content script into existing tabs on extension load/update ───
+// Content scripts only auto-inject into NEW tabs. For already-open tabs
+// (including the frontend), we must inject manually after install/reload.
+// Inject bridge into MAIN world so postMessage works between page and content script
+function injectBridge(tabId) {
+  // Inject MAIN world relay — listens to page postMessage, forwards to content script
+  chrome.scripting.executeScript({
+    target: { tabId },
+    world: 'MAIN',
+    func: () => {
+      if (window._ccBridgeInit) return;
+      window._ccBridgeInit = true;
+      // Page → content script
+      window.addEventListener('message', (e) => {
+        if (!e.data?._cc) return;
+        window.postMessage({ _cc_to_cs: true, ...e.data }, '*');
+      });
+      // Content script → page
+      window.addEventListener('message', (e) => {
+        if (!e.data?._cc_from_cs) return;
+        const { _cc_from_cs, ...rest } = e.data;
+        window.postMessage({ ...rest }, '*');
+      });
+    }
+  }).catch(() => {});
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.tabs.query({}, (tabs) => {
+    for (const tab of tabs) {
+      if (!tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) continue;
+      injectBridge(tab.id);
+    }
+  });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status !== 'complete') return;
+  if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+  injectBridge(tabId);
+});
+
+// ── Persistent SW keepalive via alarms ───────────────────────────────────────
+// setInterval doesn't prevent MV3 SW termination. chrome.alarms does.
+chrome.alarms.create('cc_keepalive', { periodInMinutes: 0.4 }); // every 24s
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'cc_keepalive') chrome.storage.local.set({ _sw_alive: Date.now() });
+});
+
 // Background service worker — owns teach session, survives popup close
 
 // Wake on storage change — more reliable than sendMessage for waking SW
@@ -172,6 +222,53 @@ async function runJobDispatch(envelope, tabId) {
 
 
 
+
+// ── Long-lived port — keeps SW alive and bridges postMessage ─────────────────
+// Content script connects a port on load. This keeps SW alive (no 30s timeout).
+// Messages from the page are forwarded through the port.
+const _pendingPortMessages = new Map(); // reqId -> resolve
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'cc_bridge') return;
+  let connected = true;
+  port.onDisconnect.addListener(() => { connected = false; });
+  port.onMessage.addListener((msg) => {
+    const { _reqId, ...payload } = msg;
+    handleBridgeMessage(payload, (response) => {
+      if (connected) {
+        try { port.postMessage({ _cc_reply: true, _reqId, response }); }
+        catch (e) { /* port already disconnected */ }
+      }
+    });
+  });
+});
+
+function handleBridgeMessage(msg, sendResponse) {
+  if (msg.type === 'CONNECT') {
+    const { token, refreshToken, user, backendUrl } = msg;
+    if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
+    chrome.storage.local.set({ accessToken: token, refreshToken: refreshToken || null, user: user || null, backendUrl }, () => {
+      sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
+    return;
+  }
+  if (msg.type === 'PING') {
+    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    return;
+  }
+  if (msg.type === 'OPEN_AND_DISPATCH') {
+    const { envelope, formUrl } = msg;
+    if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
+    chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
+      if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
+      chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
+      sendResponse({ ok: true, tabId: tab.id });
+    });
+    return;
+  }
+  sendResponse({ ok: false, error: 'unknown type: ' + msg.type });
+}
+
 // ── Frontend Bridge: zero-config auth handshake ────────────────────────────
 // Frontend sends { type: 'CONNECT', token, refreshToken, user, backendUrl }
 // Extension stores credentials so it can act on behalf of the operator without popup config.
@@ -200,24 +297,35 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'OPEN_AND_DISPATCH') {
-    // Frontend asks extension to open form URL and run dispatch in that new tab
+    // Persist job to storage BEFORE opening tab so it survives SW termination.
+    // content.js sends CONTENT_READY when the page is ready; background picks up
+    // the pending job from storage and dispatches it then.
     const { envelope, formUrl } = msg;
     if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
     chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
       if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
-      // Wait for tab to finish loading then dispatch
-      const listener = (tabId, info) => {
-        if (tabId === tab.id && info.status === 'complete') {
-          chrome.tabs.onUpdated.removeListener(listener);
-          setTimeout(() => runJobDispatch(envelope, tab.id).catch(e => console.error('[CC] open+dispatch error:', e)), 1500);
-        }
-      };
-      chrome.tabs.onUpdated.addListener(listener);
+      // Persist — survives SW death between tab.create and page load
+      chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
       sendResponse({ ok: true, tabId: tab.id });
     });
     return true;
   }
-  sendResponse({ ok: false, error: 'unknown message type' });
+  if (msg.type === 'CONTENT_READY') {
+    // content.js fires this when it's injected and ready to receive DISPATCH_JOB.
+    // Pick up any pending job for this tab and dispatch it now.
+    const tabId = sender?.tab?.id;
+    if (!tabId) { sendResponse({ ok: true }); return; }
+    chrome.storage.local.get('_cc_pending_job', ({ _cc_pending_job: job }) => {
+      if (!job || job.tabId !== tabId) { sendResponse({ ok: true }); return; }
+      // Job is for this tab — clear it and dispatch
+      chrome.storage.local.remove('_cc_pending_job');
+      console.log('[CC] CONTENT_READY: dispatching pending job to tab', tabId);
+      runJobDispatch(job.envelope, tabId).catch(e => console.error('[CC] pending dispatch error:', e));
+      sendResponse({ ok: true, dispatching: true });
+    });
+    return true;
+  }
+    sendResponse({ ok: false, error: 'unknown message type' });
   return true;
 });
 

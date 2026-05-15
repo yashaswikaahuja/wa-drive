@@ -39,17 +39,63 @@ app.use('/api/adapters', adaptersRoutes);
 // ── Hub state ────────────────────────────────────────────────────────────────
 let workerConnected = false;
 let lastQrCode: string | null = null;
-let driveAccessToken: string | null = null;
 let workerSocket: any = null;
 
 export function getHubStatus() { return { connected: workerConnected, qrCode: lastQrCode }; }
 
-// ── Drive helpers ────────────────────────────────────────────────────────────
+// ── Google Drive — persistent OAuth2 client ──────────────────────────────────
+// Uses auth-code flow: frontend sends code → backend exchanges for tokens →
+// refresh_token stored in app_secrets DB → auto-refreshed on every Drive call.
+import { pool } from './db.js';
+
+const GOOGLE_CLIENT_ID     = process.env['GOOGLE_CLIENT_ID']     ?? '';
+const GOOGLE_CLIENT_SECRET = process.env['GOOGLE_CLIENT_SECRET'] ?? '';
+const GOOGLE_REDIRECT_URI  = process.env['GOOGLE_REDIRECT_URI']  ?? 'http://localhost:3000/api/drive/callback';
+
+const oauth2Client = new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI);
+
+// Persist tokens to DB whenever they are refreshed automatically
+oauth2Client.on('tokens', async (tokens) => {
+  if (tokens.refresh_token) {
+    await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_refresh_token',$1,now())
+      ON CONFLICT(key) DO UPDATE SET value=$1, updated_at=now()`, [tokens.refresh_token]);
+  }
+  if (tokens.access_token) {
+    await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_access_token',$1,now())
+      ON CONFLICT(key) DO UPDATE SET value=$1, updated_at=now()`, [tokens.access_token]);
+  }
+  console.log('[Hub] Drive tokens refreshed and saved to DB');
+});
+
+// Load saved tokens from DB on startup so Drive works after backend restart
+async function loadDriveTokensFromDB() {
+  try {
+    const r = await pool.query(`SELECT key, value FROM app_secrets WHERE key IN ('drive_refresh_token','drive_access_token')`);
+    const map: Record<string, string> = {};
+    for (const row of r.rows) map[row.key] = row.value;
+    if (map['drive_refresh_token']) {
+      oauth2Client.setCredentials({
+        refresh_token: map['drive_refresh_token'],
+        access_token: map['drive_access_token'] ?? undefined,
+      });
+      console.log('[Hub] Drive tokens loaded from DB — auto-refresh active');
+    }
+  } catch (e) {
+    console.warn('[Hub] Could not load Drive tokens from DB:', (e as Error).message);
+  }
+}
+loadDriveTokensFromDB();
+
 function getDrive() {
-  if (!driveAccessToken) return null;
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: driveAccessToken });
-  return google.drive({ version: 'v3', auth });
+  const creds = oauth2Client.credentials;
+  if (!creds.refresh_token && !creds.access_token) return null;
+  // oauth2Client auto-refreshes access_token using refresh_token when needed
+  return google.drive({ version: 'v3', auth: oauth2Client });
+}
+
+// Keep a legacy accessor for the remove-bg proxy (uses access_token directly)
+function getDriveAccessToken(): string | null {
+  return oauth2Client.credentials.access_token ?? null;
 }
 
 async function findOrCreateFolder(drive: any, name: string, parentId?: string): Promise<string> {
@@ -74,11 +120,50 @@ function mimeToType(mime: string): string {
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 
+// Step 1: Frontend opens popup to this URL → Google consent screen
+app.get('/api/drive/auth', (_req, res) => {
+  const url = oauth2Client.generateAuthUrl({
+    access_type: 'offline',  // gets refresh_token
+    prompt: 'consent',       // always return refresh_token
+    scope: ['https://www.googleapis.com/auth/drive.file'],
+  });
+  res.redirect(url);
+});
+
+// Step 2: Google redirects here with ?code=...
+app.get('/api/drive/callback', async (req, res) => {
+  const code = req.query['code'] as string;
+  if (!code) { res.status(400).send('Missing code'); return; }
+  try {
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
+    if (tokens.refresh_token) {
+      await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_refresh_token',$1,now())
+        ON CONFLICT(key) DO UPDATE SET value=$1, updated_at=now()`, [tokens.refresh_token]);
+    }
+    if (tokens.access_token) {
+      await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_access_token',$1,now())
+        ON CONFLICT(key) DO UPDATE SET value=$1, updated_at=now()`, [tokens.access_token]);
+    }
+    console.log('[Hub] Drive connected — refresh_token saved to DB');
+    // Close popup and notify opener (Settings page)
+    res.send(`<script>window.opener?.postMessage({type:'DRIVE_CONNECTED'},'*');window.close();</script>`);
+  } catch (e) {
+    console.error('[Hub] Drive callback error:', (e as Error).message);
+    res.status(500).send('OAuth failed: ' + (e as Error).message);
+  }
+});
+
+// Frontend polls this to check connection state
+app.get('/api/drive/status', (_req, res) => {
+  const connected = !!(oauth2Client.credentials.refresh_token || oauth2Client.credentials.access_token);
+  res.json({ connected });
+});
+
+// Legacy endpoint kept for backward compat
 app.post('/api/drive/token', (req, res) => {
   const { accessToken } = req.body as { accessToken: string | null };
-  driveAccessToken = accessToken ?? null;
-  app.locals.driveAccessToken = driveAccessToken;
-  workerSocket?.emit('drive:token', driveAccessToken);
+  if (accessToken) oauth2Client.setCredentials({ ...oauth2Client.credentials, access_token: accessToken });
   res.json({ ok: true });
 });
 
@@ -261,7 +346,7 @@ app.post('/api/remove-bg', (req: any, res: any, next: any) => {
       imageBuffer = req.file.buffer;
       filename = req.file.originalname ?? filename;
     } else if (req.body?.fileId) {
-      const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
+      const driveAccessToken = getDriveAccessToken();
       if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
       imageBuffer = await downloadDriveBuffer(req.body.fileId, driveAccessToken);
       filename = req.body.fileName ?? filename;
