@@ -415,7 +415,7 @@ app.get('/api/drive/files', async (_req, res) => {
                     id: f.id, customerId: folder.name,
                     customerName: meta.customerName ?? `Guest ${(folder.name ?? '').slice(-4)}`,
                     fileName: f.name,
-            fileUrl: `https://drive.google.com/uc?export=view&id=${f.id}`,
+            fileUrl: `https://drive.google.com/thumbnail?id=${f.id}&sz=w200`,
                     profilePicUrl: meta.profilePicUrl ?? null,
                     timestamp: f.createdTime,
                 });
@@ -522,14 +522,14 @@ app.post('/api/worker/upload', upload.single('file'), async (req, res) => {
             customerName: senderName,
             phoneNumber: phone,
             fileName,
-            fileUrl: `https://drive.google.com/uc?export=view&id=${fileId}`,
+            fileUrl: `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`,
             type: mimeToType(mimetype),
             size: fileSize,
             timestamp: new Date().toISOString(),
             profilePicUrl: profilePicUrl || null,
         });
         // Persist file record for /api/files endpoint
-        await saveWhatsAppFile(phone, senderName, fileName, `https://drive.google.com/uc?export=view&id=${fileId}`, fileId);
+        await saveWhatsAppFile(phone, senderName, fileName, `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, fileId);
         res.json({ fileUrl: file.data.webContentLink, fileId });
     }
     catch (e) {

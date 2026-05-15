@@ -67,7 +67,7 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
 
 const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
-  const thumbUrl = msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl;
+  const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w400' : (msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
 
   if (msg.text && !msg.fileName) return (
@@ -504,7 +504,7 @@ export default function WhatsApp() {
             {(() => {
               const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
               const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || '';
-              const imgUrl = driveId ? `https://drive.google.com/uc?export=view&id=${driveId}` : viewerFile.fileUrl || '';
+              const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
               const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
               if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
               if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" /> : null;
