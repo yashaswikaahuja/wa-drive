@@ -1344,40 +1344,120 @@ app.post('/api/process/extract', authMiddleware, async (req, res) => {
       }
     }
     const base64 = buffer.toString('base64');
-    const prompt = `Analyze this image and return ONLY a valid JSON object with the following structure (no explanation, no markdown):
+    const prompt = `Analyze this Indian document/identity image and extract ALL relevant information. Return ONLY a valid JSON object (no markdown, no explanation):
+
 {
   "document_type": "",
   "name": "",
-  "dob": "",
-  "gender": "",
-  "id_number": "",
-  "address": "",
   "father_name": "",
   "mother_name": "",
   "husband_name": "",
+  "spouse_name": "",
+  "guardian_name": "",
+  "dob": "",
+  "gender": "",
+  "category": "",
+  "religion": "",
+  "nationality": "",
+  "marital_status": "",
+  "blood_group": "",
   "phone": "",
+  "alt_phone": "",
   "email": "",
-  "expiry": ""
+  "address": "",
+  "permanent_address": "",
+  "city": "",
+  "district": "",
+  "state": "",
+  "pincode": "",
+  "country": "",
+  "aadhaar_number": "",
+  "pan_number": "",
+  "passport_number": "",
+  "voter_id_number": "",
+  "driving_license_number": "",
+  "ration_card_number": "",
+  "bank_account_number": "",
+  "ifsc_code": "",
+  "bank_name": "",
+  "branch_name": "",
+  "account_holder_name": "",
+  "roll_number": "",
+  "registration_number": "",
+  "enrollment_number": "",
+  "application_number": "",
+  "exam_name": "",
+  "exam_date": "",
+  "exam_center": "",
+  "exam_seat_number": "",
+  "subject": "",
+  "qualification": "",
+  "school_name": "",
+  "college_name": "",
+  "university_name": "",
+  "board_name": "",
+  "course": "",
+  "stream": "",
+  "branch_subject": "",
+  "passing_year_10th": "",
+  "marks_10th": "",
+  "percentage_10th": "",
+  "board_10th": "",
+  "passing_year_12th": "",
+  "marks_12th": "",
+  "percentage_12th": "",
+  "board_12th": "",
+  "stream_12th": "",
+  "passing_year_graduation": "",
+  "marks_graduation": "",
+  "percentage_graduation": "",
+  "graduation_university": "",
+  "graduation_subject": "",
+  "passing_year_postgrad": "",
+  "marks_postgrad": "",
+  "percentage_postgrad": "",
+  "postgrad_university": "",
+  "postgrad_subject": "",
+  "occupation": "",
+  "employer": "",
+  "designation": "",
+  "annual_income": "",
+  "expiry_date": "",
+  "issue_date": "",
+  "place_of_issue": ""
 }
 
 document_type values:
-- "aadhaar" - Indian Aadhaar card
+- "aadhaar" - Aadhaar card
 - "pan" - PAN card
 - "passport" - Passport
-- "voter_id" - Voter ID
+- "voter_id" - Voter ID / EPIC
 - "driving_license" - Driving licence
-- "marksheet" - School/college marksheet
-- "certificate" - Certificate
-- "photo" - Personal photo (passport-size, selfie, portrait)
+- "ration_card" - Ration card
+- "marksheet_10th" - 10th class marksheet
+- "marksheet_12th" - 12th class marksheet
+- "marksheet_graduation" - Graduation/degree marksheet
+- "marksheet_postgrad" - Post-graduation marksheet
+- "admit_card" - Examination admit card / hall ticket
+- "result" - Result document
+- "certificate" - Certificate (caste, income, domicile, character, etc.)
+- "bank_passbook" - Bank passbook / cancelled cheque
+- "photo" - Personal photograph
 - "signature" - Signature image
+- "form" - Application form
 - "other" - Anything else
 
-Rules:
-- Always set document_type.
-- Fill only fields visible in the document. Leave others as empty string.
+Extraction rules:
+- Fill only fields present in the document. Leave others as empty string.
 - dob format: DD/MM/YYYY
-- id_number: extract digits only (Aadhaar 12, PAN 10, etc.)
-- For photos/signatures, only set document_type and leave other fields empty.
+- For marksheets: extract passing year, marks/percentage, board/university, subjects/stream into the appropriate slot (board_10th, percentage_10th, etc.)
+- For admit cards: extract roll_number, registration_number, exam_name, exam_date, exam_center, application_number
+- For Aadhaar: aadhaar_number is 12 digits (no spaces)
+- For PAN: pan_number is 10 chars uppercase
+- Address fields: prefer to split city/state/district/pincode separately. Keep full string in 'address' too.
+- Bank documents: extract account_number, ifsc, bank_name, branch_name
+- DO NOT mix unrelated IDs into one field. Aadhaar number goes into aadhaar_number, roll number into roll_number, etc.
+- For category: SC/ST/OBC/General/EWS etc.
 - Return ONLY the JSON, no surrounding text.`;
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -1388,7 +1468,7 @@ Rules:
           { type: 'text', text: prompt },
           { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
         ]}],
-        max_tokens: 400,
+        max_tokens: 2000,
       }),
     });
     const groqData = await groqRes.json();
