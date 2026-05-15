@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../utils/helpers';
+import { useWhatsAppStore } from '../stores/whatsappStore';
 
 type Stats = { totalSessions: number; totalFills: number; successRate: number; sites: number; pendingTeaching: number };
 
@@ -8,14 +9,14 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [stats, setStats] = useState<Stats>({ totalSessions: 0, totalFills: 0, successRate: 0, sites: 0, pendingTeaching: 0 });
   const [profiles, setProfiles] = useState(0);
-  const [connected, setConnected] = useState(false);
+  // Read live connection state from the store — updated by the shared socket in App.tsx.
+  const connected = useWhatsAppStore((s) => s.connected);
 
   useEffect(() => {
     fetch(`${API_BASE_URL}/sessions/stats`).then(r => r.json()).then(d => {
       setStats({ totalSessions: d.totalSessions ?? 0, totalFills: d.totalFills ?? 0, successRate: d.successRate ?? 0, sites: d.uniqueSites ?? 0, pendingTeaching: d.pendingTeaching ?? 0 });
     }).catch(() => {});
     fetch(`${API_BASE_URL}/profiles`).then(r => r.json()).then(d => setProfiles(Array.isArray(d) ? d.length : 0)).catch(() => {});
-    fetch(`${API_BASE_URL}/whatsapp/status`).then(r => r.json()).then(d => setConnected(d.connected ?? false)).catch(() => setConnected(false));
   }, []);
 
   const STATS = [

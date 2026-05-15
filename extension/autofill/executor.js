@@ -93,6 +93,42 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
   }
 
   // ── WaitEngine — state-based waits replacing fixed setTimeout delays ──────
+
+  /**
+   * waitForElement — waits until a CSS selector matches at least one visible
+   * element in the DOM, using MutationObserver + polling.
+   * Used for cascading dropdowns (State → District → Block) where the child
+   * select only appears after the parent fires its change event.
+   */
+  function waitForElement(selector, timeout) {
+    timeout = timeout || 3000;
+    return new Promise(function(resolve) {
+      var deadline = Date.now() + timeout;
+      var resolved = false;
+      var poll, mo;
+      function cleanup(val) {
+        if (resolved) return;
+        resolved = true;
+        if (poll) clearInterval(poll);
+        if (mo) mo.disconnect();
+        resolve(val);
+      }
+      function check() {
+        if (resolved) return;
+        var el = document.querySelector(selector);
+        if (el) { cleanup(el); return; }
+        if (Date.now() > deadline) { cleanup(null); return; }
+      }
+      mo = new MutationObserver(check);
+      mo.observe(document.body, { childList: true, subtree: true });
+      check();
+      poll = setInterval(function() {
+        if (Date.now() > deadline) cleanup(null);
+        else check();
+      }, 100);
+    });
+  }
+
   function waitForOptions(selector, minCount, timeout) {
     minCount = minCount || 1; timeout = timeout || 8000;
     return new Promise(function(resolve) {
@@ -375,20 +411,51 @@ function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
         return 0;
       }
 
-      // Angular Material mat-select      // Angular Material mat-select: click trigger, wait for panel, click matching option
+      // Angular Material mat-select: click trigger, wait for panel to render,
+      // then click the matching option. Using waitForElement instead of a fixed
+      // setTimeout because slow government portals take >400ms to open the panel.
       if (elType === 'mat-select') {
         const trigger = el.querySelector('.mat-select-trigger,.mat-mdc-select-trigger') || el;
         trigger.click();
-        setTimeout(() => {
+        waitForElement('mat-option,.mat-option,.mat-mdc-option', 2000).then(function() {
           const v = value.toLowerCase().trim();
           const opts = Array.from(document.querySelectorAll('mat-option,.mat-option,.mat-mdc-option'));
           const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
                       opts.find(o => o.textContent.trim().toLowerCase().startsWith(v)) ||
                       opts.find(o => v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2) ||
                       opts.find(o => o.textContent.trim().toLowerCase().includes(v));
-          if (opt) opt.click(); else document.body.click();
-        }, 400);
+          if (opt) {
+            opt.click();
+          } else {
+            // Close the panel if no match — leaves form in a clean state.
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+          }
+        });
         return 1; // fire-and-forget, count as filled
+      }
+
+      // Angular Material mat-datepicker-input: the native setter + input event
+      // is required because Angular's CDK listens to the native input event on
+      // the underlying <input>, not to programmatic .value assignment.
+      // We also dispatch Escape to close any open date picker overlay.
+      if (el.classList.contains('mat-datepicker-input') ||
+          el.hasAttribute('matdatepickerinput') ||
+          el.hasAttribute('matStartDate') ||
+          el.hasAttribute('matEndDate')) {
+        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        // Angular Material expects MM/DD/YYYY by default; convert DD/MM/YYYY if needed.
+        let fillValue = value;
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+          const [dd, mm, yyyy] = value.split('/');
+          fillValue = `${mm}/${dd}/${yyyy}`;
+        }
+        if (niv) niv.set.call(el, fillValue); else el.value = fillValue;
+        ['input', 'change', 'blur'].forEach(ev =>
+          el.dispatchEvent(new Event(ev, { bubbles: true }))
+        );
+        // Close any open picker overlay so it doesn't block subsequent fields.
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return 1;
       }
 
       // Angular Material mat-checkbox
@@ -792,7 +859,7 @@ function fillFormFields(mapping) {
           filled++;
         }
 
-      } else if (elType === 'radio') {
+      } else if (el.type === 'radio') {
         // Find radio with matching value or label
         const radios = document.querySelectorAll(`input[type="radio"][name="${el.name}"]`);
         const match = Array.from(radios).find(r =>
@@ -801,7 +868,7 @@ function fillFormFields(mapping) {
         );
         if (match) { match.checked = true; match.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
 
-      } else if (elType === 'checkbox') {
+      } else if (el.type === 'checkbox') {
         const truthy = ['yes', 'true', '1', 'checked'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); filled++; }
 

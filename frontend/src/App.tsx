@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useWhatsAppStore } from './stores/whatsappStore';
 import WhatsAppInboxPage from './pages/WhatsAppInboxPage';
 import FileStitchPage from './pages/FileStitchPage';
 import FormReadyPage from './pages/FormReadyPage';
@@ -19,6 +20,14 @@ const NAV = [
 function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { connectSocket, disconnectSocket } = useWhatsAppStore();
+
+  // Open one shared socket for the entire app lifetime.
+  // All components read from the store — no per-component socket setup needed.
+  useEffect(() => {
+    connectSocket();
+    return () => disconnectSocket();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="h-screen flex overflow-hidden">

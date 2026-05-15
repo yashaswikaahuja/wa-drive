@@ -8,13 +8,15 @@ import makeWASocket, {
   proto,
 } from '@whiskeysockets/baileys';
 import type { WASocket } from '@whiskeysockets/baileys';
-import qrcodeTerminal from 'qrcode-terminal';
 import qrcode from 'qrcode';
 import { io as ioClient, Socket } from 'socket.io-client';
 import { createServer } from 'http';
+import { rmSync } from 'fs';
 import { dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import pino from 'pino';
+
+const log = pino({ level: process.env['LOG_LEVEL'] ?? 'info' });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -61,6 +63,9 @@ function drainQueue() {
 
 let hub: Socket;
 let isWhatsAppConnected = false;
+// Single heartbeat timer — cleared and recreated on each hub reconnect to
+// prevent timer accumulation when the hub restarts repeatedly.
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 function connectHub() {
   hub = ioClient(HUB_URL, {
@@ -73,15 +78,20 @@ function connectHub() {
     pingTimeout: 20000,
   });
   hub.on('connect', () => {
-    console.log('[Worker] Hub connected');
+    log.info('[Worker] Hub connected');
     hub.emit('worker:register', { secret: WORKER_SECRET });
     setTimeout(() => hub.emit('connection:status', { connected: isWhatsAppConnected }), 500);
-    // Heartbeat: re-send status every 30s so hub always knows real state
-    setInterval(() => hub.emit('connection:status', { connected: isWhatsAppConnected }), 30_000);
+    // Clear any previous heartbeat before starting a new one — prevents
+    // multiple overlapping intervals when the hub reconnects.
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = setInterval(
+      () => hub.emit('connection:status', { connected: isWhatsAppConnected }),
+      30_000,
+    );
   });
-  hub.on('disconnect',    (r) => console.log('[Worker] Hub disconnected:', r));
-  hub.on('connect_error', (e) => console.error('[Worker] Hub error:', e.message));
-  hub.on('worker:reinit', () => { reconnectDelay = 5000; startBaileys().catch(console.error); });
+  hub.on('disconnect',    (r: string) => log.warn({ reason: r }, '[Worker] Hub disconnected'));
+  hub.on('connect_error', (e: Error)  => log.error({ err: e.message }, '[Worker] Hub error'));
+  hub.on('worker:reinit', () => { reconnectDelay = 5000; startBaileys().catch((e: Error) => log.error(e, '[Worker] reinit failed')); });
 }
 
 // ── Upload with retry + timeout ──────────────────────────────────────────────
@@ -116,13 +126,13 @@ async function uploadWithRetry(
 
       if (res.ok) {
         const { fileId } = await res.json() as { fileId: string };
-        console.log(`[Worker] ✓ Uploaded ${fileName} → Drive ${fileId}`);
+        log.info({ fileId, fileName }, '[Worker] ✓ Uploaded to Drive');
         return;
       }
 
       const errText = await res.text();
       if (res.status === 401) {
-        console.error(`[Worker] ✗ ${fileName} — Drive not connected (401). Skipping retries.`);
+        log.error({ fileName }, '[Worker] Drive not connected (401) — skipping retries');
         return; // no point retrying
       }
       throw new Error(`HTTP ${res.status}: ${errText}`);
@@ -131,10 +141,10 @@ async function uploadWithRetry(
       const reason = e?.name === 'AbortError' ? 'Timeout' : e?.message ?? String(e);
       if (attempt < RETRY_DELAYS.length) {
         const delay = RETRY_DELAYS[attempt];
-        console.warn(`[Worker] ↻ ${fileName} attempt ${attempt + 1} failed (${reason}). Retrying in ${delay}ms…`);
+        log.warn({ fileName, attempt: attempt + 1, reason, delay }, '[Worker] Upload retry');
         await new Promise(r => setTimeout(r, delay));
       } else {
-        console.error(`[Worker] ✗ FAILED ${fileName} | phone=${phone} | reason=${reason} | all retries exhausted`);
+        log.error({ fileName, phone, reason }, '[Worker] Upload failed — all retries exhausted');
       }
     }
   }
@@ -158,7 +168,7 @@ async function downloadWithRetry(msg: proto.IWebMessageInfo): Promise<Buffer | n
     msgContent.stickerMessage;
 
   if (!mediaMsg) {
-    console.warn('[Worker] No media message object found — skipping download');
+    log.warn('[Worker] No media message object — skipping download');
     return null;
   }
 
@@ -170,7 +180,7 @@ async function downloadWithRetry(msg: proto.IWebMessageInfo): Promise<Buffer | n
     try {
       // Re-check media key on each attempt — it may have been populated by now
       if (!mediaMsg.mediaKey || mediaMsg.mediaKey.length === 0) {
-        console.warn(`[Worker] Empty media key on attempt ${attempt} — waiting before retry`);
+        log.warn({ attempt }, '[Worker] Empty media key — waiting before retry');
         if (attempt < DOWNLOAD_DELAYS_MS.length) {
           await new Promise(r => setTimeout(r, DOWNLOAD_DELAYS_MS[attempt - 1]));
         }
@@ -179,10 +189,10 @@ async function downloadWithRetry(msg: proto.IWebMessageInfo): Promise<Buffer | n
 
       const buf = await downloadMediaMessage(msg, 'buffer', {}) as Buffer;
       if (buf && buf.length > 0) return buf;
-      console.warn(`[Worker] Empty buffer on attempt ${attempt}`);
-    } catch (e: any) {
+      log.warn({ attempt }, '[Worker] Empty buffer on download attempt');
+    } catch (e: unknown) {
       const reason = (e as Error).message ?? String(e);
-      console.warn(`[Worker] Download attempt ${attempt} failed: ${reason}`);
+      log.warn({ attempt, reason }, '[Worker] Download attempt failed');
     }
     if (attempt < DOWNLOAD_DELAYS_MS.length) {
       await new Promise(r => setTimeout(r, DOWNLOAD_DELAYS_MS[attempt - 1]));
@@ -201,7 +211,7 @@ async function startBaileys() {
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
-  console.log(`[Worker] Baileys ${version.join('.')}`);
+  log.info({ version: version.join('.') }, '[Worker] Starting Baileys');
 
   const sock = makeWASocket({
     version,
@@ -217,23 +227,37 @@ async function startBaileys() {
 
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr) {
-      qrcodeTerminal.generate(qr, { small: true });
+      // Send QR to hub only — never print to terminal (operators don't have terminal access).
       try { hub.emit('connection:status', { connected: false, qrCode: await qrcode.toDataURL(qr) }); }
       catch { hub.emit('connection:status', { connected: false }); }
     }
     if (connection === 'open') {
-      console.log('[Worker] WhatsApp connected ✓');
+      log.info('[Worker] WhatsApp connected ✓');
       isWhatsAppConnected = true;
       reconnectDelay = 5000;
       hub.emit('connection:status', { connected: true });
+      // worker:ready lets the hub distinguish "just reconnected" from heartbeat pings.
+      hub.emit('worker:ready', { version: '5.33' });
     }
     if (connection === 'close') {
-      const code = (lastDisconnect?.error as any)?.output?.statusCode;
-      const shouldReconnect = code !== DisconnectReason.loggedOut;
-      console.log(`[Worker] Closed (code=${code}), reconnect=${shouldReconnect}, delay=${reconnectDelay}ms`);
+      const code = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output?.statusCode;
+      const loggedOut = code === DisconnectReason.loggedOut;
+      log.warn({ code, loggedOut, delay: reconnectDelay }, '[Worker] Connection closed');
       isWhatsAppConnected = false;
       hub.emit('connection:status', { connected: false });
-      if (shouldReconnect) { setTimeout(startBaileys, reconnectDelay); reconnectDelay = Math.min(reconnectDelay * 2, 60000); }
+      if (loggedOut) {
+        // Phone explicitly logged out — clear saved credentials so the next
+        // startBaileys() call generates a fresh QR instead of looping on 401.
+        log.warn('[Worker] Logged out — clearing auth_info and stopping reconnect');
+        try { rmSync(AUTH_DIR, { recursive: true, force: true }); } catch { /* ignore */ }
+        return; // do NOT reconnect; operator must re-scan QR
+      }
+      // Any other close reason (network blip, phone sleep, server restart):
+      // reconnect with exponential backoff capped at 30 s.
+      const delay = reconnectDelay;
+      reconnectDelay = Math.min(reconnectDelay * 2, 30_000);
+      log.info({ delay }, '[Worker] Scheduling reconnect');
+      setTimeout(() => startBaileys().catch((e: Error) => log.error(e, '[Worker] reconnect failed')), delay);
     }
   });
 
@@ -276,7 +300,7 @@ async function startBaileys() {
       const typeLabel = mimetype.startsWith('image/') ? 'photo' : mimetype.startsWith('video/') ? 'video' : mimetype.startsWith('audio/') ? 'audio' : 'file';
       const fileName = `${phone}_${ts}_${typeLabel}.${ext}`;
 
-      console.log(`[Worker] Queuing ${fileName} (${mimetype}) from ${phone}`);
+      log.info({ fileName, mimetype, phone }, '[Worker] Queuing upload');
       hub.emit('upload:queued', { fileName, phone });
 
       // Capture msg reference for closure — download inside queue task
@@ -287,19 +311,16 @@ async function startBaileys() {
 
         const buffer = await downloadWithRetry(capturedMsg);
         if (!buffer || buffer.length === 0) {
-          console.error(`[Worker] ✗ FAILED download ${fileName} | phone=${phone} | reason=download failed after all attempts`);
+          log.error({ fileName, phone }, '[Worker] Download failed after all attempts');
           hub.emit('upload:fail', { fileName, phone, reason: 'Download failed' });
           return;
         }
-
-        // Sanity check: reject suspiciously small buffers (< 100 bytes = corrupt)
         if (buffer.length < 100) {
-          console.error(`[Worker] ✗ SKIPPED ${fileName} | phone=${phone} | reason=buffer too small (${buffer.length} bytes)`);
+          log.error({ fileName, phone, bytes: buffer.length }, '[Worker] Buffer too small — corrupt file');
           hub.emit('upload:fail', { fileName, phone, reason: 'Corrupt file (too small)' });
           return;
         }
-
-        console.log(`[Worker] Processing ${fileName} (${buffer.length} bytes)`);
+        log.info({ fileName, bytes: buffer.length }, '[Worker] Processing upload');
         hub.emit('upload:start', { fileName, phone });
         await uploadWithRetry(buffer, mimetype, fileName, phone, pushName, profilePicUrl);
         hub.emit('upload:done', { fileName, phone });
@@ -313,5 +334,19 @@ async function startBaileys() {
 createServer((_req, res) => res.end('ok')).listen(process.env['PORT'] ?? 3002);
 setInterval(() => fetch(`${HUB_URL}/api/health`).catch(() => {}), 10 * 60 * 1000);
 
+// Graceful shutdown: logout from WhatsApp cleanly so the phone doesn't show
+// the session as still active, then let PM2 / the OS restart the process.
+process.on('SIGTERM', async () => {
+  log.info('[Worker] SIGTERM received — shutting down gracefully');
+  isWhatsAppConnected = false;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  try {
+    if (currentSock) await currentSock.logout();
+  } catch { /* ignore logout errors during shutdown */ }
+  hub.emit('connection:status', { connected: false });
+  hub.disconnect();
+  setTimeout(() => process.exit(0), 2000);
+});
+
 connectHub();
-startBaileys().catch((e) => { console.error('[Worker] Fatal:', e); process.exit(1); });
+startBaileys().catch((e: Error) => { log.fatal(e, '[Worker] Fatal startup error'); process.exit(1); });
