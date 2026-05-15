@@ -8,6 +8,9 @@ interface Message {
 }
 interface Chat { phone: string; name: string; lastTime: string; messages: Message[]; newCount: number; }
 
+interface Person { id: string; name: string; displayLabel: string; relationship: string; }
+interface Household { phone: string; persons: Person[]; person_count: string; }
+
 function docTitle(fileName: string): { title: string; badge: string; icon: string } {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return { title: 'Photo', badge: 'IMG', icon: '🖼️' };
@@ -25,11 +28,9 @@ function timeAgo(ts: string): string {
   return new Date(ts).toLocaleDateString();
 }
 
-// Lazy thumbnail with intersection observer — only loads when visible
 const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?: string }) => {
   const [visible, setVisible] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (!ref.current || visible) return;
     const obs = new IntersectionObserver(([entry]) => {
@@ -38,10 +39,7 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
     obs.observe(ref.current);
     return () => obs.disconnect();
   }, [visible]);
-
-  const isImg = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
   const isVideo = ['mp4','3gp','mov','avi','webm'].includes(ext);
-
   return (
     <div ref={ref} className="w-[72px] h-[72px] rounded-xl bg-white/5 relative overflow-hidden">
       {visible && src && (
@@ -55,8 +53,7 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
   );
 });
 
-// Memoized message card — only re-renders if msg changes
-const MessageCard = memo(({ msg, onClick }: { msg: Message; onClick: (m: Message) => void }) => {
+const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl;
   const { title, badge } = docTitle(msg.fileName || '');
@@ -69,8 +66,16 @@ const MessageCard = memo(({ msg, onClick }: { msg: Message; onClick: (m: Message
   );
 
   return (
-    <div className="bg-[#1a2236] border border-white/5 rounded-xl p-3 flex gap-3 max-w-[480px] hover:border-blue-500/20 transition group">
-      <div onClick={() => onClick(msg)} className="shrink-0 cursor-pointer">
+    <div className={`bg-[#1a2236] border rounded-xl p-3 flex gap-3 max-w-[480px] transition group ${selected ? 'border-blue-500/60' : 'border-white/5 hover:border-blue-500/20'}`}>
+      {selectionMode && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(msg)}
+          className="w-4 h-4 self-center accent-blue-500 cursor-pointer"
+        />
+      )}
+      <div onClick={() => selectionMode ? onToggleSelect(msg) : onClick(msg)} className="shrink-0 cursor-pointer">
         <LazyThumbnail src={thumbUrl} ext={ext} alt={title} />
       </div>
       <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -78,19 +83,17 @@ const MessageCard = memo(({ msg, onClick }: { msg: Message; onClick: (m: Message
           <p className="text-sm font-medium text-white">{title}</p>
           <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}</p>
         </div>
-        <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
-          <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
-        </div>
-      </div>
-      <div className="shrink-0">
-        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400">NEW</span>
+        {!selectionMode && (
+          <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
+            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
+          </div>
+        )}
       </div>
     </div>
   );
 });
 
-// Memoized chat list item
-const ChatItem = memo(({ chat, selected, onClick }: { chat: Chat; selected: boolean; onClick: (phone: string) => void }) => (
+const ChatItem = memo(({ chat, selected, onClick }: any) => (
   <div onClick={() => onClick(chat.phone)}
     className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selected ? 'bg-blue-600/10' : ''}`}>
     <div className="flex items-center gap-2.5">
@@ -112,6 +115,13 @@ export default function WhatsApp() {
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [viewerFile, setViewerFile] = useState<Message | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedDocs, setSelectedDocs] = useState<Map<string, Message>>(new Map());
+  const [showPicker, setShowPicker] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
+  const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
+  const [targetPersonId, setTargetPersonId] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -163,9 +173,75 @@ export default function WhatsApp() {
   }, []);
 
   const handleShowQR = useCallback(async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); }, []);
-  const handleSelectChat = useCallback((phone: string) => setSelectedChat(phone), []);
+
+  const handleSelectChat = useCallback((phone: string) => {
+    setSelectedChat(phone);
+    setSelectionMode(false);
+    setSelectedDocs(new Map());
+  }, []);
+
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
   const handleCloseViewer = useCallback(() => setViewerFile(null), []);
+
+  const toggleDocSelection = useCallback((msg: Message) => {
+    setSelectedDocs(prev => {
+      const next = new Map(prev);
+      if (next.has(msg.id)) next.delete(msg.id);
+      else next.set(msg.id, msg);
+      return next;
+    });
+  }, []);
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedDocs(new Map());
+  };
+
+  const startBuildProfile = async () => {
+    setShowPicker(true);
+  };
+
+  const onPickerConfirm = async (personId: string) => {
+    setShowPicker(false);
+    setTargetPersonId(personId);
+    setExtracting(true);
+    setExtractError('');
+    try {
+      // Multi-document extraction — call extract per doc, merge results
+      const docs = Array.from(selectedDocs.values()).filter(d => d.fileName && !['mp4','3gp','mov','avi','webm','mp3','ogg','wav'].includes(d.fileName.split('.').pop()?.toLowerCase() || ''));
+      if (docs.length === 0) { setExtractError('No images or PDFs in selection'); setExtracting(false); return; }
+      const results: any[] = await Promise.all(
+        docs.map(d => api.post('/process/extract', { fileId: d.id }).then(r => ({ doc: d, result: r.data })).catch(() => null))
+      );
+      const merged: Record<string, any> = {};
+      for (const r of results) {
+        if (!r || !r.result?.suggested) continue;
+        for (const [k, v] of Object.entries(r.result.suggested)) {
+          const fieldInfo = v as any;
+          // Prefer first non-empty value, or longer/more confident value
+          if (!merged[k] || (fieldInfo.value && fieldInfo.value.length > (merged[k].value?.length || 0))) {
+            merged[k] = { ...fieldInfo, documentId: r.doc.id };
+          }
+        }
+      }
+      setExtractedSuggestions(merged);
+    } catch (e: any) {
+      setExtractError(e.message || 'Extraction failed');
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const onConfirmExtraction = async (acceptedFields: Record<string, any>) => {
+    if (!targetPersonId) return;
+    try {
+      await api.patch(`/customers/persons/${targetPersonId}`, { fields: acceptedFields });
+      setExtractedSuggestions(null);
+      setTargetPersonId(null);
+      exitSelectionMode();
+      alert('Profile updated with extracted fields');
+    } catch (e: any) { setExtractError(e.message); }
+  };
 
   const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
@@ -213,29 +289,83 @@ export default function WhatsApp() {
               <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 font-bold text-sm">
                 {activeChat.name[0]?.toUpperCase()}
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium text-white">{activeChat.name}</p>
-                <p className="text-[10px] text-gray-500">{activeChat.phone} · {activeChat.messages.length} documents</p>
+                <p className="text-[10px] text-gray-500">{activeChat.messages.length} documents</p>
               </div>
+              {!selectionMode ? (
+                <button onClick={() => setSelectionMode(true)} className="text-xs text-blue-400 hover:underline">Select Documents</button>
+              ) : (
+                <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
+              )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
               {reversedMessages.map(msg => (
-                <MessageCard key={msg.id} msg={msg} onClick={handleOpenFile} />
+                <MessageCard
+                  key={msg.id} msg={msg} onClick={handleOpenFile}
+                  selectionMode={selectionMode}
+                  selected={selectedDocs.has(msg.id)}
+                  onToggleSelect={toggleDocSelection}
+                />
               ))}
             </div>
+
+            {/* Floating action bar when items selected */}
+            {selectionMode && selectedDocs.size > 0 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-5 py-3 rounded-full shadow-xl flex items-center gap-3 z-10">
+                <span className="text-sm font-medium">{selectedDocs.size} selected</span>
+                <button onClick={startBuildProfile}
+                  className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold hover:bg-blue-50">
+                  Build Profile →
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
 
+      {/* Customer Picker Modal */}
+      {showPicker && (
+        <CustomerPicker
+          onCancel={() => setShowPicker(false)}
+          onConfirm={onPickerConfirm}
+          docCount={selectedDocs.size}
+        />
+      )}
+
+      {/* Extracting overlay */}
+      {extracting && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+          <div className="bg-[#0d1220] rounded-xl p-6 text-center">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-white text-sm">Extracting from {selectedDocs.size} document{selectedDocs.size !== 1 ? 's' : ''}...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Extraction error */}
+      {extractError && !extracting && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setExtractError('')}>
+          <div className="bg-[#0d1220] border border-red-500/30 rounded-xl p-6 max-w-sm">
+            <p className="text-red-400 text-sm mb-3">Extraction failed</p>
+            <p className="text-gray-400 text-xs">{extractError}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Extraction confirm modal */}
+      {extractedSuggestions && (
+        <ExtractionConfirmModal
+          suggestions={extractedSuggestions}
+          onCancel={() => { setExtractedSuggestions(null); setTargetPersonId(null); }}
+          onConfirm={onConfirmExtraction}
+        />
+      )}
+
+      {/* Document viewer */}
       {viewerFile && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={handleCloseViewer}>
-          <div className="absolute top-4 right-4 flex gap-3 z-10">
-            <button onClick={handleCloseViewer} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs hover:bg-white/20">✕ Close</button>
-          </div>
-          <div className="absolute top-4 left-4 z-10">
-            <p className="text-white text-sm font-medium">{docTitle(viewerFile.fileName || '').title}</p>
-            <p className="text-gray-400 text-xs">{timeAgo(viewerFile.timestamp)} · {viewerFile.name}</p>
-          </div>
+          <button onClick={handleCloseViewer} className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs">✕ Close</button>
           <div onClick={e => e.stopPropagation()} className="max-w-[90vw] max-h-[85vh]">
             {(() => {
               const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
@@ -243,13 +373,142 @@ export default function WhatsApp() {
               const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
               const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
               if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
-              if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" allow="autoplay; fullscreen" allowFullScreen /> : <video src={imgUrl} controls className="max-w-full max-h-[85vh] rounded-lg" />;
-              if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" title="PDF" /> : <div className="bg-[#1a2236] rounded-xl p-8 text-center"><p className="text-white">PDF preview unavailable</p></div>;
-              return <div className="bg-[#1a2236] rounded-xl p-8 text-center"><span className="text-4xl block mb-3">{docTitle(viewerFile.fileName || '').icon}</span><p className="text-white">{viewerFile.fileName}</p></div>;
+              if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" /> : null;
+              if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" title="PDF" /> : null;
+              return <div className="bg-[#1a2236] rounded-xl p-8 text-center"><p className="text-white">{viewerFile.fileName}</p></div>;
             })()}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => void; onConfirm: (personId: string) => void; docCount: number }) {
+  const [households, setHouseholds] = useState<Household[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState({ phone: '', name: '', relationship: 'self' });
+  const [createdInHousehold, setCreatedInHousehold] = useState<string | null>(null);
+
+  useEffect(() => { api.get('/customers/households').then(r => setHouseholds(r.data)); }, []);
+
+  const handleCreatePerson = async (phone: string, name: string, relationship: string) => {
+    const r = await api.post('/customers/persons', { phone, name, displayLabel: name, relationship });
+    return r.data.id;
+  };
+
+  const handleQuickCreate = async () => {
+    if (!form.phone || !form.name) return;
+    const id = await handleCreatePerson(form.phone, form.name, form.relationship);
+    onConfirm(id);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} className="bg-[#0d1220] border border-white/10 rounded-xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <h3 className="text-base font-bold text-white mb-1">Build profile from {docCount} document{docCount !== 1 ? 's' : ''}</h3>
+        <p className="text-xs text-gray-500 mb-4">Select an existing person, or create a new one</p>
+
+        {!showCreate ? (
+          <>
+            <div className="space-y-3 mb-4">
+              {households.map(h => (
+                <div key={h.phone}>
+                  <p className="text-[10px] text-gray-500 uppercase mb-1 px-1">{h.phone}</p>
+                  <div className="space-y-1">
+                    {h.persons.map(p => (
+                      <button key={p.id} onClick={() => onConfirm(p.id)}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-blue-600/20 text-sm text-white flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold">{p.name?.[0]}</div>
+                        <div className="flex-1">
+                          <div className="text-sm">{p.displayLabel || p.name}</div>
+                          <div className="text-[10px] text-gray-500 capitalize">{p.relationship}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowCreate(true)} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">+ Create New Person</button>
+          </>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[11px] text-gray-500 uppercase">Phone</label>
+              <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
+                placeholder="9823745234"
+                className="w-full mt-1 px-3 py-2 bg-[#1a2236] border border-white/10 rounded-lg text-sm text-white outline-none" />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-500 uppercase">Name</label>
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                className="w-full mt-1 px-3 py-2 bg-[#1a2236] border border-white/10 rounded-lg text-sm text-white outline-none" />
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-500 uppercase">Relationship</label>
+              <select value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })}
+                className="w-full mt-1 px-3 py-2 bg-[#1a2236] border border-white/10 rounded-lg text-sm text-white outline-none">
+                <option value="self">Self</option>
+                <option value="spouse">Spouse</option>
+                <option value="parent">Parent</option>
+                <option value="child">Child</option>
+                <option value="sibling">Sibling</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleQuickCreate} disabled={!form.phone || !form.name}
+                className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm disabled:opacity-50">Create & Use</button>
+              <button onClick={() => setShowCreate(false)} className="px-3 py-2 bg-white/5 text-gray-400 rounded-lg text-sm">Back</button>
+            </div>
+          </div>
+        )}
+
+        <button onClick={onCancel} className="w-full mt-3 text-xs text-gray-500 hover:text-white">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
+  const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
+
+  const toggle = (key: string) => {
+    setAccepted((prev: any) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key];
+      else next[key] = suggestions[key];
+      return next;
+    });
+  };
+  const updateValue = (key: string, value: string) => {
+    setAccepted((prev: any) => ({ ...prev, [key]: { ...prev[key], value, source: 'document_corrected' } }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} className="bg-[#0d1220] border border-blue-500/30 rounded-xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
+        <p className="text-sm font-medium text-blue-400 mb-3">Review extracted fields</p>
+        <p className="text-xs text-gray-500 mb-4">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
+        <div className="space-y-2 mb-4">
+          {Object.entries(suggestions).map(([k, v]: [string, any]) => (
+            <div key={k} className="flex items-center gap-2">
+              <input type="checkbox" checked={!!accepted[k]} onChange={() => toggle(k)} className="accent-blue-500" />
+              <span className="text-xs text-gray-400 w-24 capitalize shrink-0">{k.replace(/_/g, ' ')}</span>
+              <input
+                value={accepted[k]?.value || v.value || ''}
+                onChange={e => updateValue(k, e.target.value)}
+                disabled={!accepted[k]}
+                className="flex-1 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-xs text-white outline-none disabled:opacity-50" />
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => onConfirm(accepted)} className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded">Confirm & Save</button>
+          <button onClick={onCancel} className="px-3 py-1.5 bg-white/5 text-gray-400 text-sm rounded">Cancel</button>
+        </div>
+      </div>
     </div>
   );
 }
