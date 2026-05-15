@@ -1293,6 +1293,19 @@ app.post('/api/process/extract', authMiddleware, async (req, res) => {
   const GROQ_API_KEY = process.env['GROQ_API_KEY'];
   if (!GROQ_API_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
   try {
+    // Check file metadata first to detect type
+    const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name`, {
+      headers: { Authorization: `Bearer ${app.locals.driveAccessToken}` }
+    });
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      if (meta.mimeType === 'application/pdf') {
+        return res.json({ ok: false, error: 'pdf_not_supported', message: 'PDF documents are not yet supported. Please send the document as an image (JPG/PNG).' });
+      }
+      if (!meta.mimeType?.startsWith('image/')) {
+        return res.json({ ok: false, error: 'unsupported_type', message: `Cannot extract from ${meta.mimeType}. Only images supported.` });
+      }
+    }
     // Download file from Drive
     const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
       headers: { Authorization: `Bearer ${app.locals.driveAccessToken}` }

@@ -214,15 +214,26 @@ export default function WhatsApp() {
         docs.map(d => api.post('/process/extract', { fileId: d.id }).then(r => ({ doc: d, result: r.data })).catch(() => null))
       );
       const merged: Record<string, any> = {};
+      const errors: string[] = [];
       for (const r of results) {
-        if (!r || !r.result?.suggested) continue;
+        if (!r) continue;
+        if (r.result?.error) { errors.push(r.doc.fileName + ': ' + (r.result.message || r.result.error)); continue; }
+        if (!r.result?.suggested) continue;
         for (const [k, v] of Object.entries(r.result.suggested)) {
           const fieldInfo = v as any;
-          // Prefer first non-empty value, or longer/more confident value
           if (!merged[k] || (fieldInfo.value && fieldInfo.value.length > (merged[k].value?.length || 0))) {
             merged[k] = { ...fieldInfo, documentId: r.doc.id };
           }
         }
+      }
+      // Remove document_type from saved fields (it's just a classification, not profile data)
+      delete merged.document_type;
+      if (Object.keys(merged).length === 0) {
+        const errMsg = errors.length > 0
+          ? errors.join('\n')
+          : 'No extractable data found in selected documents. Make sure you selected actual ID/document images, not photos or screenshots.';
+        setExtractError(errMsg);
+        return;
       }
       setExtractedSuggestions(merged);
     } catch (e: any) {
