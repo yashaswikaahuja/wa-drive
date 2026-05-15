@@ -11,6 +11,32 @@ const { Pool } = pg;
 // ── Database Pool ──────────────────────────────────────────────────────────
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
+
+// ── Drive Token Persistence ────────────────────────────────────────────────
+// Persist drive access token to database so it survives backend restarts.
+let _driveTokenLoaded = false;
+async function loadDriveTokenFromDB() {
+  try {
+    const r = await pool.query("SELECT value FROM app_secrets WHERE key = 'drive_access_token'");
+    if (r.rows.length && r.rows[0].value) {
+      driveAccessToken = r.rows[0].value;
+      app.locals.driveAccessToken = driveAccessToken;
+      console.log('[Drive] Loaded token from DB');
+    }
+  } catch (e) { console.warn('[Drive] Token load failed:', e.message); }
+  _driveTokenLoaded = true;
+}
+async function persistDriveToken(token) {
+  try {
+    if (token) {
+      await pool.query("INSERT INTO app_secrets (key, value, updated_at) VALUES ('drive_access_token', $1, now()) ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = now()", [token]);
+    } else {
+      await pool.query("DELETE FROM app_secrets WHERE key = 'drive_access_token'");
+    }
+  } catch (e) { console.warn('[Drive] Token persist failed:', e.message); }
+}
+loadDriveTokenFromDB();
+
 // ── JWT Config ─────────────────────────────────────────────────────────────
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret';
@@ -272,11 +298,12 @@ function mimeToType(mime) {
     return 'file';
 }
 // ── Routes ───────────────────────────────────────────────────────────────────
-app.post('/api/drive/token', (req, res) => {
+app.post('/api/drive/token', async (req, res) => {
     const { accessToken } = req.body;
     driveAccessToken = accessToken ?? null;
     app.locals.driveAccessToken = driveAccessToken;
     workerSocket?.emit('drive:token', driveAccessToken);
+    await persistDriveToken(driveAccessToken);
     res.json({ ok: true });
 });
 app.delete('/api/drive/files/:fileId', async (req, res) => {
@@ -1269,7 +1296,11 @@ app.post('/api/process/extract', authMiddleware, async (req, res) => {
     const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
       headers: { Authorization: `Bearer ${app.locals.driveAccessToken}` }
     });
-    if (!driveRes.ok) return res.status(driveRes.status).json({ error: 'Drive download failed' });
+    if (!driveRes.ok) {
+      const errText = await driveRes.text();
+      console.error('[Extract] Drive download failed', driveRes.status, errText.slice(0,200));
+      return res.status(driveRes.status).json({ error: 'Drive download failed', detail: errText.slice(0, 200) });
+    }
     const buffer = Buffer.from(await driveRes.arrayBuffer());
     const base64 = buffer.toString('base64');
     const prompt = `You are an OCR assistant. Extract information from this Indian identity document and return ONLY a valid JSON object with these fields:
