@@ -157,7 +157,8 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/files', filesRoutes);
-app.use('/api/process', processRoutes);
+// legacy route disabled in favor of auth-wrapped /api/process/extract
+// app.use('/api/process', processRoutes);
 // Inject pool into req for route handlers
 app.use((req, res, next) => { req.pool = pool; next(); });
 
@@ -1303,13 +1304,41 @@ app.post('/api/process/extract', authMiddleware, async (req, res) => {
     }
     const buffer = Buffer.from(await driveRes.arrayBuffer());
     const base64 = buffer.toString('base64');
-    const prompt = `You are an OCR assistant. Extract information from this Indian identity document and return ONLY a valid JSON object with these fields:
-{ "name": "", "dob": "", "gender": "", "id_number": "", "address": "", "father_name": "", "mother_name": "", "expiry": "" }
+    const prompt = `Analyze this image and return ONLY a valid JSON object with the following structure (no explanation, no markdown):
+{
+  "document_type": "",
+  "name": "",
+  "dob": "",
+  "gender": "",
+  "id_number": "",
+  "address": "",
+  "father_name": "",
+  "mother_name": "",
+  "husband_name": "",
+  "phone": "",
+  "email": "",
+  "expiry": ""
+}
+
+document_type values:
+- "aadhaar" - Indian Aadhaar card
+- "pan" - PAN card
+- "passport" - Passport
+- "voter_id" - Voter ID
+- "driving_license" - Driving licence
+- "marksheet" - School/college marksheet
+- "certificate" - Certificate
+- "photo" - Personal photo (passport-size, selfie, portrait)
+- "signature" - Signature image
+- "other" - Anything else
+
 Rules:
-- Fill only fields visible. Leave others as empty string.
+- Always set document_type.
+- Fill only fields visible in the document. Leave others as empty string.
 - dob format: DD/MM/YYYY
-- id_number: Aadhaar (12 digits), PAN (10 chars), Passport, Voter ID, etc.
-- Return only JSON, no explanation.`;
+- id_number: extract digits only (Aadhaar 12, PAN 10, etc.)
+- For photos/signatures, only set document_type and leave other fields empty.
+- Return ONLY the JSON, no surrounding text.`;
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
