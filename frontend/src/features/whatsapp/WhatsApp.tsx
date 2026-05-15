@@ -327,6 +327,7 @@ export default function WhatsApp() {
   };
 
   const onConfirmExtraction = async (acceptedFields: Record<string, any>) => {
+    console.log('[Save] targetPersonId:', targetPersonId, 'fields:', Object.keys(acceptedFields).length);
     if (!targetPersonId) return;
     try {
       await api.patch(`/customers/persons/${targetPersonId}`, { fields: acceptedFields });
