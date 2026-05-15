@@ -180,10 +180,10 @@ fillBtn.addEventListener('click', async () => {
         try { const r = await fetch(backendUrl+'/adapters/'+location.hostname,{headers}); adp=await r.json(); } catch {}
 
         // AI mapping for fields fuzzyMatch couldn't handle
-        const unmapped = formFields.filter(f => !mapping[f.selector]);
-        if (unmapped.length > 0 && groqKey) {
+        const unmappedAI = formFields.filter(f => !mapping[f.selector]);
+        if (unmappedAI.length > 0 && groqKey) {
           try {
-            const aiMapping = await aiMatch(unmapped, profile, groqKey);
+            const aiMapping = await aiMatch(unmappedAI, profile, groqKey);
             for (const [sel, val] of Object.entries(aiMapping)) {
               if (!mapping[sel]) { mapping[sel] = val; fbs[sel] = { label: 'ai', source: 'ai' }; }
             }
