@@ -1179,6 +1179,132 @@ app.patch('/api/jobs/:id/progress', authMiddleware, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+// ── Phase B: Household + Person Model ────────────────────────────────────
+// Multiple persons per phone (household). UI groups them.
+app.get('/api/customers/households', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        primary_contact_phone as phone,
+        COUNT(*) as person_count,
+        ARRAY_AGG(json_build_object(
+          'id', id,
+          'name', name,
+          'displayLabel', display_label,
+          'relationship', relationship,
+          'createdAt', created_at,
+          'updatedAt', updated_at
+        ) ORDER BY relationship = 'self' DESC, created_at) as persons
+      FROM profiles
+      WHERE workspace_id = $1 AND deleted_at IS NULL
+      GROUP BY primary_contact_phone
+      ORDER BY MAX(updated_at) DESC
+    `, [req.user.workspaceId]);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/customers/persons — create a new person in a household
+app.post('/api/customers/persons', authMiddleware, async (req, res) => {
+  const { phone, name, relationship, displayLabel, data } = req.body;
+  if (!phone || !name) return res.status(400).json({ error: 'phone and name required' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO profiles (workspace_id, primary_contact_phone, name, display_label, relationship, data, created_by)
+      VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
+    `, [req.user.workspaceId, phone, name, displayLabel || name, relationship || 'self', JSON.stringify(data || {}), req.user.userId]);
+    res.json({ ok: true, id: rows[0].id });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /api/customers/persons/:id — update person fields with provenance
+// Body: { fields: { fieldKey: { value, source, documentId, confidence } } }
+app.patch('/api/customers/persons/:id', authMiddleware, async (req, res) => {
+  const { fields, displayLabel, relationship } = req.body;
+  try {
+    // Verify ownership
+    const { rows } = await pool.query(
+      "SELECT data FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Person not found' });
+    const current = rows[0].data || {};
+    const merged = { ...current };
+    if (fields) {
+      const now = new Date().toISOString();
+      for (const [key, info] of Object.entries(fields)) {
+        const fieldInfo = info;
+        merged[key] = {
+          value: fieldInfo.value,
+          source: fieldInfo.source || 'manual',
+          documentId: fieldInfo.documentId || null,
+          confidence: fieldInfo.confidence || 1.0,
+          confirmedBy: req.user.userId,
+          confirmedAt: now,
+        };
+      }
+    }
+    const updates = ['data = $1::jsonb', 'updated_by = $2', 'updated_at = now()'];
+    const params = [JSON.stringify(merged), req.user.userId];
+    let pi = 3;
+    if (displayLabel !== undefined) { updates.push(`display_label = $${pi}`); params.push(displayLabel); pi++; }
+    if (relationship !== undefined) { updates.push(`relationship = $${pi}`); params.push(relationship); pi++; }
+    params.push(req.params.id, req.user.workspaceId);
+    await pool.query(`UPDATE profiles SET ${updates.join(', ')} WHERE id = $${pi} AND workspace_id = $${pi+1}`, params);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/process/extract — extract structured fields from a document via Groq Vision
+// Body: { fileId } where fileId is a Drive file ID
+app.post('/api/process/extract', authMiddleware, async (req, res) => {
+  const { fileId } = req.body;
+  if (!fileId) return res.status(400).json({ error: 'fileId required' });
+  if (!app.locals.driveAccessToken) return res.status(401).json({ error: 'Not connected to Google Drive' });
+  const GROQ_API_KEY = process.env['GROQ_API_KEY'];
+  if (!GROQ_API_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
+  try {
+    // Download file from Drive
+    const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: `Bearer ${app.locals.driveAccessToken}` }
+    });
+    if (!driveRes.ok) return res.status(driveRes.status).json({ error: 'Drive download failed' });
+    const buffer = Buffer.from(await driveRes.arrayBuffer());
+    const base64 = buffer.toString('base64');
+    const prompt = `You are an OCR assistant. Extract information from this Indian identity document and return ONLY a valid JSON object with these fields:
+{ "name": "", "dob": "", "gender": "", "id_number": "", "address": "", "father_name": "", "mother_name": "", "expiry": "" }
+Rules:
+- Fill only fields visible. Leave others as empty string.
+- dob format: DD/MM/YYYY
+- id_number: Aadhaar (12 digits), PAN (10 chars), Passport, Voter ID, etc.
+- Return only JSON, no explanation.`;
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
+        ]}],
+        max_tokens: 400,
+      }),
+    });
+    const groqData = await groqRes.json();
+    const text = groqData?.choices?.[0]?.message?.content || '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.status(500).json({ error: 'AI did not return JSON', raw: text.slice(0, 200) });
+    const fields = JSON.parse(jsonMatch[0]);
+    // Wrap each field with provenance metadata for the frontend to confirm
+    const suggested = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (v && String(v).trim()) suggested[k] = { value: v, source: 'document', documentId: fileId, confidence: 0.9 };
+    }
+    res.json({ ok: true, suggested, raw: fields });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 // ── Socket.IO ────────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {

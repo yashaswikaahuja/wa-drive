@@ -10,6 +10,7 @@ import Layout from './shared/Layout';
 // Lazy-loaded routes — each becomes a separate chunk
 const Dashboard = lazy(() => import('./features/dashboard/Dashboard'));
 const Customers = lazy(() => import('./features/customers/Customers'));
+const CustomerDetail = lazy(() => import('./features/customers/CustomerDetail'));
 const Jobs = lazy(() => import('./features/jobs/Jobs'));
 const NewJob = lazy(() => import('./features/jobs/NewJob'));
 const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
@@ -43,6 +44,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/app" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
           <Route path="/app/customers" element={<Suspense fallback={<PageLoader />}><Customers /></Suspense>} />
+          <Route path="/app/customers/:id" element={<Suspense fallback={<PageLoader />}><CustomerDetail /></Suspense>} />
           <Route path="/app/jobs" element={<Suspense fallback={<PageLoader />}><Jobs /></Suspense>} />
           <Route path="/app/jobs/new" element={<Suspense fallback={<PageLoader />}><NewJob /></Suspense>} />
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
