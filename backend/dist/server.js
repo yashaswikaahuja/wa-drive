@@ -1,6 +1,9 @@
 import dotenv from "dotenv"; dotenv.config({ path: "/opt/cybercontrol-hub/backend/.env" });
 import { saveWhatsAppFile } from "./db.js";
 import express from 'express';
+import { spawnSync } from 'child_process';
+import { unlinkSync } from 'fs';
+import { tmpdir } from 'os';
 import compression from 'compression';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
@@ -1297,13 +1300,12 @@ app.post('/api/process/extract', authMiddleware, async (req, res) => {
     const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name`, {
       headers: { Authorization: `Bearer ${app.locals.driveAccessToken}` }
     });
+    let mimeType = 'image/jpeg';
     if (metaRes.ok) {
       const meta = await metaRes.json();
-      if (meta.mimeType === 'application/pdf') {
-        return res.json({ ok: false, error: 'pdf_not_supported', message: 'PDF documents are not yet supported. Please send the document as an image (JPG/PNG).' });
-      }
-      if (!meta.mimeType?.startsWith('image/')) {
-        return res.json({ ok: false, error: 'unsupported_type', message: `Cannot extract from ${meta.mimeType}. Only images supported.` });
+      mimeType = meta.mimeType || mimeType;
+      if (!mimeType.startsWith('image/') && mimeType !== 'application/pdf') {
+        return res.json({ ok: false, error: 'unsupported_type', message: `Cannot extract from ${mimeType}. Only images and PDFs supported.` });
       }
     }
     // Download file from Drive
@@ -1315,7 +1317,32 @@ app.post('/api/process/extract', authMiddleware, async (req, res) => {
       console.error('[Extract] Drive download failed', driveRes.status, errText.slice(0,200));
       return res.status(driveRes.status).json({ error: 'Drive download failed', detail: errText.slice(0, 200) });
     }
-    const buffer = Buffer.from(await driveRes.arrayBuffer());
+    let buffer = Buffer.from(await driveRes.arrayBuffer());
+    // If PDF, convert first page to JPG using pdftoppm
+    if (mimeType === 'application/pdf') {
+      const tmpPdf = `${tmpdir()}/cc_pdf_${Date.now()}.pdf`;
+      const tmpJpgBase = `${tmpdir()}/cc_pdf_${Date.now()}_out`;
+      try {
+        writeFileSync(tmpPdf, buffer);
+        const r = spawnSync('pdftoppm', ['-jpeg', '-f', '1', '-l', '1', '-r', '150', tmpPdf, tmpJpgBase], { encoding: 'buffer' });
+        if (r.status !== 0) {
+          console.error('[Extract] pdftoppm failed:', r.stderr?.toString());
+          unlinkSync(tmpPdf);
+          return res.json({ ok: false, error: 'pdf_conversion_failed', message: 'PDF could not be converted to image' });
+        }
+        const jpgPath = `${tmpJpgBase}-1.jpg`;
+        if (!existsSync(jpgPath)) {
+          unlinkSync(tmpPdf);
+          return res.json({ ok: false, error: 'pdf_no_output', message: 'PDF conversion produced no output' });
+        }
+        buffer = (await import('fs')).readFileSync(jpgPath);
+        unlinkSync(tmpPdf);
+        unlinkSync(jpgPath);
+      } catch (e) {
+        try { unlinkSync(tmpPdf); } catch {}
+        return res.status(500).json({ error: 'PDF conversion error: ' + e.message });
+      }
+    }
     const base64 = buffer.toString('base64');
     const prompt = `Analyze this image and return ONLY a valid JSON object with the following structure (no explanation, no markdown):
 {
