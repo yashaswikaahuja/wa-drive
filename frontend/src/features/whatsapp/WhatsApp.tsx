@@ -122,6 +122,7 @@ export default function WhatsApp() {
   const [extractError, setExtractError] = useState('');
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
   const [targetPersonId, setTargetPersonId] = useState<string | null>(null);
+  const targetPersonIdRef = useRef<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
@@ -203,6 +204,7 @@ export default function WhatsApp() {
 
   const onPickerConfirm = async (personId: string) => {
     setShowPicker(false);
+    targetPersonIdRef.current = personId;
     setTargetPersonId(personId);
     setExtracting(true);
     setExtractError('');
@@ -327,10 +329,11 @@ export default function WhatsApp() {
   };
 
   const onConfirmExtraction = async (acceptedFields: Record<string, any>) => {
-    console.log('[Save] targetPersonId:', targetPersonId, 'fields:', Object.keys(acceptedFields).length);
-    if (!targetPersonId) return;
+    const pid = targetPersonIdRef.current || targetPersonId;
+    console.log('[Save] personId:', pid, 'fields:', Object.keys(acceptedFields).length);
+    if (!pid) { setExtractError('No target person — pick a person first'); return; }
     try {
-      await api.patch(`/customers/persons/${targetPersonId}`, { fields: acceptedFields });
+      await api.patch(`/customers/persons/${pid}`, { fields: acceptedFields });
       setExtractedSuggestions(null);
       setTargetPersonId(null);
       exitSelectionMode();
