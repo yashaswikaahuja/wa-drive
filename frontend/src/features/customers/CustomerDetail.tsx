@@ -257,7 +257,6 @@ export default function CustomerDetail() {
                     ) : (
                       <button onClick={() => setAddingInSection(section.id)} className="text-[10px] text-blue-400 hover:text-blue-300 mt-1.5">+ Add</button>
                     )}
-                    </div>
                   </div>
                 );
               })}
