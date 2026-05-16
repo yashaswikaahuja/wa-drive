@@ -59,6 +59,8 @@ export default function CustomerDetail() {
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
   const [extractDocId, setExtractDocId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   const loadHousehold = async () => {
     const r = await api.get('/customers/households');
@@ -91,6 +93,15 @@ export default function CustomerDetail() {
       setShowAddPerson(false);
       await loadHousehold();
     } catch (e: any) { setError(e.message); }
+  };
+
+  const saveField = async (key: string, value: string) => {
+    if (!selectedPerson) return;
+    try {
+      await api.patch(`/customers/persons/${selectedPerson}`, { fields: { [key]: { value, source: 'manual', confidence: 1 } } });
+      await loadPerson(selectedPerson);
+    } catch (e: any) { setError(e.message); }
+    setEditingField(null);
   };
 
   const handleExtract = async (doc: DriveFile) => {
@@ -198,13 +209,22 @@ export default function CustomerDetail() {
                         const val = flat[f.key];
                         const rawVal = raw[f.key];
                         const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
+                        const isEditing = editingField === f.key;
                         return (
                           <div key={f.key} className="flex flex-col">
                             <span className={`text-[9px] ${val ? 'text-gray-500' : 'text-red-400/60'}`}>{f.label}{f.required && !val ? ' *' : ''}</span>
-                            <div className="flex items-center gap-1">
-                              <span className={`text-[11px] truncate ${val ? 'text-white' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
-                              {docId && <span className="text-[8px] text-blue-400/60" title={`From document ${docId}`}>📄</span>}
-                            </div>
+                            {isEditing ? (
+                              <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+                                onBlur={() => { if (editValue !== (val||'')) saveField(f.key, editValue); else setEditingField(null); }}
+                                onKeyDown={e => { if (e.key === 'Enter') { saveField(f.key, editValue); } if (e.key === 'Escape') setEditingField(null); }}
+                                className="text-[11px] bg-blue-600/10 border border-blue-500/30 rounded px-1 py-0.5 text-white outline-none w-full" />
+                            ) : (
+                              <div className="flex items-center gap-1 cursor-pointer group/field" onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}>
+                                <span className={`text-[11px] truncate ${val ? 'text-white' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
+                                {docId && <span className="text-[8px] text-blue-400/60" title={`From document ${docId}`}>📄</span>}
+                                <span className="text-[9px] text-gray-600 opacity-0 group-hover/field:opacity-100">✎</span>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
