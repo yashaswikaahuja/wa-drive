@@ -150,7 +150,7 @@ export default function CustomerDetail() {
 
       <div className="grid grid-cols-12 gap-4">
         {/* Left: Persons in household */}
-        <div className="col-span-3">
+        <div className="col-span-2">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-medium text-gray-500 uppercase">People</h3>
             <button onClick={() => setShowAddPerson(true)} className="text-xs text-blue-400 hover:underline">+ Add</button>
@@ -168,7 +168,7 @@ export default function CustomerDetail() {
         </div>
 
         {/* Center: Selected person detail */}
-        <div className="col-span-5">
+        <div className="col-span-7">
           <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Profile</h3>
           {personDetail ? (
             <div className="space-y-2">
@@ -260,7 +260,7 @@ export default function CustomerDetail() {
                         <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-[10px] text-gray-500 px-1">✕</button>
                       </div>
                     ) : (
-                      <button onClick={() => setAddingInSection(section.id)} className="text-[9px] text-blue-400/70 hover:text-blue-400 mt-1.5">+ Add field</button>
+                      <button onClick={() => setAddingInSection(section.id)} className="text-[10px] text-blue-400 hover:text-blue-300 mt-1.5 border border-blue-500/20 rounded px-2 py-0.5">+ Add</button>
                     )}
                     </div>
                   </div>
@@ -281,7 +281,7 @@ export default function CustomerDetail() {
         </div>
 
         {/* Right: Documents */}
-        <div className="col-span-4">
+        <div className="col-span-3">
           <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Documents from this household</h3>
           {documents.length === 0 ? (
             <p className="text-xs text-gray-600 italic">No documents yet. Documents sent on WhatsApp from this number will appear here.</p>
