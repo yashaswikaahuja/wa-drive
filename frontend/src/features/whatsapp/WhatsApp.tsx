@@ -218,14 +218,22 @@ export default function WhatsApp() {
 
   const handleShowQR = useCallback(async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); }, []);
 
-  // If disconnected with no QR yet, request current state from backend via socket
+  // Poll status until connected (WhatsApp service doesn't use parent socket)
   useEffect(() => {
-    if (connected || qrCode) return;
-    const socket = socketRef.current;
-    if (!socket) return;
-    // Ask backend to re-send current connection:status (which includes QR if available)
-    socket.emit('request:status');
-  }, [connected, qrCode]);
+    if (connected) return;
+    const poll = setInterval(() => {
+      api.get('/whatsapp/status').then(r => {
+        if (r.data.connected) {
+          setConnected(true); setQrCode(null); setReconnecting(false);
+          localStorage.setItem('cc-wa-connected', 'true');
+          clearInterval(poll);
+        } else if (r.data.qr) {
+          setQrCode(r.data.qr); setReconnecting(false);
+        }
+      }).catch(() => {});
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [connected]);
 
   const handleSelectChat = useCallback((phone: string) => {
     setSelectedChat(phone);
