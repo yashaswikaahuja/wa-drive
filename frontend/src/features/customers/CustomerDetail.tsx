@@ -61,6 +61,9 @@ export default function CustomerDetail() {
   const [error, setError] = useState('');
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [addingInSection, setAddingInSection] = useState<string | null>(null);
+  const [newFieldKey, setNewFieldKey] = useState('');
+  const [newFieldValue, setNewFieldValue] = useState('');
 
   const loadHousehold = async () => {
     const r = await api.get('/customers/households');
@@ -228,6 +231,37 @@ export default function CustomerDetail() {
                           </div>
                         );
                       })}
+                      {/* Extra fields not in schema */}
+                      {Object.entries(flat).filter(([k]) => !section.fields.some(f => f.key === k) && !PROFILE_SCHEMA.some(s => s !== section && s.fields.some(f => f.key === k))).length === 0 ? null :
+                        Object.entries(flat).filter(([k]) => {
+                          const inThisSection = section.fields.some(f => f.key === k);
+                          const inOtherSection = PROFILE_SCHEMA.some(s => s.fields.some(f => f.key === k));
+                          return !inThisSection && !inOtherSection;
+                        }).length > 0 && section === PROFILE_SCHEMA[PROFILE_SCHEMA.length - 1] &&
+                        Object.entries(flat).filter(([k]) => !PROFILE_SCHEMA.some(s => s.fields.some(f => f.key === k))).map(([k, val]) => (
+                          <div key={k} className="flex flex-col">
+                            <span className="text-[9px] text-gray-500">{k.replace(/_/g, ' ')}</span>
+                            <div className="flex items-center gap-1 cursor-pointer group/field" onClick={() => { setEditingField(k); setEditValue(val || ''); }}>
+                              <span className="text-[11px] text-white truncate">{val}</span>
+                              <span className="text-[9px] text-gray-600 opacity-0 group-hover/field:opacity-100">✎</span>
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                    {addingInSection === section.id ? (
+                      <div className="flex gap-2 mt-2">
+                        <input placeholder="Field name" value={newFieldKey} onChange={e => setNewFieldKey(e.target.value)}
+                          className="text-[11px] bg-[#1a2236] border border-white/10 rounded px-2 py-1 text-white outline-none flex-1" />
+                        <input placeholder="Value" value={newFieldValue} onChange={e => setNewFieldValue(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && newFieldKey && newFieldValue) { saveField(newFieldKey.toLowerCase().replace(/\s+/g, '_'), newFieldValue); setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); } }}
+                          className="text-[11px] bg-[#1a2236] border border-white/10 rounded px-2 py-1 text-white outline-none flex-1" />
+                        <button onClick={() => { if (newFieldKey && newFieldValue) { saveField(newFieldKey.toLowerCase().replace(/\s+/g, '_'), newFieldValue); setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); } }} className="text-[10px] text-green-400 px-2">Save</button>
+                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-[10px] text-gray-500 px-1">✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setAddingInSection(section.id)} className="text-[9px] text-blue-400/70 hover:text-blue-400 mt-1.5">+ Add field</button>
+                    )}
                     </div>
                   </div>
                 );
