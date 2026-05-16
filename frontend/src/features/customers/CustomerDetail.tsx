@@ -260,6 +260,29 @@ export default function CustomerDetail() {
                   </div>
                 );
               })}
+              {/* Other fields not in schema */}
+              {(() => {
+                const flat = flattenProfileData(personDetail.data || {});
+                const schemaKeys = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
+                const otherFields = Object.entries(flat).filter(([k]) => !schemaKeys.has(k) && k !== 'document_type');
+                if (!otherFields.length) return null;
+                return (
+                  <div className="bg-[#0d1220] border border-white/5 rounded-lg px-3 py-2">
+                    <p className="text-[10px] font-medium text-gray-500 mb-1.5">📎 Other Details</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      {otherFields.map(([k, val]) => (
+                        <div key={k} className="flex flex-col">
+                          <span className="text-[9px] text-gray-500">{k.replace(/_/g, ' ')}</span>
+                          <div className="flex items-center gap-1 cursor-pointer group" onClick={() => { setEditingField(k); setEditValue(val || ''); }}>
+                            <span className="text-[11px] text-white truncate">{val}</span>
+                            <span className="text-[9px] text-gray-600 opacity-0 group-hover:opacity-100">✎</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           ) : <p className="text-gray-600 text-sm">Select a person</p>}
 
