@@ -146,7 +146,15 @@ export default function WhatsApp() {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    api.get('/whatsapp/status').then(r => { setConnected(r.data.connected); localStorage.setItem('cc-wa-connected', String(r.data.connected)); }).catch(() => {});
+    api.get('/whatsapp/status').then(r => {
+      setConnected(r.data.connected);
+      localStorage.setItem('cc-wa-connected', String(r.data.connected));
+      // Auto-start session if none exists
+      if (r.data.status === 'none' || (!r.data.connected && !r.data.qr)) {
+        api.post('/whatsapp/connect').catch(() => {});
+      }
+      if (r.data.qr) setQrCode(r.data.qr);
+    }).catch(() => {});
     // Load cached data instantly, then refresh from server
     const cached = localStorage.getItem('cc-drive-files');
     if (cached) {
