@@ -157,11 +157,10 @@ export default function CustomerDetail() {
         <div className="col-span-5">
           <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Profile</h3>
           {personDetail ? (
-            <div className="space-y-3">
-              <div className="bg-[#0d1220] border border-white/5 rounded-xl p-4">
+            <div className="space-y-2">
+              <div className="bg-[#0d1220] border border-white/5 rounded-xl p-3">
                 <p className="text-sm font-medium text-white">{personDetail.display_label || personDetail.name}</p>
-                <p className="text-[11px] text-gray-500 capitalize mb-3">{personDetail.relationship || 'self'}</p>
-                {/* Completeness bar */}
+                <p className="text-[11px] text-gray-500 capitalize mb-2">{personDetail.relationship || 'self'}</p>
                 {(() => {
                   const flat = flattenProfileData(personDetail.data || {});
                   const { percent, filled, total, missing } = getCompleteness(flat);
@@ -169,34 +168,43 @@ export default function CustomerDetail() {
                     <div>
                       <div className="flex justify-between text-[10px] text-gray-500 mb-1">
                         <span>{percent}% ready for SSC OTR</span>
-                        <span>{filled}/{total} required fields</span>
+                        <span>{filled}/{total} required</span>
                       </div>
                       <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full transition-all ${percent >= 80 ? 'bg-green-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${percent}%`}} />
+                        <div className={`h-full rounded-full ${percent >= 80 ? 'bg-green-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${percent}%`}} />
                       </div>
-                      {missing.length > 0 && percent < 100 && (
-                        <p className="text-[9px] text-gray-600 mt-1">Missing: {missing.slice(0, 3).join(', ')}{missing.length > 3 ? ` +${missing.length - 3} more` : ''}</p>
-                      )}
+                      {missing.length > 0 && <p className="text-[9px] text-gray-600 mt-1">Missing: {missing.slice(0, 4).join(', ')}</p>}
                     </div>
                   );
                 })()}
               </div>
-              {/* Sections */}
               {PROFILE_SCHEMA.map(section => {
-                const flat = flattenProfileData(personDetail.data || {});
+                const raw = personDetail.data || {};
+                const flat = flattenProfileData(raw);
+                const visibleFields = section.fields.filter(f => flat[f.key] || f.required);
+                if (!visibleFields.length) return null;
                 const hasAny = section.fields.some(f => flat[f.key]);
+                if (!hasAny) return (
+                  <div key={section.id} className="bg-[#0d1220] border border-white/[0.02] rounded-lg px-3 py-2 flex justify-between items-center">
+                    <span className="text-[11px] text-gray-600">{section.icon} {section.title}</span>
+                    <span className="text-[9px] text-gray-700">No data</span>
+                  </div>
+                );
                 return (
-                  <div key={section.id} className={`bg-[#0d1220] border rounded-xl p-3 ${hasAny ? 'border-white/5' : 'border-white/[0.02]'}`}>
-                    <p className="text-[11px] font-medium text-gray-400 mb-2">{section.icon} {section.title}</p>
-                    <div className="space-y-1">
-                      {section.fields.map(f => {
+                  <div key={section.id} className="bg-[#0d1220] border border-white/5 rounded-lg px-3 py-2">
+                    <p className="text-[10px] font-medium text-gray-500 mb-1.5">{section.icon} {section.title}</p>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      {visibleFields.map(f => {
                         const val = flat[f.key];
+                        const rawVal = raw[f.key];
+                        const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
                         return (
-                          <div key={f.key} className="flex justify-between text-xs">
-                            <span className={val ? 'text-gray-500' : 'text-gray-700'}>{f.label}{f.required ? ' *' : ''}</span>
-                            <span className={`text-right max-w-[55%] truncate ${val ? 'text-white' : 'text-gray-700 italic'}`} title={val || ''}>
-                              {val || '—'}
-                            </span>
+                          <div key={f.key} className="flex flex-col">
+                            <span className={`text-[9px] ${val ? 'text-gray-500' : 'text-red-400/60'}`}>{f.label}{f.required && !val ? ' *' : ''}</span>
+                            <div className="flex items-center gap-1">
+                              <span className={`text-[11px] truncate ${val ? 'text-white' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
+                              {docId && <span className="text-[8px] text-blue-400/60" title={`From document ${docId}`}>📄</span>}
+                            </div>
                           </div>
                         );
                       })}
