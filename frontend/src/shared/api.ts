@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../features/auth/store';
+import { toast } from './toast';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'https://api.cybercontrol.fun/api';
 
@@ -28,6 +29,10 @@ api.interceptors.response.use(
         } catch {}
       }
       logout();
+    }
+    if (error.response?.status !== 401) {
+      const msg = error.response?.data?.error || error.response?.data?.message || error.message || 'Request failed';
+      toast.error(msg);
     }
     return Promise.reject(error);
   }

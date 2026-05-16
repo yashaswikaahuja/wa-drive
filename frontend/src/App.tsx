@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { useEffect } from 'react';
 import { useAuthStore } from './features/auth/store';
 import { extensionBridge } from './shared/extensionBridge';
+import Toasts from './shared/Toasts';
 import { API_URL } from './shared/api';
 import Login from './features/auth/Login';
 import Layout from './shared/Layout';
@@ -40,6 +41,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <Toasts />
       <Routes>
         <Route element={<Layout />}>
           <Route path="/app" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
