@@ -3,6 +3,7 @@ import { useAuthStore } from '../features/auth/store';
 import { toast } from './toast';
 
 export const API_URL = import.meta.env.VITE_API_URL || 'https://api.cybercontrol.fun/api';
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://api.cybercontrol.fun';
 
 const api = axios.create({ baseURL: API_URL });
 

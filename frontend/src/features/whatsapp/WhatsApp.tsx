@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
-import api, { API_URL } from '../../shared/api';
+import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { getCachedBlob } from '../../shared/fileCache';
 
 interface Message {
@@ -168,7 +168,7 @@ export default function WhatsApp() {
       localStorage.setItem('cc-drive-files', JSON.stringify(msgs));
       groupMessages(msgs);
     }).catch(() => {});
-    const baseUrl = API_URL.replace('/api', '');
+    const baseUrl = SOCKET_URL;
     const socket = io(baseUrl, { transports: ['polling', 'websocket'], reconnectionAttempts: 3, timeout: 5000 });
     socketRef.current = socket;
     socket.on('connection:status', (data: any) => {
