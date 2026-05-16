@@ -42,10 +42,12 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
   }, [visible]);
   const isImage = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
   const isVideo = ['mp4','3gp','mov','avi','webm'].includes(ext);
+  const isPdf = ext === 'pdf';
+  const hasThumbnail = isImage || isVideo || isPdf;
   const { icon, badge } = docTitle(alt || ('file.' + ext));
   return (
     <div ref={ref} className="w-[72px] h-[72px] rounded-xl bg-white/5 relative overflow-hidden flex items-center justify-center">
-      {visible && src && isImage && !imgError ? (
+      {visible && src && hasThumbnail && !imgError ? (
         <>
           <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt}
             onError={() => setImgError(true)} />
