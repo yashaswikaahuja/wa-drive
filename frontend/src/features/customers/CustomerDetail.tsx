@@ -179,7 +179,7 @@ export default function CustomerDetail() {
         </div>
 
         {/* Center: Selected person detail */}
-        <div className="col-span-6">
+        <div className={`${documents.length > 0 ? 'col-span-6' : 'col-span-9'} max-h-[calc(100vh-180px)] overflow-y-auto pr-2`}>
           <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Profile</h3>
           {personDetail ? (
             <div className="space-y-2">
@@ -275,11 +275,9 @@ export default function CustomerDetail() {
         </div>
 
         {/* Right: Documents */}
-        <div className="col-span-3">
+        {documents.length > 0 && <div className="col-span-3">
           <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Documents from this household</h3>
-          {documents.length === 0 ? (
-            <p className="text-xs text-gray-600 italic">No documents yet. Documents sent on WhatsApp from this number will appear here.</p>
-          ) : (
+          {documents.length > 0 && (
             <div className="space-y-2">
               {documents.slice(0, 20).map(d => {
                 const ext = d.fileName?.split('.').pop()?.toLowerCase() || '';
@@ -304,7 +302,7 @@ export default function CustomerDetail() {
               })}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 mt-3 text-xs text-red-400">{error}</div>}
