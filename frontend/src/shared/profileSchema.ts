@@ -43,7 +43,7 @@ export const PROFILE_SCHEMA: Section[] = [
     title: 'Contact & Address',
     icon: '📍',
     fields: [
-      { key: 'mobile', label: 'Mobile Number' },
+      { key: 'phone', label: 'Mobile Number' },
       { key: 'email', label: 'Email' },
       { key: 'address', label: 'Current Address', required: true },
       { key: 'permanent_address', label: 'Permanent Address' },
@@ -59,9 +59,10 @@ export const PROFILE_SCHEMA: Section[] = [
     icon: '🎓',
     fields: [
       { key: 'board_10th', label: 'Board', required: true },
-      { key: 'roll_number_10th', label: 'Roll Number', required: true },
+      { key: 'roll_number', label: 'Roll Number', required: true },
       { key: 'passing_year_10th', label: 'Year of Passing', required: true },
       { key: 'percentage_10th', label: 'Marks / Percentage' },
+      { key: 'school_name', label: 'School Name' },
     ],
   },
   {
@@ -72,7 +73,7 @@ export const PROFILE_SCHEMA: Section[] = [
       { key: 'board_12th', label: 'Board' },
       { key: 'stream_12th', label: 'Stream / Subject' },
       { key: 'passing_year_12th', label: 'Year of Passing' },
-      { key: 'percentage_12th', label: 'Marks / Percentage' },
+      { key: 'marks_12th', label: 'Marks / Percentage' },
     ],
   },
   {
@@ -80,8 +81,8 @@ export const PROFILE_SCHEMA: Section[] = [
     title: 'Graduation',
     icon: '🎓',
     fields: [
-      { key: 'university_grad', label: 'University' },
-      { key: 'degree_grad', label: 'Degree' },
+      { key: 'university_name', label: 'University' },
+      { key: 'degree', label: 'Degree' },
       { key: 'passing_year_grad', label: 'Year of Passing' },
       { key: 'percentage_grad', label: 'Marks / Percentage' },
     ],
