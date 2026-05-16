@@ -13,5 +13,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 );
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  // Unregister any existing SW to clear stale caches
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
 }
