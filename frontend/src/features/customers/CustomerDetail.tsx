@@ -222,32 +222,16 @@ export default function CustomerDetail() {
                                 onKeyDown={e => { if (e.key === 'Enter') { saveField(f.key, editValue); } if (e.key === 'Escape') setEditingField(null); }}
                                 className="text-[11px] bg-blue-600/10 border border-blue-500/30 rounded px-1 py-0.5 text-white outline-none w-full" />
                             ) : (
-                              <div className="flex items-center gap-1 cursor-pointer group/field" onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}>
+                              <div className="flex items-center gap-1 cursor-pointer group" onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}>
                                 <span className={`text-[11px] truncate ${val ? 'text-white' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
                                 {docId && <span className="text-[8px] text-blue-400/60" title={`From document ${docId}`}>📄</span>}
-                                <span className="text-[9px] text-gray-600 opacity-0 group-hover/field:opacity-100">✎</span>
+                                <span className="text-[9px] text-gray-600 opacity-0 group-hover:opacity-100">✎</span>
                               </div>
                             )}
                           </div>
                         );
                       })}
                       {/* Extra fields not in schema */}
-                      {Object.entries(flat).filter(([k]) => !section.fields.some(f => f.key === k) && !PROFILE_SCHEMA.some(s => s !== section && s.fields.some(f => f.key === k))).length === 0 ? null :
-                        Object.entries(flat).filter(([k]) => {
-                          const inThisSection = section.fields.some(f => f.key === k);
-                          const inOtherSection = PROFILE_SCHEMA.some(s => s.fields.some(f => f.key === k));
-                          return !inThisSection && !inOtherSection;
-                        }).length > 0 && section === PROFILE_SCHEMA[PROFILE_SCHEMA.length - 1] &&
-                        Object.entries(flat).filter(([k]) => !PROFILE_SCHEMA.some(s => s.fields.some(f => f.key === k))).map(([k, val]) => (
-                          <div key={k} className="flex flex-col">
-                            <span className="text-[9px] text-gray-500">{k.replace(/_/g, ' ')}</span>
-                            <div className="flex items-center gap-1 cursor-pointer group/field" onClick={() => { setEditingField(k); setEditValue(val || ''); }}>
-                              <span className="text-[11px] text-white truncate">{val}</span>
-                              <span className="text-[9px] text-gray-600 opacity-0 group-hover/field:opacity-100">✎</span>
-                            </div>
-                          </div>
-                        ))
-                      }
                     </div>
                     {addingInSection === section.id ? (
                       <div className="flex gap-2 mt-2">
