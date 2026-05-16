@@ -384,13 +384,14 @@ export default function WhatsApp() {
           <div className="bg-white p-4 rounded-lg mb-4">
             <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
           </div>
-        ) : reconnecting ? (
-          <div className="flex flex-col items-center gap-3 mb-4">
-            <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-            <p className="text-sm text-gray-400">Reconnecting… QR will appear shortly</p>
-          </div>
         ) : (
-          <button onClick={handleShowQR} className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700">Show QR Code</button>
+          <div className="flex flex-col items-center gap-3 mb-4">
+            {reconnecting && <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
+            <p className="text-sm text-gray-400">{reconnecting ? 'Reconnecting… QR will appear shortly' : 'WhatsApp is disconnected'}</p>
+            <button onClick={handleShowQR} className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
+              {reconnecting ? 'Request QR Now' : 'Show QR Code'}
+            </button>
+          </div>
         )}
         <p className="text-xs text-gray-500 mt-2">Scan with WhatsApp to connect</p>
       </div>

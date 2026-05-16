@@ -168,9 +168,8 @@ export default function CustomerDetail() {
                   return (
                     <div key={k} className="flex justify-between text-xs">
                       <span className="text-gray-500 capitalize">{k.replace(/_/g, ' ')}</span>
-                      <span className="text-white text-right">
+                      <span className="text-white text-right max-w-[60%] truncate" title={String(val)}>
                         {String(val) || '—'}
-                        {source && <span className="text-[9px] text-blue-400 ml-2">{source}</span>}
                       </span>
                     </div>
                   );

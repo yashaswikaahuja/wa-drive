@@ -1390,13 +1390,13 @@ app.patch('/api/customers/persons/:id', authMiddleware, async (req, res) => {
 app.post('/api/process/extract', authMiddleware, async (req, res) => {
   const { fileId } = req.body;
   if (!fileId) return res.status(400).json({ error: 'fileId required' });
-  if (!app.locals.driveAccessToken) return res.status(401).json({ error: 'Not connected to Google Drive' });
+  if (!getDriveAccessToken()) return res.status(401).json({ error: 'Not connected to Google Drive' });
   const GROQ_API_KEY = process.env['GROQ_API_KEY'];
   if (!GROQ_API_KEY) return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
   try {
     // Check file metadata first to detect type
     const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name`, {
-      headers: { Authorization: `Bearer ${app.locals.driveAccessToken}` }
+      headers: { Authorization: `Bearer ${getDriveAccessToken()}` }
     });
     let mimeType = 'image/jpeg';
     if (metaRes.ok) {
@@ -1408,7 +1408,7 @@ app.post('/api/process/extract', authMiddleware, async (req, res) => {
     }
     // Download file from Drive
     const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { Authorization: `Bearer ${app.locals.driveAccessToken}` }
+      headers: { Authorization: `Bearer ${getDriveAccessToken()}` }
     });
     if (!driveRes.ok) {
       const errText = await driveRes.text();

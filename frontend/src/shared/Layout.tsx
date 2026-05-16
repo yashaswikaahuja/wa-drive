@@ -56,7 +56,7 @@ const Sidebar = memo(({ user, logout }: any) => {
             <p className="text-xs font-medium text-white truncate">{user?.name}</p>
             <p className="text-[10px] text-gray-500">{user?.role}</p>
           </div>
-          <button onClick={logout} className="text-gray-500 hover:text-red-400 text-lg" title="Logout">×</button>
+          <button onClick={logout} className="text-gray-500 hover:text-red-400 text-xs" title="Logout">⏻</button>
         </div>
       </div>
     </aside>
