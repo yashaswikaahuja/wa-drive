@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useAuthStore } from '../features/auth/store';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'https://glasgow-tyler-norm-foot.trycloudflare.com/api';
+export const API_URL = import.meta.env.VITE_API_URL || 'https://api.cybercontrol.fun/api';
 
 const api = axios.create({ baseURL: API_URL });
 
