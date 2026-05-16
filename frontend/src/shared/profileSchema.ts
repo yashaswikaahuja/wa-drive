@@ -64,8 +64,8 @@ export const PROFILE_SCHEMA: Section[] = [
     icon: '🎓',
     fields: [
       { key: 'board_10th', label: 'Board', required: true },
-      { key: 'roll_number', label: 'Roll Number', required: true },
-      { key: 'registration_number', label: 'Registration Number' },
+      { key: 'roll_number_10th', label: 'Roll Number', required: true },
+      { key: 'registration_number_10th', label: 'Registration Number' },
       { key: 'certificate_number_10th', label: 'Certificate Number' },
       { key: 'passing_year_10th', label: 'Year of Passing', required: true },
       { key: 'percentage_10th', label: 'Marks / Percentage' },
