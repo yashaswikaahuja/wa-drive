@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client';
 import api, { API_URL } from '../../shared/api';
+import { getCachedBlob } from '../../shared/fileCache';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -100,7 +101,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         {!selectionMode && (
           <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
             <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const w = window.open('', '_blank'); if(!w) return; w.document.write('<p>Loading...</p>'); api.get(`/drive/download/${driveId}`, {responseType:'blob'}).then(res => { const blob = new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); const url = URL.createObjectURL(blob); w.location.href = url; }).catch(() => { w.document.write('<p>Failed to load file</p>'); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const w = window.open('', '_blank'); if(!w) return; w.document.write('<p>Loading...</p>'); getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { w.location.href = URL.createObjectURL(blob); }).catch(() => { w.document.write('<p>Failed to load file</p>'); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
           </div>
         )}
       </div>
@@ -504,7 +505,7 @@ export default function WhatsApp() {
       {viewerFile && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={handleCloseViewer}>
           <button onClick={handleCloseViewer} className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs">✕ Close</button>
-          <button onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const w = window.open('', '_blank'); if(!w) return; w.document.write('<p>Loading...</p>'); api.get(`/drive/download/${driveId}`, {responseType:'blob'}).then(res => { const blob = new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); const url = URL.createObjectURL(blob); w.location.href = url; }).catch(() => { w.document.write('<p>Failed to load file</p>'); }); }} className="absolute top-4 right-28 px-3 py-1.5 rounded-lg bg-green-600/80 text-white text-xs">🖨 Print</button>
+          <button onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const w = window.open('', '_blank'); if(!w) return; w.document.write('<p>Loading...</p>'); getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { w.location.href = URL.createObjectURL(blob); }).catch(() => { w.document.write('<p>Failed to load file</p>'); }); }} className="absolute top-4 right-28 px-3 py-1.5 rounded-lg bg-green-600/80 text-white text-xs">🖨 Print</button>
           <div onClick={e => e.stopPropagation()} className="max-w-[90vw] max-h-[85vh]">
             {(() => {
               const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
