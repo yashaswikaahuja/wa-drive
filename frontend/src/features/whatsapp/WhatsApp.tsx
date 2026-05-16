@@ -169,7 +169,7 @@ export default function WhatsApp() {
       groupMessages(msgs);
     }).catch(() => {});
     const baseUrl = API_URL.replace('/api', '');
-    const socket = io(baseUrl, { transports: ['websocket', 'polling'] });
+    const socket = io(baseUrl, { transports: ['polling', 'websocket'], reconnectionAttempts: 3, timeout: 5000 });
     socketRef.current = socket;
     socket.on('connection:status', (data: any) => {
       setConnected(data.connected); localStorage.setItem('cc-wa-connected', String(data.connected));
