@@ -126,7 +126,10 @@ const ChatItem = memo(({ chat, selected, onClick }: any) => (
 ));
 
 export default function WhatsApp() {
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState<boolean | null>(() => {
+    const cached = localStorage.getItem('cc-wa-connected');
+    return cached !== null ? cached === 'true' : null;
+  });
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
@@ -143,7 +146,7 @@ export default function WhatsApp() {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    api.get('/whatsapp/status').then(r => setConnected(r.data.connected)).catch(() => {});
+    api.get('/whatsapp/status').then(r => { setConnected(r.data.connected); localStorage.setItem('cc-wa-connected', String(r.data.connected)); }).catch(() => {});
     // Load cached data instantly, then refresh from server
     const cached = localStorage.getItem('cc-drive-files');
     if (cached) {
@@ -161,7 +164,7 @@ export default function WhatsApp() {
     const socket = io(baseUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
     socket.on('connection:status', (data: any) => {
-      setConnected(data.connected);
+      setConnected(data.connected); localStorage.setItem('cc-wa-connected', String(data.connected));
       if (data.connected) {
         setQrCode(null);
         setReconnecting(false);
@@ -385,6 +388,10 @@ export default function WhatsApp() {
   const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
   const reversedMessages = useMemo(() => activeChat ? [...activeChat.messages].reverse() : [], [activeChat]);
+
+  if (connected === null) {
+    return <div className="h-full flex items-center justify-center"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>;
+  }
 
   if (!connected) {
     return (
