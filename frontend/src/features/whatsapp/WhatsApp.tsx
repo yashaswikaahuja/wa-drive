@@ -144,11 +144,17 @@ export default function WhatsApp() {
 
   useEffect(() => {
     api.get('/whatsapp/status').then(r => setConnected(r.data.connected)).catch(() => {});
+    // Load cached data instantly, then refresh from server
+    const cached = localStorage.getItem('cc-drive-files');
+    if (cached) {
+      try { const msgs = JSON.parse(cached); groupMessages(msgs); } catch {}
+    }
     api.get('/drive/files').then(r => {
       const msgs: Message[] = r.data.map((f: any) => ({
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
         fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp
       }));
+      localStorage.setItem('cc-drive-files', JSON.stringify(msgs));
       groupMessages(msgs);
     }).catch(() => {});
     const baseUrl = API_URL.replace('/api', '');
