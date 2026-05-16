@@ -100,7 +100,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         {!selectionMode && (
           <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
             <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open(`${API_URL}/drive/download/${driveId}?print=1`, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const { accessToken } = (window as any).__cc_auth || JSON.parse(localStorage.getItem('cc-auth')||'{}').state||{}; window.open(`${API_URL}/drive/download/${driveId}?print=1&token=${accessToken}`, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
           </div>
         )}
       </div>
@@ -504,7 +504,7 @@ export default function WhatsApp() {
       {viewerFile && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={handleCloseViewer}>
           <button onClick={handleCloseViewer} className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs">✕ Close</button>
-          <button onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open(`${API_URL}/drive/download/${driveId}?print=1`, '_blank'); }} className="absolute top-4 right-28 px-3 py-1.5 rounded-lg bg-green-600/80 text-white text-xs">🖨 Print</button>
+          <button onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const { accessToken } = (window as any).__cc_auth || JSON.parse(localStorage.getItem('cc-auth')||'{}').state||{}; window.open(`${API_URL}/drive/download/${driveId}?print=1&token=${accessToken}`, '_blank'); }} className="absolute top-4 right-28 px-3 py-1.5 rounded-lg bg-green-600/80 text-white text-xs">🖨 Print</button>
           <div onClick={e => e.stopPropagation()} className="max-w-[90vw] max-h-[85vh]">
             {(() => {
               const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
