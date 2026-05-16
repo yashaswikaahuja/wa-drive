@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../shared/api';
+import { PROFILE_SCHEMA, getCompleteness, flattenProfileData } from '../../shared/profileSchema';
 
 interface Person {
   id: string;
@@ -156,25 +157,53 @@ export default function CustomerDetail() {
         <div className="col-span-5">
           <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Profile</h3>
           {personDetail ? (
-            <div className="bg-[#0d1220] border border-white/5 rounded-xl p-4">
-              <p className="text-sm font-medium text-white">{personDetail.display_label || personDetail.name}</p>
-              <p className="text-[11px] text-gray-500 capitalize mb-3">{personDetail.relationship || 'self'}</p>
-              <div className="space-y-1.5">
-                {Object.entries(personDetail.data || {}).length === 0 ? (
-                  <p className="text-xs text-gray-600 italic">No fields yet. Extract from a document below.</p>
-                ) : Object.entries(personDetail.data || {}).map(([k, v]: [string, any]) => {
-                  const val = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
-                  const source = (v && typeof v === 'object' && v.source) ? v.source : null;
+            <div className="space-y-3">
+              <div className="bg-[#0d1220] border border-white/5 rounded-xl p-4">
+                <p className="text-sm font-medium text-white">{personDetail.display_label || personDetail.name}</p>
+                <p className="text-[11px] text-gray-500 capitalize mb-3">{personDetail.relationship || 'self'}</p>
+                {/* Completeness bar */}
+                {(() => {
+                  const flat = flattenProfileData(personDetail.data || {});
+                  const { percent, filled, total, missing } = getCompleteness(flat);
                   return (
-                    <div key={k} className="flex justify-between text-xs">
-                      <span className="text-gray-500 capitalize">{k.replace(/_/g, ' ')}</span>
-                      <span className="text-white text-right max-w-[60%] truncate" title={String(val)}>
-                        {String(val) || '—'}
-                      </span>
+                    <div>
+                      <div className="flex justify-between text-[10px] text-gray-500 mb-1">
+                        <span>{percent}% ready for SSC OTR</span>
+                        <span>{filled}/{total} required fields</span>
+                      </div>
+                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all ${percent >= 80 ? 'bg-green-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${percent}%`}} />
+                      </div>
+                      {missing.length > 0 && percent < 100 && (
+                        <p className="text-[9px] text-gray-600 mt-1">Missing: {missing.slice(0, 3).join(', ')}{missing.length > 3 ? ` +${missing.length - 3} more` : ''}</p>
+                      )}
                     </div>
                   );
-                })}
+                })()}
               </div>
+              {/* Sections */}
+              {PROFILE_SCHEMA.map(section => {
+                const flat = flattenProfileData(personDetail.data || {});
+                const hasAny = section.fields.some(f => flat[f.key]);
+                return (
+                  <div key={section.id} className={`bg-[#0d1220] border rounded-xl p-3 ${hasAny ? 'border-white/5' : 'border-white/[0.02]'}`}>
+                    <p className="text-[11px] font-medium text-gray-400 mb-2">{section.icon} {section.title}</p>
+                    <div className="space-y-1">
+                      {section.fields.map(f => {
+                        const val = flat[f.key];
+                        return (
+                          <div key={f.key} className="flex justify-between text-xs">
+                            <span className={val ? 'text-gray-500' : 'text-gray-700'}>{f.label}{f.required ? ' *' : ''}</span>
+                            <span className={`text-right max-w-[55%] truncate ${val ? 'text-white' : 'text-gray-700 italic'}`} title={val || ''}>
+                              {val || '—'}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           ) : <p className="text-gray-600 text-sm">Select a person</p>}
 
