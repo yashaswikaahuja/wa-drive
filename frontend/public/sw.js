@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cc-static-v1';
+const CACHE_NAME = 'cc-static-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
