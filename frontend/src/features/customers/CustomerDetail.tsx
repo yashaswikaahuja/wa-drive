@@ -107,6 +107,17 @@ export default function CustomerDetail() {
     setEditingField(null);
   };
 
+  const toFieldKey = (name: string) => name.toLowerCase().replace(/\s+/g, '_');
+
+  const handleAddField = () => {
+    if (newFieldKey && newFieldValue) {
+      saveField(toFieldKey(newFieldKey), newFieldValue);
+      setAddingInSection(null);
+      setNewFieldKey('');
+      setNewFieldValue('');
+    }
+  };
+
   const handleExtract = async (doc: DriveFile) => {
     if (!selectedPerson) { setError('Select a person first'); return; }
     setExtracting(doc.id);
@@ -238,13 +249,13 @@ export default function CustomerDetail() {
                         <input placeholder="Field name" value={newFieldKey} onChange={e => setNewFieldKey(e.target.value)}
                           className="text-[11px] bg-[#1a2236] border border-white/10 rounded px-2 py-1 text-white outline-none flex-1" />
                         <input placeholder="Value" value={newFieldValue} onChange={e => setNewFieldValue(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter' && newFieldKey && newFieldValue) { saveField(newFieldKey.toLowerCase().replace(/\s+/g, '_'), newFieldValue); setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); } }}
+                          onKeyDown={e => { if (e.key === 'Enter') handleAddField(); }}
                           className="text-[11px] bg-[#1a2236] border border-white/10 rounded px-2 py-1 text-white outline-none flex-1" />
-                        <button onClick={() => { if (newFieldKey && newFieldValue) { saveField(newFieldKey.toLowerCase().replace(/\s+/g, '_'), newFieldValue); setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); } }} className="text-[10px] text-green-400 px-2">Save</button>
+                        <button onClick={handleAddField} className="text-[10px] text-green-400 px-2">Save</button>
                         <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-[10px] text-gray-500 px-1">✕</button>
                       </div>
                     ) : (
-                      <button onClick={() => setAddingInSection(section.id)} className="text-[10px] text-blue-400 hover:text-blue-300 mt-1.5 border border-blue-500/20 rounded px-2 py-0.5">+ Add</button>
+                      <button onClick={() => setAddingInSection(section.id)} className="text-[10px] text-blue-400 hover:text-blue-300 mt-1.5">+ Add</button>
                     )}
                     </div>
                   </div>
