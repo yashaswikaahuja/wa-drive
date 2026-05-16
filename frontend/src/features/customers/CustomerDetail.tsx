@@ -150,7 +150,7 @@ export default function CustomerDetail() {
 
       <div className="grid grid-cols-12 gap-4">
         {/* Left: Persons in household */}
-        <div className="col-span-2">
+        <div className="col-span-3">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-medium text-gray-500 uppercase">People</h3>
             <button onClick={() => setShowAddPerson(true)} className="text-xs text-blue-400 hover:underline">+ Add</button>
@@ -168,7 +168,7 @@ export default function CustomerDetail() {
         </div>
 
         {/* Center: Selected person detail */}
-        <div className="col-span-7">
+        <div className="col-span-6">
           <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Profile</h3>
           {personDetail ? (
             <div className="space-y-2">
