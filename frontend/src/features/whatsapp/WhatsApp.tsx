@@ -224,7 +224,7 @@ export default function WhatsApp() {
   // Poll status - detect connect/disconnect
   useEffect(() => {
     let disconnectCount = 0;
-    const interval = connected ? 10000 : 3000;
+    const interval = connected ? 3000 : 3000;
     const poll = setInterval(() => {
       api.get('/whatsapp/status').then(r => {
         if (r.data.connected) {
