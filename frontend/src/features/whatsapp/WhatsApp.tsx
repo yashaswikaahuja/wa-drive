@@ -227,7 +227,7 @@ export default function WhatsApp() {
       const chat = map.get(key)!;
       chat.messages.push(m);
       if (m.timestamp > chat.lastTime) chat.lastTime = m.timestamp;
-      if (m.dpUrl && !chat.dpUrl) chat.dpUrl = m.dpUrl;
+      if (m.dpUrl) chat.dpUrl = m.dpUrl;
       chat.newCount = chat.messages.length;
     });
     setChats(map);
