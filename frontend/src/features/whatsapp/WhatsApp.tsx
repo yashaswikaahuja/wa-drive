@@ -205,7 +205,7 @@ export default function WhatsApp() {
         new Audio('/notify.mp3').play().catch(() => {});
       }
       // Track unread
-      setUnread(prev => { const m = new Map(prev); m.set(phone, (m.get(phone) || 0) + 1); return m; });
+      setUnread(prev => { const m = new Map(prev); m.set(phone, (m.get(phone) || 0) + 1); const total = Array.from(m.values()).reduce((a,b)=>a+b,0); localStorage.setItem('cc-wa-unread', String(total)); return m; });
     });
     // Request notification permission
     if (Notification.permission === 'default') Notification.requestPermission();
@@ -275,7 +275,7 @@ export default function WhatsApp() {
     setSelectedChat(phone);
     setSelectionMode(false);
     setSelectedDocs(new Map());
-    setUnread(prev => { const m = new Map(prev); m.delete(phone); return m; });
+    setUnread(prev => { const m = new Map(prev); m.delete(phone); const total = Array.from(m.values()).reduce((a,b)=>a+b,0); localStorage.setItem('cc-wa-unread', String(total)); return m; });
     userScrolledUpRef.current = false;
     setTimeout(() => messagesEndRef.current?.scrollIntoView(), 100);
   }, []);
@@ -460,22 +460,27 @@ export default function WhatsApp() {
 
   if (!connected) {
     return (
-      <div className="h-full flex flex-col items-center justify-center">
-        <h2 className="text-lg font-bold text-white mb-4">Connect WhatsApp</h2>
+      <div className="h-full flex flex-col items-center justify-center max-w-md mx-auto text-center">
+        <div className="text-5xl mb-4">💬</div>
+        <h2 className="text-lg font-bold text-white mb-2">Connect WhatsApp</h2>
+        <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
         {qrCode ? (
-          <div className="bg-white p-4 rounded-lg mb-4">
+          <div className="bg-white p-4 rounded-xl mb-4 shadow-lg">
             <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 mb-4">
             {reconnecting && <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
-            <p className="text-sm text-gray-400">{reconnecting ? 'Reconnecting… QR will appear shortly' : 'WhatsApp is disconnected'}</p>
-            <button onClick={handleShowQR} className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
-              {reconnecting ? 'Request QR Now' : 'Show QR Code'}
+            <button onClick={handleShowQR} className="px-5 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
+              {reconnecting ? 'Connecting...' : 'Connect WhatsApp'}
             </button>
           </div>
         )}
-        <p className="text-xs text-gray-500 mt-2">Scan with WhatsApp to connect</p>
+        <div className="text-xs text-gray-600 mt-4 space-y-1">
+          <p>1. Open WhatsApp on your phone</p>
+          <p>2. Go to Settings → Linked Devices</p>
+          <p>3. Scan the QR code above</p>
+        </div>
       </div>
     );
   }

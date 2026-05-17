@@ -20,13 +20,17 @@ const ADMIN_NAV = [
 ];
 
 // Memoized nav item — only re-renders when path changes
-const NavItem = memo(({ path, icon, label, end }: any) => (
+const NavItem = memo(({ path, icon, label, end }: any) => {
+  const badge = path === '/app/whatsapp' ? parseInt(localStorage.getItem('cc-wa-unread') || '0') : 0;
+  return (
   <NavLink to={path} end={end}
     className={({ isActive }) => `flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition ${isActive ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
     <span className="text-base">{icon}</span>
     <span>{label}</span>
+    {badge > 0 && <span className="ml-auto w-5 h-5 rounded-full bg-green-500 text-white text-[10px] flex items-center justify-center font-bold">{badge}</span>}
   </NavLink>
-));
+  );
+});
 
 // Memoized sidebar — only re-renders when user changes
 const Sidebar = memo(({ user, logout }: any) => {
