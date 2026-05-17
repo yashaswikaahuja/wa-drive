@@ -297,10 +297,13 @@ export default function WhatsApp() {
   }, []);
 
   const assignChat = useCallback(async (phone: string, name: string) => {
+    const isLid = !/^[0-9]{10,13}$/.test(phone);
+    const realPhone = isLid ? prompt(`Enter real phone for "${name}" (e.g. 919876543210):`) : phone;
+    if (!realPhone) return;
     try {
-      // Create customer if not exists, link phone
-      await api.post('/customers/persons', { phone, name, displayLabel: name, relationship: 'self' });
-      toast.success(`Assigned ${name} as customer`);
+      await api.post('/customers/persons', { phone: realPhone, name, displayLabel: name, relationship: 'self' });
+      if (isLid) await api.post('/whatsapp/link-lid', { lid: phone, phone: realPhone }).catch(() => {});
+      toast.success(`Assigned ${name} → ${realPhone}`);
     } catch (e: any) {
       if (e.response?.status === 409) toast.info('Already assigned');
       else toast.error(e.response?.data?.error || 'Failed to assign');
