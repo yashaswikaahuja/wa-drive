@@ -153,6 +153,7 @@ export default function WhatsApp() {
       } else if (localStorage.getItem('cc-wa-connected') !== 'true') {
         setConnected(false);
         localStorage.setItem('cc-wa-connected', 'false');
+        localStorage.removeItem('cc-drive-files');
       }
       // Auto-start session if none exists
       if (r.data.status === 'none' || (!r.data.connected && !r.data.qr)) {
@@ -165,7 +166,7 @@ export default function WhatsApp() {
     if (cached) {
       try { const msgs = JSON.parse(cached); groupMessages(msgs); } catch {}
     }
-    api.get('/drive/files').then(r => {
+    api.get('/drive/files/ws').then(r => {
       const msgs: Message[] = r.data.map((f: any) => ({
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
         fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp
@@ -236,7 +237,7 @@ export default function WhatsApp() {
           if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
         } else {
           disconnectCount++;
-          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); }
+          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); localStorage.removeItem('cc-drive-files'); }
         }
       }).catch(() => {});
     }, interval);
