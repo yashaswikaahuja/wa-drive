@@ -20,3 +20,7 @@ uploads/
 WORKER_SECRET*
 .vercel
 frontend/dist
+
+worker/
+auth_info/
+*.json.bak
