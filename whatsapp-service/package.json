@@ -1,0 +1,15 @@
+{
+  "name": "cybercontrol-whatsapp-service",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "baileys": "^6.7.16",
+    "express": "^4.18.2",
+    "ws": "^8.16.0",
+    "pino": "^8.17.2"
+  }
+}
