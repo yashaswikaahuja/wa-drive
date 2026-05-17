@@ -109,7 +109,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   );
 });
 
-const ChatItem = memo(({ chat, selected, onClick }: any) => (
+const ChatItem = memo(({ chat, selected, onClick, unreadCount }: any) => (
   <div onClick={() => onClick(chat.phone)}
     className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selected ? 'bg-blue-600/10' : ''}`}>
     <div className="flex items-center gap-2.5">
@@ -120,7 +120,10 @@ const ChatItem = memo(({ chat, selected, onClick }: any) => (
         <p className="text-sm text-white font-medium truncate">{chat.name}</p>
         <p className="text-[11px] text-gray-500">{chat.newCount} document{chat.newCount !== 1 ? 's' : ''}</p>
       </div>
-      <span className="text-[10px] text-gray-600 shrink-0">{timeAgo(chat.lastTime)}</span>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <span className="text-[10px] text-gray-600">{timeAgo(chat.lastTime)}</span>
+        {unreadCount > 0 && <span className="w-5 h-5 rounded-full bg-green-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadCount}</span>}
+      </div>
     </div>
   </div>
 ));
@@ -138,6 +141,7 @@ export default function WhatsApp() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedDocs, setSelectedDocs] = useState<Map<string, Message>>(new Map());
   const [showPicker, setShowPicker] = useState(false);
+  const [unread, setUnread] = useState<Map<string, number>>(new Map());
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
@@ -186,10 +190,19 @@ export default function WhatsApp() {
     });
     socket.on('qr', (data: any) => setQrCode(data.qr || data));
     socket.on('new_whatsapp_file', (file: any) => {
-      addMessage({ id: file.id || Date.now().toString(), phone: file.phoneNumber || file.customerId || 'unknown',
-        name: file.customerName || file.phoneNumber || 'Unknown', fileName: file.fileName,
+      const phone = file.phoneNumber || file.customerId || 'unknown';
+      const name = file.customerName || file.phoneNumber || 'Unknown';
+      addMessage({ id: file.id || Date.now().toString(), phone, name, fileName: file.fileName,
         fileUrl: file.fileUrl, timestamp: file.timestamp || new Date().toISOString() });
+      // Browser notification
+      if (Notification.permission === 'granted') {
+        new Notification(`📄 ${name}`, { body: file.fileName || 'New document received', icon: '/favicon.ico' });
+      }
+      // Track unread
+      setUnread(prev => { const m = new Map(prev); m.set(phone, (m.get(phone) || 0) + 1); return m; });
     });
+    // Request notification permission
+    if (Notification.permission === 'default') Notification.requestPermission();
     return () => { socket.disconnect(); };
   }, []);
 
@@ -256,6 +269,7 @@ export default function WhatsApp() {
     setSelectedChat(phone);
     setSelectionMode(false);
     setSelectedDocs(new Map());
+    setUnread(prev => { const m = new Map(prev); m.delete(phone); return m; });
   }, []);
 
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
@@ -460,7 +474,7 @@ export default function WhatsApp() {
           {sortedChats.length === 0 ? (
             <p className="text-center text-gray-600 text-xs py-8">No documents received</p>
           ) : sortedChats.map(chat => (
-            <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} />
+            <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} unreadCount={unread.get(chat.phone) || 0} />
           ))}
         </div>
       </div>
