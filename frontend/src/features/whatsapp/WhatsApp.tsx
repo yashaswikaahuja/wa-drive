@@ -121,7 +121,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-white font-medium truncate">{chat.name} {pinned && <span className="text-[9px] text-gray-500">📌</span>}</p>
-        <p className="text-[11px] text-gray-500">{chat.newCount} document{chat.newCount !== 1 ? 's' : ''}</p>
+        <p className="text-[11px] text-gray-500">{/^\d{10,13}$/.test(chat.phone) ? `+${chat.phone.slice(0,2)} ${chat.phone.slice(2,7)} ${chat.phone.slice(7)}` : ''} · {chat.newCount} doc{chat.newCount !== 1 ? 's' : ''}</p>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-[10px] text-gray-600">{timeAgo(chat.lastTime)}</span>
