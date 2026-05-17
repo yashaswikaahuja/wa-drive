@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import api, { API_URL } from '../../shared/api';
+import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
 
 export default function Settings() {
@@ -30,7 +30,7 @@ export default function Settings() {
     const payload = token.split('.')[1];
     const wsId = payload ? JSON.parse(atob(payload)).workspaceId || '' : '';
     const popup = window.open(
-      API_URL.replace('/api', '') + '/api/drive/auth?workspace=' + wsId,
+      SOCKET_URL + '/api/drive/auth?workspace=' + wsId,
       'drive-auth',
       'width=500,height=600,left=200,top=100'
     );
