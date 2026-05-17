@@ -148,6 +148,9 @@ export default function WhatsApp() {
   const [targetPersonId, setTargetPersonId] = useState<string | null>(null);
   const targetPersonIdRef = useRef<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const msgContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
 
   useEffect(() => {
     api.get('/whatsapp/status').then(r => {
@@ -270,7 +273,14 @@ export default function WhatsApp() {
     setSelectionMode(false);
     setSelectedDocs(new Map());
     setUnread(prev => { const m = new Map(prev); m.delete(phone); return m; });
+    userScrolledUpRef.current = false;
+    setTimeout(() => messagesEndRef.current?.scrollIntoView(), 100);
   }, []);
+
+  // Auto-scroll on new messages if user hasn't scrolled up
+  useEffect(() => {
+    if (!userScrolledUpRef.current) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [reversedMessages.length]);
 
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
   const handleCloseViewer = useCallback(() => setViewerFile(null), []);
@@ -498,7 +508,7 @@ export default function WhatsApp() {
                 <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-20" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
+            <div ref={msgContainerRef} onScroll={() => { const el = msgContainerRef.current; if (el) userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 100; }} className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
               {reversedMessages.map(msg => (
                 <MessageCard
                   key={msg.id} msg={msg} onClick={handleOpenFile}
@@ -507,6 +517,7 @@ export default function WhatsApp() {
                   onToggleSelect={toggleDocSelection}
                 />
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Floating action bar when items selected */}
