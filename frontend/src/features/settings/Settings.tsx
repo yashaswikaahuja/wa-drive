@@ -26,8 +26,11 @@ export default function Settings() {
   function connectDrive() {
     setDriveStatus('loading');
     // Open backend OAuth redirect in a popup — backend handles code exchange and token storage
+    const token = useAuthStore.getState().accessToken || '';
+    const payload = token.split('.')[1];
+    const wsId = payload ? JSON.parse(atob(payload)).workspaceId || '' : '';
     const popup = window.open(
-      API_URL.replace('/api', '') + '/api/drive/auth',
+      API_URL.replace('/api', '') + '/api/drive/auth?workspace=' + wsId,
       'drive-auth',
       'width=500,height=600,left=200,top=100'
     );
