@@ -147,8 +147,13 @@ export default function WhatsApp() {
 
   useEffect(() => {
     api.get('/whatsapp/status').then(r => {
-      setConnected(r.data.connected);
-      localStorage.setItem('cc-wa-connected', String(r.data.connected));
+      if (r.data.connected) {
+        setConnected(true);
+        localStorage.setItem('cc-wa-connected', 'true');
+      } else if (localStorage.getItem('cc-wa-connected') !== 'true') {
+        setConnected(false);
+        localStorage.setItem('cc-wa-connected', 'false');
+      }
       // Auto-start session if none exists
       if (r.data.status === 'none' || (!r.data.connected && !r.data.qr)) {
         api.post('/whatsapp/connect').catch(() => {});
@@ -172,14 +177,11 @@ export default function WhatsApp() {
     const socket = io(baseUrl, { transports: ['polling', 'websocket'], reconnectionAttempts: 3, timeout: 5000 });
     socketRef.current = socket;
     socket.on('connection:status', (data: any) => {
-      setConnected(data.connected); localStorage.setItem('cc-wa-connected', String(data.connected));
       if (data.connected) {
-        setQrCode(null);
-        setReconnecting(false);
-      } else {
-        setReconnecting(true);
-        if (data.qrCode) setQrCode(data.qrCode);
+        setConnected(true); setQrCode(null); setReconnecting(false);
+        localStorage.setItem('cc-wa-connected', 'true');
       }
+      // Don't set disconnected from socket — let poll handle it to avoid flash
     });
     socket.on('qr', (data: any) => setQrCode(data.qr || data));
     socket.on('new_whatsapp_file', (file: any) => {
@@ -221,14 +223,19 @@ export default function WhatsApp() {
   // Poll status until connected (WhatsApp service doesn't use parent socket)
   useEffect(() => {
     if (connected) return;
+    let disconnectCount = 0;
     const poll = setInterval(() => {
       api.get('/whatsapp/status').then(r => {
         if (r.data.connected) {
           setConnected(true); setQrCode(null); setReconnecting(false);
           localStorage.setItem('cc-wa-connected', 'true');
+          disconnectCount = 0;
           clearInterval(poll);
         } else if (r.data.qr) {
           setQrCode(r.data.qr); setReconnecting(false);
+        } else {
+          disconnectCount++;
+          if (disconnectCount >= 2) setReconnecting(true);
         }
       }).catch(() => {});
     }, 3000);
