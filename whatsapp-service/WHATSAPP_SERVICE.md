@@ -254,10 +254,15 @@ Then update parent's `WA_SERVICE` constant from `localhost:3100` to the new inst
 |-------|-------|-----|
 | QR not appearing | Session already connected | Check `/sessions/{id}/status` |
 | Upload failed: 500 | Parent's Drive token expired | Force refresh on parent |
+| Upload failed: 404 | `/api/worker/upload` or `/api/drive/download` endpoint missing on parent | Parent backend was reverted/restarted without patches. Re-apply the endpoint additions or redeploy from git |
+| 404 on `/api/whatsapp/*` | Old whatsapp routes still active or proxy endpoints not added | Ensure parent has `WA_SERVICE` proxy endpoints and old `whatsappRoutes` is disabled |
+| 404 on `/sessions/:id/send` | WhatsApp service doesn't have send endpoint | Update service code from latest git |
 | Disconnected: 401 | WhatsApp logged out | Delete `sessions/{id}/`, restart |
 | Disconnected: 408 | Network timeout | Auto-reconnects in 5s |
 | Disconnected: 515 | WhatsApp server error | Auto-reconnects in 5s |
 | Media error | File too large or encrypted | Check Baileys version compatibility |
+| CORS error on frontend | Backend is down (502) or nginx misconfigured | Check `pm2 status`, ensure backend is running |
+| `wss://https/socket.io/` error | Old cached frontend bundle | Clear browser cache/service worker |
 
 
 ---
