@@ -261,7 +261,7 @@ export default function WhatsApp() {
           api.get('/drive/files/ws').then(fr => {
             const msgs: Message[] = fr.data.map((f: any) => ({
               id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-              fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp
+              fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl
             }));
             if (msgs.length > 0) { localStorage.setItem('cc-drive-files', JSON.stringify(msgs)); groupMessages(msgs); }
           }).catch(() => {});
