@@ -277,11 +277,6 @@ export default function WhatsApp() {
     setTimeout(() => messagesEndRef.current?.scrollIntoView(), 100);
   }, []);
 
-  // Auto-scroll on new messages if user hasn't scrolled up
-  useEffect(() => {
-    if (!userScrolledUpRef.current) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [reversedMessages.length]);
-
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
   const handleCloseViewer = useCallback(() => setViewerFile(null), []);
 
@@ -445,6 +440,11 @@ export default function WhatsApp() {
   const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
   const reversedMessages = useMemo(() => activeChat ? [...activeChat.messages].reverse() : [], [activeChat]);
+
+  // Auto-scroll on new messages if user hasn't scrolled up
+  useEffect(() => {
+    if (!userScrolledUpRef.current) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [reversedMessages.length]);
 
   if (connected === null) {
     return <div className="h-full flex items-center justify-center"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>;
