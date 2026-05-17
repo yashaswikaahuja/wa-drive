@@ -220,25 +220,26 @@ export default function WhatsApp() {
 
   const handleShowQR = useCallback(async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); }, []);
 
-  // Poll status until connected (WhatsApp service doesn't use parent socket)
+  // Poll status - detect connect/disconnect
   useEffect(() => {
-    if (connected) return;
     let disconnectCount = 0;
+    const interval = connected ? 10000 : 3000;
     const poll = setInterval(() => {
       api.get('/whatsapp/status').then(r => {
         if (r.data.connected) {
-          setConnected(true); setQrCode(null); setReconnecting(false);
+          if (!connected) { setConnected(true); setQrCode(null); setReconnecting(false); }
           localStorage.setItem('cc-wa-connected', 'true');
           disconnectCount = 0;
-          clearInterval(poll);
         } else if (r.data.qr) {
           setQrCode(r.data.qr); setReconnecting(false);
+          disconnectCount++;
+          if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
         } else {
           disconnectCount++;
-          if (disconnectCount >= 2) setReconnecting(true);
+          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); }
         }
       }).catch(() => {});
-    }, 3000);
+    }, interval);
     return () => clearInterval(poll);
   }, [connected]);
 
