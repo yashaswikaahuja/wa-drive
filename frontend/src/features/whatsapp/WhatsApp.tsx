@@ -110,7 +110,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   );
 });
 
-const ChatItem = memo(({ chat, selected, onClick, unreadCount }: any) => (
+const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: any) => (
   <div onClick={() => onClick(chat.phone)}
     className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selected ? 'bg-blue-600/10' : ''}`}>
     <div className="flex items-center gap-2.5">
@@ -118,13 +118,14 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount }: any) => (
         {chat.name[0]?.toUpperCase() || '?'}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-white font-medium truncate">{chat.name}</p>
+        <p className="text-sm text-white font-medium truncate">{chat.name} {pinned && <span className="text-[9px] text-gray-500">📌</span>}</p>
         <p className="text-[11px] text-gray-500">{chat.newCount} document{chat.newCount !== 1 ? 's' : ''}</p>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-[10px] text-gray-600">{timeAgo(chat.lastTime)}</span>
         {unreadCount > 0 && <span className="w-5 h-5 rounded-full bg-green-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadCount}</span>}
       </div>
+      <button onClick={(e) => { e.stopPropagation(); onPin(chat.phone); }} className="text-gray-600 hover:text-white text-xs opacity-0 group-hover:opacity-100" title={pinned ? 'Unpin' : 'Pin'}>📌</button>
     </div>
   </div>
 ));
@@ -144,6 +145,10 @@ export default function WhatsApp() {
   const [showPicker, setShowPicker] = useState(false);
   const [unread, setUnread] = useState<Map<string, number>>(new Map());
   const [chatSearch, setChatSearch] = useState('');
+  const [pinnedChats, setPinnedChats] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('cc-pinned-chats') || '[]')); } catch { return new Set(); }
+  });
+  const [msgSearch, setMsgSearch] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
@@ -277,7 +282,17 @@ export default function WhatsApp() {
     setSelectedDocs(new Map());
     setUnread(prev => { const m = new Map(prev); m.delete(phone); const total = Array.from(m.values()).reduce((a,b)=>a+b,0); localStorage.setItem('cc-wa-unread', String(total)); return m; });
     userScrolledUpRef.current = false;
+    setMsgSearch('');
     setTimeout(() => messagesEndRef.current?.scrollIntoView(), 100);
+  }, []);
+
+  const togglePin = useCallback((phone: string) => {
+    setPinnedChats(prev => {
+      const next = new Set(prev);
+      if (next.has(phone)) next.delete(phone); else next.add(phone);
+      localStorage.setItem('cc-pinned-chats', JSON.stringify([...next]));
+      return next;
+    });
   }, []);
 
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
@@ -442,12 +457,28 @@ export default function WhatsApp() {
 
   const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
   const filteredChats = useMemo(() => {
-    if (!chatSearch.trim()) return sortedChats;
-    const q = chatSearch.toLowerCase();
-    return sortedChats.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
-  }, [sortedChats, chatSearch]);
+    let list = sortedChats;
+    if (chatSearch.trim()) {
+      const q = chatSearch.toLowerCase();
+      list = list.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+    }
+    // Pinned chats first
+    return [...list].sort((a, b) => {
+      const ap = pinnedChats.has(a.phone) ? 1 : 0;
+      const bp = pinnedChats.has(b.phone) ? 1 : 0;
+      return bp - ap;
+    });
+  }, [sortedChats, chatSearch, pinnedChats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
-  const reversedMessages = useMemo(() => activeChat ? [...activeChat.messages].reverse() : [], [activeChat]);
+  const reversedMessages = useMemo(() => {
+    if (!activeChat) return [];
+    let msgs = [...activeChat.messages].reverse();
+    if (msgSearch.trim()) {
+      const q = msgSearch.toLowerCase();
+      msgs = msgs.filter(m => m.fileName?.toLowerCase().includes(q) || m.text?.toLowerCase().includes(q));
+    }
+    return msgs;
+  }, [activeChat, msgSearch]);
 
   // Auto-scroll on new messages if user hasn't scrolled up
   useEffect(() => {
@@ -500,7 +531,7 @@ export default function WhatsApp() {
           {filteredChats.length === 0 ? (
             <p className="text-center text-gray-600 text-xs py-8">{chatSearch ? 'No match' : 'No documents received'}</p>
           ) : filteredChats.map(chat => (
-            <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} unreadCount={unread.get(chat.phone) || 0} />
+            <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} unreadCount={unread.get(chat.phone) || 0} pinned={pinnedChats.has(chat.phone)} onPin={togglePin} />
           ))}
         </div>
       </div>
@@ -519,7 +550,10 @@ export default function WhatsApp() {
                 <p className="text-[10px] text-gray-500">{activeChat.messages.length} documents</p>
               </div>
               {!selectionMode ? (
-                <button onClick={() => setSelectionMode(true)} className="text-xs text-blue-400 hover:underline">Select Documents</button>
+                <div className="flex items-center gap-2">
+                  <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="🔍 Search" className="w-32 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-[10px] text-white outline-none placeholder:text-gray-600" />
+                  <button onClick={() => setSelectionMode(true)} className="text-xs text-blue-400 hover:underline">Select</button>
+                </div>
               ) : (
                 <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
               )}
