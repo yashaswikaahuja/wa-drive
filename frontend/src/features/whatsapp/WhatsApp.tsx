@@ -6,9 +6,9 @@ import { getCachedBlob } from '../../shared/fileCache';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
-  fileUrl?: string; timestamp: string; type?: string;
+  fileUrl?: string; timestamp: string; type?: string; dpUrl?: string;
 }
-interface Chat { phone: string; name: string; lastTime: string; messages: Message[]; newCount: number; }
+interface Chat { phone: string; name: string; lastTime: string; messages: Message[]; newCount: number; dpUrl?: string; }
 
 interface Person { id: string; name: string; displayLabel: string; relationship: string; }
 interface Household { phone: string; persons: Person[]; person_count: string; }
@@ -115,8 +115,8 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
   <div onClick={() => onClick(chat.phone)}
     className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selected ? 'bg-blue-600/10' : ''}`}>
     <div className="flex items-center gap-2.5">
-      <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 text-xs font-bold shrink-0">
-        {chat.name[0]?.toUpperCase() || '?'}
+      <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 text-xs font-bold shrink-0 overflow-hidden">
+        {chat.dpUrl ? <img src={chat.dpUrl} className="w-full h-full object-cover" /> : chat.name[0]?.toUpperCase() || '?'}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-white font-medium truncate">{chat.name} {pinned && <span className="text-[9px] text-gray-500">📌</span>}</p>
@@ -222,10 +222,11 @@ export default function WhatsApp() {
     const map = new Map<string, Chat>();
     msgs.forEach(m => {
       const key = m.phone;
-      if (!map.has(key)) map.set(key, { phone: key, name: m.name, lastTime: m.timestamp, messages: [], newCount: 0 });
+      if (!map.has(key)) map.set(key, { phone: key, name: m.name, lastTime: m.timestamp, messages: [], newCount: 0, dpUrl: m.dpUrl });
       const chat = map.get(key)!;
       chat.messages.push(m);
       if (m.timestamp > chat.lastTime) chat.lastTime = m.timestamp;
+      if (m.dpUrl && !chat.dpUrl) chat.dpUrl = m.dpUrl;
       chat.newCount = chat.messages.length;
     });
     setChats(map);
