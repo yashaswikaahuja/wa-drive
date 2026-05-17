@@ -184,7 +184,7 @@ export default function WhatsApp() {
     api.get('/drive/files/ws').then(r => {
       const msgs: Message[] = r.data.map((f: any) => ({
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-        fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp
+        fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl
       }));
       localStorage.setItem('cc-drive-files', JSON.stringify(msgs));
       groupMessages(msgs);
@@ -204,7 +204,7 @@ export default function WhatsApp() {
       const phone = file.phoneNumber || file.customerId || 'unknown';
       const name = file.customerName || file.phoneNumber || 'Unknown';
       addMessage({ id: file.id || Date.now().toString(), phone, name, fileName: file.fileName,
-        fileUrl: file.fileUrl, timestamp: file.timestamp || new Date().toISOString() });
+        fileUrl: file.fileUrl, timestamp: file.timestamp || new Date().toISOString(), dpUrl: file.dpUrl || file.profilePicUrl });
       // Browser notification
       if (Notification.permission === 'granted') {
         new Notification(`📄 ${name}`, { body: file.fileName || 'New document received', icon: '/favicon.ico' });
