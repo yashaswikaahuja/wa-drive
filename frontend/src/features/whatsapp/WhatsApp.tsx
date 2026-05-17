@@ -498,7 +498,7 @@ export default function WhatsApp() {
                 <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-20" ref={(el) => { if (el) el.scrollTop = el.scrollHeight; }}>
               {reversedMessages.map(msg => (
                 <MessageCard
                   key={msg.id} msg={msg} onClick={handleOpenFile}
