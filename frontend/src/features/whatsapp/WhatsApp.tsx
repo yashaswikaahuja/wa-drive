@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
+import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
 
 interface Message {
@@ -295,6 +296,24 @@ export default function WhatsApp() {
     });
   }, []);
 
+  const assignChat = useCallback(async (phone: string, name: string) => {
+    try {
+      // Create customer if not exists, link phone
+      await api.post('/customers/persons', { phone, name, displayLabel: name, relationship: 'self' });
+      toast.success(`Assigned ${name} as customer`);
+    } catch (e: any) {
+      if (e.response?.status === 409) toast.info('Already assigned');
+      else toast.error(e.response?.data?.error || 'Failed to assign');
+    }
+  }, []);
+
+  const requestDocs = useCallback(async (phone: string) => {
+    try {
+      await api.post('/whatsapp/send', { phone, message: 'नमस्ते! कृपया अपने डॉक्यूमेंट्स (आधार कार्ड, मार्कशीट, फोटो आदि) WhatsApp पर भेजें। / Hello! Please send your documents (Aadhaar, marksheets, photo etc.) on this WhatsApp.' });
+      toast.success('Document request sent');
+    } catch { toast.error('Failed to send request'); }
+  }, []);
+
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
   const handleCloseViewer = useCallback(() => setViewerFile(null), []);
 
@@ -551,8 +570,10 @@ export default function WhatsApp() {
               </div>
               {!selectionMode ? (
                 <div className="flex items-center gap-2">
-                  <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="🔍 Search" className="w-32 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-[10px] text-white outline-none placeholder:text-gray-600" />
-                  <button onClick={() => setSelectionMode(true)} className="text-xs text-blue-400 hover:underline">Select</button>
+                  <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="🔍 Search" className="w-28 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-[10px] text-white outline-none placeholder:text-gray-600" />
+                  <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="text-[10px] px-2 py-1 rounded bg-orange-600/20 text-orange-400 hover:bg-orange-600/30">Request Docs</button>
+                  <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="text-[10px] px-2 py-1 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Assign</button>
+                  <button onClick={() => setSelectionMode(true)} className="text-[10px] px-2 py-1 rounded bg-white/5 text-gray-400 hover:text-white">Select</button>
                 </div>
               ) : (
                 <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
