@@ -258,3 +258,118 @@ Then update parent's `WA_SERVICE` constant from `localhost:3100` to the new inst
 | Disconnected: 408 | Network timeout | Auto-reconnects in 5s |
 | Disconnected: 515 | WhatsApp server error | Auto-reconnects in 5s |
 | Media error | File too large or encrypted | Check Baileys version compatibility |
+
+
+---
+
+## Local Development (Full Stack)
+
+Run the entire CyberControl platform on your local machine:
+
+### Prerequisites
+
+- Node.js v20+
+- PostgreSQL 14+
+- Google Cloud OAuth credentials (for Drive)
+- WhatsApp on your phone (for QR scan)
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/yashaswikaahuja/wa-drive.git
+cd wa-drive
+```
+
+### 2. Setup PostgreSQL
+
+```sql
+CREATE DATABASE cybercontrol;
+CREATE USER cybercontrol_app WITH PASSWORD 'your_password';
+GRANT ALL ON DATABASE cybercontrol TO cybercontrol_app;
+```
+
+Run migrations (tables auto-create on first backend start).
+
+### 3. Backend (`/backend`)
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+# Edit .env:
+#   DATABASE_URL=postgresql://cybercontrol_app:your_password@localhost:5432/cybercontrol
+#   JWT_SECRET=any-random-string
+#   GROQ_API_KEY=your-groq-key
+#   GOOGLE_CLIENT_ID=your-google-client-id
+#   GOOGLE_CLIENT_SECRET=your-google-client-secret
+#   GOOGLE_REDIRECT_URI=http://localhost:3000/api/drive/callback
+
+npm run dev
+# Runs on http://localhost:3000
+```
+
+### 4. WhatsApp Service (`/whatsapp-service`)
+
+```bash
+cd whatsapp-service
+npm install
+cp .env.example .env
+# Edit .env:
+#   WA_PORT=3100
+#   PARENT_URL=http://localhost:3000
+#   SERVICE_SECRET=wa-service-secret-2024
+
+node index.js
+# Runs on http://localhost:3100
+```
+
+### 5. Frontend (`/frontend`)
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+# .env should have:
+#   VITE_API_URL=http://localhost:3000/api
+#   VITE_SOCKET_URL=http://localhost:3000
+
+npm run dev
+# Runs on http://localhost:5173
+```
+
+### 6. Connect WhatsApp
+
+1. Open http://localhost:5173 → Login
+2. Go to WhatsApp page → QR code appears
+3. Scan with your phone → Connected
+4. Send a document to the connected number → appears in chat
+
+### 7. Connect Google Drive
+
+1. Go to Settings → Click "Connect Drive"
+2. Google account chooser opens → Select account
+3. Authorize → Drive connected
+4. Files sent via WhatsApp now upload to your Drive
+
+### Quick Start (all in one terminal)
+
+```bash
+# Terminal 1 — Backend
+cd backend && npm run dev
+
+# Terminal 2 — WhatsApp Service  
+cd whatsapp-service && node index.js
+
+# Terminal 3 — Frontend
+cd frontend && npm run dev
+```
+
+### Ports Summary
+
+| Service | Port | URL |
+|---------|------|-----|
+| Backend API | 3000 | http://localhost:3000/api |
+| WhatsApp Service | 3100 | http://localhost:3100 |
+| Frontend | 5173 | http://localhost:5173 |
+| PostgreSQL | 5432 | — |
+
