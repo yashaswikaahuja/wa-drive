@@ -102,6 +102,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
           <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
             <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const w = window.open('', '_blank'); if(!w) return; w.document.write('<p>Loading...</p>'); getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { w.location.href = URL.createObjectURL(blob); }).catch(() => { w.document.write('<p>Failed to load file</p>'); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/octet-stream'}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30">Download</button>
           </div>
         )}
       </div>
@@ -142,6 +143,7 @@ export default function WhatsApp() {
   const [selectedDocs, setSelectedDocs] = useState<Map<string, Message>>(new Map());
   const [showPicker, setShowPicker] = useState(false);
   const [unread, setUnread] = useState<Map<string, number>>(new Map());
+  const [chatSearch, setChatSearch] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
@@ -439,6 +441,11 @@ export default function WhatsApp() {
   };
 
   const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
+  const filteredChats = useMemo(() => {
+    if (!chatSearch.trim()) return sortedChats;
+    const q = chatSearch.toLowerCase();
+    return sortedChats.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+  }, [sortedChats, chatSearch]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
   const reversedMessages = useMemo(() => activeChat ? [...activeChat.messages].reverse() : [], [activeChat]);
 
@@ -481,10 +488,13 @@ export default function WhatsApp() {
           <span className="text-sm text-white font-medium">Inbox</span>
           <span className="text-[10px] text-gray-500 ml-auto">{sortedChats.length} customers</span>
         </div>
+        <div className="px-3 py-2 border-b border-white/5">
+          <input value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="Search customers..." className="w-full px-2.5 py-1.5 bg-[#1a2236] border border-white/10 rounded-lg text-xs text-white outline-none placeholder:text-gray-600" />
+        </div>
         <div className="flex-1 overflow-y-auto">
-          {sortedChats.length === 0 ? (
-            <p className="text-center text-gray-600 text-xs py-8">No documents received</p>
-          ) : sortedChats.map(chat => (
+          {filteredChats.length === 0 ? (
+            <p className="text-center text-gray-600 text-xs py-8">{chatSearch ? 'No match' : 'No documents received'}</p>
+          ) : filteredChats.map(chat => (
             <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} unreadCount={unread.get(chat.phone) || 0} />
           ))}
         </div>
@@ -510,14 +520,23 @@ export default function WhatsApp() {
               )}
             </div>
             <div ref={msgContainerRef} onScroll={() => { const el = msgContainerRef.current; if (el) userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 100; }} className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
-              {reversedMessages.map(msg => (
-                <MessageCard
-                  key={msg.id} msg={msg} onClick={handleOpenFile}
-                  selectionMode={selectionMode}
-                  selected={selectedDocs.has(msg.id)}
-                  onToggleSelect={toggleDocSelection}
-                />
-              ))}
+              {reversedMessages.map((msg, i) => {
+                const msgDate = new Date(msg.timestamp).toLocaleDateString();
+                const prevDate = i > 0 ? new Date(reversedMessages[i-1].timestamp).toLocaleDateString() : null;
+                const showDate = msgDate !== prevDate;
+                const today = new Date().toLocaleDateString();
+                const yesterday = new Date(Date.now()-86400000).toLocaleDateString();
+                const label = msgDate === today ? 'Today' : msgDate === yesterday ? 'Yesterday' : msgDate;
+                return (<>
+                  {showDate && <div key={'d-'+i} className="text-center py-2"><span className="text-[10px] bg-white/5 text-gray-500 px-3 py-1 rounded-full">{label}</span></div>}
+                  <MessageCard
+                    key={msg.id} msg={msg} onClick={handleOpenFile}
+                    selectionMode={selectionMode}
+                    selected={selectedDocs.has(msg.id)}
+                    onToggleSelect={toggleDocSelection}
+                  />
+                </>);
+              })}
               <div ref={messagesEndRef} />
             </div>
 
