@@ -8,9 +8,8 @@ export default function Settings() {
 
   // Check Drive connection on mount
   useEffect(() => {
-    fetch(API_URL + '/drive/status')
-      .then(r => r.json())
-      .then(d => setDriveStatus(d.connected ? 'connected' : 'disconnected'))
+    api.get('/drive/status')
+      .then(r => setDriveStatus(r.data.connected ? 'connected' : 'disconnected'))
       .catch(() => setDriveStatus('disconnected'));
   }, []);
 
@@ -38,9 +37,8 @@ export default function Settings() {
     const timer = setInterval(() => {
       if (popup?.closed) {
         clearInterval(timer);
-        fetch(API_URL + '/drive/status')
-          .then(r => r.json())
-          .then(d => setDriveStatus(d.connected ? 'connected' : 'disconnected'))
+        api.get('/drive/status')
+          .then(r => setDriveStatus(r.data.connected ? 'connected' : 'disconnected'))
           .catch(() => setDriveStatus('disconnected'));
       }
     }, 500);
