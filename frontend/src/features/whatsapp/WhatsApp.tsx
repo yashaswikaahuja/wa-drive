@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { getCachedBlob } from '../../shared/fileCache';
 
