@@ -69,9 +69,9 @@ export default function Customers() {
                 {h.persons[0]?.name?.[0] || '?'}
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-white">{h.phone}</p>
+                <p className="text-sm font-medium text-white">{h.persons[0]?.displayLabel || h.persons[0]?.name || h.phone.replace(/@.*/, '')}</p>
                 <p className="text-xs text-gray-500 truncate">
-                  {h.persons.map(p => p.displayLabel || p.name).join(' · ')}
+                  {h.phone.match(/^[0-9]{10,13}$/) ? h.phone : ''}{h.persons.length > 1 ? (h.phone.match(/^[0-9]{10,13}$/) ? ' · ' : '') + h.persons.slice(1).map(p => p.displayLabel || p.name).join(' · ') : ''}
                 </p>
               </div>
               <span className="text-[10px] text-gray-500 px-2 py-0.5 rounded-full bg-white/5">
