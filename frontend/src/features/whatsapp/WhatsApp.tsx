@@ -200,6 +200,7 @@ export default function WhatsApp() {
       // Browser notification
       if (Notification.permission === 'granted') {
         new Notification(`📄 ${name}`, { body: file.fileName || 'New document received', icon: '/favicon.ico' });
+        new Audio('/notify.mp3').play().catch(() => {});
       }
       // Track unread
       setUnread(prev => { const m = new Map(prev); m.set(phone, (m.get(phone) || 0) + 1); return m; });
