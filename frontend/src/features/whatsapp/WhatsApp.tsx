@@ -116,7 +116,8 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
     className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selected ? 'bg-blue-600/10' : ''}`}>
     <div className="flex items-center gap-2.5">
       <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 text-xs font-bold shrink-0 overflow-hidden">
-        {chat.dpUrl ? <img src={chat.dpUrl} className="w-full h-full object-cover" /> : chat.name[0]?.toUpperCase() || '?'}
+        {chat.dpUrl ? <img src={chat.dpUrl} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display='none')} /> : null}
+        {!chat.dpUrl && (chat.name[0]?.toUpperCase() || '?')}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm text-white font-medium truncate">{chat.name} {pinned && <span className="text-[9px] text-gray-500">📌</span>}</p>
