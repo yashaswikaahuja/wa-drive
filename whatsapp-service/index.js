@@ -11,6 +11,7 @@ const PORT = process.env.WA_PORT || 3100;
 const PARENT_URL = process.env.PARENT_URL || 'https://api.cybercontrol.fun';
 const SERVICE_SECRET = process.env.SERVICE_SECRET || 'wa-service-secret-2024';
 const AUTH_DIR = process.env.AUTH_DIR || './sessions';
+const RESOLVER_URL = process.env.RESOLVER_URL || 'http://localhost:3200';
 
 const app = express();
 app.use(express.json());
@@ -101,7 +102,28 @@ async function startSession(workspaceId) {
         msg.message?.documentWithCaptionMessage?.message?.documentMessage;
       if (!hasMedia) continue;
 
-      const phone = msg.key.remoteJid?.replace('@s.whatsapp.net', '') || 'unknown';
+      const rawJid = msg.key.remoteJid || '';
+      let phone;
+      let profilePicUrl = null;
+
+      if (rawJid.endsWith('@s.whatsapp.net')) {
+        phone = rawJid.replace('@s.whatsapp.net', '');
+        try { profilePicUrl = await sock.profilePictureUrl(rawJid, 'image'); } catch {}
+      } else if (rawJid.endsWith('@lid')) {
+        // Resolve via local wwebjs resolver
+        const lidNum = rawJid.replace('@lid', '');
+        try {
+          const r = await fetch(`${RESOLVER_URL}/resolve?lid=${lidNum}`, { headers: { 'x-service-secret': SERVICE_SECRET } });
+          if (r.ok) {
+            const data = await r.json();
+            phone = data.phone || lidNum;
+            profilePicUrl = data.dpUrl || null;
+            if (data.phone) console.log(`[WA] LID resolved: ${lidNum} → ${data.phone}`);
+          } else { phone = lidNum; }
+        } catch { phone = lidNum; }
+      } else {
+        phone = rawJid.replace(/@.*/, '');
+      }
       const pushName = msg.pushName || phone;
 
       try {
@@ -110,10 +132,6 @@ async function startSession(workspaceId) {
 
         const ext = getExtFromMsg(msg);
         const fileName = `${phone}_${Date.now()}_file.${ext}`;
-
-        // Get sender's profile pic
-        let profilePicUrl = null;
-        try { profilePicUrl = await sock.profilePictureUrl(msg.key.remoteJid, 'image'); } catch {}
 
         // Upload to parent
         await uploadToParent(workspaceId, buffer, fileName, phone, pushName, profilePicUrl);
