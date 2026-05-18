@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
+import { useAuthStore } from '../auth/store';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -191,7 +192,8 @@ export default function WhatsApp() {
       groupMessages(msgs);
     }).catch(() => {});
     const baseUrl = SOCKET_URL;
-    const socket = io(baseUrl, { transports: ['polling', 'websocket'], reconnectionAttempts: 3, timeout: 5000 });
+    const token = useAuthStore.getState().accessToken || '';
+    const socket = io(baseUrl, { transports: ['polling', 'websocket'], reconnectionAttempts: 3, timeout: 5000, auth: { token }, query: { token } });
     socketRef.current = socket;
     socket.on('connection:status', (data: any) => {
       if (data.connected) {
