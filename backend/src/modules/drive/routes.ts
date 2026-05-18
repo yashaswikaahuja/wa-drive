@@ -100,3 +100,14 @@ router.get('/download/:fileId', (req: any, res, next) => {
 });
 
 export default router;
+
+
+// Tag a file with document category
+router.patch('/files/:id/tag', authMiddleware, async (req: any, res) => {
+  const { tag } = req.body;
+  if (!tag) return res.status(400).json({ error: 'tag required' });
+  try {
+    await pool.query('UPDATE drive_files SET tag = $1 WHERE id = $2 AND workspace_id = $3', [tag, req.params.id, req.user.workspaceId]);
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});

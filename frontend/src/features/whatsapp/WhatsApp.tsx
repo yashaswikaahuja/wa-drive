@@ -7,7 +7,7 @@ import { useAuthStore } from '../auth/store';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
-  fileUrl?: string; timestamp: string; type?: string; dpUrl?: string;
+  fileUrl?: string; timestamp: string; type?: string; dpUrl?: string; tag?: string;
 }
 interface Chat { phone: string; name: string; lastTime: string; messages: Message[]; newCount: number; dpUrl?: string; }
 
@@ -93,7 +93,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w400' : (msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
-  const category = docCategory(msg.fileName || '');
+  const category = msg.tag ? { category: msg.tag, color: 'bg-yellow-500/20 text-yellow-400' } : docCategory(msg.fileName || '');
 
   if (msg.text && !msg.fileName) return (
     <div className="bg-[#1a2236] rounded-lg px-3 py-2 max-w-[80%]">
@@ -121,8 +121,9 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
           <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}{category && <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-medium ${category.color}`}>{category.category}</span>}</p>
         </div>
         {!selectionMode && (
-          <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
+          <div className="flex flex-wrap gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
             <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
+            <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="text-[10px] px-2 py-0.5 rounded-md bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">Tag</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; const w = window.open('', '_blank'); if(!w) return; w.document.write('<p>Loading...</p>'); getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { w.location.href = URL.createObjectURL(blob); }).catch(() => { w.document.write('<p>Failed to load file</p>'); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/octet-stream'}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30">Download</button>
           </div>
@@ -206,7 +207,7 @@ export default function WhatsApp() {
     api.get('/drive/files/ws').then(r => {
       const msgs: Message[] = r.data.map((f: any) => ({
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-        fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl
+        fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
       }));
       localStorage.setItem('cc-drive-files', JSON.stringify(msgs));
       groupMessages(msgs);
@@ -285,7 +286,7 @@ export default function WhatsApp() {
           api.get('/drive/files/ws').then(fr => {
             const msgs: Message[] = fr.data.map((f: any) => ({
               id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-              fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl
+              fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
             }));
             if (msgs.length > 0) { localStorage.setItem('cc-drive-files', JSON.stringify(msgs)); groupMessages(msgs); }
           }).catch(() => {});
