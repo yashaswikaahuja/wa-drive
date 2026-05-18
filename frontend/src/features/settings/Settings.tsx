@@ -4,7 +4,7 @@ import { useAuthStore } from '../../features/auth/store';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
-  const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('disconnected');
+  const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('loading');
 
   // Check Drive connection on mount
   useEffect(() => {
@@ -64,8 +64,8 @@ export default function Settings() {
         <h3 className="text-sm font-medium text-gray-400 mb-3">Google Drive</h3>
         <p className="text-xs text-gray-500 mb-3">Connect Google Drive to receive WhatsApp files</p>
         <div className="flex items-center gap-3">
-          <span className={`w-2.5 h-2.5 rounded-full ${driveStatus === 'connected' ? 'bg-green-500' : 'bg-red-500'}`} />
-          <span className="text-sm text-white">{driveStatus === 'connected' ? 'Connected' : 'Disconnected'}</span>
+          <span className={`w-2.5 h-2.5 rounded-full ${driveStatus === 'connected' ? 'bg-green-500' : driveStatus === 'loading' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`} />
+          <span className="text-sm text-white">{driveStatus === 'connected' ? 'Connected' : driveStatus === 'loading' ? 'Checking...' : 'Disconnected'}</span>
           <button onClick={connectDrive} disabled={driveStatus === 'loading'}
             className="ml-auto px-4 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50">
             {driveStatus === 'loading' ? 'Connecting...' : driveStatus === 'connected' ? 'Reconnect' : 'Connect Drive'}
