@@ -14,6 +14,25 @@ interface Chat { phone: string; name: string; lastTime: string; messages: Messag
 interface Person { id: string; name: string; displayLabel: string; relationship: string; }
 interface Household { phone: string; persons: Person[]; person_count: string; }
 
+function docCategory(fileName: string): { category: string; color: string } | null {
+  const name = fileName.toLowerCase();
+  if (/aadh|aadhaar|adhar|uid/i.test(name)) return { category: 'Aadhaar', color: 'bg-orange-500/20 text-orange-400' };
+  if (/pan[\s_-]?card|pan[\s_.]|pancard/i.test(name)) return { category: 'PAN', color: 'bg-blue-500/20 text-blue-400' };
+  if (/passport|pport/i.test(name)) return { category: 'Passport', color: 'bg-purple-500/20 text-purple-400' };
+  if (/mark\s?sheet|result|10th|12th|matric|inter|hsc|ssc/i.test(name)) return { category: 'Marksheet', color: 'bg-green-500/20 text-green-400' };
+  if (/degree|graduat|diploma|certif/i.test(name)) return { category: 'Certificate', color: 'bg-teal-500/20 text-teal-400' };
+  if (/photo|passport.?size|selfie|dp|pic/i.test(name)) return { category: 'Photo', color: 'bg-pink-500/20 text-pink-400' };
+  if (/voter|epic|election/i.test(name)) return { category: 'Voter ID', color: 'bg-yellow-500/20 text-yellow-400' };
+  if (/driv.*lic|dl[\s_.-]/i.test(name)) return { category: 'Driving License', color: 'bg-red-500/20 text-red-400' };
+  if (/ration|bpl|apl/i.test(name)) return { category: 'Ration Card', color: 'bg-amber-500/20 text-amber-400' };
+  if (/caste|obc|sc[\s_]|st[\s_]|category/i.test(name)) return { category: 'Caste Cert', color: 'bg-indigo-500/20 text-indigo-400' };
+  if (/income|salary|itr/i.test(name)) return { category: 'Income', color: 'bg-emerald-500/20 text-emerald-400' };
+  if (/domicile|residen/i.test(name)) return { category: 'Domicile', color: 'bg-cyan-500/20 text-cyan-400' };
+  if (/bank|passbook|cheque|ifsc/i.test(name)) return { category: 'Bank', color: 'bg-sky-500/20 text-sky-400' };
+  if (/sign|signature/i.test(name)) return { category: 'Signature', color: 'bg-violet-500/20 text-violet-400' };
+  return null;
+}
+
 function docTitle(fileName: string): { title: string; badge: string; icon: string } {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
   if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return { title: 'Photo', badge: 'IMG', icon: '🖼️' };
@@ -74,6 +93,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w400' : (msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
+  const category = docCategory(msg.fileName || '');
 
   if (msg.text && !msg.fileName) return (
     <div className="bg-[#1a2236] rounded-lg px-3 py-2 max-w-[80%]">
@@ -98,7 +118,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
       <div className="flex-1 min-w-0 flex flex-col justify-between">
         <div>
           <p className="text-sm font-medium text-white">{title}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}</p>
+          <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}{category && <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-medium ${category.color}`}>{category.category}</span>}</p>
         </div>
         {!selectionMode && (
           <div className="flex gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
