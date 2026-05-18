@@ -267,8 +267,8 @@ export default function WhatsApp() {
           }).catch(() => {});
           disconnectCount = 0;
         } else if (r.data.qr) {
-          setQrCode(r.data.qr); setReconnecting(false);
           disconnectCount++;
+          if (disconnectCount >= 2) { setQrCode(r.data.qr); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
           if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
         } else {
           disconnectCount++;
