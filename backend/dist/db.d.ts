@@ -1,23 +1,4 @@
-import type { Customer, WhatsAppFile } from './types/index.js';
-declare const customers: Customer[];
-declare const files: WhatsAppFile[];
-/**
- * Find or create a customer by WhatsApp phone number
- * In production, this should query PostgreSQL
- */
-export declare function findOrCreateCustomer(waId: string): Promise<Customer>;
-/**
- * Save a WhatsApp file record
- * In production, this should insert into PostgreSQL
- */
-export declare function saveWhatsAppFile(customerId: string, customerName: string, fileName: string, fileUrl: string, filePath: string): Promise<WhatsAppFile>;
-/**
- * Get all WhatsApp files (or filtered by type)
- */
-export declare function getWhatsAppFiles(type?: string): Promise<WhatsAppFile[]>;
-/**
- * Delete a file record
- */
-export declare function deleteFile(fileId: string): Promise<boolean>;
-export { customers, files };
+export declare const pool: import("pg").Pool;
+export declare function query(text: string, params?: any[]): Promise<import("pg").QueryResult<any>>;
+export declare function auditLog(workspaceId: string, userId: string, eventType: string, entityType: string, entityId: string, metadata?: any): Promise<void>;
 //# sourceMappingURL=db.d.ts.map
