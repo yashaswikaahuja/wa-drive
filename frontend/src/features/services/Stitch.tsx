@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
+import { useAuthStore } from '../auth/store';
 
 interface StitchFile { id: string; fileName: string; fileUrl: string; customerName: string; }
 
@@ -46,6 +47,7 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, text?: { name?: string; date?: string; signature?: boolean; font?: string }, processedBlob?: Blob): Promise<string> {
+  const token = useAuthStore.getState().accessToken || '';
   let res: Response;
   if (processedBlob) {
     const form = new FormData();
@@ -56,10 +58,10 @@ async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, 
     if (text?.date) form.append('date', text.date);
     if (text?.signature) form.append('signature', 'true');
     if (text?.font) form.append('font', text.font);
-    res = await fetch(`${SOCKET_URL}/api/process/passport-sheet`, { method: 'POST', body: form });
+    res = await fetch(`${SOCKET_URL}/api/process/passport-sheet`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: form });
   } else {
     res = await fetch(`${SOCKET_URL}/api/process/passport-sheet`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ fileId, preset, spec, ...text }),
     });
   }
@@ -122,7 +124,7 @@ export default function Stitch() {
     setLayoutLoading(true); setLayoutError(null);
     try {
       const res = await fetch(`${SOCKET_URL}/api/process`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${useAuthStore.getState().accessToken}` },
         body: JSON.stringify({ fileIds: f.map(x => getDriveId(x.fileUrl) ?? x.id), action: 'aadhaar_layout' }),
       });
       if (!res.ok) throw new Error(`Error ${res.status}`);
@@ -138,7 +140,7 @@ export default function Stitch() {
       const fileId = getDriveId(activeFile.fileUrl);
       if (!fileId) throw new Error('No Drive file ID');
       const res = await fetch(`${SOCKET_URL}/api/remove-bg`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${useAuthStore.getState().accessToken}` },
         body: JSON.stringify({ fileId, fileName: activeFile.fileName }),
       });
       if (!res.ok) throw new Error(await res.text() || `Error ${res.status}`);
