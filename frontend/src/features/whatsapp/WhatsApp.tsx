@@ -638,6 +638,10 @@ export default function WhatsApp() {
                   className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold hover:bg-blue-50">
                   Build Profile →
                 </button>
+                <button onClick={() => { const files = Array.from(selectedDocs.values()).map(m => ({ id: m.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || m.id, fileName: m.fileName || '', fileUrl: m.fileUrl || '', customerName: m.name })); window.location.href = '/app/stitch?files=' + encodeURIComponent(JSON.stringify(files)); }}
+                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                  📷 Photo Tool
+                </button>
               </div>
             )}
           </>
