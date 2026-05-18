@@ -239,11 +239,13 @@ export default function WhatsApp() {
     setChats(prev => {
       const map = new Map(prev);
       const key = msg.phone;
-      if (!map.has(key)) map.set(key, { phone: key, name: msg.name, lastTime: msg.timestamp, messages: [], newCount: 0 });
+      if (!map.has(key)) map.set(key, { phone: key, name: msg.name, lastTime: msg.timestamp, messages: [], newCount: 0, dpUrl: msg.dpUrl });
       const chat = map.get(key)!;
+      if (chat.messages.some(m => m.id === msg.id)) return prev; // dedupe
       chat.messages.unshift(msg);
       chat.lastTime = msg.timestamp;
       chat.newCount++;
+      if (msg.dpUrl) chat.dpUrl = msg.dpUrl;
       return map;
     });
   }, []);
