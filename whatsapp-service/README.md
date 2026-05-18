@@ -1,41 +1,52 @@
 # CyberControl WhatsApp Service
 
-Multi-tenant WhatsApp session manager. Runs as a separate microservice, communicates with the parent API.
+Multi-tenant WhatsApp session manager using **Baileys** + **wwebjs Resolver** for LID→phone resolution.
 
-## Architecture
-
-```
-Parent API (api.cybercontrol.fun)
-  ↕ HTTP + WebSocket
-WhatsApp Service (port 3100)
-  → Manages N Baileys sessions (one per workspace)
-  → Uploads received files to Parent
-  → Notifies Parent of connection events
-```
-
-## API
-
-All endpoints require `x-service-secret` header.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | /health | Service status |
-| POST | /sessions/start | Start WhatsApp session `{workspaceId}` |
-| POST | /sessions/stop | Stop session `{workspaceId}` |
-| GET | /sessions/:id/status | Get connection status + QR |
-| GET | /sessions/:id/qr | Get current QR code |
-| GET | /sessions | List all active sessions |
-
-## WebSocket
-
-Connect to `ws://host:3100/ws?workspaceId=xxx` to receive real-time events:
-- `{type: 'qr', qr: '...'}` — new QR code
-- `{type: 'status', connected: true/false}` — connection changed
-
-## Deploy
+## Quick Start
 
 ```bash
-cd /opt/whatsapp-service
 npm install
-pm2 start ecosystem.config.cjs
+cp .env.example .env
+node index.js
 ```
+
+## Services
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| `whatsapp-service` | 3100 | Baileys — receives files, manages sessions |
+| `whatsapp-resolver` | 3200 | wwebjs — resolves LID→phone, fetches DP + saved names |
+
+## Production (GCP #2)
+
+```bash
+pm2 start index.js --name whatsapp-service --cwd /opt/whatsapp/service
+pm2 start index.js --name whatsapp-resolver --cwd /opt/whatsapp/resolver
+pm2 save
+```
+
+## Key Features
+
+- **Auto-start** — all sessions resume on boot
+- **LID resolution** — anonymous WhatsApp IDs → real phone numbers
+- **Retry + disk queue** — no file loss even if parent is down
+- **Exponential backoff** — prevents reconnect floods
+- **Health endpoint** — disk, memory, session status
+
+## Health Check
+
+```bash
+curl http://localhost:3100/health
+# {"status":"ok","sessions":3,"diskFree":"22G","memMB":111}
+```
+
+## Resolver QR
+
+If resolver disconnects, re-scan at:
+```
+http://34.100.147.20:3200/qr-page?secret=wa-service-secret-2024
+```
+
+## Full Documentation
+
+See [WHATSAPP_SERVICE.md](./WHATSAPP_SERVICE.md) for architecture, message flow, troubleshooting, and local dev setup.
