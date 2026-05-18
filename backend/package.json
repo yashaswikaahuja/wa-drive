@@ -11,8 +11,6 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@types/express": "^4.17.17",
-    "@types/multer": "^2.1.0",
     "@types/node": "^20.19.39",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
@@ -32,6 +30,12 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/compression": "^1.8.1",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.1.0",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.21.0"
   }
 }
