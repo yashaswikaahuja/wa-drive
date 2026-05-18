@@ -47,8 +47,7 @@ async function compositeOnColor(fgDataUrl: string, color: string): Promise<strin
 }
 
 async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, text?: { name?: string; date?: string; signature?: boolean; font?: string }, processedBlob?: Blob): Promise<string> {
-  const token = useAuthStore.getState().accessToken || '';
-  let res: Response;
+  let res: any;
   if (processedBlob) {
     const form = new FormData();
     form.append('image_file', processedBlob, 'photo.png');
@@ -58,15 +57,11 @@ async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, 
     if (text?.date) form.append('date', text.date);
     if (text?.signature) form.append('signature', 'true');
     if (text?.font) form.append('font', text.font);
-    res = await fetch(`${SOCKET_URL}/api/process/passport-sheet`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: form });
+    res = await api.post('/process/passport-sheet', form, { responseType: 'blob', headers: { 'Content-Type': 'multipart/form-data' } });
   } else {
-    res = await fetch(`${SOCKET_URL}/api/process/passport-sheet`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ fileId, preset, spec, ...text }),
-    });
+    res = await api.post('/process/passport-sheet', { fileId, preset, spec, ...text }, { responseType: 'blob' });
   }
-  if (!res.ok) throw new Error(`Sheet generation failed: ${await res.text()}`);
-  return URL.createObjectURL(await res.blob());
+  return URL.createObjectURL(res.data);
 }
 
 function printUrl(url: string) { const w = window.open('', '_blank'); if (!w) return; w.document.write(`<html><body style="margin:0"><img src="${url}" style="width:100%" onload="window.print()"/></body></html>`); w.document.close(); }
