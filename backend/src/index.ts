@@ -8,6 +8,7 @@ import { setupSocket } from './socket/index.js';
 import { loadDriveTokenFromDB } from './modules/drive/service.js';
 
 import authRoutes from './modules/auth/routes.js';
+import processRoutes from './api/routes/process.routes.js';
 import driveRoutes from './modules/drive/routes.js';
 import uploadRoutes from './modules/upload/routes.js';
 import whatsappRoutes from './modules/whatsapp/routes.js';
@@ -36,6 +37,7 @@ app.use((req: any, res, next) => { req.pool = pool; next(); });
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/drive', driveRoutes);
+app.use('/api/process', authMiddleware, processRoutes);
 app.use('/api/worker', uploadRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/worker', whatsappRoutes); // /api/worker/event and /api/worker/update-dp
