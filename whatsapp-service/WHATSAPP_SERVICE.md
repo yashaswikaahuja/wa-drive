@@ -1,31 +1,36 @@
 # WhatsApp Service — CyberControl
 
-Multi-tenant WhatsApp session manager for CyberControl SaaS. Each workspace (cybercafe) gets its own independent WhatsApp connection.
+Multi-tenant WhatsApp session manager for CyberControl SaaS. Each workspace (cybercafe) gets its own independent WhatsApp connection. Runs on a **separate GCP instance** (GCP #2) dedicated to WhatsApp processing.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Parent API (api.cybercontrol.fun:3000)                  │
-│  - Proxies /api/whatsapp/* to this service               │
-│  - Receives uploaded files via POST /api/worker/upload    │
-│  - Emits socket.io events to frontend on new files       │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTP (localhost:3100)
-┌──────────────────────▼──────────────────────────────────┐
-│  WhatsApp Service (this)                                 │
-│  - Manages N Baileys sessions (one per workspace)        │
-│  - Downloads media from WhatsApp                         │
-│  - Uploads files to Parent API                           │
-│  - Sends messages on behalf of workspaces                │
-└──────────────────────┬──────────────────────────────────┘
-                       │ WhatsApp Web Protocol (Baileys)
-┌──────────────────────▼──────────────────────────────────┐
-│  WhatsApp Servers                                        │
-│  - Each workspace = one linked device session            │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  GCP #1 — Parent (136.115.232.70)                            │
+│  ├─ Backend API (api.cybercontrol.fun:3000)                  │
+│  ├─ PostgreSQL                                               │
+│  ├─ Google Drive upload + storage                            │
+│  └─ Proxies /api/whatsapp/* → GCP #2                         │
+└─────────────────────┬────────────────────────────────────────┘
+                      │ HTTPS (34.100.147.20:3100)
+┌─────────────────────▼────────────────────────────────────────┐
+│  GCP #2 — WhatsApp (34.100.147.20)                           │
+│  ├─ WhatsApp Service (port 3100) — Baileys multi-session     │
+│  │   ├─ Receives media from WhatsApp                         │
+│  │   ├─ Resolves LID → real phone via Resolver               │
+│  │   ├─ Uploads files to Parent API                          │
+│  │   └─ Retry queue + disk persistence                       │
+│  └─ WhatsApp Resolver (port 3200) — wwebjs + Chromium        │
+│      ├─ Resolves LID → phone number                          │
+│      ├─ Fetches profile pictures                             │
+│      └─ Returns saved contact names                          │
+└─────────────────────┬────────────────────────────────────────┘
+                      │ WhatsApp Web Protocol
+┌─────────────────────▼────────────────────────────────────────┐
+│  WhatsApp Servers                                            │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -34,15 +39,20 @@ Multi-tenant WhatsApp session manager for CyberControl SaaS. Each workspace (cyb
 
 | Feature | Description |
 |---------|-------------|
-| Multi-tenant sessions | Each workspace has its own Baileys session stored in `./sessions/{workspaceId}/` |
-| QR code generation | Generates QR for new connections, sends to parent via webhook |
-| Auto-reconnect | Reconnects automatically on disconnect (except logout) |
-| Media download | Downloads images and documents from WhatsApp messages |
-| File upload to parent | Uploads received files to parent API for Drive storage |
-| Profile picture fetch | Gets sender's WhatsApp DP URL |
-| Send messages | Sends text messages to customers (for document requests) |
-| File filtering | Only accepts images + documents (no videos/audio to save bandwidth) |
-| Session cleanup | Deletes auth data on logout for fresh QR re-pair |
+| Multi-tenant sessions | Each workspace has its own Baileys session in `./sessions/{workspaceId}/` |
+| LID → Phone resolution | Automatically resolves WhatsApp's anonymous LIDs to real phone numbers via wwebjs resolver |
+| Saved contact names | Shows the name saved in operator's phone contacts (not just pushName) |
+| Profile picture fetch | Downloads sender's DP as base64 (permanent, never expires) |
+| Auto-reconnect | Exponential backoff: 5s → 10s → 30s → 60s max |
+| Auto-start on boot | All saved sessions start automatically when PM2 restarts |
+| Retry queue | 3 in-memory retries, then saves to disk for later processing |
+| File-based persistence | Failed uploads saved to `./upload_queue/` and retried every 5 minutes |
+| QR web page | Scan QR from browser without SSH: `http://IP:3200/qr-page?secret=...` |
+| Health monitoring | `/health` returns sessions, disk space, memory usage |
+| Resolver health-check | Logs warning every 60s if resolver is unreachable |
+| Send messages | Send text messages to customers (document request feature) |
+| File filtering | Only images + documents (no videos/audio) |
+| Original filenames | Documents keep their real name; images get `phone_timestamp_image.ext` |
 
 ---
 
@@ -50,26 +60,46 @@ Multi-tenant WhatsApp session manager for CyberControl SaaS. Each workspace (cyb
 
 ```
 whatsapp-service/
-├── index.js              # Main service (single file)
+├── index.js              # Baileys multi-session service
 ├── package.json          # Dependencies
-├── .env.example          # Environment config template
-├── ecosystem.config.cjs  # PM2 deployment config
-├── README.md             # Quick start guide
-├── WHATSAPP_SERVICE.md   # This file (full documentation)
-└── sessions/             # Runtime: auth data per workspace (gitignored)
-    └── {workspaceId}/    # Baileys multi-file auth state
+├── .env.example          # Environment config
+├── ecosystem.config.cjs  # PM2 config
+├── setup-gcp2.sh         # One-command deployment for new GCP instance
+├── WHATSAPP_SERVICE.md   # This file
+├── sessions/             # Auth data per workspace (gitignored)
+│   └── {workspaceId}/
+├── upload_queue/         # Failed uploads persisted to disk
+│   ├── {id}.json         # Metadata (phone, name, workspace)
+│   └── {id}.bin          # File binary
+└── failed_uploads/       # Legacy fallback directory
+
+whatsapp-resolver/
+├── index.js              # wwebjs LID resolver service
+├── package.json          # Dependencies
+├── .env.example          # Environment config
+└── session/              # wwebjs LocalAuth data (gitignored)
 ```
 
 ---
 
 ## Environment Variables
 
+### WhatsApp Service (.env)
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WA_PORT` | 3100 | Port this service listens on |
 | `PARENT_URL` | https://api.cybercontrol.fun | Parent API base URL |
-| `SERVICE_SECRET` | wa-service-secret-2024 | Shared secret for auth between parent ↔ this service |
-| `AUTH_DIR` | ./sessions | Directory to store Baileys auth per workspace |
+| `SERVICE_SECRET` | wa-service-secret-2024 | Shared secret for inter-service auth |
+| `AUTH_DIR` | ./sessions | Directory for Baileys auth per workspace |
+| `RESOLVER_URL` | http://localhost:3200 | URL of the LID resolver |
+
+### WhatsApp Resolver (.env)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 3200 | Port resolver listens on |
+| `SERVICE_SECRET` | wa-service-secret-2024 | Shared secret for auth |
 
 ---
 
@@ -77,174 +107,203 @@ whatsapp-service/
 
 All endpoints require header: `x-service-secret: <SERVICE_SECRET>`
 
-### Session Management
+### WhatsApp Service (port 3100)
 
 | Method | Endpoint | Body | Description |
 |--------|----------|------|-------------|
-| POST | `/sessions/start` | `{workspaceId}` | Start/resume a WhatsApp session |
+| GET | `/health` | — | Status, sessions, disk, memory |
+| POST | `/sessions/start` | `{workspaceId}` | Start/resume a session |
 | POST | `/sessions/stop` | `{workspaceId}` | Disconnect and remove session |
-| GET | `/sessions/:workspaceId/status` | — | Get connection status, QR, phone |
-| GET | `/sessions/:workspaceId/qr` | — | Get current QR code (null if connected) |
+| GET | `/sessions/:id/status` | — | Connection status, QR, phone |
+| GET | `/sessions/:id/qr` | — | Current QR code (null if connected) |
 | GET | `/sessions` | — | List all active sessions |
-| GET | `/health` | — | Service health + session count |
+| POST | `/sessions/:id/send` | `{phone, message}` | Send text message |
 
-### Messaging
+### WhatsApp Resolver (port 3200)
 
-| Method | Endpoint | Body | Description |
-|--------|----------|------|-------------|
-| POST | `/sessions/:workspaceId/send` | `{phone, message}` | Send text message to a phone number |
+| Method | Endpoint | Params | Description |
+|--------|----------|--------|-------------|
+| GET | `/health` | — | Status + connected boolean |
+| GET | `/resolve` | `?lid=140583356072067` | Resolve LID → phone + dpUrl + savedName |
+| GET | `/dp` | `?phone=919876543210` | Get profile picture URL |
+| GET | `/qr` | — | Current QR (for re-linking) |
+| GET | `/qr-page` | `?secret=...` | Scannable QR web page |
 
-### WebSocket
+### Resolver Response Example
 
-Connect to `ws://host:3100/ws?workspaceId=xxx` for real-time events:
-- `{type: 'qr', qr: '...', workspaceId}` — New QR code available
-- `{type: 'status', connected: true/false, phone, workspaceId}` — Connection state changed
+```json
+{
+  "lid": "140583356072067",
+  "phone": "919006615450",
+  "dpUrl": "https://pps.whatsapp.net/...",
+  "savedName": "Sudhir Prasad"
+}
+```
 
 ---
 
-## Logic & Conditions
-
-### Session Lifecycle
+## Message Flow
 
 ```
-startSession(workspaceId)
+Customer sends image/document on WhatsApp
   │
-  ├─ Load auth from ./sessions/{workspaceId}/
-  ├─ Create Baileys socket
+  ├─ Baileys receives message
+  ├─ Skip if fromMe or video/audio
+  ├─ Unwrap viewOnce / captioned wrappers
   │
-  ├─ on 'connection.update':
-  │   ├─ qr received → emit to parent + WebSocket
-  │   ├─ connection = 'open' → notify parent "connected"
-  │   └─ connection = 'close':
-  │       ├─ loggedOut=true → delete session dir, stop
-  │       └─ loggedOut=false → reconnect after 5s
+  ├─ Identify sender:
+  │   ├─ @s.whatsapp.net → use phone directly
+  │   └─ @lid → call Resolver:
+  │       ├─ GET /resolve?lid=xxx
+  │       ├─ Returns: phone, savedName, dpUrl
+  │       ├─ Use savedName as sender name
+  │       └─ Download DP in background (async, non-blocking)
   │
-  └─ on 'messages.upsert':
-      ├─ Skip own messages (fromMe)
-      ├─ Unwrap viewOnce / captioned messages
-      ├─ Filter: only imageMessage or documentMessage
-      ├─ Skip videos and audio (bandwidth)
-      ├─ Download media buffer
-      ├─ Detect extension from message type
-      ├─ Fetch sender's profile picture URL
-      └─ Upload to parent API
+  ├─ Download media buffer from WhatsApp
+  ├─ Determine filename:
+  │   ├─ Documents → original filename (e.g. "Aadhaar.pdf")
+  │   └─ Images → "{phone}_{timestamp}_image.jpg"
+  │
+  ├─ Upload to parent (POST /api/worker/upload):
+  │   ├─ Try 1 → success? Done ✓
+  │   ├─ Try 2 (5s delay) → success? Done ✓
+  │   ├─ Try 3 (10s delay) → success? Done ✓
+  │   └─ All failed → save to ./upload_queue/ for later
+  │
+  └─ Parent receives → uploads to Google Drive → saves to DB → emits socket.io event → frontend updates
 ```
 
-### Message Type Detection
+---
 
-```javascript
-// Unwrap nested message types
-innerMsg = msg.message.viewOnceMessage?.message
-        || msg.message.viewOnceMessageV2?.message
-        || msg.message.documentWithCaptionMessage?.message
-        || msg.message
+## Reliability Features
 
-// Only process these:
-✅ innerMsg.imageMessage        → extension: .jpg
-✅ innerMsg.documentMessage     → extension from fileName or .pdf
-❌ innerMsg.videoMessage        → SKIPPED (too large)
-❌ innerMsg.audioMessage        → SKIPPED (not useful)
+### Exponential Backoff on Disconnect
+
+```
+Attempt 1: reconnect in 5s
+Attempt 2: reconnect in 10s
+Attempt 3: reconnect in 30s
+Attempt 4+: reconnect in 60s (max)
+Reset to 5s on successful connection
 ```
 
-### File Extension Detection
+### Upload Retry + Disk Queue
 
-```javascript
-imageMessage  → 'jpg'
-videoMessage  → 'mp4' (skipped but defined)
-audioMessage  → 'ogg' (skipped but defined)
-documentMessage → extract from fileName (e.g. "doc.pdf" → "pdf")
-fallback      → 'bin'
+```
+Upload attempt 1 → fail → retry in 5s
+Upload attempt 2 → fail → retry in 10s
+Upload attempt 3 → fail → save to ./upload_queue/{id}.json + {id}.bin
+Queue processed: on boot (30s delay) + every 5 minutes
 ```
 
-### Upload to Parent
+### Auto-Start on Boot
 
-Uses `form-data` package piped through `http.request`:
-- `file` — binary buffer with original filename
-- `phone` — sender's WhatsApp number (without @s.whatsapp.net)
-- `senderName` — push name from WhatsApp
-- `workspaceId` — which workspace this file belongs to
-- `fileName` — constructed as `{phone}_{timestamp}_file.{ext}`
-- `profilePicUrl` — sender's WhatsApp DP (may be null)
+On PM2 restart, all sessions with saved auth in `./sessions/` are automatically started with 10-second staggering between each to prevent RAM spikes.
 
-### Send Message
+### Resolver Health Check
 
-```javascript
-// Formats phone for WhatsApp JID
-jid = phone.replace(/[^0-9]/g, '') + '@s.whatsapp.net'
-socket.sendMessage(jid, { text: message })
-```
+Every 60 seconds, the Baileys service pings the resolver's `/health`. If unreachable or disconnected, it logs a warning. LID resolution gracefully falls back to using the raw LID number.
 
 ---
 
 ## How Parent API Integrates
 
-The parent backend (`/backend/dist/server.js`) proxies WhatsApp requests:
+Parent backend proxies WhatsApp requests to GCP #2 (`34.100.147.20:3100`):
 
 | Frontend calls | Parent proxies to |
 |---|---|
-| `GET /api/whatsapp/status` | `GET localhost:3100/sessions/{workspaceId}/status` |
-| `GET /api/whatsapp/qr` | `GET localhost:3100/sessions/{workspaceId}/status` → returns `.qr` |
-| `POST /api/whatsapp/connect` | `POST localhost:3100/sessions/start` |
-| `POST /api/whatsapp/send` | `POST localhost:3100/sessions/{workspaceId}/send` |
-
-The parent identifies the workspace from the JWT token in the user's Authorization header.
+| `GET /api/whatsapp/status` | `GET :3100/sessions/{workspaceId}/status` |
+| `GET /api/whatsapp/qr` | `GET :3100/sessions/{workspaceId}/status` → `.qr` |
+| `POST /api/whatsapp/connect` | `POST :3100/sessions/start` |
+| `POST /api/whatsapp/send` | `POST :3100/sessions/{workspaceId}/send` |
 
 ---
 
-## Notifications to Parent
+## Deployment (GCP #2)
 
-When events occur, this service POSTs to `{PARENT_URL}/api/worker/event`:
+### Fresh Setup
+
+```bash
+# On a new GCP e2-micro (Ubuntu 22.04):
+bash <(curl -s https://raw.githubusercontent.com/yashaswikaahuja/wa-drive/master/whatsapp-service/setup-gcp2.sh)
+```
+
+### Current Production
+
+```
+Instance: cybercontrol-whatsapp
+Zone: asia-south1-a
+IP: 34.100.147.20
+Ports: 3100 (Baileys), 3200 (Resolver)
+Swap: 1GB (total effective RAM: ~2GB)
+```
+
+### SSH Access
+
+```bash
+gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a
+```
+
+### Common Commands
+
+```bash
+pm2 list                          # Check status
+pm2 restart whatsapp-service      # Restart Baileys
+pm2 restart whatsapp-resolver     # Restart Resolver
+pm2 logs whatsapp-service         # View logs
+curl http://localhost:3100/health  # Health check
+curl http://localhost:3200/health  # Resolver status
+```
+
+---
+
+## Resolver QR Re-linking
+
+If the resolver disconnects (rare), re-scan QR:
+
+1. Open in browser: `http://34.100.147.20:3200/qr-page?secret=wa-service-secret-2024`
+2. If connected: shows "✅ Connected"
+3. If disconnected: shows scannable QR, auto-refreshes every 20s
+4. Scan with WhatsApp → Linked Devices → Link a Device
+
+**Do NOT log out from phone** — it's a linked device, stays connected permanently.
+
+---
+
+## Monitoring
+
+### UptimeRobot (external)
+
+- `http://34.100.147.20:3100/health` — Baileys service
+- `http://34.100.147.20:3200/health` — Resolver
+- `https://api.cybercontrol.fun/api/health` — Parent API
+
+### Health Endpoint Response
 
 ```json
-{ "workspaceId": "...", "event": "qr", "qr": "..." }
-{ "workspaceId": "...", "event": "connected", "phone": "919876543210" }
-{ "workspaceId": "...", "event": "disconnected", "loggedOut": true/false }
+{
+  "status": "ok",
+  "sessions": 3,
+  "sessionList": [
+    {"id": "fcae0309", "status": "connected", "phone": "917209372901"},
+    {"id": "8295a4f7", "status": "connected", "phone": "919006615450"}
+  ],
+  "diskFree": "22G",
+  "memMB": 111
+}
 ```
-
-The parent then emits these via Socket.IO to connected frontends.
-
----
-
-## Deployment
-
-### On same GCP instance as parent:
-
-```bash
-cd /opt/cybercontrol-hub/whatsapp-service
-npm install
-pm2 start index.js --name whatsapp-service
-pm2 save
-```
-
-### On separate GCP instance (future):
-
-```bash
-git clone https://github.com/yashaswikaahuja/wa-drive.git
-cd wa-drive/whatsapp-service
-npm install
-# Edit .env with PARENT_URL pointing to parent API
-pm2 start ecosystem.config.cjs
-```
-
-Then update parent's `WA_SERVICE` constant from `localhost:3100` to the new instance's IP.
-
----
-
-## Security
-
-- All endpoints require `x-service-secret` header
-- Session auth data stored locally (not in DB) — isolated per workspace
-- Parent validates workspace ownership via JWT before proxying
-- No direct internet exposure — only parent communicates with this service
 
 ---
 
 ## Scaling
 
-- Each Baileys session uses ~30-50MB RAM
-- A single GCP e2-medium (4GB) can handle ~50 concurrent sessions
-- To scale beyond: run multiple instances, route by workspace hash
-- Sessions are stateful — a workspace must always hit the same instance
+| Sessions | RAM needed | Instance |
+|----------|-----------|----------|
+| 1-3 | ~150MB Baileys + 40MB Resolver | e2-micro (1GB) with swap ✅ |
+| 5-10 | ~400MB + 40MB | e2-micro with swap |
+| 10-15 | ~600MB + 40MB | e2-micro tight, upgrade to e2-small |
+| 15-30 | ~1GB + 40MB | e2-small (2GB) |
+| 30+ | ~1.5GB+ | e2-medium (4GB) |
 
 ---
 
@@ -253,128 +312,87 @@ Then update parent's `WA_SERVICE` constant from `localhost:3100` to the new inst
 | Issue | Cause | Fix |
 |-------|-------|-----|
 | QR not appearing | Session already connected | Check `/sessions/{id}/status` |
-| Upload failed: 500 | Parent's Drive token expired | Force refresh on parent |
-| Upload failed: 404 | `/api/worker/upload` or `/api/drive/download` endpoint missing on parent | Parent backend was reverted/restarted without patches. Re-apply the endpoint additions or redeploy from git |
-| 404 on `/api/whatsapp/*` | Old whatsapp routes still active or proxy endpoints not added | Ensure parent has `WA_SERVICE` proxy endpoints and old `whatsappRoutes` is disabled |
-| 404 on `/sessions/:id/send` | WhatsApp service doesn't have send endpoint | Update service code from latest git |
+| Upload failed: 500 | Parent's Drive token expired | Reconnect Drive from Settings page |
+| Upload stuck/hanging | Drive API timeout | Restart parent; files saved in queue |
+| LID not resolved | Resolver disconnected | Check `/qr-page`, re-scan if needed |
 | Disconnected: 401 | WhatsApp logged out | Delete `sessions/{id}/`, restart |
-| Disconnected: 408 | Network timeout | Auto-reconnects in 5s |
-| Disconnected: 515 | WhatsApp server error | Auto-reconnects in 5s |
-| Media error | File too large or encrypted | Check Baileys version compatibility |
-| CORS error on frontend | Backend is down (502) or nginx misconfigured | Check `pm2 status`, ensure backend is running |
-| `wss://https/socket.io/` error | Old cached frontend bundle | Clear browser cache/service worker |
-
+| Disconnected: 408 | Network timeout | Auto-reconnects with backoff |
+| Disconnected: 500 | WhatsApp server error | Auto-reconnects with backoff |
+| Disconnected: 515 | WhatsApp server error | Auto-reconnects with backoff |
+| Media error | File too large or encrypted | Check Baileys version |
+| `require is not defined` | ESM module issue in code | Use `import` not `require` |
+| Description too long | base64 DP in Drive metadata | DP stored in DB only, not Drive |
+| Wrong workspace Drive | Global oauth client used | Fixed: per-workspace tokens from DB |
+| Session not starting on boot | Auth dir empty or corrupted | Delete session dir, re-scan QR |
 
 ---
 
 ## Local Development (Full Stack)
 
-Run the entire CyberControl platform on your local machine:
-
 ### Prerequisites
 
 - Node.js v20+
 - PostgreSQL 14+
-- Google Cloud OAuth credentials (for Drive)
-- WhatsApp on your phone (for QR scan)
+- Google Cloud OAuth credentials
+- WhatsApp on your phone
 
-### 1. Clone the repo
+### Quick Start
 
 ```bash
 git clone https://github.com/yashaswikaahuja/wa-drive.git
 cd wa-drive
-```
 
-### 2. Setup PostgreSQL
-
-```sql
-CREATE DATABASE cybercontrol;
-CREATE USER cybercontrol_app WITH PASSWORD 'your_password';
-GRANT ALL ON DATABASE cybercontrol TO cybercontrol_app;
-```
-
-Run migrations (tables auto-create on first backend start).
-
-### 3. Backend (`/backend`)
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-# Edit .env:
-#   DATABASE_URL=postgresql://cybercontrol_app:your_password@localhost:5432/cybercontrol
-#   JWT_SECRET=any-random-string
-#   GROQ_API_KEY=your-groq-key
-#   GOOGLE_CLIENT_ID=your-google-client-id
-#   GOOGLE_CLIENT_SECRET=your-google-client-secret
-#   GOOGLE_REDIRECT_URI=http://localhost:3000/api/drive/callback
-
-npm run dev
-# Runs on http://localhost:3000
-```
-
-### 4. WhatsApp Service (`/whatsapp-service`)
-
-```bash
-cd whatsapp-service
-npm install
-cp .env.example .env
-# Edit .env:
-#   WA_PORT=3100
-#   PARENT_URL=http://localhost:3000
-#   SERVICE_SECRET=wa-service-secret-2024
-
-node index.js
-# Runs on http://localhost:3100
-```
-
-### 5. Frontend (`/frontend`)
-
-```bash
-cd frontend
-npm install
-cp .env.example .env
-# .env should have:
-#   VITE_API_URL=http://localhost:3000/api
-#   VITE_SOCKET_URL=http://localhost:3000
-
-npm run dev
-# Runs on http://localhost:5173
-```
-
-### 6. Connect WhatsApp
-
-1. Open http://localhost:5173 → Login
-2. Go to WhatsApp page → QR code appears
-3. Scan with your phone → Connected
-4. Send a document to the connected number → appears in chat
-
-### 7. Connect Google Drive
-
-1. Go to Settings → Click "Connect Drive"
-2. Google account chooser opens → Select account
-3. Authorize → Drive connected
-4. Files sent via WhatsApp now upload to your Drive
-
-### Quick Start (all in one terminal)
-
-```bash
 # Terminal 1 — Backend
-cd backend && npm run dev
+cd backend && npm install && cp .env.example .env && npm run dev
 
-# Terminal 2 — WhatsApp Service  
-cd whatsapp-service && node index.js
+# Terminal 2 — WhatsApp Service
+cd whatsapp-service && npm install && cp .env.example .env && node index.js
 
-# Terminal 3 — Frontend
-cd frontend && npm run dev
+# Terminal 3 — WhatsApp Resolver
+cd whatsapp-resolver && npm install && cp .env.example .env && node index.js
+
+# Terminal 4 — Frontend
+cd frontend && npm install && cp .env.example .env && npm run dev
 ```
 
-### Ports Summary
+### Local .env Files
 
-| Service | Port | URL |
-|---------|------|-----|
-| Backend API | 3000 | http://localhost:3000/api |
-| WhatsApp Service | 3100 | http://localhost:3100 |
-| Frontend | 5173 | http://localhost:5173 |
-| PostgreSQL | 5432 | — |
+**backend/.env:**
+```
+DATABASE_URL=postgresql://cybercontrol_app:password@localhost:5432/cybercontrol
+JWT_SECRET=any-random-string
+GROQ_API_KEY=your-key
+GOOGLE_CLIENT_ID=your-id
+GOOGLE_CLIENT_SECRET=your-secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/drive/callback
+```
 
+**whatsapp-service/.env:**
+```
+WA_PORT=3100
+PARENT_URL=http://localhost:3000
+SERVICE_SECRET=wa-service-secret-2024
+RESOLVER_URL=http://localhost:3200
+```
+
+**whatsapp-resolver/.env:**
+```
+PORT=3200
+SERVICE_SECRET=wa-service-secret-2024
+```
+
+**frontend/.env:**
+```
+VITE_API_URL=http://localhost:3000/api
+VITE_SOCKET_URL=http://localhost:3000
+```
+
+### Ports
+
+| Service | Port |
+|---------|------|
+| Backend API | 3000 |
+| WhatsApp Service | 3100 |
+| WhatsApp Resolver | 3200 |
+| Frontend | 5173 |
+| PostgreSQL | 5432 |
