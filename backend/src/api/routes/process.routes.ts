@@ -141,13 +141,18 @@ router.post('/extract', async (req: Request, res: Response) => {
     // Detect if PDF and convert first page to image
     let mimeType = 'image/jpeg';
     if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
-      // PDF detected - convert to image using sharp (render first page)
+      // PDF detected - convert to image using pdftoppm
       try {
-        const sharp = (await import('sharp')).default;
-        buffer = await sharp(buffer, { density: 200 }).jpeg({ quality: 90 }).toBuffer();
-      } catch {
-        // If sharp can't handle PDF, try sending as application/pdf (some models support it)
-        mimeType = 'application/pdf';
+        const { execSync } = await import('child_process');
+        const { writeFileSync, readFileSync, unlinkSync } = await import('fs');
+        const tmpPdf = '/tmp/extract_' + Date.now() + '.pdf';
+        const tmpImg = '/tmp/extract_' + Date.now();
+        writeFileSync(tmpPdf, buffer);
+        execSync(`pdftoppm -jpeg -r 200 -f 1 -l 1 ${tmpPdf} ${tmpImg}`);
+        buffer = readFileSync(tmpImg + '-1.jpg');
+        try { unlinkSync(tmpPdf); unlinkSync(tmpImg + '-1.jpg'); } catch {}
+      } catch (e: any) {
+        console.error('[Process] PDF conversion failed:', e.message);
       }
     } else if (buffer[0] === 0x89 && buffer[1] === 0x50) {
       mimeType = 'image/png';
