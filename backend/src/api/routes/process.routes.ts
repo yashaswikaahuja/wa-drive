@@ -127,8 +127,7 @@ router.get('/debug/last-image', async (req: Request, res: Response) => {
 export default router;
 
 // POST /api/process/extract
-// Body: { fileId } — downloads from Drive, sends to Groq Vision, returns extracted fields
-router.post('/extract', async (req: Request, res: Response) => {
+router.post('/extract', async (req: any, res: Response) => {
   const { fileId } = req.body as { fileId?: string };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
 
@@ -139,79 +138,139 @@ router.post('/extract', async (req: Request, res: Response) => {
     let buffer = await downloadDriveFile(fileId, req);
     
     // Detect if PDF and convert first page to image
-    let mimeType = 'image/jpeg';
     if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
-      // PDF detected - convert to image using pdftoppm
       try {
         const { execSync } = await import('child_process');
         const { writeFileSync, readFileSync, unlinkSync } = await import('fs');
         const tmpPdf = '/tmp/extract_' + Date.now() + '.pdf';
         const tmpImg = '/tmp/extract_' + Date.now();
         writeFileSync(tmpPdf, buffer);
-        execSync(`pdftoppm -jpeg -r 200 -f 1 -l 1 ${tmpPdf} ${tmpImg}`);
+        execSync(`pdftoppm -jpeg -r 150 -f 1 -l 1 ${tmpPdf} ${tmpImg}`);
         buffer = readFileSync(tmpImg + '-1.jpg');
         try { unlinkSync(tmpPdf); unlinkSync(tmpImg + '-1.jpg'); } catch {}
       } catch (e: any) {
         console.error('[Process] PDF conversion failed:', e.message);
+        res.json({ ok: false, error: 'pdf_conversion_failed', message: 'PDF could not be converted' });
+        return;
       }
-    } else if (buffer[0] === 0x89 && buffer[1] === 0x50) {
-      mimeType = 'image/png';
     }
-    
+
     const base64 = buffer.toString('base64');
-
-    const prompt = `You are an expert OCR assistant for Indian government documents. Extract ALL visible information from this document image.
-
-Return ONLY a valid JSON object. Use Title Case for all text values. Include these keys (leave empty string if not visible):
+    const prompt = `Analyze this Indian document/identity image and extract ALL relevant information. Return ONLY a valid JSON object (no markdown, no explanation):
 
 {
-  "document_type": "(aadhaar/pan/passport/voter_id/driving_license/marksheet_10th/marksheet_12th/marksheet_graduation/admit_card/certificate/bank_passbook/ration_card/other)",
+  "document_type": "",
   "name": "",
   "father_name": "",
   "mother_name": "",
   "husband_name": "",
-  "dob": "DD/MM/YYYY",
+  "spouse_name": "",
+  "guardian_name": "",
+  "dob": "",
   "gender": "",
-  "id_number": "",
+  "category": "",
+  "religion": "",
+  "nationality": "",
+  "marital_status": "",
+  "blood_group": "",
+  "phone": "",
+  "alt_phone": "",
+  "email": "",
   "address": "",
   "permanent_address": "",
+  "city": "",
   "district": "",
   "state": "",
   "pincode": "",
-  "phone": "",
-  "email": "",
-  "blood_group": "",
-  "category": "",
-  "nationality": "",
-  "religion": "",
-  "marital_status": "",
-  "issue_date": "DD/MM/YYYY",
-  "expiry": "DD/MM/YYYY",
-  "board_10th": "",
-  "passing_year_10th": "",
-  "percentage_10th": "",
-  "marks_10th": "",
-  "roll_number_10th": "",
-  "board_12th": "",
-  "passing_year_12th": "",
-  "percentage_12th": "",
-  "marks_12th": "",
-  "roll_number_12th": "",
-  "university": "",
-  "degree": "",
-  "passing_year_graduation": "",
-  "percentage_graduation": "",
+  "country": "",
+  "aadhaar_number": "",
+  "pan_number": "",
+  "passport_number": "",
+  "voter_id_number": "",
+  "driving_license_number": "",
+  "ration_card_number": "",
+  "bank_account_number": "",
+  "ifsc_code": "",
+  "bank_name": "",
+  "branch_name": "",
+  "account_holder_name": "",
   "roll_number": "",
   "registration_number": "",
+  "enrollment_number": "",
+  "application_number": "",
   "exam_name": "",
-  "exam_center": ""
+  "exam_date": "",
+  "exam_center": "",
+  "exam_seat_number": "",
+  "subject": "",
+  "qualification": "",
+  "school_name": "",
+  "college_name": "",
+  "university_name": "",
+  "board_name": "",
+  "course": "",
+  "stream": "",
+  "branch_subject": "",
+  "passing_year_10th": "",
+  "marks_10th": "",
+  "percentage_10th": "",
+  "board_10th": "",
+  "passing_year_12th": "",
+  "marks_12th": "",
+  "percentage_12th": "",
+  "board_12th": "",
+  "stream_12th": "",
+  "passing_year_graduation": "",
+  "marks_graduation": "",
+  "percentage_graduation": "",
+  "graduation_university": "",
+  "graduation_subject": "",
+  "passing_year_postgrad": "",
+  "marks_postgrad": "",
+  "percentage_postgrad": "",
+  "postgrad_university": "",
+  "postgrad_subject": "",
+  "occupation": "",
+  "employer": "",
+  "designation": "",
+  "annual_income": "",
+  "expiry_date": "",
+  "issue_date": "",
+  "place_of_issue": ""
 }
 
-Rules:
-- Extract ONLY what is clearly visible. Do not guess.
-- All text in Title Case (e.g. "Shubham Kumar" not "SHUBHAM KUMAR").
-- id_number: Aadhaar=12 digits, PAN=10 chars, Voter ID=alphanumeric, DL=format varies.
-- Return ONLY the JSON object, no explanation.`;
+document_type values:
+- "aadhaar" - Aadhaar card
+- "pan" - PAN card
+- "passport" - Passport
+- "voter_id" - Voter ID / EPIC
+- "driving_license" - Driving licence
+- "ration_card" - Ration card
+- "marksheet_10th" - 10th class marksheet
+- "marksheet_12th" - 12th class marksheet
+- "marksheet_graduation" - Graduation/degree marksheet
+- "marksheet_postgrad" - Post-graduation marksheet
+- "admit_card" - Examination admit card / hall ticket
+- "result" - Result document
+- "certificate" - Certificate (caste, income, domicile, character, etc.)
+- "bank_passbook" - Bank passbook / cancelled cheque
+- "photo" - Personal photograph
+- "signature" - Signature image
+- "form" - Application form
+- "other" - Anything else
+
+Extraction rules:
+- Fill only fields present in the document. Leave others as empty string.
+- dob format: DD/MM/YYYY
+- For marksheets: extract passing year, marks/percentage, board/university, subjects/stream into the appropriate slot (board_10th, percentage_10th, etc.)
+- For admit cards: extract roll_number, registration_number, exam_name, exam_date, exam_center, application_number
+- For Aadhaar: aadhaar_number is 12 digits (no spaces)
+- For PAN: pan_number is 10 chars uppercase
+- Address fields: prefer to split city/state/district/pincode separately. Keep full string in 'address' too.
+- Bank documents: extract account_number, ifsc, bank_name, branch_name
+- DO NOT mix unrelated IDs into one field. Aadhaar number goes into aadhaar_number, roll number into roll_number, etc.
+- For category: SC/ST/OBC/General/EWS etc.
+- Return ONLY the JSON, no surrounding text.`;
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -220,21 +279,25 @@ Rules:
         model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         messages: [{ role: 'user', content: [
           { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
         ]}],
-        max_tokens: 800,
+        max_tokens: 2000,
       }),
     });
 
     const data = await response.json() as any;
     const text = data?.choices?.[0]?.message?.content ?? '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) { res.json({ name: '', dob: '', gender: '', id_number: '', address: '', father_name: '', expiry: '' }); return; }
+    if (!jsonMatch) { res.json({ ok: true, suggested: {} }); return; }
     try {
       const fields = JSON.parse(jsonMatch[0]);
-      res.json(fields);
+      const suggested: any = {};
+      for (const [k, v] of Object.entries(fields)) {
+        if (v && String(v).trim()) suggested[k] = { value: v, source: 'document', documentId: fileId, confidence: 0.9 };
+      }
+      res.json({ ok: true, suggested, raw: fields });
     } catch {
-      res.json({ name: '', dob: '', gender: '', id_number: '', address: '', father_name: '', expiry: '' });
+      res.json({ ok: true, suggested: {} });
     }
   } catch (e: any) {
     console.error('[Process] extract error:', e.message);
