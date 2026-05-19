@@ -160,13 +160,58 @@ router.post('/extract', async (req: Request, res: Response) => {
     
     const base64 = buffer.toString('base64');
 
-    const prompt = `You are an OCR assistant. Extract information from this Indian identity document and return ONLY a valid JSON object with these fields:
-{ name: , dob: , gender: , id_number: , address: , father_name: , expiry:  }
+    const prompt = `You are an expert OCR assistant for Indian government documents. Extract ALL visible information from this document image.
+
+Return ONLY a valid JSON object. Use Title Case for all text values. Include these keys (leave empty string if not visible):
+
+{
+  "document_type": "(aadhaar/pan/passport/voter_id/driving_license/marksheet_10th/marksheet_12th/marksheet_graduation/admit_card/certificate/bank_passbook/ration_card/other)",
+  "name": "",
+  "father_name": "",
+  "mother_name": "",
+  "husband_name": "",
+  "dob": "DD/MM/YYYY",
+  "gender": "",
+  "id_number": "",
+  "address": "",
+  "permanent_address": "",
+  "district": "",
+  "state": "",
+  "pincode": "",
+  "phone": "",
+  "email": "",
+  "blood_group": "",
+  "category": "",
+  "nationality": "",
+  "religion": "",
+  "marital_status": "",
+  "issue_date": "DD/MM/YYYY",
+  "expiry": "DD/MM/YYYY",
+  "board_10th": "",
+  "passing_year_10th": "",
+  "percentage_10th": "",
+  "marks_10th": "",
+  "roll_number_10th": "",
+  "board_12th": "",
+  "passing_year_12th": "",
+  "percentage_12th": "",
+  "marks_12th": "",
+  "roll_number_12th": "",
+  "university": "",
+  "degree": "",
+  "passing_year_graduation": "",
+  "percentage_graduation": "",
+  "roll_number": "",
+  "registration_number": "",
+  "exam_name": "",
+  "exam_center": ""
+}
+
 Rules:
-- Fill only fields visible in the document. Leave others as empty string.
-- dob format: DD/MM/YYYY
-- id_number: Aadhaar (12 digits), PAN (10 chars), Passport number, Voter ID etc.
-- Do NOT include any explanation, only the JSON object.`;
+- Extract ONLY what is clearly visible. Do not guess.
+- All text in Title Case (e.g. "Shubham Kumar" not "SHUBHAM KUMAR").
+- id_number: Aadhaar=12 digits, PAN=10 chars, Voter ID=alphanumeric, DL=format varies.
+- Return ONLY the JSON object, no explanation.`;
 
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -177,7 +222,7 @@ Rules:
           { type: 'text', text: prompt },
           { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
         ]}],
-        max_tokens: 300,
+        max_tokens: 800,
       }),
     });
 
