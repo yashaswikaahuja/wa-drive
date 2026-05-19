@@ -140,16 +140,21 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
   // Sort by DOM order (sequential top-to-bottom filling)
   const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
   const entries = Object.entries(mapping);
-  // Extract DOM index for sorting
-  function domIndex(sel) {
-    if (sel.startsWith('form-field-')) return parseInt(sel.split('-')[2]);
-    if (sel.startsWith('ng-dropdown-')) return 1000 + parseInt(sel.split('-')[2]);
-    const el = document.querySelector(sel);
-    if (!el) return 9999;
-    const all = document.querySelectorAll('input,select,textarea,div.ng-dropdown');
-    return Array.from(all).indexOf(el);
+  // Sort by actual DOM position (compareDocumentPosition)
+  function getEl(sel) {
+    if (sel.startsWith('form-field-')) {
+      const all = document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],input[type=radio],input[type=checkbox],input:not([type]),textarea,select');
+      return all[parseInt(sel.split('-')[2])];
+    }
+    if (sel.startsWith('ng-dropdown-')) return document.querySelectorAll('div.ng-dropdown')[parseInt(sel.split('-')[2])];
+    return document.querySelector(sel);
   }
-  entries.sort(([sa], [sb]) => domIndex(sa) - domIndex(sb));
+  entries.sort(([sa], [sb]) => {
+    const a = getEl(sa), b = getEl(sb);
+    if (!a || !b) return 0;
+    if (a === b) return 0;
+    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+  });
 
   let filled = 0;
   let delay = 0;
@@ -575,15 +580,37 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
         if (!booleanLike.includes(value.toLowerCase())) { console.debug('[CC] skipped checkbox with non-boolean value:', value); return 0; }
         const truthy = ['yes','true','1','checked','on'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
+      } else if (el.getAttribute('matdatepicker') !== null || el.getAttribute('matInput') !== null && el.closest('mat-datepicker-toggle,mat-form-field') && (el.type === 'text' || el.type === 'date')) {
+        // ── Angular Material mat-datepicker ──────────────────────────────────
+        // mat-datepicker binds to a plain <input matInput [matDatepicker]="...">
+        // Setting .value alone doesn't update the Angular FormControl.
+        // We must: 1) set via native setter, 2) fire input+change, 3) fire a
+        // synthetic MatDatepickerInputEvent so Angular's ControlValueAccessor picks it up.
+        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        el.focus();
+        if (niv) niv.set.call(el, value); else el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        // Angular Material listens for 'dateChange' and 'dateInput' on the host element
+        el.dispatchEvent(new CustomEvent('dateChange', { bubbles: true, detail: { value } }));
+        el.dispatchEvent(new CustomEvent('dateInput', { bubbles: true, detail: { value } }));
+        // Also try keyboard simulation — some Angular versions only update on keyup
+        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) || 'Enter' }));
+        el.blur();
+        return 1;
       } else {
         // Angular/React compatible input filling
-        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') ||
-                    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+        const isTextarea = el.tagName === 'TEXTAREA';
+        const niv = isTextarea
+          ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')
+          : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        el.focus();
         if (niv) niv.set.call(el, value);
         else el.value = value;
-        ['input','change','keyup','keydown'].forEach(ev => {
-          el.dispatchEvent(new Event(ev, { bubbles: true }));
-        });
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
+        el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
         // Also simulate keyboard events for Angular
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
         // ServicePlus: transliterate English→Hindi for paired Hindi field
@@ -640,7 +667,26 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
       const _t0 = Date.now();
       const _fieldCtx = { type, label: filledBySource[selector]?.label || selector, profileKey: filledBySource[selector]?.profileKey || '', selector };
 
-      if (isNgDropdown) {
+      if (fieldData.type === 'button') {
+        // Phase boundary: button-click plugin
+        const _btnPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
+        if (_btnPlugin) {
+          const _pResult = _btnPlugin.fill(el, value, { attempt: 1 });
+          const _preCount = document.querySelectorAll("input,select,textarea,div.ng-dropdown").length;
+          // Wait for DOM to stabilize after transition
+          await waitForDOMQuiet(800);
+          // Re-extract visible fields after transition (graph rebuild)
+          const newFields = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,div.ng-dropdown');
+          const newFieldCount = newFields.length;
+          _ccRecords.push({ selector, value, type: 'button', result: 'filled', strategy: 'plugin:button-click', plugin: 'button-click', role: fieldData.role || 'navigation', newFieldCount, transitionOutcome: newFieldCount > _preCount ? "transition_success" : newFieldCount === _preCount ? "transition_no_change" : "transition_partial", durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          console.debug('[CC][plugin] button-click', selector, 'newFields:', newFieldCount);
+        } else {
+          // Fallback: just click
+          if (el) el.click();
+          await waitForDOMQuiet(800);
+        }
+        await new Promise(r => setTimeout(r, 500));
+      } else if (isNgDropdown) {
         // ng-dropdown: use plugin if available
         if (!el) { _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); continue; }
         const _ngPlugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(el, _fieldCtx) : null;
@@ -694,6 +740,82 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
     }
   }
   await fillSequential();
+
+
+  // ── Operator Correction Observer ─────────────────────────────────────────
+  // After runtime settles, snapshot filled values.
+  // On form submit or page unload, capture final state and POST corrections.
+  setTimeout(() => {
+    const _ccBackendUrl = document.body.getAttribute('data-cc-backend') || '';
+    const _ccFormKey = document.body.getAttribute('data-cc-formkey') || '';
+    const snapshot = {};
+    const fieldMeta = {};
+    for (const [selector, fieldData] of entries) {
+      let el = getEl(selector);
+      if (!el) continue;
+      const val = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
+        : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
+        : el.value || '';
+      snapshot[selector] = val;
+      const rec = _ccRecords.find(r => r.selector === selector);
+      fieldMeta[selector] = {
+        label: filledBySource[selector]?.label || selector,
+        semanticKey: filledBySource[selector]?.semanticKey || '',
+        profileKey: filledBySource[selector]?.profileKey || '',
+        plugin: rec?.plugin || null,
+        strategy: rec?.strategy || '',
+        originalResult: rec?.result || 'unknown',
+        autofilledValue: fieldData.value
+      };
+    }
+
+    function captureCorrections(trigger) {
+      const corrections = [];
+      for (const [selector, originalVal] of Object.entries(snapshot)) {
+        let el = getEl(selector);
+        if (!el) continue;
+        const currentVal = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
+          : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
+          : el.value || '';
+        if (currentVal !== originalVal && currentVal !== '') {
+          const meta = fieldMeta[selector] || {};
+          corrections.push({
+            selector, field: meta.label, semanticKey: meta.semanticKey, profileKey: meta.profileKey,
+            autofilledValue: meta.autofilledValue, snapshotValue: originalVal, finalOperatorValue: currentVal,
+            correctionType: (!originalVal || originalVal === '') ? 'completion' : 'override',
+            originalResult: meta.originalResult, plugin: meta.plugin, strategy: meta.strategy,
+            trigger, ts: Date.now()
+          });
+        }
+      }
+      return corrections;
+    }
+
+    function postCorrections(trigger) {
+      const corrections = captureCorrections(trigger);
+      if (corrections.length === 0) return;
+      document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections));
+      if (_ccBackendUrl) {
+        fetch(_ccBackendUrl + '/corrections', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hostname: location.hostname, semanticFormKey: _ccFormKey, trigger, corrections })
+        }).catch(() => {});
+      }
+    }
+
+    // Detect submit button clicks
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button,input[type="submit"],[type="submit"],.btn-submit,.submit-btn');
+      if (!btn) return;
+      const txt = (btn.textContent || btn.value || '').toLowerCase();
+      if (/submit|save|next|continue|proceed|finalize/i.test(txt) || btn.type === 'submit') {
+        postCorrections('submit');
+      }
+    }, true);
+
+    // Fallback: beforeunload
+    window.addEventListener('beforeunload', () => postCorrections('unload'));
+  }, 10000);
 
   // ── Confirm/Retype propagation pass ─────────────────────────────────────────
   // After primary fills settle, mirror DOM values into confirm/retype fields
