@@ -4,10 +4,13 @@
 
   let port = null;
   const pending = new Map();
+  let retries = 0;
 
   function connect() {
+    if (retries > 5) return; // Stop after 5 retries — extension popup will re-inject if needed
     try {
       port = chrome.runtime.connect({ name: 'cc_bridge' });
+      retries = 0;
       port.onMessage.addListener((msg) => {
         if (!msg._cc_reply) return;
         const resolve = pending.get(msg._reqId);
@@ -17,7 +20,8 @@
       });
       port.onDisconnect.addListener(() => {
         port = null;
-        setTimeout(connect, 1000);
+        retries++;
+        setTimeout(connect, 2000 * retries);
       });
     } catch(e) { setTimeout(connect, 2000); }
   }
