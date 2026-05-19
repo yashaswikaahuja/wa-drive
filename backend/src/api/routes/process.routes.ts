@@ -163,9 +163,13 @@ Rules:
     const data = await response.json() as any;
     const text = data?.choices?.[0]?.message?.content ?? '';
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) { res.status(500).json({ error: 'Could not parse AI response', raw: text }); return; }
-    const fields = JSON.parse(jsonMatch[0]);
-    res.json(fields);
+    if (!jsonMatch) { res.json({ name: '', dob: '', gender: '', id_number: '', address: '', father_name: '', expiry: '' }); return; }
+    try {
+      const fields = JSON.parse(jsonMatch[0]);
+      res.json(fields);
+    } catch {
+      res.json({ name: '', dob: '', gender: '', id_number: '', address: '', father_name: '', expiry: '' });
+    }
   } catch (e: any) {
     console.error('[Process] extract error:', e.message);
     res.status(500).json({ error: e.message ?? 'Extraction failed' });
