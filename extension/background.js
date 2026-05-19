@@ -105,6 +105,11 @@ setTimeout(validateAuth, 5000);
 setInterval(validateAuth, 10 * 60 * 1000);
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // Bridge messages from content script (CONNECT, PING, OPEN_AND_DISPATCH)
+  if (msg.type === 'CONNECT' || msg.type === 'PING' || msg.type === 'OPEN_AND_DISPATCH') {
+    handleBridgeMessage(msg, sendResponse);
+    return true;
+  }
   if (msg.type === 'TEACH_JOB') {
     const job = msg.job;
     // Use sender tab ID if job tabId is missing/invalid
