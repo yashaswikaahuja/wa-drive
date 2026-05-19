@@ -99,7 +99,8 @@ async function validateAuth() {
     }
   } catch (e) { console.log('[CC] Auth check failed:', e.message); }
 }
-validateAuth();
+// Delay initial auth check to not block extension startup
+setTimeout(validateAuth, 5000);
 // Re-validate every 10 minutes
 setInterval(validateAuth, 10 * 60 * 1000);
 
