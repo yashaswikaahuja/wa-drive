@@ -3,14 +3,14 @@ import { google } from 'googleapis';
 import multer from 'multer';
 import { generateAadhaarLayout, generatePassportSheet, generateSingleSheet, SheetPreset, PhotoSpec } from '../../services/processor/layout.js';
 import { cropAndAlignFace, setLastImage, getLastImage } from '../../services/processor/faceDetect.js';
+import { getDriveForWorkspace } from '../../modules/drive/service.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
-async function downloadDriveFile(fileId: string, accessToken: string): Promise<Buffer> {
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
-  const drive = google.drive({ version: 'v3', auth });
+async function downloadDriveFile(fileId: string, req: any): Promise<Buffer> {
+  const drive = await getDriveForWorkspace(req.user?.workspaceId);
+  if (!drive) throw new Error('Drive not connected for this workspace');
   const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
   return Buffer.from(res.data as ArrayBuffer);
 }
@@ -26,14 +26,11 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   // Access token is stored on the hub — retrieve from module-level state
-  const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
-  if (!driveAccessToken) {
-    res.status(401).json({ error: 'Not connected to Google Drive' }); return;
-  }
+  // Drive access handled per-workspace in downloadDriveFile
 
   try {
     console.log(`[Process] Aadhaar layout for files: ${fileIds.join(', ')}`);
-    const buffers = await Promise.all(fileIds.map(id => downloadDriveFile(id, driveAccessToken)));
+    const buffers = await Promise.all(fileIds.map(id => downloadDriveFile(id, req)));
     const output = await generateAadhaarLayout(buffers);
     console.log(`[Process] Layout generated: ${output.length} bytes`);
     res.set('Content-Type', 'image/jpeg');
@@ -63,9 +60,8 @@ router.post('/passport-sheet', upload.single('image_file') as any, async (req: R
       // Multipart upload — bg-removed image from frontend
       buffer = (req as any).file.buffer;
     } else if (fileId) {
-      const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
-      if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
-      buffer = await downloadDriveFile(fileId, driveAccessToken);
+      // Drive handled per-workspace
+      buffer = await downloadDriveFile(fileId, req);
     } else {
       res.status(400).json({ error: 'Provide image_file (multipart) or fileId' }); return;
     }
@@ -95,9 +91,8 @@ router.post('/face-align', upload.single('image_file') as any, async (req: any, 
     if (req.file) {
       imageBuffer = req.file.buffer;
     } else if (req.body?.fileId) {
-      const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
-      if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
-      imageBuffer = await downloadDriveFile(req.body.fileId, driveAccessToken);
+      // Drive handled per-workspace
+      imageBuffer = await downloadDriveFile(req.body.fileId, req);
     } else {
       res.status(400).json({ error: 'Provide image_file (multipart) or fileId (JSON)' }); return;
     }
@@ -137,14 +132,11 @@ router.post('/extract', async (req: Request, res: Response) => {
   const { fileId } = req.body as { fileId?: string };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
 
-  const { driveAccessToken } = req.app.locals as { driveAccessToken?: string };
-  if (!driveAccessToken) { res.status(401).json({ error: 'Not connected to Google Drive' }); return; }
-
   const GROQ_API_KEY = process.env['GROQ_API_KEY'];
   if (!GROQ_API_KEY) { res.status(500).json({ error: 'GROQ_API_KEY not configured' }); return; }
 
   try {
-    const buffer = await downloadDriveFile(fileId, driveAccessToken);
+    const buffer = await downloadDriveFile(fileId, req);
     const base64 = buffer.toString('base64');
 
     const prompt = `You are an OCR assistant. Extract information from this Indian identity document and return ONLY a valid JSON object with these fields:
