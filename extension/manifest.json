@@ -23,6 +23,8 @@
   "content_scripts": [
     {
       "matches": [
+        "*://app.cybercontrol.fun/*",
+        "*://frontend-pi-ochre-71.vercel.app/*",
         "*://*.ssc.nic.in/*",
         "*://*.ssc.gov.in/*",
         "*://*.rrbcdg.gov.in/*",
