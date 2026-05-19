@@ -33,7 +33,7 @@ function injectBridge(tabId) {
 
 chrome.runtime.onInstalled.addListener(() => {
   // Only inject into frontend tabs, not all tabs
-  chrome.tabs.query({ url: ['*://app.cybercontrol.fun/*', '*://frontend-pi-ochre-71.vercel.app/*', '*://localhost:5173/*'] }, (tabs) => {
+  chrome.tabs.query({ url: ['*://app.cybercontrol.fun/*', '*://frontend-pi-ochre-71.vercel.app/*', 'http://localhost:5173/*'] }, (tabs) => {
     for (const tab of (tabs || [])) {
       if (!tab.id) continue;
       injectBridge(tab.id);
