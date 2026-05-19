@@ -380,7 +380,13 @@ export default function WhatsApp() {
       for (const d of docs) {
         try {
           const r = await api.post('/process/extract', { fileId: d.id });
-          results.push({ doc: d, result: r.data });
+          // Transform flat response {name:"x",dob:"y"} into {suggested:{name:{value:"x"},dob:{value:"y"}}}
+          const raw = r.data;
+          const suggested: any = {};
+          for (const [k, v] of Object.entries(raw)) {
+            if (v) suggested[k] = { value: v };
+          }
+          results.push({ doc: d, result: { suggested } });
         } catch (e: any) {
           results.push({ doc: d, result: { error: e.message } });
         }
