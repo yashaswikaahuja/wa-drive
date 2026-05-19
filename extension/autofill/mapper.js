@@ -173,8 +173,8 @@ function fuzzyMatch(formFields, profile) {
       if (ident.includes('year') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1 || selLower.includes('ddl_year') || selLower.includes('_year'))) {
         mapping[field.selector] = { value: dobYear, type: field.type }; continue;
       }
-      // Angular Material DOB: placeholder='dd-mm-yyyy' (label may equal placeholder)
-      if ((field.placeholder === 'dd-mm-yyyy' || field.placeholder === 'DD-MM-YYYY' || field.label === 'dd-mm-yyyy' || field.label === 'DD-MM-YYYY' || /^dd[-/]mm[-/]yyyy$/i.test(field.label||''))) {
+      // Angular Material DOB: placeholder='dd-mm-yyyy' with no label
+      if (!field.label && (field.placeholder === 'dd-mm-yyyy' || field.placeholder === 'DD-MM-YYYY')) {
         mapping[field.selector] = { value: profile.dob.split('/').join('-'), type: field.type }; continue;
       }
       // Full DOB field (single input) - detect separator from placeholder
