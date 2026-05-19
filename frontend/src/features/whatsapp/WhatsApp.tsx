@@ -374,6 +374,7 @@ export default function WhatsApp() {
     try {
       // Multi-document extraction — call extract per doc, merge results
       const docs = Array.from(selectedDocs.values()).filter(d => d.fileName && !['mp4','3gp','mov','avi','webm','mp3','ogg','wav'].includes(d.fileName.split('.').pop()?.toLowerCase() || ''));
+      console.log('[Extract] selectedDocs size:', selectedDocs.size, 'filtered docs:', docs.length, docs.map(d => ({id:d.id, name:d.fileName})));
       if (docs.length === 0) { setExtractError('No images or PDFs in selection'); setExtracting(false); return; }
       // Run extractions sequentially to avoid Groq rate limits
       const results: any[] = [];
