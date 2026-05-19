@@ -9,6 +9,7 @@ import { loadDriveTokenFromDB } from './modules/drive/service.js';
 
 import authRoutes from './modules/auth/routes.js';
 import processRoutes from './api/routes/process.routes.js';
+import profilesRoutes from './api/routes/profiles.routes.js';
 import driveRoutes from './modules/drive/routes.js';
 import uploadRoutes from './modules/upload/routes.js';
 import whatsappRoutes from './modules/whatsapp/routes.js';
@@ -42,6 +43,7 @@ app.use('/api/worker', uploadRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/worker', whatsappRoutes); // /api/worker/event and /api/worker/update-dp
 app.use('/api/customers', customersRoutes);
+app.use('/api/profiles', authMiddleware, profilesRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
