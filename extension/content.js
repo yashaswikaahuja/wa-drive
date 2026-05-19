@@ -7,7 +7,6 @@
   let retries = 0;
 
   function connect() {
-    if (retries > 5) return; // Stop after 5 retries — extension popup will re-inject if needed
     try {
       port = chrome.runtime.connect({ name: 'cc_bridge' });
       retries = 0;
@@ -21,7 +20,7 @@
       port.onDisconnect.addListener(() => {
         port = null;
         retries++;
-        setTimeout(connect, 2000 * retries);
+        setTimeout(connect, Math.min(2000 * retries, 30000));
       });
     } catch(e) { setTimeout(connect, 2000); }
   }
