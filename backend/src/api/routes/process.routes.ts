@@ -136,7 +136,23 @@ router.post('/extract', async (req: Request, res: Response) => {
   if (!GROQ_API_KEY) { res.status(500).json({ error: 'GROQ_API_KEY not configured' }); return; }
 
   try {
-    const buffer = await downloadDriveFile(fileId, req);
+    let buffer = await downloadDriveFile(fileId, req);
+    
+    // Detect if PDF and convert first page to image
+    let mimeType = 'image/jpeg';
+    if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+      // PDF detected - convert to image using sharp (render first page)
+      try {
+        const sharp = (await import('sharp')).default;
+        buffer = await sharp(buffer, { density: 200 }).jpeg({ quality: 90 }).toBuffer();
+      } catch {
+        // If sharp can't handle PDF, try sending as application/pdf (some models support it)
+        mimeType = 'application/pdf';
+      }
+    } else if (buffer[0] === 0x89 && buffer[1] === 0x50) {
+      mimeType = 'image/png';
+    }
+    
     const base64 = buffer.toString('base64');
 
     const prompt = `You are an OCR assistant. Extract information from this Indian identity document and return ONLY a valid JSON object with these fields:
@@ -154,7 +170,7 @@ Rules:
         model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         messages: [{ role: 'user', content: [
           { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } }
         ]}],
         max_tokens: 300,
       }),
