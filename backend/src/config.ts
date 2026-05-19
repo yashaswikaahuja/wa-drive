@@ -6,7 +6,7 @@ export const PORT = Number(process.env.PORT ?? 3000);
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 export const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret';
-export const ACCESS_TOKEN_EXPIRY = '15m';
+export const ACCESS_TOKEN_EXPIRY = '24h';
 export const REFRESH_TOKEN_EXPIRY = '7d';
 
 export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
