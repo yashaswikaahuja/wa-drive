@@ -179,15 +179,17 @@ fillBtn.addEventListener('click', async () => {
         let adp = {};
         try { const r = await fetch(backendUrl+'/adapters/'+location.hostname,{headers}); adp=await r.json(); } catch {}
 
-        // AI mapping for fields fuzzyMatch couldn't handle
+        // AI mapping for fields fuzzyMatch couldn't handle (with 10s timeout)
         const unmappedAI = formFields.filter(f => !mapping[f.selector]);
         if (unmappedAI.length > 0 && groqKey) {
           try {
-            const aiMapping = await aiMatch(unmappedAI, profile, groqKey);
+            const aiPromise = aiMatch(unmappedAI, profile, groqKey);
+            const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('AI timeout')), 10000));
+            const aiMapping = await Promise.race([aiPromise, timeout]);
             for (const [sel, val] of Object.entries(aiMapping)) {
               if (!mapping[sel]) { mapping[sel] = val; fbs[sel] = { label: 'ai', source: 'ai' }; }
             }
-          } catch(e) { console.warn('[CC] aiMatch failed:', e.message); }
+          } catch(e) { console.warn('[CC] aiMatch skipped:', e.message); }
         }
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
         return { ok: true, filled };
