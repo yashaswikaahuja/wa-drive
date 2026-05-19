@@ -32,9 +32,10 @@ function injectBridge(tabId) {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.tabs.query({}, (tabs) => {
+  // Only inject into frontend tabs, not all tabs
+  chrome.tabs.query({ url: ['*://app.cybercontrol.fun/*', '*://frontend-pi-ochre-71.vercel.app/*', '*://localhost:5173/*'] }, (tabs) => {
     for (const tab of tabs) {
-      if (!tab.id || !tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) continue;
+      if (!tab.id) continue;
       injectBridge(tab.id);
     }
   });
@@ -42,7 +43,10 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
   if (info.status !== 'complete') return;
-  if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+  if (!tab.url) return;
+  // Only inject on frontend and govt form sites
+  const allowed = ['app.cybercontrol.fun', 'frontend-pi-ochre-71.vercel.app', 'localhost:5173', 'ssc.nic.in', 'ssc.gov.in', 'rrbcdg.gov.in', 'nta.ac.in', 'upsc.gov.in', 'passportindia.gov.in'];
+  if (!allowed.some(h => tab.url.includes(h))) return;
   injectBridge(tabId);
 });
 
