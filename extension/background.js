@@ -2,60 +2,15 @@
 function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
 
-console.log("[CC] background.js loaded v5.17");
+console.log("[CC] background.js loaded v5.46");
 
-// ── Auto-inject content script into existing tabs on extension load/update ───
-// Content scripts only auto-inject into NEW tabs. For already-open tabs
-// (including the frontend), we must inject manually after install/reload.
-// Inject bridge into MAIN world so postMessage works between page and content script
-function injectBridge(tabId) {
-  // Inject MAIN world relay — listens to page postMessage, forwards to content script
-  chrome.scripting.executeScript({
-    target: { tabId },
-    world: 'MAIN',
-    func: () => {
-      if (window._ccBridgeInit) return;
-      window._ccBridgeInit = true;
-      // Page → content script
-      window.addEventListener('message', (e) => {
-        if (!e.data?._cc) return;
-        window.postMessage({ _cc_to_cs: true, ...e.data }, '*');
-      });
-      // Content script → page
-      window.addEventListener('message', (e) => {
-        if (!e.data?._cc_from_cs) return;
-        const { _cc_from_cs, ...rest } = e.data;
-        window.postMessage({ ...rest }, '*');
-      });
-    }
-  }).catch(() => {});
-}
-
+// Content script handles bridge via manifest injection — no manual injection needed
 chrome.runtime.onInstalled.addListener(() => {
-  // Only inject into frontend tabs, not all tabs
-  chrome.tabs.query({ url: ['*://app.cybercontrol.fun/*', '*://frontend-pi-ochre-71.vercel.app/*', 'http://localhost:5173/*'] }, (tabs) => {
-    for (const tab of (tabs || [])) {
-      if (!tab.id) continue;
-      injectBridge(tab.id);
-    }
-  });
+  console.log('[CC] Extension installed/updated');
 });
 
-chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
-  if (info.status !== 'complete') return;
-  if (!tab.url) return;
-  // Only inject on frontend and govt form sites
-  const allowed = ['app.cybercontrol.fun', 'frontend-pi-ochre-71.vercel.app', 'localhost:5173', 'ssc.nic.in', 'ssc.gov.in', 'rrbcdg.gov.in', 'nta.ac.in', 'upsc.gov.in', 'passportindia.gov.in'];
-  if (!allowed.some(h => tab.url.includes(h))) return;
-  injectBridge(tabId);
-});
-
-// ── Persistent SW keepalive via alarms ───────────────────────────────────────
-// setInterval doesn't prevent MV3 SW termination. chrome.alarms does.
-chrome.alarms.create('cc_keepalive', { periodInMinutes: 0.4 }); // every 24s
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'cc_keepalive') chrome.storage.local.set({ _sw_alive: Date.now() });
-});
+// SW stays alive via chrome.runtime.onMessage (wakes on demand)
+// No keepalive alarm needed with sendMessage-based bridge
 
 // Background service worker — owns teach session, survives popup close
 
