@@ -271,7 +271,22 @@ export default function WhatsApp() {
     });
   }, []);
 
-  const handleShowQR = useCallback(async () => { const r = await api.get('/whatsapp/qr'); if (r.data.qrCode) setQrCode(r.data.qrCode); }, []);
+  const handleShowQR = useCallback(async () => {
+    setReconnecting(true);
+    // Force start a new session — this generates a fresh QR
+    await api.post('/whatsapp/connect').catch(() => {});
+    // Poll for QR (takes 3-10s for Baileys to generate)
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await api.get('/whatsapp/status');
+        if (r.data.connected) { clearInterval(poll); setConnected(true); setQrCode(null); setReconnecting(false); return; }
+        if (r.data.qr) { clearInterval(poll); setQrCode(r.data.qr); setReconnecting(false); }
+      } catch {}
+      if (attempts > 15) { clearInterval(poll); setReconnecting(false); }
+    }, 2000);
+  }, []);
 
   // Poll status - detect connect/disconnect
   useEffect(() => {
@@ -293,7 +308,7 @@ export default function WhatsApp() {
           disconnectCount = 0;
         } else if (r.data.qr) {
           disconnectCount++;
-          if (disconnectCount >= 2) { setQrCode(r.data.qr); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
+          if (disconnectCount >= 2) { setQrCode(r.data.qr || null); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
           if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
         } else {
           disconnectCount++;
