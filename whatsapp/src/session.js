@@ -1,4 +1,5 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import pkg from 'whatsapp-web.js';
+const { Client, LocalAuth } = pkg;
 import { EventEmitter } from 'events';
 
 const sessions = new Map(); // workspaceId → { client, status, qr, phone }
