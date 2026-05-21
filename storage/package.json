@@ -1,0 +1,13 @@
+{
+  "name": "cybercontrol-storage",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "googleapis": "^130.0.0",
+    "pg": "^8.11.3"
+  }
+}
