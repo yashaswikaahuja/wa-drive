@@ -41,6 +41,21 @@ router.post('/persons', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/customers/persons/:id — full profile for a single person
+router.get('/persons/:id', authMiddleware, async (req: any, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, primary_contact_phone as phone, name, display_label as "displayLabel",
+              relationship, data, created_at as "createdAt", updated_at as "updatedAt"
+       FROM profiles
+       WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Person not found' });
+    res.json(rows[0]);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // PATCH /api/customers/persons/:id
 router.patch('/persons/:id', authMiddleware, async (req: any, res) => {
   const { fields, displayLabel, relationship } = req.body;

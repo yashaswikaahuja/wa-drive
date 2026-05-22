@@ -74,7 +74,7 @@ export default function CustomerDetail() {
 
   const loadDocuments = async () => {
     try {
-      const r = await api.get('/drive/files');
+      const r = await api.get('/drive/files/ws');
       const docs = r.data.filter((d: any) => d.customerId === phone);
       setDocuments(docs);
     } catch {}
@@ -82,7 +82,7 @@ export default function CustomerDetail() {
 
   const loadPerson = async (personId: string) => {
     try {
-      const r = await api.get(`/profiles/${personId}?full=1`);
+      const r = await api.get(`/customers/persons/${personId}`);
       setPersonDetail(r.data);
     } catch {}
   };
