@@ -203,19 +203,22 @@ popup.js                    background.js (SW)              Page
 
 Base: `https://<tunnel>/api`
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/profiles` | List all student profiles |
-| POST | `/profiles` | Save/update profile (keyed by `phone`) |
-| GET | `/adapters/:hostname` | Get all adapters for a site |
-| POST | `/adapters/:hostname` | Save/merge adapter (requires `componentClass`) |
-| PATCH | `/adapters/:hostname/:componentClass` | Partial adapter update |
-| GET | `/mappings/:formKey` | Get saved field→profileKey mappings |
-| POST | `/mappings/:formKey` | Update mapping confidence scores |
-| GET | `/extension/version` | `{ version, download_url }` |
-| GET | `/extension/download` | Download extension zip |
+| Method | Path | Purpose | Auth | Storage |
+|--------|------|---------|------|---------|
+| GET | `/profiles` | **List profiles for the JWT's workspace** (used by extension popup picker) | Bearer JWT | DB `profiles` table, scoped by `workspace_id` |
+| GET | `/profiles/:id` | Full profile (incl. `data` jsonb) for autofill | Bearer JWT | DB `profiles` |
+| POST | `/customers/persons` | Create a new person/profile | Bearer JWT | DB `profiles` |
+| PATCH | `/customers/persons/:id` | Update fields on a person (autofill confirmations) | Bearer JWT | DB `profiles` |
+| GET | `/customers/households` | List households grouped by phone | Bearer JWT | DB `profiles` |
+| GET | `/adapters/:hostname` | Get all adapters for a site | service-secret | DB `adapters` |
+| POST | `/adapters/:hostname` | Save/merge adapter (requires `componentClass`) | service-secret | DB `adapters` |
+| PATCH | `/adapters/:hostname/:componentClass` | Partial adapter update | service-secret | DB `adapters` |
+| GET | `/mappings/:formKey` | Get saved field→profileKey mappings | Bearer JWT | DB `mappings` |
+| POST | `/mappings/:formKey` | Update mapping confidence scores | Bearer JWT | DB `mappings` |
+| GET | `/extension/version` | `{ version, download_url }` | none | static |
+| GET | `/extension/download` | Download extension zip | none | static |
 
-Storage: flat JSON files in `/opt/cybercontrol-hub/data/`
+> **Important:** Profile endpoints are workspace-scoped via JWT. Each operator only sees profiles belonging to their workspace. The legacy file-based store at `backend/data/profiles.json` is deprecated — do NOT add new code that reads from it.
 
 ---
 

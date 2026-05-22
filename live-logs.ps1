@@ -15,10 +15,10 @@ $hubJob = Start-Job -ScriptBlock {
     ssh gcp-worker "pm2 logs cybercontrol-hub --raw --lines 0" 2>&1
 }
 $waJob = Start-Job -ScriptBlock {
-    gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="pm2 logs whatsapp-service --raw --lines 0" 2>&1
+    gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="sudo -u kishy pm2 logs whatsapp-service --raw --lines 0" 2>&1
 }
 $resolverJob = Start-Job -ScriptBlock {
-    gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="pm2 logs whatsapp-resolver --raw --lines 0" 2>&1
+    gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="sudo -u kishy pm2 logs whatsapp-resolver --raw --lines 0" 2>&1
 }
 
 # Stream output from all jobs with colored prefix

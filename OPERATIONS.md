@@ -209,3 +209,64 @@ Checks:
 | whatsapp-service | GCP#2 | kishy | 3100 | Baileys WhatsApp | YES |
 | whatsapp-resolver | GCP#2 | kishy | 3200 | wwebjs LID resolver | LOW (only for @lid → phone) |
 | Vercel | Cloud | — | — | Frontend hosting | YES |
+
+
+
+## Extension (Chrome AutoFill v5.47+)
+
+### Connection status indicator (sidebar)
+The frontend shows a colored dot at the bottom of the sidebar:
+- 🟢 Green = extension connected, version shown
+- 🟡 Yellow pulsing = trying to connect (cold service worker)
+- 🔴 Red = extension off / not installed
+- ⚫ Gray = checking
+
+The bridge auto-retries forever (3s, 6s, ..., capped at 15s). Once connected, it pings every 60s to refresh the token in case the service worker restarted.
+
+### Extension shows only one profile (or wrong profiles)
+**Cause:** `/api/profiles` is reading from the legacy JSON file (`backend/data/profiles.json`) instead of the workspace-scoped DB.
+
+**Fix:**
+1. Ensure latest code is deployed:
+   ```bash
+   ssh gcp-worker "grep -c 'workspace_id' /opt/cybercontrol-hub/backend/dist/api/routes/profiles.routes.js"
+   ```
+   Must be ≥ 2 (DB-backed). If 0, the legacy version is deployed — rebuild + scp.
+
+2. Test the endpoint directly:
+   ```bash
+   # Get a token by logging in
+   TOKEN=$(curl -s -X POST https://api.cybercontrol.fun/api/auth/login -H 'Content-Type: application/json' -d '{"email":"...","password":"..."}' | jq -r .accessToken)
+   # Should return JSON array of profiles for that workspace, NOT a static list
+   curl -s https://api.cybercontrol.fun/api/profiles -H "Authorization: Bearer $TOKEN" | jq length
+   ```
+
+3. If a stale `profiles.json` exists on server, move it aside:
+   ```bash
+   ssh gcp-worker "sudo mv /opt/cybercontrol-hub/backend/data/profiles.json /opt/cybercontrol-hub/backend/data/profiles.json.legacy 2>/dev/null"
+   ```
+
+### Extension doesn't connect to frontend at all
+**Symptom:** sidebar dot stays red, popup says "Please login again" or fails.
+
+1. **Verify content script is injected**: open DevTools console on `app.cybercontrol.fun`, run:
+   ```js
+   console.log('Bridge:', window._ccCSBridgeInit, 'chrome:', !!chrome?.runtime);
+   ```
+   - `Bridge: undefined` → content script not running. Reload extension at `chrome://extensions`.
+   - `chrome: false` → no chrome runtime API exposed; means extension isn't installed or page URL doesn't match manifest.
+
+2. **Verify manifest matches the URL**: extension only injects on `app.cybercontrol.fun`. If you changed domains, update `extension/manifest.json` `content_scripts[0].matches`.
+
+3. **Reload extension**: after editing extension code, you MUST reload it at `chrome://extensions` — Chrome doesn't hot-reload extension code.
+
+4. **Service worker dead**: Chrome MV3 SW can sleep. The 60s keepalive in extensionBridge.ts handles this — first message after wake takes ~1-2s. Sidebar will briefly show 🟡 then go 🟢.
+
+### Form fields don't autofill on a govt site
+- Verify the site URL is in `extension/manifest.json` `content_scripts[0].matches`
+- Open the form, click extension icon → select profile → Fill button
+- Check browser console for `[CC]` errors
+- If a new field type isn't filling, the autofill plugins (`extension/autofill/plugins/`) need an adapter
+
+### Where the legacy JSON store lived
+`backend/src/api/routes/profiles.routes.ts` originally read/wrote `backend/data/profiles.json`. That file is now deprecated — moved to `.legacy` extension and the route reads the DB. Don't restore the JSON-backed version.

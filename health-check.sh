@@ -90,6 +90,22 @@ else
 fi
 
 echo
+echo "--- EXTENSION ENDPOINTS ---"
+DB_BACKED=$(ssh gcp-worker "grep -c 'workspace_id' /opt/cybercontrol-hub/backend/dist/api/routes/profiles.routes.js" 2>/dev/null | tr -d '[:space:]')
+if [[ "${DB_BACKED:-0}" -ge 2 ]]; then
+  ok "/api/profiles is DB-backed (workspace-scoped)"
+else
+  fail "/api/profiles missing workspace_id (only $DB_BACKED occurrences) — extension will show stale data, redeploy backend"
+fi
+
+LEGACY=$(ssh gcp-worker "[ -f /opt/cybercontrol-hub/backend/data/profiles.json ] && echo YES || echo NO" 2>/dev/null | tr -d '[:space:]')
+if [[ "$LEGACY" == "NO" ]]; then
+  ok "No legacy profiles.json on server"
+else
+  warn "Legacy profiles.json exists — sudo mv /opt/cybercontrol-hub/backend/data/profiles.json{,.legacy}"
+fi
+
+echo
 echo "--- FRONTEND ---"
 FE=$(curl -s -o /dev/null -w '%{http_code}' https://app.cybercontrol.fun/)
 [[ "$FE" == "200" ]] && ok "https://app.cybercontrol.fun/ → 200" || fail "Frontend returned $FE"

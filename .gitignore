@@ -28,3 +28,7 @@ auth_info/
 # Stray local data
 whatsapp/
 *.heapsnapshot
+
+# Legacy in-memory data store (replaced by DB)
+backend/data/
+*.legacy

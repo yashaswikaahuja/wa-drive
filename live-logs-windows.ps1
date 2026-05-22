@@ -13,14 +13,14 @@ Start-Sleep -Seconds 1
 
 Start-Process powershell -ArgumentList @(
     "-NoExit", "-Command",
-    "Write-Host 'WA - GCP#2 whatsapp-service' -ForegroundColor Green; gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command='pm2 logs whatsapp-service --raw'"
+    "Write-Host 'WA - GCP#2 whatsapp-service' -ForegroundColor Green; gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command='sudo -u kishy pm2 logs whatsapp-service --raw'"
 )
 
 Start-Sleep -Seconds 1
 
 Start-Process powershell -ArgumentList @(
     "-NoExit", "-Command",
-    "Write-Host 'RESOLVER - GCP#2 whatsapp-resolver' -ForegroundColor Magenta; gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command='pm2 logs whatsapp-resolver --raw'"
+    "Write-Host 'RESOLVER - GCP#2 whatsapp-resolver' -ForegroundColor Magenta; gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command='sudo -u kishy pm2 logs whatsapp-resolver --raw'"
 )
 
 Write-Host "Done. 3 windows opened." -ForegroundColor Cyan

@@ -41,8 +41,9 @@ if ($rHealth -match '"connected":true') {
   WARN "Resolver NOT logged in - saved names won't appear. Scan QR at: http://34.100.147.20:3200/qr-page?secret=wa-service-secret-2024"
 }
 
-$pm2Users = (GCP2 "ps aux | grep 'PM2.*God' | grep -v grep | awk '{print `$1}' | sort -u").Trim()
+$pm2Users = (GCP2 "ps -eo user,stat,args | grep 'PM2.*God' | grep -v grep | awk '`$2 !~ /Z/ {print `$1}' | sort -u").Trim()
 if ($pm2Users -eq 'kishy') { OK "Single PM2 daemon (kishy)" }
+elseif ($pm2Users -eq '') { FAIL "No PM2 daemon running on GCP#2!" }
 else { FAIL "PM2 daemons: '$pm2Users' - only kishy should run" }
 
 $sessOwn = (GCP2 "stat -c %U /opt/whatsapp/service/sessions").Trim()
@@ -65,6 +66,19 @@ else { FAIL "$orphans orphan Chrome process(es) - run: bash recover-resolver.sh"
 $refErrs = (GCP2 "sudo -u kishy pm2 logs whatsapp-service --nostream --lines 200 --err 2>/dev/null | grep -c ReferenceError").Trim()
 if ([int]$refErrs -lt 1) { OK "No recent ReferenceError in worker" }
 else { WARN "$refErrs ReferenceError(s) in worker logs - redeploy whatsapp-service/index.js" }
+
+Write-Host ""
+Write-Host "--- EXTENSION ENDPOINTS ---"
+# Verify /api/profiles is DB-backed (looks for workspace_id in compiled JS)
+$dbBacked = ssh gcp-worker "grep -c 'workspace_id' /opt/cybercontrol-hub/backend/dist/api/routes/profiles.routes.js" 2>$null
+if ([int]$dbBacked -ge 2) { OK "/api/profiles is DB-backed (workspace-scoped)" }
+else { FAIL "/api/profiles missing workspace_id check (only $dbBacked occurrences) - extension will show stale data, redeploy backend" }
+
+# Verify legacy JSON file isn't lingering
+$legacyExists = ssh gcp-worker "[ -f /opt/cybercontrol-hub/backend/data/profiles.json ] && echo YES || echo NO" 2>$null
+$legacyExists = $legacyExists.Trim()
+if ($legacyExists -eq 'NO') { OK "No legacy profiles.json on server" }
+else { WARN "Legacy profiles.json exists on server - move aside: sudo mv /opt/cybercontrol-hub/backend/data/profiles.json{,.legacy}" }
 
 Write-Host ""
 Write-Host "--- FRONTEND ---"
