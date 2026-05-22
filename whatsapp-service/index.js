@@ -244,10 +244,18 @@ wss.on('connection', (ws, req) => {
 app.get('/health', (_, res) => res.json({ status: 'ok', sessions: sessions.size }));
 
 app.post('/sessions/start', authMiddleware, async (req, res) => {
-  const { workspaceId } = req.body;
+  const { workspaceId, force } = req.body;
   if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
+  if (force) {
+    const existing = sessions.get(workspaceId);
+    if (existing?.socket) {
+      console.log(`[WA:${workspaceId.slice(0, 8)}] Force restart — tearing down existing socket`);
+      try { existing.socket.end(); } catch {}
+    }
+    sessions.delete(workspaceId);
+  }
   await startSession(workspaceId);
-  res.json({ ok: true });
+  res.json({ ok: true, forced: !!force });
 });
 
 app.post('/sessions/stop', authMiddleware, async (req, res) => {

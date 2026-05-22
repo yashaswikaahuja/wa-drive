@@ -8,17 +8,31 @@ let workerSocket: any = null;
 let workerConnected = false;
 let lastQrCode: string | null = null;
 
-// Per-workspace QR cache (latest QR for each workspace)
-const workspaceQRs = new Map<string, string | null>();
+// Per-workspace QR cache with timestamp (auto-expires after 40s)
+const workspaceQRs = new Map<string, { qr: string; updatedAt: number }>();
+const QR_TTL_MS = 40_000; // Baileys regenerates every ~20s; 40s gives 2x safety margin
 
 export function getIO() { return io; }
 export function getHubStatus() { return { connected: workerConnected, qrCode: lastQrCode }; }
 export function getWorkspaceQR(wsId: string): string | null {
-  return workspaceQRs.get(wsId) || null;
+  const entry = workspaceQRs.get(wsId);
+  if (!entry) return null;
+  // Expire stale QRs — caller should request fresh from worker
+  if (Date.now() - entry.updatedAt > QR_TTL_MS) {
+    workspaceQRs.delete(wsId);
+    return null;
+  }
+  return entry.qr;
 }
 export function setWorkspaceQR(wsId: string, qr: string | null): void {
-  if (qr) workspaceQRs.set(wsId, qr);
+  if (qr) workspaceQRs.set(wsId, { qr, updatedAt: Date.now() });
   else workspaceQRs.delete(wsId);
+}
+// Helper for /status route: get raw cached QR with age, even if expired
+export function getWorkspaceQRWithAge(wsId: string): { qr: string | null; ageMs: number } {
+  const entry = workspaceQRs.get(wsId);
+  if (!entry) return { qr: null, ageMs: 0 };
+  return { qr: entry.qr, ageMs: Date.now() - entry.updatedAt };
 }
 
 export function setupSocket(httpServer: HttpServer) {

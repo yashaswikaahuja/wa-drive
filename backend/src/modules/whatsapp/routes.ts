@@ -16,7 +16,17 @@ router.get('/status', authMiddleware, async (req: any, res) => {
     // Update cache from worker truth
     if (data?.qr) setWorkspaceQR(wsId, data.qr);
     if (data?.connected) setWorkspaceQR(wsId, null);
-    // Always include cached QR if present (covers race where worker /status hasn't updated yet)
+    // Self-heal: if worker is in qr_pending but has same QR for >40s, restart session
+    // This covers Baileys hangs where session.qr stops getting updated
+    if (!data.connected && data.status === 'qr_pending' && cached && data.qr === cached) {
+      // QR returned to us is the same as cached — TTL expired, force restart
+      console.log(`[Hub] QR stale for ws=${wsId.slice(0, 8)} — forcing session restart`);
+      fetch(WA_SERVICE + '/sessions/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
+        body: JSON.stringify({ workspaceId: wsId, force: true }),
+      }).catch(() => {});
+    }
     res.json({
       connected: !!data.connected,
       status: data.status || 'unknown',
