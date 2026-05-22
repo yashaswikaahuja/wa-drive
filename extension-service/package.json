@@ -1,0 +1,20 @@
+{
+  "name": "cybercontrol-extension-service",
+  "version": "1.0.0",
+  "description": "Standalone API for the Chrome extension — profiles, mappings, adapters",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "jsonwebtoken": "^9.0.2",
+    "dotenv": "^17.0.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

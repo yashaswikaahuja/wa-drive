@@ -29,9 +29,11 @@
 ### GCP #1 — `136.115.232.70` (cybercontrol-worker)
 - **PM2 daemon owner:** `bharattvv542` (yes, this is correct)
 - **systemd unit:** `pm2-bharattvv542.service` (enabled)
-- **Processes:** `cybercontrol-hub` only
-- **Backend dist:** `/opt/cybercontrol-hub/backend/dist/`
-- **Backend env:** `/opt/cybercontrol-hub/backend/.env`
+- **Processes:** `cybercontrol-hub`, `extension-service`
+- **Hub backend dist:** `/opt/cybercontrol-hub/backend/dist/`
+- **Hub .env:** `/opt/cybercontrol-hub/.env` ⚠️ (NOT `backend/.env` — PM2 starts hub with cwd=`/opt/cybercontrol-hub`, so dotenv reads from there)
+- **extension-service:** `/opt/extension-service/` (port 3300)
+- **extension-service .env:** `/opt/extension-service/.env` (must share `JWT_SECRET` and `DATABASE_URL` with hub)
 
 ### GCP #2 — `34.100.147.20` (cybercontrol-whatsapp)
 - **PM2 daemon owner:** `kishy` (NOT yasha)

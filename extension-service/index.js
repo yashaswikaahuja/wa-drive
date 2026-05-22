@@ -1,0 +1,54 @@
+import 'dotenv/config';
+import express from 'express';
+
+import profilesRouter from './routes/profiles.js';
+import mappingsRouter from './routes/mappings.js';
+import adaptersRouter from './routes/adapters.js';
+
+const PORT = Number(process.env.PORT) || 3300;
+const app = express();
+
+// CORS — same as hub (extension hits this via api.cybercontrol.fun → nginx → here)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+app.use(express.json({ limit: '5mb' }));
+
+// Health endpoint (unauthenticated, for nginx + smoke tests)
+app.get('/health', (_req, res) => res.json({
+  status: 'ok',
+  service: 'extension-service',
+  version: '1.0.0',
+}));
+
+// Routes are mounted at the SAME paths the hub used to expose them at,
+// so nginx can transparently route /api/profiles, /api/mappings, /api/adapters here.
+app.use('/api/profiles', profilesRouter);
+app.use('/api/mappings', mappingsRouter);
+app.use('/api/adapters', adaptersRouter);
+
+// 404 fallthrough
+app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
+
+// Error handler (last)
+app.use((err, _req, res, _next) => {
+  console.error('[extension-service]', err);
+  res.status(500).json({ error: err.message });
+});
+
+// Crash safety
+process.on('uncaughtException', (err) => console.error('[FATAL] Uncaught:', err.message));
+process.on('unhandledRejection', (err) => console.error('[FATAL] Unhandled:', err?.message || err));
+
+app.listen(PORT, () => {
+  const jwtPrefix = (process.env.JWT_SECRET || '').slice(0, 4);
+  console.log(`[extension-service] listening on :${PORT}`);
+  console.log(`[extension-service] JWT_SECRET starts with: ${jwtPrefix}***`);
+  console.log(`[extension-service] DATABASE_URL present: ${!!process.env.DATABASE_URL}`);
+  console.log(`[extension-service] DATA_DIR: ${process.env.DATA_DIR || 'default ./data'}`);
+});

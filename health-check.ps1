@@ -22,9 +22,9 @@ Write-Host "--- HUB (GCP#1) ---"
 $h = ssh gcp-worker "curl -s http://localhost:3000/api/health" 2>$null
 if ($h -match '"status":"ok"') { OK "Hub /api/health" } else { FAIL "Hub /api/health: $h" }
 
-$wa = ssh gcp-worker "cat /opt/cybercontrol-hub/backend/.env" 2>$null
-if ($wa -match 'WA_SECRET=\S+') { OK "Hub WA_SECRET set" } else { FAIL "Hub WA_SECRET missing in .env" }
-if ($wa -match 'WA_SERVICE=.*34\.100\.147\.20') { OK "Hub WA_SERVICE -> GCP#2" } else { FAIL "Hub WA_SERVICE wrong/missing" }
+$wa = ssh gcp-worker "cat /opt/cybercontrol-hub/.env" 2>$null
+if ($wa -match 'JWT_SECRET=\S+') { OK "Hub JWT_SECRET set" } else { FAIL "Hub JWT_SECRET missing in .env" }
+if ($wa -match 'DATABASE_URL=\S+') { OK "Hub DATABASE_URL set" } else { FAIL "Hub DATABASE_URL missing" }
 
 $pm2 = ssh gcp-worker 'pm2 jlist 2>/dev/null | grep -o cybercontrol-hub.*online | head -1' 2>$null
 if ($pm2) { OK "Hub PM2 process online" } else { FAIL "Hub PM2 process not online" }
@@ -68,17 +68,25 @@ if ([int]$refErrs -lt 1) { OK "No recent ReferenceError in worker" }
 else { WARN "$refErrs ReferenceError(s) in worker logs - redeploy whatsapp-service/index.js" }
 
 Write-Host ""
-Write-Host "--- EXTENSION ENDPOINTS ---"
-# Verify /api/profiles is DB-backed (looks for workspace_id in compiled JS)
-$dbBacked = ssh gcp-worker "grep -c 'workspace_id' /opt/cybercontrol-hub/backend/dist/api/routes/profiles.routes.js" 2>$null
-if ([int]$dbBacked -ge 2) { OK "/api/profiles is DB-backed (workspace-scoped)" }
-else { FAIL "/api/profiles missing workspace_id check (only $dbBacked occurrences) - extension will show stale data, redeploy backend" }
+Write-Host "--- EXTENSION SERVICE (GCP#1, port 3300) ---"
+$extHealth = ssh gcp-worker "curl -s http://localhost:3300/health" 2>$null
+if ($extHealth -match '"status":"ok"') { OK "extension-service /health" }
+else { FAIL "extension-service /health: $extHealth" }
 
-# Verify legacy JSON file isn't lingering
-$legacyExists = ssh gcp-worker "[ -f /opt/cybercontrol-hub/backend/data/profiles.json ] && echo YES || echo NO" 2>$null
-$legacyExists = $legacyExists.Trim()
-if ($legacyExists -eq 'NO') { OK "No legacy profiles.json on server" }
-else { WARN "Legacy profiles.json exists on server - move aside: sudo mv /opt/cybercontrol-hub/backend/data/profiles.json{,.legacy}" }
+$extPm2 = ssh gcp-worker 'pm2 jlist 2>/dev/null | grep -o extension-service.*online | head -1' 2>$null
+if ($extPm2) { OK "extension-service PM2 process online" }
+else { FAIL "extension-service PM2 process not online" }
+
+# Verify nginx routes /api/profiles to port 3300 not hub
+$nginxConf = ssh gcp-worker "sudo cat /etc/nginx/sites-enabled/cybercontrol 2>/dev/null | grep -A1 'location /api/profiles' | head -2" 2>$null
+if ($nginxConf -match '127\.0\.0\.1:3300') { OK "nginx routes /api/profiles -> :3300 (extension-service)" }
+else { FAIL "nginx /api/profiles not routed to :3300 - extension will hit the hub instead" }
+
+# Verify extension-service shares JWT_SECRET with hub
+$hubJwt = (ssh gcp-worker "grep ^JWT_SECRET= /opt/cybercontrol-hub/.env 2>/dev/null | head -c 25").Trim()
+$extJwt = (ssh gcp-worker "grep ^JWT_SECRET= /opt/extension-service/.env 2>/dev/null | head -c 25").Trim()
+if ($hubJwt -and $hubJwt -eq $extJwt) { OK "JWT_SECRET matches between hub and extension-service" }
+else { FAIL "JWT_SECRET mismatch - extension will reject hub-issued tokens" }
 
 Write-Host ""
 Write-Host "--- FRONTEND ---"

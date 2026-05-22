@@ -1,12 +1,11 @@
-import { Router, Request, Response } from 'express';
-import { pool } from '../../db.js';
-import { authMiddleware } from '../../middleware/auth.js';
+import { Router } from 'express';
+import { pool } from '../db.js';
+import { authMiddleware } from '../auth.js';
 
 const router = Router();
 
-// GET /api/profiles — list all profiles for the authenticated user's workspace
-// Returns shape compatible with extension popup: { id, name, phone, displayLabel, relationship }
-router.get('/', authMiddleware, async (req: any, res: Response) => {
+// GET /api/profiles — list profiles for the authenticated workspace
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
@@ -16,11 +15,14 @@ router.get('/', authMiddleware, async (req: any, res: Response) => {
       ORDER BY updated_at DESC
     `, [req.user.workspaceId]);
     res.json(rows);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[ext/profiles] list error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// GET /api/profiles/:id — full profile (with data jsonb) for the extension to autofill
-router.get('/:id', authMiddleware, async (req: any, res: Response) => {
+// GET /api/profiles/:id — full profile (with data jsonb) for autofill
+router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
@@ -30,7 +32,10 @@ router.get('/:id', authMiddleware, async (req: any, res: Response) => {
     `, [req.params.id, req.user.workspaceId]);
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
     res.json(rows[0]);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e) {
+    console.error('[ext/profiles] get error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 export default router;
