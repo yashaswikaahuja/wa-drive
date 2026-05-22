@@ -105,26 +105,36 @@ async function startSession(workspaceId) {
       const rawJid = msg.key.remoteJid || '';
       let phone;
       let profilePicUrl = null;
+      let savedName = null;
 
       if (rawJid.endsWith('@s.whatsapp.net')) {
         phone = rawJid.replace('@s.whatsapp.net', '');
         try { profilePicUrl = await sock.profilePictureUrl(rawJid, 'image'); } catch {}
+        // Fetch saved contact name from resolver (operator's phone book)
+        try {
+          const r = await fetch(`${RESOLVER_URL}/contact?phone=${phone}`, { headers: { 'x-service-secret': WA_SECRET } });
+          if (r.ok) {
+            const data = await r.json();
+            savedName = data.name || null;
+          }
+        } catch {}
       } else if (rawJid.endsWith('@lid')) {
-        // Resolve via local wwebjs resolver
         const lidNum = rawJid.replace('@lid', '');
         try {
-          const r = await fetch(`${RESOLVER_URL}/resolve?lid=${lidNum}`, { headers: { 'x-service-secret': SERVICE_SECRET } });
+          const r = await fetch(`${RESOLVER_URL}/resolve?lid=${lidNum}`, { headers: { 'x-service-secret': WA_SECRET } });
           if (r.ok) {
             const data = await r.json();
             phone = data.phone || lidNum;
             profilePicUrl = data.dpUrl || null;
-            if (data.phone) console.log(`[WA] LID resolved: ${lidNum} → ${data.phone}`);
+            savedName = data.name || null;
+            if (data.phone) console.log(`[WA] LID resolved: ${lidNum} → ${data.phone}${savedName ? ' (' + savedName + ')' : ''}`);
           } else { phone = lidNum; }
         } catch { phone = lidNum; }
       } else {
         phone = rawJid.replace(/@.*/, '');
       }
-      const pushName = msg.pushName || phone;
+      // Priority: operator's saved contact name > sender's WA display name > phone
+      const pushName = savedName || msg.pushName || phone;
 
       try {
         const buffer = await downloadMedia(sock, msg);

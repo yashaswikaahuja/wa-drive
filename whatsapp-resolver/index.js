@@ -50,7 +50,7 @@ function initClient() {
   });
 }
 
-// Resolve LID → phone + DP
+// Resolve LID → phone + saved name + DP
 app.get('/resolve', auth, async (req, res) => {
   const { lid } = req.query;
   if (!lid) return res.status(400).json({ error: 'lid required' });
@@ -63,12 +63,16 @@ app.get('/resolve', auth, async (req, res) => {
     const phone = result?.pn?.replace('@c.us', '').replace('@s.whatsapp.net', '') || null;
 
     let dpUrl = null;
+    let name = null;
     try {
       const contact = await client.getContactById(phone ? `${phone}@c.us` : lidJid);
+      // Saved contact name from operator's phone book (preferred)
+      // Falls back to push name (whatever the sender set as their WA display name)
+      name = contact?.name || contact?.pushname || null;
       dpUrl = await contact.getProfilePicUrl();
     } catch {}
 
-    res.json({ lid, phone, dpUrl });
+    res.json({ lid, phone, name, dpUrl });
   } catch (e) {
     console.error('[Resolver] Error:', e.message);
     res.status(500).json({ error: e.message });
@@ -94,7 +98,7 @@ app.post('/resolve-bulk', auth, async (req, res) => {
   }
 });
 
-// Get DP by phone
+// Get DP + saved name by phone
 app.get('/dp', auth, async (req, res) => {
   const { phone } = req.query;
   if (!phone) return res.status(400).json({ error: 'phone required' });
@@ -103,9 +107,25 @@ app.get('/dp', auth, async (req, res) => {
   try {
     const contact = await client.getContactById(`${phone}@c.us`);
     const dpUrl = await contact.getProfilePicUrl();
-    res.json({ phone, dpUrl: dpUrl || null });
+    const name = contact?.name || contact?.pushname || null;
+    res.json({ phone, name, dpUrl: dpUrl || null });
   } catch (e) {
-    res.json({ phone, dpUrl: null });
+    res.json({ phone, name: null, dpUrl: null });
+  }
+});
+
+// Get saved contact name by phone (cheap call — no DP fetch)
+app.get('/contact', auth, async (req, res) => {
+  const { phone } = req.query;
+  if (!phone) return res.status(400).json({ error: 'phone required' });
+  if (!ready) return res.status(503).json({ error: 'Not connected' });
+
+  try {
+    const contact = await client.getContactById(`${phone}@c.us`);
+    const name = contact?.name || contact?.pushname || null;
+    res.json({ phone, name });
+  } catch (e) {
+    res.json({ phone, name: null });
   }
 });
 
