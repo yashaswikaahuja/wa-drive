@@ -1,51 +1,36 @@
 import { Router, Request, Response } from 'express';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { pool } from '../../db.js';
+import { authMiddleware } from '../../middleware/auth.js';
 
 const router = Router();
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = resolve(__dirname, '../../../data');
-const PROFILES_PATH = resolve(DATA_DIR, 'profiles.json');
 
-function load(): Record<string, object> {
-  if (!existsSync(PROFILES_PATH)) return {};
-  try { return JSON.parse(readFileSync(PROFILES_PATH, 'utf8')); } catch { return {}; }
-}
-function save(data: Record<string, object>) {
-  mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(PROFILES_PATH, JSON.stringify(data, null, 2));
-}
-
-// GET /api/profiles — list all profiles
-router.get('/', (_req: Request, res: Response) => {
-  res.json(Object.values(load()));
+// GET /api/profiles — list all profiles for the authenticated user's workspace
+// Returns shape compatible with extension popup: { id, name, phone, displayLabel, relationship }
+router.get('/', authMiddleware, async (req: any, res: Response) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
+             relationship, updated_at AS "updatedAt"
+      FROM profiles
+      WHERE workspace_id = $1 AND deleted_at IS NULL
+      ORDER BY updated_at DESC
+    `, [req.user.workspaceId]);
+    res.json(rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/profiles/:phone — get profile by phone
-router.get('/:phone', (req: Request, res: Response) => {
-  const profiles = load();
-  const profile = profiles[req.params.phone];
-  if (!profile) { res.status(404).json({ error: 'Not found' }); return; }
-  res.json(profile);
-});
-
-// POST /api/profiles — save/update profile
-router.post('/', (req: Request, res: Response) => {
-  const profile = req.body as { phone: string; [key: string]: string };
-  if (!profile.phone) { res.status(400).json({ error: 'phone required' }); return; }
-  const profiles = load();
-  profiles[profile.phone] = { ...profiles[profile.phone], ...profile, updatedAt: new Date().toISOString() };
-  save(profiles);
-  res.json({ ok: true, profile: profiles[profile.phone] });
-});
-
-// DELETE /api/profiles/:phone
-router.delete('/:phone', (req: Request, res: Response) => {
-  const profiles = load();
-  delete profiles[req.params.phone];
-  save(profiles);
-  res.json({ ok: true });
+// GET /api/profiles/:id — full profile (with data jsonb) for the extension to autofill
+router.get('/:id', authMiddleware, async (req: any, res: Response) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
+             relationship, data, created_at AS "createdAt", updated_at AS "updatedAt"
+      FROM profiles
+      WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL
+    `, [req.params.id, req.user.workspaceId]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;
