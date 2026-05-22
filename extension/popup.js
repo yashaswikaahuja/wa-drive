@@ -192,7 +192,27 @@ fillBtn.addEventListener('click', async () => {
           } catch(e) { console.warn('[CC] aiMatch skipped:', e.message); }
         }
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
-        return { ok: true, filled };
+        // Read structured records the executor flushed to document.body
+        let records = [];
+        try { records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
+        const totalFilled = records.filter(r => r.result === 'filled').length;
+        const totalFailed = records.filter(r => r.result && r.result !== 'filled' && r.result !== 'skipped').length;
+        // POST session record (workspace-scoped via the JWT)
+        try {
+          await fetch(backendUrl + '/sessions', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              hostname: location.hostname,
+              semanticFormKey,
+              runtimeVersion: (records[0] && records[0].rv) || null,
+              totalFilled,
+              totalFailed,
+              records,
+            }),
+          });
+        } catch (e) { console.warn('[CC] session post failed:', e.message); }
+        return { ok: true, filled, totalFilled, totalFailed, recordCount: records.length };
       }
     });
 

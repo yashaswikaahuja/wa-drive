@@ -4,6 +4,9 @@ import express from 'express';
 import profilesRouter from './routes/profiles.js';
 import mappingsRouter from './routes/mappings.js';
 import adaptersRouter from './routes/adapters.js';
+import sessionsRouter from './routes/sessions.js';
+import correctionsRouter from './routes/corrections.js';
+import trainingRouter from './routes/training.js';
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();
@@ -31,6 +34,9 @@ app.get('/health', (_req, res) => res.json({
 app.use('/api/profiles', profilesRouter);
 app.use('/api/mappings', mappingsRouter);
 app.use('/api/adapters', adaptersRouter);
+app.use('/api/sessions', sessionsRouter);
+app.use('/api/corrections', correctionsRouter);
+app.use('/api/training', trainingRouter);
 
 // 404 fallthrough
 app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
