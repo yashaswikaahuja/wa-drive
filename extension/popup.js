@@ -109,6 +109,17 @@ fillBtn.addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) { showStatus('No active tab', '#ef4444'); return; }
 
+    // Fetch FULL profile (incl. data jsonb) — list endpoint only returns summary
+    const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
+    let fullProfile = selectedProfile;
+    try {
+      const fr = await fetch(data.backendUrl + '/profiles/' + selectedProfile.id, {
+        headers: { Authorization: 'Bearer ' + data.accessToken },
+      });
+      if (fr.ok) fullProfile = await fr.json();
+    } catch (e) { console.warn('[CC] full profile fetch failed:', e.message); }
+    selectedProfile = fullProfile;
+
     // Inject all autofill scripts in ONE call — they must share the same scope
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -123,7 +134,6 @@ fillBtn.addEventListener('click', async () => {
       ]
     });
 
-    const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
     // Get Groq key from backend settings
     let groqKey = '';
     try {
