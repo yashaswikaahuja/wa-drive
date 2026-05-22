@@ -132,6 +132,23 @@ app.get('/contact', auth, async (req, res) => {
 app.get('/health', (_, res) => res.json({ status: 'ok', connected: ready }));
 app.get('/qr', auth, (_, res) => res.json({ qr: currentQr }));
 
+// Browser-friendly page to scan the resolver QR
+app.get('/qr-page', (req, res) => {
+  if (req.query.secret !== SECRET) return res.status(401).send('unauthorized');
+  if (ready) return res.send('<h2>✓ Resolver is already connected — no QR needed.</h2>');
+  if (!currentQr) return res.send('<h2>QR not yet generated. Refresh in a few seconds.</h2><script>setTimeout(()=>location.reload(),3000)</script>');
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=${encodeURIComponent(currentQr)}`;
+  res.send(`<!doctype html>
+<html><head><meta charset="utf-8"><title>Resolver QR</title>
+<meta http-equiv="refresh" content="20">
+<style>body{font-family:system-ui;text-align:center;padding:40px;background:#0d1220;color:#fff}img{background:#fff;padding:12px;border-radius:8px}h1{font-size:18px}p{color:#aaa;font-size:13px}</style>
+</head><body>
+<h1>Scan with WhatsApp to connect Resolver</h1>
+<img src="${qrUrl}" alt="QR">
+<p>This QR auto-refreshes every 20 seconds.<br>Once scanned, you'll see "✓ Connected" on next reload.</p>
+</body></html>`);
+});
+
 app.listen(PORT, () => {
   console.log(`[Resolver] Running on port ${PORT}`);
   initClient();
