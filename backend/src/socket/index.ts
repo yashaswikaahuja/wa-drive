@@ -58,7 +58,7 @@ export function setupSocket(httpServer: HttpServer) {
       socket.emit('connection:status', { connected: workerConnected, ...(lastQrCode ? { qrCode: lastQrCode } : {}) });
     });
 
-    // Join workspace room via JWT and immediately send cached QR if any
+    // Join workspace room via JWT (still useful for non-QR events: file inbox, connection status)
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
     let workspaceId: string | null = null;
     if (token) {
@@ -68,12 +68,7 @@ export function setupSocket(httpServer: HttpServer) {
           workspaceId = decoded.workspaceId;
           socket.join(decoded.workspaceId);
           console.log('[Socket] Joined room:', decoded.workspaceId.slice(0, 8));
-          // Send cached QR immediately to this socket if available
-          const cachedQR = workspaceQRs.get(decoded.workspaceId);
-          if (cachedQR) {
-            socket.emit('qr', { qr: cachedQR, workspaceId: decoded.workspaceId });
-            socket.emit('connection:status', { connected: false, qrCode: cachedQR, workspaceId: decoded.workspaceId });
-          }
+          // QR is delivered via polling now — no longer pushed via socket on join
         }
       } catch {}
     }

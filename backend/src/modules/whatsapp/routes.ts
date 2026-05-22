@@ -7,14 +7,26 @@ import { getIO, getWorkspaceQR, setWorkspaceQR } from '../../socket/index.js';
 const router = Router();
 
 router.get('/status', authMiddleware, async (req: any, res) => {
+  const wsId = req.user.workspaceId;
+  // Return cached QR INSTANTLY if we have one (polling-friendly path)
+  const cached = getWorkspaceQR(wsId);
   try {
-    const r = await fetch(WA_SERVICE + '/sessions/' + req.user.workspaceId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
+    const r = await fetch(WA_SERVICE + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
-    // If service has fresh QR, cache it
-    if (data?.qr) setWorkspaceQR(req.user.workspaceId, data.qr);
-    if (data?.connected) setWorkspaceQR(req.user.workspaceId, null);
-    res.json(data);
-  } catch { res.json({ connected: false, status: 'service_down' }); }
+    // Update cache from worker truth
+    if (data?.qr) setWorkspaceQR(wsId, data.qr);
+    if (data?.connected) setWorkspaceQR(wsId, null);
+    // Always include cached QR if present (covers race where worker /status hasn't updated yet)
+    res.json({
+      connected: !!data.connected,
+      status: data.status || 'unknown',
+      phone: data.phone || null,
+      qr: data.qr || cached || null,
+    });
+  } catch {
+    // If worker is unreachable, still return cached QR so polling keeps working
+    res.json({ connected: false, status: 'service_down', qr: cached || null });
+  }
 });
 
 router.get('/qr', authMiddleware, async (req: any, res) => {
@@ -67,7 +79,9 @@ router.post('/link-lid', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// Worker event relay (WhatsApp service → frontend socket.io)
+// Worker event relay (WhatsApp service → hub).
+// QR is cached only — frontend polls /status to retrieve it (no socket.io).
+// Other events (connected/disconnected) still emit via socket for UI quickness.
 router.post('/event', (req, res) => {
   const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
   if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
@@ -76,16 +90,14 @@ router.post('/event', (req, res) => {
   const io = getIO();
   if (event === 'qr') {
     setWorkspaceQR(workspaceId, qr);
-    // Emit to workspace room only (NOT global) and include payload for frontend
-    io.to(workspaceId).emit('qr', { qr, workspaceId });
-    io.to(workspaceId).emit('connection:status', { connected: false, qrCode: qr, workspaceId });
-    console.log(`[Hub] QR pushed to workspace ${workspaceId.slice(0, 8)}`);
+    console.log(`[Hub] QR cached for workspace ${workspaceId.slice(0, 8)} (qr_len=${qr?.length || 0})`);
   } else if (event === 'connected') {
     setWorkspaceQR(workspaceId, null);
     io.to(workspaceId).emit('connection:status', { connected: true, phone, workspaceId });
     console.log(`[Hub] Connected: ${phone} (${workspaceId.slice(0, 8)})`);
   } else if (event === 'disconnected') {
     io.to(workspaceId).emit('connection:status', { connected: false, workspaceId });
+    console.log(`[Hub] Disconnected (${workspaceId.slice(0, 8)})`);
   }
   res.json({ ok: true });
 });

@@ -215,7 +215,6 @@ export default function WhatsApp() {
     const baseUrl = SOCKET_URL;
     const token = useAuthStore.getState().accessToken || '';
     const socket = io(baseUrl, {
-      // WebSocket FIRST for low latency, polling only as last resort
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
@@ -226,31 +225,41 @@ export default function WhatsApp() {
       query: { token },
     });
     socketRef.current = socket;
-    // On connect/reconnect, fetch fresh QR & status from REST as fallback
-    const refreshFromRest = () => {
-      api.get('/whatsapp/status').then(r => {
+    // ── QR delivery via HTTP polling (no Socket.IO) ──
+    // Polls /whatsapp/status every 3s. Stops when connected. Resumes if disconnected.
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const pollStatus = async () => {
+      try {
+        const r = await api.get('/whatsapp/status');
         if (r.data.connected) {
           setConnected(true); setQrCode(null); setReconnecting(false);
           localStorage.setItem('cc-wa-connected', 'true');
-        } else if (r.data.qr) {
-          setQrCode(r.data.qr); setConnected(false);
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        } else {
+          if (r.data.qr) setQrCode(r.data.qr);
+          setConnected(false);
         }
-      }).catch(() => {});
+      } catch (e) {
+        console.warn('[WhatsApp] status poll failed:', (e as any)?.message);
+      }
     };
-    socket.on('connect', refreshFromRest);
-    socket.on('reconnect', refreshFromRest);
+    const startPolling = () => {
+      if (pollTimer) return;
+      pollStatus();
+      pollTimer = setInterval(pollStatus, 3000);
+    };
+    // Kick off polling immediately
+    startPolling();
+    // Connection events still come via socket (single emit, low cost) — these toggle polling
     socket.on('connection:status', (data: any) => {
       if (data.connected) {
         setConnected(true); setQrCode(null); setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
-      } else if (data.qrCode || data.qr) {
-        setQrCode(data.qrCode || data.qr);
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      } else {
+        // Resumed disconnect → restart polling for fresh QR
+        startPolling();
       }
-      // Don't set disconnected from socket — let poll handle it to avoid flash
-    });
-    socket.on('qr', (data: any) => {
-      const newQr = typeof data === 'string' ? data : (data?.qr || data?.qrCode);
-      if (newQr) { setQrCode(newQr); setConnected(false); }
     });
     socket.on('new_whatsapp_file', (file: any) => {
       const phone = file.phoneNumber || file.customerId || 'unknown';
@@ -267,7 +276,10 @@ export default function WhatsApp() {
     });
     // Request notification permission
     if (Notification.permission === 'default') Notification.requestPermission();
-    return () => { socket.disconnect(); };
+    return () => {
+      socket.disconnect();
+      if (pollTimer) clearInterval(pollTimer);
+    };
   }, []);
 
   const groupMessages = useCallback((msgs: Message[]) => {
