@@ -24,3 +24,7 @@ frontend/dist
 worker/
 auth_info/
 *.json.bak
+
+# Stray local data
+whatsapp/
+*.heapsnapshot
