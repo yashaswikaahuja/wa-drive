@@ -109,6 +109,51 @@ The hub auto-restarts when QR is stuck >45s. If still stuck:
 
 **Reason 515 (restartRequired)** = normal Baileys handoff after pairing — followed by Connected event.
 
+### Saved contact name not showing on dashboard
+The resolver (whatsapp-web.js) provides operator's saved contact names. If names show as WA push names (sender's display name) or just phone numbers:
+
+1. **Check resolver is logged in:**
+   ```bash
+   gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="curl -s http://localhost:3200/health"
+   ```
+   Should show `"connected":true`. If false, scan QR at:
+   `http://34.100.147.20:3200/qr-page?secret=wa-service-secret-2024`
+
+2. **Check worker for ReferenceError or other silent failures:**
+   ```bash
+   gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="sudo -u kishy pm2 logs whatsapp-service --nostream --lines 30 --err"
+   ```
+   `WA_SECRET is not defined` means worker code references undefined var — redeploy `whatsapp-service/index.js` from master.
+
+3. **Verify resolver returns the name directly:**
+   ```bash
+   gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="curl -s 'http://localhost:3200/contact?phone=919006615450' -H 'x-service-secret: wa-service-secret-2024'"
+   ```
+   Should return `{"phone":"...","name":"<saved name>"}`. If `name:null`, the operator hasn't saved that contact in their phone book.
+
+4. **Backfill old customers:** Run `node /opt/cybercontrol-hub/backend/backfill-saved-names.cjs` (reads `scripts/backfill-saved-names.js` from repo).
+
+### Resolver stuck — won't init Chromium
+Symptom: `[Resolver] Init failed: The browser is already running for /opt/whatsapp/resolver/session/session`
+
+Cause: orphan Chrome process holding the userDataDir, OR stale SingletonLock files from a crashed previous run.
+
+**Fix:** `bash recover-resolver.sh` — kills orphans, removes locks, restarts cleanly.
+
+### Same WhatsApp number receives messages twice (duplicate uploads)
+Two workspaces are paired to the same WA number. Each Baileys session is its own linked device, so both receive every message.
+
+**Diagnose:** `health-check.sh` flags this. Or query DB:
+```sql
+SELECT phone_number, count(*) FROM whatsapp_sessions
+WHERE status='connected' GROUP BY phone_number HAVING count(*) > 1;
+```
+
+**Fix:** Decide which workspace keeps the number, delete the other's session creds:
+```bash
+gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="sudo rm -rf /opt/whatsapp/service/sessions/<WORKSPACE_ID> && sudo -u kishy pm2 restart whatsapp-service"
+```
+
 ### Hub session permissions broken (after manual SSH/chown)
 ```bash
 gcloud compute ssh cybercontrol-whatsapp --zone=asia-south1-a --command="sudo chown -R kishy:kishy /opt/whatsapp/service/sessions /opt/whatsapp/service/upload_queue && sudo -u kishy pm2 restart whatsapp-service"
