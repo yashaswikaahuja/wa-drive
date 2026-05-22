@@ -216,6 +216,29 @@ Checks:
 
 ## Extension (Chrome AutoFill v5.47+)
 
+### Repository layout
+
+```
+extension/                      ← runs IN THE BROWSER (operator's Chrome)
+├── manifest.json, background.js, content.js, popup.{html,js}
+├── autofill/
+│   ├── extractor.js, mapper.js, planner.js, executor.js
+│   └── plugins/                ← per-component-type adapters
+│       ├── interface.js, cascade-select.js, ng-dropdown.js, button-click.js
+└── scripts/
+    ├── fixes/                  ← historical Python patches (already applied)
+    └── tests/                  ← node-runnable autofill smoke tests
+
+extension-service/              ← runs ON THE SERVER (GCP#1, port 3300)
+├── index.js, db.js, auth.js
+└── routes/
+    ├── profiles.js             ← workspace-scoped profile list + autofill data
+    ├── mappings.js             ← global form_field → profileKey mappings
+    └── adapters.js             ← global per-site component selectors
+```
+
+The frontend Sidebar shows extension status: 🟢 connected, 🟡 connecting, 🔴 off.
+
 ### Connection status indicator (sidebar)
 The frontend shows a colored dot at the bottom of the sidebar:
 - 🟢 Green = extension connected, version shown

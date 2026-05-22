@@ -1,74 +1,50 @@
+// PM2 ecosystem — runs hub + worker + resolver on the same VM (GCP#1).
+// Deploy: pm2 start ecosystem.config.cjs --env production
+// All apps share the same .env via dotenv (each app loads its own).
+// SECRETS: WA_SECRET must be identical across hub and worker.
 module.exports = {
   apps: [
     {
       name: 'cybercontrol-hub',
-      script: '/opt/cybercontrol-hub/backend/dist/server.js',
+      script: '/opt/cybercontrol-hub/backend/dist/index.js',
       cwd: '/opt/cybercontrol-hub/backend',
-      interpreter: 'node',
-      interpreter_args: '--max-old-space-size=256',
       env: {
         NODE_ENV: 'production',
         PORT: '3000',
-        GROQ_API_KEY: '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',
-        WORKER_SECRET: 'cybercontrol-worker-secret-2024',
+        // WA_SECRET, JWT_SECRET, DATABASE_URL, GOOGLE_*, GROQ_API_KEY come from .env
       },
-      // Restart if process exceeds 300MB RSS
-      max_memory_restart: '300M',
-      // Wait 5s before restarting after a crash
-      restart_delay: 5000,
-      // Stop restarting after 10 crashes in a row (prevents crash loop)
-      max_restarts: 10,
-      min_uptime: '10s',
-      // Merge stdout + stderr into one log file
-      merge_logs: true,
-      log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      out_file: '/home/bharattvv542/.pm2/logs/hub-out.log',
-      error_file: '/home/bharattvv542/.pm2/logs/hub-error.log',
-      // Kill timeout before SIGKILL (give app time to close connections)
-      kill_timeout: 5000,
-      // Don't auto-restart on intentional stop
       autorestart: true,
-      watch: false,
+      max_memory_restart: '500M',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
     {
-      name: 'whatsapp-worker',
-      script: 'npm',
-      args: 'start',
-      cwd: '/opt/whatsapp-worker/worker',
-      interpreter: 'none',
+      name: 'whatsapp-service',
+      script: '/opt/whatsapp/service/index.js',
+      cwd: '/opt/whatsapp/service',
       env: {
         NODE_ENV: 'production',
-        PORT: '3002',
-        HUB_URL: 'http://localhost:3000',
-        WORKER_SECRET: 'cybercontrol-worker-secret-2024',
+        WA_PORT: '3100',
+        // Co-located: localhost = no DNS, no TLS, no nginx
+        PARENT_URL: 'http://localhost:3000',
+        AUTH_DIR: '/opt/whatsapp/service/sessions',
+        RESOLVER_URL: 'http://localhost:3200',
+        // SERVICE_SECRET must be identical to hub's WA_SECRET
       },
-      max_memory_restart: '300M',
-      restart_delay: 8000,
-      max_restarts: 10,
-      min_uptime: '15s',
-      merge_logs: true,
-      log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      out_file: '/home/bharattvv542/.pm2/logs/worker-out.log',
-      error_file: '/home/bharattvv542/.pm2/logs/worker-error.log',
-      kill_timeout: 8000,
       autorestart: true,
-      watch: false,
+      max_memory_restart: '300M',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
     {
-      name: 'cloudflare-tunnel',
-      script: 'cloudflared',
-      args: 'tunnel --url http://localhost:3000',
-      interpreter: 'none',
-      max_memory_restart: '100M',
-      restart_delay: 5000,
-      max_restarts: 20,
-      min_uptime: '5s',
-      merge_logs: true,
-      log_date_format: 'YYYY-MM-DD HH:mm:ss',
-      out_file: '/home/bharattvv542/.pm2/logs/tunnel-out.log',
-      error_file: '/home/bharattvv542/.pm2/logs/tunnel-error.log',
+      name: 'whatsapp-resolver',
+      script: '/opt/whatsapp/resolver/index.js',
+      cwd: '/opt/whatsapp/resolver',
+      env: {
+        NODE_ENV: 'production',
+        RESOLVER_PORT: '3200',
+      },
       autorestart: true,
-      watch: false,
+      max_memory_restart: '500M',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss',
     },
   ],
 };
