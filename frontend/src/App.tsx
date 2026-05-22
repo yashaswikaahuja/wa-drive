@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
-const WORKSPACE_ID = 'demo-workspace-1';
+const WORKSPACE_ID = '11111111-1111-1111-1111-111111111111';
 
 interface FileItem {
   id: string; file_name: string; sender_name: string; sender_phone: string;

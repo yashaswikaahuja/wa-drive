@@ -11,10 +11,26 @@ interface Session {
 const sessions = new Map<string, Session>();
 export const sessionEvents = new EventEmitter();
 
+import * as fs from 'fs';
+
 const PUPPETEER_ARGS = [
   '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage',
-  '--disable-gpu', '--single-process', '--no-zygote'
+  '--disable-gpu', '--no-zygote'
 ];
+
+function findChrome(): string | undefined {
+  const candidates = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ];
+  for (const p of candidates) if (fs.existsSync(p)) return p;
+  return undefined;
+}
+
+const CHROME_PATH = findChrome();
 
 export function getSession(workspaceId: string) {
   return sessions.get(workspaceId) || null;
@@ -31,7 +47,7 @@ export async function startSession(workspaceId: string) {
 
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: workspaceId, dataPath: './sessions' }),
-    puppeteer: { headless: true, args: PUPPETEER_ARGS }
+    puppeteer: { headless: true, args: PUPPETEER_ARGS, executablePath: CHROME_PATH }
   });
 
   const session: Session = { client, status: 'connecting', qr: null, phone: null };
