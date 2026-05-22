@@ -1,6 +1,36 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useEffect, useState } from 'react';
 import { useAuthStore } from '../features/auth/store';
+import { extensionBridge } from './extensionBridge';
+
+// Extension connection status indicator
+const ExtensionStatus = memo(() => {
+  const [status, setStatus] = useState<'unknown' | 'connecting' | 'connected' | 'disconnected'>('unknown');
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => extensionBridge.onStatus((s, v) => { setStatus(s); setVersion(v); }), []);
+  const dot =
+    status === 'connected' ? 'bg-green-500' :
+    status === 'connecting' ? 'bg-yellow-500 animate-pulse' :
+    status === 'disconnected' ? 'bg-red-500' :
+    'bg-gray-500';
+  const label =
+    status === 'connected' ? `Extension v${version || '?'}` :
+    status === 'connecting' ? 'Connecting…' :
+    status === 'disconnected' ? 'Extension off' :
+    'Checking…';
+  const tooltip =
+    status === 'disconnected'
+      ? 'Install or enable CyberControl extension. Will retry automatically.'
+      : status === 'connected'
+      ? `Extension connected — token auto-refreshed every 60s`
+      : '';
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-[#0a0f1c]" title={tooltip}>
+      <span className={`w-2 h-2 rounded-full ${dot}`} />
+      <span className="text-[11px] text-gray-400">{label}</span>
+    </div>
+  );
+});
 
 const OPERATOR_NAV = [
   { path: '/app', icon: '📊', label: 'Dashboard', end: true },
@@ -52,7 +82,8 @@ const Sidebar = memo(({ user, logout }: any) => {
           : <NavItem key={n.path} {...n} />
         )}
       </nav>
-      <div className="p-3 border-t border-white/5">
+      <div className="p-3 border-t border-white/5 space-y-2">
+        <ExtensionStatus />
         <div className="flex items-center gap-2 px-2">
           <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 text-xs font-bold">
             {user?.name?.[0] || '?'}

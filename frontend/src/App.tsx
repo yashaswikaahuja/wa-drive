@@ -35,7 +35,10 @@ export default function App() {
   useEffect(() => {
     if (isAuthenticated && accessToken) {
       extensionBridge.connect({ accessToken, refreshToken, user, backendUrl: API_URL }).catch(() => {});
+    } else {
+      extensionBridge.disconnect();
     }
+    return () => { /* keep retry loop alive on route change */ };
   }, [isAuthenticated, accessToken]);
   if (!isAuthenticated) return <Login />;
 

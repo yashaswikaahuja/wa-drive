@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.46",
+  "version": "5.47",
   "description": "Auto-fill SSC/Railway/NEET forms from CyberControl student profiles",
   "permissions": [
     "storage",
@@ -24,7 +24,6 @@
     {
       "matches": [
         "*://app.cybercontrol.fun/*",
-        "*://frontend-pi-ochre-71.vercel.app/*",
         "*://*.ssc.nic.in/*",
         "*://*.ssc.gov.in/*",
         "*://*.rrbcdg.gov.in/*",
