@@ -8,11 +8,30 @@ let workerSocket: any = null;
 let workerConnected = false;
 let lastQrCode: string | null = null;
 
+// Per-workspace QR cache (latest QR for each workspace)
+const workspaceQRs = new Map<string, string | null>();
+
 export function getIO() { return io; }
 export function getHubStatus() { return { connected: workerConnected, qrCode: lastQrCode }; }
+export function getWorkspaceQR(wsId: string): string | null {
+  return workspaceQRs.get(wsId) || null;
+}
+export function setWorkspaceQR(wsId: string, qr: string | null): void {
+  if (qr) workspaceQRs.set(wsId, qr);
+  else workspaceQRs.delete(wsId);
+}
 
 export function setupSocket(httpServer: HttpServer) {
-  io = new SocketIOServer(httpServer, { cors: { origin: '*', methods: ['GET', 'POST'] } });
+  io = new SocketIOServer(httpServer, {
+    cors: { origin: '*', methods: ['GET', 'POST'] },
+    // Prefer websocket; allow polling as fallback only
+    transports: ['websocket', 'polling'],
+    // Faster pings keep the connection healthy through proxies
+    pingInterval: 20000,
+    pingTimeout: 25000,
+    // Allow long-lived connections
+    maxHttpBufferSize: 1e7,
+  });
 
   io.on('connection', (socket) => {
     // Auto-register worker
@@ -39,14 +58,22 @@ export function setupSocket(httpServer: HttpServer) {
       socket.emit('connection:status', { connected: workerConnected, ...(lastQrCode ? { qrCode: lastQrCode } : {}) });
     });
 
-    // Join workspace room via JWT
+    // Join workspace room via JWT and immediately send cached QR if any
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    let workspaceId: string | null = null;
     if (token) {
       try {
         const decoded: any = jwt.verify(token as string, JWT_SECRET);
         if (decoded.workspaceId) {
+          workspaceId = decoded.workspaceId;
           socket.join(decoded.workspaceId);
           console.log('[Socket] Joined room:', decoded.workspaceId.slice(0, 8));
+          // Send cached QR immediately to this socket if available
+          const cachedQR = workspaceQRs.get(decoded.workspaceId);
+          if (cachedQR) {
+            socket.emit('qr', { qr: cachedQR, workspaceId: decoded.workspaceId });
+            socket.emit('connection:status', { connected: false, qrCode: cachedQR, workspaceId: decoded.workspaceId });
+          }
         }
       } catch {}
     }

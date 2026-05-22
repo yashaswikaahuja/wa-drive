@@ -214,16 +214,44 @@ export default function WhatsApp() {
     }).catch(() => {});
     const baseUrl = SOCKET_URL;
     const token = useAuthStore.getState().accessToken || '';
-    const socket = io(baseUrl, { transports: ['polling', 'websocket'], reconnectionAttempts: 3, timeout: 5000, auth: { token }, query: { token } });
+    const socket = io(baseUrl, {
+      // WebSocket FIRST for low latency, polling only as last resort
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
+      auth: { token },
+      query: { token },
+    });
     socketRef.current = socket;
+    // On connect/reconnect, fetch fresh QR & status from REST as fallback
+    const refreshFromRest = () => {
+      api.get('/whatsapp/status').then(r => {
+        if (r.data.connected) {
+          setConnected(true); setQrCode(null); setReconnecting(false);
+          localStorage.setItem('cc-wa-connected', 'true');
+        } else if (r.data.qr) {
+          setQrCode(r.data.qr); setConnected(false);
+        }
+      }).catch(() => {});
+    };
+    socket.on('connect', refreshFromRest);
+    socket.on('reconnect', refreshFromRest);
     socket.on('connection:status', (data: any) => {
       if (data.connected) {
         setConnected(true); setQrCode(null); setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
+      } else if (data.qrCode || data.qr) {
+        setQrCode(data.qrCode || data.qr);
       }
       // Don't set disconnected from socket — let poll handle it to avoid flash
     });
-    socket.on('qr', (data: any) => setQrCode(data.qr || data));
+    socket.on('qr', (data: any) => {
+      const newQr = typeof data === 'string' ? data : (data?.qr || data?.qrCode);
+      if (newQr) { setQrCode(newQr); setConnected(false); }
+    });
     socket.on('new_whatsapp_file', (file: any) => {
       const phone = file.phoneNumber || file.customerId || 'unknown';
       const name = file.customerName || file.phoneNumber || 'Unknown';
