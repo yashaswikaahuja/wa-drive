@@ -10,6 +10,7 @@ import http from 'http';
 const PORT = process.env.WA_PORT || 3100;
 const PARENT_URL = process.env.PARENT_URL || 'https://api.cybercontrol.fun';
 const SERVICE_SECRET = process.env.SERVICE_SECRET || 'wa-service-secret-2024';
+const WA_SECRET = process.env.WA_SECRET || SERVICE_SECRET; // alias for newer code paths
 const AUTH_DIR = process.env.AUTH_DIR || './sessions';
 const RESOLVER_URL = process.env.RESOLVER_URL || 'http://localhost:3200';
 
@@ -103,23 +104,30 @@ async function startSession(workspaceId) {
       if (!hasMedia) continue;
 
       const rawJid = msg.key.remoteJid || '';
+      const participantJid = msg.key.participant || '';
+      // For groups, rawJid is the group, real sender is in participant
+      const senderJid = rawJid.endsWith('@g.us') ? participantJid : rawJid;
       let phone;
       let profilePicUrl = null;
       let savedName = null;
 
-      if (rawJid.endsWith('@s.whatsapp.net')) {
-        phone = rawJid.replace('@s.whatsapp.net', '');
-        try { profilePicUrl = await sock.profilePictureUrl(rawJid, 'image'); } catch {}
-        // Fetch saved contact name from resolver (operator's phone book)
+      if (senderJid.endsWith('@s.whatsapp.net')) {
+        phone = senderJid.replace('@s.whatsapp.net', '');
+        try { profilePicUrl = await sock.profilePictureUrl(senderJid, 'image'); } catch {}
         try {
           const r = await fetch(`${RESOLVER_URL}/contact?phone=${phone}`, { headers: { 'x-service-secret': WA_SECRET } });
           if (r.ok) {
             const data = await r.json();
             savedName = data.name || null;
+            console.log(`[WA] phone ${phone} resolver returned name=${data.name}`);
+          } else {
+            console.warn(`[WA] phone ${phone} resolver HTTP ${r.status}`);
           }
-        } catch {}
-      } else if (rawJid.endsWith('@lid')) {
-        const lidNum = rawJid.replace('@lid', '');
+        } catch (e) {
+          console.warn(`[WA] phone ${phone} resolver failed: ${e.message}`);
+        }
+      } else if (senderJid.endsWith('@lid')) {
+        const lidNum = senderJid.replace('@lid', '');
         try {
           const r = await fetch(`${RESOLVER_URL}/resolve?lid=${lidNum}`, { headers: { 'x-service-secret': WA_SECRET } });
           if (r.ok) {
@@ -127,11 +135,18 @@ async function startSession(workspaceId) {
             phone = data.phone || lidNum;
             profilePicUrl = data.dpUrl || null;
             savedName = data.name || null;
-            if (data.phone) console.log(`[WA] LID resolved: ${lidNum} → ${data.phone}${savedName ? ' (' + savedName + ')' : ''}`);
-          } else { phone = lidNum; }
-        } catch { phone = lidNum; }
+            console.log(`[WA] LID ${lidNum} → ${phone}${savedName ? ' (' + savedName + ')' : ''}`);
+          } else {
+            console.warn(`[WA] LID ${lidNum} resolver HTTP ${r.status}`);
+            phone = lidNum;
+          }
+        } catch (e) {
+          console.warn(`[WA] LID ${lidNum} resolver error: ${e.message}`);
+          phone = lidNum;
+        }
       } else {
-        phone = rawJid.replace(/@.*/, '');
+        phone = senderJid.replace(/@.*/, '') || rawJid.replace(/@.*/, '');
+        console.warn(`[WA] sender JID has unknown format: ${senderJid} (rawJid=${rawJid})`);
       }
       // Priority: operator's saved contact name > sender's WA display name > phone
       const pushName = savedName || msg.pushName || phone;
