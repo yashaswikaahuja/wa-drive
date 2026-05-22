@@ -16,13 +16,7 @@ export function getIO() { return io; }
 export function getHubStatus() { return { connected: workerConnected, qrCode: lastQrCode }; }
 export function getWorkspaceQR(wsId: string): string | null {
   const entry = workspaceQRs.get(wsId);
-  if (!entry) return null;
-  // Expire stale QRs — caller should request fresh from worker
-  if (Date.now() - entry.updatedAt > QR_TTL_MS) {
-    workspaceQRs.delete(wsId);
-    return null;
-  }
-  return entry.qr;
+  return entry?.qr || null;
 }
 export function setWorkspaceQR(wsId: string, qr: string | null): void {
   if (qr) workspaceQRs.set(wsId, { qr, updatedAt: Date.now() });

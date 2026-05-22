@@ -2,25 +2,36 @@ import { Router } from 'express';
 import { pool } from '../../db.js';
 import { authMiddleware } from '../../middleware/auth.js';
 import { WA_SERVICE, WA_SECRET } from '../../config.js';
-import { getIO, getWorkspaceQR, setWorkspaceQR } from '../../socket/index.js';
+import { getIO, getWorkspaceQR, setWorkspaceQR, getWorkspaceQRWithAge } from '../../socket/index.js';
 
 const router = Router();
 
 router.get('/status', authMiddleware, async (req: any, res) => {
   const wsId = req.user.workspaceId;
-  // Return cached QR INSTANTLY if we have one (polling-friendly path)
-  const cached = getWorkspaceQR(wsId);
+  // Snapshot cache state BEFORE worker call (we need ageMs for staleness check)
+  const before = getWorkspaceQRWithAge(wsId);
   try {
     const r = await fetch(WA_SERVICE + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
-    // Update cache from worker truth
-    if (data?.qr) setWorkspaceQR(wsId, data.qr);
+    // Update cache: only refresh timestamp when worker returns a DIFFERENT QR
+    if (data?.qr) {
+      if (data.qr !== before.qr) {
+        // New QR! Refresh cache (resets timestamp).
+        setWorkspaceQR(wsId, data.qr);
+      }
+      // If same QR, leave cache untouched — its age keeps growing so we can detect staleness
+    }
     if (data?.connected) setWorkspaceQR(wsId, null);
-    // Self-heal: if worker is in qr_pending but has same QR for >40s, restart session
-    // This covers Baileys hangs where session.qr stops getting updated
-    if (!data.connected && data.status === 'qr_pending' && cached && data.qr === cached) {
-      // QR returned to us is the same as cached — TTL expired, force restart
-      console.log(`[Hub] QR stale for ws=${wsId.slice(0, 8)} — forcing session restart`);
+    // Self-heal: if worker is stuck on the same QR for >45s (Baileys should regenerate every ~20s),
+    // force a restart so the user gets a fresh scannable QR
+    if (
+      !data.connected &&
+      data.status === 'qr_pending' &&
+      before.qr &&
+      data.qr === before.qr &&
+      before.ageMs > 45_000
+    ) {
+      console.log(`[Hub] QR stale (${Math.round(before.ageMs/1000)}s) for ws=${wsId.slice(0, 8)} — force restart`);
       fetch(WA_SERVICE + '/sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
@@ -31,11 +42,10 @@ router.get('/status', authMiddleware, async (req: any, res) => {
       connected: !!data.connected,
       status: data.status || 'unknown',
       phone: data.phone || null,
-      qr: data.qr || cached || null,
+      qr: data.qr || before.qr || null,
     });
   } catch {
-    // If worker is unreachable, still return cached QR so polling keeps working
-    res.json({ connected: false, status: 'service_down', qr: cached || null });
+    res.json({ connected: false, status: 'service_down', qr: before.qr || null });
   }
 });
 
