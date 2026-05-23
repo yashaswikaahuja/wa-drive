@@ -65,56 +65,19 @@ function fuzzyMatch(formFields, profile) {
     var labelEn = (field.label || '').replace(/[^\x00-\x7F]/g, ' ').trim();
     var ident = [labelEn, labelEn, field.placeholder, field.id, field.name]
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-    // Re-type/confirm mirror fields — fill with same value as primary field
-    var isRetype = /retype|re_type|reenter|re_enter|confirm|retypeFullName|retypefullname|re_type_|retype_/i.test(ident) ||
-                     /^re_type|^retype|^re_enter|^reenter|^confirm/i.test(ident) ||
-                     field.id?.toLowerCase().includes('retype') || field.name?.toLowerCase().includes('retype') || field.id?.toLowerCase().startsWith('c') && field.id?.length > 2;
-    // Skip verify fields (SSC pattern) but NOT retype fields (RRB pattern)
-    // Skip verify/confirm twin fields in the MAIN loop — handled by post-pass below
-    // which mirrors the primary's value. Without this skip the main loop would
-    // pick up its own (often different) match e.g. on SSC OTR:
-    //   '10. Matriculation Roll Number'      -> roll_number_10th = 1500099 ✓
-    //   'a. Verify Roll Number'              -> roll_number      = 0647819 ✗
+    // Skip ALL retype/verify/confirm twin fields in the MAIN loop.
+    // Post-pass at the end of fuzzyMatch mirrors the primary's already-mapped
+    // value. The legacy isRetype handler below was buggy: when it failed to
+    // find a primary by id/label match, it fell through to alias-matching
+    // which substring-matched 'name' against 'father_s_name', making
+    // 'Re-type Father's Name' get filled with profile.name (Sandhya Kumari)
+    // instead of profile.father_name (Sudhir Prasad). [seen on RRB 2026-05-23]
     var rawLbl = (field.label || '').trim();
-    var isTwin = /^(?:[a-z]\.|\d+\.|\(\w\)|[ixv]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b/i.test(rawLbl);
-    if (isTwin && !isRetype) continue;
-    if (/^verify_|_and_verify/i.test(ident) && !ident.includes('id') && !isRetype) continue;
-    if (isRetype) {
-      // Find the primary field this mirrors by matching selector/id/label
-      var baseIdent = ident.replace(/retype|re_type|reenter|re_enter|confirm/gi, '').replace(/^[_\s]+|[_\s]+$/g, '');
-      var baseId = (field.id || '').replace(/^c(?=[a-z])/i, '').replace(/^confirm/i, '').replace(/^retype/i, '');
-      // First: try to find already-mapped field with matching base id
-      let matched = false;
-      for (const [sel, val] of Object.entries(mapping)) {
-        var selId = sel.replace('#', '').replace(/\[.*\]/, '');
-        if (selId && baseId && selId.toLowerCase() === baseId.toLowerCase()) {
-          mapping[field.selector] = { value: val.value, type: field.type };
-          matched = true; break;
-        }
-      }
-      // Fallback: match by label similarity against already-mapped fields
-      if (!matched) {
-        for (const f2 of formFields) {
-          if (f2.selector === field.selector || !mapping[f2.selector]) continue;
-          var f2Label = (f2.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-          if (baseIdent && f2Label && (baseIdent.includes(f2Label) || f2Label.includes(baseIdent.split(' ')[0]))) {
-            mapping[field.selector] = { value: mapping[f2.selector].value, type: field.type };
-            matched = true; break;
-          }
-        }
-      }
-      // Last fallback: profile key lookup
-      if (!matched) {
-        for (const [key, aliases] of Object.entries(FIELD_ALIASES)) {
-          if (!profile[key]) continue;
-          if (aliases.some(a => baseIdent.includes(a)) || baseIdent.includes(key)) {
-            mapping[field.selector] = { value: profile[key], type: field.type };
-            break;
-          }
-        }
-      }
-      continue;
-    }
+    var isTwin = /^(?:[a-z]\.|\d+\.|\(\w\)|[ixv]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b/i.test(rawLbl)
+              || /retype|re_type|reenter|re_enter|^confirm/i.test(ident)
+              || (field.id && /^(c|re|retype|verify|confirm)/i.test(field.id))
+              || (field.name && /^(re|retype|verify|confirm)/i.test(field.name));
+    if (isTwin) continue;
 
     // Skip yes/no question radio buttons (not data fields)
     if (field.type === 'radio' && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
