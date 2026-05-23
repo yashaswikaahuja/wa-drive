@@ -32,3 +32,5 @@ whatsapp/
 # Legacy in-memory data store (replaced by DB)
 backend/data/
 *.legacy
+
+corpus/node_modules/

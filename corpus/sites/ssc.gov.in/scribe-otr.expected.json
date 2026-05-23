@@ -1,0 +1,20 @@
+{
+  "site": "ssc.gov.in",
+  "form": "scribe-otr",
+  "framework": "Angular",
+  "url": "https://ssc.gov.in/candidate-portal/one-time-registration/scribe-otr-details",
+  "minFields": 36,
+  "fieldsByType": {
+    "text": 16,
+    "checkbox": 2,
+    "radio": 4,
+    "textarea": 2,
+    "ng-dropdown": 12
+  },
+  "notes": [
+    "Custom ng-dropdown widgets (12) — all share id='dropsection' (invalid HTML, real on live site)",
+    "Labels are <div class='label'> not <label>",
+    "Checkbox '#agree' has Hindi+English label that's actually a NOTE, not an agreement (false positive risk)",
+    "Last checkbox is the real 'I confirm...' agreement — must auto-check"
+  ]
+}
