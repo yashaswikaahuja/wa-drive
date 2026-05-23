@@ -1,12 +1,12 @@
 async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters, allFields) {
   portalAdapters = portalAdapters || {};
-  console.log('[CC] v5.17 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
+  console.log('[CC] fillFormFieldsSequential started v' + ((typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj') + ', fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
   function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
 
   // ── Runtime version constants ─────────────────────────────────────────────
-  const RUNTIME_VERSION = '4.47';
+  const RUNTIME_VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj';
   const STRATEGY_VERSION = '1.0';
   const WAIT_ENGINE_VERSION = '1.0';
 

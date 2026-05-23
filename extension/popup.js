@@ -1,4 +1,4 @@
-const VERSION = '5.43';
+const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
 
