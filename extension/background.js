@@ -124,7 +124,7 @@ async function runJobDispatch(envelope, tabId) {
 
   // Inject runtime + run autofill pipeline (reuse existing executor)
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
 
     const result = await chrome.scripting.executeScript({
       target: { tabId },

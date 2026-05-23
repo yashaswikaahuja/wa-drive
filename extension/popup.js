@@ -144,6 +144,11 @@ fillBtn.addEventListener('click', async () => {
           'autofill/plugins/ng-dropdown.js',
           'autofill/plugins/button-click.js',
           'autofill/plugins/keystroke-input.js',
+          'drivers/dispatch.js',
+          'drivers/dom.js',
+          'drivers/input.js',
+          'drivers/select.js',
+          'drivers/interaction.js',
           'autofill/extractor.js',
           'autofill/mapper.js',
           'autofill/executor.js'
