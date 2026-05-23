@@ -122,24 +122,36 @@ fillBtn.addEventListener('click', async () => {
 
     // Inject the network monitor in PAGE world — wraps fetch + XMLHttpRequest
     // so the autofill executor can wait for AJAX idle instead of hardcoded delays.
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      world: 'MAIN',
-      files: ['autofill/plugins/network-monitor.js'],
-    });
+    // Wrapped in try/catch — some pages (chrome://, sandboxed iframes, CSP-strict
+    // sites) reject MAIN world injection; in those cases the executor falls back
+    // to fixed delays via waitForNetworkIdle's 'monitor missing' path.
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: 'MAIN',
+        files: ['autofill/plugins/network-monitor.js'],
+      });
+    } catch (e) {
+      console.warn('[CC] network monitor injection failed (will use fallback delays):', e.message);
+    }
     // Inject all autofill scripts in ONE call — they must share the same scope (ISOLATED world)
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: [
-        'autofill/plugins/interface.js',
-        'autofill/plugins/cascade-select.js',
-        'autofill/plugins/ng-dropdown.js',
-        'autofill/plugins/button-click.js',
-        'autofill/extractor.js',
-        'autofill/mapper.js',
-        'autofill/executor.js'
-      ]
-    });
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: [
+          'autofill/plugins/interface.js',
+          'autofill/plugins/cascade-select.js',
+          'autofill/plugins/ng-dropdown.js',
+          'autofill/plugins/button-click.js',
+          'autofill/extractor.js',
+          'autofill/mapper.js',
+          'autofill/executor.js'
+        ]
+      });
+    } catch (e) {
+      showStatus('Failed to load autofill scripts: ' + e.message, '#ef4444');
+      return;
+    }
 
     // Get Groq key from backend settings
     let groqKey = '';
