@@ -746,7 +746,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           if (el) el.click();
           await waitForDOMQuiet(800);
         }
-        await waitForNetworkIdle(100, 1500); // was setTimeout(500) — now exits early when AJAX done
+        await waitForNetworkIdle(100, 1500); // was setTimeout(500) ï¿½ now exits early when AJAX done
       } else if (isNgDropdown) {
         // ng-dropdown: use plugin if available
         if (!el) { _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); continue; }
@@ -764,7 +764,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         } else {
           fillOne(selector, value, type);
         }
-        await waitForNetworkIdle(100, 1500); // was setTimeout(500) — now exits early when AJAX done
+        await waitForNetworkIdle(100, 1500); // was setTimeout(500) ï¿½ now exits early when AJAX done
       } else if (isDependent && filled > 0) {
         // Cascade: wait for parent's AJAX to actually complete (vs hardcoded delay).
         // Network monitor counts in-flight fetch + XHR â€” we proceed the moment
