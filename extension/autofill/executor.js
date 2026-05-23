@@ -138,7 +138,19 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
     });
   }
   // Sort by DOM order (sequential top-to-bottom filling)
-  const PRIORITY_KEYS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village_panchayat'];
+  const PRIORITY_KEYS = [
+    'state', 'rajya', 'राज्य',
+    'district', 'jila', 'जिला',
+    'sub_division', 'subdivision', 'sub-division', 'अनुमंडल',
+    'block', 'prakhand', 'प्रखंड',
+    'panchayat', 'village_panchayat', 'पंचायत',
+    'village', 'gram', 'ग्राम', 'mohalla', 'मोहल्ला',
+    'tehsil', 'taluka', 'तहसील',
+    'police_station', 'police-station', 'thana', 'थाना',
+    'post_office', 'post-office', 'डाक घर',
+    'pin_code', 'pincode', 'पिन',
+    'municipal', 'नगर',
+  ];
   const entries = Object.entries(mapping);
   // Sort by actual DOM position (compareDocumentPosition)
   function getEl(sel) {
@@ -705,10 +717,14 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
         }
         await new Promise(r => setTimeout(r, 500));
       } else if (isDependent && filled > 0) {
-        // Cascade: wait for options then fill (plugin or legacy)
-        const waitedEl = await waitForOptions(selector, 1, 8000);
+        // Cascade: wait for parent select's change handlers to fire AJAX,
+        // then wait for child options to populate.
+        // 1. Wait for DOM to stabilize after the previous fill (parent change → AJAX → option append)
+        await waitForDOMQuiet(500);
+        // 2. Wait up to 12s for at least one real option to appear in this select
+        const waitedEl = await waitForOptions(selector, 1, 12000);
         if (!waitedEl) {
-          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', durationMs: 8000, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', durationMs: 12000, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
           continue;
         }
         const _plugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(waitedEl, _fieldCtx) : null;
