@@ -143,6 +143,7 @@ fillBtn.addEventListener('click', async () => {
           'autofill/plugins/cascade-select.js',
           'autofill/plugins/ng-dropdown.js',
           'autofill/plugins/button-click.js',
+          'autofill/plugins/keystroke-input.js',
           'autofill/extractor.js',
           'autofill/mapper.js',
           'autofill/executor.js'

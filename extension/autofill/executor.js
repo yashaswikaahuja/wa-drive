@@ -665,6 +665,21 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         const niv = isTextarea
           ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')
           : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+
+        // Some fields (aadhaar, OTP, captcha, masked inputs) reject value+dispatch
+        // and require real keystroke events. Detect and route to keystrokeFill.
+        const fieldLabel = filledBySource[selector]?.label || '';
+        const needsKeystroke = (typeof window.shouldUseKeystroke === 'function')
+          ? window.shouldUseKeystroke(el, fieldLabel)
+          : false;
+        if (needsKeystroke && typeof window.keystrokeFill === 'function') {
+          // Primary keystroke path — fire-and-forget but await briefly so caller sees update
+          window.keystrokeFill(el, value, { delay: 12 }).catch(() => {});
+          // Yield long enough for at least 1-2 chars to land before returning
+          // (the executor's wait-engine will pick up the rest)
+          return 1;
+        }
+
         el.focus();
         if (niv) niv.set.call(el, value);
         else el.value = value;
@@ -674,6 +689,13 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
         // Also simulate keyboard events for Angular
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
+
+        // Verify the value actually landed; if not, retry with keystroke fill.
+        // Many sites (UIDAI / bank Aadhaar fields) silently reject the value+dispatch
+        // approach but accept char-by-char keystrokes.
+        if (el.value !== String(value) && typeof window.keystrokeFill === 'function') {
+          window.keystrokeFill(el, value, { delay: 12 }).catch(() => {});
+        }
         // ServicePlus: transliterate English→Hindi for paired Hindi field
         if (el.getAttribute('data-type') === 'fullName') {
           const allInputs = Array.from(document.querySelectorAll('input[type="text"]'));
