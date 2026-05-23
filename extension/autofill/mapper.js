@@ -27,6 +27,20 @@ var FIELD_ALIASES = {
   highest_education_qualification: ['highest_education','highest_qualification','highest_level_of_education','highest_level_of_educational'],
   degree_name:         ['degree_name','degree','qualification_name','course_name','programme'],
   university_name:     ['university_name','university','institution_name','college_name','college'],
+  // Generic roll number — Sandhya's profile.roll_number is from 10th cert.
+  // Earlier this was excluded to avoid education-table fields, but in practice
+  // most "Roll Number" labels are top-level identity fields. We restore it.
+  roll_number:         ['roll_number','roll_no','rollno','rollnumber','roll'],
+  // 10th/12th board fields — atomic terms that match labels like "8. Matriculation (10th class) Education Board"
+  board_10th:          ['10th_class','matriculation','class_10','sslc_board','class_x','tenth_class','board_10th','board_10','10th_education','matric_board','matriculation_board'],
+  board_12th:          ['12th_class','intermediate','class_12','class_xii','twelfth_class','board_12th','board_12','12th_education','plus_two','plustwo','hsc_board','intermediate_board','inter_board'],
+  board_name:          ['education_board','exam_board','university_board'],
+  passing_year_10th:   ['10th_passing_year','matriculation_year_of_passing','matric_year','class_10_year','tenth_year_of_passing','sslc_year','year_of_passing_10th','passing_year_10th'],
+  passing_year_12th:   ['12th_passing_year','intermediate_year_of_passing','inter_year','class_12_year','twelfth_year_of_passing','hsc_year','year_of_passing_12th','passing_year_12th','plus_two_year'],
+  marks_10th:          ['10th_marks','10th_percentage','matriculation_marks','matric_percentage','class_10_marks','tenth_marks','sslc_marks','marks_10th'],
+  marks_12th:          ['12th_marks','12th_percentage','intermediate_marks','inter_percentage','class_12_marks','twelfth_marks','hsc_marks','marks_12th','plus_two_marks'],
+  school_name:         ['school_name','school','last_school_attended','name_of_school','institute_name','last_institution'],
+  registration_number: ['registration_number','reg_number','reg_no','registration_no','enrollment_number','enrolment_number'],
   village:        ['village', 'village_name', 'gram', 'gaon', 'txt_village', 'ddl_village'],
   post_office:    ['post_office', 'post', 'po', 'txt_post', 'post_name'],
   police_station: ['police_station', 'thana', 'ps', 'txt_ps', 'ddl_ps'],
@@ -50,7 +64,7 @@ function fuzzyMatch(formFields, profile) {
     // Strip Hindi/non-ASCII chars from label for matching, keep English part
     var labelEn = (field.label || '').replace(/[^\x00-\x7F]/g, ' ').trim();
     var ident = [labelEn, labelEn, field.placeholder, field.id, field.name]
-      .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_');
+      .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
     // Re-type/confirm mirror fields — fill with same value as primary field
     var isRetype = /retype|re_type|reenter|re_enter|confirm|retypeFullName|retypefullname|re_type_|retype_/i.test(ident) ||
                      /^re_type|^retype|^re_enter|^reenter|^confirm/i.test(ident) ||
@@ -124,8 +138,8 @@ function fuzzyMatch(formFields, profile) {
     if (isEducationRow) {
       // Don't skip — try to match education fields from profile
       var eduAliases = {
-        board_10th:         ['board_10th','board_matric','board_class10','10th_board','matric_board','boardname_hs','ddl_boardname_hs'],
-        board_12th:         ['board_12th','board_inter','board_class12','12th_board','inter_board'],
+        board_10th:         ['board_10th','board_matric','board_class10','10th_board','matric_board','boardname_hs','ddl_boardname_hs','matriculation_10th_class_education_board','matriculation_class_education_board','class_10th_education_board','10th_class_education_board','matriculation_education_board','tenth_class_education_board','class_x_education_board','sslc_education_board'],
+        board_12th:         ['board_12th','board_inter','board_class12','12th_board','inter_board','intermediate_education_board','class_12th_education_board','12th_class_education_board','twelfth_education_board','class_xii_education_board','plus_two_education_board','hsc_education_board'],
         roll_no_10th:       ['roll_no_10th','roll_10th','roll_matric','matric_roll','10th_roll'],
         roll_no_12th:       ['roll_no_12th','roll_12th','roll_inter','inter_roll','12th_roll'],
         passing_year_10th:  ['passing_year_10th','year_10th','year_matric','matric_year','10th_year','year_of_passing_10','yearofpassing_hs','ddl_yearofpassing_hs'],
@@ -240,6 +254,77 @@ function fuzzyMatch(formFields, profile) {
       }
     }
   }
+
+  // ── Post-pass: verify/confirm/re-type twin fields mirror their primary ──
+  // Catches "a. Verify Roll Number*" → "9. Roll Number*", "Confirm Email" → "Email", etc.
+  // Runs after main mapping so primaries are already mapped.
+  var TWIN_PREFIX_RE = /^(?:[a-z]\.|\d+\.|\(\w\)|[i-x]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b[\s:_-]*/i;
+  function normLabel(s) {
+    // Strip leading numbering ("1.", "a.", "(i)", "iv.") then non-alphanumerics
+    return (s || '').toLowerCase()
+      .replace(/^\s*(?:\d+\.|[a-z]\.|\([a-z0-9]+\)|[ixv]+\.)\s*/i, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
+  for (const field of formFields) {
+    if (mapping[field.selector]) continue; // already mapped
+    var rawLabel = (field.label || '').trim();
+    if (!rawLabel || !TWIN_PREFIX_RE.test(rawLabel)) continue;
+    // Strip the verify/confirm prefix to get the underlying field name
+    var primaryLabel = rawLabel.replace(TWIN_PREFIX_RE, '').trim();
+    var primaryNorm = normLabel(primaryLabel);
+    if (!primaryNorm) continue;
+    // Find a mapped field whose normalised label matches
+    var primaryField = formFields.find(f =>
+      mapping[f.selector] &&
+      f.selector !== field.selector &&
+      normLabel(f.label || '') === primaryNorm
+    );
+    // Fuzzy fallback: contains relationship
+    if (!primaryField) {
+      primaryField = formFields.find(f => {
+        if (!mapping[f.selector] || f.selector === field.selector) return false;
+        var fNorm = normLabel(f.label || '');
+        return fNorm && primaryNorm && (fNorm.includes(primaryNorm) || primaryNorm.includes(fNorm));
+      });
+    }
+    if (primaryField) {
+      mapping[field.selector] = { value: mapping[primaryField.selector].value, type: field.type };
+    }
+  }
+
+  // ── Post-pass: split date fields (DD / MM / YYYY) ──
+  // Many bank/insurance forms split DOB into 3 small inputs labeled "DD" "MM" "YYYY"
+  // (or "Day"/"Month"/"Year"). We pull from profile.dob to fill them.
+  if (profile.dob) {
+    // Parse DOB - try common formats
+    var dobStr = String(profile.dob).trim();
+    var dobParts = null;
+    // dd/mm/yyyy or dd-mm-yyyy
+    var m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    // yyyy-mm-dd
+    var m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (m1) dobParts = { day: m1[1].padStart(2, '0'), month: m1[2].padStart(2, '0'), year: m1[3] };
+    else if (m2) dobParts = { day: m2[3].padStart(2, '0'), month: m2[2].padStart(2, '0'), year: m2[1] };
+    if (dobParts) {
+      for (const field of formFields) {
+        if (mapping[field.selector]) continue; // already mapped
+        var lbl = (field.label || '').trim();
+        var idn = (field.id || field.name || '').toLowerCase();
+        var ph = (field.placeholder || '').trim();
+        // Match short canonical day/month/year labels (case-insensitive, trimmed)
+        // Could be "DD", "MM", "YYYY", "Day", "Month", "Year", "Date", or placeholders
+        var combined = (lbl + ' ' + ph + ' ' + idn).toLowerCase();
+        var isDay = /^dd$|^day$|day_of_birth|dob_day|birth_day|birthday_dd|^(\(?day\)?)$/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth)(?:[^a-z]|$)/.test(idn);
+        var isMonth = /^mm$|^month$|month_of_birth|dob_month|birth_month|^(\(?month\)?)$/i.test(lbl) || /^mm$|^month$/i.test(ph) || /(?:^|[^a-z])(dob_?month|birth_?month|month_of_birth)(?:[^a-z]|$)/.test(idn);
+        var isYear = /^yyyy$|^yyy$|^year$|year_of_birth|dob_year|birth_year|^(\(?year\)?)$/i.test(lbl) || /^yyyy$|^year$/i.test(ph) || /(?:^|[^a-z])(dob_?year|birth_?year|year_of_birth)(?:[^a-z]|$)/.test(idn);
+        if (isDay) mapping[field.selector] = { value: dobParts.day, type: field.type, profileKey: 'dob' };
+        else if (isMonth) mapping[field.selector] = { value: dobParts.month, type: field.type, profileKey: 'dob' };
+        else if (isYear) mapping[field.selector] = { value: dobParts.year, type: field.type, profileKey: 'dob' };
+      }
+    }
+  }
+
   return mapping;
 }
 
