@@ -137,6 +137,55 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       setTimeout(function() { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
     });
   }
+
+  /**
+   * Resolve when the page network has been idle for `quietMs` consecutive
+   * milliseconds — i.e. the network monitor reports active=0 AND no new
+   * activity for at least `quietMs`. Falls back to a max wait if the monitor
+   * isn't loaded or the network never settles.
+   *
+   * Returns:
+   *   { idle: true, waitedMs }   on idle
+   *   { idle: false, waitedMs }  on timeout
+   */
+  function waitForNetworkIdle(quietMs, maxMs) {
+    quietMs = quietMs || 200;
+    maxMs = maxMs || 8000;
+    return new Promise(function (resolve) {
+      var start = Date.now();
+      var deadline = start + maxMs;
+      var lastSeenActive = -1;
+      var monitorMissing = false;
+      function tick() {
+        var ds = document.body.dataset || {};
+        var active = parseInt(ds.ccAjaxActive || 'NaN', 10);
+        var lastActivity = parseInt(ds.ccAjaxLastActivity || '0', 10);
+        if (Number.isNaN(active)) {
+          // Monitor not installed — fall back to DOM-quiet only
+          monitorMissing = true;
+        }
+        if (Date.now() >= deadline) {
+          resolve({ idle: false, waitedMs: Date.now() - start, monitorMissing });
+          return;
+        }
+        if (monitorMissing) {
+          // No network monitor → wait quietMs unconditionally then resolve
+          setTimeout(function () {
+            resolve({ idle: true, waitedMs: Date.now() - start, monitorMissing: true });
+          }, quietMs);
+          return;
+        }
+        if (active === 0 && lastActivity && Date.now() - lastActivity >= quietMs) {
+          resolve({ idle: true, waitedMs: Date.now() - start });
+          return;
+        }
+        lastSeenActive = active;
+        setTimeout(tick, 50);
+      }
+      tick();
+    });
+  }
+
   // Sort by DOM order (sequential top-to-bottom filling)
   const PRIORITY_KEYS = [
     'state', 'rajya', 'राज्य',
@@ -697,7 +746,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           if (el) el.click();
           await waitForDOMQuiet(800);
         }
-        await new Promise(r => setTimeout(r, 500));
+        await waitForNetworkIdle(100, 1500); // was setTimeout(500) � now exits early when AJAX done
       } else if (isNgDropdown) {
         // ng-dropdown: use plugin if available
         if (!el) { _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); continue; }
@@ -715,16 +764,16 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         } else {
           fillOne(selector, value, type);
         }
-        await new Promise(r => setTimeout(r, 500));
+        await waitForNetworkIdle(100, 1500); // was setTimeout(500) � now exits early when AJAX done
       } else if (isDependent && filled > 0) {
-        // Cascade: wait for parent select's change handlers to fire AJAX,
-        // then wait for child options to populate.
-        // 1. Wait for DOM to stabilize after the previous fill (parent change → AJAX → option append)
-        await waitForDOMQuiet(500);
-        // 2. Wait up to 12s for at least one real option to appear in this select
-        const waitedEl = await waitForOptions(selector, 1, 12000);
+        // Cascade: wait for parent's AJAX to actually complete (vs hardcoded delay).
+        // Network monitor counts in-flight fetch + XHR — we proceed the moment
+        // active=0 AND has been idle for 150ms, OR after maxWait.
+        const _netRes = await waitForNetworkIdle(150, 6000);
+        // After network idle, options should be populated; double-check with poll
+        const waitedEl = await waitForOptions(selector, 1, 4000);
         if (!waitedEl) {
-          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', durationMs: 12000, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', waitedMs: _netRes.waitedMs, networkIdle: _netRes.idle, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
           continue;
         }
         const _plugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(waitedEl, _fieldCtx) : null;

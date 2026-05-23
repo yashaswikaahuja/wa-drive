@@ -120,7 +120,14 @@ fillBtn.addEventListener('click', async () => {
     } catch (e) { console.warn('[CC] full profile fetch failed:', e.message); }
     selectedProfile = fullProfile;
 
-    // Inject all autofill scripts in ONE call — they must share the same scope
+    // Inject the network monitor in PAGE world — wraps fetch + XMLHttpRequest
+    // so the autofill executor can wait for AJAX idle instead of hardcoded delays.
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      world: 'MAIN',
+      files: ['autofill/plugins/network-monitor.js'],
+    });
+    // Inject all autofill scripts in ONE call — they must share the same scope (ISOLATED world)
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: [
