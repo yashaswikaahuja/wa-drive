@@ -156,6 +156,13 @@ fillBtn.addEventListener('click', async () => {
       func: async (profile, backendUrl, accessToken, groqKey) => {
         const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken };
         const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
+        // Stash backend URL + token + formkey on document.body so executor's
+        // post-fill correction observer can authenticate its POSTs
+        try {
+          document.body.setAttribute('data-cc-backend', backendUrl);
+          document.body.setAttribute('data-cc-token', accessToken);
+          document.body.setAttribute('data-cc-formkey', semanticFormKey || '');
+        } catch {}
         if (!formFields.length) return { ok: false, error: 'No form fields detected' };
 
         // Try saved mappings

@@ -796,8 +796,12 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
       if (corrections.length === 0) return;
       document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections));
       if (_ccBackendUrl) {
+        const _ccToken = document.body.getAttribute('data-cc-token') || '';
+        const headers = { 'Content-Type': 'application/json' };
+        if (_ccToken) headers['Authorization'] = 'Bearer ' + _ccToken;
         fetch(_ccBackendUrl + '/corrections', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers,
           body: JSON.stringify({ hostname: location.hostname, semanticFormKey: _ccFormKey, trigger, corrections })
         }).catch(() => {});
       }
