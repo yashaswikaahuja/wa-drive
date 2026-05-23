@@ -91,6 +91,11 @@
    * order; validators that listen to keydown/input/keypress/keyup will see
    * them char-by-char even though they all execute within one JS tick.
    * This is the PRIMARY fill path for all text inputs as of v5.67.
+   *
+   * After typing, dispatches a Tab keydown so site-specific handlers
+   * (RTPS Bihar's English→Hindi transliterator, ASP.NET validation,
+   * jQuery focusout-bound formatters) run as if the user actually
+   * pressed Tab to leave the field.
    */
   window.keystrokeFillSync = function keystrokeFillSync(el, value) {
     if (!el) return false;
@@ -124,6 +129,14 @@
     }
 
     el.dispatchEvent(new Event('change', { bubbles: true }));
+
+    // Dispatch Tab keydown so site-specific keydown handlers run.
+    // RTPS Bihar's transliteration listener fires on Tab/keydown — without this,
+    // the Hindi sibling field stays empty.
+    el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Tab', code: 'Tab', keyCode: 9, which: 9 }));
+    el.dispatchEvent(new KeyboardEvent('keyup',   { bubbles: true, cancelable: false, key: 'Tab', code: 'Tab', keyCode: 9, which: 9 }));
+    // Trigger any focusout/blur handlers (jQuery .blur, ASP validators)
+    el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     try { el.blur(); } catch (e) {}
     return el.value === str;
   };
