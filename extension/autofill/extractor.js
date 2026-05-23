@@ -151,10 +151,28 @@ function extractFormFieldsWithFingerprint() {
 
   // ── Angular ng-select / ng-dropdown custom widgets ──
   // (these are NOT covered by mat-select or [role=combobox] selectors)
-  document.querySelectorAll('ng-select, ng-dropdown, .ng-select, .ng-dropdown').forEach(el => {
+  // Strategy: find ANY container that holds a dropdown-trigger child element
+  // (.value-area, .select-type, .ng-value-container — used by ssc.gov.in / RRB / NTA forms)
+  const ngTriggerSelectors = '.value-area, .select-type, .ng-value-container, .ng-select-container';
+  const ngContainerSelectors = 'ng-select, ng-dropdown, .ng-select, .ng-dropdown, [class*="custom-dropdown"], [class*="select-control"]';
+  const ngCandidates = new Set();
+  // Direct: explicit container classes
+  document.querySelectorAll(ngContainerSelectors).forEach(el => ngCandidates.add(el));
+  // Indirect: any element with a trigger child becomes a candidate (use closest meaningful wrapper)
+  document.querySelectorAll(ngTriggerSelectors).forEach(trigger => {
+    // Walk up to find the field-level container (form-field, .form-group, or parent div)
+    let container = trigger.closest('mat-form-field, .form-field, .form-group, [class*="dropdown"], [class*="select"]');
+    if (!container) container = trigger.parentElement;
+    if (container && container !== document.body) ngCandidates.add(container);
+  });
+
+  ngCandidates.forEach(el => {
     if (isInSkipContext(el)) return;
-    // Skip if it contains a real <select> we already captured
-    if (el.querySelector('select') && formFields.some(f => f.selector.includes(el.querySelector('select').id))) return;
+    // Skip if already captured (mat-select / select / ng-select case)
+    const skip = formFields.some(f => {
+      try { return el.matches(f.selector) || el.querySelector(f.selector); } catch { return false; }
+    });
+    if (skip) return;
     const label = getLabel(el) || el.getAttribute('aria-label') || el.querySelector('label')?.textContent?.trim() || '';
     if (!isGoodLabel(label)) return;
     const id = el.id || `ng-dd-${matIdx}`;
