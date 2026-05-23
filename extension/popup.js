@@ -208,7 +208,7 @@ fillBtn.addEventListener('click', async () => {
             }
           } catch(e) { console.warn('[CC] aiMatch skipped:', e.message); }
         }
-        const filled = await fillFormFieldsSequential(mapping, fbs, adp);
+        const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
         // Read structured records the executor flushed to document.body
         let records = [];
         try { records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}

@@ -1,4 +1,4 @@
-async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters) {
+async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters, allFields) {
   portalAdapters = portalAdapters || {};
   console.log('[CC] v5.17 fillFormFieldsSequential started, fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
@@ -783,6 +783,30 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters)
         originalResult: rec?.result || 'unknown',
         autofilledValue: fieldData.value
       };
+    }
+
+    // Also snapshot UNMAPPED fields the popup detected — so when operator fills them
+    // manually, we capture them as 'completion' corrections (= teaching signal that
+    // populates the profile next time)
+    if (Array.isArray(allFields)) {
+      for (const f of allFields) {
+        if (snapshot[f.selector] !== undefined) continue; // already tracked as mapped
+        const el = getEl(f.selector);
+        if (!el) continue;
+        const val = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
+          : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
+          : el.value || '';
+        snapshot[f.selector] = val;
+        fieldMeta[f.selector] = {
+          label: f.label || f.selector,
+          semanticKey: '',
+          profileKey: '',
+          plugin: null,
+          strategy: 'unmapped',
+          originalResult: 'unmapped',
+          autofilledValue: '',
+        };
+      }
     }
 
     function captureCorrections(trigger) {
