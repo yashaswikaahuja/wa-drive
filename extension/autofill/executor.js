@@ -92,6 +92,41 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     return type || 'unknown';
   }
 
+  // Verify a field's actual current value matches what we tried to fill.
+  // Tolerates masked-input reformatting (e.g. '9155049176188766' becomes
+  // '9155 0491 7618 8766' on UIDAI). Compares the alphanumeric core of both.
+  // Returns { ok, actualValue, normExpected, normActual }
+  async function verifyValue(selector, expected, settleMs) {
+    settleMs = (typeof settleMs === 'number') ? settleMs : 150;
+    // Wait for framework to react (validators, formatters, ControlValueAccessor)
+    if (settleMs > 0) await new Promise(r => setTimeout(r, settleMs));
+    const liveEl = (selector && selector.startsWith && (selector.startsWith('form-field-') || selector.startsWith('ng-dropdown-')))
+      ? null
+      : document.querySelector(selector);
+    if (!liveEl) return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'no-element-on-verify' };
+    const tag = (liveEl.tagName || '').toLowerCase();
+    if (tag === 'select') {
+      // For selects: compare selected option's text or value
+      const opt = liveEl.options[liveEl.selectedIndex];
+      const actualVal = (opt ? (opt.text || opt.value) : '') || '';
+      const normExp = String(expected || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normAct = actualVal.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return { ok: normExp.length > 0 && (normAct === normExp || normAct.includes(normExp) || normExp.includes(normAct)), actualValue: actualVal, normExpected: normExp, normActual: normAct };
+    }
+    const actual = liveEl.value || '';
+    const expStr = String(expected || '');
+    if (!expStr) return { ok: false, actualValue: actual, normExpected: '', normActual: actual, reason: 'empty-expected' };
+    // Normalise: lowercase + strip non-alphanumeric (handles masked formatting and case)
+    const normExp = expStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normAct = actual.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (normExp === normAct) return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct };
+    if (normAct.length > 0 && (normAct.startsWith(normExp.slice(0, Math.max(8, normExp.length - 2))) || normExp.startsWith(normAct.slice(0, 8)))) {
+      // Partial — accept if actual contains expected prefix (some sites trim trailing whitespace)
+      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, partial: true };
+    }
+    return { ok: false, actualValue: actual, normExpected: normExp, normActual: normAct, reason: actual === '' ? 'value-rejected-empty' : 'value-mismatch' };
+  }
+
   // ── WaitEngine — state-based waits replacing fixed setTimeout delays ──────
   function waitForOptions(selector, minCount, timeout) {
     minCount = minCount || 1; timeout = timeout || 8000;
@@ -802,10 +837,23 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         // Standard field: fill immediately
         try {
           const _r = fillOne(selector, value, type) || 0;
-          filled += _r;
           const _el2 = el || document.querySelector(selector);
           const _strategy = detectStrategy(_el2, type);
-          _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? (_el2 ? null : 'no-element') : (_el2 ? 'no-option' : 'no-element'), strategy: _strategy, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          // Verify the value actually landed (catches frameworks that silently
+          // clear, masked inputs that reformat, or async validators).
+          const _ver = await verifyValue(selector, value, 120);
+          const _trulyFilled = _r === 1 && _ver.ok;
+          if (_trulyFilled) filled += 1;
+          _ccRecords.push({
+            selector, value, type,
+            result: _trulyFilled ? 'filled' : 'skipped',
+            failReason: _trulyFilled ? null : (_r ? (_ver.reason || 'value-rejected') : (_el2 ? 'no-option' : 'no-element')),
+            actualValue: _ver.actualValue,
+            verified: _ver.ok,
+            strategy: _strategy,
+            durationMs: Date.now() - _t0,
+            ts: Date.now(), rv: RUNTIME_VERSION
+          }); _flushRecords();
         } catch(e) {
           _ccRecords.push({ selector, value, type, result: 'error', error: e.message, ts: Date.now() }); _flushRecords();
         }
