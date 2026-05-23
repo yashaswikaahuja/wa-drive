@@ -169,7 +169,7 @@ fillBtn.addEventListener('click', async () => {
               const sk = norm(f.label); const s = saved[sk];
               if (s?.profileKey && profile[s.profileKey]) {
                 mapping[f.selector] = { value: profile[s.profileKey], type: f.type };
-                fbs[f.selector] = { label: f.label, profileKey: s.profileKey };
+                fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'mapping' };
               }
             }
           }
@@ -182,7 +182,7 @@ fillBtn.addEventListener('click', async () => {
           for (const [s,v] of Object.entries(fz)) {
             mapping[s] = v;
             const ff = formFields.find(x=>x.selector===s);
-            if (ff) fbs[s] = { label: ff.label };
+            if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' };
           }
         }
 
@@ -205,8 +205,39 @@ fillBtn.addEventListener('click', async () => {
         // Read structured records the executor flushed to document.body
         let records = [];
         try { records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
+
+        // Tag every record with its source (mapping / fuzzy / ai) — read from fbs by selector
+        records = records.map(r => ({ ...r, source: r.source || (fbs[r.selector] && fbs[r.selector].source) || 'unknown' }));
+
+        // Append "unmapped" records for fields the mapper couldn't find a value for —
+        // makes admin Sessions page show WHY a field wasn't filled.
+        const filledSelectors = new Set(records.map(r => r.selector));
+        for (const f of formFields) {
+          if (filledSelectors.has(f.selector)) continue;
+          if (mapping[f.selector]) continue; // mapped but executor didn't report — handled below
+          let reason = 'no-mapping';
+          if (f.type === 'ng-dropdown' || f.type === 'mat-select' || f.type === 'select') reason = 'no-mapping-for-dropdown';
+          if (f.type === 'radio' || f.type === 'checkbox' || f.type === 'mat-radio' || f.type === 'mat-checkbox') reason = 'no-mapping-for-' + f.type;
+          records.push({
+            selector: f.selector,
+            label: f.label,
+            type: f.type,
+            value: null,
+            result: 'unmapped',
+            failReason: reason,
+            strategy: 'planner',
+            source: 'none',
+            ts: Date.now(),
+          });
+        }
+
+        const totalDetected = formFields.length;
+        const totalMapped = Object.keys(mapping).length;
         const totalFilled = records.filter(r => r.result === 'filled').length;
-        const totalFailed = records.filter(r => r.result && r.result !== 'filled' && r.result !== 'skipped').length;
+        const totalSkipped = records.filter(r => r.result === 'skipped').length;
+        const totalUnmapped = records.filter(r => r.result === 'unmapped').length;
+        const totalFailed = records.filter(r => r.result && r.result !== 'filled' && r.result !== 'skipped' && r.result !== 'unmapped').length;
+
         // POST session record (workspace-scoped via the JWT)
         try {
           await fetch(backendUrl + '/sessions', {
@@ -219,10 +250,12 @@ fillBtn.addEventListener('click', async () => {
               totalFilled,
               totalFailed,
               records,
+              // Diagnostics for admin UI
+              meta: { totalDetected, totalMapped, totalSkipped, totalUnmapped },
             }),
           });
         } catch (e) { console.warn('[CC] session post failed:', e.message); }
-        return { ok: true, filled, totalFilled, totalFailed, recordCount: records.length };
+        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length };
       }
     });
 

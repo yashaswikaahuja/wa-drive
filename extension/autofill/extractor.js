@@ -149,6 +149,29 @@ function extractFormFieldsWithFingerprint() {
     formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++ });
   });
 
+  // ── Angular ng-select / ng-dropdown custom widgets ──
+  // (these are NOT covered by mat-select or [role=combobox] selectors)
+  document.querySelectorAll('ng-select, ng-dropdown, .ng-select, .ng-dropdown').forEach(el => {
+    if (isInSkipContext(el)) return;
+    // Skip if it contains a real <select> we already captured
+    if (el.querySelector('select') && formFields.some(f => f.selector.includes(el.querySelector('select').id))) return;
+    const label = getLabel(el) || el.getAttribute('aria-label') || el.querySelector('label')?.textContent?.trim() || '';
+    if (!isGoodLabel(label)) return;
+    const id = el.id || `ng-dd-${matIdx}`;
+    if (!el.id) el.setAttribute('data-cc-id', id);
+    labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    formFields.push({
+      selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`,
+      id,
+      name: el.getAttribute('formcontrolname') || el.getAttribute('name') || '',
+      value: '',
+      placeholder: '',
+      label,
+      type: 'ng-dropdown',
+      index: matIdx++,
+    });
+  });
+
   // ── Fingerprint ──
   const labelSig = labelList.sort().slice(0, 10).join('|');
   const raw = `${hostname}::${title}::${labelSig}`;
