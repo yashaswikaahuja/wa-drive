@@ -173,14 +173,29 @@ function extractFormFieldsWithFingerprint() {
       try { return el.matches(f.selector) || el.querySelector(f.selector); } catch { return false; }
     });
     if (skip) return;
-    const label = getLabel(el) || el.getAttribute('aria-label') || el.querySelector('label')?.textContent?.trim() || '';
+    // Label resolution: ng-dropdown container often has its label as a CHILD
+    // <div class="ng-dropdown"><div class="label">5. Gender</div>...</div>
+    let label = getLabel(el) || el.getAttribute('aria-label') || '';
+    if (!label) {
+      // Direct child label/.label/.field-label (NOT inside .value-area which holds the trigger)
+      const childLabel = el.querySelector(':scope > .label, :scope > label, :scope > .field-label, :scope > [class*="label"]');
+      if (childLabel) label = childLabel.textContent.trim();
+    }
+    if (!label) {
+      // Any descendant .label that isn't inside a value-area / option-list
+      const dl = Array.from(el.querySelectorAll('.label, .field-label, [class*="label"]'))
+        .find(n => !n.closest('.value-area, .options-list, .ng-dropdown-panel, .dropdown-options'));
+      if (dl) label = dl.textContent.trim();
+    }
+    label = (label || '').replace(/\s+/g, ' ').trim();
     if (!isGoodLabel(label)) return;
-    const id = el.id || `ng-dd-${matIdx}`;
-    if (!el.id) el.setAttribute('data-cc-id', id);
+    // Force unique selector via data-cc-id (SSC reuses id="dropsection" for ALL dropdowns)
+    const ddId = `ng-dd-${matIdx}`;
+    el.setAttribute('data-cc-id', ddId);
     labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({
-      selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`,
-      id,
+      selector: `[data-cc-id="${ddId}"]`,
+      id: ddId,
       name: el.getAttribute('formcontrolname') || el.getAttribute('name') || '',
       value: '',
       placeholder: '',
