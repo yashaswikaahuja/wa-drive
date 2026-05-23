@@ -214,8 +214,15 @@ fillBtn.addEventListener('click', async () => {
         let records = [];
         try { records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
 
-        // Tag every record with its source (mapping / fuzzy / ai) — read from fbs by selector
-        records = records.map(r => ({ ...r, source: r.source || (fbs[r.selector] && fbs[r.selector].source) || 'unknown' }));
+        // Index formFields by selector for label lookup
+        const fieldBySelector = {};
+        for (const f of formFields) fieldBySelector[f.selector] = f;
+        // Tag every record with its source (mapping / fuzzy / ai) AND the field's label
+        records = records.map(r => ({
+          ...r,
+          source: r.source || (fbs[r.selector] && fbs[r.selector].source) || 'unknown',
+          label: r.label || (fieldBySelector[r.selector] && fieldBySelector[r.selector].label) || (fbs[r.selector] && fbs[r.selector].label) || '',
+        }));
 
         // Append "unmapped" records for fields the mapper couldn't find a value for —
         // makes admin Sessions page show WHY a field wasn't filled.

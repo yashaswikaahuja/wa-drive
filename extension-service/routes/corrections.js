@@ -24,14 +24,17 @@ const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').repla
 // Label-↔-profileKey similarity score. Higher = more likely the label is asking for that key.
 function labelKeyAffinity(labelLower, profileKey) {
   const pk = (profileKey || '').toLowerCase();
-  const tokens = pk.split('_').filter(t => t.length > 1);
-  if (!tokens.length) return 0;
+  if (!pk) return 0;
+  // Normalize label: strip spaces and non-alphanumerics so "pin code" matches "pincode"
+  const labelStripped = labelLower.replace(/[^a-z0-9]/g, '');
   let score = 0;
+  // Tokens split on underscores AND camelCase boundaries
+  const tokens = pk.split(/[_-]|(?<=[a-z])(?=[A-Z])/).filter(t => t.length > 1);
   for (const t of tokens) {
-    if (labelLower.includes(t)) score++;
+    if (labelLower.includes(t) || labelStripped.includes(t)) score++;
   }
-  // Strong opposite-direction hints — penalize obvious mismatches
-  // e.g. label "police station" vs profileKey "block" → 0
+  // Also: full key match in stripped label (handles "pincode" matching "pin code")
+  if (pk.length > 2 && labelStripped.includes(pk)) score++;
   return score;
 }
 
