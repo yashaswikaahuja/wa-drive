@@ -837,12 +837,13 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections));
       if (_ccBackendUrl) {
         const _ccToken = document.body.getAttribute('data-cc-token') || '';
+        const _ccProfileId = document.body.getAttribute('data-cc-profile-id') || '';
         const headers = { 'Content-Type': 'application/json' };
         if (_ccToken) headers['Authorization'] = 'Bearer ' + _ccToken;
         fetch(_ccBackendUrl + '/corrections', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ hostname: location.hostname, semanticFormKey: _ccFormKey, trigger, corrections })
+          body: JSON.stringify({ hostname: location.hostname, semanticFormKey: _ccFormKey, profileId: _ccProfileId, trigger, corrections })
         }).catch(() => {});
       }
     }

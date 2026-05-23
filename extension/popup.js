@@ -152,16 +152,17 @@ fillBtn.addEventListener('click', async () => {
           // Also include top-level fields
           if (selectedProfile.name) flat.name = flat.name || selectedProfile.name;
           return flat;
-        })(), data.backendUrl, data.accessToken, groqKey],
-      func: async (profile, backendUrl, accessToken, groqKey) => {
+        })(), selectedProfile.id || '', data.backendUrl, data.accessToken, groqKey],
+      func: async (profile, profileId, backendUrl, accessToken, groqKey) => {
         const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken };
         const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
-        // Stash backend URL + token + formkey on document.body so executor's
-        // post-fill correction observer can authenticate its POSTs
+        // Stash backend URL + token + formkey + profileId on document.body so executor's
+        // post-fill correction observer can authenticate its POSTs and link to profile
         try {
           document.body.setAttribute('data-cc-backend', backendUrl);
           document.body.setAttribute('data-cc-token', accessToken);
           document.body.setAttribute('data-cc-formkey', semanticFormKey || '');
+          document.body.setAttribute('data-cc-profile-id', profileId || '');
         } catch {}
         if (!formFields.length) return { ok: false, error: 'No form fields detected' };
 

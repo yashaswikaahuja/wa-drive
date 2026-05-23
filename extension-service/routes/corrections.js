@@ -1,19 +1,113 @@
 import { Router } from 'express';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
 import { authMiddleware } from '../auth.js';
 
 const router = Router();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = process.env.DATA_DIR || resolve(__dirname, '../data');
+const MAPPINGS_PATH = resolve(DATA_DIR, 'form_mappings.json');
 
-// POST /api/corrections — operator supervised correction batch
+function loadMappings() {
+  if (!existsSync(MAPPINGS_PATH)) return {};
+  try { return JSON.parse(readFileSync(MAPPINGS_PATH, 'utf8')); } catch { return {}; }
+}
+function saveMappings(data) {
+  mkdirSync(DATA_DIR, { recursive: true });
+  writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
+}
+
+const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+
+/**
+ * Given a profile's data jsonb and an operator-entered value,
+ * find which profile key has that value (or the closest match).
+ * Returns the matching profileKey or null.
+ */
+function findProfileKeyForValue(profileData, operatorValue) {
+  if (!operatorValue || !profileData || typeof profileData !== 'object') return null;
+  const target = String(operatorValue).trim().toLowerCase();
+  if (target.length < 2) return null;
+  // Walk the data jsonb. Each key maps to either a primitive or { value, source, ... }
+  for (const [key, raw] of Object.entries(profileData)) {
+    const val = (raw && typeof raw === 'object' && 'value' in raw) ? raw.value : raw;
+    if (val == null) continue;
+    const cmp = String(val).trim().toLowerCase();
+    if (cmp === target) return key;
+  }
+  // Fuzzy second pass: substring match (operator value contains profile value or vice versa)
+  for (const [key, raw] of Object.entries(profileData)) {
+    const val = (raw && typeof raw === 'object' && 'value' in raw) ? raw.value : raw;
+    if (val == null) continue;
+    const cmp = String(val).trim().toLowerCase();
+    if (cmp.length < 3) continue;
+    if (cmp === target) continue; // already checked above
+    if (cmp.includes(target) || target.includes(cmp)) return key;
+  }
+  return null;
+}
+
+// POST /api/corrections — operator supervised corrections
+// + auto-promote: for each correction whose final value matches a profile field,
+// save a (formKey, fieldLabel) -> profileKey mapping so future autofills get it right.
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { hostname, semanticFormKey, trigger, corrections, runtimeVersion } = req.body;
-    const { rows } = await pool.query(
-      `INSERT INTO corrections (workspace_id, user_id, hostname, semantic_form_key, trigger, runtime_version, corrections)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [req.user.workspaceId, req.user.userId, hostname, semanticFormKey || null, trigger, runtimeVersion || null, JSON.stringify(corrections || [])]
+    const { hostname, semanticFormKey, trigger, corrections, runtimeVersion, profileId } = req.body;
+    const insR = await pool.query(
+      `INSERT INTO corrections (workspace_id, user_id, profile_id, hostname, semantic_form_key, trigger, runtime_version, corrections)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [req.user.workspaceId, req.user.userId, profileId || null, hostname, semanticFormKey || null, trigger, runtimeVersion || null, JSON.stringify(corrections || [])]
     );
-    res.json({ ok: true, id: rows[0].id });
+    const correctionId = insR.rows[0].id;
+
+    // ── Auto-promote ──────────────────────────────────────────────────────
+    let promoted = 0;
+    if (profileId && semanticFormKey && Array.isArray(corrections) && corrections.length) {
+      try {
+        const pR = await pool.query(
+          'SELECT data FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL',
+          [profileId, req.user.workspaceId]
+        );
+        const profileData = pR.rows[0]?.data || {};
+        const mappings = loadMappings();
+        const formKey = semanticFormKey;
+        if (!mappings[formKey]) mappings[formKey] = {};
+        const today = new Date().toISOString().slice(0, 10);
+
+        for (const c of corrections) {
+          const operatorValue = c.finalOperatorValue || c.operatorValue;
+          if (!operatorValue) continue;
+          const profileKey = findProfileKeyForValue(profileData, operatorValue);
+          if (!profileKey) continue;
+          const semanticKey = normLabel(c.field || c.label);
+          if (!semanticKey) continue;
+
+          const existing = mappings[formKey][semanticKey];
+          if (existing && existing.profileKey === profileKey) {
+            // Confirm existing mapping (boost confidence)
+            existing.fills = (existing.fills || 0) + 1;
+            existing.lastSeen = today;
+          } else {
+            // New or changed mapping (operator overrode the previous)
+            mappings[formKey][semanticKey] = {
+              profileKey,
+              fills: 1,
+              corrections: existing?.corrections ? existing.corrections + 1 : 1,
+              lastSeen: today,
+              source: 'auto-correction',
+            };
+          }
+          promoted++;
+        }
+        if (promoted > 0) saveMappings(mappings);
+      } catch (e) {
+        console.warn('[ext/corrections] auto-promote failed:', e.message);
+      }
+    }
+
+    res.json({ ok: true, id: correctionId, promotedMappings: promoted });
   } catch (e) {
     console.error('[ext/corrections] post:', e.message);
     res.status(500).json({ error: e.message });
@@ -42,7 +136,7 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/corrections/:id — full
+// GET /api/corrections/:id
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const { rows } = await pool.query(
