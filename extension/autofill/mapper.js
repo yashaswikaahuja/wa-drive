@@ -70,6 +70,14 @@ function fuzzyMatch(formFields, profile) {
                      /^re_type|^retype|^re_enter|^reenter|^confirm/i.test(ident) ||
                      field.id?.toLowerCase().includes('retype') || field.name?.toLowerCase().includes('retype') || field.id?.toLowerCase().startsWith('c') && field.id?.length > 2;
     // Skip verify fields (SSC pattern) but NOT retype fields (RRB pattern)
+    // Skip verify/confirm twin fields in the MAIN loop — handled by post-pass below
+    // which mirrors the primary's value. Without this skip the main loop would
+    // pick up its own (often different) match e.g. on SSC OTR:
+    //   '10. Matriculation Roll Number'      -> roll_number_10th = 1500099 ✓
+    //   'a. Verify Roll Number'              -> roll_number      = 0647819 ✗
+    var rawLbl = (field.label || '').trim();
+    var isTwin = /^(?:[a-z]\.|\d+\.|\(\w\)|[ixv]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b/i.test(rawLbl);
+    if (isTwin && !isRetype) continue;
     if (/^verify_|_and_verify/i.test(ident) && !ident.includes('id') && !isRetype) continue;
     if (isRetype) {
       // Find the primary field this mirrors by matching selector/id/label
@@ -140,10 +148,10 @@ function fuzzyMatch(formFields, profile) {
       var eduAliases = {
         board_10th:         ['board_10th','board_matric','board_class10','10th_board','matric_board','boardname_hs','ddl_boardname_hs','matriculation_10th_class_education_board','matriculation_class_education_board','class_10th_education_board','10th_class_education_board','matriculation_education_board','tenth_class_education_board','class_x_education_board','sslc_education_board'],
         board_12th:         ['board_12th','board_inter','board_class12','12th_board','inter_board','intermediate_education_board','class_12th_education_board','12th_class_education_board','twelfth_education_board','class_xii_education_board','plus_two_education_board','hsc_education_board'],
-        roll_no_10th:       ['roll_no_10th','roll_10th','roll_matric','matric_roll','10th_roll'],
-        roll_no_12th:       ['roll_no_12th','roll_12th','roll_inter','inter_roll','12th_roll'],
-        passing_year_10th:  ['passing_year_10th','year_10th','year_matric','matric_year','10th_year','year_of_passing_10','yearofpassing_hs','ddl_yearofpassing_hs'],
-        passing_year_12th:  ['passing_year_12th','year_12th','year_inter','inter_year','12th_year','year_of_passing_12'],
+        roll_number_10th:   ['roll_number_10th','roll_no_10th','roll_10th','roll_matric','matric_roll','10th_roll','matriculation_roll_number','matriculation_10th_class_roll_number','class_10_roll_number','tenth_roll_number','sslc_roll_number'],
+        roll_number_12th:   ['roll_number_12th','roll_no_12th','roll_12th','roll_inter','inter_roll','12th_roll','intermediate_roll_number','class_12_roll_number','twelfth_roll_number','hsc_roll_number','plus_two_roll_number'],
+        passing_year_10th:  ['passing_year_10th','year_10th','year_matric','matric_year','10th_year','year_of_passing_10','yearofpassing_hs','ddl_yearofpassing_hs','matriculation_year_of_passing','matriculation_10th_class_year_of_passing','class_10_year_of_passing','tenth_year_of_passing'],
+        passing_year_12th:  ['passing_year_12th','year_12th','year_inter','inter_year','12th_year','year_of_passing_12','intermediate_year_of_passing','class_12_year_of_passing','twelfth_year_of_passing'],
         marks_10th:         ['marks_10th','percentage_10th','10th_marks','matric_marks','10th_percentage'],
         marks_12th:         ['marks_12th','percentage_12th','12th_marks','inter_marks','12th_percentage'],
         school_name:        ['school_name','school','institution_10','matric_school'],
