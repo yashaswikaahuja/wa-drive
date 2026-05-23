@@ -14,7 +14,18 @@ function extractFormFieldsWithFingerprint() {
   function isGoodLabel(s) {
     if (!s) return false;
     const t = s.replace(/[*:\s]/g, '');
-    return t.length >= 2;
+    if (t.length < 2) return false;
+    // Reject obvious placeholder-only text (when option text gets captured as label)
+    const lower = s.toLowerCase().trim();
+    if (/^(please\s+select|select\s+(an?|one)|--\s*select|choose|select\.{2,})/i.test(lower)) return false;
+    // Reject if mostly years/numbers separated by whitespace (option list of years got captured)
+    const nonDigits = s.replace(/[\d\s\n\r,]/g, '').trim();
+    if (s.length > 30 && nonDigits.length < s.length * 0.3) return false;
+    // Reject if too long (>250 chars likely a paragraph or option list dump)
+    if (s.length > 250) return false;
+    // Reject if has too many newlines (option list captured)
+    if ((s.match(/\n/g) || []).length > 3) return false;
+    return true;
   }
 
   // ── Get label for an input element ──
