@@ -25,16 +25,17 @@ const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').repla
 function labelKeyAffinity(labelLower, profileKey) {
   const pk = (profileKey || '').toLowerCase();
   if (!pk) return 0;
-  // Normalize label: strip spaces and non-alphanumerics so "pin code" matches "pincode"
   const labelStripped = labelLower.replace(/[^a-z0-9]/g, '');
   let score = 0;
-  // Tokens split on underscores AND camelCase boundaries
-  const tokens = pk.split(/[_-]|(?<=[a-z])(?=[A-Z])/).filter(t => t.length > 1);
+  // Tokens split on underscores AND camelCase boundaries.
+  // Min length 3 — short tokens like 'no', 'id', 'pn' produce false positives
+  // (e.g. 'ward no' matching 'si_no' because of 'no').
+  const tokens = pk.split(/[_-]|(?<=[a-z])(?=[A-Z])/).filter(t => t.length >= 3);
   for (const t of tokens) {
     if (labelLower.includes(t) || labelStripped.includes(t)) score++;
   }
-  // Also: full key match in stripped label (handles "pincode" matching "pin code")
-  if (pk.length > 2 && labelStripped.includes(pk)) score++;
+  // Full-key compound match (handles 'pincode' matching 'pin code')
+  if (pk.length >= 4 && labelStripped.includes(pk.replace(/[_-]/g, ''))) score += 2;
   return score;
 }
 
