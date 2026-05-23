@@ -5,7 +5,7 @@
  * Runtime owns: timing, retries, verification, replay, escalation.
  * Plugins own: HOW to interact with a specific widget family.
  */
-const PluginInterface = {
+var PluginInterface = {
   // Required: unique plugin identifier
   id: '',
   // Required: human-readable description
@@ -28,7 +28,7 @@ const PluginInterface = {
 };
 
 // Plugin registry — ordered by specificity (most specific first)
-const PLUGIN_REGISTRY = [];
+var PLUGIN_REGISTRY = [];
 
 function registerPlugin(plugin) {
   if (!plugin.id || !plugin.supports || !plugin.fill) throw new Error('Invalid plugin: missing id/supports/fill');

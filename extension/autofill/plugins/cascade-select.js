@@ -11,9 +11,9 @@
  * Plugin owns: option matching, event dispatch, DWR re-apply.
  */
 
-const CASCADE_FIELDS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village', 'village_panchayat', 'post_office'];
+var CASCADE_FIELDS = ['state', 'district', 'sub_division', 'subdivision', 'block', 'panchayat', 'village', 'village_panchayat', 'post_office'];
 
-const CASCADE_DEPENDENCIES = {
+var CASCADE_DEPENDENCIES = {
   district: ['state'],
   sub_division: ['district'],
   subdivision: ['district'],
@@ -24,34 +24,34 @@ const CASCADE_DEPENDENCIES = {
   post_office: ['block', 'village'],
 };
 
-const CascadeSelectPlugin = {
+var CascadeSelectPlugin = {
   id: 'cascade-select',
   description: 'Dependent <select> chains: waits for option population, applies with DWR/jQuery compat',
 
   supports(el, fieldContext) {
     if (!el || el.tagName !== 'SELECT') return false;
     // Match if field label/profileKey is a known cascade field
-    const label = (fieldContext.label || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
-    const pk = (fieldContext.profileKey || '').toLowerCase();
+    var label = (fieldContext.label || '').toLowerCase().replace(/[^a-z0-9_]/g, '');
+    var pk = (fieldContext.profileKey || '').toLowerCase();
     // Is this a cascade field?
-    const isCascade = CASCADE_FIELDS.some(k => label.includes(k) || pk.includes(k));
+    var isCascade = CASCADE_FIELDS.some(k => label.includes(k) || pk.includes(k));
     if (!isCascade) return false;
     // Is it a child (has dependencies)? Or a parent that populatesChildren?
     return true;
   },
 
   fill(el, value, context) {
-    const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    const v = norm(value);
-    const vWords = v.split(' ').filter(w => w.length > 1);
+    var norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    var v = norm(value);
+    var vWords = v.split(' ').filter(w => w.length > 1);
 
     function findOpt(options) {
-      const opts = options.filter(o => {
+      var opts = options.filter(o => {
         if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
-        const txt = o.text.toLowerCase();
+        var txt = o.text.toLowerCase();
         return !txt.includes('select') && !txt.includes('choose') && !txt.includes('loading') && txt !== '--';
       });
-      const overlapScore = o => { const ot = norm(o.text); return vWords.filter(w => ot.includes(w)).length; };
+      var overlapScore = o => { const ot = norm(o.text); return vWords.filter(w => ot.includes(w)).length; };
       return opts.find(o => o.value.toLowerCase() === value.toLowerCase().trim()) ||
              opts.find(o => norm(o.text) === v) ||
              opts.find(o => norm(o.value) === v) ||
@@ -68,7 +68,7 @@ const CascadeSelectPlugin = {
       Array.from(el.options).forEach(o => { o.selected = false; });
       opt.selected = true;
       el.selectedIndex = opt.index;
-      const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value');
+      var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value');
       if (nativeSetter) nativeSetter.set.call(el, opt.value);
       else el.value = opt.value;
       ['mousedown','mouseup','click','input','change'].forEach(ev =>
@@ -79,7 +79,7 @@ const CascadeSelectPlugin = {
       try { el.dispatchEvent(new Event('propertychange', { bubbles: true })); } catch {}
       el.dispatchEvent(new Event('blur', { bubbles: true }));
       // DWR re-apply after 3.5s
-      const _rv = opt.value, _ri = opt.index;
+      var _rv = opt.value, _ri = opt.index;
       setTimeout(() => {
         if (el.value !== _rv) {
           el.selectedIndex = _ri; el.value = _rv;
@@ -90,15 +90,15 @@ const CascadeSelectPlugin = {
     }
 
     // Try immediate match
-    const allOpts = Array.from(el.options);
-    const opt = findOpt(allOpts);
+    var allOpts = Array.from(el.options);
+    var opt = findOpt(allOpts);
     if (opt) {
       applySelect(el, opt);
       return { success: true, settled: true, waitMs: 0 };
     }
 
     // No options yet — need to wait (runtime should have waited, but report not settled)
-    const realOpts = allOpts.filter(o => o.value && o.value !== '0' && o.value !== '-1' && o.value !== '');
+    var realOpts = allOpts.filter(o => o.value && o.value !== '0' && o.value !== '-1' && o.value !== '');
     if (realOpts.length === 0) {
       return { success: false, settled: false, reason: 'no-options-loaded' };
     }
@@ -115,7 +115,7 @@ const CascadeSelectPlugin = {
     needsParentValues: true,
     // Dynamic dependsOn resolved per-field from CASCADE_DEPENDENCIES
     getDependsOn(profileKey) {
-      const pk = (profileKey || '').toLowerCase();
+      var pk = (profileKey || '').toLowerCase();
       return CASCADE_DEPENDENCIES[pk] || [];
     },
   },

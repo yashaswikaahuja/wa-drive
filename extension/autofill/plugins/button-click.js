@@ -9,7 +9,7 @@
  * Schema: EXECUTION_SCHEMA v1.0, action: click_button
  */
 
-const ButtonClickPlugin = {
+var ButtonClickPlugin = {
   id: 'button-click',
   description: 'Workflow transition: click taught buttons (navigation, expand, add-row)',
 

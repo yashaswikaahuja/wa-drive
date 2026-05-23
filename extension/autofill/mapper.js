@@ -1,5 +1,5 @@
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
-const FIELD_ALIASES = {
+var FIELD_ALIASES = {
   name:           ['candidate_name', 'candidates_name', 'applicant_name', 'applicants_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname', 'pratyashi_ka_naam', 'your_name', 'enter_name'],
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_', 'txt_dob', 'txtdob', 'txt_date_of_birth'],
   father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name', 'fathers_name_and_verify', 'pitaji_ka_naam'],
@@ -38,33 +38,33 @@ const FIELD_ALIASES = {
 };
 
 function fuzzyMatch(formFields, profile) {
-  const mapping = {};
-  const nameParts = (profile.name || '').trim().split(/\s+/);
-  const firstName = nameParts[0] || '';
-  const lastName = nameParts.slice(1).join(' ') || nameParts[0] || '';
-  const middleName = nameParts.length >= 3 ? nameParts[1] : '';
+  var mapping = {};
+  var nameParts = (profile.name || '').trim().split(/\s+/);
+  var firstName = nameParts[0] || '';
+  var lastName = nameParts.slice(1).join(' ') || nameParts[0] || '';
+  var middleName = nameParts.length >= 3 ? nameParts[1] : '';
 
   for (const field of formFields) {
     // Prioritize label text — for ServicePlus/dynamic forms, label is the only meaningful identifier
     // Repeat label twice to give it more weight over generic IDs like field_1_1
     // Strip Hindi/non-ASCII chars from label for matching, keep English part
-    const labelEn = (field.label || '').replace(/[^\x00-\x7F]/g, ' ').trim();
-    const ident = [labelEn, labelEn, field.placeholder, field.id, field.name]
+    var labelEn = (field.label || '').replace(/[^\x00-\x7F]/g, ' ').trim();
+    var ident = [labelEn, labelEn, field.placeholder, field.id, field.name]
       .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_');
     // Re-type/confirm mirror fields — fill with same value as primary field
-    const isRetype = /retype|re_type|reenter|re_enter|confirm|retypeFullName|retypefullname|re_type_|retype_/i.test(ident) ||
+    var isRetype = /retype|re_type|reenter|re_enter|confirm|retypeFullName|retypefullname|re_type_|retype_/i.test(ident) ||
                      /^re_type|^retype|^re_enter|^reenter|^confirm/i.test(ident) ||
                      field.id?.toLowerCase().includes('retype') || field.name?.toLowerCase().includes('retype') || field.id?.toLowerCase().startsWith('c') && field.id?.length > 2;
     // Skip verify fields (SSC pattern) but NOT retype fields (RRB pattern)
     if (/^verify_|_and_verify/i.test(ident) && !ident.includes('id') && !isRetype) continue;
     if (isRetype) {
       // Find the primary field this mirrors by matching selector/id/label
-      const baseIdent = ident.replace(/retype|re_type|reenter|re_enter|confirm/gi, '').replace(/^[_\s]+|[_\s]+$/g, '');
-      const baseId = (field.id || '').replace(/^c(?=[a-z])/i, '').replace(/^confirm/i, '').replace(/^retype/i, '');
+      var baseIdent = ident.replace(/retype|re_type|reenter|re_enter|confirm/gi, '').replace(/^[_\s]+|[_\s]+$/g, '');
+      var baseId = (field.id || '').replace(/^c(?=[a-z])/i, '').replace(/^confirm/i, '').replace(/^retype/i, '');
       // First: try to find already-mapped field with matching base id
       let matched = false;
       for (const [sel, val] of Object.entries(mapping)) {
-        const selId = sel.replace('#', '').replace(/\[.*\]/, '');
+        var selId = sel.replace('#', '').replace(/\[.*\]/, '');
         if (selId && baseId && selId.toLowerCase() === baseId.toLowerCase()) {
           mapping[field.selector] = { value: val.value, type: field.type };
           matched = true; break;
@@ -74,7 +74,7 @@ function fuzzyMatch(formFields, profile) {
       if (!matched) {
         for (const f2 of formFields) {
           if (f2.selector === field.selector || !mapping[f2.selector]) continue;
-          const f2Label = (f2.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+          var f2Label = (f2.label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
           if (baseIdent && f2Label && (baseIdent.includes(f2Label) || f2Label.includes(baseIdent.split(' ')[0]))) {
             mapping[field.selector] = { value: mapping[f2.selector].value, type: field.type };
             matched = true; break;
@@ -100,12 +100,12 @@ function fuzzyMatch(formFields, profile) {
     // Auto-check agreement / declaration / consent checkboxes (also mat-checkbox)
     if (field.type === 'checkbox' || field.type === 'mat-checkbox') {
       // Test against the RAW label text (preserves spaces) — ident has spaces collapsed to underscores
-      const labelText = (field.label || '').toLowerCase();
-      const isAgreement = /\bi\s+(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|i_(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|consent|terms\s+and\s+conditions|self[\s_-]?declaration|^agree$|^accept$|^confirm$/i.test(labelText)
+      var labelText = (field.label || '').toLowerCase();
+      var isAgreement = /\bi\s+(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|i_(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|consent|terms\s+and\s+conditions|self[\s_-]?declaration|^agree$|^accept$|^confirm$/i.test(labelText)
         || /i_(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|^agree$|^accept$|^confirm$|consent|self_declaration/i.test(ident);
       // Also: match if the checkbox's name/id literally says "agree", "accept", "confirm", "consent"
-      const fieldNameId = (field.name || '') + ' ' + (field.id || '');
-      const isAgreeByName = /\b(agree|accept|consent|confirm|declar|tnc|terms)\b/i.test(fieldNameId);
+      var fieldNameId = (field.name || '') + ' ' + (field.id || '');
+      var isAgreeByName = /\b(agree|accept|consent|confirm|declar|tnc|terms)\b/i.test(fieldNameId);
       if (isAgreement || isAgreeByName) {
         mapping[field.selector] = { value: 'yes', type: field.type };
         continue;
@@ -113,17 +113,17 @@ function fuzzyMatch(formFields, profile) {
       // Skip OTHER checkboxes — non-agreement boxes need explicit profile data which we don't have
       continue;
     }
-    const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
-    const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
+    var isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
+    var isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
     // 'candidate name as per matriculation' is a name field, not education row
-    const isCandidateNameField = ident.includes('candidate_name') || ident.includes('candidates_name') || (ident.includes('name') && ident.includes('candidate'));
+    var isCandidateNameField = ident.includes('candidate_name') || ident.includes('candidates_name') || (ident.includes('name') && ident.includes('candidate'));
     // 'highest level of educational qualification' contains 'graduation' but is NOT an education row
-    const isHighestEduField = ident.includes('highest');
-    const isEducationRow = !isCandidateNameField && !isHighestEduField && (ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll'));
+    var isHighestEduField = ident.includes('highest');
+    var isEducationRow = !isCandidateNameField && !isHighestEduField && (ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll'));
     if (isEducationRow) {
       // Don't skip — try to match education fields from profile
-      const eduAliases = {
+      var eduAliases = {
         board_10th:         ['board_10th','board_matric','board_class10','10th_board','matric_board','boardname_hs','ddl_boardname_hs'],
         board_12th:         ['board_12th','board_inter','board_class12','12th_board','inter_board'],
         roll_no_10th:       ['roll_no_10th','roll_10th','roll_matric','matric_roll','10th_roll'],
@@ -154,10 +154,10 @@ function fuzzyMatch(formFields, profile) {
       continue;
     }
     // Skip Hindi name fields (auto-converted by ServicePlus on Tab press)
-    const isHindiField = ident.includes('hindi') || ident.includes('_hindi') || field.label.includes('हिंदी') || field.label.includes('(Hindi)');
+    var isHindiField = ident.includes('hindi') || ident.includes('_hindi') || field.label.includes('हिंदी') || field.label.includes('(Hindi)');
     if (isHindiField) continue;
     // Skip "changed name" / "new name" fields — only fill if profile has changed_name
-    const isChangedName = ident.includes('new_name') || ident.includes('changed_name') || ident.includes('newname') || ident.includes('changedname') ||
+    var isChangedName = ident.includes('new_name') || ident.includes('changed_name') || ident.includes('newname') || ident.includes('changedname') ||
       (field.label.toLowerCase().includes('new name') || field.label.toLowerCase().includes('changed name'));
     if (isChangedName && !profile.changed_name) continue;
 
@@ -176,17 +176,17 @@ function fuzzyMatch(formFields, profile) {
 
     // DOB split — handle separate day/month/year dropdowns
     if (profile.dob) {
-      const dobParts = profile.dob.split('/'); // DD/MM/YYYY
-      const [dobDay, dobMonth, dobYear] = dobParts;
-      const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
-      const monthShort = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const monthNum = parseInt(dobMonth);
-      const selLower = (field.selector||'').toLowerCase();
+      var dobParts = profile.dob.split('/'); // DD/MM/YYYY
+      var [dobDay, dobMonth, dobYear] = dobParts;
+      var monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+      var monthShort = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var monthNum = parseInt(dobMonth);
+      var selLower = (field.selector||'').toLowerCase();
       if (ident.includes('day') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || /^[_\s]*day[_\s]*$/.test(ident.replace(/day/g,'').trim()) || ident.replace(/[_\s]/g,'') === 'day' || selLower.includes('ddl_day') || selLower.includes('_day'))) {
         mapping[field.selector] = { value: parseInt(dobDay).toString(), type: field.type }; continue;
       }
       if (ident.includes('month') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1 || selLower.includes('ddl_month') || selLower.includes('_month'))) {
-        const monthVal = field.type === 'select' ? monthNames[monthNum] : dobMonth;
+        var monthVal = field.type === 'select' ? monthNames[monthNum] : dobMonth;
         mapping[field.selector] = { value: monthVal, type: field.type, monthNum, monthShort: monthShort[monthNum] }; continue;
       }
       if (ident.includes('year') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1 || selLower.includes('ddl_year') || selLower.includes('_year'))) {
@@ -198,8 +198,8 @@ function fuzzyMatch(formFields, profile) {
       }
       // Full DOB field (single input) - detect separator from placeholder
       if (ident.includes('dob') || ident.includes('date_of_birth') || ident.includes('dateofbirth') || ident.includes('birth_date') || (ident.includes('date') && ident.includes('birth'))) {
-        const sep = (field.placeholder || '').includes('-') ? '-' : '/';
-        const dobVal = dobDay + sep + dobMonth + sep + dobYear;
+        var sep = (field.placeholder || '').includes('-') ? '-' : '/';
+        var dobVal = dobDay + sep + dobMonth + sep + dobYear;
         mapping[field.selector] = { value: dobVal, type: field.type }; continue;
       }
     }
@@ -220,13 +220,13 @@ function fuzzyMatch(formFields, profile) {
 
       // For radio buttons: match by checking if this option's label contains the profile value
       if (field.type === 'radio') {
-        const profileVal = profile[profileKey].toLowerCase().replace(/[^a-z0-9]/g, '');
-        const optLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
+        var profileVal = profile[profileKey].toLowerCase().replace(/[^a-z0-9]/g, '');
+        var optLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
         // Check if this radio group name/ident matches the profileKey aliases
-        const groupIdent = [field.name, field.id].filter(Boolean).join(' ').toLowerCase().replace(/[-_\s]/g, '');
-        const groupMatches = aliases.some(a => groupIdent.includes(a.replace(/[^a-z0-9]/g, '')));
+        var groupIdent = [field.name, field.id].filter(Boolean).join(' ').toLowerCase().replace(/[-_\s]/g, '');
+        var groupMatches = aliases.some(a => groupIdent.includes(a.replace(/[^a-z0-9]/g, '')));
         // Also check if the option label directly contains the profile value
-        const labelMatches = optLabel.includes(profileVal) || profileVal.includes(optLabel);
+        var labelMatches = optLabel.includes(profileVal) || profileVal.includes(optLabel);
         if ((groupMatches || labelMatches) && optLabel.includes(profileVal)) {
           mapping[field.selector] = { value: 'true', type: 'radio-click' };
           break;
@@ -245,15 +245,15 @@ function fuzzyMatch(formFields, profile) {
 
 // ── AI matching via Groq ──────────────────────────────────────────────────────
 async function aiMatch(formFields, profile, groqKey) {
-  const fieldDescriptions = formFields.map((f, i) =>
+  var fieldDescriptions = formFields.map((f, i) =>
     `${i}: label="${f.label || ''}" id="${f.id || ''}" name="${f.name || ''}" placeholder="${f.placeholder || ''}"`
   ).join('\n');
 
-  const profileKeys = Object.entries(profile)
+  var profileKeys = Object.entries(profile)
     .filter(([k, v]) => v && k !== 'phone' && k !== 'updatedAt')
     .map(([k, v]) => `${k}: "${v}"`).join('\n');
 
-  const prompt = `You are a form field mapper. Given form fields and a student profile, return a JSON object mapping field index to profile key.
+  var prompt = `You are a form field mapper. Given form fields and a student profile, return a JSON object mapping field index to profile key.
 
 RULES:
 - Return ONLY a valid JSON object, nothing else
@@ -275,7 +275,7 @@ ${profileKeys}
 Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    var res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -284,16 +284,16 @@ Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
         max_tokens: 300,
       }),
     });
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content ?? '';
-    const match = text.match(/\{[\s\S]*\}/);
+    var data = await res.json();
+    var text = data?.choices?.[0]?.message?.content ?? '';
+    var match = text.match(/\{[\s\S]*\}/);
     if (!match) return {};
-    const indexMap = JSON.parse(match[0]);
-    const mapping = {};
-    const nameParts = (profile.name || '').trim().split(/\s+/);
-    const dobParts = (profile.dob || '').split('/'); // DD/MM/YYYY
+    var indexMap = JSON.parse(match[0]);
+    var mapping = {};
+    var nameParts = (profile.name || '').trim().split(/\s+/);
+    var dobParts = (profile.dob || '').split('/'); // DD/MM/YYYY
     for (const [idx, profileKey] of Object.entries(indexMap)) {
-      const field = formFields[parseInt(idx)];
+      var field = formFields[parseInt(idx)];
       if (!field) continue;
       let value = null;
       // Handle split keys
@@ -302,8 +302,8 @@ Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
       else if (profileKey === 'name__middle') value = nameParts.length >= 3 ? nameParts.slice(1, -1).join(' ') : '';
       else if (profileKey === 'dob__day') value = dobParts[0] || '';
       else if (profileKey === 'dob__month') {
-        const _m = parseInt(dobParts[1] || '0');
-        const _months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+        var _m = parseInt(dobParts[1] || '0');
+        var _months = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
         value = _months[_m] || dobParts[1] || '';
       }
       else if (profileKey === 'dob__year') value = dobParts[2] || '';
