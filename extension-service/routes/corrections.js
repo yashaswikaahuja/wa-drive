@@ -21,31 +21,75 @@ function saveMappings(data) {
 
 const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 
+// Label-↔-profileKey similarity score. Higher = more likely the label is asking for that key.
+function labelKeyAffinity(labelLower, profileKey) {
+  const pk = (profileKey || '').toLowerCase();
+  const tokens = pk.split('_').filter(t => t.length > 1);
+  if (!tokens.length) return 0;
+  let score = 0;
+  for (const t of tokens) {
+    if (labelLower.includes(t)) score++;
+  }
+  // Strong opposite-direction hints — penalize obvious mismatches
+  // e.g. label "police station" vs profileKey "block" → 0
+  return score;
+}
+
 /**
- * Given a profile's data jsonb and an operator-entered value,
- * find which profile key has that value (or the closest match).
+ * Given a profile's data jsonb, an operator-entered value, and the field's label,
+ * find which profile key has that value AND has a label-compatible name.
  * Returns the matching profileKey or null.
+ *
+ * Safety:
+ *   - Skips promotion if the value matches multiple profile keys (ambiguous)
+ *   - Skips promotion if the chosen key has zero label affinity
+ *     AND another key in the data has positive affinity (label contradicts)
  */
-function findProfileKeyForValue(profileData, operatorValue) {
+function findProfileKeyForValue(profileData, operatorValue, fieldLabel) {
   if (!operatorValue || !profileData || typeof profileData !== 'object') return null;
   const target = String(operatorValue).trim().toLowerCase();
   if (target.length < 2) return null;
-  // Walk the data jsonb. Each key maps to either a primitive or { value, source, ... }
+  const labelLower = (fieldLabel || '').toLowerCase();
+
+  const exactMatches = [];
+  const fuzzyMatches = [];
+
   for (const [key, raw] of Object.entries(profileData)) {
     const val = (raw && typeof raw === 'object' && 'value' in raw) ? raw.value : raw;
     if (val == null) continue;
     const cmp = String(val).trim().toLowerCase();
-    if (cmp === target) return key;
+    if (!cmp) continue;
+    if (cmp === target) {
+      exactMatches.push({ key, affinity: labelKeyAffinity(labelLower, key) });
+    } else if (cmp.length >= 3 && (cmp.includes(target) || target.includes(cmp))) {
+      fuzzyMatches.push({ key, affinity: labelKeyAffinity(labelLower, key) });
+    }
   }
-  // Fuzzy second pass: substring match (operator value contains profile value or vice versa)
-  for (const [key, raw] of Object.entries(profileData)) {
-    const val = (raw && typeof raw === 'object' && 'value' in raw) ? raw.value : raw;
-    if (val == null) continue;
-    const cmp = String(val).trim().toLowerCase();
-    if (cmp.length < 3) continue;
-    if (cmp === target) continue; // already checked above
-    if (cmp.includes(target) || target.includes(cmp)) return key;
+
+  // Prefer exact matches over fuzzy
+  const candidates = exactMatches.length ? exactMatches : fuzzyMatches;
+  if (!candidates.length) return null;
+
+  // If only one match — use it but ONLY if either:
+  //   - label has positive affinity, OR
+  //   - no profile key has positive affinity for this label (so we can't disambiguate via label, accept)
+  if (candidates.length === 1) {
+    const sole = candidates[0];
+    if (sole.affinity > 0) return sole.key;
+    // Check if any OTHER profile key has affinity to the label — if yes, reject (label contradicts)
+    for (const [k] of Object.entries(profileData)) {
+      if (k === sole.key) continue;
+      if (labelKeyAffinity(labelLower, k) > 0) return null;
+    }
+    return sole.key;
   }
+
+  // Multiple candidates — pick the one with highest label affinity, but only if it's STRICTLY better
+  candidates.sort((a, b) => b.affinity - a.affinity);
+  if (candidates[0].affinity > 0 && candidates[0].affinity > (candidates[1]?.affinity || 0)) {
+    return candidates[0].key;
+  }
+  // Ambiguous — skip
   return null;
 }
 
@@ -79,7 +123,7 @@ router.post('/', authMiddleware, async (req, res) => {
         for (const c of corrections) {
           const operatorValue = c.finalOperatorValue || c.operatorValue;
           if (!operatorValue) continue;
-          const profileKey = findProfileKeyForValue(profileData, operatorValue);
+          const profileKey = findProfileKeyForValue(profileData, operatorValue, c.field || c.label);
           if (!profileKey) continue;
           const semanticKey = normLabel(c.field || c.label);
           if (!semanticKey) continue;
