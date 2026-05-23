@@ -7,6 +7,7 @@ import adaptersRouter from './routes/adapters.js';
 import sessionsRouter from './routes/sessions.js';
 import correctionsRouter from './routes/corrections.js';
 import trainingRouter from './routes/training.js';
+import agentRouter from './routes/agent.js';
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/adapters', adaptersRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/corrections', correctionsRouter);
 app.use('/api/training', trainingRouter);
+app.use('/api/agent', agentRouter);
 
 // 404 fallthrough
 app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));

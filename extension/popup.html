@@ -62,7 +62,16 @@
 
   <div class="footer">
     <button id="fill-btn" disabled>⚡ Fill Form</button>
+    <button id="agent-btn" disabled title="AI Agent (preview before execute)">🤖</button>
     <button id="open-btn" title="Open CyberControl">🖥</button>
+  </div>
+  <div id="agent-panel" style="display:none; padding: 8px; border-top: 1px solid #333; max-height: 400px; overflow-y: auto;">
+    <div style="font-size: 11px; color: #888; margin-bottom: 6px;">PROPOSED ACTIONS</div>
+    <div id="agent-actions"></div>
+    <div style="display: flex; gap: 6px; margin-top: 8px;">
+      <button id="agent-execute" style="flex:1;">▶ Execute</button>
+      <button id="agent-cancel" style="flex:0;">Cancel</button>
+    </div>
   </div>
   <div class="ver" id="ver"></div>
 

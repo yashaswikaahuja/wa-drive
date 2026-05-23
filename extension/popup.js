@@ -5,6 +5,11 @@ let selectedProfile = null;
 const profilesEl = document.getElementById('profiles');
 const searchEl = document.getElementById('search');
 const fillBtn = document.getElementById('fill-btn');
+const agentBtn = document.getElementById('agent-btn');
+const agentPanel = document.getElementById('agent-panel');
+const agentActionsEl = document.getElementById('agent-actions');
+const agentExecuteBtn = document.getElementById('agent-execute');
+const agentCancelBtn = document.getElementById('agent-cancel');
 const statusEl = document.getElementById('status');
 const connDot = document.getElementById('conn-dot');
 const connText = document.getElementById('conn-text');
@@ -47,6 +52,7 @@ function renderProfiles(query) {
     el.addEventListener('click', () => {
       selectedProfile = allProfiles.find(p => p.id === el.dataset.id) || null;
       fillBtn.disabled = !selectedProfile;
+      agentBtn.disabled = !selectedProfile;
       renderProfiles(searchEl.value);
     });
   });
@@ -324,6 +330,183 @@ document.getElementById('open-btn').addEventListener('click', async () => {
   if (existing) { chrome.tabs.update(existing.id, {active:true}); chrome.windows.update(existing.windowId,{focused:true}); }
   else chrome.tabs.create({ url: frontendUrl || 'http://localhost:5173' });
   window.close();
+});
+
+// ── AI Agent flow ─────────────────────────────────────────────────────────
+// Plan-then-execute model: popup posts (goal + page snapshot + driver list)
+// to /api/agent/plan, hub returns proposed actions, operator approves,
+// popup runs cc.run(actions) in the active tab.
+let _pendingPlan = null;
+
+async function injectDriversInto(tabId) {
+  // Inject network monitor in MAIN world (best-effort)
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      files: ['autofill/plugins/network-monitor.js'],
+    });
+  } catch (e) {}
+  // Inject plugins + drivers in ISOLATED world
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: [
+      'autofill/plugins/interface.js',
+      'autofill/plugins/cascade-select.js',
+      'autofill/plugins/ng-dropdown.js',
+      'autofill/plugins/button-click.js',
+      'autofill/plugins/keystroke-input.js',
+      'drivers/dispatch.js',
+      'drivers/dom.js',
+      'drivers/input.js',
+      'drivers/select.js',
+      'drivers/interaction.js',
+    ],
+  });
+}
+
+agentBtn.addEventListener('click', async () => {
+  if (!selectedProfile) return;
+  agentBtn.disabled = true;
+  agentBtn.textContent = '🤖 ...';
+  showStatus('Snapshotting page + planning…', '#3b82f6');
+
+  try {
+    const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await injectDriversInto(tab.id);
+
+    // Get snapshot + driver list from page via cc.do
+    const [{ result: pageData }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: async () => {
+        if (typeof cc === 'undefined') return { error: 'drivers not injected' };
+        const snap = await cc.do({ name: 'dom.snapshot', args: { kinds: ['input', 'select', 'textarea', 'button', 'checkbox', 'radio'], limit: 200 } });
+        const drivers = cc.listDrivers();
+        return { snapshot: snap.result, drivers };
+      },
+    });
+    if (pageData.error) throw new Error(pageData.error);
+
+    // Flatten profile
+    const flatProfile = {};
+    const raw = selectedProfile.data || selectedProfile;
+    for (const [k, v] of Object.entries(raw)) {
+      flatProfile[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+    }
+    if (selectedProfile.name) flatProfile.name = flatProfile.name || selectedProfile.name;
+    if (selectedProfile.phone) flatProfile.phone = flatProfile.phone || selectedProfile.phone;
+
+    const goal = `Fill the form on ${pageData.snapshot.url} for the customer profile. Skip submit/continue buttons.`;
+
+    const planRes = await fetch(data.backendUrl + '/agent/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
+      body: JSON.stringify({
+        goal,
+        snapshot: pageData.snapshot,
+        drivers: pageData.drivers,
+        profile: flatProfile,
+        profileId: selectedProfile.id,
+        hostname: new URL(tab.url).hostname,
+      }),
+    });
+    if (!planRes.ok) {
+      const errBody = await planRes.text();
+      throw new Error('plan: ' + planRes.status + ' ' + errBody.slice(0, 100));
+    }
+    const plan = await planRes.json();
+
+    if (!plan.actions || plan.actions.length === 0) {
+      showStatus('Agent returned 0 actions. Check console for raw response.', '#f59e0b');
+      console.log('[CC agent] empty plan, raw:', plan);
+      agentBtn.disabled = false;
+      agentBtn.textContent = '🤖';
+      return;
+    }
+
+    _pendingPlan = { plan, snapshot: pageData.snapshot, tab };
+    renderPlan(plan.actions);
+    agentPanel.style.display = 'block';
+    showStatus(`Agent proposed ${plan.actions.length} actions (${plan.durationMs}ms, ${plan.model}). Review + execute.`, '#10b981');
+  } catch (e) {
+    showStatus('Agent error: ' + e.message, '#ef4444');
+    console.error('[CC agent]', e);
+  } finally {
+    agentBtn.disabled = false;
+    agentBtn.textContent = '🤖';
+  }
+});
+
+function renderPlan(actions) {
+  agentActionsEl.innerHTML = actions.map((a, i) => {
+    const args = JSON.stringify(a.args).slice(0, 80);
+    return `<div style="font-size: 11px; padding: 4px 6px; border-bottom: 1px solid #222; font-family: monospace;">
+      <span style="color: #888;">${i + 1}.</span>
+      <span style="color: #3b82f6;">${a.name}</span>
+      <span style="color: #ccc;">${args}</span>
+    </div>`;
+  }).join('');
+}
+
+agentCancelBtn.addEventListener('click', () => {
+  agentPanel.style.display = 'none';
+  _pendingPlan = null;
+});
+
+agentExecuteBtn.addEventListener('click', async () => {
+  if (!_pendingPlan) return;
+  const { plan, snapshot, tab } = _pendingPlan;
+  agentExecuteBtn.disabled = true;
+  agentExecuteBtn.textContent = '...';
+  showStatus('Executing ' + plan.actions.length + ' actions…', '#3b82f6');
+
+  try {
+    const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
+    // Execute in tab via cc.run
+    const [{ result: execResult }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      args: [plan.actions],
+      func: async (actions) => {
+        if (typeof cc === 'undefined') return { error: 'drivers not loaded' };
+        return await cc.run(actions);
+      },
+    });
+
+    if (execResult.error) throw new Error(execResult.error);
+
+    const okCount = execResult.steps.filter(s => s.ok).length;
+    showStatus(`Done: ${okCount}/${execResult.steps.length} actions succeeded`, execResult.ok ? '#10b981' : '#f59e0b');
+
+    // Snapshot after for trace
+    const [{ result: snapAfter }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: async () => (await cc.do({ name: 'dom.snapshot', args: {} })).result,
+    });
+
+    // Persist trace (best-effort)
+    fetch(data.backendUrl + '/agent/trace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
+      body: JSON.stringify({
+        goal: 'agent execute',
+        plan,
+        results: execResult,
+        snapshotBefore: snapshot,
+        snapshotAfter: snapAfter,
+        profileId: selectedProfile?.id,
+      }),
+    }).catch(e => console.warn('[CC agent] trace persist failed:', e));
+
+    agentPanel.style.display = 'none';
+    _pendingPlan = null;
+  } catch (e) {
+    showStatus('Execute error: ' + e.message, '#ef4444');
+    console.error('[CC agent execute]', e);
+  } finally {
+    agentExecuteBtn.disabled = false;
+    agentExecuteBtn.textContent = '▶ Execute';
+  }
 });
 
 init();
