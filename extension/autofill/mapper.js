@@ -97,13 +97,18 @@ function fuzzyMatch(formFields, profile) {
 
     // Auto-check agreement / declaration / consent checkboxes (also mat-checkbox)
     if (field.type === 'checkbox' || field.type === 'mat-checkbox') {
-      const isAgreement = /\bi\s+(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|consent|terms\s+and\s+conditions|self[\s_-]?declaration|i_(confirm|agree|accept|declare|certify)|^agree$|^accept$|^confirm$/i.test(ident);
-      if (isAgreement) {
+      // Test against the RAW label text (preserves spaces) — ident has spaces collapsed to underscores
+      const labelText = (field.label || '').toLowerCase();
+      const isAgreement = /\bi\s+(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|i_(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|consent|terms\s+and\s+conditions|self[\s_-]?declaration|^agree$|^accept$|^confirm$/i.test(labelText)
+        || /i_(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|^agree$|^accept$|^confirm$|consent|self_declaration/i.test(ident);
+      // Also: match if the checkbox's name/id literally says "agree", "accept", "confirm", "consent"
+      const fieldNameId = (field.name || '') + ' ' + (field.id || '');
+      const isAgreeByName = /\b(agree|accept|consent|confirm|declar|tnc|terms)\b/i.test(fieldNameId);
+      if (isAgreement || isAgreeByName) {
         mapping[field.selector] = { value: 'yes', type: field.type };
         continue;
       }
-      // For non-agreement checkboxes (e.g. "Same as Above"), skip — mapper has no boolean source
-      // (could be enhanced later via FIELD_ALIASES if specific cases come up)
+      // Skip OTHER checkboxes — non-agreement boxes need explicit profile data which we don't have
       continue;
     }
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
