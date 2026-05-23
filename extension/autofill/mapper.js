@@ -94,6 +94,18 @@ function fuzzyMatch(formFields, profile) {
 
     // Skip yes/no question radio buttons (not data fields)
     if (field.type === 'radio' && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
+
+    // Auto-check agreement / declaration / consent checkboxes (also mat-checkbox)
+    if (field.type === 'checkbox' || field.type === 'mat-checkbox') {
+      const isAgreement = /\bi\s+(confirm|agree|accept|declare|certify|acknowledge|consent|understand)|consent|terms\s+and\s+conditions|self[\s_-]?declaration|i_(confirm|agree|accept|declare|certify)|^agree$|^accept$|^confirm$/i.test(ident);
+      if (isAgreement) {
+        mapping[field.selector] = { value: 'yes', type: field.type };
+        continue;
+      }
+      // For non-agreement checkboxes (e.g. "Same as Above"), skip — mapper has no boolean source
+      // (could be enhanced later via FIELD_ALIASES if specific cases come up)
+      continue;
+    }
     const isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     const isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
