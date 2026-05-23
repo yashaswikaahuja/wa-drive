@@ -666,20 +666,33 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')
           : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
 
-        // Some fields (aadhaar, OTP, captcha, masked inputs) reject value+dispatch
-        // and require real keystroke events. Detect and route to keystrokeFill.
-        const fieldLabel = filledBySource[selector]?.label || '';
-        const needsKeystroke = (typeof window.shouldUseKeystroke === 'function')
-          ? window.shouldUseKeystroke(el, fieldLabel)
-          : false;
-        if (needsKeystroke && typeof window.keystrokeFill === 'function') {
-          // Primary keystroke path — fire-and-forget but await briefly so caller sees update
-          window.keystrokeFill(el, value, { delay: 12 }).catch(() => {});
-          // Yield long enough for at least 1-2 chars to land before returning
-          // (the executor's wait-engine will pick up the rest)
-          return 1;
+        // PRIMARY PATH: keystroke-style fill — mimics real typing with full
+        // keydown/beforeinput/input(insertText)/keypress/keyup event sequence.
+        // Works on every site we've tested + is required by aadhaar/OTP/captcha
+        // fields that reject value+dispatch. v5.67 made this the default.
+        if (typeof window.keystrokeFillSync === 'function') {
+          const ok = window.keystrokeFillSync(el, value);
+          // Trigger any post-fill side-effects (transliteration, etc.) below
+          // ServicePlus: transliterate English→Hindi for paired Hindi field
+          if (el.getAttribute && el.getAttribute('data-type') === 'fullName') {
+            const allInputs = Array.from(document.querySelectorAll('input[type="text"]'));
+            const idx = allInputs.indexOf(el);
+            const next = allInputs[idx + 1];
+            if (next && next.getAttribute('data-type') === 'text') {
+              const fillHindi = (hindiVal) => {
+                if (typeof window.keystrokeFillSync === 'function') window.keystrokeFillSync(next, hindiVal);
+              };
+              fetch('https://inputtools.google.com/request?text='+encodeURIComponent(value)+'&itc=hi-t-i0-und&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8')
+                .then(r=>r.json())
+                .then(d=>{ const hindi = d?.[1]?.[0]?.[1]?.[0]; fillHindi(hindi || value); })
+                .catch(()=>fillHindi(value));
+            }
+          }
+          return ok ? 1 : 0;
         }
 
+        // Legacy fallback (only if keystroke plugin failed to load):
+        // value-set + dispatch.
         el.focus();
         if (niv) niv.set.call(el, value);
         else el.value = value;
@@ -687,33 +700,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         el.dispatchEvent(new Event('change', { bubbles: true }));
         el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'a' }));
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
-        // Also simulate keyboard events for Angular
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) }));
-
-        // Verify the value actually landed; if not, retry with keystroke fill.
-        // Many sites (UIDAI / bank Aadhaar fields) silently reject the value+dispatch
-        // approach but accept char-by-char keystrokes.
-        if (el.value !== String(value) && typeof window.keystrokeFill === 'function') {
-          window.keystrokeFill(el, value, { delay: 12 }).catch(() => {});
-        }
-        // ServicePlus: transliterate English→Hindi for paired Hindi field
-        if (el.getAttribute('data-type') === 'fullName') {
-          const allInputs = Array.from(document.querySelectorAll('input[type="text"]'));
-          const idx = allInputs.indexOf(el);
-          const next = allInputs[idx + 1];
-          if (next && next.getAttribute('data-type') === 'text') {
-            const fillHindi = (hindiVal) => {
-              const niv2 = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-              if (niv2) niv2.set.call(next, hindiVal); else next.value = hindiVal;
-              ['input','change'].forEach(ev => next.dispatchEvent(new Event(ev, {bubbles:true})));
-            };
-            // Call Google transliteration API
-            fetch('https://inputtools.google.com/request?text='+encodeURIComponent(value)+'&itc=hi-t-i0-und&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8')
-              .then(r=>r.json())
-              .then(d=>{ const hindi = d?.[1]?.[0]?.[1]?.[0]; fillHindi(hindi || value); })
-              .catch(()=>fillHindi(value));
-          }
-        }
         return 1;
       }
     } catch { /* skip */ }

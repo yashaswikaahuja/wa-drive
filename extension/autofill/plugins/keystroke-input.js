@@ -86,6 +86,49 @@
   };
 
   /**
+   * Synchronous version — no per-char delay. Use this from sync callers
+   * (the executor's fillOne is sync). Events are still fired in proper
+   * order; validators that listen to keydown/input/keypress/keyup will see
+   * them char-by-char even though they all execute within one JS tick.
+   * This is the PRIMARY fill path for all text inputs as of v5.67.
+   */
+  window.keystrokeFillSync = function keystrokeFillSync(el, value) {
+    if (!el) return false;
+    const str = String(value);
+    const isTextarea = el.tagName === 'TEXTAREA';
+    const proto = isTextarea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    const setVal = desc ? (v) => desc.set.call(el, v) : (v) => { el.value = v; };
+
+    try { el.focus(); } catch (e) {}
+    try { el.click(); } catch (e) {}
+
+    if (el.value) {
+      try { el.select(); } catch (e) {}
+      setVal('');
+      try { el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' })); } catch (e) {}
+    }
+
+    let current = '';
+    for (const ch of str) {
+      const kc = keyCodeFor(ch);
+      const code = codeFor(ch);
+      el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ch, code, keyCode: kc, which: kc, charCode: 0 }));
+      try { el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: ch })); } catch (e) {}
+      current += ch;
+      setVal(current);
+      try { el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch })); }
+      catch (e) { el.dispatchEvent(new Event('input', { bubbles: true })); }
+      el.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, cancelable: true, key: ch, code, keyCode: kc, which: kc, charCode: kc }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ch, code, keyCode: kc, which: kc }));
+    }
+
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    try { el.blur(); } catch (e) {}
+    return el.value === str;
+  };
+
+  /**
    * Heuristic: should this field need keystroke fill PRIMARILY (vs as fallback)?
    * Yes for: aadhaar/UID fields, OTP, captcha, masked numeric fields with maxLength<=16.
    */
