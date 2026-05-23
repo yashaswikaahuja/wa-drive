@@ -3,25 +3,42 @@ import api from '../../shared/api';
 
 interface CorrectionBatch {
   id: string; hostname: string; semanticFormKey: string; trigger: string;
-  corrections: any[]; receivedAt: string;
+  corrections?: any[]; correctionCount?: number; receivedAt: string;
 }
 
 export default function Corrections() {
   const [batches, setBatches] = useState<CorrectionBatch[]>([]);
   const [selected, setSelected] = useState<CorrectionBatch | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
 
   useEffect(() => { api.get('/corrections').then(r => setBatches(r.data)).catch(() => {}); }, []);
 
+  async function openBatch(b: CorrectionBatch) {
+    setSelected(b);
+    setLoadingDetail(true);
+    try {
+      const r = await api.get(`/corrections/${b.id}`);
+      setSelected(r.data);
+    } catch {}
+    finally { setLoadingDetail(false); }
+  }
+
   if (selected) {
+    const corrections = selected.corrections || [];
     return (
       <div>
         <button onClick={() => setSelected(null)} className="text-xs text-blue-400 mb-4 hover:underline">← Back</button>
         <h2 className="text-lg font-bold text-white mb-1">{selected.hostname}</h2>
-        <p className="text-xs text-gray-500 mb-4">Trigger: {selected.trigger} · {new Date(selected.receivedAt).toLocaleString()}</p>
+        <p className="text-xs text-gray-500 mb-4">
+          Trigger: <span className="text-orange-400">{selected.trigger}</span> ·
+          {' '}{corrections.length} correction{corrections.length === 1 ? '' : 's'} ·
+          {' '}{new Date(selected.receivedAt).toLocaleString()}
+        </p>
+        {loadingDetail && corrections.length === 0 && <p className="text-gray-600 text-sm">Loading detail…</p>}
         <div className="space-y-2">
-          {selected.corrections.map((c: any, i: number) => (
+          {corrections.map((c: any, i: number) => (
             <div key={i} className="bg-[#0d1220] border border-white/5 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className={c.correctionType === 'override' ? 'text-orange-400' : 'text-blue-400'}>
                   {c.correctionType === 'override' ? '✏️' : '➕'}
                 </span>
@@ -29,14 +46,30 @@ export default function Corrections() {
                 <span className={`px-2 py-0.5 rounded text-[10px] ${c.correctionType === 'override' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
                   {c.correctionType}
                 </span>
+                {c.profileKey && <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-400">profile.{c.profileKey}</span>}
+                {c.originalResult && c.originalResult !== 'filled' && <span className="px-2 py-0.5 rounded text-[10px] bg-yellow-500/20 text-yellow-400">{c.originalResult}</span>}
               </div>
-              <div className="flex gap-4 text-xs mt-1">
-                <span className="text-red-400">Auto: {c.autofilledValue || '—'}</span>
-                <span className="text-green-400">Operator: {c.finalOperatorValue || c.operatorValue || '—'}</span>
+              <div className="flex gap-4 text-xs mt-1 flex-wrap">
+                <span className="text-red-300">
+                  <span className="text-gray-500">autofilled:</span>{' '}
+                  <code className="bg-red-500/10 px-1.5 py-0.5 rounded">{c.autofilledValue || '—'}</code>
+                </span>
+                <span className="text-green-300">
+                  <span className="text-gray-500">operator:</span>{' '}
+                  <code className="bg-green-500/10 px-1.5 py-0.5 rounded">{c.finalOperatorValue || c.operatorValue || '—'}</code>
+                </span>
               </div>
-              {c.strategy && <p className="text-[10px] text-gray-600 mt-1">Strategy: {c.strategy} · Plugin: {c.plugin || 'none'}</p>}
+              {(c.strategy || c.plugin) && (
+                <p className="text-[10px] text-gray-600 mt-1">
+                  Strategy: {c.strategy || '—'}{c.plugin ? ` · Plugin: ${c.plugin}` : ''}
+                </p>
+              )}
+              {c.selector && (
+                <p className="text-[10px] text-gray-700 mt-0.5 font-mono truncate" title={c.selector}>{c.selector}</p>
+              )}
             </div>
           ))}
+          {!loadingDetail && corrections.length === 0 && <p className="text-gray-600 text-sm">No correction entries</p>}
         </div>
       </div>
     );
@@ -48,15 +81,15 @@ export default function Corrections() {
       {batches.length === 0 ? <p className="text-gray-500 text-center py-12">No corrections captured yet</p> : (
         <div className="space-y-2">
           {batches.map(b => (
-            <div key={b.id} onClick={() => setSelected(b)}
+            <div key={b.id} onClick={() => openBatch(b)}
               className="bg-[#0d1220] border border-white/5 rounded-xl p-4 cursor-pointer hover:border-orange-500/30 transition">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-white">{b.hostname}</p>
-                  <p className="text-xs text-gray-500">Trigger: {b.trigger}</p>
+                  <p className="text-sm font-medium text-white">{b.hostname || '(no hostname)'}</p>
+                  <p className="text-xs text-gray-500">Trigger: {b.trigger || '—'}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-orange-400 font-medium">{b.corrections?.length || 0} corrections</p>
+                  <p className="text-sm text-orange-400 font-medium">{b.correctionCount ?? b.corrections?.length ?? 0} correction{(b.correctionCount ?? b.corrections?.length ?? 0) === 1 ? '' : 's'}</p>
                 </div>
               </div>
               <p className="text-[10px] text-gray-600 mt-2">{new Date(b.receivedAt).toLocaleString()}</p>
