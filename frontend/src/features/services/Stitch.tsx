@@ -64,7 +64,35 @@ async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, 
   return URL.createObjectURL(res.data);
 }
 
-function printUrl(url: string) { const w = window.open('', '_blank'); if (!w) return; w.document.write(`<html><body style="margin:0"><img src="${url}" style="width:100%" onload="window.print()"/></body></html>`); w.document.close(); }
+function printUrl(url: string) {
+  if (!url) { alert('Nothing to print — generate the sheet first.'); return; }
+  // Open the blob URL directly in a new tab. Browser renders the image.
+  // We then trigger window.print() on it. Falls back to download if popup blocked.
+  const w = window.open(url, '_blank');
+  if (!w) {
+    // Popup blocked. Download as fallback so operator can print manually.
+    const a = document.createElement('a');
+    a.href = url; a.download = 'photo-sheet.jpg';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    alert('Popup was blocked — file downloaded instead. Open it and Ctrl+P to print.');
+    return;
+  }
+  // Wait for the popup to finish loading the image, then print.
+  const tryPrint = () => {
+    try {
+      if (w.closed) return;
+      if (w.document && w.document.readyState === 'complete') {
+        // Give browser a moment to render before print dialog
+        setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
+      } else {
+        setTimeout(tryPrint, 200);
+      }
+    } catch (e) {
+      // Cross-origin or window closed — give up silently
+    }
+  };
+  setTimeout(tryPrint, 500);
+}
 function downloadUrl(url: string, name: string) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
 
 export default function Stitch() {
@@ -97,6 +125,7 @@ export default function Stitch() {
   const [bgLoading, setBgLoading] = useState(false);
   const [bgError, setBgError] = useState<string | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
 
   useEffect(() => {
     const raw = params.get('files');
@@ -160,10 +189,21 @@ export default function Stitch() {
     const fileId = getDriveId(activeFile.fileUrl);
     if (!fileId) return;
     setSheetLoading(true);
+    setSheetError(null);
     let processedBlob: Blob | undefined;
     if (processedUrl) { const r = await fetch(processedUrl); processedBlob = await r.blob(); }
-    try { setSheetUrl(await buildSheet(fileId, preset, spec, { name: textName || undefined, date: textDate || undefined, signature: textSig || undefined, font: textFont }, processedBlob)); }
-    catch (e: any) { setBgError(e.message); }
+    try {
+      setSheetUrl(await buildSheet(fileId, preset, spec, { name: textName || undefined, date: textDate || undefined, signature: textSig || undefined, font: textFont }, processedBlob));
+    }
+    catch (e: any) {
+      // Axios error body is a Blob (we requested responseType:'blob'). Read it to get the real error.
+      let msg = e.message || 'Sheet generation failed';
+      if (e.response?.data instanceof Blob) {
+        try { const text = await e.response.data.text(); const j = JSON.parse(text); if (j.error) msg = j.error; } catch {}
+      }
+      if (e.response?.status === 404) msg = 'File not found (404). The photo may have been deleted from Drive — re-pick it from WhatsApp.';
+      setSheetError(msg);
+    }
     finally { setSheetLoading(false); }
   }
 
@@ -287,7 +327,14 @@ export default function Stitch() {
                 className="w-full py-2.5 bg-green-700 hover:bg-green-600 disabled:opacity-40 text-white text-xs font-bold rounded">
                 {sheetLoading ? 'Generating…' : `🖼️ Generate ${PRESETS.find(p => p.key === preset)?.label}`}
               </button>
-              {(fgDataUrl || processedUrl) && <button onClick={() => { setFgDataUrl(null); setProcessedUrl(null); setSheetUrl(null); setBgError(null); }} className="w-full mt-2 py-1 text-gray-500 text-[10px] border border-white/5 rounded">↺ Reset</button>}
+              {sheetError && (
+                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/30 rounded text-[11px] text-red-300">
+                  <div className="font-medium mb-0.5">⚠ Sheet generation failed</div>
+                  <div className="text-red-400/80">{sheetError}</div>
+                  <button onClick={generateSheet} className="mt-1 text-[10px] underline text-red-300">retry</button>
+                </div>
+              )}
+              {(fgDataUrl || processedUrl) && <button onClick={() => { setFgDataUrl(null); setProcessedUrl(null); setSheetUrl(null); setBgError(null); setSheetError(null); }} className="w-full mt-2 py-1 text-gray-500 text-[10px] border border-white/5 rounded">↺ Reset</button>}
             </div>
           </div>
 
