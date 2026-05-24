@@ -66,32 +66,38 @@ async function buildSheet(fileId: string, preset: SheetPreset, spec: PhotoSpec, 
 
 function printUrl(url: string) {
   if (!url) { alert('Nothing to print — generate the sheet first.'); return; }
-  // Open the blob URL directly in a new tab. Browser renders the image.
-  // We then trigger window.print() on it. Falls back to download if popup blocked.
-  const w = window.open(url, '_blank');
-  if (!w) {
-    // Popup blocked. Download as fallback so operator can print manually.
-    const a = document.createElement('a');
-    a.href = url; a.download = 'photo-sheet.jpg';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    alert('Popup was blocked — file downloaded instead. Open it and Ctrl+P to print.');
-    return;
-  }
-  // Wait for the popup to finish loading the image, then print.
-  const tryPrint = () => {
-    try {
-      if (w.closed) return;
-      if (w.document && w.document.readyState === 'complete') {
-        // Give browser a moment to render before print dialog
-        setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 300);
-      } else {
-        setTimeout(tryPrint, 200);
+  // Print via hidden iframe in the SAME document. Cross-window blob URLs
+  // are blocked by Chrome's same-origin policy (since ~2020), so we can't
+  // navigate window.open() to a blob URL. iframe sharing the parent's
+  // document context CAN load blob URLs.
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;right:-9999px;bottom:0;width:210mm;height:297mm;border:0';
+  iframe.src = url;
+  let printed = false;
+  const cleanup = () => { try { document.body.removeChild(iframe); } catch (e) {} };
+  iframe.onload = () => {
+    if (printed) return;
+    printed = true;
+    // Slight delay so the image is rendered
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (e) {
+        // Fallback to download
+        const a = document.createElement('a');
+        a.href = url; a.download = 'photo-sheet.jpg';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
       }
-    } catch (e) {
-      // Cross-origin or window closed — give up silently
-    }
+      // Keep iframe around long enough for print dialog
+      setTimeout(cleanup, 5000);
+    }, 200);
   };
-  setTimeout(tryPrint, 500);
+  iframe.onerror = () => {
+    cleanup();
+    alert('Failed to load print preview. Try Download and print manually.');
+  };
+  document.body.appendChild(iframe);
 }
 function downloadUrl(url: string, name: string) { const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
 
