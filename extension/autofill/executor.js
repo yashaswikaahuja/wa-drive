@@ -124,6 +124,15 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       // Partial — accept if actual contains expected prefix (some sites trim trailing whitespace)
       return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, partial: true };
     }
+    // Masked-input pattern (UIDAI, banks): actual shows '********6597' but real value is full 12 digits.
+    // If actual ends with the LAST 4-6 chars of expected AND actual length matches expected length,
+    // consider it filled (the * are placeholders, not real).
+    if (actual.length >= 8 && actual.length === expStr.length) {
+      const tail = expStr.slice(-4).toLowerCase();
+      if (actual.toLowerCase().endsWith(tail)) {
+        return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, masked: true };
+      }
+    }
     return { ok: false, actualValue: actual, normExpected: normExp, normActual: normAct, reason: actual === '' ? 'value-rejected-empty' : 'value-mismatch' };
   }
 

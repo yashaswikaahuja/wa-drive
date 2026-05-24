@@ -71,8 +71,29 @@
   function summarizeEl(el, opts) {
     if (!el) return null;
     const r = el.getBoundingClientRect();
+    const tag = el.tagName.toLowerCase();
+    const cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
+    // Semantic kind — what the LLM agent should pick the tool for.
+    let kind = 'unknown';
+    if (tag === 'select' || tag === 'ng-select' || tag === 'mat-select' || cls.includes('ng-select') || cls.includes('mat-select')) {
+      kind = 'dropdown';
+    } else if (tag === 'textarea') {
+      kind = 'text';
+    } else if (tag === 'input') {
+      const t = (el.type || 'text').toLowerCase();
+      if (t === 'radio') kind = 'radio';
+      else if (t === 'checkbox') kind = 'checkbox';
+      else if (t === 'submit' || t === 'button') kind = 'button';
+      else if (t === 'file') kind = 'file';
+      else kind = 'text';
+    } else if (tag === 'button' || el.getAttribute('role') === 'button') {
+      kind = 'button';
+    } else if (tag === 'a') {
+      kind = 'link';
+    }
     const sum = {
-      tag: el.tagName.toLowerCase(),
+      tag,
+      kind,
       type: el.type || null,
       id: el.id || null,
       name: el.name || null,
@@ -185,7 +206,15 @@
       if (kinds.includes('input')) sels.push('input:not([type="hidden"])', 'textarea');
       if (kinds.includes('button')) sels.push('button', 'input[type="submit"]', 'input[type="button"]', '[role="button"]');
       if (kinds.includes('link')) sels.push('a[href]');
-      if (kinds.includes('select')) sels.push('select', 'mat-select', '.ng-select');
+      if (kinds.includes('select')) {
+        // Native + Angular Material + ng-select. Common patterns:
+        //   <select>
+        //   <mat-select> wrapped in <mat-form-field>
+        //   <ng-select> from @ng-select/ng-select
+        //   <div class="ng-select">  some sites use plain divs styled as ng-select
+        //   <div class="value-area">  custom dropdowns (SSC OTR pattern)
+        sels.push('select', 'mat-select', 'ng-select', '.ng-select', '.mat-select-trigger', 'div.value-area', '.ng-select-container');
+      }
       if (kinds.includes('checkbox')) sels.push('input[type="checkbox"]', 'mat-checkbox');
       if (kinds.includes('radio')) sels.push('input[type="radio"]', 'mat-radio-button');
       const els = Array.from(document.querySelectorAll(sels.join(',')))

@@ -58,8 +58,13 @@
       const after = readActual(el);
       const expectedNorm = String(args.value).toLowerCase().replace(/[^a-z0-9]/g, '');
       const actualNorm = after.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const verified = expectedNorm === actualNorm
+      let verified = expectedNorm === actualNorm
         || (actualNorm.length > 0 && actualNorm.startsWith(expectedNorm.slice(0, Math.max(8, expectedNorm.length - 2))));
+      // Masked input pattern (UIDAI etc): actual shows '********6597'; accept if length matches and last 4 match
+      if (!verified && after.length === String(args.value).length && after.length >= 8) {
+        const tail = String(args.value).slice(-4).toLowerCase();
+        if (after.toLowerCase().endsWith(tail)) verified = true;
+      }
       return { before, actualValue: after, verified };
     },
   });

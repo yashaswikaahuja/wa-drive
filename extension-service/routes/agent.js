@@ -36,12 +36,11 @@ function buildSystemPrompt(profile, hostname, formContext) {
     'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId',
     'confirmedAt', 'confirmedBy', 'source', 'confidence',
   ]);
-  const profileBrief = profile
-    ? Object.entries(profile)
-        .filter(([k, v]) => v && typeof v !== 'object' && String(v).length > 0 && String(v).length < 200 && !META_KEYS.has(k))
-        .map(([k, v]) => `  ${k}: ${v}`)
-        .join('\n')
-    : '(no profile provided)';
+  const cleanEntries = profile
+    ? Object.entries(profile).filter(([k, v]) => v && typeof v !== 'object' && String(v).length > 0 && String(v).length < 200 && !META_KEYS.has(k))
+    : [];
+  const profileBrief = cleanEntries.length ? cleanEntries.map(([k, v]) => `  ${k}: ${v}`).join('\n') : '(no profile provided)';
+  const availableKeys = cleanEntries.map(([k]) => k).join(', ') || '(none)';
 
   return `You are CyberControl's form-filling agent. You drive a browser by emitting tool calls.
 
@@ -70,6 +69,20 @@ FILLING DISCIPLINE
 - For State/UT, use profile.state. District: profile.district. Block: profile.block. Village: profile.village.
 - For Father's Name use profile.father_name. Mother's Name: profile.mother_name.
 - For Date of Birth: profile.dob (format dd/mm/yyyy already).
+
+DROPDOWNS (ng-select / mat-select / native select)
+- For Gender: select.option with value matching profile.gender (e.g. "Female").
+- For State, District, Education Board, Year of Passing, etc: use select.option (or select.cascade
+  for State→District chains). Match by EXACT profile value text.
+- If the snapshot's element is a <select> or <ng-select> or <mat-select>, USE select.option, NOT input.type.
+
+NEVER INVENT VALUES
+- If profile has no email, do NOT type something like "name@gmail.com". Skip the field entirely.
+- If profile has no specific value for a field, skip it. Don't guess. Don't synthesize.
+- If a profile key is empty / missing, that field stays unfilled.
+
+AVAILABLE PROFILE KEYS (these are the ONLY keys that exist; if a form field needs a key NOT in this list, skip):
+  ${availableKeys}
 
 SELECTOR DISCIPLINE
 - Use the EXACT selector string from the snapshot. Don't shorten or rewrite it. The CSS path looks ugly but it's what works.
@@ -114,11 +127,21 @@ function buildUserPrompt(goal, snapshot) {
   const fieldList = elements.slice(0, 100).map((el, i) => {
     const parts = [];
     parts.push(`#${i}`);
-    parts.push('<' + el.tag + (el.type ? ' type=' + el.type : '') + '>');
+    // Use the kind field set by dom.js summarizeEl (drivers v5.76+).
+    // Falls back to inferring from tag/type for older snapshots.
+    let kind = el.kind;
+    if (!kind) {
+      if (el.tag === 'select' || el.tag === 'ng-select' || el.tag === 'mat-select') kind = 'dropdown';
+      else if (el.type === 'radio') kind = 'radio';
+      else if (el.type === 'checkbox') kind = 'checkbox';
+      else if (el.tag === 'button' || el.type === 'submit' || el.type === 'button') kind = 'button';
+      else kind = 'text';
+    }
+    parts.push('[' + kind.toUpperCase() + ']');
     if (el.label) parts.push('label="' + el.label.slice(0, 60) + '"');
     if (el.placeholder) parts.push('placeholder="' + el.placeholder.slice(0, 40) + '"');
     if (el.value) parts.push('value="' + String(el.value).slice(0, 30) + '"');
-    if (el.text && !el.label) parts.push('text="' + el.text.slice(0, 40) + '"');
+    if (el.text && !el.label && !['button','div'].includes(el.tag)) parts.push('text="' + el.text.slice(0, 40) + '"');
     parts.push('selector="' + el.selector + '"');
     return parts.join(' ');
   }).join('\n');
@@ -130,10 +153,10 @@ url: ${snapshot?.url || 'unknown'}
 title: ${snapshot?.title || 'unknown'}
 elementCount: ${elements.length}
 
-ELEMENTS:
+ELEMENTS (use kind tag to pick the right tool):
 ${fieldList}
 
-Plan the actions to achieve the goal. Use selectors from the snapshot exactly. Call one tool per action.`;
+Plan tool calls. For each [TEXT] use input.type; for each [DROPDOWN] use select.option (the value text matches the profile field, e.g. "Female"); SKIP [BUTTON] and [RADIO] unless explicitly told otherwise.`;
 }
 
 router.post('/plan', async (req, res) => {
@@ -178,6 +201,19 @@ router.post('/plan', async (req, res) => {
     const data = await response.json();
     const message = data?.choices?.[0]?.message;
     const toolCalls = message?.tool_calls || [];
+
+    // Build set of profile values for hallucination filter
+    const profileValueSet = new Set();
+    if (profile && typeof profile === 'object') {
+      for (const v of Object.values(profile)) {
+        if (v && typeof v !== 'object') {
+          const str = String(v).trim();
+          if (str.length > 0) profileValueSet.add(str.toLowerCase().replace(/[^a-z0-9]/g, ''));
+        }
+      }
+    }
+
+    let hallucinationsDropped = 0;
     const actions = toolCalls.map((tc, i) => {
       let args = {};
       try { args = JSON.parse(tc.function.arguments); } catch (e) {}
@@ -187,10 +223,32 @@ router.post('/plan', async (req, res) => {
         args,
         toolCallId: tc.id,
       };
+    }).filter(action => {
+      // Hallucination guard: for input.type / select.option, the value MUST come from profile.
+      // Match by lowercase-alphanum compare. Allow profile aadhaar masked variants (subset match ok).
+      if ((action.name === 'input.type' || action.name === 'select.option') && action.args && action.args.value) {
+        const valNorm = String(action.args.value).toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (valNorm.length === 0) return true; // empty value, let driver handle
+        // Direct match
+        if (profileValueSet.has(valNorm)) return true;
+        // Substring match (e.g. profile.address contains the value, or value is prefix of address)
+        for (const pv of profileValueSet) {
+          if (pv.length >= 4 && (pv.includes(valNorm) || valNorm.includes(pv))) return true;
+        }
+        // Single-token / numeric check (DD/MM/YYYY parts of dob)
+        if (profile.dob) {
+          const dobParts = String(profile.dob).split(/[\/\-.]/);
+          if (dobParts.includes(String(action.args.value))) return true;
+        }
+        hallucinationsDropped++;
+        return false; // hallucinated value — drop
+      }
+      return true;
     });
 
     const result = {
       actions,
+      hallucinationsDropped,
       reasoning: message?.content || null,
       model: data.model || model,
       promptTokens: data.usage?.prompt_tokens,
