@@ -478,6 +478,21 @@ agentExecuteBtn.addEventListener('click', async () => {
     const okCount = execResult.steps.filter(s => s.ok).length;
     showStatus(`Done: ${okCount}/${execResult.steps.length} actions succeeded`, execResult.ok ? '#10b981' : '#f59e0b');
 
+    // Render per-step results inline so operator sees what happened
+    agentActionsEl.innerHTML = plan.actions.map((a, i) => {
+      const r = execResult.steps[i];
+      const ok = r && r.ok;
+      const color = ok ? '#10b981' : '#ef4444';
+      const summary = r?.error || (r?.result ? JSON.stringify(r.result).slice(0, 80) : '?');
+      const args = JSON.stringify(a.args).slice(0, 60);
+      return `<div style="font-size: 11px; padding: 4px 6px; border-bottom: 1px solid #222; font-family: monospace;">
+        <span style="color: ${color};">${ok ? '✓' : '✗'}</span>
+        <span style="color: #3b82f6;">${a.name}</span>
+        <span style="color: #ccc;">${args}</span>
+        <div style="color: #888; padding-left: 16px; font-size: 10px;">${summary}</div>
+      </div>`;
+    }).join('');
+
     // Snapshot after for trace
     const [{ result: snapAfter }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -498,7 +513,8 @@ agentExecuteBtn.addEventListener('click', async () => {
       }),
     }).catch(e => console.warn('[CC agent] trace persist failed:', e));
 
-    agentPanel.style.display = 'none';
+    agentExecuteBtn.textContent = '✓ Done';
+    setTimeout(() => { agentExecuteBtn.textContent = '▶ Execute'; }, 3000);
     _pendingPlan = null;
   } catch (e) {
     showStatus('Execute error: ' + e.message, '#ef4444');

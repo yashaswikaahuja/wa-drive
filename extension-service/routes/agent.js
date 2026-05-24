@@ -44,23 +44,19 @@ You will receive:
 3. A CUSTOMER PROFILE (key-value pairs from their documents — Aadhaar, marksheet, etc.)
 4. The DRIVER TOOLS you can call
 
-You output a JSON list of actions to perform. Each action calls one driver tool.
+You output a sequence of tool calls — ONE per field you want to fill.
 
-Driver tools work like this:
-- Observation tools (dom.query, dom.read, dom.snapshot, wait.*) read the page or wait for state.
-- Mutation tools (input.type, input.clear, select.option, click) change the page.
-- Compose them in order. The browser executes them one by one.
-
-Rules:
-- For text fields, use input.type with the EXACT profile value. Don't reformat (the field's masking handles that).
-- For dropdowns, use select.option with the option text from the snapshot's element list.
-- For dependent dropdowns (state→district→block), use select.cascade.
-- For "Verify X" or "Confirm X" twin fields, use the same value as the primary field.
-- For radios, only pick when the option label matches a profile value clearly. Skip "Have you ___?" / "Yes/No" qualifying radios.
-- For checkboxes, only check agreement/declaration boxes (terms, I confirm, etc).
-- Use exact selectors from the snapshot — don't invent ones.
-- If you can't find a match for a profile field, skip it. Don't guess.
-- Don't click submit/continue/next buttons unless the goal explicitly says to navigate.
+CRITICAL RULES — read carefully:
+- To FILL a text/email/tel/textarea field, use **input.type**. Never use input.focus or click for filling — those don't enter values.
+- For each field that has a clear profile match, emit ONE input.type tool call with the profile's value.
+- Use the EXACT selector from the snapshot. Don't invent selectors. Don't shorten them.
+- For dropdowns, use **select.option** with text from the snapshot's option list when shown.
+- For dependent dropdowns (state→district), use **select.cascade** in DOM order so parents fill first.
+- For "Verify X" / "Confirm X" / "Re-type X" twin fields, use the same value as the primary field.
+- Do NOT call input.focus or click — they only navigate, not fill.
+- Do NOT click submit/continue/next/proceed buttons. The operator submits manually.
+- For radios labeled "Yes"/"No"/"Have you...?": SKIP. These are decisions, not data.
+- For checkboxes: only check explicit agreement/declaration checkboxes (terms, I confirm, I declare).
 
 Hostname: ${hostname || 'unknown'}
 Form context: ${formContext || 'unknown'}
@@ -68,12 +64,19 @@ Form context: ${formContext || 'unknown'}
 Customer profile:
 ${profileBrief}
 
-Output ONLY by calling the tool functions. Do not write prose.`;
+Match each form field to the BEST profile key. If no match, skip that field. Don't guess. Don't fill placeholders. Output one tool call per fill.`;
 }
 
 function driverSchemasToTools(drivers) {
+  // Only expose drivers that are useful for FORM FILLING. Excludes:
+  //   - input.focus / input.clear  — focus alone won't fill, model would call it instead of type
+  //   - click                       — submit/navigate is operator's responsibility
+  //   - wait.*                      — agent is single-shot for now; iteration in Phase 3
+  //   - dom.read / dom.query        — agent already has dom.snapshot in the prompt
+  //   - select.cascade              — same impl as select.option, simpler to expose one
+  const FILL_DRIVERS = new Set(['input.type', 'select.option', 'select.cascade']);
   return (drivers || [])
-    .filter(d => d && d.name && d.input)
+    .filter(d => d && d.name && d.input && FILL_DRIVERS.has(d.name))
     .map(d => ({
       type: 'function',
       function: {
