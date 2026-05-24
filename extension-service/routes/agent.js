@@ -256,8 +256,11 @@ router.post('/plan', async (req, res) => {
     const semKey = normLabel(el.label);
     if (!semKey) continue;
     if (!formMappings[semKey]) {
-      formMappings[semKey] = { profileKey: null, fills: 0, corrections: 0, lastSeen: today, source: 'seed' };
+      formMappings[semKey] = { label: el.label, profileKey: null, fills: 0, corrections: 0, lastSeen: today, source: 'seed' };
       seeded++;
+    } else if (!formMappings[semKey].label) {
+      // Backfill original label on existing entries that lack it
+      formMappings[semKey].label = el.label;
     }
   }
   // Persist if anything new was added (or just _meta updated)
@@ -421,6 +424,7 @@ router.post('/plan', async (req, res) => {
         if (existing && existing.profileKey && existing.source === 'manual') continue;
         if (profileKey) {
           formMappings[semKey] = formMappings[semKey] || { fills: 0, corrections: 0, source: 'agent' };
+          formMappings[semKey].label = formMappings[semKey].label || el.label;
           formMappings[semKey].profileKey = profileKey;
           formMappings[semKey].lastSeen = today;
           if (!formMappings[semKey].source || formMappings[semKey].source === 'seed') {
@@ -504,11 +508,12 @@ router.post('/trace', async (req, res) => {
         if (!profileKey) continue;
         const existing = all[formKey][semKey];
         if (existing) {
+          existing.label = existing.label || el.label;
           existing.fills = (existing.fills || 0) + 1;
           existing.profileKey = profileKey;
           existing.lastSeen = today;
         } else {
-          all[formKey][semKey] = { profileKey, fills: 1, corrections: 0, lastSeen: today, source: 'agent' };
+          all[formKey][semKey] = { label: el.label, profileKey, fills: 1, corrections: 0, lastSeen: today, source: 'agent' };
         }
         learned++;
       }

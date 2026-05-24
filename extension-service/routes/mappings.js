@@ -103,6 +103,7 @@ router.post('/backfill', authMiddleware, async (req, res) => {
 
         if (!existing) {
           all[formKey][semKey] = {
+            label: r.label,
             profileKey: profileKey || null,
             fills: 0, corrections: 0,
             lastSeen: today,
@@ -110,11 +111,15 @@ router.post('/backfill', authMiddleware, async (req, res) => {
           };
           formSeeded++;
           if (profileKey) mappedTotal++;
-        } else if (!existing.profileKey && profileKey) {
-          existing.profileKey = profileKey;
-          existing.source = source;
-          existing.lastSeen = today;
-          mappedTotal++;
+        } else {
+          // Backfill missing label on existing entries
+          if (!existing.label) existing.label = r.label;
+          if (!existing.profileKey && profileKey) {
+            existing.profileKey = profileKey;
+            existing.source = source;
+            existing.lastSeen = today;
+            mappedTotal++;
+          }
         }
       }
       if (formSeeded > 0) formsSeeded++;

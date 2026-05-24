@@ -13,6 +13,7 @@ interface FormSummary {
 }
 
 interface FieldMapping {
+  label?: string;
   profileKey: string | null;
   fills: number;
   corrections: number;
@@ -156,40 +157,48 @@ export default function MappingsPage() {
             <div className="col-span-4">Maps To Profile Key</div>
             <div className="col-span-2 text-right">Stats</div>
           </div>
-          {fieldEntries.map(([label, m]) => (
-            <div key={label} className={`grid grid-cols-12 px-4 py-2.5 border-b border-gray-800/50 items-center hover:bg-gray-800/30 transition ${!m.profileKey ? 'bg-yellow-500/5' : ''}`}>
-              <div className="col-span-6 text-sm text-gray-200 font-mono truncate" title={label}>
-                {label}
+          {fieldEntries.map(([key, m]) => {
+            const display = m.label || key;
+            return (
+              <div key={key} className={`grid grid-cols-12 px-4 py-2.5 border-b border-gray-800/50 items-center hover:bg-gray-800/30 transition ${!m.profileKey ? 'bg-yellow-500/5' : ''}`}>
+                <div className="col-span-6 text-sm text-gray-200 truncate" title={display}>
+                  {display}
+                  {m.label && m.label !== key && (
+                    <div className="text-[10px] text-gray-600 font-mono mt-0.5">key: {key}</div>
+                  )}
+                </div>
+                <div className="col-span-4">
+                  <select
+                    value={m.profileKey || ''}
+                    onChange={(e) => updateField(key, e.target.value)}
+                    disabled={savingKey === key}
+                    className="bg-gray-800 text-gray-100 text-sm px-2.5 py-1.5 rounded border border-gray-700 w-full focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">— skip / no mapping —</option>
+                    {PROFILE_KEY_GROUPS.map(group => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.keys.map(k => <option key={k} value={k}>{k}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-2 flex items-center justify-end gap-2">
+                  <span className="text-[11px] text-gray-500">f:{m.fills} c:{m.corrections}</span>
+                  {m.source && (
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                      m.source === 'manual' ? 'bg-cyan-500/20 text-cyan-300' :
+                      m.source === 'agent' ? 'bg-blue-500/20 text-blue-300' :
+                      m.source === 'heuristic' ? 'bg-purple-500/20 text-purple-300' :
+                      m.source === 'backfill' ? 'bg-green-500/20 text-green-300' :
+                      m.source === 'seed' ? 'bg-yellow-500/20 text-yellow-300' :
+                      'bg-gray-700 text-gray-400'
+                    }`}>{m.source}</span>
+                  )}
+                  <button onClick={() => deleteField(key)} className="text-gray-500 hover:text-red-400 text-base" title="Remove">×</button>
+                </div>
               </div>
-              <div className="col-span-4">
-                <select
-                  value={m.profileKey || ''}
-                  onChange={(e) => updateField(label, e.target.value)}
-                  disabled={savingKey === label}
-                  className="bg-gray-800 text-gray-100 text-sm px-2.5 py-1.5 rounded border border-gray-700 w-full focus:outline-none focus:border-blue-500"
-                >
-                  <option value="">— skip / no mapping —</option>
-                  {PROFILE_KEY_GROUPS.map(group => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.keys.map(k => <option key={k} value={k}>{k}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-              <div className="col-span-2 flex items-center justify-end gap-2">
-                <span className="text-[11px] text-gray-500">f:{m.fills} c:{m.corrections}</span>
-                {m.source && (
-                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                    m.source === 'manual' ? 'bg-cyan-500/20 text-cyan-300' :
-                    m.source === 'agent' ? 'bg-blue-500/20 text-blue-300' :
-                    m.source === 'seed' ? 'bg-yellow-500/20 text-yellow-300' :
-                    'bg-gray-700 text-gray-400'
-                  }`}>{m.source}</span>
-                )}
-                <button onClick={() => deleteField(label)} className="text-gray-500 hover:text-red-400 text-base" title="Remove">×</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {fieldEntries.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">No fields recorded yet.</div>}
         </div>
       </div>
