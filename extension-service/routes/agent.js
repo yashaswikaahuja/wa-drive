@@ -20,12 +20,50 @@
 import express from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
 router.use(authMiddleware);
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
+
+// ── Mappings cache (same JSON file used by autofill executor's correction loop)
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = process.env.DATA_DIR || resolve(__dirname, '../data');
+const MAPPINGS_PATH = resolve(DATA_DIR, 'form_mappings.json');
+
+function loadMappings() {
+  if (!existsSync(MAPPINGS_PATH)) return {};
+  try { return JSON.parse(readFileSync(MAPPINGS_PATH, 'utf8')); } catch { return {}; }
+}
+function saveMappings(data) {
+  mkdirSync(DATA_DIR, { recursive: true });
+  writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
+}
+
+// Compute semanticFormKey identically to extension/autofill/extractor.js
+// so the agent and the autofill flow share the same cache key.
+function computeSemanticFormKey(snapshot) {
+  const url = snapshot && snapshot.url || '';
+  let hostname = '';
+  try { hostname = new URL(url).hostname; } catch (e) {}
+  const labels = (snapshot && snapshot.elements || [])
+    .map(e => (e.label || '').toLowerCase().replace(/[^a-z\s]/g, '').trim())
+    .filter(l => l.length > 2)
+    .sort()
+    .slice(0, 15);
+  const raw = `${hostname}|${labels.join('|')}`;
+  let h = 0;
+  for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
+  return 's_' + Math.abs(h).toString(36);
+}
+
+function normLabel(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
 function buildSystemPrompt(profile, hostname, formContext) {
   // Strip metadata that aren't form values (id, timestamps, relationship, etc.)
@@ -187,12 +225,68 @@ router.post('/plan', async (req, res) => {
     return res.status(400).json({ error: 'drivers array is required (call cc.listDrivers() in the extension)' });
   }
 
+  // ── Mapping cache: skip Groq for fields we've already learned ──────────
+  // Each mapping entry: { profileKey, fills, corrections, lastSeen }
+  // Pre-fill any snapshot field whose normalized label matches a known mapping
+  // and whose mapped profile key has a value for THIS profile.
+  const formKey = computeSemanticFormKey(snapshot);
+  const allMappings = loadMappings();
+  const formMappings = allMappings[formKey] || {};
+  const cachedActions = [];
+  const cachedFieldKeys = new Set();
+  for (const el of (snapshot.elements || [])) {
+    if (el.kind === 'button' || el.kind === 'link' || el.disabled || el.readOnly) continue;
+    const semKey = normLabel(el.label);
+    if (!semKey) continue;
+    const m = formMappings[semKey];
+    if (!m || !m.profileKey) continue;
+    const value = profile && profile[m.profileKey];
+    if (value === undefined || value === null || value === '') continue;
+    const driver = (el.kind === 'dropdown' || el.tag === 'select' || el.tag === 'ng-select' || el.tag === 'mat-select')
+      ? 'select.option'
+      : 'input.type';
+    cachedActions.push({
+      index: cachedActions.length,
+      name: driver,
+      args: { target: el.selector, value: String(value) },
+      source: 'cache',
+      cacheConfidence: m.fills > 0 ? Math.max(0, Math.min(1, (m.fills - m.corrections * 2) / Math.max(1, m.fills + m.corrections))) : 0.5,
+    });
+    cachedFieldKeys.add(semKey);
+  }
+
+  // If cache covers all fillable fields, return immediately — no Groq call.
+  const fillableElements = (snapshot.elements || []).filter(e => {
+    const k = e.kind || '';
+    return k !== 'button' && k !== 'link' && !e.disabled && !e.readOnly && (e.label || '').length > 0;
+  });
+  const uncovered = fillableElements.filter(e => !cachedFieldKeys.has(normLabel(e.label)));
+
+  if (uncovered.length === 0 && cachedActions.length > 0) {
+    return res.json({
+      actions: cachedActions,
+      reasoning: `cache-only: ${cachedActions.length} fields all in trained mappings for ${formKey}`,
+      model: 'cache',
+      formKey,
+      cacheHit: cachedActions.length,
+      cacheMiss: 0,
+      durationMs: Date.now() - t0,
+    });
+  }
+
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) return res.status(500).json({ error: 'GROQ_API_KEY not configured on server' });
 
+  // For Groq, only send the UNCOVERED fields — not the whole snapshot.
+  // Preserves token budget and lets Groq focus on novel fields.
+  const subSnapshot = {
+    ...snapshot,
+    elements: uncovered.length ? uncovered : (snapshot.elements || []),
+  };
+
   const tools = driverSchemasToTools(drivers);
   const systemPrompt = buildSystemPrompt(profile, hostname, formContext);
-  const userPrompt = buildUserPrompt(goal, snapshot);
+  const userPrompt = buildUserPrompt(goal, subSnapshot);
   const model = requestedModel || DEFAULT_MODEL;
 
   try {
@@ -265,11 +359,18 @@ router.post('/plan', async (req, res) => {
       return true;
     });
 
+    // Mark Groq-sourced actions and merge with cached ones (cache first)
+    actions.forEach((a, i) => { a.source = a.source || 'agent'; a.index = cachedActions.length + i; });
+    const mergedActions = [...cachedActions, ...actions];
+
     const result = {
-      actions,
+      actions: mergedActions,
       hallucinationsDropped,
       reasoning: message?.content || null,
       model: data.model || model,
+      formKey,
+      cacheHit: cachedActions.length,
+      cacheMiss: actions.length,
       promptTokens: data.usage?.prompt_tokens,
       completionTokens: data.usage?.completion_tokens,
       durationMs: Date.now() - t0,
@@ -297,8 +398,56 @@ router.post('/plan', async (req, res) => {
 });
 
 router.post('/trace', async (req, res) => {
-  const { goal, plan, results, snapshotBefore, snapshotAfter, profileId, traceId } = req.body || {};
+  const { goal, plan, results, snapshotBefore, snapshotAfter, profileId, traceId, profile, formKey: bodyFormKey } = req.body || {};
   if (!plan || !results) return res.status(400).json({ error: 'plan and results required' });
+
+  // ── Learn: write successful (formKey, label) -> profileKey to mappings ───
+  // For each step that succeeded AND verified, find the snapshot element by
+  // selector to recover its label, then promote (formKey, label) -> profileKey.
+  let learned = 0;
+  try {
+    const formKey = bodyFormKey || (snapshotBefore ? computeSemanticFormKey(snapshotBefore) : null);
+    if (formKey && plan.actions && results.steps && Array.isArray(snapshotBefore?.elements)) {
+      const all = loadMappings();
+      if (!all[formKey]) all[formKey] = {};
+      const today = new Date().toISOString().slice(0, 10);
+      const elementBySelector = new Map();
+      for (const el of snapshotBefore.elements) {
+        elementBySelector.set(el.selector, el);
+      }
+      for (let i = 0; i < plan.actions.length; i++) {
+        const action = plan.actions[i];
+        const step = results.steps[i];
+        if (!step || !step.ok || !step.result) continue;
+        if (action.name !== 'input.type' && action.name !== 'select.option') continue;
+        if (step.result.verified === false) continue;
+        const el = elementBySelector.get(action.args.target);
+        if (!el || !el.label) continue;
+        const semKey = normLabel(el.label);
+        if (!semKey) continue;
+        // Reverse-lookup the profile key by value
+        let profileKey = null;
+        if (profile && typeof profile === 'object') {
+          for (const [k, v] of Object.entries(profile)) {
+            if (v && String(v) === String(action.args.value)) { profileKey = k; break; }
+          }
+        }
+        if (!profileKey) continue;
+        const existing = all[formKey][semKey];
+        if (existing) {
+          existing.fills = (existing.fills || 0) + 1;
+          existing.profileKey = profileKey;
+          existing.lastSeen = today;
+        } else {
+          all[formKey][semKey] = { profileKey, fills: 1, corrections: 0, lastSeen: today, source: 'agent' };
+        }
+        learned++;
+      }
+      if (learned > 0) saveMappings(all);
+    }
+  } catch (e) {
+    console.warn('[agent] learn failed:', e.message);
+  }
 
   try {
     const userId = req.user?.id;
@@ -317,12 +466,11 @@ router.post('/trace', async (req, res) => {
         profileId || null,
       ]
     );
-    res.json({ ok: true, traceId: finalTraceId });
+    res.json({ ok: true, traceId: finalTraceId, mappingsLearned: learned });
   } catch (e) {
     if (e.code === '42P01') {
-      // Table missing — return ok but log so admin creates it
       console.warn('[agent] trace table missing — run migrations');
-      return res.json({ ok: true, traceId: 'not-persisted', warning: 'agent_traces table missing' });
+      return res.json({ ok: true, traceId: 'not-persisted', mappingsLearned: learned, warning: 'agent_traces table missing' });
     }
     res.status(500).json({ error: e.message });
   }

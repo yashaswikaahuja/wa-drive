@@ -447,7 +447,7 @@ agentBtn.addEventListener('click', async () => {
       return;
     }
 
-    _pendingPlan = { plan, snapshot: pageData.snapshot, tab };
+    _pendingPlan = { plan, snapshot: pageData.snapshot, tab, profile: flatProfile };
     renderPlan(plan.actions);
     agentPanel.style.display = 'block';
     showStatus(`Agent proposed ${plan.actions.length} actions (${plan.durationMs}ms, ${plan.model}). Review + execute.`, '#10b981');
@@ -521,7 +521,8 @@ agentExecuteBtn.addEventListener('click', async () => {
       func: async () => (await cc.do({ name: 'dom.snapshot', args: {} })).result,
     });
 
-    // Persist trace (best-effort)
+    // Persist trace (best-effort) — also pass profile + formKey so server can
+    // learn (formKey, label) -> profileKey mappings from successful fills.
     fetch(data.backendUrl + '/agent/trace', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
@@ -532,6 +533,8 @@ agentExecuteBtn.addEventListener('click', async () => {
         snapshotBefore: snapshot,
         snapshotAfter: snapAfter,
         profileId: selectedProfile?.id,
+        profile: _pendingPlan?.profile || null,
+        formKey: plan.formKey || null,
       }),
     }).catch(e => console.warn('[CC agent] trace persist failed:', e));
 
