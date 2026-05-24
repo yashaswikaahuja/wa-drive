@@ -5,7 +5,7 @@
 
 const FIELD_ALIASES = {
   name: ['candidate name', 'candidates name', 'applicant name', 'applicants name', 'student name', 'full name', 'fullname', 'naam', 'name', 'enter name', 'your name'],
-  dob: ['dob', 'date of birth', 'dateofbirth', 'birth date', 'janm tithi', 'janm', 'birthdate'],
+  dob: ['dob', 'date of birth', 'dateofbirth', 'birth date', 'janm tithi', 'janm', 'birthdate', 'dd mm yyyy', 'dd-mm-yyyy', 'dd/mm/yyyy', 'mm dd yyyy', 'yyyy mm dd', 'date of birth dd mm yyyy', 'birth dd mm yyyy'],
   father_name: ['father name', 'fathers name', 'father s name', 'pita ka naam', 'pita naam', 'father', 'father husband name'],
   mother_name: ['mother name', 'mothers name', 'mother s name', 'mata ka naam', 'mata naam', 'mother'],
   address: ['address', 'permanent address', 'correspondence address', 'residential address', 'pata', 'niwas', 'full address'],

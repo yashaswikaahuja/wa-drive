@@ -20,6 +20,27 @@ function save(data) {
   writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
 }
 
+// POST /api/mappings/cleanup — remove junk/short entries from existing mappings
+router.post('/cleanup', authMiddleware, (_req, res) => {
+  const all = load();
+  let removed = 0;
+  for (const formKey of Object.keys(all)) {
+    const fields = all[formKey];
+    for (const key of Object.keys(fields)) {
+      if (key === '_meta') continue;
+      const lbl = fields[key].label || key;
+      const trimmed = String(lbl).trim();
+      // Same filters as seed: too short OR no letters at all
+      if (trimmed.length < 3 || !/[a-zA-Z\u0900-\u097F]/.test(trimmed)) {
+        delete fields[key];
+        removed++;
+      }
+    }
+  }
+  save(all);
+  res.json({ ok: true, removed });
+});
+
 // POST /api/mappings/backfill — seed mappings from past sessions for a formKey
 // (or all formKeys) so the admin UI shows EVERY field ever seen on a form.
 // Reverse-looks-up profileKey from each record's value against that session's
@@ -87,6 +108,9 @@ router.post('/backfill', authMiddleware, async (req, res) => {
       for (let i = 0; i < records.length; i++) {
         const r = records[i];
         if (!r || !r.label) continue;
+        const trimmedLabel = String(r.label).trim();
+        if (trimmedLabel.length < 3) continue;
+        if (!/[a-zA-Z\u0900-\u097F]/.test(trimmedLabel)) continue;
         const semKey = normLabel(r.label);
         if (!semKey) continue;
         const existing = all[formKey][semKey];

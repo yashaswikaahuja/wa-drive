@@ -169,7 +169,7 @@ export default function MappingsPage() {
           {fieldEntries.map(([key, m]) => {
             const display = m.label || key;
             const type = m.type || 'text';
-            const typeIcon = type === 'dropdown' ? '▾' : type === 'radio' ? '◉' : type === 'checkbox' ? '☐' : type === 'textarea' ? '¶' : 'T';
+            const typeAbbr = type === 'dropdown' ? 'SEL' : type === 'radio' ? 'RAD' : type === 'checkbox' ? 'CHK' : type === 'textarea' ? 'TXT' : 'INP';
             const typeColor = type === 'dropdown' ? 'bg-purple-500/20 text-purple-300' :
               type === 'radio' ? 'bg-orange-500/20 text-orange-300' :
               type === 'checkbox' ? 'bg-green-500/20 text-green-300' :
@@ -178,8 +178,8 @@ export default function MappingsPage() {
             return (
               <div key={key} className={`grid grid-cols-12 px-4 py-2.5 border-b border-gray-800/50 items-center hover:bg-gray-800/30 transition ${!m.profileKey ? 'bg-yellow-500/5' : ''}`}>
                 <div className="col-span-6 text-sm text-gray-200 flex items-center gap-2">
-                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold ${typeColor}`} title={type}>
-                    {typeIcon}
+                  <span className={`inline-flex items-center justify-center w-9 h-5 rounded text-[9px] font-bold tracking-wider ${typeColor}`} title={type}>
+                    {typeAbbr}
                   </span>
                   <div className="flex-1 min-w-0">
                     <div className="truncate" title={display}>{display}</div>

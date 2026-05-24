@@ -257,6 +257,10 @@ router.post('/plan', async (req, res) => {
     if (el.kind === 'button' || el.kind === 'link') continue;
     if (el.disabled) continue;
     if (!el.label) continue;
+    // Skip junk labels: too short, non-alphabetic, or mismatched stray text
+    const trimmedLabel = el.label.trim();
+    if (trimmedLabel.length < 3) continue;
+    if (!/[a-zA-Z\u0900-\u097F]/.test(trimmedLabel)) continue; // require at least one letter (Latin or Devanagari)
     const semKey = normLabel(el.label);
     if (!semKey) continue;
     if (!formMappings[semKey]) {
