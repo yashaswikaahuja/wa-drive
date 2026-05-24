@@ -99,23 +99,37 @@ Form: ${formContext || 'unknown'}`;
 }
 
 function driverSchemasToTools(drivers) {
-  // Only expose drivers that are useful for FORM FILLING. Excludes:
-  //   - input.focus / input.clear  — focus alone won't fill, model would call it instead of type
-  //   - click                       — submit/navigate is operator's responsibility
-  //   - wait.*                      — agent is single-shot for now; iteration in Phase 3
-  //   - dom.read / dom.query        — agent already has dom.snapshot in the prompt
-  //   - select.cascade              — same impl as select.option, simpler to expose one
   const FILL_DRIVERS = new Set(['input.type', 'select.option', 'select.cascade']);
   return (drivers || [])
     .filter(d => d && d.name && d.input && FILL_DRIVERS.has(d.name))
-    .map(d => ({
-      type: 'function',
-      function: {
-        name: d.name.replace(/\./g, '__'), // Groq tool names disallow dots
-        description: d.description || '',
-        parameters: d.input,
-      },
-    }));
+    .map(d => {
+      // Sanitize input schema: keep only standard JSON-Schema fields.
+      // Groq has rejected schemas with custom 'description' on the schema root
+      // or extra metadata (sideEffect, output, etc).
+      const cleanInput = {
+        type: d.input.type || 'object',
+        properties: d.input.properties || {},
+        required: d.input.required || [],
+      };
+      // Strip nested non-standard fields per property (only keep type, description, enum, items)
+      for (const [propKey, propVal] of Object.entries(cleanInput.properties)) {
+        const out = {};
+        if (propVal.type) out.type = propVal.type;
+        if (propVal.description) out.description = String(propVal.description).slice(0, 200);
+        if (propVal.enum) out.enum = propVal.enum;
+        if (propVal.items) out.items = propVal.items;
+        if (propVal.default !== undefined) out.default = propVal.default;
+        cleanInput.properties[propKey] = out;
+      }
+      return {
+        type: 'function',
+        function: {
+          name: d.name.replace(/\./g, '__'),
+          description: (d.description || '').slice(0, 300),
+          parameters: cleanInput,
+        },
+      };
+    });
 }
 
 function toolNameToDriverName(toolName) {
@@ -124,39 +138,44 @@ function toolNameToDriverName(toolName) {
 
 function buildUserPrompt(goal, snapshot) {
   const elements = (snapshot && snapshot.elements) || [];
-  const fieldList = elements.slice(0, 100).map((el, i) => {
+  // Filter out elements the agent shouldn't fill (saves prompt tokens)
+  // Also limit to first 80 fillable elements.
+  const fillable = elements.filter(el => {
+    const k = el.kind || '';
+    if (k === 'button') return false;             // skip buttons (operator submits)
+    if (k === 'link') return false;                // skip links
+    if (el.disabled) return false;
+    if (el.readOnly) return false;
+    return true;
+  }).slice(0, 80);
+
+  const fieldList = fillable.map((el, i) => {
     const parts = [];
     parts.push(`#${i}`);
-    // Use the kind field set by dom.js summarizeEl (drivers v5.76+).
-    // Falls back to inferring from tag/type for older snapshots.
-    let kind = el.kind;
-    if (!kind) {
+    let kind = el.kind || 'text';
+    if (!el.kind) {
+      // Legacy snapshot fallback
       if (el.tag === 'select' || el.tag === 'ng-select' || el.tag === 'mat-select') kind = 'dropdown';
       else if (el.type === 'radio') kind = 'radio';
       else if (el.type === 'checkbox') kind = 'checkbox';
-      else if (el.tag === 'button' || el.type === 'submit' || el.type === 'button') kind = 'button';
-      else kind = 'text';
     }
     parts.push('[' + kind.toUpperCase() + ']');
-    if (el.label) parts.push('label="' + el.label.slice(0, 60) + '"');
-    if (el.placeholder) parts.push('placeholder="' + el.placeholder.slice(0, 40) + '"');
-    if (el.value) parts.push('value="' + String(el.value).slice(0, 30) + '"');
-    if (el.text && !el.label && !['button','div'].includes(el.tag)) parts.push('text="' + el.text.slice(0, 40) + '"');
-    parts.push('selector="' + el.selector + '"');
+    if (el.label) parts.push('lbl="' + el.label.slice(0, 50) + '"');
+    else if (el.placeholder) parts.push('ph="' + el.placeholder.slice(0, 40) + '"');
+    if (el.value) parts.push('val="' + String(el.value).slice(0, 25) + '"');
+    // Selector: truncate aggressively. Most ng paths repeat parents.
+    const sel = el.selector || '';
+    parts.push('sel="' + (sel.length > 120 ? '...' + sel.slice(-117) : sel) + '"');
     return parts.join(' ');
   }).join('\n');
 
   return `GOAL: ${goal}
 
-PAGE SNAPSHOT:
-url: ${snapshot?.url || 'unknown'}
-title: ${snapshot?.title || 'unknown'}
-elementCount: ${elements.length}
-
-ELEMENTS (use kind tag to pick the right tool):
+PAGE: ${snapshot?.url || 'unknown'} | ${snapshot?.title || ''}
+FIELDS (${fillable.length} fillable of ${elements.length} total):
 ${fieldList}
 
-Plan tool calls. For each [TEXT] use input.type; for each [DROPDOWN] use select.option (the value text matches the profile field, e.g. "Female"); SKIP [BUTTON] and [RADIO] unless explicitly told otherwise.`;
+For each [TEXT] use input.type. For each [DROPDOWN] use select.option (value text matches profile, e.g. "Female"). SKIP [RADIO] / [CHECKBOX] unless explicitly told otherwise.`;
 }
 
 router.post('/plan', async (req, res) => {

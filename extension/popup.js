@@ -427,7 +427,15 @@ agentBtn.addEventListener('click', async () => {
     });
     if (!planRes.ok) {
       const errBody = await planRes.text();
-      throw new Error('plan: ' + planRes.status + ' ' + errBody.slice(0, 100));
+      let pretty = '';
+      try {
+        const parsed = JSON.parse(errBody);
+        if (parsed.status === 413) pretty = 'Form too big for one prompt — try again on a shorter section';
+        else if (parsed.status === 429) pretty = 'AI rate-limited — wait 30s and retry';
+        else if (parsed.status === 400) pretty = 'AI rejected schema — extension version mismatch?';
+        else pretty = parsed.error || errBody.slice(0, 100);
+      } catch (e) { pretty = errBody.slice(0, 120); }
+      throw new Error('plan ' + planRes.status + ': ' + pretty);
     }
     const plan = await planRes.json();
 
