@@ -4,6 +4,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
+import { guessProfileKey } from './label-mapper.js';
 
 const router = Router();
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -90,23 +91,28 @@ router.post('/backfill', authMiddleware, async (req, res) => {
         const existing = all[formKey][semKey];
         // Don't overwrite manual assignments
         if (existing && existing.source === 'manual') continue;
-        // Try to determine profileKey from r.profileKey first, then reverse-lookup
+        // Try to determine profileKey from r.profileKey first, then reverse-lookup, then label heuristic
         let profileKey = r.profileKey || null;
+        let source = 'backfill';
         if (!profileKey && r.value) profileKey = reverseLookup(profile, r.value);
+        if (!profileKey) {
+          // Fall back to label-based guess (server-side mirror of mapper.js aliases)
+          profileKey = guessProfileKey(r.label);
+          if (profileKey) source = 'heuristic';
+        }
 
         if (!existing) {
           all[formKey][semKey] = {
             profileKey: profileKey || null,
             fills: 0, corrections: 0,
             lastSeen: today,
-            source: profileKey ? 'backfill' : 'seed',
+            source: profileKey ? source : 'seed',
           };
           formSeeded++;
           if (profileKey) mappedTotal++;
         } else if (!existing.profileKey && profileKey) {
-          // Existing entry without profileKey gets it filled in
           existing.profileKey = profileKey;
-          existing.source = 'backfill';
+          existing.source = source;
           existing.lastSeen = today;
           mappedTotal++;
         }
