@@ -231,7 +231,38 @@ router.post('/plan', async (req, res) => {
   // and whose mapped profile key has a value for THIS profile.
   const formKey = computeSemanticFormKey(snapshot);
   const allMappings = loadMappings();
-  const formMappings = allMappings[formKey] || {};
+  let formMappings = allMappings[formKey] || {};
+
+  // ── Seed: first time we see this form, save its labels with profileKey=null ──
+  // This makes the form appear in /admin/mappings even if no fill happened.
+  // Operator can then assign profileKey per field manually.
+  let seeded = 0;
+  if (!allMappings[formKey]) {
+    allMappings[formKey] = {};
+    let pageHostname = '';
+    try { pageHostname = new URL(snapshot.url || '').hostname; } catch (e) {}
+    allMappings[formKey]._meta = {
+      hostname: pageHostname || hostname || null,
+      title: snapshot.title || null,
+      firstSeen: new Date().toISOString().slice(0, 10),
+      lastSeen: new Date().toISOString().slice(0, 10),
+    };
+    for (const el of (snapshot.elements || [])) {
+      if (el.kind === 'button' || el.kind === 'link' || el.disabled || el.readOnly) continue;
+      if (!el.label) continue;
+      const semKey = normLabel(el.label);
+      if (!semKey) continue;
+      if (!allMappings[formKey][semKey]) {
+        allMappings[formKey][semKey] = { profileKey: null, fills: 0, corrections: 0, lastSeen: new Date().toISOString().slice(0, 10), source: 'seed' };
+        seeded++;
+      }
+    }
+    if (seeded > 0) {
+      saveMappings(allMappings);
+      formMappings = allMappings[formKey];
+    }
+  }
+
   const cachedActions = [];
   const cachedFieldKeys = new Set();
   for (const el of (snapshot.elements || [])) {

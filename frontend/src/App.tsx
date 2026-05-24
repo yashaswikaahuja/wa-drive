@@ -21,6 +21,7 @@ const Settings = lazy(() => import('./features/settings/Settings'));
 const Overview = lazy(() => import('./features/admin/Overview'));
 const Sessions = lazy(() => import('./features/admin/Sessions'));
 const Corrections = lazy(() => import('./features/admin/Corrections'));
+const Mappings = lazy(() => import('./features/admin/Mappings'));
 
 function PageLoader() {
   return (
@@ -60,7 +61,7 @@ export default function App() {
           <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
           <Route path="/admin/corrections" element={<Suspense fallback={<PageLoader />}><Corrections /></Suspense>} />
           <Route path="/admin/sessions" element={<Suspense fallback={<PageLoader />}><Sessions /></Suspense>} />
-          <Route path="/admin/mappings" element={<Placeholder title="Mappings" />} />
+          <Route path="/admin/mappings" element={<Mappings />} />
           <Route path="/admin/operators" element={<Placeholder title="Operators" />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Route>
