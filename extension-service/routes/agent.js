@@ -250,17 +250,31 @@ router.post('/plan', async (req, res) => {
   formMappings._meta.title = formMappings._meta.title || snapshot.title || null;
   formMappings._meta.lastSeen = today;
 
-  for (const el of (snapshot.elements || [])) {
-    if (el.kind === 'button' || el.kind === 'link' || el.disabled || el.readOnly) continue;
+  for (let i = 0; i < (snapshot.elements || []).length; i++) {
+    const el = snapshot.elements[i];
+    // Only filter out non-field elements. Radios/checkboxes are KEPT (operator
+    // wants to see them in the mappings replica of the form).
+    if (el.kind === 'button' || el.kind === 'link') continue;
+    if (el.disabled) continue;
     if (!el.label) continue;
     const semKey = normLabel(el.label);
     if (!semKey) continue;
     if (!formMappings[semKey]) {
-      formMappings[semKey] = { label: el.label, profileKey: null, fills: 0, corrections: 0, lastSeen: today, source: 'seed' };
+      formMappings[semKey] = {
+        label: el.label,
+        type: el.kind || 'text',           // text|dropdown|radio|checkbox|textarea|file
+        order: i,                           // DOM order for replica display
+        profileKey: null,
+        fills: 0, corrections: 0,
+        lastSeen: today,
+        source: 'seed',
+      };
       seeded++;
-    } else if (!formMappings[semKey].label) {
-      // Backfill original label on existing entries that lack it
-      formMappings[semKey].label = el.label;
+    } else {
+      // Backfill missing fields without overwriting profileKey
+      if (!formMappings[semKey].label) formMappings[semKey].label = el.label;
+      if (!formMappings[semKey].type) formMappings[semKey].type = el.kind || 'text';
+      if (formMappings[semKey].order === undefined) formMappings[semKey].order = i;
     }
   }
   // Persist if anything new was added (or just _meta updated)

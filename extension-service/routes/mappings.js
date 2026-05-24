@@ -84,7 +84,8 @@ router.post('/backfill', authMiddleware, async (req, res) => {
       all[formKey]._meta.lastSeen = today;
       let formSeeded = 0;
       const records = Array.isArray(row.records) ? row.records : [];
-      for (const r of records) {
+      for (let i = 0; i < records.length; i++) {
+        const r = records[i];
         if (!r || !r.label) continue;
         const semKey = normLabel(r.label);
         if (!semKey) continue;
@@ -96,14 +97,22 @@ router.post('/backfill', authMiddleware, async (req, res) => {
         let source = 'backfill';
         if (!profileKey && r.value) profileKey = reverseLookup(profile, r.value);
         if (!profileKey) {
-          // Fall back to label-based guess (server-side mirror of mapper.js aliases)
           profileKey = guessProfileKey(r.label);
           if (profileKey) source = 'heuristic';
         }
+        // Determine field type from session record
+        const recType = r.type || 'text';
+        const normalisedType = recType === 'select' || recType === 'ng-dropdown' ? 'dropdown'
+          : recType === 'radio' ? 'radio'
+          : recType === 'checkbox' || recType === 'mat-checkbox' ? 'checkbox'
+          : recType === 'textarea' ? 'text'
+          : 'text';
 
         if (!existing) {
           all[formKey][semKey] = {
             label: r.label,
+            type: normalisedType,
+            order: i,
             profileKey: profileKey || null,
             fills: 0, corrections: 0,
             lastSeen: today,
@@ -112,8 +121,9 @@ router.post('/backfill', authMiddleware, async (req, res) => {
           formSeeded++;
           if (profileKey) mappedTotal++;
         } else {
-          // Backfill missing label on existing entries
           if (!existing.label) existing.label = r.label;
+          if (!existing.type) existing.type = normalisedType;
+          if (existing.order === undefined) existing.order = i;
           if (!existing.profileKey && profileKey) {
             existing.profileKey = profileKey;
             existing.source = source;

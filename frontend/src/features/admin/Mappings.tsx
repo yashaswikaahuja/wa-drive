@@ -14,6 +14,8 @@ interface FormSummary {
 
 interface FieldMapping {
   label?: string;
+  type?: string;            // text|dropdown|radio|checkbox|textarea
+  order?: number;           // DOM order
   profileKey: string | null;
   fills: number;
   corrections: number;
@@ -107,7 +109,14 @@ export default function MappingsPage() {
 
   // ── Detail view ────────────────────────────────────────────────────────
   if (selected) {
-    const fieldEntries = Object.entries(fields).sort((a, b) => a[0].localeCompare(b[0]));
+    // Sort by DOM order (set by agent/backfill); fall back to alphabetical
+    const fieldEntries = Object.entries(fields).sort((a, b) => {
+      const ao = a[1].order, bo = b[1].order;
+      if (ao !== undefined && bo !== undefined) return ao - bo;
+      if (ao !== undefined) return -1;
+      if (bo !== undefined) return 1;
+      return a[0].localeCompare(b[0]);
+    });
     const mapped = fieldEntries.filter(([, m]) => m.profileKey).length;
     const total = fieldEntries.length;
     const pct = total ? Math.round((mapped / total) * 100) : 0;
@@ -159,13 +168,25 @@ export default function MappingsPage() {
           </div>
           {fieldEntries.map(([key, m]) => {
             const display = m.label || key;
+            const type = m.type || 'text';
+            const typeIcon = type === 'dropdown' ? '▾' : type === 'radio' ? '◉' : type === 'checkbox' ? '☐' : type === 'textarea' ? '¶' : 'T';
+            const typeColor = type === 'dropdown' ? 'bg-purple-500/20 text-purple-300' :
+              type === 'radio' ? 'bg-orange-500/20 text-orange-300' :
+              type === 'checkbox' ? 'bg-green-500/20 text-green-300' :
+              type === 'textarea' ? 'bg-blue-500/20 text-blue-300' :
+              'bg-gray-700 text-gray-300';
             return (
               <div key={key} className={`grid grid-cols-12 px-4 py-2.5 border-b border-gray-800/50 items-center hover:bg-gray-800/30 transition ${!m.profileKey ? 'bg-yellow-500/5' : ''}`}>
-                <div className="col-span-6 text-sm text-gray-200 truncate" title={display}>
-                  {display}
-                  {m.label && m.label !== key && (
-                    <div className="text-[10px] text-gray-600 font-mono mt-0.5">key: {key}</div>
-                  )}
+                <div className="col-span-6 text-sm text-gray-200 flex items-center gap-2">
+                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold ${typeColor}`} title={type}>
+                    {typeIcon}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate" title={display}>{display}</div>
+                    {m.label && m.label !== key && (
+                      <div className="text-[10px] text-gray-600 font-mono mt-0.5 truncate">key: {key}</div>
+                    )}
+                  </div>
                 </div>
                 <div className="col-span-4">
                   <select
