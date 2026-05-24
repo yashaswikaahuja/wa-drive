@@ -93,6 +93,17 @@ export default function MappingsPage() {
     } catch { /* ignore */ }
   }
 
+  async function backfillFromSessions() {
+    if (!confirm('Backfill mappings for all forms from past sessions? Existing assignments are kept.')) return;
+    setLoading(true);
+    try {
+      const r = await api.post('/mappings/backfill');
+      alert(`Backfill done: ${r.data.seededTotal} fields added across ${r.data.formsSeeded} forms.`);
+      await loadList();
+    } catch (e) { console.warn('backfill failed', e); alert('Backfill failed'); }
+    finally { setLoading(false); }
+  }
+
   // ── Detail view ────────────────────────────────────────────────────────
   if (selected) {
     const fieldEntries = Object.entries(fields).sort((a, b) => a[0].localeCompare(b[0]));
@@ -195,12 +206,21 @@ export default function MappingsPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold mb-1">Form Mappings</h1>
-        <p className="text-sm text-gray-400">
-          Each form your operators visit gets recorded here. Click any form to assign which profile field
-          fills which form field. Edits take effect on the next fill.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Form Mappings</h1>
+          <p className="text-sm text-gray-400">
+            Each form your operators visit gets recorded here. Click any form to assign which profile field
+            fills which form field. Edits take effect on the next fill.
+          </p>
+        </div>
+        <button
+          onClick={backfillFromSessions}
+          className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-sm px-4 py-2 rounded-lg flex-shrink-0"
+          title="Add fields from past autofill sessions to mappings"
+        >
+          ↻ Backfill from sessions
+        </button>
       </div>
 
       <input

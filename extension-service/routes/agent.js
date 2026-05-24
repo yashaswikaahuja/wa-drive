@@ -231,37 +231,37 @@ router.post('/plan', async (req, res) => {
   // and whose mapped profile key has a value for THIS profile.
   const formKey = computeSemanticFormKey(snapshot);
   const allMappings = loadMappings();
-  let formMappings = allMappings[formKey] || {};
+  if (!allMappings[formKey]) allMappings[formKey] = {};
+  let formMappings = allMappings[formKey];
 
-  // ── Seed: first time we see this form, save its labels with profileKey=null ──
-  // This makes the form appear in /admin/mappings even if no fill happened.
-  // Operator can then assign profileKey per field manually.
+  // ── Seed: every visit, add any visible labels NOT yet in mappings ────────
+  // Pre-existing profileKey assignments are NEVER overwritten.
+  // Operator can then assign profileKey per field manually in /admin/mappings.
   let seeded = 0;
-  if (!allMappings[formKey]) {
-    allMappings[formKey] = {};
-    let pageHostname = '';
-    try { pageHostname = new URL(snapshot.url || '').hostname; } catch (e) {}
-    allMappings[formKey]._meta = {
-      hostname: pageHostname || hostname || null,
-      title: snapshot.title || null,
-      firstSeen: new Date().toISOString().slice(0, 10),
-      lastSeen: new Date().toISOString().slice(0, 10),
-    };
-    for (const el of (snapshot.elements || [])) {
-      if (el.kind === 'button' || el.kind === 'link' || el.disabled || el.readOnly) continue;
-      if (!el.label) continue;
-      const semKey = normLabel(el.label);
-      if (!semKey) continue;
-      if (!allMappings[formKey][semKey]) {
-        allMappings[formKey][semKey] = { profileKey: null, fills: 0, corrections: 0, lastSeen: new Date().toISOString().slice(0, 10), source: 'seed' };
-        seeded++;
-      }
-    }
-    if (seeded > 0) {
-      saveMappings(allMappings);
-      formMappings = allMappings[formKey];
+  let pageHostname = '';
+  try { pageHostname = new URL(snapshot.url || '').hostname; } catch (e) {}
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Update _meta with latest visit info (don't overwrite firstSeen)
+  if (!formMappings._meta) {
+    formMappings._meta = { firstSeen: today };
+  }
+  formMappings._meta.hostname = formMappings._meta.hostname || pageHostname || hostname || null;
+  formMappings._meta.title = formMappings._meta.title || snapshot.title || null;
+  formMappings._meta.lastSeen = today;
+
+  for (const el of (snapshot.elements || [])) {
+    if (el.kind === 'button' || el.kind === 'link' || el.disabled || el.readOnly) continue;
+    if (!el.label) continue;
+    const semKey = normLabel(el.label);
+    if (!semKey) continue;
+    if (!formMappings[semKey]) {
+      formMappings[semKey] = { profileKey: null, fills: 0, corrections: 0, lastSeen: today, source: 'seed' };
+      seeded++;
     }
   }
+  // Persist if anything new was added (or just _meta updated)
+  saveMappings(allMappings);
 
   const cachedActions = [];
   const cachedFieldKeys = new Set();

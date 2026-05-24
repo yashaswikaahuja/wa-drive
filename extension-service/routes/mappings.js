@@ -19,6 +19,54 @@ function save(data) {
   writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
 }
 
+// POST /api/mappings/backfill — seed mappings from past sessions for a formKey
+// (or all formKeys) so the admin UI shows EVERY field ever seen on a form.
+// Pre-existing profileKey assignments are never overwritten.
+router.post('/backfill', authMiddleware, async (req, res) => {
+  const targetFormKey = req.body?.formKey || null;
+  let seededTotal = 0;
+  let formsSeeded = 0;
+  try {
+    const sql = targetFormKey
+      ? `SELECT semantic_form_key, hostname, records FROM sessions WHERE semantic_form_key = $1 AND records IS NOT NULL ORDER BY created_at DESC`
+      : `SELECT semantic_form_key, hostname, records FROM sessions WHERE semantic_form_key IS NOT NULL AND records IS NOT NULL ORDER BY created_at DESC`;
+    const params = targetFormKey ? [targetFormKey] : [];
+    const { rows } = await pool.query(sql, params);
+
+    const all = load();
+    const today = new Date().toISOString().slice(0, 10);
+
+    function normLabel(s) {
+      return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    for (const row of rows) {
+      const formKey = row.semantic_form_key;
+      if (!all[formKey]) all[formKey] = {};
+      if (!all[formKey]._meta) all[formKey]._meta = { firstSeen: today };
+      all[formKey]._meta.hostname = all[formKey]._meta.hostname || row.hostname;
+      all[formKey]._meta.lastSeen = today;
+      let formSeeded = 0;
+      const records = Array.isArray(row.records) ? row.records : [];
+      for (const r of records) {
+        if (!r || !r.label) continue;
+        const semKey = normLabel(r.label);
+        if (!semKey) continue;
+        if (!all[formKey][semKey]) {
+          all[formKey][semKey] = { profileKey: null, fills: 0, corrections: 0, lastSeen: today, source: 'backfill' };
+          formSeeded++;
+        }
+      }
+      if (formSeeded > 0) formsSeeded++;
+      seededTotal += formSeeded;
+    }
+    save(all);
+    res.json({ ok: true, formsSeeded, seededTotal });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/mappings/list — all formKeys with metadata + hostname from sessions
 router.get('/list', authMiddleware, async (_req, res) => {
   const data = load();
