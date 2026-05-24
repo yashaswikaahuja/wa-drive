@@ -28,43 +28,61 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
 
 function buildSystemPrompt(profile, hostname, formContext) {
+  // Strip metadata that aren't form values (id, timestamps, relationship, etc.)
+  // These leaked into past plans as values being typed (e.g. Aadhaar got the
+  // profile UUID instead of the aadhaar_number).
+  const META_KEYS = new Set([
+    'id', 'displayLabel', 'displayName', 'relationship', 'createdAt',
+    'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId',
+    'confirmedAt', 'confirmedBy', 'source', 'confidence',
+  ]);
   const profileBrief = profile
     ? Object.entries(profile)
-        .filter(([k, v]) => v && typeof v !== 'object' && String(v).length < 200)
-        .slice(0, 50)
-        .map(([k, v]) => `${k}: ${v}`)
+        .filter(([k, v]) => v && typeof v !== 'object' && String(v).length > 0 && String(v).length < 200 && !META_KEYS.has(k))
+        .map(([k, v]) => `  ${k}: ${v}`)
         .join('\n')
     : '(no profile provided)';
 
-  return `You are CyberControl's form-filling agent. You drive a browser through a fixed set of driver tools.
+  return `You are CyberControl's form-filling agent. You drive a browser by emitting tool calls.
 
-You will receive:
-1. A GOAL (e.g., "fill the personal-details registration form for this customer")
-2. A SNAPSHOT of visible form fields, buttons, and links on the current page
-3. A CUSTOMER PROFILE (key-value pairs from their documents — Aadhaar, marksheet, etc.)
-4. The DRIVER TOOLS you can call
+INPUT
+You receive a goal, a snapshot of visible form elements, and a customer profile.
+The customer profile is the GROUND TRUTH for any value you type. Don't invent values.
 
-You output a sequence of tool calls — ONE per field you want to fill.
+OUTPUT
+You output a sequence of tool calls — ONE per field you decide to fill. NO prose between calls.
 
-CRITICAL RULES — read carefully:
-- To FILL a text/email/tel/textarea field, use **input.type**. Never use input.focus or click for filling — those don't enter values.
-- For each field that has a clear profile match, emit ONE input.type tool call with the profile's value.
-- Use the EXACT selector from the snapshot. Don't invent selectors. Don't shorten them.
-- For dropdowns, use **select.option** with text from the snapshot's option list when shown.
-- For dependent dropdowns (state→district), use **select.cascade** in DOM order so parents fill first.
-- For "Verify X" / "Confirm X" / "Re-type X" twin fields, use the same value as the primary field.
-- Do NOT call input.focus or click — they only navigate, not fill.
-- Do NOT click submit/continue/next/proceed buttons. The operator submits manually.
-- For radios labeled "Yes"/"No"/"Have you...?": SKIP. These are decisions, not data.
-- For checkboxes: only check explicit agreement/declaration checkboxes (terms, I confirm, I declare).
+CRITICAL RULES
+1. To fill a text/email/tel/textarea field, ALWAYS use input.type. Never input.focus, never click.
+2. To select a dropdown option, use select.option (or select.cascade for dependent ones).
+3. SKIP submit/continue/proceed/next buttons. The operator submits manually.
+4. SKIP "Yes"/"No" radio fields and qualifying questions ("Have you...?", "Are you...?").
+5. SKIP fields where no profile key clearly matches.
 
-Hostname: ${hostname || 'unknown'}
-Form context: ${formContext || 'unknown'}
+FILLING DISCIPLINE
+- For EVERY field whose label clearly maps to a profile key, emit ONE input.type call.
+- For "Verify X", "Confirm X", "Re-type X", "a. Verify Y" twin labels, MIRROR the value of the primary field above (the one without "verify"/"confirm"/"re-type"). Same exact value.
+- For Aadhaar/UID/VID labels, use profile.aadhaar_number (12 digits). NEVER profile.id.
+- For Mobile/Phone/Contact labels, use profile.phone.
+- For "Matriculation" / "10th class" / "SSLC" labels, use the *_10th profile keys.
+- For "Intermediate" / "12th class" / "HSC" labels, use the *_12th keys.
+- For Pin Code / Pincode, use profile.pincode.
+- For State/UT, use profile.state. District: profile.district. Block: profile.block. Village: profile.village.
+- For Father's Name use profile.father_name. Mother's Name: profile.mother_name.
+- For Date of Birth: profile.dob (format dd/mm/yyyy already).
 
-Customer profile:
+SELECTOR DISCIPLINE
+- Use the EXACT selector string from the snapshot. Don't shorten or rewrite it. The CSS path looks ugly but it's what works.
+
+LIMIT
+Be exhaustive. If the form has 25 fillable fields, emit 25 tool calls (or close). Don't be lazy.
+
+CUSTOMER PROFILE (use these as values):
 ${profileBrief}
 
-Match each form field to the BEST profile key. If no match, skip that field. Don't guess. Don't fill placeholders. Output one tool call per fill.`;
+CONTEXT
+Hostname: ${hostname || 'unknown'}
+Form: ${formContext || 'unknown'}`;
 }
 
 function driverSchemasToTools(drivers) {
@@ -148,7 +166,7 @@ router.post('/plan', async (req, res) => {
         tools,
         tool_choice: 'auto',
         temperature: 0.1, // deterministic
-        max_tokens: 4096,
+        max_tokens: 8192, // ~30+ tool calls comfortably
       }),
     });
 

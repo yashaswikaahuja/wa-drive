@@ -388,14 +388,28 @@ agentBtn.addEventListener('click', async () => {
     });
     if (pageData.error) throw new Error(pageData.error);
 
-    // Flatten profile
+    // Fetch FULL profile detail (list endpoint only returns summary {id,name,phone})
+    let fullProfile = selectedProfile;
+    try {
+      const detailRes = await fetch(data.backendUrl + '/profiles/' + selectedProfile.id, {
+        headers: { 'Authorization': 'Bearer ' + data.accessToken },
+      });
+      if (detailRes.ok) {
+        const detail = await detailRes.json();
+        fullProfile = typeof detail === 'string' ? JSON.parse(detail) : detail;
+      }
+    } catch (e) {}
+
+    // Flatten data — strip metadata keys
+    const META_KEYS = new Set(['id', 'displayLabel', 'displayName', 'relationship', 'createdAt', 'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId', 'confirmedAt', 'confirmedBy', 'source', 'confidence']);
     const flatProfile = {};
-    const raw = selectedProfile.data || selectedProfile;
+    const raw = fullProfile.data || fullProfile;
     for (const [k, v] of Object.entries(raw)) {
+      if (META_KEYS.has(k)) continue;
       flatProfile[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
     }
-    if (selectedProfile.name) flatProfile.name = flatProfile.name || selectedProfile.name;
-    if (selectedProfile.phone) flatProfile.phone = flatProfile.phone || selectedProfile.phone;
+    if (fullProfile.name) flatProfile.name = flatProfile.name || fullProfile.name;
+    if (fullProfile.phone) flatProfile.phone = flatProfile.phone || fullProfile.phone;
 
     const goal = `Fill the form on ${pageData.snapshot.url} for the customer profile. Skip submit/continue buttons.`;
 
