@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { authMiddleware } from '../auth.js';
+import { pool } from '../db.js';
 
 const router = Router();
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -18,11 +19,29 @@ function save(data) {
   writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
 }
 
-// GET /api/mappings/list — all formKeys with metadata (auth required for admin UI)
-router.get('/list', authMiddleware, (_req, res) => {
+// GET /api/mappings/list — all formKeys with metadata + hostname from sessions
+router.get('/list', authMiddleware, async (_req, res) => {
   const data = load();
+
+  // Backfill hostname/title from sessions table for entries that don't have _meta
+  // (existing mappings created before agent v5.79 don't have _meta.hostname)
+  let sessionMeta = {};
+  try {
+    const { rows } = await pool.query(
+      `SELECT semantic_form_key, hostname, MAX(created_at) as last_session
+       FROM sessions
+       WHERE semantic_form_key IS NOT NULL
+       GROUP BY semantic_form_key, hostname`
+    );
+    for (const r of rows) {
+      if (!sessionMeta[r.semantic_form_key]) sessionMeta[r.semantic_form_key] = {};
+      sessionMeta[r.semantic_form_key].hostname = r.hostname;
+      sessionMeta[r.semantic_form_key].lastSession = r.last_session;
+    }
+  } catch (e) { /* ignore — sessions table missing or DB down */ }
+
   const list = Object.entries(data).map(([formKey, fields]) => {
-    const entries = Object.entries(fields || {});
+    const entries = Object.entries(fields || {}).filter(([k]) => k !== '_meta');
     const fills = entries.reduce((s, [, m]) => s + (m?.fills || 0), 0);
     const corrections = entries.reduce((s, [, m]) => s + (m?.corrections || 0), 0);
     const lastSeen = entries.reduce((m, [, e]) => {
@@ -32,9 +51,9 @@ router.get('/list', authMiddleware, (_req, res) => {
     const unmapped = entries.filter(([, m]) => !m?.profileKey).length;
     return {
       formKey,
-      hostname: fields._meta?.hostname || null,
+      hostname: fields._meta?.hostname || sessionMeta[formKey]?.hostname || null,
       title: fields._meta?.title || null,
-      fieldCount: entries.filter(([k]) => k !== '_meta').length,
+      fieldCount: entries.length,
       unmapped,
       fills, corrections, lastSeen,
     };
