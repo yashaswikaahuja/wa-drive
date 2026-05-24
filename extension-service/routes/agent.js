@@ -394,6 +394,44 @@ router.post('/plan', async (req, res) => {
     actions.forEach((a, i) => { a.source = a.source || 'agent'; a.index = cachedActions.length + i; });
     const mergedActions = [...cachedActions, ...actions];
 
+    // ── Save proposed mappings to form_mappings.json IMMEDIATELY ──────────
+    // Even before execute, save the agent's profileKey guesses so the admin
+    // page shows all fields pre-mapped. Operator can later correct wrong ones.
+    // We DON'T overwrite existing entries that have a profileKey set (so manual
+    // operator edits in /admin/mappings are sticky).
+    try {
+      const elementBySelector = new Map();
+      for (const el of (snapshot.elements || [])) elementBySelector.set(el.selector, el);
+      let savedMappings = 0;
+      for (const action of mergedActions) {
+        if (action.name !== 'input.type' && action.name !== 'select.option') continue;
+        const el = elementBySelector.get(action.args?.target);
+        if (!el || !el.label) continue;
+        const semKey = normLabel(el.label);
+        if (!semKey) continue;
+        // Reverse-lookup profileKey from value
+        let profileKey = null;
+        if (profile && typeof profile === 'object') {
+          for (const [k, v] of Object.entries(profile)) {
+            if (v && String(v) === String(action.args.value)) { profileKey = k; break; }
+          }
+        }
+        // Only set if not already mapped to something concrete (preserve manual edits)
+        const existing = formMappings[semKey];
+        if (existing && existing.profileKey && existing.source === 'manual') continue;
+        if (profileKey) {
+          formMappings[semKey] = formMappings[semKey] || { fills: 0, corrections: 0, source: 'agent' };
+          formMappings[semKey].profileKey = profileKey;
+          formMappings[semKey].lastSeen = today;
+          if (!formMappings[semKey].source || formMappings[semKey].source === 'seed') {
+            formMappings[semKey].source = action.source || 'agent';
+          }
+          savedMappings++;
+        }
+      }
+      if (savedMappings > 0) saveMappings(allMappings);
+    } catch (e) { console.warn('[agent] save proposed mappings failed:', e.message); }
+
     const result = {
       actions: mergedActions,
       hallucinationsDropped,

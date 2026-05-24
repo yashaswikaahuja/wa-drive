@@ -21,15 +21,22 @@ function save(data) {
 
 // POST /api/mappings/backfill — seed mappings from past sessions for a formKey
 // (or all formKeys) so the admin UI shows EVERY field ever seen on a form.
-// Pre-existing profileKey assignments are never overwritten.
+// Reverse-looks-up profileKey from each record's value against that session's
+// profile, so fields are PRE-MAPPED with the best guess. Pre-existing manual
+// assignments are never overwritten.
 router.post('/backfill', authMiddleware, async (req, res) => {
   const targetFormKey = req.body?.formKey || null;
   let seededTotal = 0;
   let formsSeeded = 0;
+  let mappedTotal = 0;
   try {
     const sql = targetFormKey
-      ? `SELECT semantic_form_key, hostname, records FROM sessions WHERE semantic_form_key = $1 AND records IS NOT NULL ORDER BY created_at DESC`
-      : `SELECT semantic_form_key, hostname, records FROM sessions WHERE semantic_form_key IS NOT NULL AND records IS NOT NULL ORDER BY created_at DESC`;
+      ? `SELECT s.semantic_form_key, s.hostname, s.records, s.profile_id, p.data as profile_data
+         FROM sessions s LEFT JOIN profiles p ON p.id = s.profile_id
+         WHERE s.semantic_form_key = $1 AND s.records IS NOT NULL ORDER BY s.created_at DESC`
+      : `SELECT s.semantic_form_key, s.hostname, s.records, s.profile_id, p.data as profile_data
+         FROM sessions s LEFT JOIN profiles p ON p.id = s.profile_id
+         WHERE s.semantic_form_key IS NOT NULL AND s.records IS NOT NULL ORDER BY s.created_at DESC`;
     const params = targetFormKey ? [targetFormKey] : [];
     const { rows } = await pool.query(sql, params);
 
@@ -39,9 +46,37 @@ router.post('/backfill', authMiddleware, async (req, res) => {
     function normLabel(s) {
       return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
     }
+    // Flatten profile data jsonb into {key: stringValue} for reverse-lookup
+    function flattenProfile(p) {
+      if (!p) return {};
+      const out = {};
+      for (const [k, v] of Object.entries(p)) {
+        if (v == null) continue;
+        if (typeof v === 'object' && 'value' in v) out[k] = String(v.value);
+        else if (typeof v !== 'object') out[k] = String(v);
+      }
+      return out;
+    }
+    function reverseLookup(profile, value) {
+      if (!profile || !value) return null;
+      const v = String(value);
+      const vNorm = v.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!vNorm) return null;
+      // Exact match first
+      for (const [k, pv] of Object.entries(profile)) {
+        if (String(pv) === v) return k;
+      }
+      // Normalised match (for spacing/case differences)
+      for (const [k, pv] of Object.entries(profile)) {
+        const pvNorm = String(pv).toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (pvNorm && pvNorm === vNorm) return k;
+      }
+      return null;
+    }
 
     for (const row of rows) {
       const formKey = row.semantic_form_key;
+      const profile = flattenProfile(row.profile_data);
       if (!all[formKey]) all[formKey] = {};
       if (!all[formKey]._meta) all[formKey]._meta = { firstSeen: today };
       all[formKey]._meta.hostname = all[formKey]._meta.hostname || row.hostname;
@@ -52,16 +87,35 @@ router.post('/backfill', authMiddleware, async (req, res) => {
         if (!r || !r.label) continue;
         const semKey = normLabel(r.label);
         if (!semKey) continue;
-        if (!all[formKey][semKey]) {
-          all[formKey][semKey] = { profileKey: null, fills: 0, corrections: 0, lastSeen: today, source: 'backfill' };
+        const existing = all[formKey][semKey];
+        // Don't overwrite manual assignments
+        if (existing && existing.source === 'manual') continue;
+        // Try to determine profileKey from r.profileKey first, then reverse-lookup
+        let profileKey = r.profileKey || null;
+        if (!profileKey && r.value) profileKey = reverseLookup(profile, r.value);
+
+        if (!existing) {
+          all[formKey][semKey] = {
+            profileKey: profileKey || null,
+            fills: 0, corrections: 0,
+            lastSeen: today,
+            source: profileKey ? 'backfill' : 'seed',
+          };
           formSeeded++;
+          if (profileKey) mappedTotal++;
+        } else if (!existing.profileKey && profileKey) {
+          // Existing entry without profileKey gets it filled in
+          existing.profileKey = profileKey;
+          existing.source = 'backfill';
+          existing.lastSeen = today;
+          mappedTotal++;
         }
       }
       if (formSeeded > 0) formsSeeded++;
       seededTotal += formSeeded;
     }
     save(all);
-    res.json({ ok: true, formsSeeded, seededTotal });
+    res.json({ ok: true, formsSeeded, seededTotal, mappedTotal });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
