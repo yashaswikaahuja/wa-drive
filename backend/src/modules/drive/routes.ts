@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../../db.js';
 import { authMiddleware } from '../../middleware/auth.js';
-import { oauth2Client, getDrive, getDriveAccessToken } from './service.js';
+import { oauth2Client, getDrive, getDriveAccessToken, getDriveForWorkspace } from './service.js';
 
 const router = Router();
 
@@ -86,8 +86,8 @@ router.get('/download/:fileId', (req: any, res, next) => {
   authMiddleware(req, res, next);
 }, async (req: any, res) => {
   const { fileId } = req.params;
-  const drive = getDrive();
-  if (!drive) return res.status(401).json({ error: 'Drive not connected' });
+  const drive = await getDriveForWorkspace(req.user.workspaceId);
+  if (!drive) return res.status(401).json({ error: 'Drive not connected for this workspace' });
   try {
     const metaRes = await drive.files.get({ fileId, fields: 'mimeType,name' });
     const mime = metaRes.data.mimeType || 'application/octet-stream';
