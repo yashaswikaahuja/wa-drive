@@ -21,6 +21,7 @@ export default function PhotoTool() {
   const [error, setError] = useState<string>('');
   const [templateId, setTemplateId] = useState<string>('free');
   const [grayscale, setGrayscale] = useState<boolean>(false);
+  const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
 
   const template = TEMPLATES.find(t => t.id === templateId) || TPL_FREE;
 
@@ -34,6 +35,7 @@ export default function PhotoTool() {
       const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
       setImageBitmap(prev => { if (prev) prev.close(); return bitmap; });
       setFileName(file.name);
+      setRotation(0);
     } catch (e: any) {
       setError('Could not read image: ' + (e.message || 'unknown'));
     }
@@ -93,6 +95,16 @@ img { display: block; width: 210mm; height: 297mm; }
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setRotation(r => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
+            disabled={!imageBitmap}
+            className={`px-3 py-1.5 rounded text-xs ${
+              imageBitmap ? 'bg-gray-800 hover:bg-gray-700 text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+            }`}
+            title="Rotate 90° clockwise"
+          >
+            ↻ Rotate
+          </button>
+          <button
             onClick={() => setGrayscale(g => !g)}
             className={`px-3 py-1.5 rounded text-xs ${
               grayscale ? 'bg-gray-700 text-white' : 'bg-gray-800 hover:bg-gray-700 text-gray-400'
@@ -136,7 +148,7 @@ img { display: block; width: 210mm; height: 297mm; }
         </aside>
 
         <main className="flex-1 flex items-center justify-center overflow-auto p-8">
-          <A4Canvas image={imageBitmap} template={template} grayscale={grayscale} onDrop={handleFile} />
+          <A4Canvas image={imageBitmap} template={template} grayscale={grayscale} rotation={rotation} onDrop={handleFile} />
         </main>
       </div>
 
@@ -171,7 +183,7 @@ function FilePicker({ onFile }: { onFile: (f: File) => void }) {
   );
 }
 
-function A4Canvas({ image, template, grayscale, onDrop }: { image: ImageBitmap | null; template: Template; grayscale: boolean; onDrop: (f: File) => void }) {
+function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: ImageBitmap | null; template: Template; grayscale: boolean; rotation: 0 | 90 | 180 | 270; onDrop: (f: File) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -185,11 +197,28 @@ function A4Canvas({ image, template, grayscale, onDrop }: { image: ImageBitmap |
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, A4_W_PX, A4_H_PX);
     if (image) {
+      // Apply rotation via OffscreenCanvas — produces a new bitmap with the
+      // rotation baked in, so downstream slot-fit math works unchanged.
+      let rendered = image;
+      let temp: ImageBitmap | null = null;
+      if (rotation !== 0) {
+        const swapped = rotation === 90 || rotation === 270;
+        const w = swapped ? image.height : image.width;
+        const h = swapped ? image.width : image.height;
+        const oc = new OffscreenCanvas(w, h);
+        const octx = oc.getContext('2d')!;
+        octx.translate(w / 2, h / 2);
+        octx.rotate((rotation * Math.PI) / 180);
+        octx.drawImage(image, -image.width / 2, -image.height / 2);
+        temp = oc.transferToImageBitmap();
+        rendered = temp;
+      }
       ctx.filter = grayscale ? 'grayscale(1) contrast(1.1)' : 'none';
       for (const slot of template.slots) {
-        drawIntoSlot(ctx, image, slot);
+        drawIntoSlot(ctx, rendered, slot);
       }
       ctx.filter = 'none';
+      if (temp) temp.close();
     } else {
       ctx.strokeStyle = '#d1d5db';
       ctx.lineWidth = 4;
@@ -199,7 +228,7 @@ function A4Canvas({ image, template, grayscale, onDrop }: { image: ImageBitmap |
       }
       ctx.setLineDash([]);
     }
-  }, [image, template, grayscale]);
+  }, [image, template, grayscale, rotation]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
