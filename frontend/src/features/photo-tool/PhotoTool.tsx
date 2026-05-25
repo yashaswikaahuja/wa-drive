@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { TEMPLATES, TPL_FREE, A4_W_PX, A4_H_PX } from './templates';
 import type { Slot, Template } from './templates';
+import { printBlob } from '../../shared/fileCache';
 
 const DISPLAY_W = 480;
 const DISPLAY_H = Math.round(DISPLAY_W * (A4_H_PX / A4_W_PX));
@@ -37,6 +38,15 @@ export default function PhotoTool() {
     }
   }, []);
 
+  const handlePrint = useCallback(() => {
+    const canvas = document.getElementById('cc-photo-canvas') as HTMLCanvasElement | null;
+    if (!canvas) { setError('Canvas not ready'); return; }
+    canvas.toBlob(blob => {
+      if (!blob) { setError('Could not export image'); return; }
+      printBlob(blob);
+    }, 'image/png');
+  }, []);
+
   useEffect(() => {
     return () => { if (imageBitmap) imageBitmap.close(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -54,8 +64,16 @@ export default function PhotoTool() {
         </div>
         <div className="flex items-center gap-2">
           <FilePicker onFile={handleFile} />
-          <button disabled className="px-3 py-1.5 rounded text-xs bg-gray-800 text-gray-500 cursor-not-allowed">
-            Print
+          <button
+            onClick={handlePrint}
+            disabled={!imageBitmap}
+            className={`px-3 py-1.5 rounded text-xs ${
+              imageBitmap
+                ? 'bg-green-600 hover:bg-green-500 text-white'
+                : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+            }`}
+          >
+            🖨 Print
           </button>
         </div>
       </header>
@@ -160,6 +178,7 @@ function A4Canvas({ image, template, onDrop }: { image: ImageBitmap | null; temp
     >
       <canvas
         ref={canvasRef}
+        id="cc-photo-canvas"
         style={{ width: DISPLAY_W, height: DISPLAY_H, display: 'block' }}
       />
       {!image && (
