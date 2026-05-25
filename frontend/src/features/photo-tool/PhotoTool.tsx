@@ -13,6 +13,7 @@ import type { Slot, Template } from './templates';
 import { printBlob } from '../../shared/fileCache';
 import api from '../../shared/api';
 import DrivePicker from './DrivePicker';
+import CropModal from './CropModal';
 
 const DISPLAY_W = 480;
 const DISPLAY_H = Math.round(DISPLAY_W * (A4_H_PX / A4_W_PX));
@@ -25,6 +26,7 @@ export default function PhotoTool() {
   const [grayscale, setGrayscale] = useState<boolean>(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [drivePickerOpen, setDrivePickerOpen] = useState<boolean>(false);
+  const [cropModalOpen, setCropModalOpen] = useState<boolean>(false);
 
   const template = TEMPLATES.find(t => t.id === templateId) || TPL_FREE;
 
@@ -140,6 +142,11 @@ img { display: block; width: 210mm; height: 297mm; }
       }
       if (e.key === 'Escape') {
         if (drivePickerOpen) setDrivePickerOpen(false);
+        if (cropModalOpen) setCropModalOpen(false);
+        return;
+      }
+      if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) {
+        if (imageBitmap) setCropModalOpen(true);
         return;
       }
       if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey) {
@@ -163,7 +170,7 @@ img { display: block; width: 210mm; height: 297mm; }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageBitmap, drivePickerOpen]);
+  }, [imageBitmap, drivePickerOpen, cropModalOpen]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-950 text-gray-300">
@@ -176,6 +183,16 @@ img { display: block; width: 210mm; height: 297mm; }
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCropModalOpen(true)}
+            disabled={!imageBitmap}
+            className={`px-3 py-1.5 rounded text-xs ${
+              imageBitmap ? 'bg-gray-800 hover:bg-gray-700 text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+            }`}
+            title="Crop image (C)"
+          >
+            ✂ Crop
+          </button>
           <button
             onClick={() => setRotation(r => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
             disabled={!imageBitmap}
@@ -251,7 +268,7 @@ img { display: block; width: 210mm; height: 297mm; }
       <footer className="px-4 py-1.5 border-t border-gray-800 bg-gray-900 text-xs text-gray-500 flex justify-between">
         <span>{template.name} · {template.slots.length} slot{template.slots.length === 1 ? '' : 's'}</span>
         <span className={error ? 'text-red-400' : 'italic'}>
-          {error || 'L latest · Ctrl+V paste · R rotate · B B&W · Ctrl+P print · 1-9 templates'}
+          {error || 'L latest · C crop · R rotate · B B&W · Ctrl+V paste · Ctrl+P print · 1-9 templates'}
         </span>
       </footer>
 
@@ -259,6 +276,16 @@ img { display: block; width: 210mm; height: 297mm; }
         open={drivePickerOpen}
         onClose={() => setDrivePickerOpen(false)}
         onPick={handleFile}
+      />
+
+      <CropModal
+        open={cropModalOpen}
+        source={imageBitmap}
+        onClose={() => setCropModalOpen(false)}
+        onCrop={(cropped) => {
+          setImageBitmap(prev => { if (prev) prev.close(); return cropped; });
+          setRotation(0);
+        }}
       />
     </div>
   );
