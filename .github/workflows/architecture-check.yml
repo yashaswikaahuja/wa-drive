@@ -1,0 +1,27 @@
+name: Architecture Doctrine
+
+# Runs on every PR and push to master.
+# Fails if a new forbidden backend dependency is added.
+# See /ARCHITECTURE.md §5 and /tools/forbidden-deps-check.mjs.
+#
+# This workflow is fully isolated:
+#   - it does not depend on any other workflow
+#   - it does not touch deployment
+#   - deleting this file silently disables the check
+#     (the runtime guard in services still logs warnings)
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+jobs:
+  forbidden-deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run architecture doctrine check
+        run: node tools/forbidden-deps-check.mjs --strict
