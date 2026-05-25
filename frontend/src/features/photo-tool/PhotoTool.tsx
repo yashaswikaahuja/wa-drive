@@ -17,6 +17,22 @@ import CropModal from './CropModal';
 
 const DISPLAY_MAX = 720;
 
+// Layer for Free Compose mode — independent draggable/resizable image rect
+// in canvas (paper) coordinates.
+type Layer = { id: number; imageIndex: number; x: number; y: number; w: number; h: number };
+let _layerSeq = 1;
+
+function makeDefaultLayer(imageIndex: number, img: ImageBitmap, paperW: number, paperH: number, cascadeIndex: number): Layer {
+  // Default size: ~40% of paper width, preserving aspect ratio
+  const targetW = paperW * 0.4;
+  const targetH = targetW * (img.height / img.width);
+  // Cascade: each new layer offset by 100px right + 100px down
+  const offset = (cascadeIndex % 6) * 100;
+  const x = Math.max(0, Math.min(paperW - targetW, paperW * 0.1 + offset));
+  const y = Math.max(0, Math.min(paperH - targetH, paperH * 0.1 + offset));
+  return { id: _layerSeq++, imageIndex, x, y, w: targetW, h: targetH };
+}
+
 function displaySize(paperW: number, paperH: number) {
   const ratio = paperW / paperH;
   if (ratio >= 1) {
@@ -31,7 +47,7 @@ export default function PhotoTool() {
   const [images, setImages] = useState<ImageBitmap[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const [templateId, setTemplateId] = useState<string>('free-a4p');
+  const [templateId, setTemplateId] = useState<string>('compose-a4p');
   const [grayscale, setGrayscale] = useState<boolean>(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [drivePickerOpen, setDrivePickerOpen] = useState<boolean>(false);
@@ -41,6 +57,12 @@ export default function PhotoTool() {
   const [transforms, setTransforms] = useState<Record<number, { zoom: number; offsetX: number; offsetY: number }>>({});
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
 
+  // Free Compose layers — each image becomes a freely positioned/sized rect
+  // when the active template is the Free Compose mode.
+  const [layers, setLayers] = useState<Layer[]>([]);
+  const [selectedLayer, setSelectedLayer] = useState<number | null>(null);
+  const isCompose = templateId.startsWith('compose-');
+
   const template = TEMPLATES.find(t => t.id === templateId) || TPL_FREE;
   const hasImage = images.length > 0;
 
@@ -48,6 +70,8 @@ export default function PhotoTool() {
   useEffect(() => {
     setTransforms({});
     setSelectedSlot(null);
+    setLayers([]);
+    setSelectedLayer(null);
   }, [templateId]);
 
   const handleFile = useCallback(async (file: File, mode: 'replace' | 'append' = 'replace') => {
@@ -58,9 +82,11 @@ export default function PhotoTool() {
     }
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      let newImageIdx = 0;
       setImages(prev => {
-        if (mode === 'append') return [...prev, bitmap];
+        if (mode === 'append') { newImageIdx = prev.length; return [...prev, bitmap]; }
         prev.forEach(b => b.close());
+        newImageIdx = 0;
         return [bitmap];
       });
       setFileName(file.name);
@@ -68,13 +94,26 @@ export default function PhotoTool() {
         setRotation(0);
         setTransforms({});
         setSelectedSlot(null);
+        // In compose mode, replace = also reset layers + add one for this image
+        if (isCompose) {
+          const paper = TEMPLATES.find(t => t.id === templateId)?.paper;
+          if (paper) setLayers([makeDefaultLayer(0, bitmap, paper.w, paper.h, 0)]);
+          setSelectedLayer(null);
+        }
+      } else if (isCompose) {
+        // Append in compose mode → add a cascaded layer for the new image
+        const paper = TEMPLATES.find(t => t.id === templateId)?.paper;
+        if (paper) {
+          setLayers(prev => [...prev, makeDefaultLayer(newImageIdx, bitmap, paper.w, paper.h, prev.length)]);
+        }
       }
     } catch (e: any) {
       setError('Could not read image: ' + (e.message || 'unknown'));
     }
-  }, []);
+  }, [isCompose, templateId]);
 
-  // Multi-file upload — fills slots in order, replaces existing images
+  // Multi-file upload — replaces existing images. In compose mode also creates
+  // a cascaded layer per image.
   const handleFiles = useCallback(async (files: File[]) => {
     if (files.length === 0) return;
     if (files.length === 1) { await handleFile(files[0], 'replace'); return; }
@@ -88,10 +127,15 @@ export default function PhotoTool() {
       setRotation(0);
       setTransforms({});
       setSelectedSlot(null);
+      if (isCompose) {
+        const paper = TEMPLATES.find(t => t.id === templateId)?.paper;
+        if (paper) setLayers(bitmaps.map((b, i) => makeDefaultLayer(i, b, paper.w, paper.h, i)));
+        setSelectedLayer(null);
+      }
     } catch (e: any) {
       setError('Could not read images: ' + (e.message || 'unknown'));
     }
-  }, [handleFile]);
+  }, [handleFile, isCompose, templateId]);
 
   // Load the most recently received Drive file — operator's most common need:
   // "customer just sent it on WhatsApp, give me that one."
@@ -330,6 +374,10 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
               const cur = t[idx] || { zoom: 1, offsetX: 0, offsetY: 0 };
               return { ...t, [idx]: fn(cur) };
             })}
+            layers={layers}
+            selectedLayer={selectedLayer}
+            onSelectLayer={setSelectedLayer}
+            onUpdateLayer={(id, fn) => setLayers(prev => prev.map(L => L.id === id ? fn(L) : L))}
             onDrop={handleFile}
           />
         </main>
@@ -409,7 +457,7 @@ function FilePicker({ onFiles, onAppend }: { onFiles: (files: File[]) => void; o
 type SlotXf = { zoom: number; offsetX: number; offsetY: number };
 type XfMap = Record<number, SlotXf>;
 
-function A4Canvas({ images, template, grayscale, rotation, transforms, selectedSlot, onSelectSlot, onTransformSlot, onDrop }: {
+function A4Canvas({ images, template, grayscale, rotation, transforms, selectedSlot, onSelectSlot, onTransformSlot, layers, selectedLayer, onSelectLayer, onUpdateLayer, onDrop }: {
   images: ImageBitmap[];
   template: Template;
   grayscale: boolean;
@@ -418,6 +466,10 @@ function A4Canvas({ images, template, grayscale, rotation, transforms, selectedS
   selectedSlot: number | null;
   onSelectSlot: (idx: number | null) => void;
   onTransformSlot: (idx: number, fn: (cur: SlotXf) => SlotXf) => void;
+  layers: Layer[];
+  selectedLayer: number | null;
+  onSelectLayer: (id: number | null) => void;
+  onUpdateLayer: (id: number, fn: (cur: Layer) => Layer) => void;
   onDrop: (f: File) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -427,6 +479,7 @@ function A4Canvas({ images, template, grayscale, rotation, transforms, selectedS
   const paperH = template.paper.h;
   const disp = displaySize(paperW, paperH);
   const scale = paperW / disp.w; // display→canvas scale
+  const isCompose = template.id.startsWith('compose-');
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -437,7 +490,26 @@ function A4Canvas({ images, template, grayscale, rotation, transforms, selectedS
     canvas.height = paperH;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, paperW, paperH);
-    if (images.length > 0) {
+    if (isCompose) {
+      // Compose mode: render layers (no slot fitting, pure positions)
+      ctx.filter = grayscale ? 'grayscale(1) contrast(1.1)' : 'none';
+      for (const L of layers) {
+        const img = images[L.imageIndex];
+        if (!img) continue;
+        ctx.drawImage(img, L.x, L.y, L.w, L.h);
+      }
+      ctx.filter = 'none';
+      // Selected layer border
+      if (selectedLayer !== null) {
+        const L = layers.find(l => l.id === selectedLayer);
+        if (L) {
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = 8;
+          ctx.setLineDash([]);
+          ctx.strokeRect(L.x, L.y, L.w, L.h);
+        }
+      }
+    } else if (images.length > 0) {
       // Pre-rotate each image once (avoids re-rotating per slot)
       const rotated: ImageBitmap[] = [];
       const temps: ImageBitmap[] = [];
@@ -482,7 +554,7 @@ function A4Canvas({ images, template, grayscale, rotation, transforms, selectedS
       ctx.setLineDash([]);
       ctx.strokeRect(s.x, s.y, s.w, s.h);
     }
-  }, [images, template, grayscale, rotation, transforms, selectedSlot, paperW, paperH]);
+  }, [images, template, grayscale, rotation, transforms, selectedSlot, layers, selectedLayer, isCompose, paperW, paperH]);
 
   // Translate display coords to canvas (paper) coords
   const eventToCanvas = (e: { clientX: number; clientY: number }) => {
