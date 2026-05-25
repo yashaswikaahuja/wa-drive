@@ -1,8 +1,21 @@
 import express from 'express';
 import compression from 'compression';
 import { createServer } from 'http';
+import { createRequire } from 'module';
 import { PORT } from './config.js';
 import { pool } from './db.js';
+
+// Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
+// Non-blocking, fail-silent. Logs a warning if forbidden deps are installed.
+// Deleting this block disables runtime warnings; CI still enforces.
+setTimeout(() => {
+  try {
+    const __req = createRequire(import.meta.url);
+    const FORBIDDEN = ['jimp','puppeteer','puppeteer-core','playwright','canvas','pdfkit','pdf-lib','tesseract.js','ffmpeg-static','fluent-ffmpeg','@tensorflow/tfjs-node','onnxruntime-node','node-poppler','pdf2pic','pdf-image','html-pdf','html-pdf-node','gm'];
+    const found = FORBIDDEN.filter((n: string) => { try { __req.resolve(n); return true; } catch { return false; } });
+    if (found.length) console.error('[ARCHITECTURE] forbidden deps installed:', found.join(', '), '— see /ARCHITECTURE.md §5');
+  } catch {}
+}, 1000);
 import { authMiddleware } from './middleware/auth.js';
 import { setupSocket } from './socket/index.js';
 import { loadDriveTokenFromDB } from './modules/drive/service.js';

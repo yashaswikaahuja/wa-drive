@@ -1,5 +1,18 @@
 import 'dotenv/config';
 import express from 'express';
+import { createRequire } from 'module';
+
+// Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
+// Non-blocking, fail-silent. Logs a warning if forbidden deps are installed.
+// Deleting this block disables runtime warnings; CI still enforces.
+setTimeout(() => {
+  try {
+    const __req = createRequire(import.meta.url);
+    const FORBIDDEN = ['jimp','puppeteer','puppeteer-core','playwright','canvas','pdfkit','pdf-lib','tesseract.js','ffmpeg-static','fluent-ffmpeg','@tensorflow/tfjs-node','onnxruntime-node','node-poppler','pdf2pic','pdf-image','html-pdf','html-pdf-node','gm','sharp'];
+    const found = FORBIDDEN.filter(n => { try { __req.resolve(n); return true; } catch { return false; } });
+    if (found.length) console.error('[ARCHITECTURE] forbidden deps installed:', found.join(', '), '— see /ARCHITECTURE.md §5');
+  } catch {}
+}, 1000);
 
 import profilesRouter from './routes/profiles.js';
 import mappingsRouter from './routes/mappings.js';

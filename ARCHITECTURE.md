@@ -290,6 +290,28 @@ follow §4.4.
 If you find yourself wanting one of these, the right question is:
 "Why am I trying to do pixels on the server?" Re-read §3.
 
+### 5.1 Grandfathered exemptions
+
+These existed in the codebase before the doctrine was written and are
+allowed temporarily, with a remediation plan. Each exemption is encoded
+in `tools/forbidden-deps-check.mjs` so CI does not flag them as new
+violations. When the package is removed, delete the entry from that file.
+
+| Service | Package | Reason | Remediation |
+|---|---|---|---|
+| backend | `sharp` | Used by legacy Stitch photo sheet generator (`services/processor/`) and upload metadata validation. | Removed when browser-side Photo Tool replaces Stitch. |
+| backend | `playwright-core` | Listed in `package.json` but not imported anywhere in source. | Remove in next backend dependency cleanup pass. |
+
+Adding a new exemption is **not a free pass**. It requires:
+
+1. A PR that lists the package, its current usage, and a deletion plan
+   with a target date or trigger event.
+2. Review by another contributor.
+3. Update of the table above and `EXEMPTIONS` in
+   `tools/forbidden-deps-check.mjs`.
+
+The number of rows in this table should only ever decrease.
+
 ---
 
 ## 6. Decision procedure for new features
