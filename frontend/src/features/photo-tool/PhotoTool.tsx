@@ -11,6 +11,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { TEMPLATES, TPL_FREE, A4_W_PX, A4_H_PX } from './templates';
 import type { Slot, Template } from './templates';
 import { printBlob } from '../../shared/fileCache';
+import api from '../../shared/api';
+import DrivePicker from './DrivePicker';
 
 const DISPLAY_W = 480;
 const DISPLAY_H = Math.round(DISPLAY_W * (A4_H_PX / A4_W_PX));
@@ -22,6 +24,7 @@ export default function PhotoTool() {
   const [templateId, setTemplateId] = useState<string>('free');
   const [grayscale, setGrayscale] = useState<boolean>(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
+  const [drivePickerOpen, setDrivePickerOpen] = useState<boolean>(false);
 
   const template = TEMPLATES.find(t => t.id === templateId) || TPL_FREE;
 
@@ -83,6 +86,63 @@ img { display: block; width: 210mm; height: 297mm; }
     return () => document.removeEventListener('paste', onPaste);
   }, [handleFile]);
 
+  // URL params: ?fileId=X&template=Y — preload from a Drive file
+  // (used by WhatsApp deep-link, future external integrations).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tplParam = params.get('template');
+    if (tplParam && TEMPLATES.some(t => t.id === tplParam)) {
+      setTemplateId(tplParam);
+    }
+    const fileId = params.get('fileId');
+    if (fileId) {
+      api.get(`/drive/download/${fileId}`, { responseType: 'blob' })
+        .then(res => {
+          const blob = new Blob([res.data], { type: res.headers['content-type'] || 'image/jpeg' });
+          const file = new File([blob], 'drive-file', { type: blob.type });
+          handleFile(file);
+        })
+        .catch(e => setError('Could not load Drive file: ' + (e.message || 'unknown')));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keyboard shortcuts — operators expect speed.
+  // Ctrl+P print · R rotate · B B&W · 1-9 pick template by index · Esc close picker
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Don't intercept when typing in an input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (imageBitmap) handlePrint();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (drivePickerOpen) setDrivePickerOpen(false);
+        return;
+      }
+      if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey) {
+        if (imageBitmap) setRotation(r => ((r + 90) % 360) as 0 | 90 | 180 | 270);
+        return;
+      }
+      if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) {
+        setGrayscale(g => !g);
+        return;
+      }
+      if (e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.metaKey) {
+        const idx = parseInt(e.key, 10) - 1;
+        if (idx >= 0 && idx < TEMPLATES.length) setTemplateId(TEMPLATES[idx].id);
+        return;
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageBitmap, drivePickerOpen]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-950 text-gray-300">
       <header className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900">
@@ -112,6 +172,13 @@ img { display: block; width: 210mm; height: 297mm; }
             title="Toggle grayscale (saves toner on B&W printers)"
           >
             B&W
+          </button>
+          <button
+            onClick={() => setDrivePickerOpen(true)}
+            className="px-3 py-1.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-200"
+            title="Pick a customer file from Drive"
+          >
+            📁 Drive
           </button>
           <FilePicker onFile={handleFile} />
           <button
@@ -155,9 +222,15 @@ img { display: block; width: 210mm; height: 297mm; }
       <footer className="px-4 py-1.5 border-t border-gray-800 bg-gray-900 text-xs text-gray-500 flex justify-between">
         <span>{template.name} · {template.slots.length} slot{template.slots.length === 1 ? '' : 's'}</span>
         <span className={error ? 'text-red-400' : 'italic'}>
-          {error || 'Phase 2b — 5 templates'}
+          {error || 'Ctrl+V paste · R rotate · Ctrl+P print · 1-9 templates'}
         </span>
       </footer>
+
+      <DrivePicker
+        open={drivePickerOpen}
+        onClose={() => setDrivePickerOpen(false)}
+        onPick={handleFile}
+      />
     </div>
   );
 }
