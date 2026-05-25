@@ -44,6 +44,24 @@ export default function PhotoTool() {
     }
   }, []);
 
+  // Load the most recently received Drive file — operator's most common need:
+  // "customer just sent it on WhatsApp, give me that one."
+  const loadLatest = useCallback(async () => {
+    setError('');
+    try {
+      const res = await api.get('/drive/files/ws');
+      const files = Array.isArray(res.data) ? res.data : [];
+      if (files.length === 0) { setError('No files in Drive yet'); return; }
+      const latest = files[0]; // backend returns newest first
+      const dl = await api.get(`/drive/download/${latest.id}`, { responseType: 'blob' });
+      const blob = new Blob([dl.data], { type: dl.headers['content-type'] || 'image/jpeg' });
+      const file = new File([blob], latest.fileName || 'latest', { type: blob.type });
+      await handleFile(file);
+    } catch (e: any) {
+      setError('Could not load latest: ' + (e.response?.data?.error || e.message || 'unknown'));
+    }
+  }, [handleFile]);
+
   const handlePrint = useCallback(() => {
     const canvas = document.getElementById('cc-photo-canvas') as HTMLCanvasElement | null;
     if (!canvas) { setError('Canvas not ready'); return; }
@@ -132,6 +150,10 @@ img { display: block; width: 210mm; height: 297mm; }
         setGrayscale(g => !g);
         return;
       }
+      if (e.key.toLowerCase() === 'l' && !e.ctrlKey && !e.metaKey) {
+        loadLatest();
+        return;
+      }
       if (e.key >= '1' && e.key <= '9' && !e.ctrlKey && !e.metaKey) {
         const idx = parseInt(e.key, 10) - 1;
         if (idx >= 0 && idx < TEMPLATES.length) setTemplateId(TEMPLATES[idx].id);
@@ -172,6 +194,13 @@ img { display: block; width: 210mm; height: 297mm; }
             title="Toggle grayscale (saves toner on B&W printers)"
           >
             B&W
+          </button>
+          <button
+            onClick={loadLatest}
+            className="px-3 py-1.5 rounded text-xs bg-yellow-600 hover:bg-yellow-500 text-white"
+            title="Load latest Drive file (L)"
+          >
+            📥 Latest
           </button>
           <button
             onClick={() => setDrivePickerOpen(true)}
@@ -222,7 +251,7 @@ img { display: block; width: 210mm; height: 297mm; }
       <footer className="px-4 py-1.5 border-t border-gray-800 bg-gray-900 text-xs text-gray-500 flex justify-between">
         <span>{template.name} · {template.slots.length} slot{template.slots.length === 1 ? '' : 's'}</span>
         <span className={error ? 'text-red-400' : 'italic'}>
-          {error || 'Ctrl+V paste · R rotate · Ctrl+P print · 1-9 templates'}
+          {error || 'L latest · Ctrl+V paste · R rotate · B B&W · Ctrl+P print · 1-9 templates'}
         </span>
       </footer>
 
