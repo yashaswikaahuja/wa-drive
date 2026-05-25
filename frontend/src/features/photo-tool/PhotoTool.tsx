@@ -4,64 +4,15 @@
  * SERVER NEVER SEES PIXELS. All rendering happens here in the browser.
  * See /ARCHITECTURE.md §3.1 and §3.2.
  *
- * Phase 2a: template engine — pick a template, image fills the slots.
+ * Phase 2b: 5 built-in templates loaded from templates.ts.
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-
-// A4 @ 300 DPI — internal coordinate system
-const A4_W_PX = 2480;
-const A4_H_PX = 3508;
-const MM_TO_PX = 300 / 25.4; // 300 DPI
-const mm = (n: number) => Math.round(n * MM_TO_PX);
-
-// Aadhaar/PAN/credit-card size: 85.6 × 54mm
-const CARD_W = mm(85.6);
-const CARD_H = mm(54);
+import { TEMPLATES, TPL_FREE, A4_W_PX, A4_H_PX } from './templates';
+import type { Slot, Template } from './templates';
 
 const DISPLAY_W = 480;
 const DISPLAY_H = Math.round(DISPLAY_W * (A4_H_PX / A4_W_PX));
-
-// ── Templates ────────────────────────────────────────────────────────────
-// Each template is pure data. Slots are positions in A4 px @ 300 DPI.
-// imageIndex points to which uploaded image fills this slot (0 = first image).
-// fit: 'contain' (fit inside, may letterbox) | 'cover' (fill, may crop).
-type Slot = { x: number; y: number; w: number; h: number; imageIndex: number; fit: 'contain' | 'cover' };
-type Template = {
-  id: string;
-  name: string;
-  description: string;
-  imagesNeeded: number;
-  slots: Slot[];
-};
-
-// Free A4: image fits inside printable area, centered.
-const TPL_FREE: Template = {
-  id: 'free',
-  name: 'Free A4',
-  description: 'Fit one image to A4',
-  imagesNeeded: 1,
-  slots: [{ x: mm(5), y: mm(5), w: A4_W_PX - 2 * mm(5), h: A4_H_PX - 2 * mm(5), imageIndex: 0, fit: 'contain' }],
-};
-
-// Aadhaar 2 copies: two cards, stacked vertically, centered. Operator cuts in middle.
-const AADHAAR_X = Math.round((A4_W_PX - CARD_W) / 2); // center horizontally
-const AADHAAR_Y1 = Math.round((A4_H_PX / 2 - CARD_H) / 2); // center in top half
-const AADHAAR_Y2 = Math.round(A4_H_PX / 2 + (A4_H_PX / 2 - CARD_H) / 2); // center in bottom half
-const TPL_AADHAAR_2: Template = {
-  id: 'aadhaar-2',
-  name: 'Aadhaar — 2 copies',
-  description: 'Same image, 2 cards on A4',
-  imagesNeeded: 1,
-  slots: [
-    { x: AADHAAR_X, y: AADHAAR_Y1, w: CARD_W, h: CARD_H, imageIndex: 0, fit: 'contain' },
-    { x: AADHAAR_X, y: AADHAAR_Y2, w: CARD_W, h: CARD_H, imageIndex: 0, fit: 'contain' },
-  ],
-};
-
-const TEMPLATES: Template[] = [TPL_FREE, TPL_AADHAAR_2];
-
-// ── Component ────────────────────────────────────────────────────────────
 
 export default function PhotoTool() {
   const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null);
@@ -97,7 +48,9 @@ export default function PhotoTool() {
         <div className="flex items-center gap-3">
           <span className="text-lg">🖨</span>
           <h1 className="text-sm font-semibold text-gray-200">Photo Tool</h1>
-          <span className="text-xs text-gray-500">{fileName || '— print Aadhaar, passport photos, documents'}</span>
+          <span className="text-xs text-gray-500 truncate max-w-md">
+            {fileName || '— print Aadhaar, passport photos, documents'}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <FilePicker onFile={handleFile} />
@@ -108,15 +61,16 @@ export default function PhotoTool() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Template sidebar */}
-        <aside className="w-48 border-r border-gray-800 bg-gray-900 overflow-y-auto p-2 flex flex-col gap-1">
+        <aside className="w-52 border-r border-gray-800 bg-gray-900 overflow-y-auto p-2 flex flex-col gap-1">
           <div className="text-[10px] uppercase tracking-wider text-gray-500 px-2 py-1">Templates</div>
           {TEMPLATES.map(t => (
             <button
               key={t.id}
               onClick={() => setTemplateId(t.id)}
               className={`text-left px-3 py-2 rounded text-xs transition-colors ${
-                templateId === t.id ? 'bg-blue-600/20 text-blue-300 ring-1 ring-blue-600/40' : 'hover:bg-gray-800 text-gray-300'
+                templateId === t.id
+                  ? 'bg-blue-600/20 text-blue-300 ring-1 ring-blue-600/40'
+                  : 'hover:bg-gray-800 text-gray-300'
               }`}
             >
               <div className="font-medium">{t.name}</div>
@@ -125,7 +79,6 @@ export default function PhotoTool() {
           ))}
         </aside>
 
-        {/* Canvas */}
         <main className="flex-1 flex items-center justify-center overflow-auto p-8">
           <A4Canvas image={imageBitmap} template={template} onDrop={handleFile} />
         </main>
@@ -134,7 +87,7 @@ export default function PhotoTool() {
       <footer className="px-4 py-1.5 border-t border-gray-800 bg-gray-900 text-xs text-gray-500 flex justify-between">
         <span>{template.name} · {template.slots.length} slot{template.slots.length === 1 ? '' : 's'}</span>
         <span className={error ? 'text-red-400' : 'italic'}>
-          {error || 'Phase 2a — templates'}
+          {error || 'Phase 2b — 5 templates'}
         </span>
       </footer>
     </div>
@@ -173,16 +126,13 @@ function A4Canvas({ image, template, onDrop }: { image: ImageBitmap | null; temp
     if (!ctx) return;
     canvas.width = A4_W_PX;
     canvas.height = A4_H_PX;
-    // White paper
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, A4_W_PX, A4_H_PX);
-    // Draw image into each slot per template
     if (image) {
       for (const slot of template.slots) {
         drawIntoSlot(ctx, image, slot);
       }
     } else {
-      // Empty-state slot guides (light gray dashed rects) to show layout
       ctx.strokeStyle = '#d1d5db';
       ctx.lineWidth = 4;
       ctx.setLineDash([20, 10]);
@@ -245,7 +195,6 @@ function drawIntoSlot(ctx: CanvasRenderingContext2D, img: ImageBitmap, slot: Slo
   }
   const dx = slot.x + (slot.w - drawW) / 2;
   const dy = slot.y + (slot.h - drawH) / 2;
-  // Clip to slot bounds (matters for 'cover')
   ctx.save();
   ctx.beginPath();
   ctx.rect(slot.x, slot.y, slot.w, slot.h);
