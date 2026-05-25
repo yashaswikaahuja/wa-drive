@@ -60,6 +60,27 @@ img { display: block; width: 210mm; height: 297mm; }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Clipboard paste — operator hits Ctrl+V anywhere on page.
+  // Captures image from clipboard (screenshot, copy-from-website, etc.).
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            handleFile(file);
+            return;
+          }
+        }
+      }
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [handleFile]);
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-950 text-gray-300">
       <header className="flex items-center justify-between px-4 py-2 border-b border-gray-800 bg-gray-900">
@@ -201,8 +222,8 @@ function A4Canvas({ image, template, grayscale, onDrop }: { image: ImageBitmap |
         style={{ width: DISPLAY_W, height: DISPLAY_H, display: 'block' }}
       />
       {!image && (
-        <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm pointer-events-none select-none">
-          Drop an image, or click "Choose Image"
+        <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm pointer-events-none select-none text-center px-4">
+          Drop an image · paste with Ctrl+V · or click "Choose Image"
         </div>
       )}
     </div>
