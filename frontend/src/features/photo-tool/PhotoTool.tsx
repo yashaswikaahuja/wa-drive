@@ -28,7 +28,7 @@ function displaySize(paperW: number, paperH: number) {
 }
 
 export default function PhotoTool() {
-  const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null);
+  const [images, setImages] = useState<ImageBitmap[]>([]);
   const [fileName, setFileName] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [templateId, setTemplateId] = useState<string>('free-a4p');
@@ -42,6 +42,7 @@ export default function PhotoTool() {
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
 
   const template = TEMPLATES.find(t => t.id === templateId) || TPL_FREE;
+  const hasImage = images.length > 0;
 
   // Reset transforms when template changes (slot indices may differ)
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function PhotoTool() {
     setSelectedSlot(null);
   }, [templateId]);
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleFile = useCallback(async (file: File, mode: 'replace' | 'append' = 'replace') => {
     setError('');
     if (!file.type.startsWith('image/')) {
       setError('Please drop an image file');
@@ -57,15 +58,40 @@ export default function PhotoTool() {
     }
     try {
       const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-      setImageBitmap(prev => { if (prev) prev.close(); return bitmap; });
+      setImages(prev => {
+        if (mode === 'append') return [...prev, bitmap];
+        prev.forEach(b => b.close());
+        return [bitmap];
+      });
       setFileName(file.name);
-      setRotation(0);
-      setTransforms({});
-      setSelectedSlot(null);
+      if (mode === 'replace') {
+        setRotation(0);
+        setTransforms({});
+        setSelectedSlot(null);
+      }
     } catch (e: any) {
       setError('Could not read image: ' + (e.message || 'unknown'));
     }
   }, []);
+
+  // Multi-file upload — fills slots in order, replaces existing images
+  const handleFiles = useCallback(async (files: File[]) => {
+    if (files.length === 0) return;
+    if (files.length === 1) { await handleFile(files[0], 'replace'); return; }
+    setError('');
+    try {
+      const bitmaps = await Promise.all(files.filter(f => f.type.startsWith('image/'))
+        .map(f => createImageBitmap(f, { imageOrientation: 'from-image' })));
+      if (bitmaps.length === 0) { setError('No image files'); return; }
+      setImages(prev => { prev.forEach(b => b.close()); return bitmaps; });
+      setFileName(`${bitmaps.length} images`);
+      setRotation(0);
+      setTransforms({});
+      setSelectedSlot(null);
+    } catch (e: any) {
+      setError('Could not read images: ' + (e.message || 'unknown'));
+    }
+  }, [handleFile]);
 
   // Load the most recently received Drive file — operator's most common need:
   // "customer just sent it on WhatsApp, give me that one."
@@ -105,7 +131,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
   }, [template]);
 
   useEffect(() => {
-    return () => { if (imageBitmap) imageBitmap.close(); };
+    return () => { images.forEach(b => b.close()); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -161,7 +187,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
 
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
-        if (imageBitmap) handlePrint();
+        if (hasImage) handlePrint();
         return;
       }
       if (e.key === 'Escape') {
@@ -171,11 +197,11 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
         return;
       }
       if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) {
-        if (imageBitmap) setCropModalOpen(true);
+        if (hasImage) setCropModalOpen(true);
         return;
       }
       if (e.key.toLowerCase() === 'r' && !e.ctrlKey && !e.metaKey) {
-        if (imageBitmap) setRotation(r => ((r + 90) % 360) as 0 | 90 | 180 | 270);
+        if (hasImage) setRotation(r => ((r + 90) % 360) as 0 | 90 | 180 | 270);
         return;
       }
       if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) {
@@ -195,7 +221,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageBitmap, drivePickerOpen, cropModalOpen, selectedSlot]);
+  }, [hasImage, drivePickerOpen, cropModalOpen, selectedSlot]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-950 text-gray-300">
@@ -210,9 +236,9 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
         <div className="flex items-center gap-2">
           <button
             onClick={() => setCropModalOpen(true)}
-            disabled={!imageBitmap}
+            disabled={!hasImage}
             className={`px-3 py-1.5 rounded text-xs ${
-              imageBitmap ? 'bg-gray-800 hover:bg-gray-700 text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+              hasImage ? 'bg-gray-800 hover:bg-gray-700 text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
             }`}
             title="Crop image (C)"
           >
@@ -220,9 +246,9 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
           </button>
           <button
             onClick={() => setRotation(r => ((r + 90) % 360) as 0 | 90 | 180 | 270)}
-            disabled={!imageBitmap}
+            disabled={!hasImage}
             className={`px-3 py-1.5 rounded text-xs ${
-              imageBitmap ? 'bg-gray-800 hover:bg-gray-700 text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+              hasImage ? 'bg-gray-800 hover:bg-gray-700 text-gray-200' : 'bg-gray-800 text-gray-600 cursor-not-allowed'
             }`}
             title="Rotate 90° clockwise"
           >
@@ -251,13 +277,12 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
           >
             📁 Drive
           </button>
-          <FilePicker onFile={handleFile} />
+          <FilePicker onFiles={handleFiles} onAppend={f => handleFile(f, 'append')} />
           <button
             onClick={handlePrint}
-            disabled={!imageBitmap}
+            disabled={!hasImage}
             className={`px-3 py-1.5 rounded text-xs ${
-              imageBitmap
-                ? 'bg-green-600 hover:bg-green-500 text-white'
+              hasImage ? 'bg-green-600 hover:bg-green-500 text-white'
                 : 'bg-gray-800 text-gray-500 cursor-not-allowed'
             }`}
           >
@@ -279,7 +304,14 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
                   : 'hover:bg-gray-800 text-gray-300'
               }`}
             >
-              <div className="font-medium">{t.name}</div>
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{t.name}</span>
+                {t.imagesNeeded > 1 && (
+                  <span className="ml-2 px-1.5 py-0.5 bg-purple-600/30 text-purple-300 rounded text-[9px]">
+                    {t.imagesNeeded} imgs
+                  </span>
+                )}
+              </div>
               <div className="text-gray-500 text-[10px] mt-0.5">{t.description}</div>
             </button>
           ))}
@@ -287,7 +319,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
 
         <main className="flex-1 flex items-center justify-center overflow-auto p-8">
           <A4Canvas
-            image={imageBitmap}
+            images={images}
             template={template}
             grayscale={grayscale}
             rotation={rotation}
@@ -320,10 +352,15 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
 
       <CropModal
         open={cropModalOpen}
-        source={imageBitmap}
+        source={images[0] || null}
         onClose={() => setCropModalOpen(false)}
         onCrop={(cropped) => {
-          setImageBitmap(prev => { if (prev) prev.close(); return cropped; });
+          setImages(prev => {
+            const next = [...prev];
+            if (next[0]) next[0].close();
+            next[0] = cropped;
+            return next;
+          });
           setRotation(0);
         }}
       />
@@ -331,22 +368,39 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
   );
 }
 
-function FilePicker({ onFile }: { onFile: (f: File) => void }) {
+function FilePicker({ onFiles, onAppend }: { onFiles: (files: File[]) => void; onAppend: (file: File) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const appendRef = useRef<HTMLInputElement>(null);
   return (
     <>
       <input
         ref={inputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ''; }}
+        onChange={e => { const fs = Array.from(e.target.files || []); if (fs.length) onFiles(fs); e.target.value = ''; }}
+      />
+      <input
+        ref={appendRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) onAppend(f); e.target.value = ''; }}
       />
       <button
         onClick={() => inputRef.current?.click()}
         className="px-3 py-1.5 rounded text-xs bg-blue-600 hover:bg-blue-500 text-white"
+        title="Choose one or more images"
       >
-        Choose Image
+        Choose
+      </button>
+      <button
+        onClick={() => appendRef.current?.click()}
+        className="px-3 py-1.5 rounded text-xs bg-blue-700 hover:bg-blue-600 text-white"
+        title="Add another image to the current set"
+      >
+        + Add
       </button>
     </>
   );
@@ -355,8 +409,8 @@ function FilePicker({ onFile }: { onFile: (f: File) => void }) {
 type SlotXf = { zoom: number; offsetX: number; offsetY: number };
 type XfMap = Record<number, SlotXf>;
 
-function A4Canvas({ image, template, grayscale, rotation, transforms, selectedSlot, onSelectSlot, onTransformSlot, onDrop }: {
-  image: ImageBitmap | null;
+function A4Canvas({ images, template, grayscale, rotation, transforms, selectedSlot, onSelectSlot, onTransformSlot, onDrop }: {
+  images: ImageBitmap[];
   template: Template;
   grayscale: boolean;
   rotation: 0 | 90 | 180 | 270;
@@ -383,29 +437,34 @@ function A4Canvas({ image, template, grayscale, rotation, transforms, selectedSl
     canvas.height = paperH;
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, paperW, paperH);
-    if (image) {
-      let rendered = image;
-      let temp: ImageBitmap | null = null;
-      if (rotation !== 0) {
+    if (images.length > 0) {
+      // Pre-rotate each image once (avoids re-rotating per slot)
+      const rotated: ImageBitmap[] = [];
+      const temps: ImageBitmap[] = [];
+      for (const img of images) {
+        if (rotation === 0) { rotated.push(img); continue; }
         const swapped = rotation === 90 || rotation === 270;
-        const w = swapped ? image.height : image.width;
-        const h = swapped ? image.width : image.height;
+        const w = swapped ? img.height : img.width;
+        const h = swapped ? img.width : img.height;
         const oc = new OffscreenCanvas(w, h);
         const octx = oc.getContext('2d')!;
         octx.translate(w / 2, h / 2);
         octx.rotate((rotation * Math.PI) / 180);
-        octx.drawImage(image, -image.width / 2, -image.height / 2);
-        temp = oc.transferToImageBitmap();
-        rendered = temp;
+        octx.drawImage(img, -img.width / 2, -img.height / 2);
+        const bm = oc.transferToImageBitmap();
+        rotated.push(bm);
+        temps.push(bm);
       }
       ctx.filter = grayscale ? 'grayscale(1) contrast(1.1)' : 'none';
       for (let i = 0; i < template.slots.length; i++) {
         const slot = template.slots[i];
+        const img = rotated[slot.imageIndex] || rotated[0];
+        if (!img) continue;
         const xf = transforms[i] || { zoom: 1, offsetX: 0, offsetY: 0 };
-        drawIntoSlot(ctx, rendered, slot, xf);
+        drawIntoSlot(ctx, img, slot, xf);
       }
       ctx.filter = 'none';
-      if (temp) temp.close();
+      temps.forEach(t => t.close());
     } else {
       ctx.strokeStyle = '#d1d5db';
       ctx.lineWidth = 4;
@@ -423,7 +482,7 @@ function A4Canvas({ image, template, grayscale, rotation, transforms, selectedSl
       ctx.setLineDash([]);
       ctx.strokeRect(s.x, s.y, s.w, s.h);
     }
-  }, [image, template, grayscale, rotation, transforms, selectedSlot, paperW, paperH]);
+  }, [images, template, grayscale, rotation, transforms, selectedSlot, paperW, paperH]);
 
   // Translate display coords to canvas (paper) coords
   const eventToCanvas = (e: { clientX: number; clientY: number }) => {
@@ -442,7 +501,7 @@ function A4Canvas({ image, template, grayscale, rotation, transforms, selectedSl
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
-    if (!image) return;
+    if (images.length === 0) return;
     const { x, y } = eventToCanvas(e);
     const idx = slotAt(x, y);
     onSelectSlot(idx);
@@ -491,14 +550,14 @@ function A4Canvas({ image, template, grayscale, rotation, transforms, selectedSl
       <canvas
         ref={canvasRef}
         id="cc-photo-canvas"
-        style={{ width: disp.w, height: disp.h, display: 'block', cursor: image ? (selectedSlot !== null ? 'move' : 'pointer') : 'default' }}
+        style={{ width: disp.w, height: disp.h, display: 'block', cursor: images.length > 0 ? (selectedSlot !== null ? 'move' : 'pointer') : 'default' }}
         onMouseDown={onCanvasMouseDown}
         onMouseMove={onCanvasMouseMove}
         onMouseUp={onCanvasMouseUp}
         onMouseLeave={onCanvasMouseUp}
         onWheel={onCanvasWheel}
       />
-      {!image && (
+      {images.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm pointer-events-none select-none text-center px-4">
           Drop an image · paste with Ctrl+V · or click "Choose Image"
         </div>

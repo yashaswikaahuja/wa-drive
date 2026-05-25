@@ -116,6 +116,47 @@ export const TPL_AADHAAR_2: Template = {
   })(),
 };
 
+export const TPL_AADHAAR_FB: Template = {
+  id: 'aadhaar-fb',
+  name: 'Aadhaar — front + back',
+  description: 'Image 1 = front, Image 2 = back',
+  imagesNeeded: 2,
+  paper: PAPER_A4_P,
+  slots: (() => {
+    const x = Math.round((PAPER_A4_P.w - CARD_W) / 2);
+    const y1 = Math.round((PAPER_A4_P.h / 2 - CARD_H) / 2);
+    const y2 = Math.round(PAPER_A4_P.h / 2 + (PAPER_A4_P.h / 2 - CARD_H) / 2);
+    return [
+      { x, y: y1, w: CARD_W, h: CARD_H, imageIndex: 0, fit: 'contain' as const },
+      { x, y: y2, w: CARD_W, h: CARD_H, imageIndex: 1, fit: 'contain' as const },
+    ];
+  })(),
+};
+
+export const TPL_PASSPORT_4_DIFF: Template = {
+  id: 'passport-4-diff',
+  name: 'Passport — 4 different',
+  description: '4 different photos at 35×45mm',
+  imagesNeeded: 4,
+  paper: PAPER_A4_P,
+  slots: (() => {
+    const cols = 2, rows = 2, gap = 60;
+    const totalW = cols * mm(35) + (cols - 1) * gap;
+    const totalH = rows * mm(45) + (rows - 1) * gap;
+    const startX = Math.round((PAPER_A4_P.w - totalW) / 2);
+    const startY = Math.round((PAPER_A4_P.h - totalH) / 2);
+    const slots: Slot[] = [];
+    let idx = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        slots.push({ x: startX + c * (mm(35) + gap), y: startY + r * (mm(45) + gap), w: mm(35), h: mm(45), imageIndex: idx, fit: 'cover' });
+        idx++;
+      }
+    }
+    return slots;
+  })(),
+};
+
 export const TPL_PAN_4: Template = {
   id: 'pan-4',
   name: 'PAN — 4 copies',
@@ -192,8 +233,8 @@ export const TPL_BANNER: Template = {
 export const TEMPLATES: Template[] = [
   TPL_FREE_A4_P, TPL_FREE_A4_L,
   TPL_FREE_4X6_P, TPL_FREE_4X6_L,
-  TPL_AADHAAR_2, TPL_PAN_4,
-  TPL_PASSPORT_4, TPL_PASSPORT_8, TPL_PASSPORT_4_L,
+  TPL_AADHAAR_2, TPL_AADHAAR_FB, TPL_PAN_4,
+  TPL_PASSPORT_4, TPL_PASSPORT_8, TPL_PASSPORT_4_DIFF, TPL_PASSPORT_4_L,
   TPL_VISA_4, TPL_VISA_6,
   TPL_SMALL_8,
   TPL_BANNER,
