@@ -1,9 +1,15 @@
 /**
- * Crop modal — operator drags/resizes a rectangle on the source image,
- * clicks Apply, gets back a cropped ImageBitmap.
+ * Crop modal with zoom + pan.
+ *
+ *   - Mouse wheel: zoom image (centered on cursor)
+ *   - Drag inside crop rect: move crop rect
+ *   - Drag corners: resize crop rect
+ *   - Drag outside crop rect (or hold Space + drag): pan the image
+ *   - +/- buttons: zoom step
+ *   - Reset: restore default fit + center
+ *   - Apply: cut the image region under the crop rect, return new ImageBitmap
  *
  * SERVER NEVER SEES PIXELS — see /ARCHITECTURE.md §3.1.
- * All cropping happens in-browser via OffscreenCanvas.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -15,32 +21,38 @@ interface Props {
   onClose: () => void;
 }
 
-type DragKind = 'move' | 'tl' | 'tr' | 'bl' | 'br' | null;
-
+type DragKind = 'move' | 'tl' | 'tr' | 'bl' | 'br' | 'pan' | null;
 const HANDLE_SIZE = 14;
 
 export default function CropModal({ open, source, onCrop, onClose }: Props) {
-  // Crop rectangle in DISPLAY coordinates (px on screen)
+  // Container display size (fixed)
+  const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
+  // Base display size of the image (fit to container at zoom=1)
+  const [baseSize, setBaseSize] = useState({ w: 0, h: 0 });
+  // Image transform within container
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  // Crop rectangle in container coordinates
   const [crop, setCrop] = useState({ x: 0, y: 0, w: 0, h: 0 });
-  const [displaySize, setDisplaySize] = useState({ w: 0, h: 0 });
-  const [drag, setDrag] = useState<{ kind: DragKind; startX: number; startY: number; startCrop: typeof crop } | null>(null);
+  const [drag, setDrag] = useState<{ kind: DragKind; startX: number; startY: number; startCrop: typeof crop; startOffset: typeof offset } | null>(null);
   const imgUrlRef = useRef<string>('');
+  const [imgUrl, setImgUrl] = useState<string>('');
 
-  // Compute display size to fit within modal (max 80vw × 70vh)
   useEffect(() => {
     if (!open || !source) return;
-    const maxW = Math.min(window.innerWidth * 0.8, 1000);
-    const maxH = window.innerHeight * 0.7;
+    const maxW = Math.min(window.innerWidth * 0.8, 900);
+    const maxH = window.innerHeight * 0.65;
     const ratio = source.width / source.height;
     let dw = maxW;
     let dh = dw / ratio;
     if (dh > maxH) { dh = maxH; dw = dh * ratio; }
     dw = Math.round(dw); dh = Math.round(dh);
-    setDisplaySize({ w: dw, h: dh });
-    // Default crop = 80% center
+    setContainerSize({ w: dw, h: dh });
+    setBaseSize({ w: dw, h: dh });
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
     setCrop({ x: Math.round(dw * 0.1), y: Math.round(dh * 0.1), w: Math.round(dw * 0.8), h: Math.round(dh * 0.8) });
 
-    // Render source bitmap to a blob URL for <img> display
     const oc = document.createElement('canvas');
     oc.width = source.width;
     oc.height = source.height;
@@ -54,9 +66,6 @@ export default function CropModal({ open, source, onCrop, onClose }: Props) {
     }, 'image/png');
   }, [open, source]);
 
-  const [imgUrl, setImgUrl] = useState<string>('');
-
-  // Cleanup blob URL on unmount/close
   useEffect(() => {
     if (!open && imgUrlRef.current) {
       URL.revokeObjectURL(imgUrlRef.current);
@@ -70,43 +79,87 @@ export default function CropModal({ open, source, onCrop, onClose }: Props) {
   const startDrag = (kind: DragKind, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setDrag({ kind, startX: e.clientX, startY: e.clientY, startCrop: { ...crop } });
+    setDrag({ kind, startX: e.clientX, startY: e.clientY, startCrop: { ...crop }, startOffset: { ...offset } });
+  };
+
+  const onContainerMouseDown = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).dataset.handle || (e.target as HTMLElement).dataset.croprect) return;
+    // Outside the crop rect → pan the image
+    startDrag('pan', e);
   };
 
   const onMouseMove = (e: React.MouseEvent) => {
     if (!drag) return;
     const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
+    if (drag.kind === 'pan') {
+      setOffset({ x: drag.startOffset.x + dx, y: drag.startOffset.y + dy });
+      return;
+    }
     let { x, y, w, h } = drag.startCrop;
     if (drag.kind === 'move') {
-      x = Math.max(0, Math.min(displaySize.w - w, x + dx));
-      y = Math.max(0, Math.min(displaySize.h - h, y + dy));
+      x = Math.max(0, Math.min(containerSize.w - w, x + dx));
+      y = Math.max(0, Math.min(containerSize.h - h, y + dy));
     } else if (drag.kind === 'tl') {
       const nx = Math.max(0, x + dx); const ny = Math.max(0, y + dy);
       w = w + (x - nx); h = h + (y - ny); x = nx; y = ny;
     } else if (drag.kind === 'tr') {
       const ny = Math.max(0, y + dy);
-      w = Math.min(displaySize.w - x, w + dx); h = h + (y - ny); y = ny;
+      w = Math.min(containerSize.w - x, w + dx); h = h + (y - ny); y = ny;
     } else if (drag.kind === 'bl') {
       const nx = Math.max(0, x + dx);
-      w = w + (x - nx); h = Math.min(displaySize.h - y, h + dy); x = nx;
+      w = w + (x - nx); h = Math.min(containerSize.h - y, h + dy); x = nx;
     } else if (drag.kind === 'br') {
-      w = Math.min(displaySize.w - x, w + dx);
-      h = Math.min(displaySize.h - y, h + dy);
+      w = Math.min(containerSize.w - x, w + dx);
+      h = Math.min(containerSize.h - y, h + dy);
     }
-    if (w < 20 || h < 20) return; // min size
+    if (w < 20 || h < 20) return;
     setCrop({ x, y, w, h });
   };
 
   const endDrag = () => setDrag(null);
 
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const newZoom = Math.max(0.2, Math.min(8, zoom * factor));
+    // Zoom around cursor: keep image point under cursor stable
+    const newOffsetX = px - (px - offset.x) * (newZoom / zoom);
+    const newOffsetY = py - (py - offset.y) * (newZoom / zoom);
+    setZoom(newZoom);
+    setOffset({ x: newOffsetX, y: newOffsetY });
+  };
+
+  const zoomStep = (factor: number) => {
+    const cx = containerSize.w / 2;
+    const cy = containerSize.h / 2;
+    const newZoom = Math.max(0.2, Math.min(8, zoom * factor));
+    const newOffsetX = cx - (cx - offset.x) * (newZoom / zoom);
+    const newOffsetY = cy - (cy - offset.y) * (newZoom / zoom);
+    setZoom(newZoom);
+    setOffset({ x: newOffsetX, y: newOffsetY });
+  };
+
+  const reset = () => {
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+    setCrop({ x: Math.round(containerSize.w * 0.1), y: Math.round(containerSize.h * 0.1), w: Math.round(containerSize.w * 0.8), h: Math.round(containerSize.h * 0.8) });
+  };
+
   const apply = async () => {
     if (!source) return;
-    const scale = source.width / displaySize.w;
-    const sx = Math.round(crop.x * scale);
-    const sy = Math.round(crop.y * scale);
-    const sw = Math.round(crop.w * scale);
-    const sh = Math.round(crop.h * scale);
+    // Container point (cx, cy) → image-displayed point: ((cx - offset.x) / zoom, (cy - offset.y) / zoom)
+    // image-displayed → source: multiply by source.w / baseSize.w
+    const scaleX = source.width / baseSize.w;
+    const scaleY = source.height / baseSize.h;
+    const sx = Math.max(0, Math.round((crop.x - offset.x) / zoom * scaleX));
+    const sy = Math.max(0, Math.round((crop.y - offset.y) / zoom * scaleY));
+    const sw = Math.min(source.width - sx, Math.round(crop.w / zoom * scaleX));
+    const sh = Math.min(source.height - sy, Math.round(crop.h / zoom * scaleY));
+    if (sw <= 0 || sh <= 0) { onClose(); return; }
     const oc = new OffscreenCanvas(sw, sh);
     const ctx = oc.getContext('2d')!;
     ctx.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
@@ -123,6 +176,7 @@ export default function CropModal({ open, source, onCrop, onClose }: Props) {
     borderRadius: 2,
     top, left, cursor,
     transform: 'translate(-50%, -50%)',
+    zIndex: 3,
   });
 
   return (
@@ -133,40 +187,64 @@ export default function CropModal({ open, source, onCrop, onClose }: Props) {
       onMouseLeave={endDrag}
     >
       <div className="bg-gray-900 rounded-lg shadow-2xl border border-gray-800 p-4 flex flex-col gap-3" onClick={e => e.stopPropagation()}>
-        <header className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-200">✂ Crop image — drag corners to resize, drag inside to move</h2>
-          <button onClick={onClose} className="px-2 py-1 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-300">Close</button>
+        <header className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-gray-200">✂ Crop image</h2>
+          <div className="flex items-center gap-1 text-xs">
+            <button onClick={() => zoomStep(1 / 1.25)} className="w-7 h-7 rounded bg-gray-800 hover:bg-gray-700 text-gray-200">−</button>
+            <span className="px-2 text-gray-400 min-w-[3rem] text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => zoomStep(1.25)} className="w-7 h-7 rounded bg-gray-800 hover:bg-gray-700 text-gray-200">+</button>
+            <button onClick={reset} className="ml-2 px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">Reset</button>
+            <button onClick={onClose} className="ml-2 px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 text-gray-300">Close</button>
+          </div>
         </header>
 
+        <div className="text-[10px] text-gray-500">
+          Wheel = zoom · drag outside rect = pan image · drag inside rect = move crop · drag corners = resize
+        </div>
+
         <div
-          className="relative overflow-hidden bg-checker"
-          style={{ width: displaySize.w, height: displaySize.h, userSelect: 'none' }}
+          className="relative overflow-hidden bg-gray-950"
+          style={{ width: containerSize.w, height: containerSize.h, userSelect: 'none', cursor: drag?.kind === 'pan' ? 'grabbing' : 'grab' }}
+          onMouseDown={onContainerMouseDown}
+          onWheel={onWheel}
         >
           {imgUrl && (
-            <img src={imgUrl} alt="crop source" draggable={false} style={{ width: '100%', height: '100%', display: 'block', pointerEvents: 'none' }} />
+            <img
+              src={imgUrl}
+              alt="crop source"
+              draggable={false}
+              style={{
+                position: 'absolute',
+                width: baseSize.w,
+                height: baseSize.h,
+                transformOrigin: '0 0',
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                pointerEvents: 'none',
+              }}
+            />
           )}
-          {/* Dim overlay outside crop */}
+          {/* Dim mask outside crop */}
           <div className="absolute inset-0 pointer-events-none" style={{
-            background: `linear-gradient(transparent, transparent), linear-gradient(transparent, transparent)`,
-            boxShadow: `0 0 0 9999px rgba(0,0,0,0.55) inset`,
+            boxShadow: '0 0 0 9999px rgba(0,0,0,0.55) inset',
             clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${crop.x}px ${crop.y}px, ${crop.x}px ${crop.y + crop.h}px, ${crop.x + crop.w}px ${crop.y + crop.h}px, ${crop.x + crop.w}px ${crop.y}px, ${crop.x}px ${crop.y}px)`,
-          }}/>
+          }} />
           {/* Crop rect */}
           <div
+            data-croprect="1"
             onMouseDown={e => startDrag('move', e)}
             className="absolute border-2 border-blue-500"
-            style={{ left: crop.x, top: crop.y, width: crop.w, height: crop.h, cursor: 'move' }}
+            style={{ left: crop.x, top: crop.y, width: crop.w, height: crop.h, cursor: 'move', zIndex: 2 }}
           >
-            <div onMouseDown={e => startDrag('tl', e)} style={handleStyle(0, 0, 'nw-resize')} />
-            <div onMouseDown={e => startDrag('tr', e)} style={handleStyle(0, '100%', 'ne-resize')} />
-            <div onMouseDown={e => startDrag('bl', e)} style={handleStyle('100%', 0, 'sw-resize')} />
-            <div onMouseDown={e => startDrag('br', e)} style={handleStyle('100%', '100%', 'se-resize')} />
+            <div data-handle="1" onMouseDown={e => startDrag('tl', e)} style={handleStyle(0, 0, 'nw-resize')} />
+            <div data-handle="1" onMouseDown={e => startDrag('tr', e)} style={handleStyle(0, '100%', 'ne-resize')} />
+            <div data-handle="1" onMouseDown={e => startDrag('bl', e)} style={handleStyle('100%', 0, 'sw-resize')} />
+            <div data-handle="1" onMouseDown={e => startDrag('br', e)} style={handleStyle('100%', '100%', 'se-resize')} />
           </div>
         </div>
 
         <footer className="flex items-center justify-between gap-2">
           <span className="text-[10px] text-gray-500">
-            Crop: {Math.round(crop.w * (source.width / displaySize.w))} × {Math.round(crop.h * (source.height / displaySize.h))} px
+            Output: {Math.max(0, Math.round(crop.w / zoom * (source.width / baseSize.w)))} × {Math.max(0, Math.round(crop.h / zoom * (source.height / baseSize.h)))} px
           </span>
           <div className="flex gap-2">
             <button onClick={onClose} className="px-3 py-1.5 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-300">Cancel</button>
