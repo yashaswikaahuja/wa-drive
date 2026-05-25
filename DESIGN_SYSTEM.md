@@ -21,6 +21,8 @@
 
 **Borders > shadows for separation.** A faint border on a white card sitting on `#fafafa` page background already creates visible depth. Shadows are reserved for elevated interactions (hovered cards, modals, dropdowns) — not decoration.
 
+**Responsive by default.** Desktop-first in design, but every screen works on mobile and tablet. No "this only works on desktop." Operators use tablets for chat workflows; owners check dashboards from phones; admins review data on the go. Mobile-first CSS, progressively enhanced for larger screens. Specifics in §20.
+
 ---
 
 ## 2. Color palette
@@ -626,5 +628,153 @@ If these don't visibly improve, this design system has failed and we'll re-spec.
 
 Same procedure as `ARCHITECTURE.md`. Approved → contract. Changes require explicit doc revision, not silent code drift.
 
+**v1.2 — 2026-05-26 — added §20 Responsive Design (mobile/tablet/desktop spec).**
 **v1.1 — 2026-05-26 — addresses feedback on color depth, focus states, label token, sidebar width, dark mode parity.**
 **v1.0 — 2026-05-25 — initial Zerodha-inspired light theme.**
+
+---
+
+## 20. Responsive design
+
+CyberControl is **desktop-first in design** (operators sit at counters with monitors), but **must work on tablet and phone**. Cafe owners check dashboards from phones; operators use tablets for chat-only workflows; admins review data while traveling.
+
+The rule: **every screen works at every breakpoint.** No "use desktop please" walls. Some screens (Photo Tool) degrade gracefully on small screens; others (WhatsApp, Customers, Dashboard) work equally well on all.
+
+### 20.1 Breakpoints
+
+Use Tailwind defaults. Mobile-first base; progressively enhance.
+
+| Token | min px | Device class | Typical width |
+|---|---|---|---|
+| (base) | 0 | Phone portrait | 360–414px |
+| `sm` | 640 | Phone landscape, small tablet | 640–767 |
+| `md` | 768 | Tablet portrait | 768–1023 |
+| `lg` | 1024 | Tablet landscape, small laptop | 1024–1279 |
+| `xl` | 1280 | Desktop | 1280–1535 |
+| `2xl` | 1536 | Wide desktop, monitors | 1536+ |
+
+### 20.2 Layout patterns
+
+**Sidebar:**
+- `< md` (mobile, < 768px): hidden by default. Hamburger button at top-left opens it as a drawer overlay with backdrop. Tap outside or swipe-left to close. Auto-close after navigation.
+- `md` to `lg-1` (tablet): collapsed to **icon-only rail** (60px wide). Labels appear on hover or expand-toggle. Saves space without losing navigation.
+- `lg+` (desktop): full 240px sidebar with icon + label.
+
+**Page padding:**
+- Mobile: `space-4` (16px) horizontal, `space-3` (12px) vertical.
+- Tablet (`md`): `space-6` (24px) horizontal.
+- Desktop (`lg+`): `space-8` (32px) horizontal.
+
+**Multi-column grids** (template tiles, customer cards, drive picker, photo album):
+- Base: 1 column
+- `sm:` 2 columns
+- `lg:` 3 columns
+- `xl:` 4 columns
+
+**Tables → Cards transformation:**
+On mobile, traditional tables don't fit. Each row becomes a vertical card with label-value pairs.
+- Base: card layout. Each row: `<div>` with stacked `<dt>`/`<dd>` style.
+- `md+`: traditional table.
+Implementation: same data; conditional render or CSS transformation via media queries.
+
+### 20.3 Touch targets
+
+- Touch devices (phone, tablet): minimum **44×44px** (WCAG 2.5.5).
+- Mouse devices (desktop): minimum **36×36px**.
+
+Use responsive sizing: `h-12 md:h-10` (48px touch, 40px desktop) for primary buttons.
+
+Spacing between adjacent touch targets: minimum 8px to prevent fat-finger errors.
+
+### 20.4 Typography on mobile
+
+Base font sizes adjust slightly for readability without zoom:
+
+| Token | Mobile | Desktop |
+|---|---|---|
+| `text-cc-body` | 15px | 14px |
+| `text-cc-small` | 14px | 13px |
+| `text-cc-label` | 11px | 11px (unchanged) |
+| Headings (`h1`/`h2`/`h3`) | unchanged | unchanged |
+
+Inputs: minimum 16px font-size on mobile (prevents iOS Safari auto-zoom on focus).
+
+### 20.5 Component-specific responsive specs
+
+**Modals:**
+- `< md`: full-screen bottom sheet (slides up from bottom, full viewport height).
+- `md+`: centered card with backdrop (as spec'd in §9.7).
+
+**Toolbars** (page headers, Photo Tool header):
+- `< md`: condense to icon-only buttons; overflow into a "..." menu.
+- `md`: text + icon for primary actions; icon-only for secondary.
+- `lg+`: full labels and icons.
+
+**Forms:**
+- `< md`: single column, fields stacked, full-width.
+- `md+`: 2-column where it makes sense (e.g., first-name + last-name).
+
+**Drive picker, photo grid, template tiles:**
+- Follow the multi-column grid rule above.
+
+**WhatsApp page:**
+- `< md`: chat list OR conversation visible (full-screen). Tapping a chat replaces the list with the conversation. Back button to return.
+- `md+`: split view (chat list 320px + conversation flexible).
+
+**Toast / notifications:**
+- `< sm`: top of viewport, full-width minus 16px margin.
+- `sm+`: top-right, 320px wide as spec'd.
+
+**Drawers / popovers:**
+- `< md`: bottom-sheet style (slides up).
+- `md+`: anchored popover.
+
+### 20.6 Photo Tool — graceful degradation
+
+Photo Tool needs canvas real estate. We don't block mobile, but we honestly degrade:
+
+- `< md` (mobile): canvas takes most of the viewport. Template sidebar collapses into a bottom-sheet picker. Tools (rotate, B&W, crop, etc.) become a horizontal scroll bar above the canvas. **All features work**, just bigger touch targets and reorganized chrome.
+  - On first visit on a small screen, show a tiny dismissable banner: "For complex layouts, switch to desktop." Don't block use.
+- `md` (tablet): sidebar collapses to bottom drawer; canvas + drawer compose. All features available with comfortable touch.
+- `lg+` (desktop): full experience as designed in current code.
+
+Print works at all sizes (it hits the system print dialog regardless).
+
+### 20.7 Testing requirements
+
+Every screen must work at these viewports. Test in Chrome DevTools device emulation before considering a screen "done."
+
+| Test viewport | Why |
+|---|---|
+| 360×800 | Common Android phone |
+| 414×896 | Larger phone (iPhone Pro Max) |
+| 768×1024 | iPad portrait — typical operator tablet |
+| 1024×768 | iPad landscape, small laptop |
+| 1280×800 | Common laptop / Chromebook |
+| 1920×1080 | Standard desktop monitor |
+
+A screen "passes" responsive if:
+- No horizontal scroll at any viewport.
+- All text legible without zoom.
+- All interactive elements reachable and tappable.
+- Primary action visible above the fold (mobile).
+- No content cut off or hidden behind other elements.
+
+### 20.8 Implementation guidance
+
+- **Always mobile-first.** Write base styles for `< sm`, then layer `sm:`, `md:`, `lg:` modifiers.
+- **Don't write separate components per breakpoint.** One `<Sidebar>` that adapts via Tailwind classes, not `<MobileSidebar>` and `<DesktopSidebar>`.
+- **Never use `min-width: 1024px` to block features.** If a feature genuinely can't work on mobile, hide it gracefully and explain in plain language.
+- **Test with the keyboard hidden on mobile** — viewport shrinks when keyboard opens.
+- **Use `dvh` (dynamic viewport height)**, not `100vh`, to handle mobile browser address bars.
+- **Drag/drop fallbacks:** mobile has no drag-drop for files. Replace with explicit "Choose Image" button (we already have this).
+
+### 20.9 Anti-patterns
+
+- ❌ Hide critical features on mobile because "they're hard to fit." Find a layout that works.
+- ❌ Use `min-width` media queries to block mobile users.
+- ❌ Build separate `mobile-*.tsx` files. Single component, responsive via Tailwind.
+- ❌ Touch targets smaller than 44×44 on touch devices.
+- ❌ Sidebar drawer that doesn't auto-close after a nav action on mobile.
+- ❌ Modal that's centered on mobile (small modals get lost; use bottom-sheet).
+- ❌ Tables without mobile fallback (will horizontal-scroll badly).
