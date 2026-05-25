@@ -8,21 +8,30 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { TEMPLATES, TPL_FREE, A4_W_PX, A4_H_PX } from './templates';
+import { TEMPLATES, TPL_FREE } from './templates';
 import type { Slot, Template } from './templates';
 import { printBlob } from '../../shared/fileCache';
 import api from '../../shared/api';
 import DrivePicker from './DrivePicker';
 import CropModal from './CropModal';
 
-const DISPLAY_W = 480;
-const DISPLAY_H = Math.round(DISPLAY_W * (A4_H_PX / A4_W_PX));
+const DISPLAY_MAX = 720;
+
+function displaySize(paperW: number, paperH: number) {
+  const ratio = paperW / paperH;
+  if (ratio >= 1) {
+    // landscape or square — fit width
+    return { w: DISPLAY_MAX, h: Math.round(DISPLAY_MAX / ratio) };
+  }
+  // portrait — fit height
+  return { w: Math.round(DISPLAY_MAX * ratio), h: DISPLAY_MAX };
+}
 
 export default function PhotoTool() {
   const [imageBitmap, setImageBitmap] = useState<ImageBitmap | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const [templateId, setTemplateId] = useState<string>('free');
+  const [templateId, setTemplateId] = useState<string>('free-a4p');
   const [grayscale, setGrayscale] = useState<boolean>(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [drivePickerOpen, setDrivePickerOpen] = useState<boolean>(false);
@@ -67,18 +76,21 @@ export default function PhotoTool() {
   const handlePrint = useCallback(() => {
     const canvas = document.getElementById('cc-photo-canvas') as HTMLCanvasElement | null;
     if (!canvas) { setError('Canvas not ready'); return; }
-    // Wrap PNG in a minimal HTML doc with @page A4 + zero margins, so the
-    // browser print dialog produces a real 210x297mm page (not "Fit to page"
-    // with default printer margins). The img is sized to fill the page exactly.
     const dataUrl = canvas.toDataURL('image/png');
+    // @page size matches the active template's paper (A4 portrait/landscape, 4x6, etc).
+    // Express paper size in mm so any printer respects it.
+    const paperWmm = (template.paper.w / 300) * 25.4;
+    const paperHmm = (template.paper.h / 300) * 25.4;
+    const orientation = template.paper.w >= template.paper.h ? 'landscape' : 'portrait';
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>
-@page { size: A4 portrait; margin: 0; }
+@page { size: ${paperWmm}mm ${paperHmm}mm; margin: 0; }
 html, body { margin: 0; padding: 0; }
-img { display: block; width: 210mm; height: 297mm; }
+img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
 </style></head><body><img src="${dataUrl}"/></body></html>`;
     const blob = new Blob([html], { type: 'text/html' });
     printBlob(blob);
-  }, []);
+    void orientation;
+  }, [template]);
 
   useEffect(() => {
     return () => { if (imageBitmap) imageBitmap.close(); };
@@ -266,7 +278,7 @@ img { display: block; width: 210mm; height: 297mm; }
       </div>
 
       <footer className="px-4 py-1.5 border-t border-gray-800 bg-gray-900 text-xs text-gray-500 flex justify-between">
-        <span>{template.name} · {template.slots.length} slot{template.slots.length === 1 ? '' : 's'}</span>
+        <span>{template.name} · {template.paper.name} · {template.slots.length} slot{template.slots.length === 1 ? '' : 's'}</span>
         <span className={error ? 'text-red-400' : 'italic'}>
           {error || 'L latest · C crop · R rotate · B B&W · Ctrl+V paste · Ctrl+P print · 1-9 templates'}
         </span>
@@ -315,19 +327,20 @@ function FilePicker({ onFile }: { onFile: (f: File) => void }) {
 function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: ImageBitmap | null; template: Template; grayscale: boolean; rotation: 0 | 90 | 180 | 270; onDrop: (f: File) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const paperW = template.paper.w;
+  const paperH = template.paper.h;
+  const disp = displaySize(paperW, paperH);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    canvas.width = A4_W_PX;
-    canvas.height = A4_H_PX;
+    canvas.width = paperW;
+    canvas.height = paperH;
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, A4_W_PX, A4_H_PX);
+    ctx.fillRect(0, 0, paperW, paperH);
     if (image) {
-      // Apply rotation via OffscreenCanvas — produces a new bitmap with the
-      // rotation baked in, so downstream slot-fit math works unchanged.
       let rendered = image;
       let temp: ImageBitmap | null = null;
       if (rotation !== 0) {
@@ -357,7 +370,7 @@ function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: Ima
       }
       ctx.setLineDash([]);
     }
-  }, [image, template, grayscale, rotation]);
+  }, [image, template, grayscale, rotation, paperW, paperH]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -369,7 +382,7 @@ function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: Ima
   return (
     <div
       className={`relative shadow-2xl rounded-sm transition-shadow ${dragOver ? 'ring-2 ring-blue-500' : ''}`}
-      style={{ width: DISPLAY_W, height: DISPLAY_H }}
+      style={{ width: disp.w, height: disp.h }}
       onDragOver={e => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
@@ -377,7 +390,7 @@ function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: Ima
       <canvas
         ref={canvasRef}
         id="cc-photo-canvas"
-        style={{ width: DISPLAY_W, height: DISPLAY_H, display: 'block' }}
+        style={{ width: disp.w, height: disp.h, display: 'block' }}
       />
       {!image && (
         <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm pointer-events-none select-none text-center px-4">
