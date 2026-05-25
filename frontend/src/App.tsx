@@ -17,6 +17,7 @@ const NewJob = lazy(() => import('./features/jobs/NewJob'));
 const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const Stitch = lazy(() => import('./features/services/Stitch'));
+const PhotoTool = lazy(() => import('./features/photo-tool/PhotoTool'));
 const Settings = lazy(() => import('./features/settings/Settings'));
 const Overview = lazy(() => import('./features/admin/Overview'));
 const Sessions = lazy(() => import('./features/admin/Sessions'));
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/stitch" element={<Suspense fallback={<PageLoader />}><Stitch /></Suspense>} />
+          <Route path="/app/photo" element={<Suspense fallback={<PageLoader />}><PhotoTool /></Suspense>} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
           <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
