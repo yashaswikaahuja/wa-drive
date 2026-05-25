@@ -20,6 +20,7 @@ export default function PhotoTool() {
   const [fileName, setFileName] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [templateId, setTemplateId] = useState<string>('free');
+  const [grayscale, setGrayscale] = useState<boolean>(false);
 
   const template = TEMPLATES.find(t => t.id === templateId) || TPL_FREE;
 
@@ -70,6 +71,15 @@ img { display: block; width: 210mm; height: 297mm; }
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setGrayscale(g => !g)}
+            className={`px-3 py-1.5 rounded text-xs ${
+              grayscale ? 'bg-gray-700 text-white' : 'bg-gray-800 hover:bg-gray-700 text-gray-400'
+            }`}
+            title="Toggle grayscale (saves toner on B&W printers)"
+          >
+            B&W
+          </button>
           <FilePicker onFile={handleFile} />
           <button
             onClick={handlePrint}
@@ -105,7 +115,7 @@ img { display: block; width: 210mm; height: 297mm; }
         </aside>
 
         <main className="flex-1 flex items-center justify-center overflow-auto p-8">
-          <A4Canvas image={imageBitmap} template={template} onDrop={handleFile} />
+          <A4Canvas image={imageBitmap} template={template} grayscale={grayscale} onDrop={handleFile} />
         </main>
       </div>
 
@@ -140,7 +150,7 @@ function FilePicker({ onFile }: { onFile: (f: File) => void }) {
   );
 }
 
-function A4Canvas({ image, template, onDrop }: { image: ImageBitmap | null; template: Template; onDrop: (f: File) => void }) {
+function A4Canvas({ image, template, grayscale, onDrop }: { image: ImageBitmap | null; template: Template; grayscale: boolean; onDrop: (f: File) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -154,9 +164,11 @@ function A4Canvas({ image, template, onDrop }: { image: ImageBitmap | null; temp
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, A4_W_PX, A4_H_PX);
     if (image) {
+      ctx.filter = grayscale ? 'grayscale(1) contrast(1.1)' : 'none';
       for (const slot of template.slots) {
         drawIntoSlot(ctx, image, slot);
       }
+      ctx.filter = 'none';
     } else {
       ctx.strokeStyle = '#d1d5db';
       ctx.lineWidth = 4;
@@ -166,7 +178,7 @@ function A4Canvas({ image, template, onDrop }: { image: ImageBitmap | null; temp
       }
       ctx.setLineDash([]);
     }
-  }, [image, template]);
+  }, [image, template, grayscale]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
