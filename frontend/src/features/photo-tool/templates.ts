@@ -19,6 +19,10 @@ const CARD_W = mm(85.6);  // Aadhaar / PAN / credit card
 const CARD_H = mm(54);
 const PASSPORT_W = mm(35); // standard Indian passport photo
 const PASSPORT_H = mm(45);
+const VISA_W = mm(50); // US/Schengen visa photo (square)
+const VISA_H = mm(50);
+const SMALL_W = mm(25); // school/college small photo
+const SMALL_H = mm(30);
 
 export type Slot = {
   x: number;
@@ -121,6 +125,30 @@ export const TPL_PASSPORT_8: Template = {
   slots: gridSlots(2, 4, PASSPORT_W, PASSPORT_H, 60, 0, 'cover'),
 };
 
+export const TPL_VISA_4: Template = {
+  id: 'visa-4',
+  name: 'Visa photo — 4 copies',
+  description: '4 photos at 50×50mm (square)',
+  imagesNeeded: 1,
+  slots: gridSlots(2, 2, VISA_W, VISA_H, 60, 0, 'cover'),
+};
+
+export const TPL_VISA_6: Template = {
+  id: 'visa-6',
+  name: 'Visa photo — 6 copies',
+  description: '6 photos at 50×50mm (square)',
+  imagesNeeded: 1,
+  slots: gridSlots(2, 3, VISA_W, VISA_H, 60, 0, 'cover'),
+};
+
+export const TPL_SMALL_8: Template = {
+  id: 'small-8',
+  name: 'Small photo — 8 copies',
+  description: '8 photos at 25×30mm (school/college)',
+  imagesNeeded: 1,
+  slots: gridSlots(2, 4, SMALL_W, SMALL_H, 60, 0, 'cover'),
+};
+
 // Order in this array = order in the sidebar
 export const TEMPLATES: Template[] = [
   TPL_FREE,
@@ -128,4 +156,7 @@ export const TEMPLATES: Template[] = [
   TPL_PAN_4,
   TPL_PASSPORT_4,
   TPL_PASSPORT_8,
+  TPL_VISA_4,
+  TPL_VISA_6,
+  TPL_SMALL_8,
 ];
