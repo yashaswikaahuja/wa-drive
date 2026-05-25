@@ -36,8 +36,18 @@ export default function PhotoTool() {
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [drivePickerOpen, setDrivePickerOpen] = useState<boolean>(false);
   const [cropModalOpen, setCropModalOpen] = useState<boolean>(false);
+  // Per-slot transforms: zoom + pan offset within each slot.
+  // Keyed by slot index in the active template.
+  const [transforms, setTransforms] = useState<Record<number, { zoom: number; offsetX: number; offsetY: number }>>({});
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
 
   const template = TEMPLATES.find(t => t.id === templateId) || TPL_FREE;
+
+  // Reset transforms when template changes (slot indices may differ)
+  useEffect(() => {
+    setTransforms({});
+    setSelectedSlot(null);
+  }, [templateId]);
 
   const handleFile = useCallback(async (file: File) => {
     setError('');
@@ -50,6 +60,8 @@ export default function PhotoTool() {
       setImageBitmap(prev => { if (prev) prev.close(); return bitmap; });
       setFileName(file.name);
       setRotation(0);
+      setTransforms({});
+      setSelectedSlot(null);
     } catch (e: any) {
       setError('Could not read image: ' + (e.message || 'unknown'));
     }
@@ -155,6 +167,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
       if (e.key === 'Escape') {
         if (drivePickerOpen) setDrivePickerOpen(false);
         if (cropModalOpen) setCropModalOpen(false);
+        if (selectedSlot !== null) setSelectedSlot(null);
         return;
       }
       if (e.key.toLowerCase() === 'c' && !e.ctrlKey && !e.metaKey) {
@@ -182,7 +195,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageBitmap, drivePickerOpen, cropModalOpen]);
+  }, [imageBitmap, drivePickerOpen, cropModalOpen, selectedSlot]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-950 text-gray-300">
@@ -273,14 +286,29 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
         </aside>
 
         <main className="flex-1 flex items-center justify-center overflow-auto p-8">
-          <A4Canvas image={imageBitmap} template={template} grayscale={grayscale} rotation={rotation} onDrop={handleFile} />
+          <A4Canvas
+            image={imageBitmap}
+            template={template}
+            grayscale={grayscale}
+            rotation={rotation}
+            transforms={transforms}
+            selectedSlot={selectedSlot}
+            onSelectSlot={setSelectedSlot}
+            onTransformSlot={(idx, fn) => setTransforms(t => {
+              const cur = t[idx] || { zoom: 1, offsetX: 0, offsetY: 0 };
+              return { ...t, [idx]: fn(cur) };
+            })}
+            onDrop={handleFile}
+          />
         </main>
       </div>
 
       <footer className="px-4 py-1.5 border-t border-gray-800 bg-gray-900 text-xs text-gray-500 flex justify-between">
         <span>{template.name} · {template.paper.name} · {template.slots.length} slot{template.slots.length === 1 ? '' : 's'}</span>
         <span className={error ? 'text-red-400' : 'italic'}>
-          {error || 'L latest · C crop · R rotate · B B&W · Ctrl+V paste · Ctrl+P print · 1-9 templates'}
+          {error || (selectedSlot !== null
+            ? 'Slot ' + (selectedSlot + 1) + ' selected — drag to pan · scroll to zoom · Esc to deselect'
+            : 'L latest · C crop · R rotate · B B&W · click slot to adjust · Ctrl+P print · 1-9 templates')}
         </span>
       </footer>
 
@@ -324,12 +352,27 @@ function FilePicker({ onFile }: { onFile: (f: File) => void }) {
   );
 }
 
-function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: ImageBitmap | null; template: Template; grayscale: boolean; rotation: 0 | 90 | 180 | 270; onDrop: (f: File) => void }) {
+type SlotXf = { zoom: number; offsetX: number; offsetY: number };
+type XfMap = Record<number, SlotXf>;
+
+function A4Canvas({ image, template, grayscale, rotation, transforms, selectedSlot, onSelectSlot, onTransformSlot, onDrop }: {
+  image: ImageBitmap | null;
+  template: Template;
+  grayscale: boolean;
+  rotation: 0 | 90 | 180 | 270;
+  transforms: XfMap;
+  selectedSlot: number | null;
+  onSelectSlot: (idx: number | null) => void;
+  onTransformSlot: (idx: number, fn: (cur: SlotXf) => SlotXf) => void;
+  onDrop: (f: File) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const dragRef = useRef<{ slotIdx: number; startX: number; startY: number; startOffset: { x: number; y: number } } | null>(null);
   const paperW = template.paper.w;
   const paperH = template.paper.h;
   const disp = displaySize(paperW, paperH);
+  const scale = paperW / disp.w; // display→canvas scale
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -356,8 +399,10 @@ function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: Ima
         rendered = temp;
       }
       ctx.filter = grayscale ? 'grayscale(1) contrast(1.1)' : 'none';
-      for (const slot of template.slots) {
-        drawIntoSlot(ctx, rendered, slot);
+      for (let i = 0; i < template.slots.length; i++) {
+        const slot = template.slots[i];
+        const xf = transforms[i] || { zoom: 1, offsetX: 0, offsetY: 0 };
+        drawIntoSlot(ctx, rendered, slot, xf);
       }
       ctx.filter = 'none';
       if (temp) temp.close();
@@ -370,7 +415,63 @@ function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: Ima
       }
       ctx.setLineDash([]);
     }
-  }, [image, template, grayscale, rotation, paperW, paperH]);
+    // Selection border on top
+    if (selectedSlot !== null && template.slots[selectedSlot]) {
+      const s = template.slots[selectedSlot];
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 8;
+      ctx.setLineDash([]);
+      ctx.strokeRect(s.x, s.y, s.w, s.h);
+    }
+  }, [image, template, grayscale, rotation, transforms, selectedSlot, paperW, paperH]);
+
+  // Translate display coords to canvas (paper) coords
+  const eventToCanvas = (e: { clientX: number; clientY: number }) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * scale,
+      y: (e.clientY - rect.top) * scale,
+    };
+  };
+  const slotAt = (x: number, y: number) => {
+    for (let i = template.slots.length - 1; i >= 0; i--) {
+      const s = template.slots[i];
+      if (x >= s.x && x < s.x + s.w && y >= s.y && y < s.y + s.h) return i;
+    }
+    return null;
+  };
+
+  const onCanvasMouseDown = (e: React.MouseEvent) => {
+    if (!image) return;
+    const { x, y } = eventToCanvas(e);
+    const idx = slotAt(x, y);
+    onSelectSlot(idx);
+    if (idx !== null) {
+      const cur = transforms[idx] || { zoom: 1, offsetX: 0, offsetY: 0 };
+      dragRef.current = { slotIdx: idx, startX: e.clientX, startY: e.clientY, startOffset: { x: cur.offsetX, y: cur.offsetY } };
+    }
+  };
+  const onCanvasMouseMove = (e: React.MouseEvent) => {
+    if (!dragRef.current) return;
+    const dx = (e.clientX - dragRef.current.startX) * scale;
+    const dy = (e.clientY - dragRef.current.startY) * scale;
+    const idx = dragRef.current.slotIdx;
+    onTransformSlot(idx, () => ({
+      zoom: (transforms[idx]?.zoom ?? 1),
+      offsetX: dragRef.current!.startOffset.x + dx,
+      offsetY: dragRef.current!.startOffset.y + dy,
+    }));
+  };
+  const onCanvasMouseUp = () => { dragRef.current = null; };
+  const onCanvasWheel = (e: React.WheelEvent) => {
+    if (selectedSlot === null) return;
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    onTransformSlot(selectedSlot, cur => ({
+      ...cur,
+      zoom: Math.max(0.2, Math.min(8, cur.zoom * factor)),
+    }));
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -390,7 +491,12 @@ function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: Ima
       <canvas
         ref={canvasRef}
         id="cc-photo-canvas"
-        style={{ width: disp.w, height: disp.h, display: 'block' }}
+        style={{ width: disp.w, height: disp.h, display: 'block', cursor: image ? (selectedSlot !== null ? 'move' : 'pointer') : 'default' }}
+        onMouseDown={onCanvasMouseDown}
+        onMouseMove={onCanvasMouseMove}
+        onMouseUp={onCanvasMouseUp}
+        onMouseLeave={onCanvasMouseUp}
+        onWheel={onCanvasWheel}
       />
       {!image && (
         <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm pointer-events-none select-none text-center px-4">
@@ -402,7 +508,8 @@ function A4Canvas({ image, template, grayscale, rotation, onDrop }: { image: Ima
 }
 
 // Fit + draw image into a slot, preserving aspect ratio.
-function drawIntoSlot(ctx: CanvasRenderingContext2D, img: ImageBitmap, slot: Slot) {
+// Optional transform: zoom + offset (operator pan/zoom within the slot).
+function drawIntoSlot(ctx: CanvasRenderingContext2D, img: ImageBitmap, slot: Slot, xf: SlotXf = { zoom: 1, offsetX: 0, offsetY: 0 }) {
   const slotRatio = slot.w / slot.h;
   const imgRatio = img.width / img.height;
   let drawW: number, drawH: number;
@@ -423,8 +530,10 @@ function drawIntoSlot(ctx: CanvasRenderingContext2D, img: ImageBitmap, slot: Slo
       drawH = slot.w / imgRatio;
     }
   }
-  const dx = slot.x + (slot.w - drawW) / 2;
-  const dy = slot.y + (slot.h - drawH) / 2;
+  drawW *= xf.zoom;
+  drawH *= xf.zoom;
+  const dx = slot.x + (slot.w - drawW) / 2 + xf.offsetX;
+  const dy = slot.y + (slot.h - drawH) / 2 + xf.offsetY;
   ctx.save();
   ctx.beginPath();
   ctx.rect(slot.x, slot.y, slot.w, slot.h);
