@@ -41,10 +41,17 @@ export default function PhotoTool() {
   const handlePrint = useCallback(() => {
     const canvas = document.getElementById('cc-photo-canvas') as HTMLCanvasElement | null;
     if (!canvas) { setError('Canvas not ready'); return; }
-    canvas.toBlob(blob => {
-      if (!blob) { setError('Could not export image'); return; }
-      printBlob(blob);
-    }, 'image/png');
+    // Wrap PNG in a minimal HTML doc with @page A4 + zero margins, so the
+    // browser print dialog produces a real 210x297mm page (not "Fit to page"
+    // with default printer margins). The img is sized to fill the page exactly.
+    const dataUrl = canvas.toDataURL('image/png');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>
+@page { size: A4 portrait; margin: 0; }
+html, body { margin: 0; padding: 0; }
+img { display: block; width: 210mm; height: 297mm; }
+</style></head><body><img src="${dataUrl}"/></body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    printBlob(blob);
   }, []);
 
   useEffect(() => {
