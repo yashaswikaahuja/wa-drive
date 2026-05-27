@@ -44,7 +44,9 @@ export default function App() {
     }
     return () => { /* keep retry loop alive on route change */ };
   }, [isAuthenticated, accessToken]);
-  if (!isAuthenticated) return <Login />;
+  // Public preview route — design playground accessible without login
+  const isPlayground = typeof window !== 'undefined' && window.location.pathname.startsWith('/design-playground');
+  if (!isAuthenticated && !isPlayground) return <Login />;
 
   return (
     <BrowserRouter>
