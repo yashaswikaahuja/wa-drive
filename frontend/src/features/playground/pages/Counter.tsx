@@ -1,324 +1,322 @@
 /**
- * Counter — operator's live desk (mock).
- * Original interpretation of the redesign spec. No real data.
+ * Counter — operator's live desk (mock, redesigned).
+ * Top navbar layout. Original visual choices.
  */
 
-import { Link } from 'react-router-dom';
+const navItems = [
+  { label: 'Counter', active: true, badge: 6 },
+  { label: 'Photo Tool' },
+  { label: 'Customers' },
+  { label: 'WhatsApp', badge: 12 },
+  { label: 'Reports' },
+];
 
-// ── Sample data ──────────────────────────────────────────────────────────
-const workstack = {
+const sample = {
   pinned: [
-    { code: 'WX-2841', initials: 'SK', name: 'Sharma Kumar', service: 'Bihar Residence Cert', status: 'photo wait', ago: 'now' },
+    { id: 'p1', name: 'Mohan Das', service: 'Residence Certificate', state: 'photo missing', tone: 'warning', when: '6 min ago' },
   ],
   active: [
-    { code: 'WX-2840', initials: 'AS', name: 'Anita Singh', service: 'SSC CGL Form', status: 'portal retry', ago: '2 min', danger: true },
-    { code: 'WX-2839', initials: 'RY', name: 'Ravi Yadav', service: 'PAN Application', status: 'new docs', ago: '4 min', highlight: true },
-    { code: 'WX-2838', initials: 'PK', name: 'Pooja Kumari', service: 'Photo · 8 copies', status: 'ready to print', ago: '5 min', success: true },
-    { code: 'WX-2836', initials: 'MI', name: 'Mohd. Imran', service: 'DL Renewal', status: 'profile filled', ago: '12 min' },
+    { id: 'a1', name: 'Priya Devi', service: 'SSC CGL', state: 'portal captcha', tone: 'danger', when: '2 min ago' },
+    { id: 'a2', name: 'Suresh Ram', service: 'PAN Application', state: 'docs arrived', tone: 'info', when: 'just now' },
+    { id: 'a3', name: 'Anjali Patel', service: 'Passport Photo · 8', state: 'ready to print', tone: 'success', when: '4 min ago' },
+    { id: 'a4', name: 'Vikash Singh', service: 'Driving Licence', state: 'profile filled', tone: 'neutral', when: '11 min ago' },
   ],
   waiting: [
-    { code: 'WX-2835', initials: 'SD', name: 'Sunita Devi', service: 'Ration Card', status: 'awaiting Aadhaar back', ago: '26 min' },
-    { code: 'WX-2834', initials: 'PT', name: 'Patel Singh', service: 'Caste Cert', status: 'awaiting bill', ago: '1 hr' },
-    { code: 'WX-2833', initials: 'YV', name: 'Yadav Sharma', service: 'Income Cert', status: 'awaiting OTP', ago: '2 hr' },
+    { id: 'w1', name: 'Manish Kumar', service: 'Caste Certificate', state: 'awaiting OTP', when: '24 min ago' },
+    { id: 'w2', name: 'Geeta Mishra', service: 'Income Certificate', state: 'awaiting bill', when: '47 min ago' },
+    { id: 'w3', name: 'Rajan Lal', service: 'Voter ID Update', state: 'awaiting Aadhaar', when: '1 hr ago' },
   ],
 };
 
-const intake = [
-  { who: 'Sharma Kumar', kind: 'photo', file: 'IMG-WA0341.jpg', size: '1.2 MB', ago: 'now', auto: 'Niwas Cert' },
-  { who: 'Anita Singh',  kind: 'pdf',   file: 'ssc-marksheet.pdf', size: '612 KB', ago: '1m', auto: 'SSC CGL Form' },
-  { who: 'Ravi Yadav',   kind: 'photo', file: 'aadhaar-back.jpg', size: '184 KB', ago: '2m', auto: null },
-  { who: '+91 70021…', kind: 'pdf',   file: 'BSPHCL-may.pdf', size: '92 KB',  ago: '5m', unmatched: true },
-  { who: 'Mohd. Imran',  kind: 'photo', file: 'DL-front.jpg', size: '740 KB', ago: '12m', auto: 'DL Renewal' },
-];
-
-const currentWork = {
-  code: 'WX-2841',
-  customer: 'Sharma Kumar',
-  phone: '+91 98765 12340',
+const focused = {
+  customer: 'Mohan Das',
+  phone: '+91 90123 45678',
   service: 'Bihar Residence Certificate',
   cost: 150,
-  status: 'waiting for photo',
+  status: 'photo missing',
   modules: [
-    { id: 'docs',    label: 'Documents',  state: 'complete', detail: '4 of 4 ready', items: ['Aadhaar (front+back)', 'Voter ID', 'Electricity bill', 'Self-declaration'] },
-    { id: 'profile', label: 'Profile',    state: 'complete', detail: 'verified', summary: 'Rahul Sharma · 14 Aug 1996 · Patna' },
-    { id: 'photo',   label: 'Photo',      state: 'pending',  detail: '35×45mm · ≤50 KB', summary: 'Asked customer 6 min ago · WhatsApp delivered' },
-    { id: 'portal',  label: 'Portal',     state: 'idle',     detail: 'serviceonline.bihar.gov.in', summary: 'Form not started' },
-    { id: 'submit',  label: 'Submission', state: 'idle',     detail: 'awaits portal', summary: '' },
+    { key: 'docs', label: 'Documents', state: 'done', summary: '4 of 4 received', items: ['Aadhaar', 'Voter ID', 'Electricity bill', 'Self-declaration'] },
+    { key: 'profile', label: 'Profile', state: 'done', summary: 'Mohan Das · 14 Aug 1996 · Patna' },
+    { key: 'photo', label: 'Photo', state: 'pending', summary: 'Asked customer 6 min ago via WhatsApp' },
+    { key: 'portal', label: 'Portal', state: 'idle', summary: 'serviceonline.bihar.gov.in' },
+    { key: 'submit', label: 'Submission', state: 'idle', summary: 'Pending portal step' },
   ],
-  activity: [
-    { time: '14:32', text: 'Customer opened WhatsApp link' },
+  recent: [
+    { time: 'Just now', text: 'Photo request sent to customer' },
     { time: '14:25', text: 'Profile auto-filled from Aadhaar' },
-    { time: '14:22', text: 'Aadhaar back uploaded by Sharma' },
-    { time: '14:20', text: 'Aadhaar front uploaded by Sharma' },
+    { time: '14:22', text: 'Aadhaar (back) received' },
     { time: '14:18', text: 'Work item created' },
   ],
 };
 
-const navItems = [
-  { icon: '🪑', label: 'Counter', badge: '8', active: true },
-  { icon: '📷', label: 'Photo Tool' },
-  { icon: '👥', label: 'Customers' },
-  { icon: '💬', label: 'WhatsApp', badge: '12' },
-  { icon: '📊', label: 'Reports' },
-  { icon: '⚙', label: 'Settings' },
+const intake = [
+  { who: 'Mohan Das', file: 'IMG-WA341.jpg', kind: 'photo', size: '1.2 MB', match: 'Mohan · Residence Cert', when: 'now' },
+  { who: 'Priya Devi', file: 'marksheet.pdf', kind: 'pdf', size: '612 KB', match: 'Priya · SSC CGL', when: '1m' },
+  { who: 'Suresh Ram', file: 'aadhaar-back.jpg', kind: 'photo', size: '184 KB', match: null, when: '2m' },
+  { who: '+91 70021 88475', file: 'bill-may.pdf', kind: 'pdf', size: '92 KB', unknown: true, when: '5m' },
+  { who: 'Anjali Patel', file: 'photo.jpg', kind: 'photo', size: '320 KB', match: 'Anjali · Photo · 8', when: '7m' },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function CounterMock() {
   return (
-    <div className="flex h-screen" style={{ background: 'var(--cc-bg)', color: 'var(--cc-text)', fontFamily: 'Inter, system-ui' }}>
-      {/* Sidebar */}
-      <aside className="w-60 flex flex-col" style={{ background: 'var(--cc-surface)', borderRight: '1px solid var(--cc-border)' }}>
-        <div className="px-5 py-5">
-          <div className="text-base font-semibold">CyberControl</div>
-          <div className="text-xs mt-0.5" style={{ color: 'var(--cc-text-tertiary)' }}>Counter · Patna East</div>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--cc-bg)', color: 'var(--cc-text)', fontFamily: 'Inter, system-ui' }}>
+      {/* Top navbar */}
+      <nav className="flex items-center px-6 h-14 shrink-0" style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)' }}>
+        <div className="flex items-center gap-2 mr-8">
+          <div className="w-7 h-7 rounded grid place-items-center text-white text-xs font-semibold" style={{ background: 'var(--cc-primary)' }}>C</div>
+          <span className="text-sm font-semibold">CyberControl</span>
         </div>
-        <nav className="px-2 flex-1">
-          <div className="text-[10px] uppercase tracking-wider px-3 py-2" style={{ color: 'var(--cc-text-tertiary)', letterSpacing: '0.04em' }}>Workspace</div>
-          {navItems.map((it, i) => (
+        <div className="flex items-center gap-1">
+          {navItems.map(item => (
             <a
-              key={i}
-              className="flex items-center gap-3 px-3 py-2 rounded text-sm cursor-pointer"
+              key={item.label}
+              className="px-3 py-1.5 text-sm rounded cursor-pointer flex items-center gap-2"
               style={{
-                background: it.active ? 'var(--cc-primary-soft)' : 'transparent',
-                color: it.active ? 'var(--cc-primary)' : 'var(--cc-text)',
-                fontWeight: it.active ? 500 : 400,
+                background: item.active ? 'var(--cc-primary-soft)' : 'transparent',
+                color: item.active ? 'var(--cc-primary)' : 'var(--cc-text-secondary)',
+                fontWeight: item.active ? 500 : 400,
               }}
             >
-              <span className="text-base">{it.icon}</span>
-              <span className="flex-1">{it.label}</span>
-              {it.badge && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: it.active ? 'var(--cc-primary)' : 'var(--cc-surface-hover)', color: it.active ? '#fff' : 'var(--cc-text-secondary)' }}>
-                  {it.badge}
+              {item.label}
+              {item.badge && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ background: item.active ? 'var(--cc-primary)' : 'var(--cc-surface-hover)', color: item.active ? '#fff' : 'var(--cc-text-secondary)' }}>
+                  {item.badge}
                 </span>
               )}
             </a>
           ))}
-          <div className="text-[10px] uppercase tracking-wider px-3 py-2 mt-4" style={{ color: 'var(--cc-text-tertiary)', letterSpacing: '0.04em' }}>System</div>
-          <div className="px-3 py-1.5 text-xs flex justify-between"><span style={{ color: 'var(--cc-text-secondary)' }}>Network</span><span style={{ color: 'var(--cc-success)' }}>● 42ms</span></div>
-          <div className="px-3 py-1.5 text-xs flex justify-between"><span style={{ color: 'var(--cc-text-secondary)' }}>Printer</span><span>HP M1136</span></div>
-          <div className="px-3 py-1.5 text-xs flex justify-between"><span style={{ color: 'var(--cc-text-secondary)' }}>WhatsApp</span><span style={{ color: 'var(--cc-success)' }}>● Live</span></div>
-        </nav>
-        <div className="border-t p-4" style={{ borderColor: 'var(--cc-border)' }}>
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: 'var(--cc-primary-soft)', color: 'var(--cc-primary)' }}>RK</div>
-            <div className="flex-1 text-xs">
-              <div className="font-medium" style={{ color: 'var(--cc-text)' }}>Rahul Kumar</div>
-              <div style={{ color: 'var(--cc-text-tertiary)' }}>Operator · 09:00–21:00</div>
-            </div>
-          </div>
         </div>
-      </aside>
+        <div className="flex-1" />
+        <div className="flex items-center gap-3">
+          <StatusDot label="Internet" ok />
+          <StatusDot label="Printer" ok />
+          <StatusDot label="WhatsApp" ok />
+          <div className="w-px h-6 mx-2" style={{ background: 'var(--cc-border)' }} />
+          <a className="text-sm cursor-pointer" style={{ color: 'var(--cc-text-secondary)' }}>Settings</a>
+          <div className="w-8 h-8 rounded-full grid place-items-center text-sm font-medium ml-1" style={{ background: 'var(--cc-primary-soft)', color: 'var(--cc-primary)' }}>Y</div>
+        </div>
+      </nav>
 
-      {/* Main */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="flex items-center justify-between px-6 py-3" style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)' }}>
-          <div className="flex items-center gap-3 flex-1 max-w-2xl">
-            <input
-              placeholder="Search customers, work items, ARN, documents…"
-              className="flex-1 px-3 py-2 text-sm outline-none rounded"
-              style={{ background: 'var(--cc-bg)', border: '1px solid var(--cc-border)', color: 'var(--cc-text)' }}
-            />
-            <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--cc-surface-hover)', color: 'var(--cc-text-secondary)' }}>Ctrl K</span>
+      {/* Toolbar — search + KPIs */}
+      <div className="flex items-center justify-between px-6 py-3 shrink-0" style={{ background: 'var(--cc-surface)', borderBottom: '1px solid var(--cc-border)' }}>
+        <div className="flex items-center gap-2 flex-1 max-w-xl">
+          <input
+            placeholder="Search customer, service, document, ARN…"
+            className="flex-1 px-3 py-2 text-sm rounded outline-none"
+            style={{ background: 'var(--cc-bg)', border: '1px solid var(--cc-border)', color: 'var(--cc-text)' }}
+          />
+          <span className="text-[10px] px-2 py-1 rounded font-medium" style={{ background: 'var(--cc-surface-hover)', color: 'var(--cc-text-secondary)' }}>⌘ K</span>
+        </div>
+        <div className="flex items-center gap-6">
+          <div className="text-right">
+            <div className="text-[10px] font-medium uppercase" style={{ color: 'var(--cc-text-tertiary)', letterSpacing: '0.06em' }}>Today</div>
+            <div className="text-sm font-semibold tabular-nums">₹4,260 <span className="font-normal" style={{ color: 'var(--cc-text-secondary)' }}>· 31 done</span></div>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="text-sm">
-              <div className="text-[10px] uppercase tracking-wider" style={{ color: 'var(--cc-text-tertiary)', letterSpacing: '0.04em' }}>Today</div>
-              <div className="font-semibold">₹4,260 <span className="text-xs font-normal" style={{ color: 'var(--cc-text-secondary)' }}>· 31 jobs</span></div>
-            </div>
-            <button className="px-3 py-1.5 rounded text-sm font-medium text-white" style={{ background: 'var(--cc-primary)' }}>+ New service</button>
-          </div>
-        </header>
+          <button className="px-4 py-2 rounded text-sm font-medium text-white" style={{ background: 'var(--cc-primary)' }}>+ New service</button>
+        </div>
+      </div>
 
-        {/* Body */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Workstack column */}
-          <section className="w-80 flex flex-col overflow-hidden" style={{ borderRight: '1px solid var(--cc-border)', background: 'var(--cc-surface)' }}>
-            <div className="px-5 py-4 border-b" style={{ borderColor: 'var(--cc-border)' }}>
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold">Workstack</h2>
-                <span className="text-xs" style={{ color: 'var(--cc-text-secondary)' }}>{workstack.pinned.length + workstack.active.length + workstack.waiting.length} items</span>
-              </div>
-              <div className="flex gap-2 mt-3">
-                <span className="text-[10px] px-2 py-1 rounded font-medium" style={{ background: 'var(--cc-warning-soft)', color: 'var(--cc-warning)' }}>RETRY 1</span>
-                <span className="text-[10px] px-2 py-1 rounded font-medium" style={{ background: 'var(--cc-success-soft)', color: 'var(--cc-success)' }}>READY 1</span>
-                <span className="text-[10px] px-2 py-1 rounded font-medium" style={{ background: 'var(--cc-surface-hover)', color: 'var(--cc-text-secondary)' }}>WAITING {workstack.waiting.length}</span>
-              </div>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <Group title={`📌 Pinned · ${workstack.pinned.length}`} items={workstack.pinned} selected="WX-2841" />
-              <Group title={`Active · ${workstack.active.length}`} items={workstack.active} selected="WX-2841" />
-              <Group title={`Waiting · ${workstack.waiting.length}`} items={workstack.waiting} selected="WX-2841" muted />
-            </div>
-          </section>
+      {/* Main content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Workstack */}
+        <section className="w-96 flex flex-col overflow-hidden p-4 gap-3" style={{ background: 'var(--cc-bg)' }}>
+          <Bucket title="Pinned" count={sample.pinned.length} icon="📌">
+            {sample.pinned.map(item => <Row key={item.id} item={item} selected />)}
+          </Bucket>
+          <Bucket title="Active" count={sample.active.length}>
+            {sample.active.map(item => <Row key={item.id} item={item} />)}
+          </Bucket>
+          <Bucket title="Waiting" count={sample.waiting.length} muted>
+            {sample.waiting.map(item => <Row key={item.id} item={item} muted />)}
+          </Bucket>
+        </section>
 
-          {/* Current work + intake column */}
-          <section className="flex-1 flex flex-col overflow-hidden">
-            {/* Current work */}
-            <div className="flex-1 overflow-y-auto px-8 py-6" style={{ background: 'var(--cc-bg)' }}>
-              <div className="flex items-start justify-between mb-5">
+        {/* Current work */}
+        <section className="flex-1 overflow-y-auto p-6" style={{ background: 'var(--cc-bg)' }}>
+          <div className="rounded-lg overflow-hidden" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>
+            {/* Work header */}
+            <div className="px-6 py-4" style={{ borderBottom: '1px solid var(--cc-border)' }}>
+              <div className="flex items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--cc-text-tertiary)' }}>
-                    <span>{currentWork.code}</span>
-                    <span>·</span>
-                    <span>opened 14:18 · 14 min</span>
-                  </div>
-                  <h1 className="text-xl font-semibold mt-1">{currentWork.customer}</h1>
-                  <div className="text-sm mt-0.5" style={{ color: 'var(--cc-text-secondary)' }}>
-                    {currentWork.service} · {currentWork.phone}
-                  </div>
+                  <div className="text-xs font-medium uppercase" style={{ color: 'var(--cc-text-tertiary)', letterSpacing: '0.06em' }}>{focused.service}</div>
+                  <div className="text-xl font-semibold mt-1">{focused.customer}</div>
+                  <div className="text-sm mt-0.5" style={{ color: 'var(--cc-text-secondary)' }}>{focused.phone}</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs px-2 py-1 rounded font-medium" style={{ background: 'var(--cc-warning-soft)', color: 'var(--cc-warning)' }}>⏳ {currentWork.status}</span>
-                  <button className="px-3 py-1.5 text-xs rounded" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>Open full view</button>
+                <div className="text-right">
+                  <span className="text-xs px-2 py-1 rounded font-medium" style={{ background: 'var(--cc-warning-soft)', color: 'var(--cc-warning)' }}>⏳ {focused.status}</span>
+                  <div className="text-xs mt-2" style={{ color: 'var(--cc-text-tertiary)' }}>Charge ₹{focused.cost}</div>
                 </div>
               </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2 space-y-2">
-                  {currentWork.modules.map(m => <Module key={m.id} m={m} />)}
-                </div>
-                <aside>
-                  <div className="rounded p-4" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>
-                    <div className="text-xs font-semibold mb-3" style={{ color: 'var(--cc-text-secondary)' }}>ACTIVITY</div>
-                    <div className="space-y-2.5">
-                      {currentWork.activity.map((a, i) => (
-                        <div key={i} className="flex gap-3 text-xs">
-                          <div className="font-medium tabular-nums" style={{ color: 'var(--cc-text-tertiary)', minWidth: 36 }}>{a.time}</div>
-                          <div style={{ color: 'var(--cc-text)' }}>{a.text}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded p-4 mt-3" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>
-                    <div className="text-xs font-semibold mb-2" style={{ color: 'var(--cc-text-secondary)' }}>NOTES</div>
-                    <div className="text-sm">Customer needs by 5 PM tomorrow</div>
-                    <div className="text-xs mt-3 flex justify-between" style={{ color: 'var(--cc-text-tertiary)' }}>
-                      <span>Cost</span>
-                      <span className="font-semibold" style={{ color: 'var(--cc-text)' }}>₹{currentWork.cost}</span>
-                    </div>
-                  </div>
-                </aside>
+              <div className="flex gap-2 mt-4">
+                <Action primary>Prepare photo</Action>
+                <Action>Open portal</Action>
+                <Action>WhatsApp customer</Action>
+                <Action subtle>Pause</Action>
               </div>
             </div>
 
-            {/* WhatsApp intake — bottom strip */}
-            <div className="border-t" style={{ background: 'var(--cc-surface)', borderColor: 'var(--cc-border)' }}>
-              <div className="px-6 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-semibold">💬 WhatsApp Intake</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: 'var(--cc-success-soft)', color: 'var(--cc-success)' }}>● connected</span>
-                  <span className="text-xs" style={{ color: 'var(--cc-text-secondary)' }}>{intake.length} unhandled</span>
-                </div>
-                <a className="text-xs cursor-pointer" style={{ color: 'var(--cc-primary)' }}>Open WhatsApp →</a>
-              </div>
-              <div className="px-6 pb-3 flex gap-2 overflow-x-auto">
-                {intake.map((it, i) => <IntakeCard key={i} it={it} />)}
+            {/* Modules */}
+            <div className="px-6 py-2">
+              {focused.modules.map(m => <Module key={m.key} m={m} />)}
+            </div>
+
+            {/* Inline activity */}
+            <div className="px-6 py-4" style={{ borderTop: '1px solid var(--cc-border)' }}>
+              <div className="text-xs font-semibold uppercase mb-3" style={{ color: 'var(--cc-text-tertiary)', letterSpacing: '0.06em' }}>Recent activity</div>
+              <div className="space-y-2">
+                {focused.recent.map((e, i) => (
+                  <div key={i} className="text-xs flex gap-4">
+                    <div className="font-medium tabular-nums shrink-0" style={{ color: 'var(--cc-text-tertiary)', minWidth: 60 }}>{e.time}</div>
+                    <div>{e.text}</div>
+                  </div>
+                ))}
               </div>
             </div>
-          </section>
+          </div>
+        </section>
+      </div>
+
+      {/* WhatsApp intake — bottom drawer */}
+      <div className="shrink-0" style={{ background: 'var(--cc-surface)', borderTop: '1px solid var(--cc-border)' }}>
+        <div className="flex items-center justify-between px-6 py-2">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="font-semibold">WhatsApp intake</span>
+            <span style={{ color: 'var(--cc-text-tertiary)' }}>{intake.length} new</span>
+          </div>
+          <a className="text-xs cursor-pointer" style={{ color: 'var(--cc-primary)' }}>Open chat ↗</a>
         </div>
-      </main>
+        <div className="px-6 pb-4 flex gap-3 overflow-x-auto">
+          {intake.map((it, i) => <IntakeCard key={i} it={it} />)}
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────
 
-function Group({ title, items, selected, muted }: { title: string; items: any[]; selected: string; muted?: boolean }) {
+function StatusDot({ label, ok }: { label: string; ok: boolean }) {
   return (
-    <div className="py-2">
-      <div className="px-5 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--cc-text-tertiary)', letterSpacing: '0.04em' }}>{title}</div>
-      {items.map(it => {
-        const isSelected = it.code === selected;
-        return (
-          <div
-            key={it.code}
-            className="px-5 py-2.5 cursor-pointer flex items-center gap-3"
-            style={{
-              background: isSelected ? 'var(--cc-primary-soft)' : 'transparent',
-              borderLeft: isSelected ? '3px solid var(--cc-primary)' : '3px solid transparent',
-            }}
-          >
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold" style={{ background: 'var(--cc-surface-hover)', color: 'var(--cc-text-secondary)' }}>
-              {it.initials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <div className="text-sm truncate" style={{ fontWeight: isSelected ? 500 : 400, color: muted ? 'var(--cc-text-secondary)' : 'var(--cc-text)' }}>{it.name}</div>
-                <div className="text-[10px]" style={{ color: 'var(--cc-text-tertiary)' }}>{it.ago}</div>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <div className="text-[11px] truncate flex-1" style={{ color: 'var(--cc-text-secondary)' }}>{it.service}</div>
-                <div className="text-[10px]" style={{ color: it.danger ? 'var(--cc-danger)' : it.success ? 'var(--cc-success)' : it.highlight ? 'var(--cc-info)' : 'var(--cc-text-tertiary)' }}>
-                  {it.status}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+    <div className="flex items-center gap-1.5 text-xs" title={label}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: ok ? 'var(--cc-success)' : 'var(--cc-danger)' }} />
+      <span style={{ color: 'var(--cc-text-secondary)' }}>{label}</span>
     </div>
   );
 }
 
+function Bucket({ title, count, icon, muted, children }: any) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 px-1 mb-1.5">
+        {icon && <span>{icon}</span>}
+        <div className="text-[10px] font-semibold uppercase" style={{ color: muted ? 'var(--cc-text-tertiary)' : 'var(--cc-text-secondary)', letterSpacing: '0.08em' }}>
+          {title}
+        </div>
+        <span className="text-[10px] tabular-nums px-1.5 rounded" style={{ background: 'var(--cc-surface-hover)', color: 'var(--cc-text-secondary)' }}>{count}</span>
+      </div>
+      <div className="space-y-1.5">{children}</div>
+    </div>
+  );
+}
+
+function Row({ item, selected, muted }: any) {
+  const toneMap: Record<string, string> = {
+    success: 'var(--cc-success)',
+    danger: 'var(--cc-danger)',
+    warning: 'var(--cc-warning)',
+    info: 'var(--cc-info)',
+    neutral: 'var(--cc-text-secondary)',
+  };
+  return (
+    <div
+      className="px-3 py-2.5 rounded-lg cursor-pointer transition-colors"
+      style={{
+        background: selected ? 'var(--cc-surface)' : 'var(--cc-surface)',
+        border: selected ? '1.5px solid var(--cc-primary)' : '1px solid var(--cc-border)',
+        opacity: muted ? 0.75 : 1,
+      }}
+    >
+      <div className="flex justify-between items-center">
+        <div className="text-sm font-medium truncate" style={{ color: muted ? 'var(--cc-text-secondary)' : 'var(--cc-text)' }}>{item.name}</div>
+        <div className="text-[10px] tabular-nums shrink-0 ml-2" style={{ color: 'var(--cc-text-tertiary)' }}>{item.when}</div>
+      </div>
+      <div className="flex justify-between items-center mt-1">
+        <div className="text-xs truncate" style={{ color: 'var(--cc-text-secondary)' }}>{item.service}</div>
+        <div className="text-[10px] font-medium shrink-0 ml-2" style={{ color: item.tone ? toneMap[item.tone] : 'var(--cc-text-tertiary)' }}>
+          {item.state}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Action({ children, primary, subtle }: any) {
+  return (
+    <button
+      className="px-3 py-1.5 rounded text-xs font-medium transition-colors"
+      style={
+        primary
+          ? { background: 'var(--cc-primary)', color: '#fff' }
+          : subtle
+          ? { background: 'transparent', color: 'var(--cc-text-secondary)' }
+          : { background: 'var(--cc-surface)', color: 'var(--cc-text)', border: '1px solid var(--cc-border)' }
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
 function Module({ m }: { m: any }) {
-  const stateMap: Record<string, { color: string; bg: string; icon: string; label: string }> = {
-    complete: { color: 'var(--cc-success)', bg: 'var(--cc-success-soft)', icon: '✓', label: 'complete' },
-    pending:  { color: 'var(--cc-warning)', bg: 'var(--cc-warning-soft)', icon: '⏳', label: 'pending' },
-    idle:     { color: 'var(--cc-text-tertiary)', bg: 'var(--cc-surface-hover)', icon: '○', label: 'not started' },
+  const stateMap: Record<string, { color: string; bg: string; mark: string }> = {
+    done: { color: 'var(--cc-success)', bg: 'var(--cc-success-soft)', mark: '✓' },
+    pending: { color: 'var(--cc-warning)', bg: 'var(--cc-warning-soft)', mark: '⏳' },
+    idle: { color: 'var(--cc-text-tertiary)', bg: 'var(--cc-surface-hover)', mark: '·' },
   };
   const s = stateMap[m.state];
   return (
-    <div className="rounded p-4" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold" style={{ color: s.color }}>{s.icon}</span>
-          <div>
-            <div className="text-sm font-medium">{m.label}</div>
-            <div className="text-xs mt-0.5" style={{ color: 'var(--cc-text-secondary)' }}>{m.detail}</div>
-          </div>
-        </div>
-        <span className="text-[10px] px-2 py-0.5 rounded font-medium" style={{ background: s.bg, color: s.color }}>{s.label}</span>
+    <div className="flex items-start gap-4 py-3" style={{ borderBottom: '1px dashed var(--cc-border)' }}>
+      <div className="w-7 h-7 rounded-full grid place-items-center text-xs font-semibold shrink-0" style={{ background: s.bg, color: s.color }}>
+        {s.mark}
       </div>
-      {m.summary && <div className="text-xs mt-2 ml-6" style={{ color: 'var(--cc-text-secondary)' }}>{m.summary}</div>}
-      {m.items && (
-        <div className="mt-3 ml-6 grid grid-cols-2 gap-1">
-          {m.items.map((d: string, i: number) => (
-            <div key={i} className="text-xs flex items-center gap-2" style={{ color: 'var(--cc-text-secondary)' }}>
-              <span style={{ color: 'var(--cc-success)' }}>✓</span>{d}
-            </div>
-          ))}
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <div className="text-sm font-medium">{m.label}</div>
+          <div className="text-xs" style={{ color: 'var(--cc-text-tertiary)' }}>{m.summary}</div>
         </div>
-      )}
+        {m.items && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {m.items.map((d: string, i: number) => (
+              <span key={i} className="text-[11px] px-2 py-0.5 rounded" style={{ background: 'var(--cc-bg)', color: 'var(--cc-text-secondary)' }}>{d}</span>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 function IntakeCard({ it }: { it: any }) {
   return (
-    <div className="rounded p-3 flex-shrink-0 w-72" style={{ background: 'var(--cc-bg)', border: '1px solid var(--cc-border)' }}>
-      <div className="flex items-center justify-between mb-1">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded flex items-center justify-center text-xs" style={{ background: it.unmatched ? 'var(--cc-warning-soft)' : 'var(--cc-primary-soft)', color: it.unmatched ? 'var(--cc-warning)' : 'var(--cc-primary)' }}>
-            {it.kind === 'pdf' ? '📄' : '📷'}
-          </div>
+    <div className="rounded-lg p-3 shrink-0 w-72" style={{ background: 'var(--cc-bg)', border: '1px solid var(--cc-border)' }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-8 h-8 rounded grid place-items-center" style={{ background: it.unknown ? 'var(--cc-warning-soft)' : 'var(--cc-primary-soft)', color: it.unknown ? 'var(--cc-warning)' : 'var(--cc-primary)' }}>
+          {it.kind === 'pdf' ? '📄' : '📷'}
+        </div>
+        <div className="flex-1 min-w-0">
           <div className="text-xs font-medium truncate">{it.who}</div>
+          <div className="text-[10px] truncate" style={{ color: 'var(--cc-text-tertiary)' }}>{it.file} · {it.size}</div>
         </div>
-        <div className="text-[10px]" style={{ color: 'var(--cc-text-tertiary)' }}>{it.ago}</div>
+        <div className="text-[10px] shrink-0" style={{ color: 'var(--cc-text-tertiary)' }}>{it.when}</div>
       </div>
-      <div className="text-[11px] truncate" style={{ color: 'var(--cc-text-secondary)' }}>{it.file}</div>
-      <div className="text-[10px]" style={{ color: 'var(--cc-text-tertiary)' }}>{it.size}</div>
-      <div className="mt-2 flex gap-1.5 items-center">
-        {it.auto && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--cc-success-soft)', color: 'var(--cc-success)' }}>→ {it.auto}</span>}
-        {it.unmatched && <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--cc-warning-soft)', color: 'var(--cc-warning)' }}>unmatched</span>}
-        <div className="ml-auto flex gap-1">
-          <button className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>🖨</button>
-          <button className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>⬇</button>
-          <button className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--cc-primary)', color: '#fff' }}>📌</button>
-        </div>
+      {it.match && <div className="text-[10px] px-2 py-1 rounded mb-2" style={{ background: 'var(--cc-success-soft)', color: 'var(--cc-success)' }}>→ {it.match}</div>}
+      {it.unknown && <div className="text-[10px] px-2 py-1 rounded mb-2" style={{ background: 'var(--cc-warning-soft)', color: 'var(--cc-warning)' }}>Unknown sender — link to customer</div>}
+      <div className="flex gap-1">
+        <button className="flex-1 text-[11px] py-1 rounded" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>Print</button>
+        <button className="flex-1 text-[11px] py-1 rounded" style={{ background: 'var(--cc-surface)', border: '1px solid var(--cc-border)' }}>Save</button>
+        <button className="flex-1 text-[11px] py-1 rounded text-white" style={{ background: 'var(--cc-primary)' }}>Attach</button>
       </div>
     </div>
   );
