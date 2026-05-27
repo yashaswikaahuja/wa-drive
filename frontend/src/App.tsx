@@ -18,6 +18,7 @@ const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const Stitch = lazy(() => import('./features/services/Stitch'));
 const PhotoTool = lazy(() => import('./features/photo-tool/PhotoTool'));
+const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
 const Settings = lazy(() => import('./features/settings/Settings'));
 const Overview = lazy(() => import('./features/admin/Overview'));
 const Sessions = lazy(() => import('./features/admin/Sessions'));
@@ -48,6 +49,7 @@ export default function App() {
     <BrowserRouter>
       <Toasts />
       <Routes>
+        <Route path="/design-playground" element={<Suspense fallback={<PageLoader />}><PlaygroundIndex /></Suspense>} />
         <Route element={<Layout />}>
           <Route path="/app" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
           <Route path="/app/customers" element={<Suspense fallback={<PageLoader />}><Customers /></Suspense>} />
