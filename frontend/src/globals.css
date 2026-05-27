@@ -2,6 +2,84 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── New design system v2 tokens (cc-*) ─────────────────────────────
+   See /DESIGN_SYSTEM.md. Coexists with legacy tokens below.
+   Light theme is default; [data-theme="dark"] overrides.
+   ─────────────────────────────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --cc-primary: #1d4ed8;
+  --cc-primary-hover: #1e40af;
+  --cc-primary-pressed: #1e3a8a;
+  --cc-primary-soft: #eff6ff;
+  --cc-primary-bg: #dbeafe;
+  --cc-focus-ring: #60a5fa;
+
+  /* Neutrals */
+  --cc-bg: #fafafa;
+  --cc-surface: #ffffff;
+  --cc-surface-hover: #f5f5f5;
+  --cc-surface-pressed: #ebebeb;
+  --cc-border: #e8e8e8;
+  --cc-border-strong: #d0d0d0;
+  --cc-border-focus: #1d4ed8;
+
+  /* Text */
+  --cc-text: #1a1a1a;
+  --cc-text-secondary: #5e5e5e;
+  --cc-text-tertiary: #9b9b9b;
+  --cc-text-disabled: #c4c4c4;
+  --cc-text-on-primary: #ffffff;
+
+  /* Status */
+  --cc-success: #10b981;
+  --cc-success-soft: #d1fae5;
+  --cc-warning: #f59e0b;
+  --cc-warning-soft: #fef3c7;
+  --cc-danger: #dc2626;
+  --cc-danger-soft: #fee2e2;
+  --cc-info: #0891b2;
+  --cc-info-soft: #cffafe;
+
+  /* Shadows (used sparingly) */
+  --cc-shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.04);
+  --cc-shadow-md: 0 4px 8px -2px rgba(0,0,0,0.06), 0 2px 4px -1px rgba(0,0,0,0.04);
+  --cc-shadow-lg: 0 12px 24px -4px rgba(0,0,0,0.10), 0 4px 8px -2px rgba(0,0,0,0.06);
+
+  /* Radius */
+  --cc-radius-sm: 4px;
+  --cc-radius-md: 8px;
+  --cc-radius-lg: 12px;
+}
+
+[data-theme="dark"] {
+  --cc-primary: #3b82f6;
+  --cc-primary-hover: #60a5fa;
+  --cc-primary-pressed: #2563eb;
+  --cc-primary-soft: #1e3a8a;
+  --cc-primary-bg: #1e40af;
+  --cc-focus-ring: #93c5fd;
+  --cc-bg: #0f172a;
+  --cc-surface: #1e293b;
+  --cc-surface-hover: #334155;
+  --cc-surface-pressed: #475569;
+  --cc-border: #334155;
+  --cc-border-strong: #475569;
+  --cc-border-focus: #3b82f6;
+  --cc-text: #f1f5f9;
+  --cc-text-secondary: #cbd5e1;
+  --cc-text-tertiary: #94a3b8;
+  --cc-text-disabled: #64748b;
+  --cc-success: #34d399;
+  --cc-success-soft: #064e3b;
+  --cc-warning: #fbbf24;
+  --cc-warning-soft: #78350f;
+  --cc-danger: #ef4444;
+  --cc-danger-soft: #7f1d1d;
+  --cc-info: #22d3ee;
+  --cc-info-soft: #164e63;
+}
+
 :root {
   --background: #0a0e1a;
   --foreground: #e8ecf4;
