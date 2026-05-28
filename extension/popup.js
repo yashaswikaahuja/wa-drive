@@ -44,8 +44,14 @@ const KNOWN_SITES = {
 
 async function detectSite() {
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.url) { siteName.textContent = 'No page detected'; return; }
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    let tab = tabs[0];
+    // If popup is opened as a tab, find the real target tab
+    if (!tab?.url || tab.url.startsWith('chrome-extension://')) {
+      const allTabs = await chrome.tabs.query({ currentWindow: true });
+      tab = allTabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.startsWith('about')) || tab;
+    }
+    if (!tab?.url || tab.url.startsWith('chrome')) { siteName.textContent = 'No page detected'; return; }
     const url = new URL(tab.url);
     const host = url.hostname.replace('www.', '');
     const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
@@ -149,13 +155,16 @@ function renderProfiles(query) {
   }
 
   const visibleList = filteredProfiles.slice(0, 20);
+  const recentCount = !q ? recentIds.filter(id => allProfiles.some(x => x.id === id)).length : 0;
   profilesEl.innerHTML = visibleList.map((p, i) => {
     const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     const isSelected = selectedProfile?.id === p.id;
     const isFocused = i === focusIdx;
-    const isRecent = !q && recentIds.includes(p.id) && i < recentIds.length;
     const phone = getPhone(p);
-    return `${isRecent && i === 0 ? '<div class="section-label">Recent</div>' : ''}${!q && i === recentIds.filter(id=>allProfiles.some(x=>x.id===id)).length && recentIds.length ? '<div class="section-label">All</div>' : ''}<div class="profile-item${isSelected?' selected':''}${isFocused?' focused':''}" data-id="${p.id}" data-idx="${i}">
+    let label = '';
+    if (!q && i === 0 && recentCount > 0) label = '<div class="section-label">Recent</div>';
+    if (!q && i === recentCount && recentCount > 0) label = '<div class="section-label">All</div>';
+    return `${label}<div class="profile-item${isSelected?' selected':''}${isFocused?' focused':''}" data-id="${p.id}" data-idx="${i}">
       <div class="avatar">${initials}</div>
       <div>
         <div class="profile-name">${p.name || 'Unknown'}</div>
