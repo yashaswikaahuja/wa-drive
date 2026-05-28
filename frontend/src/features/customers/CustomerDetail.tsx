@@ -98,6 +98,15 @@ export default function CustomerDetail() {
     } catch (e: any) { setError(e.message); }
   };
 
+  const deletePerson = async (personId: string, personName: string) => {
+    if (!confirm(`Delete "${personName}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/customers/persons/${personId}`);
+      if (selectedPerson === personId) { setSelectedPerson(null); setPersonDetail(null); }
+      await loadHousehold();
+    } catch (e: any) { setError(e.message); }
+  };
+
   const saveField = async (key: string, value: string) => {
     if (!selectedPerson) return;
     try {
@@ -168,11 +177,15 @@ export default function CustomerDetail() {
           </div>
           <div className="space-y-1">
             {household.persons.map(p => (
-              <button key={p.id} onClick={() => setSelectedPerson(p.id)}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm ${selectedPerson === p.id ? 'bg-blue-600/20 text-blue-300' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}>
-                <div>{p.displayLabel || p.name}</div>
-                <div className="text-[10px] text-gray-500 capitalize">{p.relationship}</div>
-              </button>
+              <div key={p.id} className="flex items-center gap-1">
+                <button onClick={() => setSelectedPerson(p.id)}
+                  className={`flex-1 text-left px-3 py-2 rounded-lg text-sm ${selectedPerson === p.id ? 'bg-blue-600/20 text-blue-300' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}>
+                  <div>{p.displayLabel || p.name}</div>
+                  <div className="text-[10px] text-gray-500 capitalize">{p.relationship}</div>
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
+                  className="p-1 text-gray-600 hover:text-red-400 text-xs" title="Delete person">🗑</button>
+              </div>
             ))}
           </div>
           {showAddPerson && <AddPersonForm onSubmit={addPerson} onCancel={() => setShowAddPerson(false)} />}

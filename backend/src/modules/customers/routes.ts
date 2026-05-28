@@ -92,4 +92,29 @@ router.patch('/persons/:id', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// DELETE /api/customers/persons/:id — soft delete a single person
+router.delete('/persons/:id', authMiddleware, async (req: any, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      "UPDATE profiles SET deleted_at = now() WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Person not found' });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/customers/households/:phone — soft delete all persons for a phone
+router.delete('/households/:phone', authMiddleware, async (req: any, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { rowCount } = await pool.query(
+      "UPDATE profiles SET deleted_at = now() WHERE primary_contact_phone = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+      [phone, req.user.workspaceId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Household not found' });
+    res.json({ ok: true, deleted: rowCount });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

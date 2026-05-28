@@ -34,6 +34,15 @@ export default function Customers() {
     load();
   };
 
+  const deleteHousehold = async (phone: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Delete this entire customer and all their profiles? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/customers/households/${encodeURIComponent(phone)}`);
+      load();
+    } catch {}
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -77,6 +86,8 @@ export default function Customers() {
               <span className="text-[10px] text-gray-500 px-2 py-0.5 rounded-full bg-white/5">
                 {h.person_count} {parseInt(h.person_count) === 1 ? 'person' : 'people'}
               </span>
+              <button onClick={(e) => deleteHousehold(h.phone, e)}
+                className="p-1.5 text-gray-600 hover:text-red-400 rounded hover:bg-red-500/10 transition" title="Delete customer">🗑</button>
             </div>
           ))}
         </div>
