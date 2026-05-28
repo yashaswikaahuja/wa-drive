@@ -28,11 +28,13 @@
     .profile-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
     .profile-item:hover { background: #1e293b; }
     .profile-item.selected { background: #1e3a5f; border-left: 3px solid #3b82f6; }
+    .profile-item.focused { background: #1e293b; outline: 1px solid #3b82f6; }
     .avatar { width: 32px; height: 32px; border-radius: 50%; background: #1e3a5f; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #60a5fa; flex-shrink: 0; }
     .profile-name { font-size: 12px; font-weight: 600; color: #f1f5f9; }
     .profile-phone { font-size: 10px; color: #64748b; margin-top: 1px; }
 
     .empty { padding: 24px; text-align: center; color: #475569; font-size: 12px; }
+    .section-label { padding: 4px 14px; font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; background: #0f172a; }
 
     .footer { padding: 10px 12px; border-top: 1px solid #1e293b; display: flex; gap: 8px; }
     #fill-btn { flex: 1; padding: 9px; background: #2563eb; color: white; border: none; border-radius: 6px;
@@ -43,6 +45,9 @@
       font-size: 12px; cursor: pointer; }
     #agent-btn:hover { background: #334155; }
     #agent-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #undo-btn { padding: 9px 12px; background: #7c2d12; color: #fbbf24; border: none; border-radius: 6px;
+      font-size: 12px; cursor: pointer; }
+    #undo-btn:hover { background: #9a3412; }
     #open-btn { padding: 9px 10px; background: #1e293b; color: #94a3b8; border: none; border-radius: 6px;
       font-size: 11px; cursor: pointer; }
     #open-btn:hover { background: #334155; }
@@ -61,6 +66,8 @@
     .results-bar .filled { background: #22c55e; }
     .results-bar .skipped { background: #f59e0b; }
     .results-bar .failed { background: #ef4444; }
+    #results-detail { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .field-tag { font-size: 9px; padding: 2px 6px; border: 1px solid; border-radius: 3px; white-space: nowrap; }
 
     /* Progress */
     #progress { display: none; padding: 12px 14px; border-top: 1px solid #1e293b; }
@@ -69,7 +76,7 @@
     .progress-bar-inner { height: 100%; background: #3b82f6; border-radius: 2px; transition: width 0.3s; animation: pulse 1.5s infinite; }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
 
-    #status { padding: 6px 14px; font-size: 11px; color: #f59e0b; display: none; }
+    #status { padding: 6px 14px; font-size: 11px; color: #f59e0b; display: none; cursor: pointer; }
     .ver { font-size: 9px; color: #334155; text-align: center; padding: 4px; }
 
     /* Agent panel */
@@ -115,12 +122,14 @@
       <div class="stat"><div class="stat-num red" id="r-failed">0</div><div class="stat-label">Failed</div></div>
     </div>
     <div class="results-bar" id="results-bar"></div>
+    <div id="results-detail" style="display:none"></div>
   </div>
 
   <div id="status"></div>
 
   <div class="footer">
     <button id="fill-btn" disabled>⚡ Fill Form</button>
+    <button id="undo-btn" style="display:none" title="Undo last fill">↩</button>
     <button id="agent-btn" disabled title="AI Agent">🤖</button>
     <button id="open-btn" title="Open CyberControl">🖥</button>
   </div>
