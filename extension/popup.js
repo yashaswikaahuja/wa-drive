@@ -13,13 +13,64 @@ const agentCancelBtn = document.getElementById('agent-cancel');
 const statusEl = document.getElementById('status');
 const connDot = document.getElementById('conn-dot');
 const connText = document.getElementById('conn-text');
+const siteIcon = document.getElementById('site-icon');
+const siteName = document.getElementById('site-name');
+const progressEl = document.getElementById('progress');
+const progressText = document.getElementById('progress-text');
+const progressInner = document.getElementById('progress-inner');
+const resultsEl = document.getElementById('results');
 document.getElementById('ver').textContent = 'v' + VERSION;
 
 function showStatus(msg, color) {
   statusEl.textContent = msg;
   statusEl.style.color = color || '#f59e0b';
   statusEl.style.display = 'block';
-  setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+  setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
+}
+
+const KNOWN_SITES = {
+  'ssc.nic.in': { icon: '🏛', name: 'SSC' },
+  'ssc.gov.in': { icon: '🏛', name: 'SSC' },
+  'rrbcdg.gov.in': { icon: '🚂', name: 'RRB' },
+  'nta.ac.in': { icon: '📝', name: 'NTA' },
+  'upsc.gov.in': { icon: '🏛', name: 'UPSC' },
+  'passportindia.gov.in': { icon: '🛂', name: 'Passport Seva' },
+  'digilocker.gov.in': { icon: '📁', name: 'DigiLocker' },
+};
+
+async function detectSite() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.url) { siteName.textContent = 'No page detected'; return; }
+    const url = new URL(tab.url);
+    const host = url.hostname.replace('www.', '');
+    const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
+    if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' — ' + host; }
+    else { siteIcon.textContent = '🌐'; siteName.textContent = host; }
+  } catch { siteName.textContent = 'Unknown page'; }
+}
+
+function showProgress(text) {
+  resultsEl.style.display = 'none';
+  progressEl.style.display = 'block';
+  progressText.textContent = text;
+  progressInner.style.width = '30%';
+}
+function updateProgress(text, pct) {
+  progressText.textContent = text;
+  progressInner.style.width = pct + '%';
+}
+function hideProgress() { progressEl.style.display = 'none'; }
+
+function showResults(filled, skipped, failed) {
+  hideProgress();
+  const total = filled + skipped + failed || 1;
+  document.getElementById('r-filled').textContent = filled;
+  document.getElementById('r-skipped').textContent = skipped;
+  document.getElementById('r-failed').textContent = failed;
+  const bar = document.getElementById('results-bar');
+  bar.innerHTML = `<div class="filled" style="width:${filled/total*100}%"></div><div class="skipped" style="width:${skipped/total*100}%"></div><div class="failed" style="width:${failed/total*100}%"></div>`;
+  resultsEl.style.display = 'block';
 }
 
 function getPhone(p) { return p.phone || p.primary_contact_phone || ''; }
@@ -60,6 +111,7 @@ function renderProfiles(query) {
 
 async function init() {
   document.getElementById('ver').textContent = 'v' + VERSION;
+  detectSite();
 
   const data = await chrome.storage.local.get(['accessToken', 'backendUrl', 'user']);
 
@@ -109,7 +161,9 @@ searchEl.addEventListener('input', () => renderProfiles(searchEl.value));
 fillBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
   fillBtn.disabled = true;
-  fillBtn.textContent = 'Filling...';
+  fillBtn.innerHTML = '<span>Filling...</span>';
+  resultsEl.style.display = 'none';
+  showProgress('Preparing autofill scripts...');
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -162,15 +216,18 @@ fillBtn.addEventListener('click', async () => {
       });
     } catch (e) {
       showStatus('Failed to load autofill scripts: ' + e.message, '#ef4444');
+      hideProgress();
       return;
     }
 
+    updateProgress('Mapping fields to profile...', 50);
     // Get Groq key from backend settings
     let groqKey = '';
     try {
       const gRes = await fetch(data.backendUrl + '/settings/groq-key', { headers: { 'Authorization': 'Bearer ' + data.accessToken } });
       if (gRes.ok) { const gd = await gRes.json(); groqKey = gd.key || ''; }
     } catch {}
+    updateProgress('Filling form fields...', 70);
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       args: [(() => {
@@ -307,15 +364,19 @@ fillBtn.addEventListener('click', async () => {
 
     const r = result?.[0]?.result;
     if (r?.ok) {
-      showStatus(`✓ Filled ${r.filled} fields`, '#22c55e');
+      const skipped = r.totalUnmapped || 0;
+      const failed = r.totalFailed || 0;
+      showResults(r.totalFilled || 0, skipped, failed);
     } else {
+      hideProgress();
       showStatus(r?.error || 'Fill failed', '#ef4444');
     }
   } catch (e) {
+    hideProgress();
     showStatus('Error: ' + e.message, '#ef4444');
   } finally {
     fillBtn.disabled = false;
-    fillBtn.textContent = '⚡ Fill Form';
+    fillBtn.innerHTML = '⚡ Fill Form';
   }
 });
 
