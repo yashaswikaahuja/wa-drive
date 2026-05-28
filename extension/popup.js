@@ -87,6 +87,21 @@ function showResults(filled, skipped, failed, records) {
   } else {
     detailEl.style.display = 'none';
   }
+  // Show "Complete Profile" link if fields were skipped
+  const cpLink = document.getElementById('complete-profile-link');
+  if (skipped > 0 || failed > 0) {
+    cpLink.style.display = 'block';
+    cpLink.onclick = async () => {
+      const data = await chrome.storage.local.get('backendUrl');
+      const frontendUrl = (data.backendUrl || '').replace('/api', '').replace('api.', 'app.');
+      const profileId = selectedProfile?.id;
+      const phone = selectedProfile?.phone || selectedProfile?.primary_contact_phone || '';
+      const url = frontendUrl + '/app/customers/' + encodeURIComponent(phone);
+      chrome.tabs.create({ url });
+    };
+  } else {
+    cpLink.style.display = 'none';
+  }
   resultsEl.style.display = 'block';
 }
 
@@ -263,8 +278,37 @@ searchEl.addEventListener('input', () => { focusIdx = -1; renderProfiles(searchE
 let _lastFillTabId = null;
 const undoBtn = document.getElementById('undo-btn');
 
+// Required fields for govt forms
+const REQUIRED_FIELDS = ['name', 'father_name', 'dob', 'gender', 'aadhaar_number', 'address', 'state', 'pincode'];
+
+function getCompleteness(profile) {
+  const data = profile?.data || profile || {};
+  let filled = 0;
+  const missing = [];
+  for (const key of REQUIRED_FIELDS) {
+    const val = data[key];
+    const v = val && typeof val === 'object' ? val.value : val;
+    if (v) filled++;
+    else missing.push(key.replace(/_/g, ' '));
+  }
+  return { percent: Math.round(filled / REQUIRED_FIELDS.length * 100), missing };
+}
+
 fillBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
+
+  // Show completeness warning if profile is incomplete
+  const full = _prefetchedProfile?.id === selectedProfile.id ? _prefetchedProfile : selectedProfile;
+  const { percent, missing } = getCompleteness(full);
+  if (percent < 100 && missing.length > 0) {
+    const warn = document.getElementById('completeness-warn');
+    warn.innerHTML = `<span>⚠️ ${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
+    warn.style.display = 'flex';
+    await new Promise(resolve => {
+      document.getElementById('fill-anyway').onclick = () => { warn.style.display = 'none'; resolve(); };
+    });
+  }
+
   fillBtn.disabled = true;
   fillBtn.innerHTML = '<span>Filling...</span>';
   resultsEl.style.display = 'none';

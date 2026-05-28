@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
@@ -156,6 +157,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
 ));
 
 export default function WhatsApp() {
+  const navigate = useNavigate();
   const [connected, setConnected] = useState<boolean | null>(() => {
     const cached = localStorage.getItem('cc-wa-connected');
     return cached !== null ? cached === 'true' : null;
@@ -432,16 +434,15 @@ export default function WhatsApp() {
       const docs = Array.from(selectedDocs.values()).filter(d => d.fileName && !['mp4','3gp','mov','avi','webm','mp3','ogg','wav'].includes(d.fileName.split('.').pop()?.toLowerCase() || ''));
       console.log('[Extract] selectedDocs size:', selectedDocs.size, 'filtered docs:', docs.length, docs.map(d => ({id:d.id, name:d.fileName})));
       if (docs.length === 0) { setExtractError('No images or PDFs in selection'); setExtracting(false); return; }
-      // Run extractions sequentially to avoid Groq rate limits
-      const results: any[] = [];
-      for (const d of docs) {
+      // Run extractions in parallel for speed
+      const results: any[] = await Promise.all(docs.map(async (d) => {
         try {
           const r = await api.post('/process/extract', { fileId: d.id });
-          results.push({ doc: d, result: r.data });
+          return { doc: d, result: r.data };
         } catch (e: any) {
-          results.push({ doc: d, result: { error: e.message } });
+          return { doc: d, result: { error: e.message } };
         }
-      }
+      }));
       // Priority-based merge: each field has a "best source" priority by doc type.
       // Higher priority document types overwrite lower for the same field.
       const TYPE_PRIORITY: Record<string, number> = {
@@ -557,7 +558,7 @@ export default function WhatsApp() {
       setExtractedSuggestions(null);
       setTargetPersonId(null);
       exitSelectionMode();
-      alert('Profile updated with extracted fields');
+      toast.success('✅ Profile updated! Open a govt form and use the extension to fill.');
     } catch (e: any) { setExtractError(e.message); }
   };
 
@@ -659,6 +660,7 @@ export default function WhatsApp() {
                 <div className="flex items-center gap-2">
                   <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="🔍 Search" className="w-28 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-[10px] text-white outline-none placeholder:text-gray-600" />
                   <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="text-[10px] px-2 py-1 rounded bg-orange-600/20 text-orange-400 hover:bg-orange-600/30">Request Docs</button>
+                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="text-[10px] px-2 py-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/30">View Profile</button>
                   <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="text-[10px] px-2 py-1 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Assign</button>
                   <button onClick={() => setSelectionMode(true)} className="text-[10px] px-2 py-1 rounded bg-white/5 text-gray-400 hover:text-white">Select</button>
                 </div>
