@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Lightning, MagnifyingGlass, ArrowRight, CheckCircle,
-  Clock, FileText, UserCircle, TrendingUp, Fire
+  Clock, FileText, UserCircle, TrendUp, Fire
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 
@@ -71,7 +71,7 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-[#0a84ff]/10 flex items-center justify-center">
-            <TrendingUp size={16} className="text-[#0a84ff]" />
+            <TrendUp size={16} className="text-[#0a84ff]" />
           </div>
           <div>
             <p className="text-xl font-semibold text-white tabular-nums">{accuracy}%</p>
