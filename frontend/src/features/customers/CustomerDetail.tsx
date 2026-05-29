@@ -1,48 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Plus, Trash, PencilSimple, FileText, Image as ImageIcon,
+  Sparkle, CheckCircle, X, FilePdf, UserPlus
+} from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { PROFILE_SCHEMA, getCompleteness, flattenProfileData } from '../../shared/profileSchema';
 
-interface Person {
-  id: string;
-  name: string;
-  displayLabel: string;
-  relationship: string;
-  createdAt: string;
-  updatedAt: string;
-}
+const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
-interface Household {
-  phone: string;
-  person_count: string;
-  persons: Person[];
-}
-
-interface DriveFile {
-  id: string;
-  fileName: string;
-  fileUrl: string;
-  customerId: string;  // phone
-  customerName: string;
-  timestamp: string;
-}
-
-interface PersonDetail {
-  id: string;
-  name: string;
-  primary_contact_phone: string;
-  data: any;
-  display_label?: string;
-  relationship?: string;
-}
+interface Person { id: string; name: string; displayLabel: string; relationship: string; createdAt: string; updatedAt: string; }
+interface Household { phone: string; person_count: string; persons: Person[]; }
+interface DriveFile { id: string; fileName: string; fileUrl: string; customerId: string; customerName: string; timestamp: string; }
+interface PersonDetail { id: string; name: string; primary_contact_phone: string; data: any; display_label?: string; relationship?: string; }
 
 const RELATIONSHIPS = [
-  { value: 'self', label: 'Self' },
-  { value: 'spouse', label: 'Spouse' },
-  { value: 'parent', label: 'Parent' },
-  { value: 'child', label: 'Child' },
-  { value: 'sibling', label: 'Sibling' },
-  { value: 'other', label: 'Other' },
+  { value: 'self', label: 'Self' }, { value: 'spouse', label: 'Spouse' },
+  { value: 'parent', label: 'Parent' }, { value: 'child', label: 'Child' },
+  { value: 'sibling', label: 'Sibling' }, { value: 'other', label: 'Other' },
 ];
 
 export default function CustomerDetail() {
@@ -71,20 +46,11 @@ export default function CustomerDetail() {
     setHousehold(h || null);
     if (h && h.persons.length > 0 && !selectedPerson) setSelectedPerson(h.persons[0].id);
   };
-
   const loadDocuments = async () => {
-    try {
-      const r = await api.get('/drive/files/ws');
-      const docs = r.data.filter((d: any) => d.customerId === phone);
-      setDocuments(docs);
-    } catch {}
+    try { const r = await api.get('/drive/files/ws'); setDocuments(r.data.filter((d: any) => d.customerId === phone)); } catch {}
   };
-
   const loadPerson = async (personId: string) => {
-    try {
-      const r = await api.get(`/customers/persons/${personId}`);
-      setPersonDetail(r.data);
-    } catch {}
+    try { const r = await api.get(`/customers/persons/${personId}`); setPersonDetail(r.data); } catch {}
   };
 
   useEffect(() => { loadHousehold(); loadDocuments(); }, [phone]);
@@ -93,11 +59,9 @@ export default function CustomerDetail() {
   const addPerson = async (form: { name: string; relationship: string }) => {
     try {
       await api.post('/customers/persons', { phone, name: form.name, displayLabel: form.name, relationship: form.relationship });
-      setShowAddPerson(false);
-      await loadHousehold();
+      setShowAddPerson(false); await loadHousehold();
     } catch (e: any) { setError(e.message); }
   };
-
   const deletePerson = async (personId: string, personName: string) => {
     if (!confirm(`Delete "${personName}"? This cannot be undone.`)) return;
     try {
@@ -106,7 +70,6 @@ export default function CustomerDetail() {
       await loadHousehold();
     } catch (e: any) { setError(e.message); }
   };
-
   const saveField = async (key: string, value: string) => {
     if (!selectedPerson) return;
     try {
@@ -115,181 +78,197 @@ export default function CustomerDetail() {
     } catch (e: any) { setError(e.message); }
     setEditingField(null);
   };
-
   const toFieldKey = (name: string) => name.toLowerCase().replace(/\s+/g, '_');
-
   const handleAddField = () => {
     if (newFieldKey && newFieldValue) {
       saveField(toFieldKey(newFieldKey), newFieldValue);
-      setAddingInSection(null);
-      setNewFieldKey('');
-      setNewFieldValue('');
+      setAddingInSection(null); setNewFieldKey(''); setNewFieldValue('');
     }
   };
-
   const handleExtract = async (doc: DriveFile) => {
     if (!selectedPerson) { setError('Select a person first'); return; }
-    setExtracting(doc.id);
-    setError('');
+    setExtracting(doc.id); setError('');
     try {
       const r = await api.post('/process/extract', { fileId: doc.id });
-      setExtractedSuggestions(r.data.suggested);
-      setExtractDocId(doc.id);
-    } catch (e: any) {
-      setError(e.response?.data?.error || e.message || 'Extraction failed');
-    } finally {
-      setExtracting(null);
-    }
+      setExtractedSuggestions(r.data.suggested); setExtractDocId(doc.id);
+    } catch (e: any) { setError(e.response?.data?.error || e.message || 'Extraction failed'); }
+    finally { setExtracting(null); }
   };
-
   const confirmExtraction = async (acceptedFields: Record<string, any>) => {
     if (!selectedPerson) return;
     try {
       await api.patch(`/customers/persons/${selectedPerson}`, { fields: acceptedFields });
-      setExtractedSuggestions(null);
-      setExtractDocId(null);
+      setExtractedSuggestions(null); setExtractDocId(null);
       await loadPerson(selectedPerson);
     } catch (e: any) { setError(e.message); }
   };
 
-  if (!household) return <div className="p-6 text-gray-500">Loading...</div>;
+  if (!household) return (
+    <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse">
+      <div className="h-6 w-24 rounded bg-white/[0.03]" />
+      <div className="h-16 rounded-2xl bg-white/[0.03]" />
+      <div className="h-40 rounded-2xl bg-white/[0.03]" />
+    </div>
+  );
+
+  const primaryName = household.persons[0]?.displayLabel || household.persons[0]?.name || phone;
+  const flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
+  const completeness = getCompleteness(flat);
 
   return (
-    <div className="max-w-5xl">
-      <button onClick={() => navigate('/app/customers')} className="text-xs text-blue-400 mb-4 hover:underline">← Back to Customers</button>
+    <div className="max-w-4xl mx-auto pt-4">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0 text-gray-400">
+        <ArrowLeft size={15} /> Customers
+      </button>
 
-      <div className="flex items-start gap-3 mb-6">
-        <div className="w-12 h-12 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-400 font-bold">
-          📞
+      {/* Header — name first, phone secondary */}
+      <div className="flex items-center gap-4 mb-8">
+        <div className="w-14 h-14 rounded-2xl bg-[#0a84ff]/10 flex items-center justify-center text-[#0a84ff] text-xl font-semibold shrink-0">
+          {primaryName[0]?.toUpperCase()}
         </div>
-        <div className="flex-1">
-          <h1 className="text-xl font-bold text-white">{household.phone}</h1>
-          <p className="text-sm text-gray-500">{household.persons.length} person{household.persons.length !== 1 ? 's' : ''} in household</p>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-semibold text-white tracking-tight truncate">{primaryName}</h1>
+          <p className="text-sm text-gray-500">
+            {phone.match(/^\d{10,13}$/) ? `+${phone}` : phone}
+            {household.persons.length > 1 && ` · ${household.persons.length} people`}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
-        {/* Left: Persons in household */}
-        <div className="col-span-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xs font-medium text-gray-500 uppercase">People</h3>
-            <button onClick={() => setShowAddPerson(true)} className="text-xs text-blue-400 hover:underline">+ Add</button>
-          </div>
-          <div className="space-y-1">
-            {household.persons.map(p => (
-              <div key={p.id} className="flex items-center gap-1">
-                <button onClick={() => setSelectedPerson(p.id)}
-                  className={`flex-1 text-left px-3 py-2 rounded-lg text-sm ${selectedPerson === p.id ? 'bg-blue-600/20 text-blue-300' : 'bg-white/5 text-gray-300 hover:bg-white/10'}`}>
-                  <div>{p.displayLabel || p.name}</div>
-                  <div className="text-[10px] text-gray-500 capitalize">{p.relationship}</div>
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
-                  className="p-1 text-gray-600 hover:text-red-400 text-xs" title="Delete person">🗑</button>
-              </div>
-            ))}
-          </div>
-          {showAddPerson && <AddPersonForm onSubmit={addPerson} onCancel={() => setShowAddPerson(false)} />}
+      {/* People tabs (if household) */}
+      {household.persons.length > 1 && (
+        <div className="flex items-center gap-2 mb-6 flex-wrap">
+          {household.persons.map(p => (
+            <button key={p.id} onClick={() => setSelectedPerson(p.id)}
+              className="group flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full text-sm transition-all active:scale-[0.97]"
+              style={{
+                background: selectedPerson === p.id ? 'rgba(10,132,255,0.12)' : 'rgba(255,255,255,0.04)',
+                color: selectedPerson === p.id ? '#0a84ff' : '#94a3b8',
+                transitionTimingFunction: EASE, transitionDuration: '200ms',
+              }}>
+              {p.displayLabel || p.name}
+              <span className="text-[10px] opacity-50 capitalize">{p.relationship}</span>
+              <span onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
+                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
+                <X size={11} />
+              </span>
+            </button>
+          ))}
+          <button onClick={() => setShowAddPerson(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm text-gray-500 bg-white/[0.03] hover:text-white transition-colors">
+            <UserPlus size={14} /> Add
+          </button>
         </div>
+      )}
+      {household.persons.length <= 1 && (
+        <div className="mb-6">
+          <button onClick={() => setShowAddPerson(true)} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors">
+            <UserPlus size={15} /> Add family member
+          </button>
+        </div>
+      )}
+      {showAddPerson && <div className="mb-6"><AddPersonForm onSubmit={addPerson} onCancel={() => setShowAddPerson(false)} /></div>}
 
-        {/* Center: Selected person detail */}
-        <div className={`${documents.length > 0 ? 'col-span-6' : 'col-span-9'} max-h-[calc(100vh-180px)] overflow-y-auto pr-2`}>
-          <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Profile</h3>
-          {personDetail ? (
-            <div className="space-y-2">
-              <div className="bg-[#0d1220] border border-white/5 rounded-xl p-3">
-                <p className="text-sm font-medium text-white">{personDetail.display_label || personDetail.name}</p>
-                <p className="text-[11px] text-gray-500 capitalize mb-2">{personDetail.relationship || 'self'}</p>
-                {(() => {
-                  const flat = flattenProfileData(personDetail.data || {});
-                  const { percent, filled, total, missing } = getCompleteness(flat);
-                  return (
-                    <div>
-                      <div className="flex justify-between text-[10px] text-gray-500 mb-1">
-                        <span>{percent}% ready for SSC OTR</span>
-                        <span>{filled}/{total} required</span>
-                      </div>
-                      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${percent >= 80 ? 'bg-green-500' : percent >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{width: `${percent}%`}} />
-                      </div>
-                      {missing.length > 0 && <p className="text-[9px] text-gray-600 mt-1">Missing: {missing.slice(0, 4).join(', ')}</p>}
-                    </div>
-                  );
-                })()}
+      {personDetail && (
+        <>
+          {/* Readiness */}
+          <section className="card mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Readiness</h2>
+              <span className="text-xs text-gray-500 tabular-nums">{completeness.filled}/{completeness.total} fields</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-2 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${completeness.percent}%`,
+                    background: completeness.percent >= 80 ? '#30d158' : completeness.percent >= 50 ? '#ffd60a' : '#ff453a',
+                    transitionTimingFunction: EASE, transitionDuration: '600ms',
+                  }} />
               </div>
+              <span className="text-lg font-semibold text-white tabular-nums w-12 text-right">{completeness.percent}%</span>
+            </div>
+            {completeness.missing.length > 0 && (
+              <p className="text-xs text-gray-500 mt-2">Missing: {completeness.missing.slice(0, 5).join(', ')}{completeness.missing.length > 5 ? '…' : ''}</p>
+            )}
+          </section>
+
+          {/* Profile data — grouped sections */}
+          <section className="mb-6">
+            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Profile data</h2>
+            <div className="space-y-3">
               {PROFILE_SCHEMA.map(section => {
                 const raw = personDetail.data || {};
-                const flat = flattenProfileData(raw);
-                const visibleFields = section.fields.filter(f => flat[f.key] || f.required);
+                const sflat = flattenProfileData(raw);
+                const hasAny = section.fields.some(f => sflat[f.key]);
+                const visibleFields = section.fields.filter(f => sflat[f.key] || f.required);
                 if (!visibleFields.length) return null;
-                const hasAny = section.fields.some(f => flat[f.key]);
-                if (!hasAny) return (
-                  <div key={section.id} className="bg-[#0d1220] border border-white/[0.02] rounded-lg px-3 py-2 flex justify-between items-center">
-                    <span className="text-[11px] text-gray-600">{section.icon} {section.title}</span>
-                    <span className="text-[9px] text-gray-700">No data</span>
-                  </div>
-                );
                 return (
-                  <div key={section.id} className="bg-[#0d1220] border border-white/5 rounded-lg px-3 py-2">
-                    <p className="text-[10px] font-medium text-gray-500 mb-1.5">{section.icon} {section.title}</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                      {visibleFields.map(f => {
-                        const val = flat[f.key];
-                        const rawVal = raw[f.key];
-                        const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
-                        const isEditing = editingField === f.key;
-                        return (
-                          <div key={f.key} className="flex flex-col">
-                            <span className={`text-[9px] ${val ? 'text-gray-500' : 'text-red-400/60'}`}>{f.label}{f.required && !val ? ' *' : ''}</span>
-                            {isEditing ? (
-                              <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                                onBlur={() => { if (editValue !== (val||'')) saveField(f.key, editValue); else setEditingField(null); }}
-                                onKeyDown={e => { if (e.key === 'Enter') { saveField(f.key, editValue); } if (e.key === 'Escape') setEditingField(null); }}
-                                className="text-[11px] bg-blue-600/10 border border-blue-500/30 rounded px-1 py-0.5 text-white outline-none w-full" />
-                            ) : (
-                              <div className="flex items-center gap-1 cursor-pointer group" onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}>
-                                <span className={`text-[11px] truncate ${val ? 'text-white' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
-                                {docId && <span className="text-[8px] text-blue-400/60" title={`From document ${docId}`}>📄</span>}
-                                <span className="text-[9px] text-gray-600 opacity-0 group-hover:opacity-100">✎</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {/* Extra fields not in schema */}
-                    </div>
+                  <div key={section.id} className="card">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{section.title}</p>
+                    {!hasAny ? (
+                      <p className="text-xs text-gray-600">No data yet</p>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                        {visibleFields.map(f => {
+                          const val = sflat[f.key];
+                          const rawVal = raw[f.key];
+                          const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
+                          const isEditing = editingField === f.key;
+                          return (
+                            <div key={f.key} className="flex flex-col gap-0.5">
+                              <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
+                                {f.label}{f.required && !val ? ' *' : ''}
+                              </span>
+                              {isEditing ? (
+                                <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+                                  onBlur={() => { if (editValue !== (val || '')) saveField(f.key, editValue); else setEditingField(null); }}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveField(f.key, editValue); if (e.key === 'Escape') setEditingField(null); }}
+                                  className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
+                              ) : (
+                                <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
+                                  className="flex items-center gap-1.5 group text-left">
+                                  <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
+                                  {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
+                                  <PencilSimple size={11} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     {addingInSection === section.id ? (
-                      <div className="flex gap-2 mt-2">
-                        <input placeholder="Field name" value={newFieldKey} onChange={e => setNewFieldKey(e.target.value)}
-                          className="text-[11px] bg-[#1a2236] border border-white/10 rounded px-2 py-1 text-white outline-none flex-1" />
-                        <input placeholder="Value" value={newFieldValue} onChange={e => setNewFieldValue(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') handleAddField(); }}
-                          className="text-[11px] bg-[#1a2236] border border-white/10 rounded px-2 py-1 text-white outline-none flex-1" />
-                        <button onClick={handleAddField} className="text-[10px] text-green-400 px-2">Save</button>
-                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-[10px] text-gray-500 px-1">✕</button>
+                      <div className="flex gap-2 mt-3">
+                        <input placeholder="Field name" value={newFieldKey} onChange={e => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
+                        <input placeholder="Value" value={newFieldValue} onChange={e => setNewFieldValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
+                        <button onClick={handleAddField} className="text-xs text-[#30d158] px-2">Save</button>
+                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
                       </div>
                     ) : (
-                      <button onClick={() => setAddingInSection(section.id)} className="text-[10px] text-blue-400 hover:text-blue-300 mt-1.5">+ Add</button>
+                      <button onClick={() => setAddingInSection(section.id)} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
+                        <Plus size={12} /> Add field
+                      </button>
                     )}
                   </div>
                 );
               })}
+
               {/* Other fields not in schema */}
               {(() => {
-                const flat = flattenProfileData(personDetail.data || {});
                 const schemaKeys = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
                 const otherFields = Object.entries(flat).filter(([k]) => !schemaKeys.has(k) && k !== 'document_type');
                 if (!otherFields.length) return null;
                 return (
-                  <div className="bg-[#0d1220] border border-white/5 rounded-lg px-3 py-2">
-                    <p className="text-[10px] font-medium text-gray-500 mb-1.5">📎 Other Details</p>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <div className="card">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">Other details</p>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                       {otherFields.map(([k, val]) => (
-                        <div key={k} className="flex flex-col">
-                          <span className="text-[9px] text-gray-500">{k.replace(/_/g, ' ')}</span>
-                          <div className="flex items-center gap-1 cursor-pointer group" onClick={() => { setEditingField(k); setEditValue(val || ''); }}>
-                            <span className="text-[11px] text-white truncate">{val}</span>
-                            <span className="text-[9px] text-gray-600 opacity-0 group-hover:opacity-100">✎</span>
-                          </div>
+                        <div key={k} className="flex flex-col gap-0.5">
+                          <span className="text-[10px] uppercase tracking-wide text-gray-500">{k.replace(/_/g, ' ')}</span>
+                          <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
+                            <span className="text-sm text-gray-100 truncate">{val}</span>
+                            <PencilSimple size={11} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -297,51 +276,49 @@ export default function CustomerDetail() {
                 );
               })()}
             </div>
-          ) : <p className="text-gray-600 text-sm">Select a person</p>}
+          </section>
+        </>
+      )}
 
-          {/* Extraction suggestions modal */}
-          {extractedSuggestions && (
-            <ExtractionConfirm
-              suggestions={extractedSuggestions}
-              documentId={extractDocId || ''}
-              onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); }}
-              onConfirm={confirmExtraction}
-            />
-          )}
-        </div>
-
-        {/* Right: Documents */}
-        {documents.length > 0 && <div className="col-span-3">
-          <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Documents from this household</h3>
-          {documents.length > 0 && (
-            <div className="space-y-2">
-              {documents.slice(0, 20).map(d => {
-                const ext = d.fileName?.split('.').pop()?.toLowerCase() || '';
-                const isImg = ['jpg','jpeg','png','gif','webp'].includes(ext);
-                const thumb = d.fileUrl?.replace('sz=w200','sz=w300');
-                return (
-                  <div key={d.id} className="bg-[#0d1220] border border-white/5 rounded-lg p-2 flex gap-2 items-center">
-                    {isImg ? (
-                      <img src={thumb} className="w-12 h-12 rounded object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded bg-white/5 flex items-center justify-center text-lg">{ext === 'pdf' ? '📕' : '📄'}</div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-white truncate">{ext.toUpperCase()} · {new Date(d.timestamp).toLocaleDateString()}</p>
+      {/* Documents */}
+      {documents.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Documents · {documents.length}</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {documents.slice(0, 12).map(d => {
+              const ext = d.fileName?.split('.').pop()?.toLowerCase() || '';
+              const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
+              const thumb = d.fileUrl?.replace('sz=w200', 'sz=w400');
+              return (
+                <div key={d.id} className="rounded-xl p-1.5 bg-white/[0.02] border border-white/[0.05]">
+                  <div className="rounded-lg bg-[#1c1c1e] overflow-hidden">
+                    <div className="aspect-[4/3] bg-black/40 flex items-center justify-center overflow-hidden">
+                      {isImg ? <img src={thumb} className="w-full h-full object-cover" />
+                        : ext === 'pdf' ? <FilePdf size={32} className="text-gray-600" />
+                          : <FileText size={32} className="text-gray-600" />}
+                    </div>
+                    <div className="p-2.5">
+                      <p className="text-[11px] text-gray-400 truncate mb-1.5">{ext.toUpperCase()} · {new Date(d.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
                       <button onClick={() => handleExtract(d)} disabled={extracting === d.id || !selectedPerson}
-                        className="text-[10px] text-blue-400 hover:underline disabled:text-gray-600">
-                        {extracting === d.id ? 'Extracting...' : 'Extract data'}
+                        className="flex items-center gap-1 text-[11px] text-[#0a84ff] hover:text-[#409cff] disabled:text-gray-600 transition-colors">
+                        <Sparkle size={11} weight="fill" /> {extracting === d.id ? 'Extracting…' : 'Extract data'}
                       </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>}
-      </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
-      {error && <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 mt-3 text-xs text-red-400">{error}</div>}
+      {/* Extraction confirm */}
+      {extractedSuggestions && (
+        <ExtractionConfirm suggestions={extractedSuggestions} documentId={extractDocId || ''}
+          onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); }} onConfirm={confirmExtraction} />
+      )}
+
+      {error && <div className="rounded-xl bg-[#ff453a]/10 border border-[#ff453a]/20 p-3 mt-4 text-sm text-[#ff453a]">{error}</div>}
     </div>
   );
 }
@@ -350,57 +327,59 @@ function AddPersonForm({ onSubmit, onCancel }: { onSubmit: (f: any) => void; onC
   const [name, setName] = useState('');
   const [relationship, setRelationship] = useState('self');
   return (
-    <div className="bg-[#0d1220] border border-white/5 rounded-xl p-3 mt-2">
-      <input value={name} onChange={e => setName(e.target.value)} placeholder="Name"
-        className="w-full px-2 py-1.5 bg-[#1a2236] border border-white/10 rounded text-xs text-white outline-none mb-2" />
-      <select value={relationship} onChange={e => setRelationship(e.target.value)}
-        className="w-full px-2 py-1.5 bg-[#1a2236] border border-white/10 rounded text-xs text-white outline-none mb-2">
-        {RELATIONSHIPS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-      </select>
-      <div className="flex gap-2">
-        <button onClick={() => onSubmit({ name, relationship })} disabled={!name}
-          className="flex-1 px-2 py-1 bg-blue-600 text-white text-xs rounded disabled:opacity-50">Add</button>
-        <button onClick={onCancel} className="px-2 py-1 bg-white/5 text-gray-400 text-xs rounded">Cancel</button>
+    <div className="card flex gap-3 items-end">
+      <div className="flex-1">
+        <label className="text-xs text-gray-400 mb-1 block">Name</label>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Family member name" className="input-field" />
       </div>
+      <div className="w-36">
+        <label className="text-xs text-gray-400 mb-1 block">Relationship</label>
+        <select value={relationship} onChange={e => setRelationship(e.target.value)} className="input-field">
+          {RELATIONSHIPS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+        </select>
+      </div>
+      <button onClick={() => onSubmit({ name, relationship })} disabled={!name} className="btn-primary">Add</button>
+      <button onClick={onCancel} className="btn-ghost">Cancel</button>
     </div>
   );
 }
 
-function ExtractionConfirm({ suggestions, documentId, onCancel, onConfirm }: any) {
+function ExtractionConfirm({ suggestions, onCancel, onConfirm }: any) {
   const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
-
-  const toggle = (key: string) => {
-    setAccepted((prev: any) => {
-      const next = { ...prev };
-      if (next[key]) delete next[key];
-      else next[key] = suggestions[key];
-      return next;
-    });
-  };
-
-  const updateValue = (key: string, value: string) => {
-    setAccepted((prev: any) => ({ ...prev, [key]: { ...prev[key], value, source: 'document_corrected' } }));
-  };
+  const toggle = (key: string) => setAccepted((prev: any) => {
+    const next = { ...prev };
+    if (next[key]) delete next[key]; else next[key] = suggestions[key];
+    return next;
+  });
+  const updateValue = (key: string, value: string) => setAccepted((prev: any) => ({ ...prev, [key]: { ...prev[key], value, source: 'document_corrected' } }));
 
   return (
-    <div className="bg-[#0d1220] border border-blue-500/30 rounded-xl p-4 mt-3">
-      <p className="text-sm font-medium text-blue-400 mb-3">Extracted from document — confirm fields</p>
-      <div className="space-y-2 mb-3">
-        {Object.entries(suggestions).map(([k, v]: [string, any]) => (
-          <div key={k} className="flex items-center gap-2">
-            <input type="checkbox" checked={!!accepted[k]} onChange={() => toggle(k)} />
-            <span className="text-xs text-gray-400 w-24 capitalize">{k.replace(/_/g, ' ')}</span>
-            <input
-              value={accepted[k]?.value || v.value || ''}
-              onChange={e => updateValue(k, e.target.value)}
-              disabled={!accepted[k]}
-              className="flex-1 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-xs text-white outline-none disabled:opacity-50" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onCancel}>
+      <div onClick={e => e.stopPropagation()} className="w-full max-w-lg rounded-[1.5rem] p-1.5 bg-white/[0.03] border border-white/[0.08] max-h-[85vh] flex flex-col">
+        <div className="rounded-[1.1rem] bg-[#1c1c1e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] p-5 flex flex-col min-h-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Sparkle size={18} weight="fill" className="text-[#0a84ff]" />
+            <p className="text-base font-semibold text-white">Review extracted data</p>
           </div>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <button onClick={() => onConfirm(accepted)} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded">Confirm & Save</button>
-        <button onClick={onCancel} className="px-3 py-1.5 bg-white/5 text-gray-400 text-xs rounded">Cancel</button>
+          <p className="text-xs text-gray-500 mb-4">Uncheck to skip. Edit values inline. Confirm to save.</p>
+          <div className="space-y-2 mb-4 overflow-y-auto flex-1">
+            {Object.entries(suggestions).map(([k, v]: [string, any]) => (
+              <label key={k} className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={!!accepted[k]} onChange={() => toggle(k)}
+                  className="w-4 h-4 rounded accent-[#0a84ff]" />
+                <span className="text-xs text-gray-400 w-28 capitalize shrink-0">{k.replace(/_/g, ' ')}</span>
+                <input value={accepted[k]?.value || v.value || ''} onChange={e => updateValue(k, e.target.value)} disabled={!accepted[k]}
+                  className="input-field text-xs py-1.5 flex-1 disabled:opacity-40" />
+              </label>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => onConfirm(accepted)} className="btn-primary flex items-center gap-2 flex-1 justify-center">
+              <CheckCircle size={16} weight="fill" /> Confirm & Save
+            </button>
+            <button onClick={onCancel} className="btn-secondary">Cancel</button>
+          </div>
+        </div>
       </div>
     </div>
   );

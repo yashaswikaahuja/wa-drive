@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
+import { ArrowLeft, Eye, Play, CheckCircle, XCircle } from '@phosphor-icons/react';
 import api, { API_URL } from '../../shared/api';
 import { extensionBridge } from '../../shared/extensionBridge';
 
@@ -27,12 +28,12 @@ interface ProgressState {
 }
 
 const STATUS_STYLE: Record<string, { bg: string; label: string; description: string }> = {
-  queued: { bg: 'bg-yellow-500/20 text-yellow-400', label: 'Queued', description: 'Waiting to start' },
-  in_progress: { bg: 'bg-blue-500/20 text-blue-400', label: 'In Progress', description: 'Runtime executing' },
-  needs_review: { bg: 'bg-orange-500/20 text-orange-400', label: 'Review Required', description: 'Automation completed its part. Human verification required.' },
-  completed: { bg: 'bg-green-500/20 text-green-400', label: 'Completed', description: 'Job finished successfully' },
-  failed: { bg: 'bg-red-500/20 text-red-400', label: 'Failed', description: 'Runtime could not complete' },
-  cancelled: { bg: 'bg-gray-500/20 text-gray-400', label: 'Cancelled', description: 'Operator cancelled' },
+  queued: { bg: 'badge badge-warning', label: 'Queued', description: 'Waiting to start' },
+  in_progress: { bg: 'badge badge-info', label: 'In Progress', description: 'Runtime executing' },
+  needs_review: { bg: 'badge badge-warning', label: 'Review Required', description: 'Automation completed its part. Human verification required.' },
+  completed: { bg: 'badge badge-success', label: 'Completed', description: 'Job finished successfully' },
+  failed: { bg: 'badge badge-danger', label: 'Failed', description: 'Runtime could not complete' },
+  cancelled: { bg: 'badge badge-danger', label: 'Cancelled', description: 'Operator cancelled' },
 };
 
 export default function JobDetail() {
@@ -132,7 +133,13 @@ export default function JobDetail() {
     } catch (e: any) { setError(e.message); }
   };
 
-  if (loading) return <div className="p-6 text-gray-500">Loading...</div>;
+  if (loading) return (
+    <div className="max-w-3xl space-y-4">
+      <div className="h-8 w-32 bg-white/[0.03] animate-pulse rounded-lg" />
+      <div className="h-24 bg-white/[0.03] animate-pulse rounded-2xl" />
+      <div className="h-48 bg-white/[0.03] animate-pulse rounded-2xl" />
+    </div>
+  );
   if (error && !job) return <div className="p-6 text-red-400">{error}</div>;
   if (!job) return null;
 
@@ -145,27 +152,29 @@ export default function JobDetail() {
   return (
     <div className="max-w-3xl">
       {/* Back */}
-      <button onClick={() => navigate('/app/jobs')} className="text-xs text-blue-400 mb-4 hover:underline">← Back to Jobs</button>
+      <button onClick={() => navigate('/app/jobs')} className="btn-ghost flex items-center gap-1.5 text-xs mb-4">
+        <ArrowLeft size={14} weight="bold" /> Back to Jobs
+      </button>
 
       {/* Header */}
       <div className="flex items-start gap-4 mb-6">
         <span className="text-3xl">{job.service_icon}</span>
         <div className="flex-1">
-          <h1 className="text-xl font-bold text-white">{job.customer_name}</h1>
-          <p className="text-sm text-gray-500">{job.service_label} · {job.customer_phone}</p>
+          <h1 className="text-xl font-semibold text-white tracking-tight">{job.customer_name}</h1>
+          <p className="text-sm text-gray-400">{job.service_label} · {job.customer_phone}</p>
         </div>
-        <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg}`}>
+        <span className={statusInfo.bg}>
           {statusInfo.label}
         </span>
       </div>
 
       {/* Status Banner — accountability handoff */}
       {needsReview && (
-        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-5 mb-4">
+        <div className="card p-5 mb-4" style={{ borderColor: 'rgba(249,115,22,0.2)' }}>
           <div className="flex items-start gap-3">
-            <span className="text-2xl">👁️</span>
+            <Eye size={24} className="text-orange-400 mt-0.5" weight="duotone" />
             <div>
-              <p className="text-sm font-bold text-orange-400 mb-1">Review Required</p>
+              <p className="text-sm font-semibold text-orange-400 mb-1">Review Required</p>
               <p className="text-xs text-gray-400">Automation completed its part. Please verify the form on the page, make any corrections, and submit when ready.</p>
             </div>
           </div>
@@ -174,18 +183,18 @@ export default function JobDetail() {
 
       {/* Live Progress (in_progress only) */}
       {isInProgress && (
-        <div className="bg-[#0d1220] border border-blue-500/20 rounded-xl p-5 mb-4">
+        <div className="card p-5 mb-4" style={{ borderColor: 'rgba(10,132,255,0.2)' }}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#0a84ff' }} />
             <p className="text-sm font-medium text-white">Executing</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-[11px] text-gray-500 uppercase">Filled</p>
+              <p className="text-[11px] text-gray-500 uppercase tracking-wide">Filled</p>
               <p className="text-2xl font-bold text-green-400">{progress.totalFilled}</p>
             </div>
             <div>
-              <p className="text-[11px] text-gray-500 uppercase">Failed</p>
+              <p className="text-[11px] text-gray-500 uppercase tracking-wide">Failed</p>
               <p className="text-2xl font-bold text-red-400">{progress.totalFailed}</p>
             </div>
           </div>
@@ -196,8 +205,8 @@ export default function JobDetail() {
       )}
 
       {/* Service Info */}
-      <div className="bg-[#0d1220] border border-white/5 rounded-xl p-5 mb-4">
-        <h3 className="text-xs font-medium text-gray-500 uppercase mb-3">Service Details</h3>
+      <div className="card p-5 mb-4">
+        <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Service Details</h3>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between"><span className="text-gray-500">Service</span><span className="text-white">{job.service_label}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">Customer</span><span className="text-white">{job.customer_name}</span></div>
@@ -211,15 +220,15 @@ export default function JobDetail() {
 
       {/* Notes */}
       {job.notes && (
-        <div className="bg-[#0d1220] border border-white/5 rounded-xl p-5 mb-4">
-          <h3 className="text-xs font-medium text-gray-500 uppercase mb-2">Notes</h3>
+        <div className="card p-5 mb-4">
+          <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Notes</h3>
           <p className="text-sm text-gray-300 whitespace-pre-wrap">{job.notes}</p>
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
+        <div className="card p-3 mb-4" style={{ borderColor: 'rgba(239,68,68,0.2)' }}>
           <p className="text-xs text-red-400">{error}</p>
         </div>
       )}
@@ -228,20 +237,21 @@ export default function JobDetail() {
       <div className="flex gap-2 flex-wrap">
         {isQueued && (
           <button onClick={handleStart} disabled={dispatching}
-            className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 disabled:opacity-50">
-            {dispatching ? 'Dispatching...' : '▶ Start Job'}
+            className="btn-primary flex items-center gap-1.5 disabled:opacity-50">
+            <Play size={16} weight="fill" />
+            {dispatching ? 'Dispatching...' : 'Start Job'}
           </button>
         )}
         {needsReview && (
           <button onClick={handleComplete}
-            className="px-5 py-2.5 bg-green-600 text-white rounded-lg font-semibold text-sm hover:bg-green-700">
-            ✓ Mark Completed
+            className="btn-primary flex items-center gap-1.5" style={{ background: '#30d158' }}>
+            <CheckCircle size={16} weight="bold" /> Mark Completed
           </button>
         )}
         {!isDone && (
           <button onClick={handleCancel}
-            className="px-5 py-2.5 bg-white/5 text-red-400 rounded-lg text-sm hover:bg-red-500/10">
-            Cancel
+            className="btn-ghost text-red-400 flex items-center gap-1.5 hover:bg-red-500/10">
+            <XCircle size={16} /> Cancel
           </button>
         )}
       </div>

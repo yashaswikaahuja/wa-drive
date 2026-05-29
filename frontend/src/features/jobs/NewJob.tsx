@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft } from '@phosphor-icons/react';
 import api from '../../shared/api';
 
 interface Person { id: string; name: string; displayLabel: string; relationship: string; }
@@ -30,7 +31,7 @@ export default function NewJob() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <h1 className="text-xl font-bold text-white mb-6">New Job</h1>
+      <h1 className="text-xl font-semibold text-white tracking-tight mb-6">New Job</h1>
 
       {step === 1 && (
         <div>
@@ -40,16 +41,17 @@ export default function NewJob() {
           ) : (
             <div className="space-y-3">
               {households.map(h => (
-                <div key={h.phone} className="bg-[#0d1220] border border-white/5 rounded-xl p-3">
+                <div key={h.phone} className="card p-3">
                   <p className="text-xs text-gray-500 mb-2 px-2">{h.phone}</p>
                   <div className="space-y-1">
                     {h.persons.map(p => (
                       <button key={p.id} onClick={() => { setSelectedPerson({ household: h, person: p }); setStep(2); }}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-blue-600/20 hover:text-blue-300 text-sm text-white flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold">{p.name?.[0]}</div>
+                        className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-[#0a84ff]/20 text-sm text-white flex items-center gap-2 transition-all"
+                        style={{ transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'rgba(10,132,255,0.3)' }}>{p.name?.[0]}</div>
                         <div>
                           <div>{p.displayLabel || p.name}</div>
-                          <div className="text-[10px] text-gray-500 capitalize">{p.relationship}</div>
+                          <div className="text-[11px] text-gray-500 capitalize">{p.relationship}</div>
                         </div>
                       </button>
                     ))}
@@ -63,13 +65,16 @@ export default function NewJob() {
 
       {step === 2 && selectedPerson && (
         <div>
-          <button onClick={() => setStep(1)} className="text-xs text-blue-400 mb-4 hover:underline">← Back</button>
+          <button onClick={() => setStep(1)} className="btn-ghost flex items-center gap-1.5 text-xs mb-4">
+            <ArrowLeft size={14} weight="bold" /> Back
+          </button>
           <p className="text-sm text-gray-400 mb-1">Step 2 — Select Service for</p>
           <p className="text-white font-medium mb-4">{selectedPerson.person.displayLabel || selectedPerson.person.name} <span className="text-xs text-gray-500">({selectedPerson.household.phone})</span></p>
           <div className="grid grid-cols-2 gap-3">
             {services.map(s => (
               <button key={s.id} onClick={() => handleLaunch(s)} disabled={loading}
-                className="bg-[#0d1220] border border-white/5 rounded-xl p-5 text-center hover:border-blue-500/30 transition disabled:opacity-50">
+                className="card p-5 text-center transition-all disabled:opacity-50"
+                style={{ transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}>
                 <span className="text-2xl block mb-2">{s.icon}</span>
                 <p className="text-sm text-white font-medium">{s.label}</p>
               </button>
