@@ -117,4 +117,49 @@ router.delete('/households/:phone', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// GET /api/customers/group-docs/:phone — group a phone's documents by extracted name
+// Each ID doc's cached extraction has a 'name'. Docs with the same (fuzzy) name belong
+// to the same applicant. Nameless docs (photo/signature/aadhaar-back) are returned ungrouped
+// for the operator to assign manually.
+router.get('/group-docs/:phone', authMiddleware, async (req: any, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { rows } = await pool.query(
+      `SELECT d.id, d.file_name as "fileName", d.tag, d.uploaded_at as "uploadedAt", e.suggested
+       FROM drive_files d
+       LEFT JOIN extraction_cache e ON e.file_id = d.id
+       WHERE d.workspace_id = $1 AND d.customer_id = $2
+       ORDER BY d.uploaded_at DESC`,
+      [req.user.workspaceId, phone]
+    );
+
+    const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+    // similarity: one name contained in the other, or share first+last token
+    function sameName(a: string, b: string): boolean {
+      const na = norm(a), nb = norm(b);
+      if (!na || !nb) return false;
+      if (na === nb) return true;
+      if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true;
+      const ta = a.toLowerCase().split(/\s+/).filter(Boolean);
+      const tb = b.toLowerCase().split(/\s+/).filter(Boolean);
+      const shared = ta.filter(t => t.length >= 3 && tb.includes(t));
+      return shared.length >= 2; // at least 2 shared name tokens
+    }
+
+    const groups: { name: string; docs: any[] }[] = [];
+    const ungrouped: any[] = [];
+
+    for (const d of rows) {
+      const name = d.suggested?.name?.value || d.suggested?.name || '';
+      const doc = { id: d.id, fileName: d.fileName, tag: d.tag, hasName: !!name, name };
+      if (!name) { ungrouped.push(doc); continue; }
+      const g = groups.find(grp => sameName(grp.name, name));
+      if (g) { g.docs.push(doc); if (name.length > g.name.length) g.name = name; }
+      else groups.push({ name, docs: [doc] });
+    }
+
+    res.json({ groups, ungrouped });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

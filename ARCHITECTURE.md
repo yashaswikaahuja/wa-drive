@@ -394,8 +394,15 @@ Customer sends photo on WhatsApp
 
 STEP 2: Data Extraction
 ─────────────────────────
+Multi-applicant grouping: one phone may send docs for several people (self,
+spouse, child). Docs are grouped by extracted 'name' (fuzzy match on shared
+tokens / containment). Same name → same applicant → merge into one profile.
+Nameless docs (photo, signature, Aadhaar-back) returned ungrouped for the
+operator to assign. Endpoint: GET /api/customers/group-docs/:phone.
+Works on docs that arrived after auto-extract (they have cached names).
+
 Operator selects documents → clicks "Build Profile"
-  → Frontend sends files to POST /process/extract (parallel)
+  → Frontend sends files to POST /process/extract (parallel, or cached)
   → Backend downloads from Drive → sends to Groq Vision
   → Groq returns structured fields (name, DOB, address, etc.)
   → Frontend shows review modal
