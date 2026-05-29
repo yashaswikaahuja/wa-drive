@@ -69,7 +69,7 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
   const hasThumbnail = isImage || isVideo || isPdf;
   const { icon, badge } = docTitle(alt || ('file.' + ext));
   return (
-    <div ref={ref} className="w-[72px] h-[72px] rounded-xl bg-white/5 relative overflow-hidden flex items-center justify-center">
+    <div ref={ref} className="w-[120px] h-[120px] rounded-xl bg-white/5 relative overflow-hidden flex items-center justify-center">
       {visible && src && hasThumbnail && !imgError ? (
         <>
           <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt}
@@ -92,7 +92,7 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
 
 const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
-  const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w400' : (msg.fileUrl?.replace('sz=w200','sz=w400') || msg.fileUrl);
+  const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w600' : (msg.fileUrl?.replace('sz=w200','sz=w600') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
   const category = msg.tag ? { category: msg.tag, color: 'bg-yellow-500/20 text-yellow-400' } : docCategory(msg.fileName || '');
 
