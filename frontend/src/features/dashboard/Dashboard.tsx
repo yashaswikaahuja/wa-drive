@@ -16,8 +16,8 @@ export default function Dashboard() {
 
   const cards = [
     { label: 'Active Jobs', value: stats.jobsQueued + (stats.jobsInProgress || 0), icon: Briefcase, color: 'text-amber-400' },
-    { label: 'Customers', value: stats.profiles, icon: Users, color: 'text-teal-400' },
-    { label: 'Total Fills', value: stats.filled, icon: CheckCircle, color: 'text-emerald-400' },
+    { label: 'Customers', value: stats.profiles, icon: Users, color: 'text-blue-400' },
+    { label: 'Total Fills', value: stats.filled, icon: CheckCircle, color: 'text-green-400' },
     { label: 'Corrections', value: stats.corrections, icon: PencilSimple, color: 'text-orange-400' },
   ];
 
@@ -71,3 +71,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

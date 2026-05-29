@@ -66,8 +66,8 @@ export default function Login() {
     <div className="min-h-[100dvh] flex items-center justify-center" style={{ background: 'var(--background)' }}>
       <div className="w-full max-w-sm p-8 card">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-9 h-9 rounded-md bg-teal-500/10 flex items-center justify-center">
-            <Lightning size={20} weight="fill" className="text-teal-400" />
+          <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center">
+            <Lightning size={20} weight="fill" className="text-blue-400" />
           </div>
           <div>
             <h1 className="text-lg font-semibold text-white tracking-tight">CyberControl</h1>
@@ -101,3 +101,4 @@ export default function Login() {
     </div>
   );
 }
+

@@ -18,16 +18,16 @@ interface Household { phone: string; persons: Person[]; person_count: string; }
 function docCategory(fileName: string): { category: string; color: string } | null {
   const name = fileName.toLowerCase();
   if (/aadh|aadhaar|adhar|uid/i.test(name)) return { category: 'Aadhaar', color: 'bg-orange-500/20 text-orange-400' };
-  if (/pan[\s_-]?card|pan[\s_.]|pancard/i.test(name)) return { category: 'PAN', color: 'bg-blue-500/20 text-teal-400' };
+  if (/pan[\s_-]?card|pan[\s_.]|pancard/i.test(name)) return { category: 'PAN', color: 'bg-blue-500/20 text-blue-400' };
   if (/passport|pport/i.test(name)) return { category: 'Passport', color: 'bg-purple-500/20 text-purple-400' };
   if (/mark\s?sheet|result|10th|12th|matric|inter|hsc|ssc/i.test(name)) return { category: 'Marksheet', color: 'bg-green-500/20 text-green-400' };
-  if (/degree|graduat|diploma|certif/i.test(name)) return { category: 'Certificate', color: 'bg-teal-500/20 text-teal-400' };
+  if (/degree|graduat|diploma|certif/i.test(name)) return { category: 'Certificate', color: 'bg-blue-500/20 text-blue-400' };
   if (/photo|passport.?size|selfie|dp|pic/i.test(name)) return { category: 'Photo', color: 'bg-pink-500/20 text-pink-400' };
   if (/voter|epic|election/i.test(name)) return { category: 'Voter ID', color: 'bg-yellow-500/20 text-yellow-400' };
   if (/driv.*lic|dl[\s_.-]/i.test(name)) return { category: 'Driving License', color: 'bg-red-500/20 text-red-400' };
   if (/ration|bpl|apl/i.test(name)) return { category: 'Ration Card', color: 'bg-amber-500/20 text-amber-400' };
   if (/caste|obc|sc[\s_]|st[\s_]|category/i.test(name)) return { category: 'Caste Cert', color: 'bg-indigo-500/20 text-indigo-400' };
-  if (/income|salary|itr/i.test(name)) return { category: 'Income', color: 'bg-emerald-500/20 text-emerald-400' };
+  if (/income|salary|itr/i.test(name)) return { category: 'Income', color: 'bg-emerald-500/20 text-green-400' };
   if (/domicile|residen/i.test(name)) return { category: 'Domicile', color: 'bg-cyan-500/20 text-cyan-400' };
   if (/bank|passbook|cheque|ifsc/i.test(name)) return { category: 'Bank', color: 'bg-sky-500/20 text-sky-400' };
   if (/sign|signature/i.test(name)) return { category: 'Signature', color: 'bg-violet-500/20 text-violet-400' };
@@ -104,7 +104,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   );
 
   return (
-    <div className={`rounded-lg p-3 flex gap-3 max-w-[480px] transition group ${selected ? 'border border-teal-500/40 bg-teal-500/5' : 'border border-transparent hover:bg-white/[0.02]'}`} style={{ background: selected ? undefined : 'var(--card)' }}>
+    <div className={`rounded-lg p-3 flex gap-3 max-w-[480px] transition group ${selected ? 'border border-blue-500/40 bg-blue-500/5' : 'border border-transparent hover:bg-white/[0.02]'}`} style={{ background: selected ? undefined : 'var(--card)' }}>
       {selectionMode && (
         <input
           type="checkbox"
@@ -123,7 +123,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         </div>
         {!selectionMode && (
           <div className="flex flex-wrap gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
-            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.04] text-teal-400 hover:bg-white/[0.06]">Open</button>
+            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.04] text-blue-400 hover:bg-white/[0.06]">Open</button>
             <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="text-[10px] px-2 py-0.5 rounded-md bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">Tag</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30">Photo Tool</button>
@@ -137,9 +137,9 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
 
 const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: any) => (
   <div onClick={() => onClick(chat.phone)}
-    className={`px-3 py-3 border-b cursor-pointer transition-colors hover:bg-white/[0.03] ${selected ? 'bg-teal-500/5' : ''}`} style={{ borderColor: 'var(--border)' }}>
+    className={`px-3 py-3 border-b cursor-pointer transition-colors hover:bg-white/[0.03] ${selected ? 'bg-blue-500/5' : ''}`} style={{ borderColor: 'var(--border)' }}>
     <div className="flex items-center gap-2.5">
-      <div className="w-9 h-9 rounded-md bg-teal-500/10 flex items-center justify-center text-teal-400 text-xs font-semibold shrink-0 overflow-hidden">
+      <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-semibold shrink-0 overflow-hidden">
         {chat.dpUrl ? <img src={chat.dpUrl} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display='none')} /> : null}
         {!chat.dpUrl && (chat.name[0]?.toUpperCase() || '?')}
       </div>
@@ -149,7 +149,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-[10px] text-gray-600">{timeAgo(chat.lastTime)}</span>
-        {unreadCount > 0 && <span className="w-5 h-5 rounded-full bg-teal-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadCount}</span>}
+        {unreadCount > 0 && <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadCount}</span>}
       </div>
       <button onClick={(e) => { e.stopPropagation(); onPin(chat.phone); }} className="text-gray-600 hover:text-white text-xs opacity-0 group-hover:opacity-100" title={pinned ? 'Unpin' : 'Pin'}>📌</button>
     </div>
@@ -649,7 +649,7 @@ export default function WhatsApp() {
         ) : (
           <>
             <div className="h-14 px-4 flex items-center gap-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
-              <div className="w-9 h-9 rounded-md bg-teal-500/10 flex items-center justify-center text-teal-400 font-semibold text-sm">
+              <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm">
                 {activeChat.name[0]?.toUpperCase()}
               </div>
               <div className="flex-1">
@@ -660,7 +660,7 @@ export default function WhatsApp() {
                 <div className="flex items-center gap-2">
                   <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search..." className="input-field w-28 text-xs py-1" />
                   <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="btn-ghost text-xs text-orange-400 hover:text-orange-300">Request</button>
-                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="btn-ghost text-xs text-teal-400 hover:text-teal-300">Profile</button>
+                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="btn-ghost text-xs text-blue-400 hover:text-teal-300">Profile</button>
                   <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="btn-ghost text-xs">Assign</button>
                   <button onClick={() => setSelectionMode(true)} className="btn-ghost text-xs">Select</button>
                 </div>
@@ -874,7 +874,7 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
       <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-blue-500/30 rounded-xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
-        <p className="text-sm font-medium text-teal-400 mb-3">Review extracted fields</p>
+        <p className="text-sm font-medium text-blue-400 mb-3">Review extracted fields</p>
         <p className="text-xs text-gray-500 mb-4">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
         <div className="space-y-2 mb-4">
           {Object.entries(suggestions).map(([k, v]: [string, any]) => (
@@ -897,3 +897,4 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
     </div>
   );
 }
+

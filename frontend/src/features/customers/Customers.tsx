@@ -89,7 +89,7 @@ export default function Customers() {
           {filtered.map(h => (
             <div key={h.phone} onClick={() => navigate(`/app/customers/${encodeURIComponent(h.phone)}`)}
               className="group flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all hover:bg-white/[0.03]">
-              <div className="w-9 h-9 rounded-md bg-teal-500/10 flex items-center justify-center text-teal-400 font-semibold text-sm">
+              <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm">
                 {h.persons[0]?.name?.[0]?.toUpperCase() || '?'}
               </div>
               <div className="flex-1 min-w-0">
@@ -113,3 +113,4 @@ export default function Customers() {
     </div>
   );
 }
+

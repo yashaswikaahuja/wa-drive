@@ -11,7 +11,7 @@ const ExtensionStatus = memo(() => {
   const [status, setStatus] = useState<'unknown' | 'connecting' | 'connected' | 'disconnected'>('unknown');
   const [version, setVersion] = useState<string | null>(null);
   useEffect(() => extensionBridge.onStatus((s, v) => { setStatus(s); setVersion(v); }), []);
-  const dot = status === 'connected' ? 'bg-emerald-400' : status === 'connecting' ? 'bg-amber-400 animate-pulse' : status === 'disconnected' ? 'bg-red-400' : 'bg-gray-500';
+  const dot = status === 'connected' ? 'bg-green-400' : status === 'connecting' ? 'bg-amber-400 animate-pulse' : status === 'disconnected' ? 'bg-red-400' : 'bg-gray-500';
   const label = status === 'connected' ? `Extension v${version || '?'}` : status === 'connecting' ? 'Connecting...' : status === 'disconnected' ? 'Extension off' : 'Checking...';
   return (
     <div className="flex items-center gap-2 px-2 py-1.5">
@@ -47,7 +47,7 @@ const NavItem = memo(({ path, icon: Icon, label, end }: any) => {
       className={({ isActive }) => `sidebar-item ${isActive ? 'active' : ''}`}>
       <Icon size={18} weight={undefined} />
       <span>{label}</span>
-      {badge > 0 && <span className="ml-auto w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] flex items-center justify-center font-bold">{badge}</span>}
+      {badge > 0 && <span className="ml-auto w-4 h-4 rounded-full bg-green-500 text-white text-[9px] flex items-center justify-center font-bold">{badge}</span>}
     </NavLink>
   );
 });
@@ -59,9 +59,9 @@ const Sidebar = memo(({ user, logout }: any) => {
     : OPERATOR_NAV, [isAdmin]);
 
   return (
-    <aside className="w-52 flex flex-col border-r" style={{ background: 'var(--card)', borderColor: 'var(--border)' }}>
+    <aside className="w-52 flex flex-col border-r" style={{ background: '#0a0a0a', borderColor: 'var(--border)' }}>
       <div className="h-12 flex items-center gap-2 px-4 border-b" style={{ borderColor: 'var(--border)' }}>
-        <Lightning size={18} weight="fill" className="text-teal-400" />
+        <Lightning size={18} weight="fill" className="text-blue-400" />
         <span className="text-sm font-semibold text-white tracking-tight">CyberControl</span>
       </div>
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
@@ -73,7 +73,7 @@ const Sidebar = memo(({ user, logout }: any) => {
       <div className="p-3 border-t space-y-2" style={{ borderColor: 'var(--border)' }}>
         <ExtensionStatus />
         <div className="flex items-center gap-2 px-2">
-          <div className="w-7 h-7 rounded-md bg-teal-500/10 flex items-center justify-center text-teal-400 text-xs font-semibold">
+          <div className="w-7 h-7 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-semibold">
             {user?.name?.[0]?.toUpperCase() || '?'}
           </div>
           <div className="flex-1 min-w-0">
@@ -101,3 +101,4 @@ export default function Layout() {
     </div>
   );
 }
+
