@@ -77,7 +77,7 @@ export default function Dashboard() {
               placeholder="Search customer or form..."
               className="w-full pl-12 pr-24 py-3.5 rounded-[0.95rem] text-base bg-[#1c1c1e] text-white placeholder:text-gray-600 outline-none shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] focus:shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_0_0_2px_rgba(10,132,255,0.25)] transition-all"
               style={{ transitionTimingFunction: EASE, transitionDuration: '300ms' }}
-              onKeyDown={e => { if (e.key === 'Enter' && search.trim()) navigate(`/app/customers?q=${encodeURIComponent(search)}`); }}
+              onKeyDown={e => { if (e.key === 'Enter' && search.trim()) navigate(`/app/forms?q=${encodeURIComponent(search)}`); }}
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-gray-600 font-mono hidden sm:block">↵ Enter</span>
           </div>

@@ -28,6 +28,7 @@ import whatsappRoutes from './modules/whatsapp/routes.js';
 import customersRoutes from './modules/customers/routes.js';
 import jobsRoutes from './modules/jobs/routes.js';
 import dashboardRoutes from './modules/dashboard/routes.js';
+import formsRoutes from './modules/forms/routes.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -58,6 +59,7 @@ app.use('/api/customers', customersRoutes);
 // /api/profiles, /api/mappings, /api/adapters → extension-service (port 3300, routed by nginx)
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/forms', formsRoutes);
 
 // GET /api/services
 app.get('/api/services', authMiddleware, async (req: any, res) => {
