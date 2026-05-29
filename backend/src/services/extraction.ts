@@ -77,11 +77,30 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
   const buf = Buffer.from(buffer);
   setTimeout(async () => {
     try {
-      const { suggested } = await extractFromBuffer(buf, fileId);
+      const { suggested, raw } = await extractFromBuffer(buf, fileId);
+      // Persist AI-detected document type as the file's tag (drives chat badge + smart selection)
+      const docType = (raw?.document_type || '').toString().trim();
+      if (docType) {
+        const label = DOC_TYPE_LABELS[docType] || null;
+        try { await pool.query('UPDATE drive_files SET tag = $1 WHERE id = $2 AND tag IS NULL', [label, fileId]); } catch {}
+      }
       if (Object.keys(suggested).length > 0) {
         await cacheExtraction(fileId, workspaceId, suggested);
-        console.log(`[AutoExtract] ✓ ${fileId} → ${Object.keys(suggested).length} fields cached`);
+        console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields cached`);
+      } else {
+        console.log(`[AutoExtract] ${fileId} → ${docType || 'no-data'} (not an ID doc)`);
       }
     } catch (e: any) { console.warn(`[AutoExtract] ✗ ${fileId}:`, e.message); }
   }, 500);
 }
+
+// Map raw document_type → human label used as the file tag
+const DOC_TYPE_LABELS: Record<string, string> = {
+  aadhaar: 'Aadhaar', pan: 'PAN', passport: 'Passport', voter_id: 'Voter ID',
+  driving_license: 'Driving License', ration_card: 'Ration Card',
+  marksheet_10th: '10th Marksheet', marksheet_12th: '12th Marksheet',
+  marksheet_graduation: 'Graduation', marksheet_postgrad: 'Post-Grad',
+  admit_card: 'Admit Card', result: 'Result', certificate: 'Certificate',
+  bank_passbook: 'Bank', photo: 'Photo', signature: 'Signature',
+  form: 'Form', other: 'Other',
+};

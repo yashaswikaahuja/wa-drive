@@ -388,7 +388,9 @@ Customer sends photo on WhatsApp
   → Notifies backend via webhook
   → Backend stores file reference
   → Frontend shows notification
-  → [FUTURE] Auto-categorize (Aadhaar/PAN/Photo/Junk)
+  → [DONE] Auto-categorize via AI on arrival — document_type stored as file tag
+    (Aadhaar / 10th Marksheet / Photo / Other). Chat shows green badge for ID docs,
+    gray for junk. "Select IDs" auto-picks only form-relevant documents.
 
 STEP 2: Data Extraction
 ─────────────────────────

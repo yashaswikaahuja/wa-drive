@@ -94,7 +94,11 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w600' : (msg.fileUrl?.replace('sz=w200','sz=w600') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
-  const category = msg.tag ? { category: msg.tag, color: 'bg-yellow-500/20 text-yellow-400' } : docCategory(msg.fileName || '');
+  const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+  const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag); // Photo / Other / Signature / Form
+  const category = msg.tag
+    ? { category: msg.tag, color: isJunkTag ? 'bg-white/10 text-gray-500' : 'bg-green-500/15 text-green-400' }
+    : docCategory(msg.fileName || '');
 
   if (msg.text && !msg.fileName) return (
     <div className="bg-[var(--secondary)] rounded-lg px-3 py-2 max-w-[80%]">
@@ -665,7 +669,22 @@ export default function WhatsApp() {
                   <button onClick={() => setSelectionMode(true)} className="btn-ghost text-xs">Select</button>
                 </div>
               ) : (
-                <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => {
+                    // Smart-select only document-type files (skip greetings/photos/junk)
+                    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+                    const msgs = activeChat?.messages || [];
+                    const next = new Map(selectedDocs);
+                    let n = 0;
+                    for (const m of msgs) {
+                      const tag = m.tag || (m.fileName ? docCategory(m.fileName)?.category : null);
+                      if (tag && ID_TAGS.includes(tag)) { next.set(m.id, m); n++; }
+                    }
+                    setSelectedDocs(next);
+                    if (n === 0) toast.info('No ID documents detected yet — select manually');
+                  }} className="btn-ghost text-xs text-teal-400 hover:text-teal-300">Select IDs</button>
+                  <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
+                </div>
               )}
             </div>
             <div ref={msgContainerRef} onScroll={() => { const el = msgContainerRef.current; if (el) userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 100; }} className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
