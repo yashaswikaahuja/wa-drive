@@ -162,14 +162,24 @@ export default function FormDirectory() {
                       )}
 
                       {/* CTA — button-in-button */}
-                      <a href={f.url} target="_blank" rel="noopener noreferrer"
-                        className="group inline-flex items-center gap-2 pl-5 pr-2 py-2 rounded-full font-medium text-sm text-white active:scale-[0.98] transition-all"
-                        style={{ background: tint, transitionTimingFunction: EASE, transitionDuration: '300ms' }}>
-                        Open {f.short_name}
-                        <span className="w-7 h-7 rounded-full bg-black/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform" style={{ transitionTimingFunction: EASE, transitionDuration: '300ms' }}>
-                          <ArrowSquareOut size={14} weight="bold" />
-                        </span>
-                      </a>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <a href={f.url} target="_blank" rel="noopener noreferrer"
+                          className="group inline-flex items-center gap-2 pl-5 pr-2 py-2 rounded-full font-medium text-sm text-white active:scale-[0.98] transition-all"
+                          style={{ background: tint, transitionTimingFunction: EASE, transitionDuration: '300ms' }}>
+                          Open {f.short_name}
+                          <span className="w-7 h-7 rounded-full bg-black/20 flex items-center justify-center group-hover:translate-x-0.5 transition-transform" style={{ transitionTimingFunction: EASE, transitionDuration: '300ms' }}>
+                            <ArrowSquareOut size={14} weight="bold" />
+                          </span>
+                        </a>
+                        {(f.photo_specs || f.signature_specs) && (
+                          <a
+                            href={`/app/forms/photo?form=${encodeURIComponent(f.short_name)}${f.photo_specs ? `&photo=${encodeURIComponent(JSON.stringify(f.photo_specs))}` : ''}${f.signature_specs ? `&signature=${encodeURIComponent(JSON.stringify(f.signature_specs))}` : ''}`}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm text-gray-200 bg-white/[0.06] border border-white/[0.06] hover:bg-white/[0.1] active:scale-[0.98] transition-all"
+                            style={{ transitionTimingFunction: EASE, transitionDuration: '300ms' }}>
+                            <Camera size={15} /> Prepare Photo
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
