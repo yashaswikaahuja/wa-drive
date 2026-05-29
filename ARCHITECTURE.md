@@ -556,10 +556,11 @@ Conservative mode:
 - [x] Auto-extract on doc arrival (background, cached) — Build Profile is now instant; operator still reviews (trust preserved)
 
 ### Phase 3 — Network Effect
-- [ ] Global mappings (cross-workspace)
-- [ ] Mapping confidence scoring
+- [x] Global mappings (already cross-workspace — single shared form_mappings.json keyed by semanticFormKey)
+- [x] Live fill_count + confidence per form (matches session hostnames across ALL workspaces)
+- [x] "Filled X times · 95%" social-proof badge in Form Directory + `/api/forms/confidence` for extension
 - [ ] "First time on this form" conservative mode
-- [ ] Correction-based learning
+- [ ] Correction-based learning (confidence drops when corrections rise)
 
 ### Phase 4 — Habit Formation
 - [ ] Home screen = work queue (pending/ready/recent)

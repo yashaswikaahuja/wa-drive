@@ -11,7 +11,7 @@ interface FormSpec { width: number; height: number; minKB: number; maxKB: number
 interface Form {
   id: string; name: string; short_name: string; portal: string; url: string;
   required_documents: string[]; fee: Record<string, number>;
-  photo_specs: FormSpec | null; signature_specs: FormSpec | null; fill_count: number;
+  photo_specs: FormSpec | null; signature_specs: FormSpec | null; fill_count: number; confidence?: number | null;
 }
 
 const PORTAL_TINT: Record<string, string> = {
@@ -120,9 +120,12 @@ export default function FormDirectory() {
                       <p className="text-xs text-gray-500 truncate">{f.name}</p>
                     </div>
                     {f.fill_count > 0 && (
-                      <span className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500 shrink-0">
+                      <span className="hidden sm:flex items-center gap-1.5 text-[11px] shrink-0">
                         <CheckCircle size={12} weight="fill" className="text-[#30d158]" />
-                        {f.fill_count}×
+                        <span className="text-gray-400">filled {f.fill_count}×</span>
+                        {f.confidence != null && f.confidence >= 70 && (
+                          <span className="text-[#30d158] font-medium">· {f.confidence}%</span>
+                        )}
                       </span>
                     )}
                   </button>

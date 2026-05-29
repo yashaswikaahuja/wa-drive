@@ -4,28 +4,61 @@ import { authMiddleware } from '../../middleware/auth.js';
 
 const router = Router();
 
+// Build a map of hostname → { fills, filled, failed } across ALL workspaces (network effect)
+async function getHostnameStats(): Promise<Record<string, { fills: number; filled: number; failed: number }>> {
+  const { rows } = await pool.query(
+    `SELECT hostname, COUNT(*)::int as fills, COALESCE(SUM(total_filled),0)::int as filled, COALESCE(SUM(total_failed),0)::int as failed
+     FROM sessions WHERE hostname IS NOT NULL GROUP BY hostname`
+  );
+  const map: Record<string, any> = {};
+  for (const r of rows) map[r.hostname] = { fills: r.fills, filled: r.filled, failed: r.failed };
+  return map;
+}
+
+// Match a form URL to session stats by hostname (handles www. prefix + subdomain)
+function statsForUrl(url: string, stats: Record<string, any>) {
+  let host = '';
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return { fills: 0, confidence: null }; }
+  let agg = { fills: 0, filled: 0, failed: 0 };
+  for (const [h, s] of Object.entries(stats)) {
+    const hn = h.replace(/^www\./, '');
+    if (hn === host || hn.endsWith('.' + host) || host.endsWith('.' + hn)) {
+      agg.fills += s.fills; agg.filled += s.filled; agg.failed += s.failed;
+    }
+  }
+  const total = agg.filled + agg.failed;
+  const confidence = total > 0 ? Math.round((agg.filled / total) * 100) : null;
+  return { fills: agg.fills, confidence };
+}
+
 // GET /api/forms/search?q=railway
 router.get('/search', authMiddleware, async (req: any, res) => {
   try {
     const q = (req.query.q || '').toString().trim().toLowerCase();
-    if (!q) {
-      const { rows } = await pool.query(
-        `SELECT id, name, short_name, portal, url, required_documents, fee, photo_specs, signature_specs, fill_count
-         FROM forms WHERE status = 'active' ORDER BY fill_count DESC, short_name LIMIT 20`
-      );
-      return res.json(rows);
-    }
-    const { rows } = await pool.query(
-      `SELECT id, name, short_name, portal, url, required_documents, fee, photo_specs, signature_specs, fill_count
-       FROM forms
-       WHERE status = 'active' AND (
-         LOWER(name) LIKE $1 OR LOWER(short_name) LIKE $1 OR LOWER(portal) LIKE $1
-         OR EXISTS (SELECT 1 FROM unnest(search_keywords) k WHERE k LIKE $1)
-       )
-       ORDER BY fill_count DESC, short_name LIMIT 20`,
-      [`%${q}%`]
-    );
-    res.json(rows);
+    const stats = await getHostnameStats();
+    const baseSql = q
+      ? `SELECT id, name, short_name, portal, url, required_documents, fee, photo_specs, signature_specs FROM forms
+         WHERE status = 'active' AND (LOWER(name) LIKE $1 OR LOWER(short_name) LIKE $1 OR LOWER(portal) LIKE $1
+           OR EXISTS (SELECT 1 FROM unnest(search_keywords) k WHERE k LIKE $1)) LIMIT 20`
+      : `SELECT id, name, short_name, portal, url, required_documents, fee, photo_specs, signature_specs FROM forms
+         WHERE status = 'active' LIMIT 20`;
+    const { rows } = await pool.query(baseSql, q ? [`%${q}%`] : []);
+    const result = rows.map((f: any) => {
+      const s = statsForUrl(f.url, stats);
+      return { ...f, fill_count: s.fills, confidence: s.confidence };
+    }).sort((a: any, b: any) => b.fill_count - a.fill_count);
+    res.json(result);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/forms/confidence?hostname=ssc.gov.in — for extension popup badge
+router.get('/confidence', authMiddleware, async (req: any, res) => {
+  try {
+    const hostname = (req.query.hostname || '').toString();
+    if (!hostname) return res.json({ fills: 0, confidence: null });
+    const stats = await getHostnameStats();
+    const { fills, confidence } = statsForUrl('https://' + hostname.replace(/^https?:\/\//, ''), stats);
+    res.json({ fills, confidence });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
