@@ -5,30 +5,34 @@ import { authMiddleware } from '../../middleware/auth.js';
 const router = Router();
 
 // Build a map of hostname → { fills, filled, failed } across ALL workspaces (network effect)
-async function getHostnameStats(): Promise<Record<string, { fills: number; filled: number; failed: number }>> {
+async function getHostnameStats(): Promise<Record<string, { fills: number; filled: number; failed: number; corrections: number }>> {
   const { rows } = await pool.query(
     `SELECT hostname, COUNT(*)::int as fills, COALESCE(SUM(total_filled),0)::int as filled, COALESCE(SUM(total_failed),0)::int as failed
      FROM sessions WHERE hostname IS NOT NULL GROUP BY hostname`
   );
   const map: Record<string, any> = {};
-  for (const r of rows) map[r.hostname] = { fills: r.fills, filled: r.filled, failed: r.failed };
+  for (const r of rows) map[r.hostname] = { fills: r.fills, filled: r.filled, failed: r.failed, corrections: 0 };
+  try {
+    const cr = await pool.query(`SELECT hostname, COALESCE(SUM(jsonb_array_length(corrections)),0)::int as corr FROM corrections WHERE hostname IS NOT NULL GROUP BY hostname`);
+    for (const r of cr.rows) { if (map[r.hostname]) map[r.hostname].corrections = r.corr; else map[r.hostname] = { fills: 0, filled: 0, failed: 0, corrections: r.corr }; }
+  } catch {}
   return map;
 }
 
 // Match a form URL to session stats by hostname (handles www. prefix + subdomain)
 function statsForUrl(url: string, stats: Record<string, any>) {
   let host = '';
-  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return { fills: 0, confidence: null }; }
-  let agg = { fills: 0, filled: 0, failed: 0 };
+  try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return { fills: 0, confidence: null, corrections: 0 }; }
+  let agg = { fills: 0, filled: 0, failed: 0, corrections: 0 };
   for (const [h, s] of Object.entries(stats)) {
     const hn = h.replace(/^www\./, '');
     if (hn === host || hn.endsWith('.' + host) || host.endsWith('.' + hn)) {
-      agg.fills += s.fills; agg.filled += s.filled; agg.failed += s.failed;
+      agg.fills += s.fills; agg.filled += s.filled; agg.failed += s.failed; agg.corrections += (s.corrections || 0);
     }
   }
-  const total = agg.filled + agg.failed;
+  const total = agg.filled + agg.failed + agg.corrections;
   const confidence = total > 0 ? Math.round((agg.filled / total) * 100) : null;
-  return { fills: agg.fills, confidence };
+  return { fills: agg.fills, confidence, corrections: agg.corrections };
 }
 
 // GET /api/forms/search?q=railway

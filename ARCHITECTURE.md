@@ -562,7 +562,7 @@ Conservative mode:
 - [x] Extension popup confidence badge ("filled 29× · 100%" / "first time — I'll fill what I'm sure about")
 - [x] Post-fill "see what was filled" summary (label → value list, builds trust — "show, don't just do")
 - [ ] "First time on this form" conservative mode (autofill engine: only high-confidence fields on new forms)
-- [ ] Correction-based learning (confidence drops when corrections rise)
+- [x] Correction-based learning — confidence = filled/(filled+failed+corrections), drops as operators correct (SSC 97%, Bihar serviceonline 85%)
 
 ### Phase 4 — Habit Formation
 - [x] Home screen = work queue (PENDING / READY sections with action buttons)
