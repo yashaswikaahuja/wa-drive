@@ -553,7 +553,7 @@ Conservative mode:
 - [x] Nav relabeled: Today / Customers / Find Form / Documents / Photo Tool (removed Jobs, Dashboard, separate Documents page)
 - [x] CustomerDetail = Memory View (readiness bar, profile data, docs, inline edit)
 - [x] Per-customer per-form readiness ("SSC 85%, missing 10th marksheet") — `/api/forms/readiness/:phone`
-- [ ] Auto-extract on doc arrival (so 'pending' becomes 'ready' with zero effort)
+- [x] Auto-extract on doc arrival (background, cached) — Build Profile is now instant; operator still reviews (trust preserved)
 
 ### Phase 3 — Network Effect
 - [ ] Global mappings (cross-workspace)

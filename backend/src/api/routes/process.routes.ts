@@ -131,6 +131,16 @@ router.post('/extract', async (req: any, res: Response) => {
   const { fileId } = req.body as { fileId?: string };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
 
+  // Instant path: return cached extraction if auto-extract already ran on arrival
+  try {
+    const { getCachedExtraction } = await import('../../services/extraction.js');
+    const cached = await getCachedExtraction(fileId);
+    if (cached && Object.keys(cached).length > 0) {
+      res.json({ ok: true, suggested: cached, cached: true });
+      return;
+    }
+  } catch {}
+
   const GROQ_API_KEY = process.env['GROQ_API_KEY'];
   if (!GROQ_API_KEY) { res.status(500).json({ error: 'GROQ_API_KEY not configured' }); return; }
 
@@ -294,6 +304,10 @@ Extraction rules:
       const suggested: any = {};
       for (const [k, v] of Object.entries(fields)) {
         if (v && String(v).trim()) suggested[k] = { value: v, source: 'document', documentId: fileId, confidence: 0.9 };
+      }
+      // Cache so future extracts of this file are instant
+      if (req.user?.workspaceId) {
+        try { const { cacheExtraction } = await import('../../services/extraction.js'); await cacheExtraction(fileId, req.user.workspaceId, suggested); } catch {}
       }
       res.json({ ok: true, suggested, raw: fields });
     } catch {
