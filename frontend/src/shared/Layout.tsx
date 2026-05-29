@@ -3,7 +3,7 @@ import { memo, useMemo, useEffect, useState } from 'react';
 import { useAuthStore } from '../features/auth/store';
 import { extensionBridge } from './extensionBridge';
 import {
-  ChartBar, Users, Briefcase, ChatCircle, Camera, FileText, Gear,
+  Users, ChatCircle, Camera, Gear,
   ChartPie, PencilSimple, Brain, Broadcast, UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass
 } from '@phosphor-icons/react';
 
@@ -23,13 +23,11 @@ const ExtensionStatus = memo(() => {
 });
 
 const OPERATOR_NAV = [
-  { path: '/app', icon: ChartBar, label: 'Dashboard', end: true },
+  { path: '/app', icon: Lightning, label: 'Today', end: true },
   { path: '/app/customers', icon: Users, label: 'Customers' },
-  { path: '/app/jobs', icon: Briefcase, label: 'Jobs' },
-  { path: '/app/whatsapp', icon: ChatCircle, label: 'WhatsApp' },
   { path: '/app/forms', icon: MagnifyingGlass, label: 'Find Form' },
+  { path: '/app/whatsapp', icon: ChatCircle, label: 'Documents' },
   { path: '/app/photo', icon: Camera, label: 'Photo Tool' },
-  { path: '/app/documents', icon: FileText, label: 'Documents' },
   { path: '/app/settings', icon: Gear, label: 'Settings' },
 ];
 

@@ -539,10 +539,21 @@ Conservative mode:
 - [x] `forms` table + seed top 15 forms (with photo/signature specs)
 - [x] Form search API (`/api/forms/search`) + UI (`/app/forms`)
 - [x] Home search + nav wired to Form Directory
-- [ ] Photo/signature presets per form (Photo Tool reads form specs)
+- [x] Photo/signature processor per form (`/app/forms/photo` — auto resize+compress to exact specs)
 - [ ] Customer readiness check (profile vs form required_fields)
 - [ ] "Filled X times" confidence badge in extension
 - [ ] Form steps + deadline fields (seeded, not yet shown in UI)
+
+### Phase 2.5 — Customer-Centric Restructure (THE core reframe)
+> The app is reorganized around CUSTOMERS, not features. Operator thinks
+> "Customer aaya → kaam karo → done." Home = work queue, not a stats dashboard.
+- [x] Home screen = work queue (`/api/dashboard/queue`) — customers grouped by status
+- [x] Status states: new (blue, just arrived) / pending (yellow, not extracted) / ready (green, can fill)
+- [x] Unified search on home: forms AND customers in one box
+- [x] Nav relabeled: Today / Customers / Find Form / Documents / Photo Tool (removed Jobs, Dashboard, separate Documents page)
+- [x] CustomerDetail = Memory View (readiness bar, profile data, docs, inline edit)
+- [ ] Per-customer per-form readiness ("SSC 85%, missing 10th marksheet")
+- [ ] Auto-extract on doc arrival (so 'pending' becomes 'ready' with zero effort)
 
 ### Phase 3 — Network Effect
 - [ ] Global mappings (cross-workspace)
