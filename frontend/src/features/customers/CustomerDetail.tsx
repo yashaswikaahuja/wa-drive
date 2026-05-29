@@ -39,6 +39,7 @@ export default function CustomerDetail() {
   const [addingInSection, setAddingInSection] = useState<string | null>(null);
   const [newFieldKey, setNewFieldKey] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
+  const [readiness, setReadiness] = useState<any[]>([]);
 
   const loadHousehold = async () => {
     const r = await api.get('/customers/households');
@@ -53,8 +54,12 @@ export default function CustomerDetail() {
     try { const r = await api.get(`/customers/persons/${personId}`); setPersonDetail(r.data); } catch {}
   };
 
-  useEffect(() => { loadHousehold(); loadDocuments(); }, [phone]);
+  useEffect(() => { loadHousehold(); loadDocuments(); loadReadiness(); }, [phone]);
   useEffect(() => { if (selectedPerson) loadPerson(selectedPerson); }, [selectedPerson]);
+
+  const loadReadiness = async () => {
+    try { const r = await api.get(`/forms/readiness/${encodeURIComponent(phone)}`); setReadiness(r.data || []); } catch {}
+  };
 
   const addPerson = async (form: { name: string; relationship: string }) => {
     try {
@@ -74,7 +79,7 @@ export default function CustomerDetail() {
     if (!selectedPerson) return;
     try {
       await api.patch(`/customers/persons/${selectedPerson}`, { fields: { [key]: { value, source: 'manual', confidence: 1 } } });
-      await loadPerson(selectedPerson);
+      await loadPerson(selectedPerson); loadReadiness();
     } catch (e: any) { setError(e.message); }
     setEditingField(null);
   };
@@ -99,7 +104,7 @@ export default function CustomerDetail() {
     try {
       await api.patch(`/customers/persons/${selectedPerson}`, { fields: acceptedFields });
       setExtractedSuggestions(null); setExtractDocId(null);
-      await loadPerson(selectedPerson);
+      await loadPerson(selectedPerson); loadReadiness();
     } catch (e: any) { setError(e.message); }
   };
 
@@ -170,25 +175,38 @@ export default function CustomerDetail() {
 
       {personDetail && (
         <>
-          {/* Readiness */}
+          {/* Readiness — per form (architecture: "SSC 85%, missing 10th marksheet") */}
           <section className="card mb-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Readiness</h2>
-              <span className="text-xs text-gray-500 tabular-nums">{completeness.filled}/{completeness.total} fields</span>
+              <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Form readiness</h2>
+              <span className="text-xs text-gray-500 tabular-nums">{completeness.filled}/{completeness.total} core fields</span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-2 rounded-full bg-white/[0.06] overflow-hidden">
-                <div className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${completeness.percent}%`,
-                    background: completeness.percent >= 80 ? '#30d158' : completeness.percent >= 50 ? '#ffd60a' : '#ff453a',
-                    transitionTimingFunction: EASE, transitionDuration: '600ms',
-                  }} />
+            {readiness.length === 0 ? (
+              <p className="text-xs text-gray-600">No form data. Visit Find Form to see requirements.</p>
+            ) : (
+              <div className="space-y-3">
+                {readiness.slice(0, 5).map((f: any) => {
+                  const color = f.percent >= 80 ? '#30d158' : f.percent >= 50 ? '#ffd60a' : '#ff453a';
+                  return (
+                    <div key={f.id} className="flex items-center gap-3">
+                      <div className="w-28 shrink-0">
+                        <p className="text-sm text-gray-200 truncate">{f.short_name}</p>
+                        {f.missing.length > 0 && f.percent < 100 && (
+                          <p className="text-[10px] text-gray-600 truncate">need {f.missing[0].replace(/_/g, ' ')}{f.missing.length > 1 ? ` +${f.missing.length - 1}` : ''}</p>
+                        )}
+                      </div>
+                      <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                        <div className="h-full rounded-full transition-all"
+                          style={{ width: `${f.percent}%`, background: color, transitionTimingFunction: EASE, transitionDuration: '600ms' }} />
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums w-10 text-right" style={{ color }}>{f.percent}%</span>
+                      {f.percent === 100
+                        ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-medium text-[#30d158] shrink-0 w-12 text-right hover:underline">Fill →</a>
+                        : <span className="w-12 shrink-0" />}
+                    </div>
+                  );
+                })}
               </div>
-              <span className="text-lg font-semibold text-white tabular-nums w-12 text-right">{completeness.percent}%</span>
-            </div>
-            {completeness.missing.length > 0 && (
-              <p className="text-xs text-gray-500 mt-2">Missing: {completeness.missing.slice(0, 5).join(', ')}{completeness.missing.length > 5 ? '…' : ''}</p>
             )}
           </section>
 

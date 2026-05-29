@@ -552,7 +552,7 @@ Conservative mode:
 - [x] Unified search on home: forms AND customers in one box
 - [x] Nav relabeled: Today / Customers / Find Form / Documents / Photo Tool (removed Jobs, Dashboard, separate Documents page)
 - [x] CustomerDetail = Memory View (readiness bar, profile data, docs, inline edit)
-- [ ] Per-customer per-form readiness ("SSC 85%, missing 10th marksheet")
+- [x] Per-customer per-form readiness ("SSC 85%, missing 10th marksheet") — `/api/forms/readiness/:phone`
 - [ ] Auto-extract on doc arrival (so 'pending' becomes 'ready' with zero effort)
 
 ### Phase 3 — Network Effect
