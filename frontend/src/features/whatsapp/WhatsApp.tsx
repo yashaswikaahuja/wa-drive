@@ -18,7 +18,7 @@ interface Household { phone: string; persons: Person[]; person_count: string; }
 function docCategory(fileName: string): { category: string; color: string } | null {
   const name = fileName.toLowerCase();
   if (/aadh|aadhaar|adhar|uid/i.test(name)) return { category: 'Aadhaar', color: 'bg-orange-500/20 text-orange-400' };
-  if (/pan[\s_-]?card|pan[\s_.]|pancard/i.test(name)) return { category: 'PAN', color: 'bg-blue-500/20 text-blue-400' };
+  if (/pan[\s_-]?card|pan[\s_.]|pancard/i.test(name)) return { category: 'PAN', color: 'bg-blue-500/20 text-teal-400' };
   if (/passport|pport/i.test(name)) return { category: 'Passport', color: 'bg-purple-500/20 text-purple-400' };
   if (/mark\s?sheet|result|10th|12th|matric|inter|hsc|ssc/i.test(name)) return { category: 'Marksheet', color: 'bg-green-500/20 text-green-400' };
   if (/degree|graduat|diploma|certif/i.test(name)) return { category: 'Certificate', color: 'bg-teal-500/20 text-teal-400' };
@@ -97,14 +97,14 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   const category = msg.tag ? { category: msg.tag, color: 'bg-yellow-500/20 text-yellow-400' } : docCategory(msg.fileName || '');
 
   if (msg.text && !msg.fileName) return (
-    <div className="bg-[#1a2236] rounded-lg px-3 py-2 max-w-[80%]">
+    <div className="bg-[var(--secondary)] rounded-lg px-3 py-2 max-w-[80%]">
       <p className="text-sm text-gray-300">{msg.text}</p>
       <p className="text-[10px] text-gray-600 mt-1">{timeAgo(msg.timestamp)}</p>
     </div>
   );
 
   return (
-    <div className={`bg-[#1a2236] border rounded-xl p-3 flex gap-3 max-w-[480px] transition group ${selected ? 'border-blue-500/60' : 'border-white/5 hover:border-blue-500/20'}`}>
+    <div className={`rounded-lg p-3 flex gap-3 max-w-[480px] transition group ${selected ? 'border border-teal-500/40 bg-teal-500/5' : 'border border-transparent hover:bg-white/[0.02]'}`} style={{ background: selected ? undefined : 'var(--card)' }}>
       {selectionMode && (
         <input
           type="checkbox"
@@ -123,7 +123,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         </div>
         {!selectionMode && (
           <div className="flex flex-wrap gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
-            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Open</button>
+            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.04] text-teal-400 hover:bg-white/[0.06]">Open</button>
             <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="text-[10px] px-2 py-0.5 rounded-md bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">Tag</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30">Photo Tool</button>
@@ -137,9 +137,9 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
 
 const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: any) => (
   <div onClick={() => onClick(chat.phone)}
-    className={`px-3 py-3 border-b border-white/5 cursor-pointer hover:bg-white/5 ${selected ? 'bg-blue-600/10' : ''}`}>
+    className={`px-3 py-3 border-b cursor-pointer transition-colors hover:bg-white/[0.03] ${selected ? 'bg-teal-500/5' : ''}`} style={{ borderColor: 'var(--border)' }}>
     <div className="flex items-center gap-2.5">
-      <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 text-xs font-bold shrink-0 overflow-hidden">
+      <div className="w-9 h-9 rounded-md bg-teal-500/10 flex items-center justify-center text-teal-400 text-xs font-semibold shrink-0 overflow-hidden">
         {chat.dpUrl ? <img src={chat.dpUrl} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display='none')} /> : null}
         {!chat.dpUrl && (chat.name[0]?.toUpperCase() || '?')}
       </div>
@@ -149,7 +149,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-[10px] text-gray-600">{timeAgo(chat.lastTime)}</span>
-        {unreadCount > 0 && <span className="w-5 h-5 rounded-full bg-green-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadCount}</span>}
+        {unreadCount > 0 && <span className="w-5 h-5 rounded-full bg-teal-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadCount}</span>}
       </div>
       <button onClick={(e) => { e.stopPropagation(); onPin(chat.phone); }} className="text-gray-600 hover:text-white text-xs opacity-0 group-hover:opacity-100" title={pinned ? 'Unpin' : 'Pin'}>📌</button>
     </div>
@@ -625,14 +625,14 @@ export default function WhatsApp() {
 
   return (
     <div className="h-[calc(100vh-48px)] flex">
-      <div className="w-72 border-r border-white/5 flex flex-col">
-        <div className="p-3 border-b border-white/5 flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-green-500" />
+      <div className="w-72 border-r flex flex-col" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+        <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
+          <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span className="text-sm text-white font-medium">Inbox</span>
-          <span className="text-[10px] text-gray-500 ml-auto">{sortedChats.length} customers</span>
+          <span className="text-xs text-gray-500 ml-auto">{sortedChats.length} customers</span>
         </div>
-        <div className="px-3 py-2 border-b border-white/5">
-          <input value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="Search customers..." className="w-full px-2.5 py-1.5 bg-[#1a2236] border border-white/10 rounded-lg text-xs text-white outline-none placeholder:text-gray-600" />
+        <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
+          <input value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="Search customers..." className="input-field text-xs" />
         </div>
         <div className="flex-1 overflow-y-auto">
           {filteredChats.length === 0 ? (
@@ -648,21 +648,21 @@ export default function WhatsApp() {
           <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">Select a customer to view documents</div>
         ) : (
           <>
-            <div className="h-14 px-4 flex items-center gap-3 border-b border-white/5 shrink-0">
-              <div className="w-9 h-9 rounded-full bg-green-600/20 flex items-center justify-center text-green-400 font-bold text-sm">
+            <div className="h-14 px-4 flex items-center gap-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+              <div className="w-9 h-9 rounded-md bg-teal-500/10 flex items-center justify-center text-teal-400 font-semibold text-sm">
                 {activeChat.name[0]?.toUpperCase()}
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-white">{activeChat.name}</p>
-                <p className="text-[10px] text-gray-500">{activeChat.messages.length} documents</p>
+                <p className="text-xs text-gray-500">{activeChat.messages.length} documents</p>
               </div>
               {!selectionMode ? (
                 <div className="flex items-center gap-2">
-                  <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="🔍 Search" className="w-28 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-[10px] text-white outline-none placeholder:text-gray-600" />
-                  <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="text-[10px] px-2 py-1 rounded bg-orange-600/20 text-orange-400 hover:bg-orange-600/30">Request Docs</button>
-                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="text-[10px] px-2 py-1 rounded bg-green-600/20 text-green-400 hover:bg-green-600/30">View Profile</button>
-                  <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="text-[10px] px-2 py-1 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30">Assign</button>
-                  <button onClick={() => setSelectionMode(true)} className="text-[10px] px-2 py-1 rounded bg-white/5 text-gray-400 hover:text-white">Select</button>
+                  <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search..." className="input-field w-28 text-xs py-1" />
+                  <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="btn-ghost text-xs text-orange-400 hover:text-orange-300">Request</button>
+                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="btn-ghost text-xs text-teal-400 hover:text-teal-300">Profile</button>
+                  <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="btn-ghost text-xs">Assign</button>
+                  <button onClick={() => setSelectionMode(true)} className="btn-ghost text-xs">Select</button>
                 </div>
               ) : (
                 <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
@@ -677,7 +677,7 @@ export default function WhatsApp() {
                 const yesterday = new Date(Date.now()-86400000).toLocaleDateString();
                 const label = msgDate === today ? 'Today' : msgDate === yesterday ? 'Yesterday' : msgDate;
                 return (<>
-                  {showDate && <div key={'d-'+i} className="text-center py-2"><span className="text-[10px] bg-white/5 text-gray-500 px-3 py-1 rounded-full">{label}</span></div>}
+                  {showDate && <div key={'d-'+i} className="text-center py-2"><span className="text-[10px] bg-white/[0.03] text-gray-500 px-3 py-1 rounded-full">{label}</span></div>}
                   <MessageCard
                     key={msg.id} msg={msg} onClick={handleOpenFile}
                     selectionMode={selectionMode}
@@ -691,15 +691,15 @@ export default function WhatsApp() {
 
             {/* Floating action bar when items selected */}
             {selectionMode && selectedDocs.size > 0 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-5 py-3 rounded-full shadow-xl flex items-center gap-3 z-10">
-                <span className="text-sm font-medium">{selectedDocs.size} selected</span>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full shadow-xl flex items-center gap-3 z-10" style={{ background: 'var(--primary)' }}>
+                <span className="text-sm font-medium text-white">{selectedDocs.size} selected</span>
                 <button onClick={startBuildProfile}
-                  className="px-3 py-1 bg-white text-blue-600 rounded-full text-xs font-bold hover:bg-blue-50">
-                  Build Profile →
+                  className="px-3 py-1 bg-white text-gray-900 rounded-full text-xs font-bold hover:bg-gray-100">
+                  Build Profile
                 </button>
                 <button onClick={() => { const files = Array.from(selectedDocs.values()).map(m => ({ id: m.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || m.id, fileName: m.fileName || '', fileUrl: m.fileUrl || '', customerName: m.name })); window.location.href = '/app/stitch?files=' + encodeURIComponent(JSON.stringify(files)); }}
                   className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  📷 Photo Tool
+                  Photo Tool
                 </button>
               </div>
             )}
@@ -719,7 +719,7 @@ export default function WhatsApp() {
       {/* Extracting overlay */}
       {extracting && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
-          <div className="bg-[#0d1220] rounded-xl p-6 text-center">
+          <div className="bg-[var(--card)] rounded-xl p-6 text-center">
             <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
             <p className="text-white text-sm">Extracting from {selectedDocs.size} document{selectedDocs.size !== 1 ? 's' : ''}...</p>
           </div>
@@ -729,7 +729,7 @@ export default function WhatsApp() {
       {/* Extraction error */}
       {extractError && !extracting && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setExtractError('')}>
-          <div className="bg-[#0d1220] border border-red-500/30 rounded-xl p-6 max-w-sm">
+          <div className="bg-[var(--card)] border border-red-500/30 rounded-xl p-6 max-w-sm">
             <p className="text-red-400 text-sm mb-3">Extraction failed</p>
             <p className="text-gray-400 text-xs">{extractError}</p>
           </div>
@@ -760,7 +760,7 @@ export default function WhatsApp() {
               if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
               if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" /> : null;
               if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" title="PDF" /> : null;
-              return <div className="bg-[#1a2236] rounded-xl p-8 text-center"><p className="text-white">{viewerFile.fileName}</p></div>;
+              return <div className="bg-[var(--secondary)] rounded-xl p-8 text-center"><p className="text-white">{viewerFile.fileName}</p></div>;
             })()}
           </div>
         </div>
@@ -790,7 +790,7 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} className="bg-[#0d1220] border border-white/10 rounded-xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto">
+      <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto">
         <h3 className="text-base font-bold text-white mb-1">Build profile from {docCount} document{docCount !== 1 ? 's' : ''}</h3>
         <p className="text-xs text-gray-500 mb-4">Select an existing person, or create a new one</p>
 
@@ -803,7 +803,7 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
                   <div className="space-y-1">
                     {h.persons.map(p => (
                       <button key={p.id} onClick={() => onConfirm(p.id)}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-blue-600/20 text-sm text-white flex items-center gap-2">
+                        className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/[0.04] text-sm text-white flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold">{p.name?.[0]}</div>
                         <div className="flex-1">
                           <div className="text-sm">{p.displayLabel || p.name}</div>
@@ -823,17 +823,17 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
               <label className="text-[11px] text-gray-500 uppercase">Phone</label>
               <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
                 placeholder="9823745234"
-                className="w-full mt-1 px-3 py-2 bg-[#1a2236] border border-white/10 rounded-lg text-sm text-white outline-none" />
+                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none" />
             </div>
             <div>
               <label className="text-[11px] text-gray-500 uppercase">Name</label>
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-[#1a2236] border border-white/10 rounded-lg text-sm text-white outline-none" />
+                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none" />
             </div>
             <div>
               <label className="text-[11px] text-gray-500 uppercase">Relationship</label>
               <select value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-[#1a2236] border border-white/10 rounded-lg text-sm text-white outline-none">
+                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none">
                 <option value="self">Self</option>
                 <option value="spouse">Spouse</option>
                 <option value="parent">Parent</option>
@@ -873,8 +873,8 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} className="bg-[#0d1220] border border-blue-500/30 rounded-xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
-        <p className="text-sm font-medium text-blue-400 mb-3">Review extracted fields</p>
+      <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-blue-500/30 rounded-xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
+        <p className="text-sm font-medium text-teal-400 mb-3">Review extracted fields</p>
         <p className="text-xs text-gray-500 mb-4">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
         <div className="space-y-2 mb-4">
           {Object.entries(suggestions).map(([k, v]: [string, any]) => (
@@ -885,7 +885,7 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
                 value={accepted[k]?.value || v.value || ''}
                 onChange={e => updateValue(k, e.target.value)}
                 disabled={!accepted[k]}
-                className="flex-1 px-2 py-1 bg-[#1a2236] border border-white/10 rounded text-xs text-white outline-none disabled:opacity-50" />
+                className="flex-1 px-2 py-1 bg-[var(--secondary)] border border-[var(--border)] rounded text-xs text-white outline-none disabled:opacity-50" />
             </div>
           ))}
         </div>
