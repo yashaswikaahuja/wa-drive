@@ -57,7 +57,30 @@ async function detectSite() {
     const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
     if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' — ' + host; }
     else { siteIcon.textContent = '🌐'; siteName.textContent = host; }
+    // Network-effect confidence badge: "filled 29× by operators · 100%"
+    fetchConfidence(host);
   } catch { siteName.textContent = 'Unknown page'; }
+}
+
+async function fetchConfidence(host) {
+  const el = document.getElementById('site-confidence');
+  if (!el) return;
+  try {
+    const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
+    const r = await fetch(data.backendUrl + '/forms/confidence?hostname=' + encodeURIComponent(host), {
+      headers: { Authorization: 'Bearer ' + data.accessToken },
+    });
+    if (!r.ok) return;
+    const { fills, confidence } = await r.json();
+    if (fills > 0) {
+      el.textContent = `✓ filled ${fills}× by operators` + (confidence != null ? ` · ${confidence}% success` : '');
+      el.style.display = 'block';
+    } else {
+      el.textContent = `First time on this form — I'll fill what I'm sure about`;
+      el.style.color = '#94a3b8';
+      el.style.display = 'block';
+    }
+  } catch {}
 }
 
 function showProgress(text) {
