@@ -108,6 +108,11 @@ profiles (
 ```
 
 ### forms (NEW — Form Directory)
+> **IMPLEMENTATION NOTE (shipped):** The live table is missing 3 spec'd columns —
+> `required_fields TEXT[]`, `deadline DATE`, `doc_specs JSONB`. The `steps` column
+> exists but is not yet seeded. These are needed for: Customer Readiness Check
+> (`required_fields`), deadline alerts (`deadline`), and document upload validation
+> (`doc_specs`). Add via `ALTER TABLE` before building those features.
 ```sql
 forms (
   id UUID PRIMARY KEY,
@@ -531,11 +536,13 @@ Conservative mode:
 - [x] Session recording
 
 ### Phase 2 — Form Directory & Presets
-- [ ] `forms` table + seed top 20 forms
-- [ ] Form search API + UI
-- [ ] Photo/signature presets per form
-- [ ] Customer readiness check (profile vs form requirements)
+- [x] `forms` table + seed top 15 forms (with photo/signature specs)
+- [x] Form search API (`/api/forms/search`) + UI (`/app/forms`)
+- [x] Home search + nav wired to Form Directory
+- [ ] Photo/signature presets per form (Photo Tool reads form specs)
+- [ ] Customer readiness check (profile vs form required_fields)
 - [ ] "Filled X times" confidence badge in extension
+- [ ] Form steps + deadline fields (seeded, not yet shown in UI)
 
 ### Phase 3 — Network Effect
 - [ ] Global mappings (cross-workspace)
