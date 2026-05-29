@@ -559,12 +559,14 @@ Conservative mode:
 - [x] Global mappings (already cross-workspace — single shared form_mappings.json keyed by semanticFormKey)
 - [x] Live fill_count + confidence per form (matches session hostnames across ALL workspaces)
 - [x] "Filled X times · 95%" social-proof badge in Form Directory + `/api/forms/confidence` for extension
-- [ ] "First time on this form" conservative mode
+- [x] Extension popup confidence badge ("filled 29× · 100%" / "first time — I'll fill what I'm sure about")
+- [x] Post-fill "see what was filled" summary (label → value list, builds trust — "show, don't just do")
+- [ ] "First time on this form" conservative mode (autofill engine: only high-confidence fields on new forms)
 - [ ] Correction-based learning (confidence drops when corrections rise)
 
 ### Phase 4 — Habit Formation
-- [ ] Home screen = work queue (pending/ready/recent)
-- [ ] Auto-extract on document arrival
+- [x] Home screen = work queue (PENDING / READY sections with action buttons)
+- [x] Auto-extract on document arrival (cached, instant Build Profile)
 - [ ] "What's missing" proactive notifications
 - [ ] Form deadline alerts
 - [ ] Daily stats (forms filled, accuracy)
