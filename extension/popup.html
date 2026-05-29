@@ -70,6 +70,14 @@
     .results-bar .skipped { background: #f59e0b; }
     .results-bar .failed { background: #ef4444; }
     #results-detail { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    #results-filled { margin-top: 8px; }
+    .filled-toggle { font-size: 11px; color: #22c55e; cursor: pointer; user-select: none; padding: 2px 0; }
+    .filled-toggle:hover { color: #4ade80; }
+    #filled-list { margin-top: 4px; max-height: 180px; overflow-y: auto; }
+    .filled-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .fl-label { color: #94a3b8; flex: 0 0 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fl-val { color: #e2e8f0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fl-check { color: #22c55e; flex: 0 0 auto; }
     .field-tag { font-size: 9px; padding: 2px 6px; border: 1px solid; border-radius: 3px; white-space: nowrap; }
     .complete-link { display: block; margin-top: 8px; font-size: 10px; color: #60a5fa; text-decoration: none; cursor: pointer; }
     .complete-link:hover { text-decoration: underline; }
@@ -136,6 +144,7 @@
     </div>
     <div class="results-bar" id="results-bar"></div>
     <div id="results-detail" style="display:none"></div>
+    <div id="results-filled" style="display:none"></div>
     <a id="complete-profile-link" style="display:none" class="complete-link">Complete Profile →</a>
   </div>
 

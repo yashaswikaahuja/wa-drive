@@ -116,6 +116,31 @@ function showResults(filled, skipped, failed, records) {
   } else {
     detailEl.style.display = 'none';
   }
+
+  // "Show, don't just do": list exactly what was filled (label → value) so operator trusts it
+  const filledEl = document.getElementById('results-filled');
+  if (filledEl) {
+    const fr = window._lastFilledRecords || [];
+    if (fr.length) {
+      filledEl.innerHTML = `<div class="filled-toggle" id="filled-toggle">▸ See what was filled (${fr.length})</div>
+        <div id="filled-list" style="display:none"></div>`;
+      const listEl = filledEl.querySelector('#filled-list');
+      listEl.innerHTML = fr.map(r => {
+        const label = (r.label || r.selector || '').toString().replace(/[#.\[\]]/g, '').slice(0, 28);
+        const val = (r.value != null ? String(r.value) : '').slice(0, 30);
+        return `<div class="filled-row"><span class="fl-label">${label}</span><span class="fl-val">${val}</span><span class="fl-check">✓</span></div>`;
+      }).join('');
+      const toggle = filledEl.querySelector('#filled-toggle');
+      toggle.onclick = () => {
+        const open = listEl.style.display === 'block';
+        listEl.style.display = open ? 'none' : 'block';
+        toggle.textContent = (open ? '▸' : '▾') + ` See what was filled (${fr.length})`;
+      };
+      filledEl.style.display = 'block';
+    } else {
+      filledEl.style.display = 'none';
+    }
+  }
   // Show "Complete Profile" link if fields were skipped
   const cpLink = document.getElementById('complete-profile-link');
   if (skipped > 0 || failed > 0) {
@@ -557,7 +582,7 @@ fillBtn.addEventListener('click', async () => {
             }),
           });
         } catch (e) { console.warn('[CC] session post failed:', e.message); }
-        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length, records: records.filter(r => r.result !== 'filled').slice(0, 10) };
+        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length, records: records.filter(r => r.result !== 'filled').slice(0, 10), filledRecords: records.filter(r => r.result === 'filled').slice(0, 25) };
       }
     });
 
@@ -565,6 +590,7 @@ fillBtn.addEventListener('click', async () => {
     if (r?.ok) {
       const skipped = r.totalUnmapped || 0;
       const failed = r.totalFailed || 0;
+      window._lastFilledRecords = r.filledRecords || [];
       showResults(r.totalFilled || 0, skipped, failed, r.records);
       undoBtn.style.display = 'block';
     } else {
