@@ -145,6 +145,20 @@ export async function upsertProfileFromExtraction(workspaceId: string, phone: st
   } catch (e: any) { console.warn('[AutoProfile] failed:', e.message); }
 }
 
+// Serial queue — process auto-extracts ONE AT A TIME to avoid Groq rate-limit
+// degradation when a customer sends a batch of documents at once.
+const _extractQueue: Array<() => Promise<void>> = [];
+let _extractRunning = false;
+async function _drainQueue() {
+  if (_extractRunning) return;
+  _extractRunning = true;
+  while (_extractQueue.length) {
+    const job = _extractQueue.shift()!;
+    try { await job(); } catch {}
+  }
+  _extractRunning = false;
+}
+
 /** Fire-and-forget background extraction after a document arrives. */
 export function autoExtractInBackground(buffer: Buffer, fileId: string, workspaceId: string, mimetype: string, phone?: string) {
   // Detect type by magic bytes (WhatsApp uploads often arrive as octet-stream)
@@ -155,7 +169,7 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
   const isImageMime = (mimetype || '').startsWith('image/') || mimetype === 'application/pdf';
   if (!isJpeg && !isPng && !isPdf && !isImageMime) return; // skip video/audio/unknown
   const buf = Buffer.from(buffer);
-  setTimeout(async () => {
+  _extractQueue.push(async () => {
     try {
       const { suggested, raw } = await extractFromBuffer(buf, fileId);
       // Persist AI-detected document type as the file's tag (drives chat badge + smart selection)
@@ -173,7 +187,8 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
         console.log(`[AutoExtract] ${fileId} → ${docType || 'no-data'} (not an ID doc)`);
       }
     } catch (e: any) { console.warn(`[AutoExtract] ✗ ${fileId}:`, e.message); }
-  }, 500);
+  });
+  setTimeout(_drainQueue, 500);
 }
 
 // Map raw document_type → human label used as the file tag

@@ -439,14 +439,18 @@ export default function WhatsApp() {
       console.log('[Extract] selectedDocs size:', selectedDocs.size, 'filtered docs:', docs.length, docs.map(d => ({id:d.id, name:d.fileName})));
       if (docs.length === 0) { setExtractError('No images or PDFs in selection'); setExtracting(false); return; }
       // Run extractions in parallel for speed
-      const results: any[] = await Promise.all(docs.map(async (d) => {
+      // Extract one-by-one (sequential) for accuracy — parallel calls hit Groq rate
+      // limits and degrade quality. Most docs are already cached by auto-extract on
+      // arrival, so this stays fast (cache hits return instantly).
+      const results: any[] = [];
+      for (const d of docs) {
         try {
           const r = await api.post('/process/extract', { fileId: d.id });
-          return { doc: d, result: r.data };
+          results.push({ doc: d, result: r.data });
         } catch (e: any) {
-          return { doc: d, result: { error: e.message } };
+          results.push({ doc: d, result: { error: e.message } });
         }
-      }));
+      }
       // Priority-based merge: each field has a "best source" priority by doc type.
       // Higher priority document types overwrite lower for the same field.
       const TYPE_PRIORITY: Record<string, number> = {
