@@ -101,9 +101,31 @@ async function callGroqVision(base64: string, prompt: string, maxTokens: number)
 }
 
 /**
- * Single-call LLM extraction: one prompt returns document_type + all relevant fields
- * (merged ID/academic/bank superset). Halves token use vs two-stage. Validates per field.
- * Non-documents (photo/signature) yield empty.
+ * Map generic academic keys (roll_number, registration_number, marks/percentage) to the
+ * frontend's LEVEL-SPECIFIC schema keys based on docType. Prevents (a) 10th/12th/grad
+ * overwriting each other on the same generic key, and (b) fields landing in "Other details".
+ */
+function normalizeKeys(parsed: any, docType: string): any {
+  const out: any = { ...parsed };
+  const move = (from: string, to: string) => {
+    if (out[from] != null && String(out[from]).trim() && (out[to] == null || !String(out[to]).trim())) {
+      out[to] = out[from]; delete out[from];
+    }
+  };
+  if (docType === 'marksheet_10th') {
+    move('roll_number', 'roll_number_10th'); move('registration_number', 'registration_number_10th');
+    move('marks_10th', 'percentage_10th'); move('marks', 'percentage_10th');
+  } else if (docType === 'marksheet_12th') {
+    move('roll_number', 'roll_number_12th'); move('registration_number', 'registration_number_12th');
+    move('marks', 'marks_12th'); move('percentage', 'percentage_12th');
+  } else if (docType === 'marksheet_graduation' || docType === 'marksheet_postgrad' || docType === 'certificate') {
+    move('roll_number', 'roll_number_grad'); move('registration_number', 'registration_number_grad');
+    move('enrollment_number', 'registration_number_grad');
+    move('passing_year_graduation', 'passing_year_grad'); move('marks_graduation', 'percentage_grad');
+    move('percentage_graduation', 'percentage_grad'); move('course', 'degree'); move('qualification', 'degree');
+  }
+  return out;
+}
  */
 export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
   if (!groqKeys().length) throw new Error('GROQ_API_KEY not configured');
@@ -123,6 +145,7 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
   }
   const docType = String(parsed.document_type || '').trim().toLowerCase();
   if (docType === 'photo' || docType === 'signature') return { suggested: {}, raw: { document_type: docType } };
+  parsed = normalizeKeys(parsed, docType);
 
   // Validate → real per-field confidence + needsReview flag
   const suggested: any = {};
@@ -191,6 +214,11 @@ export async function upsertProfileFromExtraction(workspaceId: string, phone: st
     // Skip if "phone" is actually an unresolved LID (15+ digits). Extraction stays
     // cached, so the profile builds correctly once the resolver maps LID→phone.
     if (!/^\d{7,13}$/.test(String(phone || ''))) return;
+    // Auto-fill mobile from the WhatsApp number (last 10 digits) if the doc didn't provide one.
+    if (!suggested.phone || !String(suggested.phone?.value || suggested.phone).trim()) {
+      const mobile = String(phone).slice(-10);
+      if (/^[6-9]\d{9}$/.test(mobile)) suggested.phone = { value: mobile, source: 'whatsapp', confidence: 0.95, needsReview: false };
+    }
 
     // Find existing profiles for this phone
     const { rows } = await pool.query(
