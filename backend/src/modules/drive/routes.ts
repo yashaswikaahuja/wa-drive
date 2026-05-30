@@ -58,7 +58,7 @@ router.get('/status', authMiddleware, async (req: any, res) => {
 router.get('/files/ws', authMiddleware, async (req: any, res) => {
   try {
     const r = await pool.query(
-      'SELECT id, file_name as "fileName", customer_id as "customerId", customer_name as "customerName", file_url as "fileUrl", uploaded_at as "timestamp", profile_pic_url as "dpUrl" FROM drive_files WHERE workspace_id = $1 ORDER BY uploaded_at DESC',
+      'SELECT id, file_name as "fileName", customer_id as "customerId", customer_name as "customerName", file_url as "fileUrl", uploaded_at as "timestamp", profile_pic_url as "dpUrl", tag FROM drive_files WHERE workspace_id = $1 ORDER BY uploaded_at DESC',
       [req.user.workspaceId]
     );
     if (r.rows.length > 0) return res.json(r.rows);
