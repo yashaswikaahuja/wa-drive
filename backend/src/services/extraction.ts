@@ -18,8 +18,9 @@ const ALL_FIELDS = ['document_type','name','name_devanagari','father_name','moth
 const DOC_TYPES = ['aadhaar','pan','passport','voter_id','driving_license','ration_card','marksheet_10th','marksheet_12th','marksheet_graduation','marksheet_postgrad','admit_card','result','certificate','bank_passbook','photo','signature','form','other'];
 
 function buildExtractPrompt(fields: string[]): string {
-  return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}.
-Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit. Return ONLY the JSON.`;
+  return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari.
+document_type must be EXACTLY ONE of: ${DOC_TYPES.join(', ')} (a person photo/selfie is "photo").
+Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. phone is a 10-digit mobile only — never put an Aadhaar/ID number in phone. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit. Return ONLY the JSON.`;
 }
 
 // ── Validation (deterministic correctness checks → real confidence) ──
@@ -64,49 +65,53 @@ async function pdfToImage(buffer: Buffer): Promise<Buffer> {
   return img;
 }
 
-/** Single Groq vision call. Returns raw assistant text. */
-async function callGroqVision(base64: string, prompt: string, maxTokens: number): Promise<string> {
-  const GROQ_API_KEY = process.env['GROQ_API_KEY'];
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-      messages: [{ role: 'user', content: [
-        { type: 'text', text: prompt },
-        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
-      ] }],
-      max_tokens: maxTokens,
-      temperature: 0,
-    }),
-  });
-  const data = await response.json() as any;
-  return data?.choices?.[0]?.message?.content ?? '';
+/** All configured Groq keys (GROQ_API_KEY may be comma-separated; GROQ_API_KEY_2 also supported). */
+function groqKeys(): string[] {
+  const raw = [process.env['GROQ_API_KEY'], process.env['GROQ_API_KEY_2']].filter(Boolean).join(',');
+  return raw.split(',').map(k => k.trim()).filter(Boolean);
 }
 
-/** Stage 1: classify the document type (focuses the extraction prompt). */
-async function classifyDoc(base64: string): Promise<string> {
-  const prompt = `What type of Indian document is this image? Answer with EXACTLY ONE word from: ${DOC_TYPES.join(', ')}. A person photo or selfie is "photo". Answer one word only.`;
-  const text = (await callGroqVision(base64, prompt, 16)).toLowerCase();
-  return DOC_TYPES.find(t => text.includes(t)) || 'other';
+/** Single Groq vision call with key rotation on rate-limit. Returns raw assistant text. */
+async function callGroqVision(base64: string, prompt: string, maxTokens: number): Promise<string> {
+  const keys = groqKeys();
+  if (!keys.length) throw new Error('GROQ_API_KEY not configured');
+  for (let i = 0; i < keys.length; i++) {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${keys[i]}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: prompt },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
+        ] }],
+        max_tokens: maxTokens,
+        temperature: 0,
+      }),
+    });
+    if (response.status === 429 && i < keys.length - 1) continue; // rate-limited → next key
+    const data = await response.json() as any;
+    const content = data?.choices?.[0]?.message?.content;
+    if (content) return content;
+    // empty/error body: if more keys remain and it looks like a limit, try next
+    if (data?.error && i < keys.length - 1) continue;
+    return content ?? '';
+  }
+  return '';
 }
 
 /**
- * Two-stage LLM extraction: classify → focused extract → validate.
- * Returns { suggested, raw }. Non-documents (photo/signature) yield empty.
+ * Single-call LLM extraction: one prompt returns document_type + all relevant fields
+ * (merged ID/academic/bank superset). Halves token use vs two-stage. Validates per field.
+ * Non-documents (photo/signature) yield empty.
  */
 export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
-  if (!process.env['GROQ_API_KEY']) throw new Error('GROQ_API_KEY not configured');
+  if (!groqKeys().length) throw new Error('GROQ_API_KEY not configured');
   if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) buffer = await pdfToImage(buffer);
   const base64 = buffer.toString('base64');
 
-  // Stage 1: classify
-  const docType = await classifyDoc(base64);
-  if (docType === 'photo' || docType === 'signature') return { suggested: {}, raw: { document_type: docType } };
-
-  // Stage 2: focused extract. Known type → its group superset. Unknown (other/form) →
-  // combined ID+academic superset (covers the vast majority), never the diluted all-73.
-  const fields = TYPE_FIELDS[docType] || [...new Set([...ID_FIELDS, ...ACADEMIC_FIELDS])];
+  // One superset covering ID + academic + bank; model also returns document_type.
+  const fields = ['document_type', ...new Set([...ID_FIELDS, ...ACADEMIC_FIELDS, ...BANK_FIELDS])];
   const prompt = buildExtractPrompt(fields);
   let parsed: any = {};
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -116,9 +121,10 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
     if (Object.values(parsed).some(v => v && String(v).trim())) break;
     if (attempt === 0) await new Promise(r => setTimeout(r, 800));
   }
-  parsed.document_type = docType;
+  const docType = String(parsed.document_type || '').trim().toLowerCase();
+  if (docType === 'photo' || docType === 'signature') return { suggested: {}, raw: { document_type: docType } };
 
-  // Stage 3: validate → real per-field confidence + needsReview flag
+  // Validate → real per-field confidence + needsReview flag
   const suggested: any = {};
   for (const [k, v] of Object.entries(parsed)) {
     if (k === 'document_type' || k === 'name_devanagari') continue;
