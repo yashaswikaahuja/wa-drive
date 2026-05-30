@@ -103,6 +103,9 @@ export async function upsertProfileFromExtraction(workspaceId: string, phone: st
     const nameField = suggested?.name;
     const name = (nameField && typeof nameField === 'object' ? nameField.value : nameField) || '';
     if (!name || String(name).trim().length < 2) return; // no identity → skip
+    // Skip if "phone" is actually an unresolved LID (15+ digits). Extraction stays
+    // cached, so the profile builds correctly once the resolver maps LID→phone.
+    if (!/^\d{7,13}$/.test(String(phone || ''))) return;
 
     // Find existing profiles for this phone
     const { rows } = await pool.query(
