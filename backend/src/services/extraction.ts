@@ -26,24 +26,32 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
     buffer = await pdfToImage(buffer);
   }
   const base64 = buffer.toString('base64');
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-      messages: [{ role: 'user', content: [
-        { type: 'text', text: EXTRACT_PROMPT },
-        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
-      ] }],
-      max_tokens: 2000,
-      temperature: 0,
-    }),
-  });
-  const data = await response.json() as any;
-  const text = data?.choices?.[0]?.message?.content ?? '';
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { suggested: {}, raw: {} };
-  const fields = JSON.parse(jsonMatch[0]);
+  let fields: any = {};
+  // Retry up to 2x on empty/no-JSON response (transient Groq empties drop docs otherwise)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [{ role: 'user', content: [
+          { type: 'text', text: EXTRACT_PROMPT },
+          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
+        ] }],
+        max_tokens: 2000,
+        temperature: 0,
+      }),
+    });
+    const data = await response.json() as any;
+    const text = data?.choices?.[0]?.message?.content ?? '';
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try { fields = JSON.parse(jsonMatch[0]); } catch { fields = {}; }
+    }
+    // Stop if we got at least one non-empty value; else retry once
+    if (Object.values(fields).some(v => v && String(v).trim())) break;
+    if (attempt === 0) await new Promise(r => setTimeout(r, 800));
+  }
   const suggested: any = {};
   for (const [k, v] of Object.entries(fields)) {
     if (v && String(v).trim()) suggested[k] = { value: v, source: 'document', documentId: fileId, confidence: 0.9 };
