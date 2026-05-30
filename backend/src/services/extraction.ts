@@ -309,7 +309,7 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
   const isImageMime = (mimetype || '').startsWith('image/') || mimetype === 'application/pdf';
   if (!isJpeg && !isPng && !isPdf && !isImageMime) return; // skip video/audio/unknown
   const buf = Buffer.from(buffer);
-  _extractQueue.push(async () => {
+  const run = (attempt: number) => _extractQueue.push(async () => {
     try {
       const { suggested, raw } = await extractFromBuffer(buf, fileId);
       // Persist AI-detected document type as the file's tag (drives chat badge + smart selection)
@@ -323,11 +323,21 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
         // Auto-build/update the customer's profile (find-or-create by name)
         if (phone) await upsertProfileFromExtraction(workspaceId, phone, suggested);
         console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields`);
+      } else if (docType === 'photo' || docType === 'signature') {
+        console.log(`[AutoExtract] ${fileId} → ${docType} (not an ID doc)`);
+      } else if (attempt < 2) {
+        // empty/unknown on a doc that should have data → retry (transient Groq empty)
+        console.warn(`[AutoExtract] ↻ ${fileId} empty, retry ${attempt + 1}`);
+        setTimeout(() => run(attempt + 1), 4000);
       } else {
-        console.log(`[AutoExtract] ${fileId} → ${docType || 'no-data'} (not an ID doc)`);
+        console.log(`[AutoExtract] ${fileId} → no-data after retries`);
       }
-    } catch (e: any) { console.warn(`[AutoExtract] ✗ ${fileId}:`, e.message); }
+    } catch (e: any) {
+      console.warn(`[AutoExtract] ✗ ${fileId}:`, e.message);
+      if (attempt < 2) setTimeout(() => run(attempt + 1), 4000); // crash/transient → retry
+    }
   });
+  run(0);
   setTimeout(_drainQueue, 500);
 }
 
