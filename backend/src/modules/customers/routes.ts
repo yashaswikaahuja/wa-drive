@@ -135,15 +135,33 @@ router.get('/group-docs/:phone', authMiddleware, async (req: any, res) => {
 
     const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
     // similarity: one name contained in the other, or share first+last token
+    function lev(x: string, y: string): number {
+      const m = x.length, n = y.length;
+      const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => [i].concat(Array(n).fill(0)));
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+      for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+        dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1] + (x[i-1] === y[j-1] ? 0 : 1));
+      return dp[m][n];
+    }
     function sameName(a: string, b: string): boolean {
       const na = norm(a), nb = norm(b);
       if (!na || !nb) return false;
       if (na === nb) return true;
       if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true;
-      const ta = a.toLowerCase().split(/\s+/).filter(Boolean);
-      const tb = b.toLowerCase().split(/\s+/).filter(Boolean);
-      const shared = ta.filter(t => t.length >= 3 && tb.includes(t));
-      return shared.length >= 2; // at least 2 shared name tokens
+      // Whole-name fuzzy (OCR typos): small edit distance relative to length
+      const maxLen = Math.max(na.length, nb.length);
+      const dist = lev(na, nb);
+      if (maxLen >= 6 && dist <= 2) return true;
+      if (maxLen >= 10 && dist <= 3) return true;
+      // Token overlap with near-matches
+      const ta = a.toLowerCase().split(/\s+/).filter(t => t.length >= 3);
+      const tb = b.toLowerCase().split(/\s+/).filter(t => t.length >= 3);
+      let exact = 0, near = 0;
+      for (const x of ta) for (const y of tb) {
+        if (x === y) exact++;
+        else if (Math.max(x.length, y.length) >= 4 && lev(x, y) <= 2) near++;
+      }
+      return exact >= 2 || (exact >= 1 && near >= 1) || (near >= 2);
     }
 
     const groups: { name: string; docs: any[] }[] = [];
