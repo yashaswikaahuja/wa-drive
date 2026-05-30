@@ -3,7 +3,7 @@ import { pool } from '../db.js';
 // ── Field GROUPS: a misclassification *within* a group loses no fields, because the
 // whole group shares one superset. Classification only needs to pick the right group. ──
 const ID_FIELDS = ['name','name_devanagari','father_name','mother_name','husband_name','dob','gender','category','religion','nationality','address','city','district','state','pincode','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','issue_date','expiry_date','place_of_issue'];
-const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','board_10th','passing_year_10th','marks_10th','percentage_10th','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_subject','issue_date'];
+const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','certificate_number','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','board_10th','passing_year_10th','marks_10th','percentage_10th','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_subject','issue_date'];
 const BANK_FIELDS = ['account_holder_name','bank_account_number','ifsc_code','bank_name','branch_name','address','city','state','pincode'];
 const TYPE_FIELDS: Record<string, string[]> = {
   aadhaar: ID_FIELDS, pan: ID_FIELDS, passport: ID_FIELDS, voter_id: ID_FIELDS,
@@ -123,9 +123,11 @@ function normalizeKeys(parsed: any, docType: string): any {
   };
   if (docType === 'marksheet_10th') {
     move('roll_number', 'roll_number_10th'); move('registration_number', 'registration_number_10th');
+    move('certificate_number', 'certificate_number_10th');
     move('marks_10th', 'percentage_10th'); move('marks', 'percentage_10th');
   } else if (docType === 'marksheet_12th') {
     move('roll_number', 'roll_number_12th'); move('registration_number', 'registration_number_12th');
+    move('certificate_number', 'certificate_number_12th');
     move('marks', 'marks_12th'); move('percentage', 'percentage_12th');
   } else if (docType === 'marksheet_graduation' || docType === 'marksheet_postgrad' || docType === 'certificate') {
     move('roll_number', 'roll_number_grad'); move('registration_number', 'registration_number_grad');
