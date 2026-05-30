@@ -71,9 +71,13 @@ export async function cacheExtraction(fileId: string, workspaceId: string, sugge
 
 /** Fire-and-forget background extraction after a document arrives. */
 export function autoExtractInBackground(buffer: Buffer, fileId: string, workspaceId: string, mimetype: string) {
-  // Only auto-extract images and PDFs (skip video/audio)
-  if (!mimetype.startsWith('image/') && mimetype !== 'application/pdf') return;
-  // Copy buffer ref before caller releases it
+  // Detect type by magic bytes (WhatsApp uploads often arrive as octet-stream)
+  const b = buffer;
+  const isJpeg = b[0] === 0xFF && b[1] === 0xD8;
+  const isPng = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47;
+  const isPdf = b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
+  const isImageMime = (mimetype || '').startsWith('image/') || mimetype === 'application/pdf';
+  if (!isJpeg && !isPng && !isPdf && !isImageMime) return; // skip video/audio/unknown
   const buf = Buffer.from(buffer);
   setTimeout(async () => {
     try {
