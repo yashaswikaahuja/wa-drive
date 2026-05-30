@@ -2,7 +2,7 @@ import { pool } from '../db.js';
 
 const EXTRACT_PROMPT = `Analyze this Indian document/identity image and extract ALL relevant information. Return ONLY a valid JSON object (no markdown, no explanation) with keys: document_type, name, father_name, mother_name, husband_name, spouse_name, guardian_name, dob, gender, category, religion, nationality, marital_status, blood_group, phone, alt_phone, email, address, permanent_address, city, district, state, pincode, country, aadhaar_number, pan_number, passport_number, voter_id_number, driving_license_number, ration_card_number, bank_account_number, ifsc_code, bank_name, branch_name, account_holder_name, roll_number, registration_number, enrollment_number, application_number, exam_name, exam_date, exam_center, exam_seat_number, subject, qualification, school_name, college_name, university_name, board_name, course, stream, branch_subject, passing_year_10th, marks_10th, percentage_10th, board_10th, passing_year_12th, marks_12th, percentage_12th, board_12th, stream_12th, passing_year_graduation, marks_graduation, percentage_graduation, graduation_university, graduation_subject, occupation, employer, designation, annual_income, expiry_date, issue_date, place_of_issue.
 
-Rules: Fill only fields present in the document, leave others empty. dob format DD/MM/YYYY. aadhaar_number is 12 digits no spaces. pan_number is 10 chars uppercase. Split city/state/district/pincode separately but keep full string in address. DO NOT mix unrelated IDs into one field. document_type one of: aadhaar, pan, passport, voter_id, driving_license, ration_card, marksheet_10th, marksheet_12th, marksheet_graduation, marksheet_postgrad, admit_card, result, certificate, bank_passbook, photo, signature, form, other. Return ONLY the JSON.`;
+Rules: Fill only fields present in the document, leave others empty. Transcribe names EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do not write "SADDHNA"). dob format DD/MM/YYYY. aadhaar_number is 12 digits no spaces. pan_number is 10 chars uppercase. Split city/state/district/pincode separately but keep full string in address. DO NOT mix unrelated IDs into one field. document_type one of: aadhaar, pan, passport, voter_id, driving_license, ration_card, marksheet_10th, marksheet_12th, marksheet_graduation, marksheet_postgrad, admit_card, result, certificate, bank_passbook, photo, signature, form, other. Return ONLY the JSON.`;
 
 /** Convert PDF first page to JPEG buffer via pdftoppm. */
 async function pdfToImage(buffer: Buffer): Promise<Buffer> {
@@ -36,6 +36,7 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
         { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
       ] }],
       max_tokens: 2000,
+      temperature: 0,
     }),
   });
   const data = await response.json() as any;
