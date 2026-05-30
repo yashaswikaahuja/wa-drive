@@ -271,16 +271,34 @@ export default function CustomerDetail() {
                 );
               })}
 
-              {/* Other fields not in schema */}
+              {/* Fields not in schema → grouped by their SOURCE document (provenance) */}
               {(() => {
                 const schemaKeys = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
-                const otherFields = Object.entries(flat).filter(([k]) => !schemaKeys.has(k) && k !== 'document_type');
-                if (!otherFields.length) return null;
-                return (
-                  <div className="card">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">Other details</p>
+                const raw = personDetail.data || {};
+                const DOC_LABELS: Record<string, string> = {
+                  aadhaar: 'Aadhaar', pan: 'PAN Card', passport: 'Passport', voter_id: 'Voter ID',
+                  driving_license: 'Driving License', ration_card: 'Ration Card',
+                  marksheet_10th: '10th (Matriculation)', marksheet_12th: '12th (Intermediate)',
+                  marksheet_graduation: 'Graduation', marksheet_postgrad: 'Post-Graduation',
+                  certificate: 'Certificate', result: 'Result', admit_card: 'Admit Card',
+                  bank_passbook: 'Bank Details',
+                };
+                // group leftover fields by source document
+                const groups: Record<string, [string, string][]> = {};
+                for (const [k, val] of Object.entries(flat)) {
+                  if (schemaKeys.has(k) || k === 'document_type' || !val) continue;
+                  const rv = raw[k];
+                  const dt = (rv && typeof rv === 'object' && rv.documentType) || 'other';
+                  (groups[dt] ||= []).push([k, val]);
+                }
+                const order = Object.keys(DOC_LABELS).concat('other');
+                return Object.entries(groups)
+                  .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+                  .map(([dt, fields]) => (
+                  <div key={dt} className="card">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{DOC_LABELS[dt] || 'Other details'}</p>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      {otherFields.map(([k, val]) => (
+                      {fields.map(([k, val]) => (
                         <div key={k} className="flex flex-col gap-0.5">
                           <span className="text-[10px] uppercase tracking-wide text-gray-500">{k.replace(/_/g, ' ')}</span>
                           <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
@@ -291,7 +309,7 @@ export default function CustomerDetail() {
                       ))}
                     </div>
                   </div>
-                );
+                ));
               })()}
             </div>
           </section>

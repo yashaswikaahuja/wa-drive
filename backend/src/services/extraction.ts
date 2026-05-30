@@ -17,6 +17,15 @@ const ALL_FIELDS = ['document_type','name','name_devanagari','father_name','moth
 
 const DOC_TYPES = ['aadhaar','pan','passport','voter_id','driving_license','ration_card','marksheet_10th','marksheet_12th','marksheet_graduation','marksheet_postgrad','admit_card','result','certificate','bank_passbook','photo','signature','form','other'];
 
+// Identity fields describe the PERSON (one copy, from most authoritative doc).
+const IDENTITY_FIELDS = new Set(['name','father_name','mother_name','husband_name','dob','gender','nationality','category','religion','aadhaar_number','pan_number','voter_id_number','address','permanent_address','phone','email','city','district','state','pincode']);
+// Trust order for identity fields — higher wins.
+const DOC_AUTHORITY: Record<string, number> = {
+  aadhaar: 100, passport: 90, pan: 80, voter_id: 70, driving_license: 70, ration_card: 60,
+  marksheet_10th: 40, marksheet_12th: 40, marksheet_graduation: 40, marksheet_postgrad: 40,
+  certificate: 30, result: 30, admit_card: 30, bank_passbook: 50, form: 10, other: 10,
+};
+
 function buildExtractPrompt(fields: string[]): string {
   return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari.
 document_type must be EXACTLY ONE of: ${DOC_TYPES.join(', ')} (a person photo/selfie is "photo").
@@ -126,7 +135,7 @@ function normalizeKeys(parsed: any, docType: string): any {
   }
   return out;
 }
- */
+
 export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
   if (!groqKeys().length) throw new Error('GROQ_API_KEY not configured');
   if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) buffer = await pdfToImage(buffer);
@@ -153,7 +162,7 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
     if (k === 'document_type' || k === 'name_devanagari') continue;
     if (!v || !String(v).trim()) continue;
     const { confidence, needsReview } = validateField(k, String(v));
-    suggested[k] = { value: v, source: 'document', documentId: fileId, confidence, needsReview };
+    suggested[k] = { value: v, source: 'document', documentType: docType, documentId: fileId, confidence, needsReview };
   }
   return { suggested, raw: parsed };
 }
@@ -252,6 +261,12 @@ export async function upsertProfileFromExtraction(workspaceId: string, phone: st
       const existingConf = existing && typeof existing === 'object' ? (existing.confidence ?? 0) : 0;
       if (existingSrc === 'manual' || existingSrc === 'document_corrected') continue; // operator wins
       if (!existingVal) { merged[k] = nv; added++; continue; } // fill missing
+      // Identity fields: a more authoritative document wins (Aadhaar > marksheet for name/dob/address)
+      if (IDENTITY_FIELDS.has(k)) {
+        const exAuth = DOC_AUTHORITY[(existing && existing.documentType) || ''] ?? 0;
+        const nvAuth = DOC_AUTHORITY[nv.documentType || ''] ?? 0;
+        if (nvAuth > exAuth) { merged[k] = nv; added++; continue; }
+      }
       // Corroboration: same value seen again → boost confidence (cross-document voting)
       if (String(existingVal).trim().toLowerCase() === String(nv.value).trim().toLowerCase()) {
         merged[k] = { ...existing, confidence: Math.min(0.99, existingConf + 0.05), needsReview: false };
