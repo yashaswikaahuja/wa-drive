@@ -1,21 +1,17 @@
 import { pool } from '../db.js';
 
-// ── Focused field sets per document type (avoids diluting attention across 73 fields) ──
-const COMMON_ID = ['name','name_devanagari','father_name','mother_name','dob','gender','address','city','district','state','pincode'];
+// ── Field GROUPS: a misclassification *within* a group loses no fields, because the
+// whole group shares one superset. Classification only needs to pick the right group. ──
+const ID_FIELDS = ['name','name_devanagari','father_name','mother_name','husband_name','dob','gender','category','religion','nationality','address','city','district','state','pincode','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','issue_date','expiry_date','place_of_issue'];
+const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','board_10th','passing_year_10th','marks_10th','percentage_10th','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_subject','issue_date'];
+const BANK_FIELDS = ['account_holder_name','bank_account_number','ifsc_code','bank_name','branch_name','address','city','state','pincode'];
 const TYPE_FIELDS: Record<string, string[]> = {
-  aadhaar: [...COMMON_ID, 'aadhaar_number'],
-  pan: ['name','name_devanagari','father_name','dob','pan_number'],
-  passport: [...COMMON_ID, 'passport_number','nationality','expiry_date','issue_date','place_of_issue'],
-  voter_id: [...COMMON_ID, 'voter_id_number'],
-  driving_license: [...COMMON_ID, 'driving_license_number','expiry_date','issue_date'],
-  ration_card: ['name','father_name','address','city','district','state','pincode','ration_card_number'],
-  marksheet_10th: ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','board_10th','passing_year_10th','marks_10th','percentage_10th','school_name'],
-  marksheet_12th: ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','school_name'],
-  marksheet_graduation: ['name','father_name','roll_number','registration_number','university_name','course','stream','graduation_subject','passing_year_graduation','marks_graduation','percentage_graduation'],
-  admit_card: ['name','father_name','dob','roll_number','registration_number','application_number','exam_name','exam_date','exam_center','exam_seat_number'],
-  result: ['name','father_name','roll_number','registration_number','exam_name','exam_date','marks_graduation','percentage_graduation'],
-  certificate: ['name','name_devanagari','father_name','dob','qualification','course','school_name','college_name','university_name','board_name','issue_date'],
-  bank_passbook: ['account_holder_name','bank_account_number','ifsc_code','bank_name','branch_name','address','pincode'],
+  aadhaar: ID_FIELDS, pan: ID_FIELDS, passport: ID_FIELDS, voter_id: ID_FIELDS,
+  driving_license: ID_FIELDS, ration_card: ID_FIELDS,
+  marksheet_10th: ACADEMIC_FIELDS, marksheet_12th: ACADEMIC_FIELDS,
+  marksheet_graduation: ACADEMIC_FIELDS, marksheet_postgrad: ACADEMIC_FIELDS,
+  certificate: ACADEMIC_FIELDS, admit_card: ACADEMIC_FIELDS, result: ACADEMIC_FIELDS,
+  bank_passbook: BANK_FIELDS,
 };
 const ALL_FIELDS = ['document_type','name','name_devanagari','father_name','mother_name','husband_name','spouse_name','guardian_name','dob','gender','category','religion','nationality','marital_status','blood_group','phone','alt_phone','email','address','permanent_address','city','district','state','pincode','country','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','bank_account_number','ifsc_code','bank_name','branch_name','account_holder_name','roll_number','registration_number','enrollment_number','application_number','exam_name','exam_date','exam_center','exam_seat_number','subject','qualification','school_name','college_name','university_name','board_name','course','stream','passing_year_10th','marks_10th','percentage_10th','board_10th','passing_year_12th','marks_12th','percentage_12th','board_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_university','graduation_subject','occupation','employer','designation','issue_date','expiry_date','place_of_issue'];
 
@@ -48,6 +44,10 @@ function validateField(key: string, value: string): { confidence: number; needsR
     return (m && yr >= 1900 && yr <= new Date().getFullYear()) ? { confidence: 0.92, needsReview: false } : { confidence: 0.5, needsReview: true };
   }
   if (key === 'email') return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? { confidence: 0.9, needsReview: false } : { confidence: 0.5, needsReview: true };
+  if (key === 'phone' || key === 'alt_phone') {
+    const digits = v.replace(/\D/g, '');
+    return /^[6-9]\d{9}$/.test(digits) ? { confidence: 0.9, needsReview: false } : { confidence: 0.3, needsReview: true };
+  }
   return { confidence: 0.85, needsReview: false };
 }
 
@@ -104,8 +104,9 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
   const docType = await classifyDoc(base64);
   if (docType === 'photo' || docType === 'signature') return { suggested: {}, raw: { document_type: docType } };
 
-  // Stage 2: focused extract (only this type's fields; fallback to all for unknown)
-  const fields = TYPE_FIELDS[docType] || ALL_FIELDS;
+  // Stage 2: focused extract. Known type → its group superset. Unknown (other/form) →
+  // combined ID+academic superset (covers the vast majority), never the diluted all-73.
+  const fields = TYPE_FIELDS[docType] || [...new Set([...ID_FIELDS, ...ACADEMIC_FIELDS])];
   const prompt = buildExtractPrompt(fields);
   let parsed: any = {};
   for (let attempt = 0; attempt < 2; attempt++) {
