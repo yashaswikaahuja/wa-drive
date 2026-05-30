@@ -1,8 +1,55 @@
 import { pool } from '../db.js';
 
-const EXTRACT_PROMPT = `Analyze this Indian document/identity image and extract ALL relevant information. Return ONLY a valid JSON object (no markdown, no explanation) with keys: document_type, name, father_name, mother_name, husband_name, spouse_name, guardian_name, dob, gender, category, religion, nationality, marital_status, blood_group, phone, alt_phone, email, address, permanent_address, city, district, state, pincode, country, aadhaar_number, pan_number, passport_number, voter_id_number, driving_license_number, ration_card_number, bank_account_number, ifsc_code, bank_name, branch_name, account_holder_name, roll_number, registration_number, enrollment_number, application_number, exam_name, exam_date, exam_center, exam_seat_number, subject, qualification, school_name, college_name, university_name, board_name, course, stream, branch_subject, passing_year_10th, marks_10th, percentage_10th, board_10th, passing_year_12th, marks_12th, percentage_12th, board_12th, stream_12th, passing_year_graduation, marks_graduation, percentage_graduation, graduation_university, graduation_subject, occupation, employer, designation, annual_income, expiry_date, issue_date, place_of_issue.
+// ── Focused field sets per document type (avoids diluting attention across 73 fields) ──
+const COMMON_ID = ['name','name_devanagari','father_name','mother_name','dob','gender','address','city','district','state','pincode'];
+const TYPE_FIELDS: Record<string, string[]> = {
+  aadhaar: [...COMMON_ID, 'aadhaar_number'],
+  pan: ['name','name_devanagari','father_name','dob','pan_number'],
+  passport: [...COMMON_ID, 'passport_number','nationality','expiry_date','issue_date','place_of_issue'],
+  voter_id: [...COMMON_ID, 'voter_id_number'],
+  driving_license: [...COMMON_ID, 'driving_license_number','expiry_date','issue_date'],
+  ration_card: ['name','father_name','address','city','district','state','pincode','ration_card_number'],
+  marksheet_10th: ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','board_10th','passing_year_10th','marks_10th','percentage_10th','school_name'],
+  marksheet_12th: ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','school_name'],
+  marksheet_graduation: ['name','father_name','roll_number','registration_number','university_name','course','stream','graduation_subject','passing_year_graduation','marks_graduation','percentage_graduation'],
+  admit_card: ['name','father_name','dob','roll_number','registration_number','application_number','exam_name','exam_date','exam_center','exam_seat_number'],
+  result: ['name','father_name','roll_number','registration_number','exam_name','exam_date','marks_graduation','percentage_graduation'],
+  certificate: ['name','name_devanagari','father_name','dob','qualification','course','school_name','college_name','university_name','board_name','issue_date'],
+  bank_passbook: ['account_holder_name','bank_account_number','ifsc_code','bank_name','branch_name','address','pincode'],
+};
+const ALL_FIELDS = ['document_type','name','name_devanagari','father_name','mother_name','husband_name','spouse_name','guardian_name','dob','gender','category','religion','nationality','marital_status','blood_group','phone','alt_phone','email','address','permanent_address','city','district','state','pincode','country','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','bank_account_number','ifsc_code','bank_name','branch_name','account_holder_name','roll_number','registration_number','enrollment_number','application_number','exam_name','exam_date','exam_center','exam_seat_number','subject','qualification','school_name','college_name','university_name','board_name','course','stream','passing_year_10th','marks_10th','percentage_10th','board_10th','passing_year_12th','marks_12th','percentage_12th','board_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_university','graduation_subject','occupation','employer','designation','issue_date','expiry_date','place_of_issue'];
 
-Rules: Fill only fields present in the document, leave others empty. Transcribe names EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do not write "SADDHNA"). dob format DD/MM/YYYY. aadhaar_number is 12 digits no spaces. pan_number is 10 chars uppercase. Split city/state/district/pincode separately but keep full string in address. DO NOT mix unrelated IDs into one field. document_type one of: aadhaar, pan, passport, voter_id, driving_license, ration_card, marksheet_10th, marksheet_12th, marksheet_graduation, marksheet_postgrad, admit_card, result, certificate, bank_passbook, photo, signature, form, other. Return ONLY the JSON.`;
+const DOC_TYPES = ['aadhaar','pan','passport','voter_id','driving_license','ration_card','marksheet_10th','marksheet_12th','marksheet_graduation','marksheet_postgrad','admit_card','result','certificate','bank_passbook','photo','signature','form','other'];
+
+function buildExtractPrompt(fields: string[]): string {
+  return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}.
+Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit. Return ONLY the JSON.`;
+}
+
+// ── Validation (deterministic correctness checks → real confidence) ──
+const VD = [[0,1,2,3,4,5,6,7,8,9],[1,2,3,4,0,6,7,8,9,5],[2,3,4,0,1,7,8,9,5,6],[3,4,0,1,2,8,9,5,6,7],[4,0,1,2,3,9,5,6,7,8],[5,9,8,7,6,0,4,3,2,1],[6,5,9,8,7,1,0,4,3,2],[7,6,5,9,8,2,1,0,4,3],[8,7,6,5,9,3,2,1,0,4],[9,8,7,6,5,4,3,2,1,0]];
+const VP = [[0,1,2,3,4,5,6,7,8,9],[1,5,7,6,2,8,3,0,9,4],[5,8,0,3,7,9,6,1,4,2],[8,9,1,6,0,4,3,5,2,7],[9,4,5,3,1,2,6,8,7,0],[4,2,8,6,5,7,3,9,0,1],[2,7,9,3,8,0,6,4,1,5],[7,0,4,6,9,1,3,2,5,8]];
+function aadhaarValid(n: string): boolean {
+  if (!/^\d{12}$/.test(n)) return false;
+  let c = 0; const r = n.split('').reverse();
+  for (let i = 0; i < r.length; i++) c = VD[c][VP[i % 8][parseInt(r[i], 10)]];
+  return c === 0;
+}
+/** Returns { confidence, needsReview } for a field's value. */
+function validateField(key: string, value: string): { confidence: number; needsReview: boolean } {
+  const v = String(value).trim();
+  if (key === 'aadhaar_number') return aadhaarValid(v.replace(/\s/g, '')) ? { confidence: 0.99, needsReview: false } : { confidence: 0.4, needsReview: true };
+  if (key === 'pan_number') return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(v) ? { confidence: 0.97, needsReview: false } : { confidence: 0.4, needsReview: true };
+  if (key === 'ifsc_code') return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(v) ? { confidence: 0.97, needsReview: false } : { confidence: 0.5, needsReview: true };
+  if (key === 'pincode') return /^\d{6}$/.test(v) ? { confidence: 0.95, needsReview: false } : { confidence: 0.5, needsReview: true };
+  if (key === 'dob') {
+    const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const yr = m ? parseInt(m[3], 10) : 0;
+    return (m && yr >= 1900 && yr <= new Date().getFullYear()) ? { confidence: 0.92, needsReview: false } : { confidence: 0.5, needsReview: true };
+  }
+  if (key === 'email') return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v) ? { confidence: 0.9, needsReview: false } : { confidence: 0.5, needsReview: true };
+  return { confidence: 0.85, needsReview: false };
+}
 
 /** Convert PDF first page to JPEG buffer via pdftoppm. */
 async function pdfToImage(buffer: Buffer): Promise<Buffer> {
@@ -17,46 +64,68 @@ async function pdfToImage(buffer: Buffer): Promise<Buffer> {
   return img;
 }
 
-/** Run Groq vision extraction on a document buffer. Returns { suggested, raw }. */
-export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
+/** Single Groq vision call. Returns raw assistant text. */
+async function callGroqVision(base64: string, prompt: string, maxTokens: number): Promise<string> {
   const GROQ_API_KEY = process.env['GROQ_API_KEY'];
-  if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
+  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+      messages: [{ role: 'user', content: [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
+      ] }],
+      max_tokens: maxTokens,
+      temperature: 0,
+    }),
+  });
+  const data = await response.json() as any;
+  return data?.choices?.[0]?.message?.content ?? '';
+}
 
-  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
-    buffer = await pdfToImage(buffer);
-  }
+/** Stage 1: classify the document type (focuses the extraction prompt). */
+async function classifyDoc(base64: string): Promise<string> {
+  const prompt = `What type of Indian document is this image? Answer with EXACTLY ONE word from: ${DOC_TYPES.join(', ')}. A person photo or selfie is "photo". Answer one word only.`;
+  const text = (await callGroqVision(base64, prompt, 16)).toLowerCase();
+  return DOC_TYPES.find(t => text.includes(t)) || 'other';
+}
+
+/**
+ * Two-stage LLM extraction: classify → focused extract → validate.
+ * Returns { suggested, raw }. Non-documents (photo/signature) yield empty.
+ */
+export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
+  if (!process.env['GROQ_API_KEY']) throw new Error('GROQ_API_KEY not configured');
+  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) buffer = await pdfToImage(buffer);
   const base64 = buffer.toString('base64');
-  let fields: any = {};
-  // Retry up to 2x on empty/no-JSON response (transient Groq empties drop docs otherwise)
+
+  // Stage 1: classify
+  const docType = await classifyDoc(base64);
+  if (docType === 'photo' || docType === 'signature') return { suggested: {}, raw: { document_type: docType } };
+
+  // Stage 2: focused extract (only this type's fields; fallback to all for unknown)
+  const fields = TYPE_FIELDS[docType] || ALL_FIELDS;
+  const prompt = buildExtractPrompt(fields);
+  let parsed: any = {};
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: EXTRACT_PROMPT },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
-        ] }],
-        max_tokens: 2000,
-        temperature: 0,
-      }),
-    });
-    const data = await response.json() as any;
-    const text = data?.choices?.[0]?.message?.content ?? '';
+    const text = await callGroqVision(base64, prompt, 2000);
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      try { fields = JSON.parse(jsonMatch[0]); } catch { fields = {}; }
-    }
-    // Stop if we got at least one non-empty value; else retry once
-    if (Object.values(fields).some(v => v && String(v).trim())) break;
+    if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = {}; } }
+    if (Object.values(parsed).some(v => v && String(v).trim())) break;
     if (attempt === 0) await new Promise(r => setTimeout(r, 800));
   }
+  parsed.document_type = docType;
+
+  // Stage 3: validate → real per-field confidence + needsReview flag
   const suggested: any = {};
-  for (const [k, v] of Object.entries(fields)) {
-    if (v && String(v).trim()) suggested[k] = { value: v, source: 'document', documentId: fileId, confidence: 0.9 };
+  for (const [k, v] of Object.entries(parsed)) {
+    if (k === 'document_type' || k === 'name_devanagari') continue;
+    if (!v || !String(v).trim()) continue;
+    const { confidence, needsReview } = validateField(k, String(v));
+    suggested[k] = { value: v, source: 'document', documentId: fileId, confidence, needsReview };
   }
-  return { suggested, raw: fields };
+  return { suggested, raw: parsed };
 }
 
 /** Read cached extraction for a fileId (instant, no Groq call). */
@@ -134,18 +203,27 @@ export async function upsertProfileFromExtraction(workspaceId: string, phone: st
       return;
     }
 
-    // Existing → merge only MISSING fields; never touch confirmed ones
+    // Existing → confidence-aware merge. Fill missing fields; and let a higher-confidence
+    // (e.g. checksum-validated) reading replace a lower-confidence auto value. Never
+    // touch operator-confirmed fields.
     const current = match.data || {};
     const merged: any = { ...current };
     let added = 0;
     for (const [k, v] of Object.entries(suggested)) {
+      const nv = v as any;
       const existing = current[k];
       const existingVal = existing && typeof existing === 'object' ? existing.value : existing;
       const existingSrc = existing && typeof existing === 'object' ? existing.source : null;
-      // Skip if operator already confirmed this field
-      if (existingSrc === 'manual' || existingSrc === 'document_corrected') continue;
-      // Only fill if currently empty
-      if (!existingVal) { merged[k] = v; added++; }
+      const existingConf = existing && typeof existing === 'object' ? (existing.confidence ?? 0) : 0;
+      if (existingSrc === 'manual' || existingSrc === 'document_corrected') continue; // operator wins
+      if (!existingVal) { merged[k] = nv; added++; continue; } // fill missing
+      // Corroboration: same value seen again → boost confidence (cross-document voting)
+      if (String(existingVal).trim().toLowerCase() === String(nv.value).trim().toLowerCase()) {
+        merged[k] = { ...existing, confidence: Math.min(0.99, existingConf + 0.05), needsReview: false };
+        added++;
+      } else if ((nv.confidence ?? 0) > existingConf + 0.1) {
+        merged[k] = nv; added++; // meaningfully more confident reading wins
+      }
     }
     if (added > 0) {
       await pool.query(
