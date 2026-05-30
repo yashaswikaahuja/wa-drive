@@ -98,7 +98,7 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
 
     // Zero-effort prep: extract in background so Build Profile is instant later.
     // Does NOT auto-apply to profile — operator still reviews. Just pre-computes.
-    if (uploadWsId) autoExtractInBackground(req.file.buffer, fileId, uploadWsId, mimetype);
+    if (uploadWsId) autoExtractInBackground(req.file.buffer, fileId, uploadWsId, mimetype, phone);
 
     req.file.buffer = null; // Release buffer
 

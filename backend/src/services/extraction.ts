@@ -69,8 +69,84 @@ export async function cacheExtraction(fileId: string, workspaceId: string, sugge
   } catch (e: any) { console.warn('[extract] cache write failed:', e.message); }
 }
 
+// Fuzzy name match (same logic as group-docs) for find-or-create
+function namesMatch(a: string, b: string): boolean {
+  const norm = (x: string) => (x || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+  const na = norm(a), nb = norm(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true;
+  const lev = (x: string, y: string): number => {
+    const m = x.length, n = y.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => [i].concat(Array(n).fill(0)));
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+      dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1] + (x[i-1] === y[j-1] ? 0 : 1));
+    return dp[m][n];
+  };
+  const maxLen = Math.max(na.length, nb.length);
+  const dist = lev(na, nb);
+  if (maxLen >= 6 && dist <= 2) return true;
+  if (maxLen >= 10 && dist <= 3) return true;
+  return false;
+}
+
+/**
+ * Auto-build/update a profile from extracted data.
+ * - New name on this phone → create profile.
+ * - Existing (fuzzy-matched) name → merge ONLY missing fields (source 'auto').
+ * - Never overwrites operator-confirmed fields (manual / document_corrected).
+ * Skipped if no name (photo/signature docs have no identity).
+ */
+export async function upsertProfileFromExtraction(workspaceId: string, phone: string, suggested: any): Promise<void> {
+  try {
+    const nameField = suggested?.name;
+    const name = (nameField && typeof nameField === 'object' ? nameField.value : nameField) || '';
+    if (!name || String(name).trim().length < 2) return; // no identity → skip
+
+    // Find existing profiles for this phone
+    const { rows } = await pool.query(
+      `SELECT id, name, display_label, data FROM profiles WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL`,
+      [workspaceId, phone]
+    );
+    const match = rows.find((p: any) => namesMatch(p.display_label || p.name || '', name));
+
+    if (!match) {
+      // New applicant → create profile (relationship 'self' by default)
+      await pool.query(
+        `INSERT INTO profiles (workspace_id, primary_contact_phone, name, display_label, relationship, data)
+         VALUES ($1,$2,$3,$4,'self',$5)`,
+        [workspaceId, phone, name, name, JSON.stringify(suggested)]
+      );
+      console.log(`[AutoProfile] created "${name}" (${phone})`);
+      return;
+    }
+
+    // Existing → merge only MISSING fields; never touch confirmed ones
+    const current = match.data || {};
+    const merged: any = { ...current };
+    let added = 0;
+    for (const [k, v] of Object.entries(suggested)) {
+      const existing = current[k];
+      const existingVal = existing && typeof existing === 'object' ? existing.value : existing;
+      const existingSrc = existing && typeof existing === 'object' ? existing.source : null;
+      // Skip if operator already confirmed this field
+      if (existingSrc === 'manual' || existingSrc === 'document_corrected') continue;
+      // Only fill if currently empty
+      if (!existingVal) { merged[k] = v; added++; }
+    }
+    if (added > 0) {
+      await pool.query(
+        `UPDATE profiles SET data = $1::jsonb, updated_at = now() WHERE id = $2`,
+        [JSON.stringify(merged), match.id]
+      );
+      console.log(`[AutoProfile] updated "${match.display_label || match.name}" +${added} fields`);
+    }
+  } catch (e: any) { console.warn('[AutoProfile] failed:', e.message); }
+}
+
 /** Fire-and-forget background extraction after a document arrives. */
-export function autoExtractInBackground(buffer: Buffer, fileId: string, workspaceId: string, mimetype: string) {
+export function autoExtractInBackground(buffer: Buffer, fileId: string, workspaceId: string, mimetype: string, phone?: string) {
   // Detect type by magic bytes (WhatsApp uploads often arrive as octet-stream)
   const b = buffer;
   const isJpeg = b[0] === 0xFF && b[1] === 0xD8;
@@ -90,7 +166,9 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
       }
       if (Object.keys(suggested).length > 0) {
         await cacheExtraction(fileId, workspaceId, suggested);
-        console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields cached`);
+        // Auto-build/update the customer's profile (find-or-create by name)
+        if (phone) await upsertProfileFromExtraction(workspaceId, phone, suggested);
+        console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields`);
       } else {
         console.log(`[AutoExtract] ${fileId} → ${docType || 'no-data'} (not an ID doc)`);
       }
