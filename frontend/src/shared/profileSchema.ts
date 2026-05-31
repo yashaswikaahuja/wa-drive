@@ -11,6 +11,15 @@ export interface Section {
   fields: FieldDef[];
 }
 
+// Which document types feed which section (used to place extra/non-schema fields in the right section)
+export const SECTION_FOR_DOCTYPE: Record<string, string> = {
+  aadhaar: 'identity', pan: 'identity', passport: 'identity', voter_id: 'identity',
+  driving_license: 'identity', ration_card: 'identity',
+  marksheet_10th: 'education_10th',
+  marksheet_12th: 'education_12th',
+  marksheet_graduation: 'education_grad', marksheet_postgrad: 'education_grad', certificate: 'education_grad',
+};
+
 export const PROFILE_SCHEMA: Section[] = [
   {
     id: 'personal',

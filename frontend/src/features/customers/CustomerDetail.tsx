@@ -5,7 +5,7 @@ import {
   Sparkle, CheckCircle, X, FilePdf, UserPlus
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
-import { PROFILE_SCHEMA, getCompleteness, flattenProfileData } from '../../shared/profileSchema';
+import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
@@ -224,9 +224,18 @@ export default function CustomerDetail() {
               {PROFILE_SCHEMA.map(section => {
                 const raw = personDetail.data || {};
                 const sflat = flattenProfileData(raw);
-                const hasAny = section.fields.some(f => sflat[f.key]);
+                const schemaKeysAll = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
+                // extra fields (not in any schema section) whose source document maps to THIS section
+                const extras = Object.entries(raw).filter(([k, v]: any) => {
+                  if (schemaKeysAll.has(k) || k === 'document_type') return false;
+                  const val = v && typeof v === 'object' ? v.value : v;
+                  if (!val) return false;
+                  const dt = v && typeof v === 'object' ? v.documentType : null;
+                  return dt && SECTION_FOR_DOCTYPE[dt] === section.id;
+                });
+                const hasAny = section.fields.some(f => sflat[f.key]) || extras.length > 0;
                 const visibleFields = section.fields.filter(f => sflat[f.key] || f.required);
-                if (!visibleFields.length) return null;
+                if (!visibleFields.length && !extras.length) return null;
                 return (
                   <div key={section.id} className="card">
                     <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{section.title}</p>
@@ -260,6 +269,27 @@ export default function CustomerDetail() {
                             </div>
                           );
                         })}
+                        {extras.map(([k, v]: any) => {
+                          const val = v && typeof v === 'object' ? v.value : v;
+                          const isEditing = editingField === k;
+                          return (
+                            <div key={k} className="flex flex-col gap-0.5">
+                              <span className="text-[10px] uppercase tracking-wide text-gray-500 capitalize">{k.replace(/_(10th|12th|grad)$/, '').replace(/_/g, ' ')}</span>
+                              {isEditing ? (
+                                <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+                                  onBlur={() => { if (editValue !== (val || '')) saveField(k, editValue); else setEditingField(null); }}
+                                  onKeyDown={e => { if (e.key === 'Enter') saveField(k, editValue); if (e.key === 'Escape') setEditingField(null); }}
+                                  className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
+                              ) : (
+                                <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
+                                  <span className="text-sm text-gray-100 truncate" title={val || ''}>{val}</span>
+                                  <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />
+                                  <PencilSimple size={11} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                     {addingInSection === section.id ? (
@@ -278,24 +308,20 @@ export default function CustomerDetail() {
                 );
               })}
 
-              {/* Fields not in schema → grouped by their SOURCE document (provenance) */}
+              {/* Fields whose source document has NO dedicated section → grouped by document */}
               {(() => {
                 const schemaKeys = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
                 const raw = personDetail.data || {};
                 const DOC_LABELS: Record<string, string> = {
-                  aadhaar: 'Aadhaar', pan: 'PAN Card', passport: 'Passport', voter_id: 'Voter ID',
-                  driving_license: 'Driving License', ration_card: 'Ration Card',
-                  marksheet_10th: '10th (Matriculation)', marksheet_12th: '12th (Intermediate)',
-                  marksheet_graduation: 'Graduation', marksheet_postgrad: 'Post-Graduation',
-                  certificate: 'Certificate', result: 'Result', admit_card: 'Admit Card',
-                  bank_passbook: 'Bank Details',
+                  result: 'Result', admit_card: 'Admit Card', bank_passbook: 'Bank Details',
                 };
-                // group leftover fields by source document
+                // only fields whose docType is NOT already mapped to a schema section
                 const groups: Record<string, [string, string][]> = {};
                 for (const [k, val] of Object.entries(flat)) {
                   if (schemaKeys.has(k) || k === 'document_type' || !val) continue;
                   const rv = raw[k];
                   const dt = (rv && typeof rv === 'object' && rv.documentType) || 'other';
+                  if (SECTION_FOR_DOCTYPE[dt]) continue; // already shown inside its schema section
                   (groups[dt] ||= []).push([k, val]);
                 }
                 const order = Object.keys(DOC_LABELS).concat('other');
