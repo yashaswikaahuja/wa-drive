@@ -52,7 +52,15 @@ router.get('/persons/:id', authMiddleware, async (req: any, res) => {
       [req.params.id, req.user.workspaceId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Person not found' });
-    res.json(rows[0]);
+    const person = rows[0];
+    // Document-centric: derive fields from per-document extractions; operator edits (in data) win.
+    try {
+      const { deriveProfile } = await import('../../services/deriveProfile.js');
+      const personKey = (person.displayLabel || person.name || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+      const derived = await deriveProfile(req.user.workspaceId, person.phone, personKey, person.data || {});
+      if (Object.keys(derived).length > 0) person.data = derived;
+    } catch (e: any) { console.warn('[deriveProfile]', e.message); }
+    res.json(person);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
