@@ -3,7 +3,7 @@ import { pool } from '../db.js';
 // ── Field GROUPS: a misclassification *within* a group loses no fields, because the
 // whole group shares one superset. Classification only needs to pick the right group. ──
 const ID_FIELDS = ['name','name_devanagari','father_name','mother_name','husband_name','dob','gender','category','religion','nationality','address','city','district','state','pincode','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','issue_date','expiry_date','place_of_issue'];
-const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','certificate_number','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','marks_obtained','total_marks','percentage','board_10th','passing_year_10th','marks_10th','percentage_10th','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_subject','issue_date'];
+const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','certificate_number','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','marks_obtained','total_marks','percentage','division','board_10th','passing_year_10th','marks_10th','percentage_10th','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_subject','issue_date'];
 const BANK_FIELDS = ['account_holder_name','bank_account_number','ifsc_code','bank_name','branch_name','address','city','state','pincode'];
 const TYPE_FIELDS: Record<string, string[]> = {
   aadhaar: ID_FIELDS, pan: ID_FIELDS, passport: ID_FIELDS, voter_id: ID_FIELDS,
@@ -29,7 +29,7 @@ const DOC_AUTHORITY: Record<string, number> = {
 function buildExtractPrompt(fields: string[]): string {
   return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari.
 document_type must be EXACTLY ONE of: ${DOC_TYPES.join(', ')} (a person photo/selfie is "photo").
-Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. phone is a 10-digit mobile only — never put an Aadhaar/ID number in phone. For marksheets, marks_obtained is the marks the student scored and total_marks is the maximum/out-of marks (e.g. "391/500" → marks_obtained 391, total_marks 500); percentage is the % if printed. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit. Return ONLY the JSON.`;
+Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. phone is a 10-digit mobile only — never put an Aadhaar/ID number in phone. For marksheets, marks_obtained is the marks the student scored and total_marks is the maximum/out-of marks (e.g. "391/500" → marks_obtained 391, total_marks 500); percentage is the % if printed. division is the class/grade if printed (e.g. "FIRST","SECOND","Distinction") — put it in division NOT percentage. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit. Return ONLY the JSON.`;
 }
 
 // ── Validation (deterministic correctness checks → real confidence) ──
@@ -125,18 +125,18 @@ function normalizeKeys(parsed: any, docType: string): any {
     move('roll_number', 'roll_number_10th'); move('registration_number', 'registration_number_10th');
     move('certificate_number', 'certificate_number_10th');
     move('marks_obtained', 'marks_obtained_10th'); move('marks_10th', 'marks_obtained_10th');
-    move('total_marks', 'total_marks_10th'); move('percentage', 'percentage_10th');
+    move('total_marks', 'total_marks_10th'); move('percentage', 'percentage_10th'); move('division', 'division_10th');
   } else if (docType === 'marksheet_12th') {
     move('roll_number', 'roll_number_12th'); move('registration_number', 'registration_number_12th');
     move('certificate_number', 'certificate_number_12th');
     move('marks_obtained', 'marks_obtained_12th'); move('marks_12th', 'marks_obtained_12th');
-    move('total_marks', 'total_marks_12th'); move('percentage', 'percentage_12th');
+    move('total_marks', 'total_marks_12th'); move('percentage', 'percentage_12th'); move('division', 'division_12th');
   } else if (docType === 'marksheet_graduation' || docType === 'marksheet_postgrad' || docType === 'certificate') {
     move('roll_number', 'roll_number_grad'); move('registration_number', 'registration_number_grad');
     move('enrollment_number', 'registration_number_grad');
     move('passing_year_graduation', 'passing_year_grad');
     move('marks_obtained', 'marks_obtained_grad'); move('marks_graduation', 'marks_obtained_grad');
-    move('total_marks', 'total_marks_grad'); move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad');
+    move('total_marks', 'total_marks_grad'); move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad'); move('division', 'division_grad');
     move('course', 'degree'); move('qualification', 'degree');
   }
   return out;
