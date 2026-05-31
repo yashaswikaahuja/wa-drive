@@ -122,13 +122,18 @@ function normalizeKeys(parsed: any, docType: string): any {
     move('certificate_number', 'certificate_number_12th');
     move('marks_obtained', 'marks_obtained_12th'); move('marks_12th', 'marks_obtained_12th');
     move('total_marks', 'total_marks_12th'); move('percentage', 'percentage_12th'); move('division', 'division_12th');
-  } else if (docType === 'marksheet_graduation' || docType === 'marksheet_postgrad' || docType === 'certificate') {
+  } else if (docType === 'marksheet_graduation' || docType === 'marksheet_postgrad') {
     move('roll_number', 'roll_number_grad'); move('registration_number', 'registration_number_grad');
     move('enrollment_number', 'registration_number_grad');
     move('passing_year_graduation', 'passing_year_grad');
     move('marks_obtained', 'marks_obtained_grad'); move('marks_graduation', 'marks_obtained_grad');
     move('total_marks', 'total_marks_grad'); move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad'); move('division', 'division_grad');
     move('course', 'degree'); move('qualification', 'degree');
+  } else if (docType === 'certificate') {
+    // A certificate's roll/registration is ambiguous — do NOT claim it as graduation data
+    // (prevents a 12th-style cert leaking its roll into the Graduation section).
+    move('course', 'degree'); move('qualification', 'degree');
+    move('passing_year_graduation', 'passing_year_grad'); move('percentage_graduation', 'percentage_grad');
   }
   return out;
 }
