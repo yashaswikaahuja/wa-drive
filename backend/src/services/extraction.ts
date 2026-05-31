@@ -164,6 +164,7 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
 
   // Validate → real per-field confidence + needsReview flag
   const suggested: any = {};
+  if (docType) suggested.document_type = { value: docType, source: 'document', documentId: fileId };
   for (const [k, v] of Object.entries(parsed)) {
     if (k === 'document_type' || k === 'name_devanagari') continue;
     if (!v || !String(v).trim()) continue;
@@ -181,7 +182,7 @@ export async function getCachedExtraction(fileId: string): Promise<any | null> {
   } catch { return null; }
 }
 
-/** Store extraction result so the operator's Build Profile is instant. */
+/** Store extraction result so the operator's Build Profile is instant. Also writes the doc tag. */
 export async function cacheExtraction(fileId: string, workspaceId: string, suggested: any): Promise<void> {
   try {
     await pool.query(
@@ -189,6 +190,10 @@ export async function cacheExtraction(fileId: string, workspaceId: string, sugge
        VALUES ($1, $2, $3, now()) ON CONFLICT (file_id) DO UPDATE SET suggested = $3, created_at = now()`,
       [fileId, workspaceId, JSON.stringify(suggested)]
     );
+    // Tag the file from its detected document_type (works for PDFs and images alike)
+    const dt = suggested?.document_type?.value || suggested?.document_type;
+    const label = dt ? DOC_TYPE_LABELS[String(dt)] : null;
+    if (label) await pool.query('UPDATE drive_files SET tag = $1 WHERE id = $2 AND tag IS NULL', [label, fileId]);
   } catch (e: any) { console.warn('[extract] cache write failed:', e.message); }
 }
 
