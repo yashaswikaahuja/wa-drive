@@ -310,31 +310,29 @@ export default function CustomerDetail() {
                 );
               })}
 
-              {/* Fields whose source document has NO dedicated section → grouped by document */}
+              {/* Fields whose source document has NO dedicated section → DYNAMIC section per document */}
               {(() => {
                 const schemaKeys = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
                 const raw = personDetail.data || {};
-                const DOC_LABELS: Record<string, string> = {
-                  result: 'Result', admit_card: 'Admit Card', bank_passbook: 'Bank Details',
-                };
-                // only fields whose docType is NOT already mapped to a schema section
-                const NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name']);
-                const groups: Record<string, [string, string][]> = {};
+                const NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name','document_label']);
+                const humanize = (dt: string) => dt.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                // group fields (whose docType has no schema section) by a TITLE derived from document_label
+                const groups: Record<string, { title: string; fields: [string, string][] }> = {};
                 for (const [k, val] of Object.entries(flat)) {
                   if (schemaKeys.has(k) || k === 'document_type' || !val || NOISE.has(k)) continue;
                   const rv = raw[k];
                   const dt = (rv && typeof rv === 'object' && rv.documentType) || 'other';
                   if (SECTION_FOR_DOCTYPE[dt]) continue; // already shown inside its schema section
-                  (groups[dt] ||= []).push([k, val]);
+                  // title: the document's own label if present, else humanized docType
+                  const labelEntry = Object.entries(raw).find(([kk, vv]: any) => kk === 'document_label' && vv?.documentType === dt);
+                  const title = (labelEntry && (labelEntry[1] as any).value) || (dt === 'other' ? 'Other Details' : humanize(dt));
+                  (groups[title] ||= { title, fields: [] }).fields.push([k, val]);
                 }
-                const order = Object.keys(DOC_LABELS).concat('other');
-                return Object.entries(groups)
-                  .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
-                  .map(([dt, fields]) => (
-                  <div key={dt} className="card">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{DOC_LABELS[dt] || 'Other details'}</p>
+                return Object.values(groups).map(g => (
+                  <div key={g.title} className="card">
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{g.title}</p>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      {fields.map(([k, val]) => (
+                      {g.fields.map(([k, val]) => (
                         <div key={k} className="flex flex-col gap-0.5">
                           <span className="text-[10px] uppercase tracking-wide text-gray-500">{k.replace(/_/g, ' ')}</span>
                           <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">

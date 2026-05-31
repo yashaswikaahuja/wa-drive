@@ -18,8 +18,10 @@ const ALL_FIELDS = ['document_type','name','name_devanagari','father_name','moth
 const DOC_TYPES = ['aadhaar','pan','passport','voter_id','driving_license','ration_card','marksheet_10th','marksheet_12th','marksheet_graduation','marksheet_postgrad','admit_card','result','certificate','bank_passbook','photo','signature','form','other'];
 
 function buildExtractPrompt(fields: string[]): string {
-  return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari.
+  return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari, document_label, extra_fields.
 document_type must be EXACTLY ONE of: ${DOC_TYPES.join(', ')} (a person photo/selfie is "photo").
+document_label: a short human title for this document (e.g. "Caste Certificate", "Income Certificate", "Marriage Certificate", "Domicile Certificate", "Experience Letter", "Property Document"). 
+extra_fields: an OBJECT of any other important labelled values present that don't fit the keys above, using snake_case keys (e.g. {"caste":"OBC","certificate_authority":"Tahsildar","valid_until":"2026"}). Use {} if none.
 Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. phone is a 10-digit mobile only — never put an Aadhaar/ID number in phone. For marksheets, marks_obtained is the marks the student scored and total_marks is the maximum/out-of marks (e.g. "391/500" → marks_obtained 391, total_marks 500); percentage is the % if printed. division is the class/grade if printed (e.g. "FIRST","SECOND","Distinction") — put it in division NOT percentage. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit. Return ONLY the JSON.`;
 }
 
@@ -181,11 +183,23 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
   // Validate → real per-field confidence + needsReview flag
   const suggested: any = {};
   if (docType) suggested.document_type = { value: docType, source: 'document', documentId: fileId };
+  const docLabel = String(parsed.document_label?.value ?? parsed.document_label ?? '').trim();
+  if (docLabel) suggested.document_label = { value: docLabel, source: 'document', documentType: docType, documentId: fileId };
   for (const [k, v] of Object.entries(parsed)) {
-    if (k === 'document_type' || k === 'name_devanagari') continue;
+    if (k === 'document_type' || k === 'name_devanagari' || k === 'document_label' || k === 'extra_fields') continue;
     if (!v || !String(v).trim()) continue;
     const { confidence, needsReview } = validateField(k, String(v));
     suggested[k] = { value: v, source: 'document', documentType: docType, documentId: fileId, confidence, needsReview };
+  }
+  // Open-ended extra fields for odd/unspecified documents → flattened with provenance
+  const extra = parsed.extra_fields && typeof parsed.extra_fields === 'object' ? parsed.extra_fields : null;
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) {
+      const val = (v && typeof v === 'object' ? (v as any).value : v);
+      const key = k.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      if (!key || !val || !String(val).trim() || suggested[key]) continue;
+      suggested[key] = { value: val, source: 'document', documentType: docType, documentId: fileId, confidence: 0.8, needsReview: false, extra: true };
+    }
   }
   return { suggested, raw: parsed };
 }
