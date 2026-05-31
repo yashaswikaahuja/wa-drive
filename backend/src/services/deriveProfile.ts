@@ -25,6 +25,9 @@ export async function deriveProfile(workspaceId: string, phone: string, personKe
       if (k === 'document_type') continue;
       const nv = v as any;
       if (!nv || (typeof nv === 'object' && !String(nv.value ?? '').trim())) continue;
+      const nvValRaw = String(nv.value ?? '').trim();
+      // Guard: a "degree" that is really a school-level exam name is mis-placed (from a null-typed doc) — skip it.
+      if (k === 'degree' && /intermediate|secondary|matric|10\+2|high school|class (10|12)/i.test(nvValRaw)) continue;
       const cur = result[k];
       if (!cur) { result[k] = nv; continue; }
       const curAuth = DOC_AUTHORITY[cur.documentType || ''] ?? 0;
