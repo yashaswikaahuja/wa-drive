@@ -226,8 +226,10 @@ export default function CustomerDetail() {
                 const sflat = flattenProfileData(raw);
                 const schemaKeysAll = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
                 // extra fields (not in any schema section) whose source document maps to THIS section
+                const GENERIC_NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name']);
                 const extras = Object.entries(raw).filter(([k, v]: any) => {
                   if (schemaKeysAll.has(k) || k === 'document_type') return false;
+                  if (GENERIC_NOISE.has(k)) return false; // unsuffixed generic — its level-specific key is shown instead
                   const val = v && typeof v === 'object' ? v.value : v;
                   if (!val) return false;
                   const dt = v && typeof v === 'object' ? v.documentType : null;
@@ -316,9 +318,10 @@ export default function CustomerDetail() {
                   result: 'Result', admit_card: 'Admit Card', bank_passbook: 'Bank Details',
                 };
                 // only fields whose docType is NOT already mapped to a schema section
+                const NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name']);
                 const groups: Record<string, [string, string][]> = {};
                 for (const [k, val] of Object.entries(flat)) {
-                  if (schemaKeys.has(k) || k === 'document_type' || !val) continue;
+                  if (schemaKeys.has(k) || k === 'document_type' || !val || NOISE.has(k)) continue;
                   const rv = raw[k];
                   const dt = (rv && typeof rv === 'object' && rv.documentType) || 'other';
                   if (SECTION_FOR_DOCTYPE[dt]) continue; // already shown inside its schema section

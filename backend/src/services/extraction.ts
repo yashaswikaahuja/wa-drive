@@ -130,10 +130,14 @@ function normalizeKeys(parsed: any, docType: string): any {
     move('total_marks', 'total_marks_grad'); move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad'); move('division', 'division_grad');
     move('course', 'degree'); move('qualification', 'degree');
   } else if (docType === 'certificate') {
-    // A certificate's roll/registration is ambiguous — do NOT claim it as graduation data
-    // (prevents a 12th-style cert leaking its roll into the Graduation section).
+    // Certificates map to the Graduation section. Map its grad-ish fields there, but NOT
+    // roll/registration (ambiguous — a 12th-style cert would leak its roll into Graduation).
     move('course', 'degree'); move('qualification', 'degree');
-    move('passing_year_graduation', 'passing_year_grad'); move('percentage_graduation', 'percentage_grad');
+    move('passing_year_graduation', 'passing_year_grad');
+    move('marks_obtained', 'marks_obtained_grad'); move('marks_graduation', 'marks_obtained_grad');
+    move('total_marks', 'total_marks_grad');
+    move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad');
+    move('division', 'division_grad'); move('enrollment_number', 'registration_number_grad');
   }
   return out;
 }
