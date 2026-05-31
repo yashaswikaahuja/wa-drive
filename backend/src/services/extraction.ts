@@ -3,7 +3,7 @@ import { pool } from '../db.js';
 // ── Field GROUPS: a misclassification *within* a group loses no fields, because the
 // whole group shares one superset. Classification only needs to pick the right group. ──
 const ID_FIELDS = ['name','name_devanagari','father_name','mother_name','husband_name','dob','gender','category','religion','nationality','address','city','district','state','pincode','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','issue_date','expiry_date','place_of_issue'];
-const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','certificate_number','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','marks_obtained','total_marks','percentage','division','board_10th','passing_year_10th','marks_10th','percentage_10th','board_12th','passing_year_12th','marks_12th','percentage_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_subject','issue_date'];
+const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','certificate_number','board','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','marks_obtained','total_marks','percentage','division','passing_year','graduation_subject','issue_date'];
 const BANK_FIELDS = ['account_holder_name','bank_account_number','ifsc_code','bank_name','branch_name','address','city','state','pincode'];
 const TYPE_FIELDS: Record<string, string[]> = {
   aadhaar: ID_FIELDS, pan: ID_FIELDS, passport: ID_FIELDS, voter_id: ID_FIELDS,
@@ -127,30 +127,45 @@ function normalizeKeys(parsed: any, docType: string): any {
   }
   if (docType === 'marksheet_10th') {
     move('roll_number', 'roll_number_10th'); move('registration_number', 'registration_number_10th');
-    move('certificate_number', 'certificate_number_10th');
+    move('certificate_number', 'certificate_number_10th'); move('board', 'board_10th'); move('passing_year', 'passing_year_10th');
     move('marks_obtained', 'marks_obtained_10th'); move('marks_10th', 'marks_obtained_10th');
     move('total_marks', 'total_marks_10th'); move('percentage', 'percentage_10th'); move('division', 'division_10th');
   } else if (docType === 'marksheet_12th') {
     move('roll_number', 'roll_number_12th'); move('registration_number', 'registration_number_12th');
-    move('certificate_number', 'certificate_number_12th');
+    move('certificate_number', 'certificate_number_12th'); move('board', 'board_12th'); move('passing_year', 'passing_year_12th'); move('stream', 'stream_12th');
     move('marks_obtained', 'marks_obtained_12th'); move('marks_12th', 'marks_obtained_12th');
     move('total_marks', 'total_marks_12th'); move('percentage', 'percentage_12th'); move('division', 'division_12th');
   } else if (docType === 'marksheet_graduation' || docType === 'marksheet_postgrad') {
     move('roll_number', 'roll_number_grad'); move('registration_number', 'registration_number_grad');
     move('enrollment_number', 'registration_number_grad');
-    move('passing_year_graduation', 'passing_year_grad');
+    move('passing_year', 'passing_year_grad'); move('passing_year_graduation', 'passing_year_grad');
     move('marks_obtained', 'marks_obtained_grad'); move('marks_graduation', 'marks_obtained_grad');
     move('total_marks', 'total_marks_grad'); move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad'); move('division', 'division_grad');
-    move('course', 'degree'); move('qualification', 'degree');
+    move('course', 'degree'); move('qualification', 'degree'); move('board', 'university_name');
   } else if (docType === 'certificate') {
-    // Certificates map to the Graduation section. Map its grad-ish fields there, but NOT
-    // roll/registration (ambiguous — a 12th-style cert would leak its roll into Graduation).
-    move('course', 'degree'); move('qualification', 'degree');
-    move('passing_year_graduation', 'passing_year_grad');
-    move('marks_obtained', 'marks_obtained_grad'); move('marks_graduation', 'marks_obtained_grad');
-    move('total_marks', 'total_marks_grad');
-    move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad');
-    move('division', 'division_grad'); move('enrollment_number', 'registration_number_grad');
+    // A certificate can be of ANY level. Detect from its content, then route to that level.
+    const txt = (k: string) => String(parsed[k]?.value ?? parsed[k] ?? '').toLowerCase();
+    const blob = [txt('degree'), txt('exam_name'), txt('course'), txt('qualification'), txt('document_label'), txt('board_12th'), txt('stream_12th')].join(' ');
+    const lvl = /intermediate|10\+2|12th|senior secondary|board_12th|inter /.test(blob) || parsed.board_12th || parsed.stream_12th ? '12th'
+      : /matric|secondary school|10th|high school/.test(blob) ? '10th'
+      : /bachelor|graduat|b\.?a\.?|b\.?sc|b\.?com|degree|university|honours/.test(blob) ? 'grad'
+      : '';
+    if (lvl === '12th') {
+      move('roll_number', 'roll_number_12th'); move('registration_number', 'registration_number_12th'); move('certificate_number', 'certificate_number_12th');
+      move('marks_obtained', 'marks_obtained_12th'); move('total_marks', 'total_marks_12th'); move('percentage', 'percentage_12th'); move('division', 'division_12th');
+      move('passing_year', 'passing_year_12th');
+    } else if (lvl === '10th') {
+      move('roll_number', 'roll_number_10th'); move('registration_number', 'registration_number_10th'); move('certificate_number', 'certificate_number_10th');
+      move('marks_obtained', 'marks_obtained_10th'); move('total_marks', 'total_marks_10th'); move('percentage', 'percentage_10th'); move('division', 'division_10th');
+      move('passing_year', 'passing_year_10th');
+    } else if (lvl === 'grad') {
+      move('course', 'degree'); move('qualification', 'degree');
+      move('passing_year', 'passing_year_grad'); move('passing_year_graduation', 'passing_year_grad');
+      move('marks_obtained', 'marks_obtained_grad'); move('total_marks', 'total_marks_grad');
+      move('percentage', 'percentage_grad'); move('percentage_graduation', 'percentage_grad');
+      move('division', 'division_grad'); move('enrollment_number', 'registration_number_grad');
+    }
+    // unknown level → leave generic (shows as its own labelled section)
   }
   return out;
 }
