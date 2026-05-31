@@ -45,5 +45,10 @@ export async function deriveProfile(workspaceId: string, phone: string, personKe
     const ov = v as any;
     if (ov && (ov.source === 'manual' || ov.source === 'document_corrected')) result[k] = ov;
   }
+  // auto-fill mobile from the WhatsApp number if no doc provided one
+  if (!result.phone || !String(result.phone?.value ?? '').trim()) {
+    const mobile = String(phone).slice(-10);
+    if (/^[6-9]\d{9}$/.test(mobile)) result.phone = { value: mobile, source: 'whatsapp', confidence: 0.95, needsReview: false };
+  }
   return result;
 }

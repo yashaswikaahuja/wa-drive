@@ -226,72 +226,37 @@ function namesMatch(a: string, b: string): boolean {
  * - Never overwrites operator-confirmed fields (manual / document_corrected).
  * Skipped if no name (photo/signature docs have no identity).
  */
-export async function upsertProfileFromExtraction(workspaceId: string, phone: string, suggested: any): Promise<void> {
+export async function upsertProfileFromExtraction(workspaceId: string, phone: string, suggested: any, fileId?: string): Promise<void> {
   try {
     const nameField = suggested?.name;
     const name = (nameField && typeof nameField === 'object' ? nameField.value : nameField) || '';
     if (!name || String(name).trim().length < 2) return; // no identity → skip
-    // Skip if "phone" is actually an unresolved LID (15+ digits). Extraction stays
-    // cached, so the profile builds correctly once the resolver maps LID→phone.
-    if (!/^\d{7,13}$/.test(String(phone || ''))) return;
-    // Auto-fill mobile from the WhatsApp number (last 10 digits) if the doc didn't provide one.
-    if (!suggested.phone || !String(suggested.phone?.value || suggested.phone).trim()) {
-      const mobile = String(phone).slice(-10);
-      if (/^[6-9]\d{9}$/.test(mobile)) suggested.phone = { value: mobile, source: 'whatsapp', confidence: 0.95, needsReview: false };
-    }
+    if (!/^\d{7,13}$/.test(String(phone || ''))) return; // skip unresolved LID
 
-    // Find existing profiles for this phone
+    const norm = (x: string) => (x || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+    // Find existing profiles for this phone, fuzzy-match the name → person
     const { rows } = await pool.query(
-      `SELECT id, name, display_label, data FROM profiles WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL`,
+      `SELECT id, name, display_label FROM profiles WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL`,
       [workspaceId, phone]
     );
     const match = rows.find((p: any) => namesMatch(p.display_label || p.name || '', name));
+    const personKey = norm(match ? (match.display_label || match.name) : name);
 
     if (!match) {
-      // New applicant → create profile (relationship 'self' by default)
+      // New applicant → create an identity row (NO field blob; fields are derived from docs)
       await pool.query(
         `INSERT INTO profiles (workspace_id, primary_contact_phone, name, display_label, relationship, data)
-         VALUES ($1,$2,$3,$4,'self',$5)`,
-        [workspaceId, phone, name, name, JSON.stringify(suggested)]
+         VALUES ($1,$2,$3,$4,'self','{}'::jsonb)`,
+        [workspaceId, phone, name, name]
       );
       console.log(`[AutoProfile] created "${name}" (${phone})`);
-      return;
     }
-
-    // Existing → confidence-aware merge. Fill missing fields; and let a higher-confidence
-    // (e.g. checksum-validated) reading replace a lower-confidence auto value. Never
-    // touch operator-confirmed fields.
-    const current = match.data || {};
-    const merged: any = { ...current };
-    let added = 0;
-    for (const [k, v] of Object.entries(suggested)) {
-      const nv = v as any;
-      const existing = current[k];
-      const existingVal = existing && typeof existing === 'object' ? existing.value : existing;
-      const existingSrc = existing && typeof existing === 'object' ? existing.source : null;
-      const existingConf = existing && typeof existing === 'object' ? (existing.confidence ?? 0) : 0;
-      if (existingSrc === 'manual' || existingSrc === 'document_corrected') continue; // operator wins
-      if (!existingVal) { merged[k] = nv; added++; continue; } // fill missing
-      // Identity fields: a more authoritative document wins (Aadhaar > marksheet for name/dob/address)
-      if (IDENTITY_FIELDS.has(k)) {
-        const exAuth = DOC_AUTHORITY[(existing && existing.documentType) || ''] ?? 0;
-        const nvAuth = DOC_AUTHORITY[nv.documentType || ''] ?? 0;
-        if (nvAuth > exAuth) { merged[k] = nv; added++; continue; }
-      }
-      // Corroboration: same value seen again → boost confidence (cross-document voting)
-      if (String(existingVal).trim().toLowerCase() === String(nv.value).trim().toLowerCase()) {
-        merged[k] = { ...existing, confidence: Math.min(0.99, existingConf + 0.05), needsReview: false };
-        added++;
-      } else if ((nv.confidence ?? 0) > existingConf + 0.1) {
-        merged[k] = nv; added++; // meaningfully more confident reading wins
-      }
-    }
-    if (added > 0) {
+    // Assign this extraction to the person (document-centric: derive reads use person_key)
+    if (fileId) {
       await pool.query(
-        `UPDATE profiles SET data = $1::jsonb, updated_at = now() WHERE id = $2`,
-        [JSON.stringify(merged), match.id]
+        `UPDATE extraction_cache SET person_key = $1, phone = $2 WHERE file_id = $3`,
+        [personKey, phone, fileId]
       );
-      console.log(`[AutoProfile] updated "${match.display_label || match.name}" +${added} fields`);
     }
   } catch (e: any) { console.warn('[AutoProfile] failed:', e.message); }
 }
@@ -332,7 +297,7 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
       if (Object.keys(suggested).length > 0) {
         await cacheExtraction(fileId, workspaceId, suggested);
         // Auto-build/update the customer's profile (find-or-create by name)
-        if (phone) await upsertProfileFromExtraction(workspaceId, phone, suggested);
+        if (phone) await upsertProfileFromExtraction(workspaceId, phone, suggested, fileId);
         console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields`);
       } else if (docType === 'photo' || docType === 'signature') {
         console.log(`[AutoExtract] ${fileId} → ${docType} (not an ID doc)`);
