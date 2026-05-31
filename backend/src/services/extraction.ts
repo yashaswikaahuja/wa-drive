@@ -17,15 +17,6 @@ const ALL_FIELDS = ['document_type','name','name_devanagari','father_name','moth
 
 const DOC_TYPES = ['aadhaar','pan','passport','voter_id','driving_license','ration_card','marksheet_10th','marksheet_12th','marksheet_graduation','marksheet_postgrad','admit_card','result','certificate','bank_passbook','photo','signature','form','other'];
 
-// Identity fields describe the PERSON (one copy, from most authoritative doc).
-const IDENTITY_FIELDS = new Set(['name','father_name','mother_name','husband_name','dob','gender','nationality','category','religion','aadhaar_number','pan_number','voter_id_number','address','permanent_address','phone','email','city','district','state','pincode']);
-// Trust order for identity fields — higher wins.
-const DOC_AUTHORITY: Record<string, number> = {
-  aadhaar: 100, passport: 90, pan: 80, voter_id: 70, driving_license: 70, ration_card: 60,
-  marksheet_10th: 40, marksheet_12th: 40, marksheet_graduation: 40, marksheet_postgrad: 40,
-  certificate: 30, result: 30, admit_card: 30, bank_passbook: 50, form: 10, other: 10,
-};
-
 function buildExtractPrompt(fields: string[]): string {
   return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari.
 document_type must be EXACTLY ONE of: ${DOC_TYPES.join(', ')} (a person photo/selfie is "photo").
