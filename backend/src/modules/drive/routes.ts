@@ -111,3 +111,13 @@ router.patch('/files/:id/tag', authMiddleware, async (req: any, res) => {
     res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
+
+// DELETE /api/drive/files/:id — remove a received document from the operator's view
+router.delete('/files/:id', authMiddleware, async (req: any, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM drive_files WHERE id = $1 AND workspace_id = $2', [req.params.id, req.user.workspaceId]);
+    await pool.query('DELETE FROM extraction_cache WHERE file_id = $1', [req.params.id]).catch(() => {});
+    if (!rowCount) return res.status(404).json({ error: 'Document not found' });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});

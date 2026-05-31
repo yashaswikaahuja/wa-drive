@@ -90,7 +90,7 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
   );
 });
 
-const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect }: any) => {
+const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w600' : (msg.fileUrl?.replace('sz=w200','sz=w600') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
@@ -132,6 +132,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30">Photo Tool</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/octet-stream'}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30">Download</button>
+            <button onClick={(e) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }} className="text-[10px] px-2 py-0.5 rounded-md bg-red-600/20 text-red-400 hover:bg-red-600/30">Delete</button>
           </div>
         )}
       </div>
@@ -408,6 +409,17 @@ export default function WhatsApp() {
 
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
   const handleCloseViewer = useCallback(() => setViewerFile(null), []);
+  const handleDeleteDoc = useCallback((id: string) => {
+    setChats(prev => {
+      const map = new Map(prev);
+      for (const [key, chat] of map) {
+        const filtered = chat.messages.filter(m => m.id !== id);
+        if (filtered.length !== chat.messages.length) map.set(key, { ...chat, messages: filtered, newCount: filtered.length });
+      }
+      return map;
+    });
+    try { const cached = localStorage.getItem('cc-drive-files'); if (cached) localStorage.setItem('cc-drive-files', JSON.stringify(JSON.parse(cached).filter((m: any) => m.id !== id))); } catch {}
+  }, []);
 
   const toggleDocSelection = useCallback((msg: Message) => {
     setSelectedDocs(prev => {
@@ -706,6 +718,7 @@ export default function WhatsApp() {
                     selectionMode={selectionMode}
                     selected={selectedDocs.has(msg.id)}
                     onToggleSelect={toggleDocSelection}
+                    onDelete={handleDeleteDoc}
                   />
                 </>);
               })}
