@@ -52,17 +52,22 @@ function validateField(key: string, value: string): { confidence: number; needsR
   return { confidence: 0.85, needsReview: false };
 }
 
-/** Convert PDF first page to JPEG buffer via pdftoppm. */
-async function pdfToImage(buffer: Buffer): Promise<Buffer> {
+/** Convert PDF pages (up to 3) to JPEG buffers via pdftoppm. Marks are often on page 2+. */
+async function pdfToImages(buffer: Buffer): Promise<Buffer[]> {
   const { execSync } = await import('child_process');
-  const { writeFileSync, readFileSync, unlinkSync } = await import('fs');
-  const tmpPdf = '/tmp/extract_' + Date.now() + '.pdf';
-  const tmpImg = '/tmp/extract_' + Date.now();
+  const { writeFileSync, readFileSync, unlinkSync, existsSync } = await import('fs');
+  const base = '/tmp/extract_' + Date.now();
+  const tmpPdf = base + '.pdf';
   writeFileSync(tmpPdf, buffer);
-  execSync(`pdftoppm -jpeg -r 150 -f 1 -l 1 ${tmpPdf} ${tmpImg}`);
-  const img = readFileSync(tmpImg + '-1.jpg');
-  try { unlinkSync(tmpPdf); unlinkSync(tmpImg + '-1.jpg'); } catch {}
-  return img;
+  const imgs: Buffer[] = [];
+  try {
+    execSync(`pdftoppm -jpeg -r 150 -f 1 -l 3 ${tmpPdf} ${base}`);
+    // pdftoppm names pages base-1.jpg, base-2.jpg, ... (or base-01.jpg for 10+)
+    for (const suffix of ['-1.jpg', '-2.jpg', '-3.jpg', '-01.jpg', '-02.jpg', '-03.jpg']) {
+      if (existsSync(base + suffix)) { imgs.push(readFileSync(base + suffix)); try { unlinkSync(base + suffix); } catch {} }
+    }
+  } finally { try { unlinkSync(tmpPdf); } catch {} }
+  return imgs.length ? imgs : [buffer];
 }
 
 /** All configured Groq keys (GROQ_API_KEY may be comma-separated; GROQ_API_KEY_2 also supported). */
@@ -71,31 +76,30 @@ function groqKeys(): string[] {
   return raw.split(',').map(k => k.trim()).filter(Boolean);
 }
 
-/** Single Groq vision call with key rotation on rate-limit. Returns raw assistant text. */
-async function callGroqVision(base64: string, prompt: string, maxTokens: number): Promise<string> {
+/** Single Groq vision call with key rotation on rate-limit. Accepts one or more page images. */
+async function callGroqVision(base64s: string | string[], prompt: string, maxTokens: number): Promise<string> {
   const keys = groqKeys();
   if (!keys.length) throw new Error('GROQ_API_KEY not configured');
+  const images = (Array.isArray(base64s) ? base64s : [base64s]).slice(0, 3);
+  const content: any[] = [{ type: 'text', text: prompt },
+    ...images.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } }))];
   for (let i = 0; i < keys.length; i++) {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${keys[i]}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } },
-        ] }],
+        messages: [{ role: 'user', content }],
         max_tokens: maxTokens,
         temperature: 0,
       }),
     });
     if (response.status === 429 && i < keys.length - 1) continue; // rate-limited → next key
     const data = await response.json() as any;
-    const content = data?.choices?.[0]?.message?.content;
-    if (content) return content;
-    // empty/error body: if more keys remain and it looks like a limit, try next
+    const content2 = data?.choices?.[0]?.message?.content;
+    if (content2) return content2;
     if (data?.error && i < keys.length - 1) continue;
-    return content ?? '';
+    return content2 ?? '';
   }
   return '';
 }
@@ -151,15 +155,20 @@ function normalizeKeys(parsed: any, docType: string): any {
 
 export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
   if (!groqKeys().length) throw new Error('GROQ_API_KEY not configured');
-  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) buffer = await pdfToImage(buffer);
-  const base64 = buffer.toString('base64');
+  let base64s: string[];
+  if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
+    const pages = await pdfToImages(buffer); // marks may be on page 2+
+    base64s = pages.map(p => p.toString('base64'));
+  } else {
+    base64s = [buffer.toString('base64')];
+  }
 
   // One superset covering ID + academic + bank; model also returns document_type.
   const fields = ['document_type', ...new Set([...ID_FIELDS, ...ACADEMIC_FIELDS, ...BANK_FIELDS])];
   const prompt = buildExtractPrompt(fields);
   let parsed: any = {};
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await callGroqVision(base64, prompt, 2000);
+    const text = await callGroqVision(base64s, prompt, 2000);
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = {}; } }
     if (Object.values(parsed).some(v => v && String(v).trim())) break;
