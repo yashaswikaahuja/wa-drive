@@ -34,6 +34,8 @@ export default function CustomerDetail() {
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
   const [extractDocId, setExtractDocId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [extractError, setExtractError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [addingInSection, setAddingInSection] = useState<string | null>(null);
@@ -100,12 +102,17 @@ export default function CustomerDetail() {
     finally { setExtracting(null); }
   };
   const confirmExtraction = async (acceptedFields: Record<string, any>) => {
-    if (!selectedPerson) return;
+    if (!selectedPerson) { setExtractError('No person selected'); return; }
+    setExtractError('');
+    setSaving(true);
     try {
-      await api.patch(`/customers/persons/${selectedPerson}`, { fields: acceptedFields });
+      const fields = { ...acceptedFields };
+      delete (fields as any).document_type; // classification, not a profile field
+      await api.patch(`/customers/persons/${selectedPerson}`, { fields });
       setExtractedSuggestions(null); setExtractDocId(null);
       await loadPerson(selectedPerson); loadReadiness();
-    } catch (e: any) { setError(e.message); }
+    } catch (e: any) { setExtractError(e.response?.data?.error || e.message || 'Save failed'); }
+    finally { setSaving(false); }
   };
 
   if (!household) return (
@@ -350,8 +357,8 @@ export default function CustomerDetail() {
 
       {/* Extraction confirm */}
       {extractedSuggestions && (
-        <ExtractionConfirm suggestions={extractedSuggestions} documentId={extractDocId || ''}
-          onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); }} onConfirm={confirmExtraction} />
+        <ExtractionConfirm suggestions={extractedSuggestions} documentId={extractDocId || ''} error={extractError} saving={saving}
+          onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }} onConfirm={confirmExtraction} />
       )}
 
       {error && <div className="rounded-xl bg-[#ff453a]/10 border border-[#ff453a]/20 p-3 mt-4 text-sm text-[#ff453a]">{error}</div>}
@@ -380,7 +387,7 @@ function AddPersonForm({ onSubmit, onCancel }: { onSubmit: (f: any) => void; onC
   );
 }
 
-function ExtractionConfirm({ suggestions, onCancel, onConfirm }: any) {
+function ExtractionConfirm({ suggestions, onCancel, onConfirm, error, saving }: any) {
   const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
   const toggle = (key: string) => setAccepted((prev: any) => {
     const next = { ...prev };
@@ -410,11 +417,12 @@ function ExtractionConfirm({ suggestions, onCancel, onConfirm }: any) {
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => onConfirm(accepted)} className="btn-primary flex items-center gap-2 flex-1 justify-center">
-              <CheckCircle size={16} weight="fill" /> Confirm & Save
+            <button onClick={() => onConfirm(accepted)} disabled={saving} className="btn-primary flex items-center gap-2 flex-1 justify-center disabled:opacity-50">
+              <CheckCircle size={16} weight="fill" /> {saving ? 'Saving…' : 'Confirm & Save'}
             </button>
-            <button onClick={onCancel} className="btn-secondary">Cancel</button>
+            <button onClick={onCancel} disabled={saving} className="btn-secondary disabled:opacity-50">Cancel</button>
           </div>
+          {error && <p className="text-xs text-[#ff453a] mt-3">{error}</p>}
         </div>
       </div>
     </div>
