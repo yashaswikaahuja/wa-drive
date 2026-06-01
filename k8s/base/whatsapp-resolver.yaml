@@ -1,0 +1,65 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: whatsapp-resolver
+  namespace: cybercontrol
+spec:
+  selector:
+    app: whatsapp-resolver
+  ports:
+    - port: 3200
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whatsapp-resolver
+  namespace: cybercontrol
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whatsapp-resolver
+  template:
+    metadata:
+      labels:
+        app: whatsapp-resolver
+    spec:
+      containers:
+        - name: whatsapp-resolver
+          imagePullPolicy: IfNotPresent
+          image: cybercontrol/whatsapp-resolver:latest
+          ports:
+            - containerPort: 3200
+          env:
+            - name: RESOLVER_PORT
+              value: "3200"
+            - name: SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cybercontrol-secrets
+                  key: WA_SECRET
+          volumeMounts:
+            - name: resolver-auth
+              mountPath: /app/.wwebjs_auth
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: resolver-auth
+          persistentVolumeClaim:
+            claimName: resolver-auth-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: resolver-auth-pvc
+  namespace: cybercontrol
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi

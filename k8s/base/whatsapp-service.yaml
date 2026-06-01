@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: whatsapp-service
+  namespace: cybercontrol
+spec:
+  selector:
+    app: whatsapp-service
+  ports:
+    - port: 3100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whatsapp-service
+  namespace: cybercontrol
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whatsapp-service
+  template:
+    metadata:
+      labels:
+        app: whatsapp-service
+    spec:
+      containers:
+        - name: whatsapp-service
+          imagePullPolicy: IfNotPresent
+          image: cybercontrol/whatsapp-service:latest
+          ports:
+            - containerPort: 3100
+          env:
+            - name: WA_PORT
+              value: "3100"
+            - name: PARENT_URL
+              value: "http://backend:3000"
+            - name: RESOLVER_URL
+              value: "http://whatsapp-resolver:3200"
+            - name: AUTH_DIR
+              value: "/app/sessions"
+            - name: SERVICE_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: cybercontrol-secrets
+                  key: WA_SECRET
+          volumeMounts:
+            - name: wa-sessions
+              mountPath: /app/sessions
+            - name: wa-queue
+              mountPath: /app/upload_queue
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "300m"
+      volumes:
+        - name: wa-sessions
+          persistentVolumeClaim:
+            claimName: wa-sessions-pvc
+        - name: wa-queue
+          persistentVolumeClaim:
+            claimName: wa-queue-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wa-sessions-pvc
+  namespace: cybercontrol
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wa-queue-pvc
+  namespace: cybercontrol
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

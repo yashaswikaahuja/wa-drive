@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cybercontrol-config
+  namespace: cybercontrol
+data:
+  NODE_ENV: "production"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_NAME: "cybercontrol"
+  DB_USER: "cybercontrol_app"
+  BACKEND_PORT: "3000"
+  EXTENSION_SERVICE_PORT: "3300"
+  WA_SERVICE_PORT: "3100"
+  WA_RESOLVER_PORT: "3200"
+  WA_SERVICE_URL: "http://whatsapp-service:3100"
+  RESOLVER_URL: "http://whatsapp-resolver:3200"
+  PARENT_URL: "http://backend:3000"

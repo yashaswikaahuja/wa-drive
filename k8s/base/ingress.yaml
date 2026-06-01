@@ -1,0 +1,98 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cybercontrol-ingress
+  namespace: cybercontrol
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+    nginx.ingress.kubernetes.io/websocket-services: "backend"
+spec:
+  ingressClassName: nginx
+  rules:
+    # API domain
+    - host: api.cybercontrol.fun
+      http:
+        paths:
+          - path: /api/profiles
+            pathType: Prefix
+            backend:
+              service:
+                name: extension-service
+                port:
+                  number: 3300
+          - path: /api/mappings
+            pathType: Prefix
+            backend:
+              service:
+                name: extension-service
+                port:
+                  number: 3300
+          - path: /api/adapters
+            pathType: Prefix
+            backend:
+              service:
+                name: extension-service
+                port:
+                  number: 3300
+          - path: /api/sessions
+            pathType: Prefix
+            backend:
+              service:
+                name: extension-service
+                port:
+                  number: 3300
+          - path: /api/corrections
+            pathType: Prefix
+            backend:
+              service:
+                name: extension-service
+                port:
+                  number: 3300
+          - path: /api/training
+            pathType: Prefix
+            backend:
+              service:
+                name: extension-service
+                port:
+                  number: 3300
+          - path: /api/agent
+            pathType: Prefix
+            backend:
+              service:
+                name: extension-service
+                port:
+                  number: 3300
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 3000
+    # Frontend domain
+    - host: app.cybercontrol.fun
+      http:
+        paths:
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 3000
+          - path: /socket.io/
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 3000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80

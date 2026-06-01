@@ -1,0 +1,115 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cybercontrol
+      POSTGRES_USER: cybercontrol_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cybercontrol123}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cybercontrol_app -d cybercontrol"]
+      interval: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://cybercontrol_app:${DB_PASSWORD:-cybercontrol123}@postgres:5432/cybercontrol
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      WA_SECRET: ${WA_SECRET}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      WA_SERVICE_URL: http://whatsapp-service:3100
+      RESOLVER_URL: http://whatsapp-resolver:3200
+    ports:
+      - "3000:3000"
+
+  extension-service:
+    build: ./extension-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3300"
+      DATABASE_URL: postgresql://cybercontrol_app:${DB_PASSWORD:-cybercontrol123}@postgres:5432/cybercontrol
+      JWT_SECRET: ${JWT_SECRET}
+      DATA_DIR: /app/data
+    volumes:
+      - ext_data:/app/data
+
+  whatsapp-service:
+    build: ./whatsapp-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      WA_PORT: "3100"
+      PARENT_URL: http://backend:3000
+      RESOLVER_URL: http://whatsapp-resolver:3200
+      SERVICE_SECRET: ${WA_SECRET}
+      AUTH_DIR: /app/sessions
+    volumes:
+      - wa_sessions:/app/sessions
+      - wa_queue:/app/upload_queue
+    ports:
+      - "3100:3100"
+
+  whatsapp-resolver:
+    build: ./whatsapp-resolver
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      RESOLVER_PORT: "3200"
+      SERVICE_SECRET: ${WA_SECRET}
+    volumes:
+      - wa_resolver_auth:/app/.wwebjs_auth
+    ports:
+      - "3200:3200"
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - extension-service
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/docker.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - certs:/etc/letsencrypt:ro
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-http://localhost}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    restart: unless-stopped
+    expose:
+      - "80"
+
+volumes:
+  pgdata:
+  ext_data:
+  wa_sessions:
+  wa_queue:
+  wa_resolver_auth:
+  certs:

@@ -1,8 +1,5 @@
 node_modules
-dist
-.env
-*.log
-data
 .wwebjs_auth
 .wwebjs_cache
-uploads
+.env
+*.log
