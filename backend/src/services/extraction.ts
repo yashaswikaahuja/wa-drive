@@ -120,10 +120,10 @@ function normalizeKeys(parsed: any, docType: string): any {
   };
   // A diploma/certificate course (e.g. "Advance Diploma in Computer Application") is a separate
   // vocational qualification, NOT the degree — don't let it write graduation keys.
-  const courseTxt = String((parsed.course?.value ?? parsed.course ?? parsed.qualification?.value ?? parsed.qualification ?? parsed.degree?.value ?? parsed.degree ?? '')).toLowerCase();
+  const courseTxt = String((parsed.course?.value ?? parsed.course ?? parsed.qualification?.value ?? parsed.qualification ?? parsed.degree?.value ?? parsed.degree ?? parsed.document_label?.value ?? parsed.document_label ?? '')).toLowerCase();
   const isDiploma = /diploma|certificate course|computer application|adca|dca|tally|typing|typist/.test(courseTxt);
-  if (isDiploma && (docType === 'certificate' || docType === 'marksheet' || docType === 'other' || !docType)) {
-    return out; // keep its fields generic; do not map into 10th/12th/grad sections
+  if (isDiploma) {
+    return out; // a diploma is a separate vocational qualification, never the degree — keep generic
   }
   if (docType === 'marksheet_10th') {
     move('roll_number', 'roll_number_10th'); move('registration_number', 'registration_number_10th');
