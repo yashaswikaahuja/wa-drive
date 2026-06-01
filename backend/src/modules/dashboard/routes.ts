@@ -85,7 +85,7 @@ router.get('/queue', authMiddleware, async (req: any, res) => {
     }
 
     // Sort: new docs first (pending/new), then ready, by recency
-    const order = { new: 0, pending: 1, ready: 2 };
+    const order: Record<string, number> = { new: 0, pending: 1, ready: 2 };
     queue.sort((a: any, b: any) => {
       if (order[a.status] !== order[b.status]) return order[a.status] - order[b.status];
       return new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime();
