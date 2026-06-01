@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ArrowLeft, PencilSimple, Plus } from '@phosphor-icons/react';
 import api from '../../shared/api';
 
 interface CorrectionBatch {
@@ -27,27 +28,29 @@ export default function Corrections() {
     const corrections = selected.corrections || [];
     return (
       <div>
-        <button onClick={() => setSelected(null)} className="text-xs text-blue-400 mb-4 hover:underline">← Back</button>
-        <h2 className="text-lg font-bold text-white mb-1">{selected.hostname}</h2>
+        <button onClick={() => setSelected(null)} className="btn-ghost text-xs mb-4 flex items-center gap-1">
+          <ArrowLeft size={14} /> Back
+        </button>
+        <h2 className="text-lg font-semibold text-white tracking-tight mb-1">{selected.hostname}</h2>
         <p className="text-xs text-gray-500 mb-4">
           Trigger: <span className="text-orange-400">{selected.trigger}</span> ·
           {' '}{corrections.length} correction{corrections.length === 1 ? '' : 's'} ·
           {' '}{new Date(selected.receivedAt).toLocaleString()}
         </p>
-        {loadingDetail && corrections.length === 0 && <p className="text-gray-600 text-sm">Loading detail…</p>}
+        {loadingDetail && corrections.length === 0 && <div className="h-16 bg-white/[0.03] animate-pulse rounded-xl" />}
         <div className="space-y-2">
           {corrections.map((c: any, i: number) => (
-            <div key={i} className="bg-[#0d1220] border border-white/5 rounded-lg p-3">
+            <div key={i} className="card p-3">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className={c.correctionType === 'override' ? 'text-orange-400' : 'text-blue-400'}>
-                  {c.correctionType === 'override' ? '✏️' : '➕'}
+                <span className={c.correctionType === 'override' ? 'text-orange-400' : 'text-[#0a84ff]'}>
+                  {c.correctionType === 'override' ? <PencilSimple size={14} weight="bold" /> : <Plus size={14} weight="bold" />}
                 </span>
                 <span className="text-sm text-white font-medium">{c.field || c.selector}</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] ${c.correctionType === 'override' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                <span className={`px-2 py-0.5 rounded text-[10px] ${c.correctionType === 'override' ? 'bg-orange-500/20 text-orange-400' : 'bg-[#0a84ff]/20 text-[#0a84ff]'}`}>
                   {c.correctionType}
                 </span>
                 {c.profileKey && <span className="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-400">profile.{c.profileKey}</span>}
-                {c.originalResult && c.originalResult !== 'filled' && <span className="px-2 py-0.5 rounded text-[10px] bg-yellow-500/20 text-yellow-400">{c.originalResult}</span>}
+                {c.originalResult && c.originalResult !== 'filled' && <span className="badge badge-warning text-[10px]">{c.originalResult}</span>}
               </div>
               <div className="flex gap-4 text-xs mt-1 flex-wrap">
                 <span className="text-red-300">
@@ -77,19 +80,19 @@ export default function Corrections() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-white mb-6">Corrections</h1>
+      <h1 className="text-xl font-semibold text-white tracking-tight mb-6">Corrections</h1>
       {batches.length === 0 ? <p className="text-gray-500 text-center py-12">No corrections captured yet</p> : (
         <div className="space-y-2">
           {batches.map(b => (
             <div key={b.id} onClick={() => openBatch(b)}
-              className="bg-[#0d1220] border border-white/5 rounded-xl p-4 cursor-pointer hover:border-orange-500/30 transition">
+              className="card p-4 cursor-pointer hover:border-orange-500/30 transition">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-white">{b.hostname || '(no hostname)'}</p>
+                  <p className="text-sm font-semibold text-white tracking-tight">{b.hostname || '(no hostname)'}</p>
                   <p className="text-xs text-gray-500">Trigger: {b.trigger || '—'}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-orange-400 font-medium">{b.correctionCount ?? b.corrections?.length ?? 0} correction{(b.correctionCount ?? b.corrections?.length ?? 0) === 1 ? '' : 's'}</p>
+                  <p className="text-sm text-orange-400 font-medium tabular-nums font-mono">{b.correctionCount ?? b.corrections?.length ?? 0} correction{(b.correctionCount ?? b.corrections?.length ?? 0) === 1 ? '' : 's'}</p>
                 </div>
               </div>
               <p className="text-[10px] text-gray-600 mt-2">{new Date(b.receivedAt).toLocaleString()}</p>

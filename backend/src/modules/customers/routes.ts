@@ -52,7 +52,15 @@ router.get('/persons/:id', authMiddleware, async (req: any, res) => {
       [req.params.id, req.user.workspaceId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Person not found' });
-    res.json(rows[0]);
+    const person = rows[0];
+    // Document-centric: derive fields from per-document extractions; operator edits (in data) win.
+    try {
+      const { deriveProfile } = await import('../../services/deriveProfile.js');
+      const personKey = (person.displayLabel || person.name || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+      const derived = await deriveProfile(req.user.workspaceId, person.phone, personKey, person.data || {});
+      if (Object.keys(derived).length > 0) person.data = derived;
+    } catch (e: any) { console.warn('[deriveProfile]', e.message); }
+    res.json(person);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -89,6 +97,94 @@ router.patch('/persons/:id', authMiddleware, async (req: any, res) => {
     params.push(req.params.id, req.user.workspaceId);
     await pool.query(`UPDATE profiles SET ${updates.join(', ')} WHERE id = $${pi} AND workspace_id = $${pi + 1}`, params);
     res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/customers/persons/:id — soft delete a single person
+router.delete('/persons/:id', authMiddleware, async (req: any, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      "UPDATE profiles SET deleted_at = now() WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Person not found' });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/customers/households/:phone — soft delete all persons for a phone
+router.delete('/households/:phone', authMiddleware, async (req: any, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { rowCount } = await pool.query(
+      "UPDATE profiles SET deleted_at = now() WHERE primary_contact_phone = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+      [phone, req.user.workspaceId]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Household not found' });
+    res.json({ ok: true, deleted: rowCount });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/customers/group-docs/:phone — group a phone's documents by extracted name
+// Each ID doc's cached extraction has a 'name'. Docs with the same (fuzzy) name belong
+// to the same applicant. Nameless docs (photo/signature/aadhaar-back) are returned ungrouped
+// for the operator to assign manually.
+router.get('/group-docs/:phone', authMiddleware, async (req: any, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const { rows } = await pool.query(
+      `SELECT d.id, d.file_name as "fileName", d.tag, d.uploaded_at as "uploadedAt", e.suggested
+       FROM drive_files d
+       LEFT JOIN extraction_cache e ON e.file_id = d.id
+       WHERE d.workspace_id = $1 AND d.customer_id = $2
+       ORDER BY d.uploaded_at DESC`,
+      [req.user.workspaceId, phone]
+    );
+
+    const norm = (s: string) => (s || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+    // similarity: one name contained in the other, or share first+last token
+    function lev(x: string, y: string): number {
+      const m = x.length, n = y.length;
+      const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => [i].concat(Array(n).fill(0)));
+      for (let j = 0; j <= n; j++) dp[0][j] = j;
+      for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+        dp[i][j] = Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1] + (x[i-1] === y[j-1] ? 0 : 1));
+      return dp[m][n];
+    }
+    function sameName(a: string, b: string): boolean {
+      const na = norm(a), nb = norm(b);
+      if (!na || !nb) return false;
+      if (na === nb) return true;
+      if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true;
+      // Whole-name fuzzy (OCR typos): small edit distance relative to length
+      const maxLen = Math.max(na.length, nb.length);
+      const dist = lev(na, nb);
+      if (maxLen >= 6 && dist <= 2) return true;
+      if (maxLen >= 10 && dist <= 3) return true;
+      // Token overlap with near-matches
+      const ta = a.toLowerCase().split(/\s+/).filter(t => t.length >= 3);
+      const tb = b.toLowerCase().split(/\s+/).filter(t => t.length >= 3);
+      let exact = 0, near = 0;
+      for (const x of ta) for (const y of tb) {
+        if (x === y) exact++;
+        else if (Math.max(x.length, y.length) >= 4 && lev(x, y) <= 2) near++;
+      }
+      return exact >= 2 || (exact >= 1 && near >= 1) || (near >= 2);
+    }
+
+    const groups: { name: string; docs: any[] }[] = [];
+    const ungrouped: any[] = [];
+
+    for (const d of rows) {
+      const name = d.suggested?.name?.value || d.suggested?.name || '';
+      const doc = { id: d.id, fileName: d.fileName, tag: d.tag, hasName: !!name, name };
+      if (!name) { ungrouped.push(doc); continue; }
+      const g = groups.find(grp => sameName(grp.name, name));
+      if (g) { g.docs.push(doc); if (name.length > g.name.length) g.name = name; }
+      else groups.push({ name, docs: [doc] });
+    }
+
+    res.json({ groups, ungrouped });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

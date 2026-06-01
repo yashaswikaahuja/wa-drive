@@ -58,7 +58,7 @@ router.get('/status', authMiddleware, async (req: any, res) => {
 router.get('/files/ws', authMiddleware, async (req: any, res) => {
   try {
     const r = await pool.query(
-      'SELECT id, file_name as "fileName", customer_id as "customerId", customer_name as "customerName", file_url as "fileUrl", uploaded_at as "timestamp", profile_pic_url as "dpUrl" FROM drive_files WHERE workspace_id = $1 ORDER BY uploaded_at DESC',
+      'SELECT id, file_name as "fileName", customer_id as "customerId", customer_name as "customerName", file_url as "fileUrl", uploaded_at as "timestamp", profile_pic_url as "dpUrl", tag FROM drive_files WHERE workspace_id = $1 ORDER BY uploaded_at DESC',
       [req.user.workspaceId]
     );
     if (r.rows.length > 0) return res.json(r.rows);
@@ -108,6 +108,16 @@ router.patch('/files/:id/tag', authMiddleware, async (req: any, res) => {
   if (!tag) return res.status(400).json({ error: 'tag required' });
   try {
     await pool.query('UPDATE drive_files SET tag = $1 WHERE id = $2 AND workspace_id = $3', [tag, req.params.id, req.user.workspaceId]);
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/drive/files/:id — remove a received document from the operator's view
+router.delete('/files/:id', authMiddleware, async (req: any, res) => {
+  try {
+    const { rowCount } = await pool.query('DELETE FROM drive_files WHERE id = $1 AND workspace_id = $2', [req.params.id, req.user.workspaceId]);
+    await pool.query('DELETE FROM extraction_cache WHERE file_id = $1', [req.params.id]).catch(() => {});
+    if (!rowCount) return res.status(404).json({ error: 'Document not found' });
     res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

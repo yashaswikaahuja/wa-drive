@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-    body { width: 320px; background: #0f172a; color: #e2e8f0; }
+    body { width: 340px; background: #0f172a; color: #e2e8f0; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
 
     .header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #1e293b; }
     .logo { font-size: 18px; }
@@ -14,33 +17,91 @@
     .dot.green { background: #22c55e; }
     .conn-text { font-size: 10px; color: #64748b; }
 
+    .site-bar { padding: 8px 14px; background: #1e293b; display: flex; align-items: center; gap: 8px; }
+    .site-icon { font-size: 14px; }
+    .site-name { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
     .search-wrap { padding: 10px 12px; border-bottom: 1px solid #1e293b; }
     #search { width: 100%; padding: 7px 10px; background: #1e293b; border: 1px solid #334155; border-radius: 6px;
       color: #e2e8f0; font-size: 12px; outline: none; }
     #search:focus { border-color: #3b82f6; }
     #search::placeholder { color: #475569; }
 
-    #profiles { max-height: 280px; overflow-y: auto; }
+    #profiles { max-height: 240px; overflow-y: auto; }
     .profile-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 10px; }
     .profile-item:hover { background: #1e293b; }
     .profile-item.selected { background: #1e3a5f; border-left: 3px solid #3b82f6; }
+    .profile-item.focused { background: #1e293b; outline: 1px solid #3b82f6; }
     .avatar { width: 32px; height: 32px; border-radius: 50%; background: #1e3a5f; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #60a5fa; flex-shrink: 0; }
     .profile-name { font-size: 12px; font-weight: 600; color: #f1f5f9; }
     .profile-phone { font-size: 10px; color: #64748b; margin-top: 1px; }
 
     .empty { padding: 24px; text-align: center; color: #475569; font-size: 12px; }
+    .section-label { padding: 4px 14px; font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; background: #0f172a; }
 
     .footer { padding: 10px 12px; border-top: 1px solid #1e293b; display: flex; gap: 8px; }
-    #fill-btn { flex: 1; padding: 8px; background: #2563eb; color: white; border: none; border-radius: 6px;
-      font-size: 12px; font-weight: 600; cursor: pointer; }
+    #fill-btn { flex: 1; padding: 9px; background: #2563eb; color: white; border: none; border-radius: 6px;
+      font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
     #fill-btn:hover { background: #1d4ed8; }
     #fill-btn:disabled { background: #1e293b; color: #475569; cursor: not-allowed; }
-    #open-btn { padding: 8px 10px; background: #1e293b; color: #94a3b8; border: none; border-radius: 6px;
+    #agent-btn { padding: 9px 12px; background: #1e293b; color: #94a3b8; border: none; border-radius: 6px;
+      font-size: 12px; cursor: pointer; }
+    #agent-btn:hover { background: #334155; }
+    #agent-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #undo-btn { padding: 9px 12px; background: #7c2d12; color: #fbbf24; border: none; border-radius: 6px;
+      font-size: 12px; cursor: pointer; }
+    #undo-btn:hover { background: #9a3412; }
+    #open-btn { padding: 9px 10px; background: #1e293b; color: #94a3b8; border: none; border-radius: 6px;
       font-size: 11px; cursor: pointer; }
     #open-btn:hover { background: #334155; }
 
-    #status { padding: 6px 14px; font-size: 11px; color: #f59e0b; display: none; }
+    /* Results panel */
+    #results { display: none; padding: 10px 14px; border-top: 1px solid #1e293b; }
+    .results-header { font-size: 11px; font-weight: 600; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .results-stats { display: flex; gap: 12px; margin-bottom: 8px; }
+    .stat { text-align: center; }
+    .stat-num { font-size: 18px; font-weight: 700; }
+    .stat-num.green { color: #22c55e; }
+    .stat-num.yellow { color: #f59e0b; }
+    .stat-num.red { color: #ef4444; }
+    .stat-label { font-size: 9px; color: #64748b; text-transform: uppercase; }
+    .results-bar { height: 4px; border-radius: 2px; background: #1e293b; overflow: hidden; display: flex; }
+    .results-bar .filled { background: #22c55e; }
+    .results-bar .skipped { background: #f59e0b; }
+    .results-bar .failed { background: #ef4444; }
+    #results-detail { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    #results-filled { margin-top: 8px; }
+    .filled-toggle { font-size: 11px; color: #22c55e; cursor: pointer; user-select: none; padding: 2px 0; }
+    .filled-toggle:hover { color: #4ade80; }
+    #filled-list { margin-top: 4px; max-height: 180px; overflow-y: auto; }
+    .filled-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .fl-label { color: #94a3b8; flex: 0 0 40%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fl-val { color: #e2e8f0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .fl-check { color: #22c55e; flex: 0 0 auto; }
+    .field-tag { font-size: 9px; padding: 2px 6px; border: 1px solid; border-radius: 3px; white-space: nowrap; }
+    .complete-link { display: block; margin-top: 8px; font-size: 10px; color: #60a5fa; text-decoration: none; cursor: pointer; }
+    .complete-link:hover { text-decoration: underline; }
+
+    /* Progress */
+    #progress { display: none; padding: 12px 14px; border-top: 1px solid #1e293b; }
+    .progress-text { font-size: 11px; color: #60a5fa; margin-bottom: 6px; }
+    .progress-bar { height: 3px; border-radius: 2px; background: #1e293b; overflow: hidden; }
+    .progress-bar-inner { height: 100%; background: #3b82f6; border-radius: 2px; transition: width 0.3s; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+    #status { padding: 6px 14px; font-size: 11px; color: #f59e0b; display: none; cursor: pointer; }
+    #completeness-warn { display: none; padding: 8px 14px; background: #78350f; border-top: 1px solid #92400e; align-items: center; justify-content: space-between; gap: 8px; }
+    #completeness-warn span { font-size: 10px; color: #fbbf24; }
+    #completeness-warn button { font-size: 10px; padding: 4px 10px; background: #f59e0b; color: #000; border: none; border-radius: 4px; cursor: pointer; white-space: nowrap; font-weight: 600; }
     .ver { font-size: 9px; color: #334155; text-align: center; padding: 4px; }
+
+    /* Agent panel */
+    #agent-panel { display: none; padding: 8px; border-top: 1px solid #333; max-height: 300px; overflow-y: auto; }
+    #agent-panel .label { font-size: 11px; color: #888; margin-bottom: 6px; }
+    #agent-actions { max-height: 200px; overflow-y: auto; }
+    .agent-btns { display: flex; gap: 6px; margin-top: 8px; }
+    #agent-execute { flex: 1; padding: 7px; background: #22c55e; color: #000; border: none; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    #agent-cancel { padding: 7px 12px; background: #1e293b; color: #94a3b8; border: none; border-radius: 5px; font-size: 11px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -53,24 +114,55 @@
     </div>
   </div>
 
+  <div class="site-bar">
+    <div class="site-icon" id="site-icon">🌐</div>
+    <div style="flex:1; min-width:0">
+      <div class="site-name" id="site-name">Detecting page...</div>
+      <div id="site-confidence" style="font-size:10px; color:#22c55e; display:none; margin-top:1px"></div>
+    </div>
+  </div>
+
   <div class="search-wrap">
     <input id="search" type="text" placeholder="Search by name or phone..." autocomplete="off" />
   </div>
 
   <div id="profiles"><div class="empty">Loading profiles...</div></div>
+
+  <div id="progress">
+    <div class="progress-text" id="progress-text">Filling form...</div>
+    <div class="progress-bar"><div class="progress-bar-inner" id="progress-inner" style="width:30%"></div></div>
+  </div>
+
+  <div id="completeness-warn"></div>
+
+  <div id="results">
+    <div class="results-header">Fill Results</div>
+    <div class="results-stats">
+      <div class="stat"><div class="stat-num green" id="r-filled">0</div><div class="stat-label">Filled</div></div>
+      <div class="stat"><div class="stat-num yellow" id="r-skipped">0</div><div class="stat-label">Skipped</div></div>
+      <div class="stat"><div class="stat-num red" id="r-failed">0</div><div class="stat-label">Failed</div></div>
+    </div>
+    <div class="results-bar" id="results-bar"></div>
+    <div id="results-detail" style="display:none"></div>
+    <div id="results-filled" style="display:none"></div>
+    <a id="complete-profile-link" style="display:none" class="complete-link">Complete Profile →</a>
+  </div>
+
   <div id="status"></div>
 
   <div class="footer">
     <button id="fill-btn" disabled>⚡ Fill Form</button>
-    <button id="agent-btn" disabled title="AI Agent (preview before execute)">🤖</button>
+    <button id="undo-btn" style="display:none" title="Undo last fill">↩</button>
+    <button id="agent-btn" disabled title="AI Agent">🤖</button>
     <button id="open-btn" title="Open CyberControl">🖥</button>
   </div>
-  <div id="agent-panel" style="display:none; padding: 8px; border-top: 1px solid #333; max-height: 400px; overflow-y: auto;">
-    <div style="font-size: 11px; color: #888; margin-bottom: 6px;">PROPOSED ACTIONS</div>
+
+  <div id="agent-panel">
+    <div class="label">PROPOSED ACTIONS</div>
     <div id="agent-actions"></div>
-    <div style="display: flex; gap: 6px; margin-top: 8px;">
-      <button id="agent-execute" style="flex:1;">▶ Execute</button>
-      <button id="agent-cancel" style="flex:0;">Cancel</button>
+    <div class="agent-btns">
+      <button id="agent-execute">▶ Execute</button>
+      <button id="agent-cancel">Cancel</button>
     </div>
   </div>
   <div class="ver" id="ver"></div>

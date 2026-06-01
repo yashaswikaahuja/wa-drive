@@ -4,6 +4,7 @@ import sharp from 'sharp';
 import { pool } from '../../db.js';
 import { getDriveForWorkspace, findOrCreateFolder, uploadFileToDrive } from '../drive/service.js';
 import { getIO } from '../../socket/index.js';
+import { autoExtractInBackground } from '../../services/extraction.js';
 
 const router = Router();
 
@@ -94,6 +95,11 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
   try {
     console.log(`[Hub] Uploading: ${fileName}`);
     const { fileId, webContentLink } = await uploadFileToDrive(drive, req.file.buffer, fileName, mimetype, phone, senderName);
+
+    // Zero-effort prep: extract in background so Build Profile is instant later.
+    // Does NOT auto-apply to profile — operator still reviews. Just pre-computes.
+    if (uploadWsId) autoExtractInBackground(req.file.buffer, fileId, uploadWsId, mimetype, phone);
+
     req.file.buffer = null; // Release buffer
 
     console.log(`[Hub] ✓ Uploaded: ${fileName} → ${fileId}`);

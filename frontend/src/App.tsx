@@ -16,6 +16,8 @@ const Jobs = lazy(() => import('./features/jobs/Jobs'));
 const NewJob = lazy(() => import('./features/jobs/NewJob'));
 const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
+const FormDirectory = lazy(() => import('./features/forms/FormDirectory'));
+const FormPhotoTool = lazy(() => import('./features/forms/FormPhotoTool'));
 const Stitch = lazy(() => import('./features/services/Stitch'));
 const PhotoTool = lazy(() => import('./features/photo-tool/PhotoTool'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
@@ -62,6 +64,8 @@ export default function App() {
           <Route path="/app/jobs/new" element={<Suspense fallback={<PageLoader />}><NewJob /></Suspense>} />
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
+          <Route path="/app/forms" element={<Suspense fallback={<PageLoader />}><FormDirectory /></Suspense>} />
+          <Route path="/app/forms/photo" element={<Suspense fallback={<PageLoader />}><FormPhotoTool /></Suspense>} />
           <Route path="/app/stitch" element={<Suspense fallback={<PageLoader />}><Stitch /></Suspense>} />
           <Route path="/app/photo" element={<Suspense fallback={<PageLoader />}><PhotoTool /></Suspense>} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowsClockwise, Trash } from '@phosphor-icons/react';
 import api from '../../shared/api';
 
 interface FormSummary {
@@ -14,8 +15,8 @@ interface FormSummary {
 
 interface FieldMapping {
   label?: string;
-  type?: string;            // text|dropdown|radio|checkbox|textarea
-  order?: number;           // DOM order
+  type?: string;
+  order?: number;
   profileKey: string | null;
   fills: number;
   corrections: number;
@@ -109,7 +110,6 @@ export default function MappingsPage() {
 
   // ── Detail view ────────────────────────────────────────────────────────
   if (selected) {
-    // Sort by DOM order (set by agent/backfill); fall back to alphabetical
     const fieldEntries = Object.entries(fields).sort((a, b) => {
       const ao = a[1].order, bo = b[1].order;
       if (ao !== undefined && bo !== undefined) return ao - bo;
@@ -123,103 +123,105 @@ export default function MappingsPage() {
 
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <button onClick={() => setSelected(null)} className="text-blue-400 mb-4 text-sm hover:underline flex items-center gap-1">
-          <span>←</span> All forms
+        <button onClick={() => setSelected(null)} className="btn-ghost text-sm mb-4 flex items-center gap-1">
+          <ArrowLeft size={14} /> All forms
         </button>
 
-        <div className="bg-gradient-to-br from-gray-900 to-gray-950 rounded-xl border border-gray-800 p-6 mb-6">
+        <div className="card p-6 mb-6">
           <div className="flex items-start gap-4">
             {favicon(selected.hostname) && (
-              <img src={favicon(selected.hostname)!} alt="" className="w-10 h-10 rounded bg-white p-1" />
+              <img src={favicon(selected.hostname)!} alt="" className="w-10 h-10 rounded-xl bg-white p-1" />
             )}
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-semibold truncate">{selected.hostname || 'Unknown host'}</h1>
+              <h1 className="text-2xl font-semibold text-white tracking-tight truncate">{selected.hostname || 'Unknown host'}</h1>
               {selected.title && <div className="text-sm text-gray-400 truncate mt-0.5">{selected.title}</div>}
               <div className="flex gap-3 mt-3 text-xs text-gray-500 flex-wrap">
-                <span>formKey: <code className="bg-gray-800 px-1.5 py-0.5 rounded text-gray-300">{selected.formKey}</code></span>
+                <span>formKey: <code className="bg-white/[0.04] px-1.5 py-0.5 rounded text-gray-300">{selected.formKey}</code></span>
                 <span>·</span>
                 <span>{total} fields</span>
                 <span>·</span>
-                <span>{selected.fills} fills</span>
+                <span className="tabular-nums font-mono">{selected.fills} fills</span>
                 {selected.lastSeen && <><span>·</span><span>last seen {selected.lastSeen}</span></>}
               </div>
             </div>
-            <button onClick={() => deleteForm(selected.formKey)} className="text-red-400 text-xs hover:bg-red-500/10 px-3 py-1.5 rounded border border-red-500/20">
-              delete form
+            <button onClick={() => deleteForm(selected.formKey)} className="btn-ghost text-red-400 text-xs flex items-center gap-1">
+              <Trash size={14} /> delete form
             </button>
           </div>
 
           <div className="mt-5">
             <div className="flex justify-between items-center mb-1.5 text-xs">
               <span className="text-gray-400">{mapped} of {total} fields mapped</span>
-              <span className="text-gray-300">{pct}%</span>
+              <span className="text-gray-300 tabular-nums font-mono">{pct}%</span>
             </div>
-            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
-              <div className={`h-full transition-all ${pct === 100 ? 'bg-green-500' : pct > 50 ? 'bg-blue-500' : 'bg-yellow-500'}`} style={{ width: pct + '%' }} />
+            <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+              <div className={`h-full transition-all ${pct === 100 ? 'bg-green-500' : pct > 50 ? 'bg-[#0a84ff]' : 'bg-yellow-500'}`} style={{ width: pct + '%' }} />
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-          <div className="grid grid-cols-12 px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-gray-800 bg-gray-900/50">
+        <div className="card overflow-hidden">
+          <div className="grid grid-cols-12 px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04]">
             <div className="col-span-6">Form Field Label</div>
             <div className="col-span-4">Maps To Profile Key</div>
             <div className="col-span-2 text-right">Stats</div>
           </div>
-          {fieldEntries.map(([key, m]) => {
-            const display = m.label || key;
-            const type = m.type || 'text';
-            const typeAbbr = type === 'dropdown' ? 'SEL' : type === 'radio' ? 'RAD' : type === 'checkbox' ? 'CHK' : type === 'textarea' ? 'TXT' : 'INP';
-            const typeColor = type === 'dropdown' ? 'bg-purple-500/20 text-purple-300' :
-              type === 'radio' ? 'bg-orange-500/20 text-orange-300' :
-              type === 'checkbox' ? 'bg-green-500/20 text-green-300' :
-              type === 'textarea' ? 'bg-blue-500/20 text-blue-300' :
-              'bg-gray-700 text-gray-300';
-            return (
-              <div key={key} className={`grid grid-cols-12 px-4 py-2.5 border-b border-gray-800/50 items-center hover:bg-gray-800/30 transition ${!m.profileKey ? 'bg-yellow-500/5' : ''}`}>
-                <div className="col-span-6 text-sm text-gray-200 flex items-center gap-2">
-                  <span className={`inline-flex items-center justify-center w-9 h-5 rounded text-[9px] font-bold tracking-wider ${typeColor}`} title={type}>
-                    {typeAbbr}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate" title={display}>{display}</div>
-                    {m.label && m.label !== key && (
-                      <div className="text-[10px] text-gray-600 font-mono mt-0.5 truncate">key: {key}</div>
+          <div className="divide-y divide-white/[0.04]">
+            {fieldEntries.map(([key, m]) => {
+              const display = m.label || key;
+              const type = m.type || 'text';
+              const typeAbbr = type === 'dropdown' ? 'SEL' : type === 'radio' ? 'RAD' : type === 'checkbox' ? 'CHK' : type === 'textarea' ? 'TXT' : 'INP';
+              const typeColor = type === 'dropdown' ? 'bg-purple-500/20 text-purple-300' :
+                type === 'radio' ? 'bg-orange-500/20 text-orange-300' :
+                type === 'checkbox' ? 'bg-green-500/20 text-green-300' :
+                type === 'textarea' ? 'bg-[#0a84ff]/20 text-[#0a84ff]' :
+                'bg-white/[0.04] text-gray-300';
+              return (
+                <div key={key} className={`grid grid-cols-12 px-4 py-2.5 items-center hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
+                  <div className="col-span-6 text-sm text-gray-200 flex items-center gap-2">
+                    <span className={`inline-flex items-center justify-center w-9 h-5 rounded text-[9px] font-bold tracking-wider ${typeColor}`} title={type}>
+                      {typeAbbr}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="truncate" title={display}>{display}</div>
+                      {m.label && m.label !== key && (
+                        <div className="text-[10px] text-gray-600 font-mono mt-0.5 truncate">key: {key}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="col-span-4">
+                    <select
+                      value={m.profileKey || ''}
+                      onChange={(e) => updateField(key, e.target.value)}
+                      disabled={savingKey === key}
+                      className="input-field text-sm w-full"
+                    >
+                      <option value="">— skip / no mapping —</option>
+                      {PROFILE_KEY_GROUPS.map(group => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.keys.map(k => <option key={k} value={k}>{k}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2 flex items-center justify-end gap-2">
+                    <span className="text-[11px] text-gray-500 tabular-nums font-mono">f:{m.fills} c:{m.corrections}</span>
+                    {m.source && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                        m.source === 'manual' ? 'bg-cyan-500/20 text-cyan-300' :
+                        m.source === 'agent' ? 'bg-[#0a84ff]/20 text-[#0a84ff]' :
+                        m.source === 'heuristic' ? 'bg-purple-500/20 text-purple-300' :
+                        m.source === 'backfill' ? 'bg-green-500/20 text-green-300' :
+                        m.source === 'seed' ? 'bg-yellow-500/20 text-yellow-300' :
+                        'bg-white/[0.04] text-gray-400'
+                      }`}>{m.source}</span>
                     )}
+                    <button onClick={() => deleteField(key)} className="text-gray-500 hover:text-red-400 text-base" title="Remove">×</button>
                   </div>
                 </div>
-                <div className="col-span-4">
-                  <select
-                    value={m.profileKey || ''}
-                    onChange={(e) => updateField(key, e.target.value)}
-                    disabled={savingKey === key}
-                    className="bg-gray-800 text-gray-100 text-sm px-2.5 py-1.5 rounded border border-gray-700 w-full focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">— skip / no mapping —</option>
-                    {PROFILE_KEY_GROUPS.map(group => (
-                      <optgroup key={group.label} label={group.label}>
-                        {group.keys.map(k => <option key={k} value={k}>{k}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-span-2 flex items-center justify-end gap-2">
-                  <span className="text-[11px] text-gray-500">f:{m.fills} c:{m.corrections}</span>
-                  {m.source && (
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                      m.source === 'manual' ? 'bg-cyan-500/20 text-cyan-300' :
-                      m.source === 'agent' ? 'bg-blue-500/20 text-blue-300' :
-                      m.source === 'heuristic' ? 'bg-purple-500/20 text-purple-300' :
-                      m.source === 'backfill' ? 'bg-green-500/20 text-green-300' :
-                      m.source === 'seed' ? 'bg-yellow-500/20 text-yellow-300' :
-                      'bg-gray-700 text-gray-400'
-                    }`}>{m.source}</span>
-                  )}
-                  <button onClick={() => deleteField(key)} className="text-gray-500 hover:text-red-400 text-base" title="Remove">×</button>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
           {fieldEntries.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">No fields recorded yet.</div>}
         </div>
       </div>
@@ -238,18 +240,14 @@ export default function MappingsPage() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Form Mappings</h1>
+          <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">Form Mappings</h1>
           <p className="text-sm text-gray-400">
             Each form your operators visit gets recorded here. Click any form to assign which profile field
             fills which form field. Edits take effect on the next fill.
           </p>
         </div>
-        <button
-          onClick={backfillFromSessions}
-          className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 text-sm px-4 py-2 rounded-lg flex-shrink-0"
-          title="Add fields from past autofill sessions to mappings"
-        >
-          ↻ Backfill from sessions
+        <button onClick={backfillFromSessions} className="btn-secondary flex items-center gap-2 flex-shrink-0" title="Add fields from past autofill sessions to mappings">
+          <ArrowsClockwise size={16} /> Backfill from sessions
         </button>
       </div>
 
@@ -257,10 +255,10 @@ export default function MappingsPage() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="search by hostname, formKey, or title…"
-        className="w-full bg-gray-900 border border-gray-800 px-4 py-2.5 rounded-lg mb-4 focus:outline-none focus:border-blue-500"
+        className="input-field w-full mb-4"
       />
 
-      {loading && <div className="text-center text-gray-500 py-12 text-sm">loading…</div>}
+      {loading && <div className="h-32 bg-white/[0.03] animate-pulse rounded-2xl" />}
 
       {!loading && (
         <div className="grid gap-3">
@@ -270,31 +268,31 @@ export default function MappingsPage() {
               <div
                 key={f.formKey}
                 onClick={() => openForm(f)}
-                className="bg-gray-900 hover:bg-gray-800/70 border border-gray-800 hover:border-gray-700 rounded-xl p-4 cursor-pointer transition group"
+                className="card p-4 cursor-pointer hover:border-white/10 transition group"
               >
                 <div className="flex items-start gap-4">
                   <img
                     src={favicon(f.hostname) || ''}
                     alt=""
                     onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
-                    className="w-9 h-9 rounded bg-white p-1 flex-shrink-0"
+                    className="w-9 h-9 rounded-xl bg-white p-1 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="font-medium truncate">{f.hostname || '(unknown host)'}</h3>
+                      <h3 className="font-semibold text-white tracking-tight truncate">{f.hostname || '(unknown host)'}</h3>
                       <span className="text-[11px] text-gray-500 flex-shrink-0">{f.lastSeen || '—'}</span>
                     </div>
                     {f.title && <div className="text-xs text-gray-500 truncate mt-0.5">{f.title}</div>}
                     <div className="flex items-center gap-3 mt-2.5">
                       <code className="text-[10px] text-gray-600 font-mono">{f.formKey}</code>
                       <div className="flex items-center gap-2 flex-1 max-w-md">
-                        <div className="h-1 bg-gray-800 rounded-full overflow-hidden flex-1">
-                          <div className={`h-full ${pct === 100 ? 'bg-green-500' : pct > 50 ? 'bg-blue-500' : 'bg-yellow-500'}`} style={{ width: pct + '%' }} />
+                        <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden flex-1">
+                          <div className={`h-full ${pct === 100 ? 'bg-green-500' : pct > 50 ? 'bg-[#0a84ff]' : 'bg-yellow-500'}`} style={{ width: pct + '%' }} />
                         </div>
-                        <span className="text-[11px] text-gray-400 flex-shrink-0">{f.fieldCount - f.unmapped}/{f.fieldCount}</span>
+                        <span className="text-[11px] text-gray-400 flex-shrink-0 tabular-nums font-mono">{f.fieldCount - f.unmapped}/{f.fieldCount}</span>
                       </div>
-                      {f.fills > 0 && <span className="text-[10px] text-gray-500">{f.fills} fills</span>}
-                      {f.unmapped > 0 && <span className="text-[10px] text-yellow-500">{f.unmapped} unmapped</span>}
+                      {f.fills > 0 && <span className="text-[10px] text-gray-500 tabular-nums font-mono">{f.fills} fills</span>}
+                      {f.unmapped > 0 && <span className="text-[10px] text-yellow-500 tabular-nums font-mono">{f.unmapped} unmapped</span>}
                     </div>
                   </div>
                 </div>
@@ -302,7 +300,7 @@ export default function MappingsPage() {
             );
           })}
           {filtered.length === 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+            <div className="card p-12 text-center">
               <div className="text-gray-500 text-sm">
                 {search ? 'No forms match your search.' : 'No forms recorded yet. Visit a form via the extension to seed it.'}
               </div>

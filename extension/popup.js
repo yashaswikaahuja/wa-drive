@@ -13,33 +13,206 @@ const agentCancelBtn = document.getElementById('agent-cancel');
 const statusEl = document.getElementById('status');
 const connDot = document.getElementById('conn-dot');
 const connText = document.getElementById('conn-text');
+const siteIcon = document.getElementById('site-icon');
+const siteName = document.getElementById('site-name');
+const progressEl = document.getElementById('progress');
+const progressText = document.getElementById('progress-text');
+const progressInner = document.getElementById('progress-inner');
+const resultsEl = document.getElementById('results');
 document.getElementById('ver').textContent = 'v' + VERSION;
 
 function showStatus(msg, color) {
   statusEl.textContent = msg;
   statusEl.style.color = color || '#f59e0b';
   statusEl.style.display = 'block';
-  setTimeout(() => { statusEl.style.display = 'none'; }, 3000);
+  // Only auto-dismiss non-error messages
+  if (color !== '#ef4444') {
+    setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
+  }
+}
+statusEl?.addEventListener('click', () => { statusEl.style.display = 'none'; });
+
+const KNOWN_SITES = {
+  'ssc.nic.in': { icon: '🏛', name: 'SSC' },
+  'ssc.gov.in': { icon: '🏛', name: 'SSC' },
+  'rrbcdg.gov.in': { icon: '🚂', name: 'RRB' },
+  'nta.ac.in': { icon: '📝', name: 'NTA' },
+  'upsc.gov.in': { icon: '🏛', name: 'UPSC' },
+  'passportindia.gov.in': { icon: '🛂', name: 'Passport Seva' },
+  'digilocker.gov.in': { icon: '📁', name: 'DigiLocker' },
+};
+
+async function detectSite() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    let tab = tabs[0];
+    // If popup is opened as a tab, find the real target tab
+    if (!tab?.url || tab.url.startsWith('chrome-extension://')) {
+      const allTabs = await chrome.tabs.query({ currentWindow: true });
+      tab = allTabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.startsWith('about')) || tab;
+    }
+    if (!tab?.url || tab.url.startsWith('chrome')) { siteName.textContent = 'No page detected'; return; }
+    const url = new URL(tab.url);
+    const host = url.hostname.replace('www.', '');
+    const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
+    if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' — ' + host; }
+    else { siteIcon.textContent = '🌐'; siteName.textContent = host; }
+    // Network-effect confidence badge: "filled 29× by operators · 100%"
+    fetchConfidence(host);
+  } catch { siteName.textContent = 'Unknown page'; }
+}
+
+async function fetchConfidence(host) {
+  const el = document.getElementById('site-confidence');
+  if (!el) return;
+  try {
+    const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
+    const r = await fetch(data.backendUrl + '/forms/confidence?hostname=' + encodeURIComponent(host), {
+      headers: { Authorization: 'Bearer ' + data.accessToken },
+    });
+    if (!r.ok) return;
+    const { fills, confidence } = await r.json();
+    if (fills > 0) {
+      el.textContent = `✓ filled ${fills}× by operators` + (confidence != null ? ` · ${confidence}% success` : '');
+      el.style.display = 'block';
+    } else {
+      el.textContent = `First time on this form — I'll fill what I'm sure about`;
+      el.style.color = '#94a3b8';
+      el.style.display = 'block';
+    }
+  } catch {}
+}
+
+function showProgress(text) {
+  resultsEl.style.display = 'none';
+  progressEl.style.display = 'block';
+  progressText.textContent = text;
+  progressInner.style.width = '30%';
+}
+function updateProgress(text, pct) {
+  progressText.textContent = text;
+  progressInner.style.width = pct + '%';
+}
+function hideProgress() { progressEl.style.display = 'none'; }
+
+function showResults(filled, skipped, failed, records) {
+  hideProgress();
+  const total = filled + skipped + failed || 1;
+  document.getElementById('r-filled').textContent = filled;
+  document.getElementById('r-skipped').textContent = skipped;
+  document.getElementById('r-failed').textContent = failed;
+  const bar = document.getElementById('results-bar');
+  bar.innerHTML = `<div class="filled" style="width:${filled/total*100}%"></div><div class="skipped" style="width:${skipped/total*100}%"></div><div class="failed" style="width:${failed/total*100}%"></div>`;
+  // Show field names for skipped/failed
+  const detailEl = document.getElementById('results-detail');
+  const issues = (records || []).filter(r => r.result && r.result !== 'filled');
+  if (issues.length) {
+    detailEl.innerHTML = issues.slice(0, 8).map(r => {
+      const color = r.result === 'unmapped' ? '#f59e0b' : '#ef4444';
+      const label = r.label || r.selector?.replace(/[#.\[\]]/g, '').slice(0, 20) || '?';
+      return `<span class="field-tag" style="border-color:${color};color:${color}">${label}</span>`;
+    }).join('') + (issues.length > 8 ? `<span class="field-tag" style="color:#64748b">+${issues.length-8} more</span>` : '');
+    detailEl.style.display = 'flex';
+  } else {
+    detailEl.style.display = 'none';
+  }
+
+  // "Show, don't just do": list exactly what was filled (label → value) so operator trusts it
+  const filledEl = document.getElementById('results-filled');
+  if (filledEl) {
+    const fr = window._lastFilledRecords || [];
+    if (fr.length) {
+      filledEl.innerHTML = `<div class="filled-toggle" id="filled-toggle">▸ See what was filled (${fr.length})</div>
+        <div id="filled-list" style="display:none"></div>`;
+      const listEl = filledEl.querySelector('#filled-list');
+      listEl.innerHTML = fr.map(r => {
+        const label = (r.label || r.selector || '').toString().replace(/[#.\[\]]/g, '').slice(0, 28);
+        const val = (r.value != null ? String(r.value) : '').slice(0, 30);
+        return `<div class="filled-row"><span class="fl-label">${label}</span><span class="fl-val">${val}</span><span class="fl-check">✓</span></div>`;
+      }).join('');
+      const toggle = filledEl.querySelector('#filled-toggle');
+      toggle.onclick = () => {
+        const open = listEl.style.display === 'block';
+        listEl.style.display = open ? 'none' : 'block';
+        toggle.textContent = (open ? '▸' : '▾') + ` See what was filled (${fr.length})`;
+      };
+      filledEl.style.display = 'block';
+    } else {
+      filledEl.style.display = 'none';
+    }
+  }
+  // Show "Complete Profile" link if fields were skipped
+  const cpLink = document.getElementById('complete-profile-link');
+  if (skipped > 0 || failed > 0) {
+    cpLink.style.display = 'block';
+    cpLink.onclick = async () => {
+      const data = await chrome.storage.local.get('backendUrl');
+      const frontendUrl = (data.backendUrl || '').replace('/api', '').replace('api.', 'app.');
+      const profileId = selectedProfile?.id;
+      const phone = selectedProfile?.phone || selectedProfile?.primary_contact_phone || '';
+      const url = frontendUrl + '/app/customers/' + encodeURIComponent(phone);
+      chrome.tabs.create({ url });
+    };
+  } else {
+    cpLink.style.display = 'none';
+  }
+  resultsEl.style.display = 'block';
 }
 
 function getPhone(p) { return p.phone || p.primary_contact_phone || ''; }
 
+let focusIdx = -1;
+let filteredProfiles = [];
+let recentIds = [];
+
+async function loadRecents() {
+  const data = await chrome.storage.local.get('_cc_recents');
+  recentIds = data._cc_recents || [];
+}
+async function saveRecent(profileId) {
+  recentIds = [profileId, ...recentIds.filter(id => id !== profileId)].slice(0, 5);
+  await chrome.storage.local.set({ _cc_recents: recentIds });
+}
+
 function renderProfiles(query) {
   const q = (query || '').toLowerCase().trim();
-  const filtered = q
+  let list = q
     ? allProfiles.filter(p => (p.name||'').toLowerCase().includes(q) || getPhone(p).includes(q))
     : allProfiles;
 
-  if (!filtered.length) {
+  // Sort recents to top when no search query
+  if (!q && recentIds.length) {
+    const recents = recentIds.map(id => list.find(p => p.id === id)).filter(Boolean);
+    const rest = list.filter(p => !recentIds.includes(p.id));
+    list = [...recents, ...rest];
+  }
+  filteredProfiles = list;
+
+  if (!filteredProfiles.length) {
     profilesEl.innerHTML = `<div class="empty">${q ? 'No match for "'+q+'"' : 'No profiles found'}</div>`;
+    focusIdx = -1;
     return;
   }
 
-  profilesEl.innerHTML = filtered.slice(0, 20).map(p => {
+  // Auto-select single match
+  if (filteredProfiles.length === 1 && q) {
+    selectedProfile = filteredProfiles[0];
+    focusIdx = 0;
+    fillBtn.disabled = false;
+    agentBtn.disabled = false;
+  }
+
+  const visibleList = filteredProfiles.slice(0, 20);
+  const recentCount = !q ? recentIds.filter(id => allProfiles.some(x => x.id === id)).length : 0;
+  profilesEl.innerHTML = visibleList.map((p, i) => {
     const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
     const isSelected = selectedProfile?.id === p.id;
+    const isFocused = i === focusIdx;
     const phone = getPhone(p);
-    return `<div class="profile-item${isSelected?' selected':''}" data-id="${p.id}">
+    let label = '';
+    if (!q && i === 0 && recentCount > 0) label = '<div class="section-label">Recent</div>';
+    if (!q && i === recentCount && recentCount > 0) label = '<div class="section-label">All</div>';
+    return `${label}<div class="profile-item${isSelected?' selected':''}${isFocused?' focused':''}" data-id="${p.id}" data-idx="${i}">
       <div class="avatar">${initials}</div>
       <div>
         <div class="profile-name">${p.name || 'Unknown'}</div>
@@ -50,16 +223,62 @@ function renderProfiles(query) {
 
   profilesEl.querySelectorAll('.profile-item').forEach(el => {
     el.addEventListener('click', () => {
-      selectedProfile = allProfiles.find(p => p.id === el.dataset.id) || null;
-      fillBtn.disabled = !selectedProfile;
-      agentBtn.disabled = !selectedProfile;
-      renderProfiles(searchEl.value);
+      selectProfile(el.dataset.id);
     });
   });
 }
 
+function selectProfile(id) {
+  selectedProfile = allProfiles.find(p => p.id === id) || null;
+  fillBtn.disabled = !selectedProfile;
+  agentBtn.disabled = !selectedProfile;
+  chrome.storage.session.set({ _cc_selected: id });
+  // Pre-fetch full profile data
+  if (selectedProfile) prefetchProfile(id);
+  renderProfiles(searchEl.value);
+}
+
+let _prefetchedProfile = null;
+async function prefetchProfile(id) {
+  try {
+    const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
+    const r = await fetch(data.backendUrl + '/profiles/' + id, {
+      headers: { Authorization: 'Bearer ' + data.accessToken }
+    });
+    if (r.ok) _prefetchedProfile = await r.json();
+  } catch {}
+}
+
+// Keyboard navigation
+searchEl.addEventListener('keydown', (e) => {
+  const max = Math.min(filteredProfiles.length, 20);
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    focusIdx = Math.min(focusIdx + 1, max - 1);
+    renderProfiles(searchEl.value);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    focusIdx = Math.max(focusIdx - 1, 0);
+    renderProfiles(searchEl.value);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (selectedProfile && (focusIdx === -1 || filteredProfiles[focusIdx]?.id === selectedProfile.id)) {
+      // Profile already selected — trigger fill
+      fillBtn.click();
+    } else if (focusIdx >= 0 && filteredProfiles[focusIdx]) {
+      // Select the focused profile
+      selectProfile(filteredProfiles[focusIdx].id);
+      focusIdx = filteredProfiles.findIndex(p => p.id === selectedProfile?.id);
+    } else if (filteredProfiles.length === 1) {
+      selectProfile(filteredProfiles[0].id);
+    }
+  }
+});
+
 async function init() {
   document.getElementById('ver').textContent = 'v' + VERSION;
+  detectSite();
+  await loadRecents();
 
   const data = await chrome.storage.local.get(['accessToken', 'backendUrl', 'user']);
 
@@ -95,6 +314,13 @@ async function init() {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const profiles = await r.json();
     allProfiles = Array.isArray(profiles) ? profiles : [];
+    // Restore last selected profile
+    const sess = await chrome.storage.session.get('_cc_selected');
+    if (sess._cc_selected) {
+      selectedProfile = allProfiles.find(p => p.id === sess._cc_selected) || null;
+      fillBtn.disabled = !selectedProfile;
+      agentBtn.disabled = !selectedProfile;
+    }
     renderProfiles('');
     searchEl.focus();
   } catch (e) {
@@ -103,27 +329,79 @@ async function init() {
 }
 
 // Search
-searchEl.addEventListener('input', () => renderProfiles(searchEl.value));
+searchEl.addEventListener('input', () => { focusIdx = -1; renderProfiles(searchEl.value); });
 
 // Fill form
+let _lastFillTabId = null;
+const undoBtn = document.getElementById('undo-btn');
+
+// Required fields for govt forms
+const REQUIRED_FIELDS = ['name', 'father_name', 'dob', 'gender', 'aadhaar_number', 'address', 'state', 'pincode'];
+
+function getCompleteness(profile) {
+  const data = profile?.data || profile || {};
+  let filled = 0;
+  const missing = [];
+  for (const key of REQUIRED_FIELDS) {
+    const val = data[key];
+    const v = val && typeof val === 'object' ? val.value : val;
+    if (v) filled++;
+    else missing.push(key.replace(/_/g, ' '));
+  }
+  return { percent: Math.round(filled / REQUIRED_FIELDS.length * 100), missing };
+}
+
 fillBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
+
+  // Show completeness warning if profile is incomplete
+  const full = _prefetchedProfile?.id === selectedProfile.id ? _prefetchedProfile : selectedProfile;
+  const { percent, missing } = getCompleteness(full);
+  if (percent < 100 && missing.length > 0) {
+    const warn = document.getElementById('completeness-warn');
+    warn.innerHTML = `<span>⚠️ ${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
+    warn.style.display = 'flex';
+    await new Promise(resolve => {
+      document.getElementById('fill-anyway').onclick = () => { warn.style.display = 'none'; resolve(); };
+    });
+  }
+
   fillBtn.disabled = true;
-  fillBtn.textContent = 'Filling...';
+  fillBtn.innerHTML = '<span>Filling...</span>';
+  resultsEl.style.display = 'none';
+  undoBtn.style.display = 'none';
+  showProgress('Preparing autofill scripts...');
+  saveRecent(selectedProfile.id);
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) { showStatus('No active tab', '#ef4444'); return; }
+    if (!tab?.id) { showStatus('No active tab', '#ef4444'); hideProgress(); return; }
+    _lastFillTabId = tab.id;
 
-    // Fetch FULL profile (incl. data jsonb) — list endpoint only returns summary
+    // Capture pre-fill values for undo
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const snapshot = {};
+        document.querySelectorAll('input, select, textarea').forEach(el => {
+          const key = el.id || el.name || el.getAttribute('formcontrolname');
+          if (key) snapshot[key] = { selector: el.id ? '#'+el.id : `[name="${el.name}"]`, value: el.value, type: el.type };
+        });
+        document.body.setAttribute('data-cc-undo', JSON.stringify(snapshot));
+      }
+    });
+
+    // Use pre-fetched profile (or fetch if not ready)
     const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
-    let fullProfile = selectedProfile;
-    try {
-      const fr = await fetch(data.backendUrl + '/profiles/' + selectedProfile.id, {
-        headers: { Authorization: 'Bearer ' + data.accessToken },
-      });
-      if (fr.ok) fullProfile = await fr.json();
-    } catch (e) { console.warn('[CC] full profile fetch failed:', e.message); }
+    let fullProfile = _prefetchedProfile?.id === selectedProfile.id ? _prefetchedProfile : selectedProfile;
+    if (fullProfile === selectedProfile) {
+      try {
+        const fr = await fetch(data.backendUrl + '/profiles/' + selectedProfile.id, {
+          headers: { Authorization: 'Bearer ' + data.accessToken },
+        });
+        if (fr.ok) fullProfile = await fr.json();
+      } catch (e) { console.warn('[CC] full profile fetch failed:', e.message); }
+    }
     selectedProfile = fullProfile;
 
     // Inject the network monitor in PAGE world — wraps fetch + XMLHttpRequest
@@ -162,15 +440,18 @@ fillBtn.addEventListener('click', async () => {
       });
     } catch (e) {
       showStatus('Failed to load autofill scripts: ' + e.message, '#ef4444');
+      hideProgress();
       return;
     }
 
+    updateProgress('Mapping fields to profile...', 50);
     // Get Groq key from backend settings
     let groqKey = '';
     try {
       const gRes = await fetch(data.backendUrl + '/settings/groq-key', { headers: { 'Authorization': 'Bearer ' + data.accessToken } });
       if (gRes.ok) { const gd = await gRes.json(); groqKey = gd.key || ''; }
     } catch {}
+    updateProgress('Filling form fields...', 70);
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       args: [(() => {
@@ -301,22 +582,48 @@ fillBtn.addEventListener('click', async () => {
             }),
           });
         } catch (e) { console.warn('[CC] session post failed:', e.message); }
-        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length };
+        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length, records: records.filter(r => r.result !== 'filled').slice(0, 10), filledRecords: records.filter(r => r.result === 'filled').slice(0, 25) };
       }
     });
 
     const r = result?.[0]?.result;
     if (r?.ok) {
-      showStatus(`✓ Filled ${r.filled} fields`, '#22c55e');
+      const skipped = r.totalUnmapped || 0;
+      const failed = r.totalFailed || 0;
+      window._lastFilledRecords = r.filledRecords || [];
+      showResults(r.totalFilled || 0, skipped, failed, r.records);
+      undoBtn.style.display = 'block';
     } else {
+      hideProgress();
       showStatus(r?.error || 'Fill failed', '#ef4444');
     }
   } catch (e) {
+    hideProgress();
     showStatus('Error: ' + e.message, '#ef4444');
   } finally {
     fillBtn.disabled = false;
-    fillBtn.textContent = '⚡ Fill Form';
+    fillBtn.innerHTML = '⚡ Fill Form';
   }
+});
+
+// Undo fill
+undoBtn.addEventListener('click', async () => {
+  if (!_lastFillTabId) return;
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: _lastFillTabId },
+      func: () => {
+        const snapshot = JSON.parse(document.body.getAttribute('data-cc-undo') || '{}');
+        for (const [key, info] of Object.entries(snapshot)) {
+          const el = document.querySelector(info.selector);
+          if (el) { el.value = info.value; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
+        }
+      }
+    });
+    undoBtn.style.display = 'none';
+    resultsEl.style.display = 'none';
+    showStatus('↩ Fill undone', '#22c55e');
+  } catch (e) { showStatus('Undo failed: ' + e.message, '#ef4444'); }
 });
 
 // Open CyberControl

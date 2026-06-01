@@ -11,6 +11,15 @@ export interface Section {
   fields: FieldDef[];
 }
 
+// Which document types feed which section (used to place extra/non-schema fields in the right section)
+export const SECTION_FOR_DOCTYPE: Record<string, string> = {
+  aadhaar: 'identity', pan: 'identity', passport: 'identity', voter_id: 'identity',
+  driving_license: 'identity', ration_card: 'identity',
+  marksheet_10th: 'education_10th',
+  marksheet_12th: 'education_12th',
+  marksheet_graduation: 'education_grad', marksheet_postgrad: 'education_grad', certificate: 'education_grad',
+};
+
 export const PROFILE_SCHEMA: Section[] = [
   {
     id: 'personal',
@@ -69,7 +78,10 @@ export const PROFILE_SCHEMA: Section[] = [
       { key: 'registration_number_10th', label: 'Registration Number' },
       { key: 'certificate_number_10th', label: 'Certificate Number' },
       { key: 'passing_year_10th', label: 'Year of Passing', required: true },
-      { key: 'percentage_10th', label: 'Marks / Percentage' },
+      { key: 'marks_obtained_10th', label: 'Marks Obtained' },
+      { key: 'total_marks_10th', label: 'Total Marks' },
+      { key: 'percentage_10th', label: 'Percentage' },
+      { key: 'division_10th', label: 'Division / Grade' },
       { key: 'school_name', label: 'School Name' },
     ],
   },
@@ -84,7 +96,11 @@ export const PROFILE_SCHEMA: Section[] = [
       { key: 'certificate_number_12th', label: 'Certificate Number' },
       { key: 'stream_12th', label: 'Stream / Subject' },
       { key: 'passing_year_12th', label: 'Year of Passing' },
-      { key: 'marks_12th', label: 'Marks / Percentage' },
+      { key: 'marks_obtained_12th', label: 'Marks Obtained' },
+      { key: 'total_marks_12th', label: 'Total Marks' },
+      { key: 'percentage_12th', label: 'Percentage' },
+      { key: 'division_12th', label: 'Division / Grade' },
+      { key: 'school_name_12th', label: 'School Name' },
     ],
   },
   {
@@ -97,7 +113,10 @@ export const PROFILE_SCHEMA: Section[] = [
       { key: 'roll_number_grad', label: 'Roll Number' },
       { key: 'registration_number_grad', label: 'Registration Number' },
       { key: 'passing_year_grad', label: 'Year of Passing' },
-      { key: 'percentage_grad', label: 'Marks / Percentage' },
+      { key: 'marks_obtained_grad', label: 'Marks Obtained' },
+      { key: 'total_marks_grad', label: 'Total Marks' },
+      { key: 'percentage_grad', label: 'Percentage' },
+      { key: 'division_grad', label: 'Division / Grade' },
     ],
   },
 ];

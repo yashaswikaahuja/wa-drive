@@ -131,176 +131,30 @@ router.post('/extract', async (req: any, res: Response) => {
   const { fileId } = req.body as { fileId?: string };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
 
-  const GROQ_API_KEY = process.env['GROQ_API_KEY'];
-  if (!GROQ_API_KEY) { res.status(500).json({ error: 'GROQ_API_KEY not configured' }); return; }
-
+  // Instant path: return cached extraction if auto-extract already ran on arrival
   try {
-    let buffer = await downloadDriveFile(fileId, req);
-    
-    // Detect if PDF and convert first page to image
-    if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
-      try {
-        const { execSync } = await import('child_process');
-        const { writeFileSync, readFileSync, unlinkSync } = await import('fs');
-        const tmpPdf = '/tmp/extract_' + Date.now() + '.pdf';
-        const tmpImg = '/tmp/extract_' + Date.now();
-        writeFileSync(tmpPdf, buffer);
-        execSync(`pdftoppm -jpeg -r 150 -f 1 -l 1 ${tmpPdf} ${tmpImg}`);
-        buffer = readFileSync(tmpImg + '-1.jpg');
-        try { unlinkSync(tmpPdf); unlinkSync(tmpImg + '-1.jpg'); } catch {}
-      } catch (e: any) {
-        console.error('[Process] PDF conversion failed:', e.message);
-        res.json({ ok: false, error: 'pdf_conversion_failed', message: 'PDF could not be converted' });
-        return;
-      }
+    const { getCachedExtraction } = await import('../../services/extraction.js');
+    const cached = await getCachedExtraction(fileId);
+    if (cached && Object.keys(cached).length > 0) {
+      res.json({ ok: true, suggested: cached, cached: true });
+      return;
     }
+  } catch {}
 
-    const base64 = buffer.toString('base64');
-    const prompt = `Analyze this Indian document/identity image and extract ALL relevant information. Return ONLY a valid JSON object (no markdown, no explanation):
-
-{
-  "document_type": "",
-  "name": "",
-  "father_name": "",
-  "mother_name": "",
-  "husband_name": "",
-  "spouse_name": "",
-  "guardian_name": "",
-  "dob": "",
-  "gender": "",
-  "category": "",
-  "religion": "",
-  "nationality": "",
-  "marital_status": "",
-  "blood_group": "",
-  "phone": "",
-  "alt_phone": "",
-  "email": "",
-  "address": "",
-  "permanent_address": "",
-  "city": "",
-  "district": "",
-  "state": "",
-  "pincode": "",
-  "country": "",
-  "aadhaar_number": "",
-  "pan_number": "",
-  "passport_number": "",
-  "voter_id_number": "",
-  "driving_license_number": "",
-  "ration_card_number": "",
-  "bank_account_number": "",
-  "ifsc_code": "",
-  "bank_name": "",
-  "branch_name": "",
-  "account_holder_name": "",
-  "roll_number": "",
-  "registration_number": "",
-  "enrollment_number": "",
-  "application_number": "",
-  "exam_name": "",
-  "exam_date": "",
-  "exam_center": "",
-  "exam_seat_number": "",
-  "subject": "",
-  "qualification": "",
-  "school_name": "",
-  "college_name": "",
-  "university_name": "",
-  "board_name": "",
-  "course": "",
-  "stream": "",
-  "branch_subject": "",
-  "passing_year_10th": "",
-  "marks_10th": "",
-  "percentage_10th": "",
-  "board_10th": "",
-  "passing_year_12th": "",
-  "marks_12th": "",
-  "percentage_12th": "",
-  "board_12th": "",
-  "stream_12th": "",
-  "passing_year_graduation": "",
-  "marks_graduation": "",
-  "percentage_graduation": "",
-  "graduation_university": "",
-  "graduation_subject": "",
-  "passing_year_postgrad": "",
-  "marks_postgrad": "",
-  "percentage_postgrad": "",
-  "postgrad_university": "",
-  "postgrad_subject": "",
-  "occupation": "",
-  "employer": "",
-  "designation": "",
-  "annual_income": "",
-  "expiry_date": "",
-  "issue_date": "",
-  "place_of_issue": ""
-}
-
-document_type values:
-- "aadhaar" - Aadhaar card
-- "pan" - PAN card
-- "passport" - Passport
-- "voter_id" - Voter ID / EPIC
-- "driving_license" - Driving licence
-- "ration_card" - Ration card
-- "marksheet_10th" - 10th class marksheet
-- "marksheet_12th" - 12th class marksheet
-- "marksheet_graduation" - Graduation/degree marksheet
-- "marksheet_postgrad" - Post-graduation marksheet
-- "admit_card" - Examination admit card / hall ticket
-- "result" - Result document
-- "certificate" - Certificate (caste, income, domicile, character, etc.)
-- "bank_passbook" - Bank passbook / cancelled cheque
-- "photo" - Personal photograph
-- "signature" - Signature image
-- "form" - Application form
-- "other" - Anything else
-
-Extraction rules:
-- Fill only fields present in the document. Leave others as empty string.
-- dob format: DD/MM/YYYY
-- For marksheets: extract passing year, marks/percentage, board/university, subjects/stream into the appropriate slot (board_10th, percentage_10th, etc.)
-- For admit cards: extract roll_number, registration_number, exam_name, exam_date, exam_center, application_number
-- For Aadhaar: aadhaar_number is 12 digits (no spaces)
-- For PAN: pan_number is 10 chars uppercase
-- Address fields: prefer to split city/state/district/pincode separately. Keep full string in 'address' too.
-- Bank documents: extract account_number, ifsc, bank_name, branch_name
-- DO NOT mix unrelated IDs into one field. Aadhaar number goes into aadhaar_number, roll number into roll_number, etc.
-- For category: SC/ST/OBC/General/EWS etc.
-- Return ONLY the JSON, no surrounding text.`;
-
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-        messages: [{ role: 'user', content: [
-          { type: 'text', text: prompt },
-          { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}` } }
-        ]}],
-        max_tokens: 2000,
-      }),
-    });
-
-    const data = await response.json() as any;
-    const text = data?.choices?.[0]?.message?.content ?? '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) { res.json({ ok: true, suggested: {} }); return; }
-    try {
-      const fields = JSON.parse(jsonMatch[0]);
-      const suggested: any = {};
-      for (const [k, v] of Object.entries(fields)) {
-        if (v && String(v).trim()) suggested[k] = { value: v, source: 'document', documentId: fileId, confidence: 0.9 };
-      }
-      res.json({ ok: true, suggested, raw: fields });
-    } catch {
-      res.json({ ok: true, suggested: {} });
+  // Use the shared extraction pipeline (normalizeKeys → correct sections, provenance, validation)
+  try {
+    const buffer = await downloadDriveFile(fileId, req);
+    const { extractFromBuffer, cacheExtraction } = await import('../../services/extraction.js');
+    const { suggested } = await extractFromBuffer(buffer, fileId);
+    if (req.user?.workspaceId && Object.keys(suggested).length > 0) {
+      try { await cacheExtraction(fileId, req.user.workspaceId, suggested); } catch {}
     }
+    res.json({ ok: true, suggested });
+    return;
   } catch (e: any) {
     console.error('[Process] extract error:', e.message);
     res.status(500).json({ error: e.message ?? 'Extraction failed' });
+    return;
   }
+
 });
