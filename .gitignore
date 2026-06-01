@@ -1,4 +1,5 @@
 node_modules/
+dist/
 build/
 .env
 .env.local
@@ -10,27 +11,60 @@ build/
 *.swp
 *.swo
 *~
-.wwebjs_auth/
-uploads/
-# Keep data tracked (profiles, adapters are critical)
-# backend/data/
-# Keep dist tracked (tsc can't run on VM)
-# dist/
-.github/
-WORKER_SECRET*
-.vercel
-frontend/dist
 
-worker/
+# Runtime/auth
+.wwebjs_auth/
+.wwebjs_cache/
+uploads/
 auth_info/
+sessions/
+upload_queue/
+
+# Binaries/artifacts
+*.zip
+*.heapsnapshot
 *.json.bak
 
-# Stray local data
+# Legacy/obsolete (local only)
 whatsapp/
-*.heapsnapshot
+gateway/
+storage/
+inbox/
+data/
+tools/
+tests/
+worker/
 
-# Legacy in-memory data store (replaced by DB)
-backend/data/
-*.legacy
+# Old scripts/configs
+ecosystem.config.js
+ecosystem.config.cjs
+render.yaml
+start.sh
+stop.sh
+start-windows.bat
+deploy.sh
+setup-gcp.sh
+health-check.*
+live-logs*
+smoke-test*
+recover-resolver.sh
+update-tunnel-url.sh
+package.json.bak
+package-lock.json
 
-corpus/node_modules/
+# Old docs (kept in docs/ if needed)
+VERCEL_GCP_GUIDE.md
+GCP.md
+GCP_PM2_OPS.md
+OPERATIONS.md
+DEPENDENCIES.md
+DATABASE.md
+APPLICATION_OVERVIEW.md
+AUTOFILLER.md
+autofill_workflow.md
+DESIGN_SYSTEM.md
+CHANGELOG.md
+
+# Platform
+.vercel
+WORKER_SECRET*
