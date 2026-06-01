@@ -79,15 +79,17 @@ router.get('/:id', authMiddleware, async (req: any, res) => {
 router.get('/readiness/:phone', authMiddleware, async (req: any, res) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
-    // Best profile for this phone (most complete)
     const pr = await pool.query(
-      `SELECT data FROM profiles WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL`,
+      `SELECT name, display_label, data FROM profiles WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL`,
       [req.user.workspaceId, phone]
     );
-    // Merge all persons' data (household), pick filled values
+    // Data is document-centric now (profiles.data is empty) — derive from extractions per person.
+    const { deriveProfile } = await import('../../services/deriveProfile.js');
     const filledKeys = new Set<string>();
     for (const row of pr.rows) {
-      const data = row.data || {};
+      const personKey = (row.display_label || row.name || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+      let data: Record<string, any> = row.data || {};
+      try { data = await deriveProfile(req.user.workspaceId, phone, personKey, row.data || {}); } catch {}
       for (const [k, v] of Object.entries(data)) {
         const val = v && typeof v === 'object' ? (v as any).value : v;
         if (val) filledKeys.add(k);

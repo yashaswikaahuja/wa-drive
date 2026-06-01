@@ -133,6 +133,7 @@ function normalizeKeys(parsed: any, docType: string): any {
   } else if (docType === 'marksheet_12th') {
     move('roll_number', 'roll_number_12th'); move('registration_number', 'registration_number_12th');
     move('certificate_number', 'certificate_number_12th'); move('board', 'board_12th'); move('passing_year', 'passing_year_12th'); move('stream', 'stream_12th');
+    move('school_name', 'school_name_12th'); move('roll_code', 'roll_code_12th');
     move('marks_obtained', 'marks_obtained_12th'); move('marks_12th', 'marks_obtained_12th');
     move('total_marks', 'total_marks_12th'); move('percentage', 'percentage_12th'); move('division', 'division_12th');
   } else if (docType === 'marksheet_graduation' || docType === 'marksheet_postgrad') {
@@ -153,11 +154,11 @@ function normalizeKeys(parsed: any, docType: string): any {
     if (lvl === '12th') {
       move('roll_number', 'roll_number_12th'); move('registration_number', 'registration_number_12th'); move('certificate_number', 'certificate_number_12th');
       move('marks_obtained', 'marks_obtained_12th'); move('total_marks', 'total_marks_12th'); move('percentage', 'percentage_12th'); move('division', 'division_12th');
-      move('passing_year', 'passing_year_12th');
+      move('passing_year', 'passing_year_12th'); move('board', 'board_12th'); move('stream', 'stream_12th'); move('school_name', 'school_name_12th'); move('roll_code', 'roll_code_12th');
     } else if (lvl === '10th') {
       move('roll_number', 'roll_number_10th'); move('registration_number', 'registration_number_10th'); move('certificate_number', 'certificate_number_10th');
       move('marks_obtained', 'marks_obtained_10th'); move('total_marks', 'total_marks_10th'); move('percentage', 'percentage_10th'); move('division', 'division_10th');
-      move('passing_year', 'passing_year_10th');
+      move('passing_year', 'passing_year_10th'); move('board', 'board_10th'); move('school_name', 'school_name'); move('roll_code', 'roll_code_10th');
     } else if (lvl === 'grad') {
       move('course', 'degree'); move('qualification', 'degree');
       move('passing_year', 'passing_year_grad'); move('passing_year_graduation', 'passing_year_grad');

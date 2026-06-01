@@ -232,6 +232,10 @@ export default function CustomerDetail() {
                   if (GENERIC_NOISE.has(k)) return false; // unsuffixed generic — its level-specific key is shown instead
                   const val = v && typeof v === 'object' ? v.value : v;
                   if (!val) return false;
+                  // Level suffix wins over documentType: a 12th certificate's keys (_12th) must show under 12th, not Graduation.
+                  if (/_10th$/.test(k)) return section.id === 'education_10th';
+                  if (/_12th$/.test(k)) return section.id === 'education_12th';
+                  if (/_grad$/.test(k)) return section.id === 'education_grad';
                   const dt = v && typeof v === 'object' ? v.documentType : null;
                   return dt && SECTION_FOR_DOCTYPE[dt] === section.id;
                 });

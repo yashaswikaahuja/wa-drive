@@ -100,6 +100,7 @@ export const PROFILE_SCHEMA: Section[] = [
       { key: 'total_marks_12th', label: 'Total Marks' },
       { key: 'percentage_12th', label: 'Percentage' },
       { key: 'division_12th', label: 'Division / Grade' },
+      { key: 'school_name_12th', label: 'School Name' },
     ],
   },
   {
