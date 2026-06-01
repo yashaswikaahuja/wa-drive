@@ -1,0 +1,12 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: https://${API_DOMAIN:-api.cybercontrol.fun}/api
+        VITE_SOCKET_URL: https://${API_DOMAIN:-api.cybercontrol.fun}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"

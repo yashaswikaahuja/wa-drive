@@ -1,0 +1,33 @@
+services:
+  whatsapp-service:
+    build: ./whatsapp-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      WA_PORT: "3100"
+      PARENT_URL: https://${API_DOMAIN:-api.cybercontrol.fun}
+      RESOLVER_URL: http://whatsapp-resolver:3200
+      SERVICE_SECRET: ${WA_SECRET}
+      AUTH_DIR: /app/sessions
+    volumes:
+      - wa_sessions:/app/sessions
+      - wa_queue:/app/upload_queue
+    ports:
+      - "3100:3100"
+
+  whatsapp-resolver:
+    build: ./whatsapp-resolver
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      RESOLVER_PORT: "3200"
+      SERVICE_SECRET: ${WA_SECRET}
+    volumes:
+      - wa_resolver_auth:/app/.wwebjs_auth
+    ports:
+      - "3200:3200"
+
+volumes:
+  wa_sessions:
+  wa_queue:
+  wa_resolver_auth:

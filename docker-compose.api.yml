@@ -1,0 +1,73 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cybercontrol
+      POSTGRES_USER: cybercontrol_app
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-cybercontrol123}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cybercontrol_app -d cybercontrol"]
+      interval: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://cybercontrol_app:${DB_PASSWORD:-cybercontrol123}@postgres:5432/cybercontrol
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      WA_SECRET: ${WA_SECRET}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      WA_SERVICE_URL: http://${WA_MACHINE_IP}:3100
+      RESOLVER_URL: http://${WA_MACHINE_IP}:3200
+    ports:
+      - "3000:3000"
+
+  extension-service:
+    build: ./extension-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3300"
+      DATABASE_URL: postgresql://cybercontrol_app:${DB_PASSWORD:-cybercontrol123}@postgres:5432/cybercontrol
+      JWT_SECRET: ${JWT_SECRET}
+      DATA_DIR: /app/data
+    volumes:
+      - ext_data:/app/data
+    ports:
+      - "3300:3300"
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - extension-service
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/docker-api.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
+volumes:
+  pgdata:
+  ext_data:
