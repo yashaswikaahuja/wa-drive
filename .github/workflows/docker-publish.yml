@@ -1,0 +1,34 @@
+name: Build and push backend image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/docker-publish.yml'
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/yashaswikaahuja/cybercontrol-backend:latest
+            ghcr.io/yashaswikaahuja/cybercontrol-backend:${{ github.sha }}

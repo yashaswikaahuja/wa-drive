@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN NODE_OPTIONS=--max-old-space-size=1280 npm run build
 
 FROM node:20-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
