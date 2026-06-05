@@ -1,17 +1,49 @@
 import { Router } from 'express';
 import { pool } from '../../db.js';
 import { authMiddleware } from '../../middleware/auth.js';
-import { WA_SERVICE, WA_SECRET } from '../../config.js';
+import { WA_SERVICE, WA_SECRET, WA_INSTANCES } from '../../config.js';
 import { getIO, getWorkspaceQR, setWorkspaceQR, getWorkspaceQRWithAge } from '../../socket/index.js';
 
 const router = Router();
 
+// Shard-aware routing: resolve which whatsapp-service instance owns a workspace.
+// Backward-compatible: with no WA_INSTANCES / no shard table, falls back to the single WA_SERVICE.
+async function pickInstance(): Promise<string | null> {
+  if (!WA_INSTANCES.length) return null;
+  const { rows } = await pool.query('SELECT instance, count(*)::int AS n FROM wa_assignments GROUP BY instance');
+  const counts = new Map<string, number>(rows.map((r: any) => [r.instance, r.n]));
+  let best = WA_INSTANCES[0], bestN = counts.get(best) ?? 0;
+  for (const inst of WA_INSTANCES) {
+    const n = counts.get(inst) ?? 0;
+    if (n < bestN) { best = inst; bestN = n; }
+  }
+  return best;
+}
+
+async function waBase(workspaceId: string): Promise<string> {
+  try {
+    const { rows } = await pool.query('SELECT instance FROM wa_assignments WHERE workspace_id=$1', [workspaceId]);
+    if (rows[0]) return `http://${rows[0].instance}:3100`;
+    const inst = await pickInstance();
+    if (!inst) return WA_SERVICE;
+    await pool.query(
+      'INSERT INTO wa_assignments(workspace_id, instance) VALUES($1,$2) ON CONFLICT (workspace_id) DO NOTHING',
+      [workspaceId, inst]
+    );
+    const r2 = await pool.query('SELECT instance FROM wa_assignments WHERE workspace_id=$1', [workspaceId]);
+    return r2.rows[0] ? `http://${r2.rows[0].instance}:3100` : WA_SERVICE;
+  } catch {
+    return WA_SERVICE; // shard table absent / DB hiccup → single-instance behaviour (unchanged)
+  }
+}
+
 router.get('/status', authMiddleware, async (req: any, res) => {
   const wsId = req.user.workspaceId;
+  const base = await waBase(wsId);
   // Snapshot cache state BEFORE worker call (we need ageMs for staleness check)
   const before = getWorkspaceQRWithAge(wsId);
   try {
-    const r = await fetch(WA_SERVICE + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
+    const r = await fetch(base + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
     // Update cache: only refresh timestamp when worker returns a DIFFERENT QR
     if (data?.qr) {
@@ -32,7 +64,7 @@ router.get('/status', authMiddleware, async (req: any, res) => {
       before.ageMs > 45_000
     ) {
       console.log(`[Hub] QR stale (${Math.round(before.ageMs/1000)}s) for ws=${wsId.slice(0, 8)} — force restart`);
-      fetch(WA_SERVICE + '/sessions/start', {
+      fetch(base + '/sessions/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
         body: JSON.stringify({ workspaceId: wsId, force: true }),
@@ -54,7 +86,8 @@ router.get('/qr', authMiddleware, async (req: any, res) => {
   const cached = getWorkspaceQR(req.user.workspaceId);
   if (cached) return res.json({ qrCode: cached, qr: cached });
   try {
-    const r = await fetch(WA_SERVICE + '/sessions/' + req.user.workspaceId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
+    const base = await waBase(req.user.workspaceId);
+    const r = await fetch(base + '/sessions/' + req.user.workspaceId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
     if (data?.qr) setWorkspaceQR(req.user.workspaceId, data.qr);
     res.json({ qrCode: data.qr || null, qr: data.qr || null });
@@ -63,7 +96,8 @@ router.get('/qr', authMiddleware, async (req: any, res) => {
 
 router.post('/connect', authMiddleware, async (req: any, res) => {
   try {
-    await fetch(WA_SERVICE + '/sessions/start', {
+    const base = await waBase(req.user.workspaceId);
+    await fetch(base + '/sessions/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
       body: JSON.stringify({ workspaceId: req.user.workspaceId }),
@@ -76,7 +110,8 @@ router.post('/send', authMiddleware, async (req: any, res) => {
   try {
     const { phone, message } = req.body;
     if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
-    const r = await fetch(WA_SERVICE + '/sessions/' + req.user.workspaceId + '/send', {
+    const base = await waBase(req.user.workspaceId);
+    const r = await fetch(base + '/sessions/' + req.user.workspaceId + '/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
       body: JSON.stringify({ phone, message }),
@@ -89,7 +124,8 @@ router.post('/link-lid', authMiddleware, async (req: any, res) => {
   try {
     const { lid, phone } = req.body;
     if (!lid || !phone) return res.status(400).json({ error: 'lid and phone required' });
-    await fetch(WA_SERVICE + '/sessions/' + req.user.workspaceId + '/link-lid', {
+    const base = await waBase(req.user.workspaceId);
+    await fetch(base + '/sessions/' + req.user.workspaceId + '/link-lid', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
       body: JSON.stringify({ lid, phone }),

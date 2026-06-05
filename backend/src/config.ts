@@ -16,6 +16,9 @@ export const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://lo
 export const WORKER_SECRET = process.env.WORKER_SECRET ?? 'worker-secret';
 export const WA_SERVICE = process.env.WA_SERVICE || 'http://cybercontrol-wa:3100';
 export const WA_SECRET = process.env.WA_SECRET || 'wa-service-secret-2024';
+// Comma-separated tailnet hostnames of whatsapp-service shards, e.g. "cybercontrol-wa-1,cybercontrol-wa-2".
+// Empty → single-instance mode (routing falls back to WA_SERVICE).
+export const WA_INSTANCES = (process.env.WA_INSTANCES || '').split(',').map(s => s.trim()).filter(Boolean);
 
 export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 export const REMOVE_BG_KEY = process.env.REMOVE_BG_API_KEY ?? 'd9f7QFfqAdFuEzt1dXNqvSxP';

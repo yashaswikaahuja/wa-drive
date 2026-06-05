@@ -6,6 +6,8 @@ import fs from 'fs';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 import http from 'http';
+import pg from 'pg';
+import { usePostgresAuthState, clearPostgresAuthState } from './auth-postgres.js';
 
 const PORT = process.env.WA_PORT || 3100;
 const PARENT_URL = process.env.PARENT_URL || 'https://api.cybercontrol.fun';
@@ -13,6 +15,13 @@ const SERVICE_SECRET = process.env.SERVICE_SECRET || 'wa-service-secret-2024';
 const WA_SECRET = process.env.WA_SECRET || SERVICE_SECRET; // alias for newer code paths
 const AUTH_DIR = process.env.AUTH_DIR || './sessions';
 const RESOLVER_URL = process.env.RESOLVER_URL || 'http://localhost:3200';
+
+// Auth backend: 'postgres' (DB-backed, shardable) or 'files' (local, default for safety).
+// Set WA_AUTH_BACKEND=postgres + DATABASE_URL to decouple sessions from local disk.
+const WA_AUTH_BACKEND = process.env.WA_AUTH_BACKEND || 'files';
+const pgPool = (WA_AUTH_BACKEND === 'postgres' && process.env.DATABASE_URL)
+  ? new pg.Pool({ connectionString: process.env.DATABASE_URL })
+  : null;
 
 const app = express();
 app.use(express.json());
@@ -35,9 +44,13 @@ async function startSession(workspaceId) {
   }
 
   const sessionDir = path.join(AUTH_DIR, workspaceId);
-  fs.mkdirSync(sessionDir, { recursive: true });
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+  let state, saveCreds;
+  if (pgPool) {
+    ({ state, saveCreds } = await usePostgresAuthState(pgPool, workspaceId));
+  } else {
+    fs.mkdirSync(sessionDir, { recursive: true });
+    ({ state, saveCreds } = await useMultiFileAuthState(sessionDir));
+  }
   const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
@@ -82,7 +95,8 @@ async function startSession(workspaceId) {
       broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
 
       if (loggedOut) {
-        fs.rmSync(sessionDir, { recursive: true, force: true });
+        if (pgPool) clearPostgresAuthState(pgPool, workspaceId).catch(() => {});
+        else fs.rmSync(sessionDir, { recursive: true, force: true });
       } else {
         // Reconnect after delay
         setTimeout(() => startSession(workspaceId), 5000);
@@ -322,5 +336,6 @@ app.get('/sessions', authMiddleware, (_, res) => {
 server.listen(PORT, () => {
   console.log(`[WhatsApp Service] Running on port ${PORT}`);
   console.log(`[WhatsApp Service] Parent: ${PARENT_URL}`);
+  console.log(`[WhatsApp Service] Auth backend: ${WA_AUTH_BACKEND}${pgPool ? ' (DB)' : ' (local files)'}`);
   console.log(`[WhatsApp Service] Sessions dir: ${AUTH_DIR}`);
 });
