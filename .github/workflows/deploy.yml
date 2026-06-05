@@ -1,0 +1,47 @@
+name: Deploy (manual)
+
+# Manual gate: builds happen automatically (CI), but deploys to the VMs only run when you
+# trigger this from the Actions tab and pick a service. This is the free-tier equivalent of an
+# approval gate (environment required-reviewers need a paid plan / public repo).
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Service to deploy"
+        type: choice
+        options:
+          - backend
+          - extension-service
+          - whatsapp-service
+        default: backend
+
+jobs:
+  backend:
+    if: ${{ inputs.target == 'backend' }}
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: cybercontrol-app
+      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
+      services: backend
+      health_url: http://localhost:3000/api/health
+    secrets: inherit
+
+  extension-service:
+    if: ${{ inputs.target == 'extension-service' }}
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: cybercontrol-app
+      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
+      services: extension-service
+      health_url: http://localhost:3300/health
+    secrets: inherit
+
+  whatsapp-service:
+    if: ${{ inputs.target == 'whatsapp-service' }}
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: cybercontrol-wa
+      compose_path: /opt/cybercontrol-docker/docker-compose.wa.yml
+      services: whatsapp-service
+      health_url: http://localhost:3100/health
+    secrets: inherit

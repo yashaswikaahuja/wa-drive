@@ -1,0 +1,40 @@
+# Deploy compose for the APP VM (cybercontrol-app): backend + extension-service.
+# Pulls GHCR images; connects to the decoupled DB + WA service over the tailnet by name.
+# Secrets come from /opt/cybercontrol-docker/.env on the host (NOT committed).
+# Used by the CD pipeline (.github/workflows/_deploy.yml) and for manual deploys.
+services:
+  backend:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-backend:latest
+    pull_policy: always
+    restart: unless-stopped
+    network_mode: host          # so the container reaches the tailnet (100.x / MagicDNS)
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL}              # postgresql://...@cybercontrol-db:5432/cybercontrol
+      WA_SERVICE: ${WA_SERVICE:-http://cybercontrol-wa:3100}
+      WA_INSTANCES: ${WA_INSTANCES:-}            # empty = single-instance; csv for sharding
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      WA_SECRET: ${WA_SECRET}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+
+  extension-service:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
+    pull_policy: always
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      PORT: "3300"
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}                  # MUST match backend
+      DATA_DIR: /app/data
+    volumes:
+      - ext_data:/app/data
+
+volumes:
+  ext_data:

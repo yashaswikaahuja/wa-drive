@@ -1,0 +1,79 @@
+name: _deploy (reusable)
+
+# Reusable deploy step: pull GHCR image(s) on a tailnet VM, restart, health-check, rollback on failure.
+# Called by the build workflows after a successful image push. Gated by the `production`
+# environment so a reviewer can approve (configure required reviewers in repo Settings → Environments).
+on:
+  workflow_call:
+    inputs:
+      host:         { required: true,  type: string }   # tailnet name, e.g. cybercontrol-app
+      compose_path: { required: true,  type: string }   # path to compose file on the VM
+      services:     { required: true,  type: string }   # space-separated, e.g. "backend extension-service"
+      health_url:   { required: false, type: string, default: "" }  # e.g. http://localhost:3000/api/health
+    secrets:
+      TS_AUTHKEY:      { required: true }
+      DEPLOY_SSH_KEY:  { required: true }
+      DEPLOY_SSH_USER: { required: true }
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Join tailnet (ephemeral)
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Deploy + health-check + rollback
+        env:
+          HOST: ${{ inputs.host }}
+          USER: ${{ secrets.DEPLOY_SSH_USER }}
+          COMPOSE: ${{ inputs.compose_path }}
+          SERVICES: ${{ inputs.services }}
+          HEALTH: ${{ inputs.health_url }}
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST" \
+            "COMPOSE='$COMPOSE' SERVICES='$SERVICES' HEALTH='$HEALTH' bash -s" <<'REMOTE'
+          set -e
+          cd "$(dirname "$COMPOSE")"
+          FILE="$COMPOSE"
+          PRIMARY=$(echo $SERVICES | awk '{print $1}')
+          # record currently-running image of the primary service (for rollback)
+          CID=$(docker compose -f "$FILE" ps -q "$PRIMARY" 2>/dev/null | head -1)
+          PREV=$(docker inspect --format '{{.Image}}' "$CID" 2>/dev/null || echo "")
+          echo "previous image: ${PREV:-none}"
+          # NOTE: this host's Compose CLI rejects `up -d`; recreate via stop/rm/create/start.
+          recreate() {
+            docker compose -f "$FILE" stop $SERVICES || true
+            docker compose -f "$FILE" rm -f $SERVICES || true
+            docker compose -f "$FILE" create $SERVICES
+            docker compose -f "$FILE" start $SERVICES
+          }
+          docker compose -f "$FILE" pull $SERVICES
+          recreate
+          ok=1
+          if [ -n "$HEALTH" ]; then
+            ok=0
+            for i in $(seq 1 18); do
+              if curl -fsS "$HEALTH" >/dev/null 2>&1; then ok=1; break; fi
+              sleep 5
+            done
+          fi
+          if [ "$ok" != "1" ]; then
+            echo "::error::health check failed for $HEALTH — rolling back"
+            if [ -n "$PREV" ]; then
+              IMG=$(docker compose -f "$FILE" config --images | head -1)
+              docker tag "$PREV" "$IMG" && recreate
+              echo "rolled back $PRIMARY to previous image"
+            fi
+            exit 1
+          fi
+          echo "deploy OK ($SERVICES)"
+          REMOTE
