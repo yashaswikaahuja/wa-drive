@@ -1,0 +1,47 @@
+name: Build and push whatsapp images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'whatsapp-service/**'
+      - 'whatsapp-resolver/**'
+      - '.github/workflows/docker-publish-whatsapp.yml'
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push whatsapp-service
+        uses: docker/build-push-action@v6
+        with:
+          context: ./whatsapp-service
+          file: ./whatsapp-service/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-service:latest
+            ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-service:${{ github.sha }}
+
+      - name: Build and push whatsapp-resolver
+        uses: docker/build-push-action@v6
+        with:
+          context: ./whatsapp-resolver
+          file: ./whatsapp-resolver/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-resolver:latest
+            ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-resolver:${{ github.sha }}
