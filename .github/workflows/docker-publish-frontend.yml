@@ -1,0 +1,38 @@
+name: Build and push frontend image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/docker-publish-frontend.yml'
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            VITE_API_URL=https://api.cybercontrol.fun/api
+            VITE_SOCKET_URL=https://api.cybercontrol.fun
+            VITE_GOOGLE_CLIENT_ID=62092486976-jhsn62q3ufj4dvr42c1hpubnujasaqok.apps.googleusercontent.com
+          tags: |
+            ghcr.io/yashaswikaahuja/cybercontrol-frontend:latest
+            ghcr.io/yashaswikaahuja/cybercontrol-frontend:${{ github.sha }}
