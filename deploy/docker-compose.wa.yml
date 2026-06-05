@@ -1,0 +1,37 @@
+# Deploy compose for the WhatsApp VM (cybercontrol-wa): whatsapp-service + resolver.
+# Pulls GHCR images. DB-backed Baileys auth (WA_AUTH_BACKEND=postgres) makes sessions
+# survive container/instance moves; PARENT_URL reaches the backend over the tailnet.
+# Secrets come from the host .env (NOT committed).
+services:
+  whatsapp-service:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-service:latest
+    pull_policy: always
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      WA_PORT: "3100"
+      PARENT_URL: ${PARENT_URL:-http://cybercontrol-app:3000}
+      RESOLVER_URL: ${RESOLVER_URL:-http://localhost:3200}
+      WA_SECRET: ${WA_SECRET}
+      WA_AUTH_BACKEND: ${WA_AUTH_BACKEND:-postgres}
+      DATABASE_URL: ${DATABASE_URL}              # postgresql://...@cybercontrol-db:5432/cybercontrol
+      AUTH_DIR: /app/sessions
+    volumes:
+      - wa_sessions:/app/sessions                # only used if WA_AUTH_BACKEND=files
+
+  whatsapp-resolver:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-resolver:latest
+    pull_policy: always
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      PORT: "3200"
+      SERVICE_SECRET: ${WA_SECRET}
+    volumes:
+      - wa_resolver_auth:/app/session            # whatsapp-web.js LocalAuth (stateful)
+
+volumes:
+  wa_sessions:
+  wa_resolver_auth:

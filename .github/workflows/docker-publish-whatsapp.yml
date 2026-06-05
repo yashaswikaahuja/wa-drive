@@ -45,3 +45,14 @@ jobs:
           tags: |
             ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-resolver:latest
             ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-resolver:${{ github.sha }}
+
+
+  deploy:
+    needs: build-push
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: cybercontrol-wa
+      compose_path: /opt/cybercontrol-docker/docker-compose.wa.yml
+      services: whatsapp-service whatsapp-resolver
+      health_url: http://localhost:3100/health
+    secrets: inherit

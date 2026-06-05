@@ -32,3 +32,14 @@ jobs:
           tags: |
             ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
             ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${{ github.sha }}
+
+
+  deploy:
+    needs: build-push
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: cybercontrol-app
+      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
+      services: extension-service
+      health_url: http://localhost:3300/health
+    secrets: inherit
