@@ -310,8 +310,6 @@ gh run list --workflow=docker-publish.yml
 ---
 
 ## 10. Known gaps / TODO
-- Consider switching the backend `DATABASE_URL` host from the tailnet IP to the name `cybercontrol-db`
-  everywhere (extra robustness if the tailnet IP ever changes).
 - WhatsApp host is in `asia-south1` while app/db are in `us-central1` → ~270 ms cross-region latency
   over the tailnet. Co-locate regions if WhatsApp throughput becomes a concern.
 - Automate WhatsApp **session-dir backups** so a moved WA host restores instead of re-scanning QR.
