@@ -33,8 +33,7 @@ push to master ──► build image ──► push to GHCR ──► deploy job
 ## Required GitHub secrets (Settings → Secrets and variables → Actions)
 | Secret | What |
 |---|---|
-| `TS_OAUTH_CLIENT_ID` | Tailscale OAuth client id (tag `tag:ci`) — lets the runner join the tailnet |
-| `TS_OAUTH_SECRET` | Tailscale OAuth secret |
+| `TS_AUTHKEY` | Tailscale **reusable + ephemeral auth key** (Keys tab; no tag needed) — lets the runner join the tailnet |
 | `DEPLOY_SSH_KEY` | Private SSH key authorized on both VMs (`cybercontrol-app`, `cybercontrol-wa`) |
 | `DEPLOY_SSH_USER` | SSH user on the VMs |
 
@@ -43,8 +42,8 @@ required reviewers so deploys wait for approval.
 
 > Generate a dedicated deploy keypair (`ssh-keygen -t ed25519`), add the **public** key to
 > `~/.ssh/authorized_keys` on both VMs, and store the **private** key as `DEPLOY_SSH_KEY`.
-> Create the Tailscale OAuth client in the Tailscale admin console (Settings → OAuth clients) with
-> the `tag:ci` tag, and add an ACL allowing `tag:ci` to reach the VMs (or use Tailscale SSH).
+> Create the Tailscale auth key in the admin console (**Settings → Keys → Generate auth key**,
+> Reusable + Ephemeral, no tag needed) and store it as `TS_AUTHKEY`.
 
 ## One-time prerequisite: cut over from pm2 to containers
 Today the live services run via **pm2 from source** — there is nothing for CD to update yet.

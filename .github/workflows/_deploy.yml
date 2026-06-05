@@ -11,10 +11,9 @@ on:
       services:     { required: true,  type: string }   # space-separated, e.g. "backend extension-service"
       health_url:   { required: false, type: string, default: "" }  # e.g. http://localhost:3000/api/health
     secrets:
-      TS_OAUTH_CLIENT_ID: { required: true }
-      TS_OAUTH_SECRET:    { required: true }
-      DEPLOY_SSH_KEY:     { required: true }
-      DEPLOY_SSH_USER:    { required: true }
+      TS_AUTHKEY:      { required: true }
+      DEPLOY_SSH_KEY:  { required: true }
+      DEPLOY_SSH_USER: { required: true }
 
 jobs:
   deploy:
@@ -24,9 +23,7 @@ jobs:
       - name: Join tailnet (ephemeral)
         uses: tailscale/github-action@v2
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+          authkey: ${{ secrets.TS_AUTHKEY }}
 
       - name: Setup SSH key
         run: |
