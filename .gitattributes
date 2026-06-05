@@ -1,0 +1,4 @@
+# Shell scripts and server configs must use LF (they run on Linux VMs).
+*.sh text eol=lf
+*.conf text eol=lf
+deploy/nginx/active_color text eol=lf
