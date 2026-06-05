@@ -53,6 +53,6 @@ jobs:
     with:
       host: cybercontrol-wa
       compose_path: /opt/cybercontrol-docker/docker-compose.wa.yml
-      services: whatsapp-service whatsapp-resolver
+      services: whatsapp-service
       health_url: http://localhost:3100/health
     secrets: inherit

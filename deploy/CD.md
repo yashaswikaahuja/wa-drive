@@ -17,7 +17,12 @@ push to master ──► build image ──► push to GHCR ──► deploy job
 |---|---|---|---|
 | backend | `docker-publish.yml` | `cybercontrol-app` | `:3000/api/health` |
 | extension-service | `docker-publish-extension.yml` | `cybercontrol-app` | `:3300/health` |
-| whatsapp-service + resolver | `docker-publish-whatsapp.yml` | `cybercontrol-wa` | `:3100/health` |
+| whatsapp-service | `docker-publish-whatsapp.yml` | `cybercontrol-wa` | `:3100/health` |
+
+> The **whatsapp-resolver stays on pm2** on `cybercontrol-wa` (not containerized, not in CD). It uses
+> whatsapp-web.js, which permits only one active session per account — a copied session in a container
+> logs the account out. It's a single non-scaling oracle, so pm2 is the right home. Its image is still
+> built for reference, but never auto-deployed.
 
 ## How `_deploy.yml` works
 1. Joins your **tailnet** ephemerally (`tailscale/github-action`) so the runner can reach the VM by name.
@@ -62,11 +67,14 @@ curl -s http://localhost:3000/api/health           # expect {"status":"ok"}
 **WA VM (`cybercontrol-wa`):** first apply `backend/migrations/wa_auth.sql` to the DB and run
 `whatsapp-service/migrate-sessions-to-db.js` (see PR #1), then:
 ```bash
-# place deploy/docker-compose.wa.yml + .env (DATABASE_URL, WA_SECRET, WA_AUTH_BACKEND=postgres)
-pm2 stop whatsapp-service whatsapp-resolver
-docker compose -f docker-compose.wa.yml up -d
+# place deploy/docker-compose.wa.yml + .env (DATABASE_URL, WA_SECRET, WA_AUTH_BACKEND)
+# Stop ONLY whatsapp-service (leave whatsapp-resolver on pm2 — do not containerize it).
+pm2 stop whatsapp-service
+docker compose -f docker-compose.wa.yml create
+docker compose -f docker-compose.wa.yml start   # this box's compose CLI rejects `up -d`
 curl -s http://localhost:3100/health
-# verify WhatsApp accounts reconnect (re-scan QR for any that don't)
+# whatsapp-service uses Baileys: with WA_AUTH_BACKEND=files + the on-disk sessions (or a seeded
+# volume), accounts reconnect with no QR re-scan; the backend triggers /sessions/start per workspace.
 ```
 
 Once the services run as containers, the CD pipeline's `docker compose pull && up -d` takes over on
