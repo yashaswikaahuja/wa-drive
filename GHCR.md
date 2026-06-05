@@ -53,7 +53,7 @@ with a token that has `read:packages` (or make a package public).
 | `cybercontrol-frontend:latest`         | `./frontend`          | 80   | Vite/React + nginx | no |
 | `cybercontrol-whatsapp-service:latest` | `./whatsapp-service`  | 3100 | Baileys             | **yes** — `/app/sessions` |
 | `cybercontrol-whatsapp-resolver:latest`| `./whatsapp-resolver` | 3200 | whatsapp-web.js + Chromium | **yes** — `./session` |
-| _extension-service_ | `./extension-service` | 3300 | Node | **not yet on GHCR** (still `build:`) |
+| `cybercontrol-extension-service:latest` | `./extension-service` | 3300 | Node | minor — `DATA_DIR` files (mappings/adapters) |
 
 Each image is also tagged with the commit SHA (`:<git-sha>`) for rollback.
 
@@ -75,6 +75,7 @@ Each workflow triggers on push to `master` that touches the relevant dir, uses t
 | `.github/workflows/docker-publish.yml`           | backend            | `backend/**` |
 | `.github/workflows/docker-publish-frontend.yml`  | frontend           | `frontend/**` |
 | `.github/workflows/docker-publish-whatsapp.yml`  | wa-service + resolver | `whatsapp-service/**`, `whatsapp-resolver/**` |
+| `.github/workflows/docker-publish-extension.yml` | extension-service  | `extension-service/**` |
 
 **To rebuild:** push a change under the relevant dir, or run the workflow manually
 (`workflow_dispatch`) — e.g. `gh run list --workflow=docker-publish.yml`.
@@ -271,6 +272,24 @@ domain resolves to a live backend. (Currently the frontend is hosted on Vercel.)
 
 ---
 
+### 8e. Move / run the EXTENSION-SERVICE
+Runs alongside the backend on `cybercontrol-app` (nginx routes `/api/profiles*`, `/api/mappings*`,
+`/api/adapters*` → port 3300). Shares the **same DB and JWT_SECRET** as the backend.
+```bash
+docker pull ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
+docker run -d --restart unless-stopped --network host \
+  -e PORT=3300 \
+  -e DATABASE_URL="postgresql://cybercontrol_app:<DB_PASSWORD>@cybercontrol-db:5432/cybercontrol" \
+  -e JWT_SECRET=<JWT_SECRET> \
+  -e DATA_DIR=/app/data \
+  -v ext_data:/app/data \
+  ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
+```
+`JWT_SECRET` **must match the backend's** (it verifies tokens the hub issued). The `DATA_DIR` volume
+holds the legacy `mappings.json` / `adapters.json` file stores — preserve it when moving.
+
+---
+
 ## 9. Quick reference
 
 ```bash
@@ -291,8 +310,6 @@ gh run list --workflow=docker-publish.yml
 ---
 
 ## 10. Known gaps / TODO
-- **extension-service** is not yet on GHCR (still `build:` in compose) — give it the same Actions
-  treatment for a fully turnkey new instance.
 - Consider switching the backend `DATABASE_URL` host from the tailnet IP to the name `cybercontrol-db`
   everywhere (extra robustness if the tailnet IP ever changes).
 - WhatsApp host is in `asia-south1` while app/db are in `us-central1` → ~270 ms cross-region latency
