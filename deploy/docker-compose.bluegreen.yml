@@ -1,0 +1,62 @@
+# Blue-green deploy for the backend on cybercontrol-app.
+# nginx (:3000) fronts two backend colors (blue :3001, green :3002). The deploy script updates the
+# IDLE color, health-checks it, then atomically flips nginx to it — old color stays for instant rollback.
+# Only ONE color receives traffic at a time (via nginx), so there's no double-writer concern.
+# Secrets come from /opt/cybercontrol-docker/.env (NOT committed).
+x-backend-env: &backend-env
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL}
+  WA_SERVICE: ${WA_SERVICE:-http://cybercontrol-wa:3100}
+  WA_INSTANCES: ${WA_INSTANCES:-}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+  WA_SECRET: ${WA_SECRET}
+  GROQ_API_KEY: ${GROQ_API_KEY}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+  GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+
+services:
+  backend-blue:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-backend:latest
+    pull_policy: missing
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      <<: *backend-env
+      PORT: "3001"
+
+  backend-green:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-backend:latest
+    pull_policy: missing
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      <<: *backend-env
+      PORT: "3002"
+
+  nginx:
+    image: nginx:alpine
+    container_name: cybercontrol-nginx
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./nginx/backend.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/active_upstream.conf:/etc/nginx/conf.d/active_upstream.conf:ro
+
+  extension-service:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
+    pull_policy: missing
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      NODE_ENV: production
+      PORT: "3300"
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      DATA_DIR: /app/data
+    volumes:
+      - ext_data:/app/data
+
+volumes:
+  ext_data:

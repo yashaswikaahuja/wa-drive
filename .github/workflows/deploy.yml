@@ -17,21 +17,32 @@ on:
 
 jobs:
   backend:
+    # Blue-green: deploy idle color, health-check, atomic nginx switch (script lives on the VM).
     if: ${{ inputs.target == 'backend' }}
-    uses: ./.github/workflows/_deploy.yml
-    with:
-      host: cybercontrol-app
-      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
-      services: backend
-      health_url: http://localhost:3000/api/health
-    secrets: inherit
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Join tailnet (ephemeral)
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Blue-green deploy + switch
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
+            "${{ secrets.DEPLOY_SSH_USER }}@cybercontrol-app" \
+            "bash /opt/cybercontrol-docker/bluegreen-deploy.sh"
 
   extension-service:
     if: ${{ inputs.target == 'extension-service' }}
     uses: ./.github/workflows/_deploy.yml
     with:
       host: cybercontrol-app
-      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
+      compose_path: /opt/cybercontrol-docker/docker-compose.bluegreen.yml
       services: extension-service
       health_url: http://localhost:3300/health
     secrets: inherit
