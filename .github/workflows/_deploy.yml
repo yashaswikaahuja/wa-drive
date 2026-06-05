@@ -49,8 +49,15 @@ jobs:
           CID=$(docker compose -f "$FILE" ps -q "$PRIMARY" 2>/dev/null | head -1)
           PREV=$(docker inspect --format '{{.Image}}' "$CID" 2>/dev/null || echo "")
           echo "previous image: ${PREV:-none}"
+          # NOTE: this host's Compose CLI rejects `up -d`; recreate via stop/rm/create/start.
+          recreate() {
+            docker compose -f "$FILE" stop $SERVICES || true
+            docker compose -f "$FILE" rm -f $SERVICES || true
+            docker compose -f "$FILE" create $SERVICES
+            docker compose -f "$FILE" start $SERVICES
+          }
           docker compose -f "$FILE" pull $SERVICES
-          docker compose -f "$FILE" up -d $SERVICES
+          recreate
           ok=1
           if [ -n "$HEALTH" ]; then
             ok=0
@@ -63,7 +70,7 @@ jobs:
             echo "::error::health check failed for $HEALTH — rolling back"
             if [ -n "$PREV" ]; then
               IMG=$(docker compose -f "$FILE" config --images | head -1)
-              docker tag "$PREV" "$IMG" && docker compose -f "$FILE" up -d $SERVICES
+              docker tag "$PREV" "$IMG" && recreate
               echo "rolled back $PRIMARY to previous image"
             fi
             exit 1
