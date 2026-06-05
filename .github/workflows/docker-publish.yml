@@ -32,14 +32,3 @@ jobs:
           tags: |
             ghcr.io/yashaswikaahuja/cybercontrol-backend:latest
             ghcr.io/yashaswikaahuja/cybercontrol-backend:${{ github.sha }}
-
-
-  deploy:
-    needs: build-push
-    uses: ./.github/workflows/_deploy.yml
-    with:
-      host: cybercontrol-app
-      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
-      services: backend
-      health_url: http://localhost:3000/api/health
-    secrets: inherit
