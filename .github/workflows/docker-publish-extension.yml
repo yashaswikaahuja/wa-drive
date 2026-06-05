@@ -1,0 +1,34 @@
+name: Build and push extension-service image
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'extension-service/**'
+      - '.github/workflows/docker-publish-extension.yml'
+  workflow_dispatch:
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./extension-service
+          file: ./extension-service/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
+            ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${{ github.sha }}
