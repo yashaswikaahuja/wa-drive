@@ -52,10 +52,15 @@ with a token that has `read:packages` (or make a package public).
 | `cybercontrol-backend:latest`          | `./backend`           | 3000 | Node/Express + tsc | no (state in DB) |
 | `cybercontrol-frontend:latest`         | `./frontend`          | 80   | Vite/React + nginx | no |
 | `cybercontrol-whatsapp-service:latest` | `./whatsapp-service`  | 3100 | Baileys             | **yes** — `/app/sessions` |
-| `cybercontrol-whatsapp-resolver:latest`| `./whatsapp-resolver` | 3200 | whatsapp-web.js + Chromium | **yes** — `./session` |
+| `cybercontrol-whatsapp-resolver:latest`| `./whatsapp-resolver` | 3200 | whatsapp-web.js + Chromium | **runs on pm2, NOT containerized** (see note) |
 | `cybercontrol-extension-service:latest` | `./extension-service` | 3300 | Node | minor — `DATA_DIR` files (mappings/adapters) |
 
 Each image is also tagged with the commit SHA (`:<git-sha>`) for rollback.
+
+> **Resolver runs on pm2, not in a container.** whatsapp-web.js allows only one active session per
+> account; starting a container with a copied session triggers WhatsApp's duplicate-session logout
+> (which forces a QR re-scan). The resolver is a single, non-scaling lookup oracle, so it stays as a
+> pm2 process on `cybercontrol-wa`. Its image is still built for reference but is never deployed by CD.
 
 ### Verify an image exists
 ```bash
