@@ -10,6 +10,7 @@ on:
       compose_path: { required: true,  type: string }   # path to compose file on the VM
       services:     { required: true,  type: string }   # space-separated, e.g. "backend extension-service"
       health_url:   { required: false, type: string, default: "" }  # e.g. http://localhost:3000/api/health
+      image_tag:    { required: false, type: string, default: "latest" }  # version to deploy; a git SHA rolls back
     secrets:
       TS_AUTHKEY:      { required: true }
       DEPLOY_SSH_KEY:  { required: true }
@@ -38,9 +39,10 @@ jobs:
           COMPOSE: ${{ inputs.compose_path }}
           SERVICES: ${{ inputs.services }}
           HEALTH: ${{ inputs.health_url }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
           ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST" \
-            "COMPOSE='$COMPOSE' SERVICES='$SERVICES' HEALTH='$HEALTH' bash -s" <<'REMOTE'
+            "COMPOSE='$COMPOSE' SERVICES='$SERVICES' HEALTH='$HEALTH' IMAGE_TAG='$IMAGE_TAG' bash -s" <<'REMOTE'
           set -e
           cd "$(dirname "$COMPOSE")"
           FILE="$COMPOSE"

@@ -4,7 +4,7 @@
 # Used by the CD pipeline (.github/workflows/_deploy.yml) and for manual deploys.
 services:
   backend:
-    image: ghcr.io/yashaswikaahuja/cybercontrol-backend:latest
+    image: ghcr.io/yashaswikaahuja/cybercontrol-backend:${IMAGE_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
     network_mode: host          # so the container reaches the tailnet (100.x / MagicDNS)
@@ -23,7 +23,7 @@ services:
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
 
   extension-service:
-    image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
+    image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
     network_mode: host

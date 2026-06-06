@@ -9,7 +9,7 @@
 # Secrets come from the host .env (NOT committed).
 services:
   whatsapp-service:
-    image: ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-service:latest
+    image: ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-service:${IMAGE_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
     network_mode: host

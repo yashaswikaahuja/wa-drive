@@ -1,8 +1,11 @@
 name: Deploy (manual)
 
 # Manual gate: builds happen automatically (CI), but deploys to the VMs only run when you
-# trigger this from the Actions tab and pick a service. This is the free-tier equivalent of an
-# approval gate (environment required-reviewers need a paid plan / public repo).
+# trigger this from the Actions tab and pick a service + version. This is the free-tier equivalent
+# of an approval gate (environment required-reviewers need a paid plan / public repo).
+#
+# Rollback: set `version` to a previous image tag (a commit SHA from a prior build) to redeploy
+# that older version. Default `latest` deploys the newest build. One-at-a-time (recreate) strategy.
 on:
   workflow_dispatch:
     inputs:
@@ -14,6 +17,10 @@ on:
           - extension-service
           - whatsapp-service
         default: backend
+      version:
+        description: "Image tag to deploy (latest, or a commit SHA to roll back)"
+        type: string
+        default: latest
 
 jobs:
   backend:
@@ -24,6 +31,7 @@ jobs:
       compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
       services: backend
       health_url: http://localhost:3000/api/health
+      image_tag: ${{ inputs.version }}
     secrets: inherit
 
   extension-service:
@@ -34,6 +42,7 @@ jobs:
       compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
       services: extension-service
       health_url: http://localhost:3300/health
+      image_tag: ${{ inputs.version }}
     secrets: inherit
 
   whatsapp-service:
@@ -44,4 +53,5 @@ jobs:
       compose_path: /opt/cybercontrol-docker/docker-compose.wa.yml
       services: whatsapp-service
       health_url: http://localhost:3100/health
+      image_tag: ${{ inputs.version }}
     secrets: inherit
