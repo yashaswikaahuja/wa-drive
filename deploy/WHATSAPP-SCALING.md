@@ -71,19 +71,33 @@ single `WA_SERVICE` — current production behaviour is unchanged. The ruleset o
 configure instances.
 
 ## Activation (when you add a 2nd WhatsApp VM)
-1. **Switch auth to Postgres** so sessions can move: set `WA_AUTH_BACKEND=postgres` on the WA service(s)
-   and run the migrations on the DB:
+All env values are provisioned by CD (`_deploy.yml` writes them into each VM's `<service>.env`), so set
+them as **GitHub Variables** — do *not* hand-edit VM files.
+
+1. **Switch auth to Postgres** so sessions can move: set variable `WA_AUTH_BACKEND=postgres` in each
+   whatsapp-service environment, and run the migrations on the DB:
    ```
    psql "$DATABASE_URL" -f backend/migrations/wa_auth.sql
    psql "$DATABASE_URL" -f backend/migrations/wa_instance_health.sql
    ```
    (One-time: migrate existing on-disk sessions into the DB with
    `whatsapp-service/migrate-sessions-to-db.js`. Files-mode sessions can't fail over.)
-2. **Name each instance**: set `WA_INSTANCE_NAME=cybercontrol-wa-1` (and `-2`, …) on each WA service —
-   the value must match its tailnet hostname.
-3. **Tell the hub the pool**: set `WA_INSTANCES=cybercontrol-wa-1,cybercontrol-wa-2` on the backend.
-4. Deploy. New workspaces spread across instances; existing ones pin on first use; sessions stay put
-   unless an instance dies.
+2. **Tell the hub the pool**: set variable `WA_INSTANCES=cybercontrol-wa-1,cybercontrol-wa-2` so the
+   **backend** deploy writes it (set it as a repo variable, or in the `backend` environment).
+3. **Name each instance** — and this is the key CD detail: `WA_INSTANCE_NAME` must be **distinct per WA
+   VM**, so one shared `whatsapp-service` environment can't serve two VMs. Create a **per-instance
+   environment + deploy target** for each WA VM:
+   - environment `whatsapp-service-1` → var `WA_INSTANCE_NAME=cybercontrol-wa-1` (+ `WA_AUTH_BACKEND=postgres`)
+   - environment `whatsapp-service-2` → var `WA_INSTANCE_NAME=cybercontrol-wa-2` (+ `WA_AUTH_BACKEND=postgres`)
+   - add a deploy job (or matrix entry) in `deploy.yml` per WA VM, each pointing `host` at that VM and
+     `environment` at its per-instance environment.
+4. Deploy each service. CD now writes `WA_INSTANCES` into the backend's env and the correct
+   `WA_INSTANCE_NAME` into each worker's env, so the backend routes shard-aware and each worker
+   heartbeats. New workspaces spread across instances; existing ones pin on first use; sessions stay
+   put unless an instance dies.
+
+> Until you add the per-instance environments + targets (step 3), `WA_INSTANCE_NAME` is empty and the
+> worker stays in single-instance mode (no heartbeat) — which is the safe default.
 
 > ⚠️ Switching a currently-connected `files`-mode account to `postgres` is a one-time re-link (the
 > creds location changes). Plan it like the original cutover. After that, moves are re-scan-free.
