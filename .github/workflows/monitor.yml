@@ -1,0 +1,46 @@
+name: Monitor (health)
+
+# Scheduled health check of every tier + WhatsApp shards, over the tailnet.
+# Fails (→ GitHub emails the repo owner) if anything is down or a shard went stale.
+# Runs every 15 min; also runnable on demand.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Join tailnet (OAuth)
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:cybercontrol
+
+      - name: Check services + shards
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WA_INSTANCES: ${{ vars.WA_INSTANCES }}
+        run: |
+          fail=0
+          out=""
+          chk() {  # url, label
+            if curl -fsS -m 8 "$1" >/dev/null 2>&1; then out="$out\n✅ $2"; else out="$out\n❌ $2  ($1)"; fail=1; fi
+          }
+          chk http://cybercontrol-app:3000/api/health  "backend"
+          chk http://cybercontrol-app:3300/health      "extension-service"
+          chk http://cybercontrol-wa:3200/health       "resolver (single)"
+          for i in ${WA_INSTANCES//,/ }; do
+            chk "http://$i:3100/health" "whatsapp shard: $i"
+          done
+          # any shard that heartbeat-registered but has now gone stale (>90s)?
+          STALE=$(docker run --rm --network host postgres:15 \
+            psql "$DATABASE_URL" -tAc \
+            "SELECT coalesce(string_agg(instance, ', '), '') FROM wa_instances WHERE last_seen < now() - interval '90 seconds'" 2>/dev/null || echo "")
+          if [ -n "$STALE" ]; then out="$out\n❌ STALE shards (no heartbeat): $STALE"; fail=1; else out="$out\n✅ all registered shards fresh"; fi
+
+          echo -e "## CyberControl health\n$out" >> "$GITHUB_STEP_SUMMARY"
+          echo -e "$out"
+          exit $fail
