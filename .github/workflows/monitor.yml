@@ -35,10 +35,10 @@ jobs:
           for i in ${WA_INSTANCES//,/ }; do
             chk "http://$i:3100/health" "whatsapp shard: $i"
           done
-          # any shard that heartbeat-registered but has now gone stale (>90s)?
+          # any shard in the CONFIGURED pool that heartbeat-registered but has now gone stale (>90s)?
           STALE=$(docker run --rm --network host postgres:15 \
             psql "$DATABASE_URL" -tAc \
-            "SELECT coalesce(string_agg(instance, ', '), '') FROM wa_instances WHERE last_seen < now() - interval '90 seconds'" 2>/dev/null || echo "")
+            "SELECT coalesce(string_agg(instance, ', '), '') FROM wa_instances WHERE instance = ANY(string_to_array('$WA_INSTANCES', ',')) AND last_seen < now() - interval '90 seconds'" 2>/dev/null || echo "")
           if [ -n "$STALE" ]; then out="$out\n❌ STALE shards (no heartbeat): $STALE"; fail=1; else out="$out\n✅ all registered shards fresh"; fi
 
           echo -e "## CyberControl health\n$out" >> "$GITHUB_STEP_SUMMARY"
