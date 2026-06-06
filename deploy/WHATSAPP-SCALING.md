@@ -92,6 +92,28 @@ With **no `WA_INSTANCES`** (and no `WA_INSTANCE_NAME` on the service), everythin
 single `WA_SERVICE` — current production behaviour is unchanged. The ruleset only activates when you
 configure instances.
 
+## Fast instance bring-up (~2 min, self-provisioning)
+The manual sequence (install docker/tailscale → join → deploy user → GHCR login → copy compose) is
+baked into [`deploy/provision-wa-instance.sh`](provision-wa-instance.sh) as a **GCP startup script**.
+A new WhatsApp VM self-provisions on first boot — you only pass three per-instance values as metadata:
+
+```bash
+gcloud compute instances create cybercontrol-wa-3 \
+  --zone=us-central1-a --machine-type=e2-micro \
+  --image-family=debian-12 --image-project=debian-cloud \
+  --metadata-from-file startup-script=deploy/provision-wa-instance.sh \
+  --metadata ts-authkey=tskey-auth-XXXX,wa-instance-name=cybercontrol-wa-3,ghcr-token=ghp_XXXX
+# wait ~90s (boot + provision: docker, tailscale join, deploy user, GHCR login, compose)
+```
+Then the GitHub side (also quick):
+1. env `whatsapp-service-3` → vars `WA_INSTANCE_NAME=cybercontrol-wa-3`, `WA_AUTH_BACKEND=postgres`
+2. add a `whatsapp-service-3` target in `deploy.yml` (copy the wa-2 block, change host + environment)
+3. update repo var `WA_INSTANCES=...,cybercontrol-wa-3`
+4. Deploy (manual) → `whatsapp-service-3`, then re-deploy `backend`
+
+> Even faster: snapshot a provisioned VM into a **machine image** (docker + deploy user + compose
+> pre-baked); new instances then only run steps 2 (tailscale join) + 4 (GHCR login) on boot.
+
 ## Activation runbook (done for wa-2; reuse for a 3rd VM)
 This was followed on 2026-06-06 to add `cybercontrol-wa-2`; reuse it verbatim for any further instance.
 All env values are provisioned by CD (`_deploy.yml` writes them into each VM's `<service>.env`), so set
