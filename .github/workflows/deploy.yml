@@ -16,6 +16,7 @@ on:
           - backend
           - extension-service
           - whatsapp-service
+          - whatsapp-service-2
         default: backend
       version:
         description: "Image tag to deploy (latest, or a commit SHA to roll back)"
@@ -57,4 +58,16 @@ jobs:
       health_url: http://localhost:3100/health
       image_tag: ${{ inputs.version }}
       environment: whatsapp-service
+    secrets: inherit
+
+  whatsapp-service-2:
+    if: ${{ inputs.target == 'whatsapp-service-2' }}
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: cybercontrol-wa-2
+      compose_path: /opt/cybercontrol-docker/docker-compose.wa.yml
+      services: whatsapp-service
+      health_url: http://localhost:3100/health
+      image_tag: ${{ inputs.version }}
+      environment: whatsapp-service-2
     secrets: inherit
