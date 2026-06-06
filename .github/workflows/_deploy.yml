@@ -53,6 +53,9 @@ jobs:
           WA_AUTH_BACKEND:      ${{ vars.WA_AUTH_BACKEND }}
           WA_INSTANCES:         ${{ vars.WA_INSTANCES }}        # backend: shard pool (csv tailnet names)
           WA_INSTANCE_NAME:     ${{ vars.WA_INSTANCE_NAME }}    # whatsapp-service: this instance's tailnet name
+          RESOLVER_URL:         ${{ vars.RESOLVER_URL }}        # whatsapp-service: shared resolver over tailnet
+          WA_HEARTBEAT_MS:      ${{ vars.WA_HEARTBEAT_MS }}     # whatsapp-service: heartbeat interval
+          WA_DEAD_AFTER_MS:     ${{ vars.WA_DEAD_AFTER_MS }}    # backend: how long w/o heartbeat → failover
         run: |
           # Build a MINIMAL .env from only the values present for this environment.
           # Values arrive as env vars (not inlined), so special chars are safe; empty ones are skipped.
@@ -60,7 +63,7 @@ jobs:
           for k in DATABASE_URL JWT_SECRET JWT_REFRESH_SECRET WA_SECRET \
                    GROQ_API_KEY GROQ_API_KEY_2 GOOGLE_CLIENT_SECRET \
                    GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI WA_AUTH_BACKEND \
-                   WA_INSTANCES WA_INSTANCE_NAME; do
+                   WA_INSTANCES WA_INSTANCE_NAME RESOLVER_URL WA_HEARTBEAT_MS WA_DEAD_AFTER_MS; do
             v="${!k}"
             if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v" >> /tmp/vm.env; fi
           done
