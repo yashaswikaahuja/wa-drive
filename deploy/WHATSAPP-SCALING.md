@@ -114,6 +114,33 @@ Then the GitHub side (also quick):
 > Even faster: snapshot a provisioned VM into a **machine image** (docker + deploy user + compose
 > pre-baked); new instances then only run steps 2 (tailscale join) + 4 (GHCR login) on boot.
 
+### Tailscale OAuth (reusable, non-expiring — preferred over auth keys)
+Auth keys expire (≤90 days); an **OAuth client** doesn't, so it's better for repeated automation. The
+trade-off: OAuth-joined nodes **must be tagged**.
+
+**One-time tailnet setup** (admin console → Access controls / Keys):
+- Define the tag and its owner in the ACL, e.g. `"tagOwners": { "tag:cybercontrol": ["autogroup:admin"] }`.
+- Allow that tag to reach the services it needs (or keep the default allow-all):
+  `{"action":"accept","src":["tag:cybercontrol"],"dst":["cybercontrol-db:5432","cybercontrol-app:3000","cybercontrol-wa:3200"]}`
+- Create an **OAuth client** (Settings → OAuth clients) with `devices:write` (and `auth_keys`) scoped to `tag:cybercontrol`.
+
+**New instance via OAuth** — pass the client secret + tag as metadata:
+```bash
+  --metadata ts-authkey=tskey-client-XXXX,ts-tag=tag:cybercontrol,wa-instance-name=cybercontrol-wa-3,ghcr-token=ghp_XXXX
+```
+The provision script detects `ts-tag` and joins with `--advertise-tags` (OAuth mode).
+
+**CD runner OAuth** (`_deploy.yml`) — to stop depending on an expiring `TS_AUTHKEY`, set secrets
+`TS_OAUTH_CLIENT_ID` + `TS_OAUTH_SECRET` and swap the join step to:
+```yaml
+      - uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          tags:            tag:cybercontrol
+```
+(Not yet flipped on the live pipeline — needs the client ID + the ACL tag in place first.)
+
 ## Activation runbook (done for wa-2; reuse for a 3rd VM)
 This was followed on 2026-06-06 to add `cybercontrol-wa-2`; reuse it verbatim for any further instance.
 All env values are provisioned by CD (`_deploy.yml` writes them into each VM's `<service>.env`), so set

@@ -4,7 +4,10 @@
 # then a CD deploy. Replaces the manual install/join/login/copy sequence.
 #
 # Pass per-instance values via instance metadata:
-#   ts-authkey       = tskey-auth-...        (Tailscale auth key, reusable, ephemeral OFF)
+#   ts-authkey       = tskey-auth-...  OR  tskey-client-...  (auth key, or OAuth client secret)
+#   ts-tag           = tag:cybercontrol   (REQUIRED if ts-authkey is an OAuth client secret;
+#                                          the tag must exist in the tailnet ACL `tagOwners` and be
+#                                          allowed to reach cybercontrol-db:5432 / -app:3000 / -wa:3200)
 #   wa-instance-name = cybercontrol-wa-N     (this node's tailnet hostname)
 #   ghcr-token       = ghp_...               (GHCR read:packages token for the deploy user)
 # The deploy public key is baked in (matches the DEPLOY_SSH_KEY GitHub secret).
@@ -15,6 +18,7 @@ echo "=== cc provision $(date) ==="
 META="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
 meta() { curl -s -H "Metadata-Flavor: Google" "$META/$1"; }
 TS_KEY=$(meta ts-authkey)
+TS_TAG=$(meta ts-tag)
 WA_NAME=$(meta wa-instance-name)
 GHCR_TOKEN=$(meta ghcr-token)
 DEPLOY_PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINp+ul1LemdrPohJ/2OEzUg8QLSmMXjdecQPY6lGS9Xr cybercontrol-cd-deploy'
@@ -24,8 +28,15 @@ command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
 command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
 systemctl enable --now docker tailscaled
 
-# 2. join the tailnet under the right name
-tailscale up --auth-key="$TS_KEY" --hostname="$WA_NAME"
+# 2. join the tailnet under the right name.
+#    OAuth client secret (tskey-client-...) → must advertise a tag; plain auth key → no tag.
+if [ -n "$TS_TAG" ]; then
+  echo "joining via OAuth client with tag $TS_TAG"
+  tailscale up --auth-key="${TS_KEY}?ephemeral=false&preauthorized=true" --advertise-tags="$TS_TAG" --hostname="$WA_NAME"
+else
+  echo "joining via auth key"
+  tailscale up --auth-key="$TS_KEY" --hostname="$WA_NAME"
+fi
 
 # 3. deploy user (docker group) + CD public key
 id deploy >/dev/null 2>&1 || useradd -m -s /bin/bash deploy
