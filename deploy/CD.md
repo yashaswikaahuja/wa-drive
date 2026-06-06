@@ -64,6 +64,13 @@ ssh deploy@cybercontrol-app "cd /opt/cybercontrol-docker && IMAGE_TAG=<tag> \
 | `TS_AUTHKEY` | Tailscale **reusable + ephemeral** auth key (Keys tab; no tag) — runner joins the tailnet |
 | `DEPLOY_SSH_KEY` | Private key for the `deploy` user, authorized on both VMs |
 | `DEPLOY_SSH_USER` | `deploy` (a user in the `docker` group on both VMs) |
+| `APP_ENV` | full `.env` for the app VM (DATABASE_URL, JWT_*, WA_SECRET, GROQ, GOOGLE_*) |
+| `WA_ENV` | full `.env` for the WA VM (DATABASE_URL, WA_SECRET, WA_AUTH_BACKEND, PARENT_URL, RESOLVER_URL) |
+
+> **Env is provisioned automatically.** Each deploy writes the VM's `/opt/cybercontrol-docker/.env`
+> from `APP_ENV` / `WA_ENV` (via `scp`) before `docker compose` runs — so a fresh VM needs no manual
+> `.env`. GitHub is the source of truth; update the secret to change a VM's env. (`/opt/cybercontrol-docker`
+> is owned by the `deploy` user so it can write the file.)
 
 A `production` environment exists (the deploy job records to it). Required-reviewer approval isn't used
 (needs a paid plan / public repo); the **manual trigger is the gate**.
