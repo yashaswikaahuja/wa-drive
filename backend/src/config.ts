@@ -28,4 +28,7 @@ export const WA_DEAD_AFTER_MS = Number(process.env.WA_DEAD_AFTER_MS ?? 90_000);
 export const WA_MIN_HOLD_MS = Number(process.env.WA_MIN_HOLD_MS ?? 86_400_000);
 
 export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+// Optional: enables the socket.io Redis adapter so realtime events fan out across multiple backend
+// instances. Empty = single-instance (no adapter, current behavior). e.g. redis://cybercontrol-redis:6379
+export const REDIS_URL = process.env.REDIS_URL || '';
 export const REMOVE_BG_KEY = process.env.REMOVE_BG_API_KEY ?? 'd9f7QFfqAdFuEzt1dXNqvSxP';

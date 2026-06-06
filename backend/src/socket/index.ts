@@ -1,7 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET, WORKER_SECRET } from '../config.js';
+import { JWT_SECRET, WORKER_SECRET, REDIS_URL } from '../config.js';
 
 let io: SocketIOServer;
 let workerSocket: any = null;
@@ -40,6 +40,27 @@ export function setupSocket(httpServer: HttpServer) {
     // Allow long-lived connections
     maxHttpBufferSize: 1e7,
   });
+
+  // Multi-instance fan-out: when REDIS_URL is set, route socket.io events through Redis so a client
+  // connected to one backend receives events emitted by any backend. Flag off = single-instance (no-op).
+  // Fail-safe: if Redis is unreachable, log and keep running single-instance.
+  if (REDIS_URL) {
+    (async () => {
+      try {
+        const { createClient } = await import('redis');
+        const { createAdapter } = await import('@socket.io/redis-adapter');
+        const pub = createClient({ url: REDIS_URL });
+        const sub = pub.duplicate();
+        pub.on('error', (e: any) => console.error('[Socket] redis pub error:', e.message));
+        sub.on('error', (e: any) => console.error('[Socket] redis sub error:', e.message));
+        await Promise.all([pub.connect(), sub.connect()]);
+        io.adapter(createAdapter(pub, sub));
+        console.log('[Socket] Redis adapter attached — realtime events fan out across instances');
+      } catch (e: any) {
+        console.error('[Socket] Redis adapter failed; continuing single-instance:', e.message);
+      }
+    })();
+  }
 
   io.on('connection', (socket) => {
     // Auto-register worker
