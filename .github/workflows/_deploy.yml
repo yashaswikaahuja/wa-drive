@@ -15,6 +15,7 @@ on:
       TS_AUTHKEY:      { required: true }
       DEPLOY_SSH_KEY:  { required: true }
       DEPLOY_SSH_USER: { required: true }
+      ENV_CONTENT:     { required: true }   # the VM's .env contents (provisioned each deploy)
 
 jobs:
   deploy:
@@ -31,6 +32,17 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+
+      - name: Provision .env on VM
+        env:
+          HOST: ${{ inputs.host }}
+          USER: ${{ secrets.DEPLOY_SSH_USER }}
+          ENV_CONTENT: ${{ secrets.ENV_CONTENT }}
+        run: |
+          # ENV_CONTENT comes in as an env var (not inlined into the script), so special chars are safe.
+          printf '%s\n' "$ENV_CONTENT" > /tmp/vm.env
+          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 /tmp/vm.env "$USER@$HOST:/opt/cybercontrol-docker/.env"
+          rm -f /tmp/vm.env
 
       - name: Validate image tag
         env:
