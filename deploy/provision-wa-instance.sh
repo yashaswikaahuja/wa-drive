@@ -1,26 +1,32 @@
 #!/bin/bash
-# GCP startup-script: self-provision a WhatsApp worker VM in one shot (~60-90s on first boot),
-# so adding a shard is: `gcloud instances create ... --metadata-from-file startup-script=this`
-# then a CD deploy. Replaces the manual install/join/login/copy sequence.
+# CLOUD-AGNOSTIC self-provision for a WhatsApp worker VM (GCP, Oracle, AWS, Hetzner, bare VM...).
+# Installs docker+tailscale, joins the tailnet, creates the deploy user, logs into GHCR, drops the
+# compose file. ~60-90s on first boot (docker install is the long pole). Then a CD deploy runs it.
 #
-# Pass per-instance values via instance metadata:
-#   ts-authkey       = tskey-auth-...  OR  tskey-client-...  (auth key, or OAuth client secret)
-#   ts-tag           = tag:cybercontrol   (REQUIRED if ts-authkey is an OAuth client secret;
-#                                          the tag must exist in the tailnet ACL `tagOwners` and be
-#                                          allowed to reach cybercontrol-db:5432 / -app:3000 / -wa:3200)
-#   wa-instance-name = cybercontrol-wa-N     (this node's tailnet hostname)
-#   ghcr-token       = ghp_...               (GHCR read:packages token for the deploy user)
-# The deploy public key is baked in (matches the DEPLOY_SSH_KEY GitHub secret).
+# Config comes from ENVIRONMENT VARIABLES (so any cloud's cloud-init / user-data can set them, or run
+# it by hand). On GCP, if a var is unset it falls back to the instance metadata server.
+#   TS_AUTHKEY        tskey-auth-...  OR  tskey-client-...  (auth key, or OAuth client secret)
+#   TS_TAG            tag:cybercontrol  (REQUIRED if TS_AUTHKEY is an OAuth client secret; must be in
+#                                        the tailnet ACL tagOwners + allowed to reach db/app/resolver)
+#   WA_INSTANCE_NAME  cybercontrol-wa-N  (this node's tailnet hostname)
+#   GHCR_TOKEN        ghp_...            (GHCR read:packages token for the deploy user)
+#
+# Examples:
+#   any cloud (cloud-init user-data or manual):
+#     sudo TS_AUTHKEY=... TS_TAG=tag:cybercontrol WA_INSTANCE_NAME=cybercontrol-wa-3 GHCR_TOKEN=... bash provision-wa-instance.sh
+#   GCP: pass the same as instance metadata keys ts-authkey/ts-tag/wa-instance-name/ghcr-token.
 set -e
 exec >>/var/log/cc-provision.log 2>&1
 echo "=== cc provision $(date) ==="
 
-META="http://metadata.google.internal/computeMetadata/v1/instance/attributes"
-meta() { curl -s -H "Metadata-Flavor: Google" "$META/$1"; }
-TS_KEY=$(meta ts-authkey)
-TS_TAG=$(meta ts-tag)
-WA_NAME=$(meta wa-instance-name)
-GHCR_TOKEN=$(meta ghcr-token)
+# Config: prefer env vars; on GCP fall back to the metadata server (2s timeout, harmless elsewhere).
+gcp_meta() { curl -s -m 2 -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$1" 2>/dev/null; }
+: "${TS_AUTHKEY:=$(gcp_meta ts-authkey)}"
+: "${TS_TAG:=$(gcp_meta ts-tag)}"
+: "${WA_INSTANCE_NAME:=$(gcp_meta wa-instance-name)}"
+: "${GHCR_TOKEN:=$(gcp_meta ghcr-token)}"
+TS_KEY="$TS_AUTHKEY"
+WA_NAME="$WA_INSTANCE_NAME"
 DEPLOY_PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINp+ul1LemdrPohJ/2OEzUg8QLSmMXjdecQPY6lGS9Xr cybercontrol-cd-deploy'
 
 # 1. docker + tailscale

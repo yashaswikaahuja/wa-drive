@@ -94,16 +94,24 @@ configure instances.
 
 ## Fast instance bring-up (~2 min, self-provisioning)
 The manual sequence (install docker/tailscale → join → deploy user → GHCR login → copy compose) is
-baked into [`deploy/provision-wa-instance.sh`](provision-wa-instance.sh) as a **GCP startup script**.
-A new WhatsApp VM self-provisions on first boot — you only pass three per-instance values as metadata:
+baked into [`deploy/provision-wa-instance.sh`](provision-wa-instance.sh) — **cloud-agnostic**: it reads
+config from **environment variables**, so it runs on any cloud's cloud-init / user-data (GCP, Oracle,
+AWS, Hetzner, bare VM…), with the GCP metadata server only as a fallback. There is **no hard GCP
+dependency** — the VM is just "any Linux box with Docker + Tailscale."
 
+**Any cloud** (cloud-init user-data, or run by hand on a fresh VM):
+```bash
+sudo TS_AUTHKEY=tskey-client-XXXX TS_TAG=tag:cybercontrol \
+     WA_INSTANCE_NAME=cybercontrol-wa-3 GHCR_TOKEN=ghp_XXXX \
+     bash provision-wa-instance.sh
+# ~90s: docker, tailscale join, deploy user, GHCR login, compose
+```
+**GCP convenience** (same script via metadata):
 ```bash
 gcloud compute instances create cybercontrol-wa-3 \
-  --zone=us-central1-a --machine-type=e2-micro \
-  --image-family=debian-12 --image-project=debian-cloud \
+  --image-family=debian-12 --image-project=debian-cloud --machine-type=e2-micro --zone=us-central1-a \
   --metadata-from-file startup-script=deploy/provision-wa-instance.sh \
-  --metadata ts-authkey=tskey-auth-XXXX,wa-instance-name=cybercontrol-wa-3,ghcr-token=ghp_XXXX
-# wait ~90s (boot + provision: docker, tailscale join, deploy user, GHCR login, compose)
+  --metadata ts-authkey=tskey-client-XXXX,ts-tag=tag:cybercontrol,wa-instance-name=cybercontrol-wa-3,ghcr-token=ghp_XXXX
 ```
 Then the GitHub side (also quick):
 1. env `whatsapp-service-3` → vars `WA_INSTANCE_NAME=cybercontrol-wa-3`, `WA_AUTH_BACKEND=postgres`
@@ -111,30 +119,27 @@ Then the GitHub side (also quick):
 3. update repo var `WA_INSTANCES=...,cybercontrol-wa-3`
 4. Deploy (manual) → `whatsapp-service-3`, then re-deploy `backend`
 
-> Even faster: snapshot a provisioned VM into a **machine image** (docker + deploy user + compose
-> pre-baked); new instances then only run steps 2 (tailscale join) + 4 (GHCR login) on boot.
+### Faster boot via a pre-baked image (per-cloud — optional)
+Skipping the ~100s docker install needs a golden image, which is **cloud-specific** (GCP machine image /
+AWS AMI / Oracle custom image). The boot-only join script is [`deploy/provision-wa-from-image.sh`](provision-wa-from-image.sh)
+(also env-var driven). To stay portable across clouds, build images from the **same** `provision-wa-instance.sh`
+with [Packer](https://www.packer.io/) (one template → images for each cloud). The script path above works
+**everywhere** with zero per-cloud image tooling (just ~1 min slower).
 
-### Fastest path — machine image (~1 min to ready) ✅ BUILT
-A golden image **`cybercontrol-wa-image`** (kishynay project) has docker + tailscale + the deploy user +
-GHCR creds + the compose file + the whatsapp-service image **pre-baked**. A clone's only first-boot work
-is joining the tailnet, via [`deploy/provision-wa-from-image.sh`](provision-wa-from-image.sh) (~3s).
-Measured: create → tailnet-joined + ready in **~1m25s** (vs ~2m06s from scratch).
-
+**GCP example (built):** image `cybercontrol-wa-image` exists in the kishynay project; measured create →
+ready in **~1m25s** (vs ~2m06s from scratch):
 ```bash
 gcloud compute instances create cybercontrol-wa-N \
-  --zone=us-central1-a --project=cybercontrol-db-20260605 \
   --source-machine-image=cybercontrol-wa-image \
   --metadata-from-file startup-script=deploy/provision-wa-from-image.sh \
   --metadata ts-authkey=tskey-client-XXXX,ts-tag=tag:cybercontrol,wa-instance-name=cybercontrol-wa-N
-# ~1 min → provisioned + on the tailnet. Then: GH env + deploy.yml target + WA_INSTANCES + CD deploy.
 ```
 
-**Rebake the image** when the base OS/docker or the compose changes: spin a VM with
-`deploy/provision-wa-instance.sh`, `docker pull` the latest service image, `tailscale logout`, then
-`gcloud compute machine-images create cybercontrol-wa-image --source-instance=<vm> --source-instance-zone=...`.
+**Rebake / build on another cloud:** spin a VM with `provision-wa-instance.sh`, `docker pull` the latest
+service image, `tailscale logout`, then snapshot it with that cloud's image tool (or Packer).
 
-> ⚠️ The image bakes the GHCR token (in `/home/deploy/.docker/config.json`). Keep the image private to
-> the project; rebake after rotating the token.
+> ⚠️ A baked image contains the GHCR token (`/home/deploy/.docker/config.json`). Keep images private;
+> rebake after rotating the token.
 
 ### Tailscale OAuth (reusable, non-expiring — preferred over auth keys)
 Auth keys expire (≤90 days); an **OAuth client** doesn't, so it's better for repeated automation. The
