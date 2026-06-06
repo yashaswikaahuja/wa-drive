@@ -1,8 +1,9 @@
 name: _deploy (reusable)
 
 # Reusable deploy step: pull GHCR image(s) on a tailnet VM, restart, health-check, rollback on failure.
-# Called by the build workflows after a successful image push. Gated by the `production`
-# environment so a reviewer can approve (configure required reviewers in repo Settings → Environments).
+# Runs in the caller-supplied GitHub Environment (backend | extension-service | whatsapp-service), which
+# provides that service's private secrets; shared secrets come from repo level. The .env written to the
+# VM is assembled minimally — only the keys present for that environment.
 on:
   workflow_call:
     inputs:
@@ -11,16 +12,16 @@ on:
       services:     { required: true,  type: string }   # space-separated, e.g. "backend extension-service"
       health_url:   { required: false, type: string, default: "" }  # e.g. http://localhost:3000/api/health
       image_tag:    { required: false, type: string, default: "latest" }  # version to deploy; a git SHA rolls back
+      environment:  { required: true,  type: string }   # GitHub Environment: backend | extension-service | whatsapp-service
     secrets:
       TS_AUTHKEY:      { required: true }
       DEPLOY_SSH_KEY:  { required: true }
       DEPLOY_SSH_USER: { required: true }
-      ENV_CONTENT:     { required: true }   # the VM's .env contents (provisioned each deploy)
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ inputs.environment }}
     steps:
       - name: Join tailnet (ephemeral)
         uses: tailscale/github-action@v2
@@ -33,15 +34,35 @@ jobs:
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-      - name: Provision .env on VM
+      - name: Assemble + provision .env on VM
         env:
           HOST: ${{ inputs.host }}
           USER: ${{ secrets.DEPLOY_SSH_USER }}
-          ENV_CONTENT: ${{ secrets.ENV_CONTENT }}
+          # shared secrets (repo-level, single source of truth) — inherited from the caller
+          DATABASE_URL:         ${{ secrets.DATABASE_URL }}
+          JWT_SECRET:           ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET:   ${{ secrets.JWT_REFRESH_SECRET }}
+          WA_SECRET:            ${{ secrets.WA_SECRET }}
+          # service-private secrets — only set in the relevant environment (empty elsewhere → skipped)
+          GROQ_API_KEY:         ${{ secrets.GROQ_API_KEY }}
+          GROQ_API_KEY_2:       ${{ secrets.GROQ_API_KEY_2 }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          # config (non-secret) — repo or environment variables
+          GOOGLE_CLIENT_ID:     ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_REDIRECT_URI:  ${{ vars.GOOGLE_REDIRECT_URI }}
+          WA_AUTH_BACKEND:      ${{ vars.WA_AUTH_BACKEND }}
         run: |
-          # ENV_CONTENT comes in as an env var (not inlined into the script), so special chars are safe.
-          printf '%s\n' "$ENV_CONTENT" > /tmp/vm.env
-          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 /tmp/vm.env "$USER@$HOST:/opt/cybercontrol-docker/.env"
+          # Build a MINIMAL .env from only the values present for this environment.
+          # Values arrive as env vars (not inlined), so special chars are safe; empty ones are skipped.
+          : > /tmp/vm.env
+          for k in DATABASE_URL JWT_SECRET JWT_REFRESH_SECRET WA_SECRET \
+                   GROQ_API_KEY GROQ_API_KEY_2 GOOGLE_CLIENT_SECRET \
+                   GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI WA_AUTH_BACKEND; do
+            v="${!k}"
+            if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v" >> /tmp/vm.env; fi
+          done
+          echo "provisioning $(grep -c '=' /tmp/vm.env) vars to $HOST (env: ${{ inputs.environment }})"
+          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 /tmp/vm.env "$USER@$HOST:/opt/cybercontrol-docker/${{ inputs.environment }}.env"
           rm -f /tmp/vm.env
 
       - name: Validate image tag
@@ -62,25 +83,28 @@ jobs:
           SERVICES: ${{ inputs.services }}
           HEALTH: ${{ inputs.health_url }}
           IMAGE_TAG: ${{ inputs.image_tag }}
+          ENVFILE: ${{ inputs.environment }}.env
         run: |
           ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST" \
-            "COMPOSE='$COMPOSE' SERVICES='$SERVICES' HEALTH='$HEALTH' IMAGE_TAG='$IMAGE_TAG' bash -s" <<'REMOTE'
+            "COMPOSE='$COMPOSE' SERVICES='$SERVICES' HEALTH='$HEALTH' IMAGE_TAG='$IMAGE_TAG' ENVFILE='$ENVFILE' bash -s" <<'REMOTE'
           set -e
           cd "$(dirname "$COMPOSE")"
           FILE="$COMPOSE"
+          # per-service env file (so co-located services don't clobber each other's .env)
+          DC="docker compose --env-file $ENVFILE -f $FILE"
           PRIMARY=$(echo $SERVICES | awk '{print $1}')
           # record currently-running image of the primary service (for rollback)
-          CID=$(docker compose -f "$FILE" ps -q "$PRIMARY" 2>/dev/null | head -1)
+          CID=$($DC ps -q "$PRIMARY" 2>/dev/null | head -1)
           PREV=$(docker inspect --format '{{.Image}}' "$CID" 2>/dev/null || echo "")
           echo "previous image: ${PREV:-none}"
           # NOTE: this host's Compose CLI rejects `up -d`; recreate via stop/rm/create/start.
           recreate() {
-            docker compose -f "$FILE" stop $SERVICES || true
-            docker compose -f "$FILE" rm -f $SERVICES || true
-            docker compose -f "$FILE" create $SERVICES
-            docker compose -f "$FILE" start $SERVICES
+            $DC stop $SERVICES || true
+            $DC rm -f $SERVICES || true
+            $DC create $SERVICES
+            $DC start $SERVICES
           }
-          docker compose -f "$FILE" pull $SERVICES
+          $DC pull $SERVICES
           recreate
           ok=1
           if [ -n "$HEALTH" ]; then
@@ -93,7 +117,7 @@ jobs:
           if [ "$ok" != "1" ]; then
             echo "::error::health check failed for $HEALTH — rolling back"
             if [ -n "$PREV" ]; then
-              IMG=$(docker compose -f "$FILE" config --images | head -1)
+              IMG=$($DC config --images | head -1)
               docker tag "$PREV" "$IMG" && recreate
               echo "rolled back $PRIMARY to previous image"
             fi

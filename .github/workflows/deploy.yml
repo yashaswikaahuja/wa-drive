@@ -32,11 +32,8 @@ jobs:
       services: backend
       health_url: http://localhost:3000/api/health
       image_tag: ${{ inputs.version }}
-    secrets:
-      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
-      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-      DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
-      ENV_CONTENT: ${{ secrets.APP_ENV }}
+      environment: backend
+    secrets: inherit
 
   extension-service:
     if: ${{ inputs.target == 'extension-service' }}
@@ -47,11 +44,8 @@ jobs:
       services: extension-service
       health_url: http://localhost:3300/health
       image_tag: ${{ inputs.version }}
-    secrets:
-      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
-      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-      DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
-      ENV_CONTENT: ${{ secrets.APP_ENV }}
+      environment: extension-service
+    secrets: inherit
 
   whatsapp-service:
     if: ${{ inputs.target == 'whatsapp-service' }}
@@ -62,8 +56,5 @@ jobs:
       services: whatsapp-service
       health_url: http://localhost:3100/health
       image_tag: ${{ inputs.version }}
-    secrets:
-      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
-      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-      DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
-      ENV_CONTENT: ${{ secrets.WA_ENV }}
+      environment: whatsapp-service
+    secrets: inherit

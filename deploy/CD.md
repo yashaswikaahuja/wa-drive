@@ -51,37 +51,57 @@ ssh deploy@cybercontrol-app "cd /opt/cybercontrol-docker && IMAGE_TAG=<tag> \
 ```
 
 ## How `_deploy.yml` works
-1. **Validates `image_tag`** against the Docker tag charset (`[A-Za-z0-9._-]`, ≤128) — rejects anything
+1. Runs in the per-service **GitHub Environment** (`backend` | `extension-service` | `whatsapp-service`),
+   which supplies that service's private secrets.
+2. **Validates `image_tag`** against the Docker tag charset (`[A-Za-z0-9._-]`, ≤128) — rejects anything
    else, so a free-form version value can't inject shell commands over SSH.
-2. Joins your **tailnet** ephemerally (`tailscale/github-action`) so the runner reaches the VM by name.
-3. SSHes in as the `deploy` user and runs `IMAGE_TAG=<version> docker compose pull` → stop/rm/**create**/**start**
-   the service (this host's Compose CLI rejects `up -d`). Compose images are `:${IMAGE_TAG:-latest}`.
-4. Polls `health_url` for ~90s; **auto-rollback** to the previous image on failure.
+3. **Assembles a minimal `.env`** for that service from shared secrets + its environment's private
+   secrets + config vars (empty values skipped), and `scp`s it to `/opt/cybercontrol-docker/<service>.env`.
+4. Joins your **tailnet** ephemerally, then SSHes in as the `deploy` user and runs
+   `docker compose --env-file <service>.env … pull` → stop/rm/**create**/**start** (this host's Compose
+   CLI rejects `up -d`). Per-service env files mean co-located services never clobber each other's env.
+5. Polls `health_url` for ~90s; **auto-rollback** to the previous image on failure.
 
-## GitHub secrets (all set + verified)
+## Secrets, environments & variables (ownership split)
+Organized by *who owns each value*, so a service can move to an isolated VM with only what it needs.
+
+**Repo-level secrets (shared, single source of truth):**
 | Secret | What |
 |---|---|
-| `TS_AUTHKEY` | Tailscale **reusable + ephemeral** auth key (Keys tab; no tag) — runner joins the tailnet |
-| `DEPLOY_SSH_KEY` | Private key for the `deploy` user, authorized on both VMs |
-| `DEPLOY_SSH_USER` | `deploy` (a user in the `docker` group on both VMs) |
-| `APP_ENV` | full `.env` for the app VM (DATABASE_URL, JWT_*, WA_SECRET, GROQ, GOOGLE_*) |
-| `WA_ENV` | full `.env` for the WA VM (DATABASE_URL, WA_SECRET, WA_AUTH_BACKEND, PARENT_URL, RESOLVER_URL) |
+| `TS_AUTHKEY` | Tailscale reusable + ephemeral auth key — runner joins the tailnet |
+| `DEPLOY_SSH_KEY` / `DEPLOY_SSH_USER` | `deploy` user key + name (authorized on both VMs) |
+| `DATABASE_URL` | DB connection (shared by every service hitting the DB) |
+| `JWT_SECRET` | shared by backend ⇄ extension-service (must match) |
+| `JWT_REFRESH_SECRET` | refresh-token signing |
+| `WA_SECRET` | shared by backend ⇄ whatsapp-service ⇄ resolver |
 
-> **Env is provisioned automatically.** Each deploy writes the VM's `/opt/cybercontrol-docker/.env`
-> from `APP_ENV` / `WA_ENV` (via `scp`) before `docker compose` runs — so a fresh VM needs no manual
-> `.env`. GitHub is the source of truth; update the secret to change a VM's env. (`/opt/cybercontrol-docker`
-> is owned by the `deploy` user so it can write the file.)
+**Per-service Environment secrets (private):**
+| Environment | Private secrets |
+|---|---|
+| `backend` | `GROQ_API_KEY`, `GOOGLE_CLIENT_SECRET` |
+| `extension-service` | _(none)_ |
+| `whatsapp-service` | _(none)_ |
 
-A `production` environment exists (the deploy job records to it). Required-reviewer approval isn't used
-(needs a paid plan / public repo); the **manual trigger is the gate**.
+**Variables (config, not secret):** repo `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`; `whatsapp-service`
+env `WA_AUTH_BACKEND=files` (overrides the compose default of `postgres`). Everything else
+(`WA_SERVICE`, `PARENT_URL`, `RESOLVER_URL`, `WA_INSTANCES`, ports) uses compose defaults.
+
+> **Env is provisioned automatically + least-privilege.** Each deploy writes only that service's
+> `/opt/cybercontrol-docker/<service>.env` — the sensitive `GROQ`/`GOOGLE_CLIENT_SECRET` creds only ever
+> land on the backend's box. GitHub is the source of truth; a fresh VM needs no manual `.env`.
+
+The deploy job runs in its per-service environment. Required-reviewer approval isn't used (needs a paid
+plan / public repo); the **manual trigger is the gate**.
 
 ## Status — done
-- [x] 3 secrets set + verified (`deploy` user SSHs into both VMs with docker access).
-- [x] `production` environment created; Tailscale via reusable+ephemeral auth key.
-- [x] Compose files at `/opt/cybercontrol-docker/` on each VM.
+- [x] Repo + per-service-environment secrets/variables set and verified.
+- [x] `deploy` user SSHs into both VMs with docker access; owns `/opt/cybercontrol-docker`.
+- [x] Compose files at `/opt/cybercontrol-docker/` on each VM; images use `:${IMAGE_TAG:-latest}`.
 - [x] Cutover complete: backend + extension-service (app VM) and whatsapp-service (WA VM) run as
       containers; resolver on pm2; pm2 entries for the containerized services removed (`pm2 save`).
-- [x] CD verified end-to-end (a real backend deploy succeeded: pull → recreate → health 200).
+- [x] CD verified end-to-end: backend, extension-service, and whatsapp-service deploys each
+      pull → assemble minimal `.env` → recreate → health 200 (co-located env files don't clobber).
+
 
 ## How the cutover was done (reference)
 **App VM (`cybercontrol-app`):** placed `docker-compose.app.yml` + `.env` at `/opt/cybercontrol-docker/`,
