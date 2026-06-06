@@ -1,0 +1,33 @@
+// Tailscale ACL for CyberControl (HuJSON — comments + trailing commas allowed).
+// Paste into https://login.tailscale.com/admin/acls/file
+//
+// If your current ACL is the DEFAULT (just the allow-all rule), paste this whole file.
+// If you've CUSTOMIZED your ACL already, do NOT overwrite — only add the "tagOwners" block
+// into your existing file and keep your "acls" as they are.
+{
+	// Who may assign tags to devices. Required so the OAuth client (and you) can create
+	// tagged nodes like cybercontrol-wa-3 that join via OAuth.
+	"tagOwners": {
+		"tag:cybercontrol": ["autogroup:admin"],
+	},
+
+	// Access rules. Left permissive so existing connectivity is unchanged
+	// (tagged nodes can reach DB/app/resolver because "*" includes them).
+	"acls": [
+		{"action": "accept", "src": ["*"], "dst": ["*:*"]},
+	],
+
+	// ---------------------------------------------------------------------------
+	// OPTIONAL least-privilege version: delete the allow-all rule above and
+	// uncomment this block to restrict the WhatsApp shards to only what they need.
+	//
+	// "hosts": {
+	// 	"cc-db":  "100.76.185.22",
+	// 	"cc-app": "100.101.187.24",
+	// 	"cc-wa":  "100.64.23.97",
+	// },
+	// "acls": [
+	// 	{"action": "accept", "src": ["tag:cybercontrol"], "dst": ["cc-db:5432", "cc-app:3000", "cc-wa:3200"]},
+	// 	{"action": "accept", "src": ["autogroup:member"], "dst": ["*:*"]},
+	// ],
+}
