@@ -113,11 +113,12 @@ gcloud compute instances create cybercontrol-wa-3 \
   --metadata-from-file startup-script=deploy/provision-wa-instance.sh \
   --metadata ts-authkey=tskey-client-XXXX,ts-tag=tag:cybercontrol,wa-instance-name=cybercontrol-wa-3,ghcr-token=ghp_XXXX
 ```
-Then the GitHub side (also quick):
-1. env `whatsapp-service-3` → vars `WA_INSTANCE_NAME=cybercontrol-wa-3`, `WA_AUTH_BACKEND=postgres`
-2. add a `whatsapp-service-3` target in `deploy.yml` (copy the wa-2 block, change host + environment)
-3. update repo var `WA_INSTANCES=...,cybercontrol-wa-3`
-4. Deploy (manual) → `whatsapp-service-3`, then re-deploy `backend`
+Then add it to the cluster with **one command** (no per-instance environment or `deploy.yml` edit —
+the generic `whatsapp-instance` target handles any VM):
+```bash
+deploy/add-wa-shard.sh cybercontrol-wa-3
+# → appends it to WA_INSTANCES, deploys whatsapp-service onto it, re-deploys the backend
+```
 
 ### Faster boot via a pre-baked image (per-cloud — optional)
 Skipping the ~100s docker install needs a golden image, which is **cloud-specific** (GCP machine image /

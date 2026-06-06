@@ -17,11 +17,16 @@ on:
           - extension-service
           - whatsapp-service
           - whatsapp-service-2
+          - whatsapp-instance
         default: backend
       version:
         description: "Image tag to deploy (latest, or a commit SHA to roll back)"
         type: string
         default: latest
+      wa_host:
+        description: "For target=whatsapp-instance: the VM's tailnet name (e.g. cybercontrol-wa-3)"
+        type: string
+        default: ""
 
 jobs:
   backend:
@@ -70,4 +75,19 @@ jobs:
       health_url: http://localhost:3100/health
       image_tag: ${{ inputs.version }}
       environment: whatsapp-service-2
+    secrets: inherit
+
+  # Generic shard: deploy any WhatsApp VM by passing wa_host — no per-instance env or job needed.
+  # WA_INSTANCE_NAME is set to the host; uses the shared whatsapp-service environment for secrets.
+  whatsapp-instance:
+    if: ${{ inputs.target == 'whatsapp-instance' }}
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: ${{ inputs.wa_host }}
+      compose_path: /opt/cybercontrol-docker/docker-compose.wa.yml
+      services: whatsapp-service
+      health_url: http://localhost:3100/health
+      image_tag: ${{ inputs.version }}
+      environment: whatsapp-service
+      wa_instance_name: ${{ inputs.wa_host }}
     secrets: inherit

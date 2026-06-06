@@ -13,6 +13,7 @@ on:
       health_url:   { required: false, type: string, default: "" }  # e.g. http://localhost:3000/api/health
       image_tag:    { required: false, type: string, default: "latest" }  # version to deploy; a git SHA rolls back
       environment:  { required: true,  type: string }   # GitHub Environment: backend | extension-service | whatsapp-service
+      wa_instance_name: { required: false, type: string, default: "" }  # overrides WA_INSTANCE_NAME (for generic WA shards)
     secrets:
       TS_AUTHKEY:      { required: true }
       DEPLOY_SSH_KEY:  { required: true }
@@ -54,7 +55,7 @@ jobs:
           GOOGLE_REDIRECT_URI:  ${{ vars.GOOGLE_REDIRECT_URI }}
           WA_AUTH_BACKEND:      ${{ vars.WA_AUTH_BACKEND }}
           WA_INSTANCES:         ${{ vars.WA_INSTANCES }}        # backend: shard pool (csv tailnet names)
-          WA_INSTANCE_NAME:     ${{ vars.WA_INSTANCE_NAME }}    # whatsapp-service: this instance's tailnet name
+          WA_INSTANCE_NAME:     ${{ inputs.wa_instance_name || vars.WA_INSTANCE_NAME }}    # whatsapp-service: this instance's tailnet name
           RESOLVER_URL:         ${{ vars.RESOLVER_URL }}        # whatsapp-service: shared resolver over tailnet
           WA_HEARTBEAT_MS:      ${{ vars.WA_HEARTBEAT_MS }}     # whatsapp-service: heartbeat interval
           WA_DEAD_AFTER_MS:     ${{ vars.WA_DEAD_AFTER_MS }}    # backend: how long w/o heartbeat → failover
