@@ -5,8 +5,13 @@ This document describes every container image, how they are built and published 
 the **runbooks for moving any service to a different VM / cloud**.
 
 > ⚠️ **Secrets:** this file uses placeholders like `<DB_PASSWORD>` for sensitive values.
-> Real values live in each host's `.env` (e.g. `/opt/cybercontrol-docker/.env`,
-> `/opt/cybercontrol-hub/backend/.env`). **Do not commit real secrets into this file.**
+> Real values live in each host's `.env` (e.g. `/opt/cybercontrol-docker/.env`) — which is now
+> **provisioned automatically** from the GitHub secrets `APP_ENV` / `WA_ENV` on every deploy
+> (see [`deploy/CD.md`](deploy/CD.md)). **Do not commit real secrets into this file.**
+
+> 📦 **Deployment is automated.** This doc covers images + architecture + manual move runbooks.
+> For the day-to-day deploy/rollback flow (the `Deploy (manual)` GitHub workflow), see
+> [`deploy/CD.md`](deploy/CD.md). The §8 runbooks below are the manual fallback / bootstrap path.
 
 ---
 
@@ -84,6 +89,13 @@ Each workflow triggers on push to `master` that touches the relevant dir, uses t
 
 **To rebuild:** push a change under the relevant dir, or run the workflow manually
 (`workflow_dispatch`) — e.g. `gh run list --workflow=docker-publish.yml`.
+
+### Deploying a built image (CD)
+Building only publishes to GHCR; it does **not** deploy. To ship an image to a VM, run the
+**`Deploy (manual)`** workflow (Actions tab → pick a service). It SSHes to the VM over the tailnet,
+provisions the `.env` from secrets, pulls, recreates the service, health-checks, and auto-rolls-back
+on failure. **Rollback** = run it again with `version` set to a previous commit SHA. Full details and
+the secrets it needs are in [`deploy/CD.md`](deploy/CD.md).
 
 ### Frontend build note
 The frontend bakes its API target **at build time** (Vite). The values are passed as build-args /
@@ -199,6 +211,10 @@ curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up --authkey=<TAILSCALE_AUTHKEY> --hostname=<service-name>
 # 3. Login to GHCR (private registry)
 echo <GHCR_TOKEN> | docker login ghcr.io -u yashaswikaahuja --password-stdin
+# 4. (for CD) create the `deploy` user, add it to the docker group, authorize the CD public key,
+#    `docker login ghcr.io` as that user, and place the compose file under /opt/cybercontrol-docker
+#    (owned by deploy). Then run `Deploy (manual)` — it provisions .env from APP_ENV/WA_ENV and starts
+#    the service. The manual `docker run` blocks below are the alternative if you're not using CD.
 ```
 > **MagicDNS gotcha:** if the OLD node is still registered with that hostname, Tailscale gives the
 > new one a `-1` suffix (e.g. `cybercontrol-app-1`). **Delete/rename the old node** in the Tailscale
@@ -315,7 +331,10 @@ gh run list --workflow=docker-publish.yml
 ---
 
 ## 10. Known gaps / TODO
+- **Rotate the GHCR PAT** if it was ever shared, then re-run `docker login ghcr.io` as the `deploy`
+  user on both VMs (CD pulls use the `deploy` user's stored creds and will fail on a stale token).
 - WhatsApp host is in `asia-south1` while app/db are in `us-central1` → ~270 ms cross-region latency
   over the tailnet. Co-locate regions if WhatsApp throughput becomes a concern.
 - Automate WhatsApp **session-dir backups** so a moved WA host restores instead of re-scanning QR.
+- `WA_MACHINE_IP` in `APP_ENV` is vestigial (WA is reached by tailnet name now) — can be dropped.
 - **Revoke** any Tailscale auth key that was shared in chat once nodes are joined.
