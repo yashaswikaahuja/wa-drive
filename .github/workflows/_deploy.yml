@@ -32,6 +32,16 @@ jobs:
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
+      - name: Validate image tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          # Docker tag charset only; blocks quotes/spaces/;/$ etc. so it can't break the SSH command.
+          if ! printf '%s' "$IMAGE_TAG" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$'; then
+            echo "::error::invalid image_tag '$IMAGE_TAG' — allowed: [A-Za-z0-9._-], max 128 chars"
+            exit 1
+          fi
+
       - name: Deploy + health-check + rollback
         env:
           HOST: ${{ inputs.host }}
