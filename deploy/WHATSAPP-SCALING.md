@@ -114,6 +114,28 @@ Then the GitHub side (also quick):
 > Even faster: snapshot a provisioned VM into a **machine image** (docker + deploy user + compose
 > pre-baked); new instances then only run steps 2 (tailscale join) + 4 (GHCR login) on boot.
 
+### Fastest path — machine image (~1 min to ready) ✅ BUILT
+A golden image **`cybercontrol-wa-image`** (kishynay project) has docker + tailscale + the deploy user +
+GHCR creds + the compose file + the whatsapp-service image **pre-baked**. A clone's only first-boot work
+is joining the tailnet, via [`deploy/provision-wa-from-image.sh`](provision-wa-from-image.sh) (~3s).
+Measured: create → tailnet-joined + ready in **~1m25s** (vs ~2m06s from scratch).
+
+```bash
+gcloud compute instances create cybercontrol-wa-N \
+  --zone=us-central1-a --project=cybercontrol-db-20260605 \
+  --source-machine-image=cybercontrol-wa-image \
+  --metadata-from-file startup-script=deploy/provision-wa-from-image.sh \
+  --metadata ts-authkey=tskey-client-XXXX,ts-tag=tag:cybercontrol,wa-instance-name=cybercontrol-wa-N
+# ~1 min → provisioned + on the tailnet. Then: GH env + deploy.yml target + WA_INSTANCES + CD deploy.
+```
+
+**Rebake the image** when the base OS/docker or the compose changes: spin a VM with
+`deploy/provision-wa-instance.sh`, `docker pull` the latest service image, `tailscale logout`, then
+`gcloud compute machine-images create cybercontrol-wa-image --source-instance=<vm> --source-instance-zone=...`.
+
+> ⚠️ The image bakes the GHCR token (in `/home/deploy/.docker/config.json`). Keep the image private to
+> the project; rebake after rotating the token.
+
 ### Tailscale OAuth (reusable, non-expiring — preferred over auth keys)
 Auth keys expire (≤90 days); an **OAuth client** doesn't, so it's better for repeated automation. The
 trade-off: OAuth-joined nodes **must be tagged**.
