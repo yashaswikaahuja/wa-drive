@@ -1,8 +1,9 @@
 name: _deploy (reusable)
 
 # Reusable deploy step: pull GHCR image(s) on a tailnet VM, restart, health-check, rollback on failure.
-# Called by the build workflows after a successful image push. Gated by the `production`
-# environment so a reviewer can approve (configure required reviewers in repo Settings → Environments).
+# Runs in the caller-supplied GitHub Environment (backend | extension-service | whatsapp-service), which
+# provides that service's private secrets; shared secrets come from repo level. The .env written to the
+# VM is assembled minimally — only the keys present for that environment.
 on:
   workflow_call:
     inputs:
@@ -11,16 +12,16 @@ on:
       services:     { required: true,  type: string }   # space-separated, e.g. "backend extension-service"
       health_url:   { required: false, type: string, default: "" }  # e.g. http://localhost:3000/api/health
       image_tag:    { required: false, type: string, default: "latest" }  # version to deploy; a git SHA rolls back
+      environment:  { required: true,  type: string }   # GitHub Environment: backend | extension-service | whatsapp-service
     secrets:
       TS_AUTHKEY:      { required: true }
       DEPLOY_SSH_KEY:  { required: true }
       DEPLOY_SSH_USER: { required: true }
-      ENV_CONTENT:     { required: true }   # the VM's .env contents (provisioned each deploy)
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ inputs.environment }}
     steps:
       - name: Join tailnet (ephemeral)
         uses: tailscale/github-action@v2
@@ -33,14 +34,34 @@ jobs:
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-      - name: Provision .env on VM
+      - name: Assemble + provision .env on VM
         env:
           HOST: ${{ inputs.host }}
           USER: ${{ secrets.DEPLOY_SSH_USER }}
-          ENV_CONTENT: ${{ secrets.ENV_CONTENT }}
+          # shared secrets (repo-level, single source of truth) — inherited from the caller
+          DATABASE_URL:         ${{ secrets.DATABASE_URL }}
+          JWT_SECRET:           ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET:   ${{ secrets.JWT_REFRESH_SECRET }}
+          WA_SECRET:            ${{ secrets.WA_SECRET }}
+          # service-private secrets — only set in the relevant environment (empty elsewhere → skipped)
+          GROQ_API_KEY:         ${{ secrets.GROQ_API_KEY }}
+          GROQ_API_KEY_2:       ${{ secrets.GROQ_API_KEY_2 }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          # config (non-secret) — repo or environment variables
+          GOOGLE_CLIENT_ID:     ${{ vars.GOOGLE_CLIENT_ID }}
+          GOOGLE_REDIRECT_URI:  ${{ vars.GOOGLE_REDIRECT_URI }}
+          WA_AUTH_BACKEND:      ${{ vars.WA_AUTH_BACKEND }}
         run: |
-          # ENV_CONTENT comes in as an env var (not inlined into the script), so special chars are safe.
-          printf '%s\n' "$ENV_CONTENT" > /tmp/vm.env
+          # Build a MINIMAL .env from only the values present for this environment.
+          # Values arrive as env vars (not inlined), so special chars are safe; empty ones are skipped.
+          : > /tmp/vm.env
+          for k in DATABASE_URL JWT_SECRET JWT_REFRESH_SECRET WA_SECRET \
+                   GROQ_API_KEY GROQ_API_KEY_2 GOOGLE_CLIENT_SECRET \
+                   GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI WA_AUTH_BACKEND; do
+            v="${!k}"
+            if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v" >> /tmp/vm.env; fi
+          done
+          echo "provisioning $(grep -c '=' /tmp/vm.env) vars to $HOST (env: ${{ inputs.environment }})"
           scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 /tmp/vm.env "$USER@$HOST:/opt/cybercontrol-docker/.env"
           rm -f /tmp/vm.env
 
