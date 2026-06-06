@@ -94,7 +94,7 @@ configure instances.
 
 ## Fast instance bring-up (~2 min, self-provisioning)
 The manual sequence (install docker/tailscale → join → deploy user → GHCR login → copy compose) is
-baked into [`deploy/provision-wa-instance.sh`](provision-wa-instance.sh) — **cloud-agnostic**: it reads
+baked into [`deploy/scripts/provision-wa-instance.sh`](../scripts/provision-wa-instance.sh) — **cloud-agnostic**: it reads
 config from **environment variables**, so it runs on any cloud's cloud-init / user-data (GCP, Oracle,
 AWS, Hetzner, bare VM…), with the GCP metadata server only as a fallback. There is **no hard GCP
 dependency** — the VM is just "any Linux box with Docker + Tailscale."
@@ -110,19 +110,19 @@ sudo TS_AUTHKEY=tskey-client-XXXX TS_TAG=tag:cybercontrol \
 ```bash
 gcloud compute instances create cybercontrol-wa-3 \
   --image-family=debian-12 --image-project=debian-cloud --machine-type=e2-micro --zone=us-central1-a \
-  --metadata-from-file startup-script=deploy/provision-wa-instance.sh \
+  --metadata-from-file startup-script=deploy/scripts/provision-wa-instance.sh \
   --metadata ts-authkey=tskey-client-XXXX,ts-tag=tag:cybercontrol,wa-instance-name=cybercontrol-wa-3,ghcr-token=ghp_XXXX
 ```
 Then add it to the cluster with **one command** (no per-instance environment or `deploy.yml` edit —
 the generic `whatsapp-instance` target handles any VM):
 ```bash
-deploy/add-wa-shard.sh cybercontrol-wa-3
+deploy/scripts/add-wa-shard.sh cybercontrol-wa-3
 # → appends it to WA_INSTANCES, deploys whatsapp-service onto it, re-deploys the backend
 ```
 
 ### Faster boot via a pre-baked image (per-cloud — optional)
 Skipping the ~100s docker install needs a golden image, which is **cloud-specific** (GCP machine image /
-AWS AMI / Oracle custom image). The boot-only join script is [`deploy/provision-wa-from-image.sh`](provision-wa-from-image.sh)
+AWS AMI / Oracle custom image). The boot-only join script is [`deploy/scripts/provision-wa-from-image.sh`](../scripts/provision-wa-from-image.sh)
 (also env-var driven). To stay portable across clouds, build images from the **same** `provision-wa-instance.sh`
 with [Packer](https://www.packer.io/) (one template → images for each cloud). The script path above works
 **everywhere** with zero per-cloud image tooling (just ~1 min slower).
@@ -132,7 +132,7 @@ ready in **~1m25s** (vs ~2m06s from scratch):
 ```bash
 gcloud compute instances create cybercontrol-wa-N \
   --source-machine-image=cybercontrol-wa-image \
-  --metadata-from-file startup-script=deploy/provision-wa-from-image.sh \
+  --metadata-from-file startup-script=deploy/scripts/provision-wa-from-image.sh \
   --metadata ts-authkey=tskey-client-XXXX,ts-tag=tag:cybercontrol,wa-instance-name=cybercontrol-wa-N
 ```
 

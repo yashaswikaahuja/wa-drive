@@ -8,12 +8,12 @@ the **runbooks for moving any service to a different VM / cloud**.
 > Real values live in **GitHub** — shared secrets at repo level (`DATABASE_URL`, `JWT_SECRET`,
 > `JWT_REFRESH_SECRET`, `WA_SECRET`) and service-private secrets in per-service **Environments**
 > (`backend` holds `GROQ_API_KEY`, `GOOGLE_CLIENT_SECRET`). Each deploy assembles a minimal
-> per-service `/opt/cybercontrol-docker/<service>.env` (see [`deploy/CD.md`](deploy/CD.md)).
+> per-service `/opt/cybercontrol-docker/<service>.env` (see [`CD.md`](CD.md)).
 > **Do not commit real secrets into this file.**
 
 > 📦 **Deployment is automated.** This doc covers images + architecture + manual move runbooks.
 > For the day-to-day deploy/rollback flow (the `Deploy (manual)` GitHub workflow), see
-> [`deploy/CD.md`](deploy/CD.md). The §8 runbooks below are the manual fallback / bootstrap path.
+> [`CD.md`](CD.md). The §8 runbooks below are the manual fallback / bootstrap path.
 
 ---
 
@@ -97,7 +97,7 @@ Building only publishes to GHCR; it does **not** deploy. To ship an image to a V
 **`Deploy (manual)`** workflow (Actions tab → pick a service). It SSHes to the VM over the tailnet,
 provisions the `.env` from secrets, pulls, recreates the service, health-checks, and auto-rolls-back
 on failure. **Rollback** = run it again with `version` set to a previous commit SHA. Full details and
-the secrets it needs are in [`deploy/CD.md`](deploy/CD.md).
+the secrets it needs are in [`CD.md`](CD.md).
 
 ### Frontend build note
 The frontend bakes its API target **at build time** (Vite). The values are passed as build-args /

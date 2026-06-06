@@ -1,6 +1,6 @@
 # CD — Continuous Deployment
 
-How code reaches production. See [`/GHCR.md`](../GHCR.md) for the overall architecture (images,
+How code reaches production. See [`GHCR.md`](GHCR.md) for the overall architecture (images,
 tailnet, decoupled DB). **Status: live and verified.**
 
 ## Pipeline at a glance

@@ -4,7 +4,7 @@
 and do not reflect the current architecture.** Do not assume they describe the running system.
 
 The real deployment is **GHCR images on GCE/Oracle VMs connected over a Tailscale tailnet**.
-See [`/GHCR.md`](../../GHCR.md) for the authoritative architecture, images, connectivity, and
+See [`GHCR.md`](../docs/GHCR.md) for the authoritative architecture, images, connectivity, and
 VM-shift runbooks.
 
 ## Why these are stale (if you ever revive them)
