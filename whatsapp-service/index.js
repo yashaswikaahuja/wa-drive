@@ -19,6 +19,10 @@ const RESOLVER_URL = process.env.RESOLVER_URL || 'http://localhost:3200';
 // Auth backend: 'postgres' (DB-backed, shardable) or 'files' (local, default for safety).
 // Set WA_AUTH_BACKEND=postgres + DATABASE_URL to decouple sessions from local disk.
 const WA_AUTH_BACKEND = process.env.WA_AUTH_BACKEND || 'files';
+// This instance's tailnet hostname (e.g. cybercontrol-wa-1). Used for sticky-shard heartbeats +
+// boot resume. Empty → single-instance mode (no heartbeat / no resume).
+const WA_INSTANCE_NAME = process.env.WA_INSTANCE_NAME || '';
+const HEARTBEAT_MS = Number(process.env.WA_HEARTBEAT_MS || 20_000);
 const pgPool = (WA_AUTH_BACKEND === 'postgres' && process.env.DATABASE_URL)
   ? new pg.Pool({ connectionString: process.env.DATABASE_URL })
   : null;
@@ -332,10 +336,46 @@ app.get('/sessions', authMiddleware, (_, res) => {
   res.json(list);
 });
 
+// ── Sticky-shard: heartbeat + boot resume ────────────────────────────────────
+// Tell the hub we're alive on the tailnet. If these stop arriving (instance off the tailnet),
+// the hub fails this instance's workspaces over to a healthy instance.
+async function sendHeartbeat() {
+  if (!WA_INSTANCE_NAME) return;
+  try {
+    await fetch(`${PARENT_URL}/api/worker/instance-heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-worker-secret': SERVICE_SECRET },
+      body: JSON.stringify({ instance: WA_INSTANCE_NAME }),
+    });
+  } catch { /* hub unreachable → hub will mark us dead, which is correct */ }
+}
+
+// On boot, resume the sessions this instance owns (per the shard map) so they reconnect
+// proactively (e.g. after a restart or a failover) without waiting for a user request.
+// Requires DB-backed auth (pgPool) so creds can be restored with no QR re-scan.
+async function resumeAssignedSessions() {
+  if (!pgPool || !WA_INSTANCE_NAME) return;
+  try {
+    const { rows } = await pgPool.query('SELECT workspace_id FROM wa_assignments WHERE instance=$1', [WA_INSTANCE_NAME]);
+    console.log(`[WhatsApp Service] Resuming ${rows.length} assigned session(s) for ${WA_INSTANCE_NAME}`);
+    for (const r of rows) {
+      startSession(r.workspace_id).catch(e => console.warn(`[resume] ${r.workspace_id.slice(0,8)}: ${e.message}`));
+    }
+  } catch (e) {
+    console.warn(`[WhatsApp Service] resume skipped: ${e.message}`);
+  }
+}
+
 // ── Start ──────────────────────────────────────────────────────────────────
 server.listen(PORT, () => {
   console.log(`[WhatsApp Service] Running on port ${PORT}`);
   console.log(`[WhatsApp Service] Parent: ${PARENT_URL}`);
   console.log(`[WhatsApp Service] Auth backend: ${WA_AUTH_BACKEND}${pgPool ? ' (DB)' : ' (local files)'}`);
   console.log(`[WhatsApp Service] Sessions dir: ${AUTH_DIR}`);
+  if (WA_INSTANCE_NAME) {
+    console.log(`[WhatsApp Service] Instance: ${WA_INSTANCE_NAME} (heartbeat every ${HEARTBEAT_MS}ms)`);
+    sendHeartbeat();
+    setInterval(sendHeartbeat, HEARTBEAT_MS);
+    resumeAssignedSessions();
+  }
 });
