@@ -5,9 +5,11 @@ This document describes every container image, how they are built and published 
 the **runbooks for moving any service to a different VM / cloud**.
 
 > ⚠️ **Secrets:** this file uses placeholders like `<DB_PASSWORD>` for sensitive values.
-> Real values live in each host's `.env` (e.g. `/opt/cybercontrol-docker/.env`) — which is now
-> **provisioned automatically** from the GitHub secrets `APP_ENV` / `WA_ENV` on every deploy
-> (see [`deploy/CD.md`](deploy/CD.md)). **Do not commit real secrets into this file.**
+> Real values live in **GitHub** — shared secrets at repo level (`DATABASE_URL`, `JWT_SECRET`,
+> `JWT_REFRESH_SECRET`, `WA_SECRET`) and service-private secrets in per-service **Environments**
+> (`backend` holds `GROQ_API_KEY`, `GOOGLE_CLIENT_SECRET`). Each deploy assembles a minimal
+> per-service `/opt/cybercontrol-docker/<service>.env` (see [`deploy/CD.md`](deploy/CD.md)).
+> **Do not commit real secrets into this file.**
 
 > 📦 **Deployment is automated.** This doc covers images + architecture + manual move runbooks.
 > For the day-to-day deploy/rollback flow (the `Deploy (manual)` GitHub workflow), see
