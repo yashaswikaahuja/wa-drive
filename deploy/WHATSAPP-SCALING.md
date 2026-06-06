@@ -3,6 +3,11 @@
 How the WhatsApp tier scales across multiple VMs, and the ruleset that keeps a logged-in account
 **stable on one instance** (no surprise re-scans) while still surviving an instance going down.
 
+> ✅ **ACTIVATED (2026-06-06).** Live shard pool: `cybercontrol-wa` (asia) + `cybercontrol-wa-2`
+> (us-central1, kishynay account, 3ms to DB). Both on DB-backed auth + heartbeating. A live failover
+> drill passed: stopping `cybercontrol-wa` moved the customer to `cybercontrol-wa-2` and reconnected
+> from the DB **with no QR re-scan**. Tuning in use: `WA_DEAD_AFTER_MS=30000`, `WA_HEARTBEAT_MS=10000`.
+
 ## Why WhatsApp is different from the backend
 The backend is stateless → round-robin across replicas. WhatsApp is **not**: one WhatsApp account =
 one live socket = **one linked device**. You cannot run the same account on two instances at once
@@ -43,9 +48,9 @@ re-scan — and it only ever moves if its instance genuinely dies.
 
 ### How "alive / dead" is decided — heartbeats
 - Each `whatsapp-service` instance POSTs `/api/worker/instance-heartbeat` (with its `WA_INSTANCE_NAME`)
-  to the hub every `WA_HEARTBEAT_MS` (default 20s). The hub upserts `wa_instances.last_seen`.
-- The hub treats an instance as **alive** if `last_seen` is within `WA_DEAD_AFTER_MS` (default **90s** —
-  several missed beats, so a brief blip doesn't trigger a needless failover).
+  to the hub every `WA_HEARTBEAT_MS` (code default 20s; **live: 10s**). The hub upserts `wa_instances.last_seen`.
+- The hub treats an instance as **alive** if `last_seen` is within `WA_DEAD_AFTER_MS` (code default 90s;
+  **live: 30s** — ~3 missed beats, fast failover without flapping on a brief blip).
 - If an instance is off the tailnet, its heartbeats can't reach the hub → it's marked dead → its
   workspaces fail over. This is exactly the "only logs out if the instance disconnects" rule you wanted.
 
@@ -55,6 +60,23 @@ DB-backed Baileys auth (`WA_AUTH_BACKEND=postgres`): each workspace's creds/keys
 and reconnect **without** a QR scan. On boot, an instance also **resumes** the sessions assigned to it
 (`resumeAssignedSessions()` → `wa_assignments WHERE instance = me`).
 
+## The resolver is shared — reach it over the tailnet
+The **whatsapp-resolver** (whatsapp-web.js, contact/LID lookups) is a single non-scaling oracle that
+runs on **`cybercontrol-wa`** only (pm2, bound to `*:3200`). When the service is sharded, every
+instance must reach that one resolver over the tailnet — **not** `localhost`:
+
+```
+   RESOLVER_URL = http://cybercontrol-wa:3200      (all WA instances, via CD var)
+```
+If left at the default `localhost:3200`, a shard with no local resolver (e.g. `cybercontrol-wa-2`)
+can't resolve contacts. Provisioned as the repo variable `RESOLVER_URL` and written into each WA
+instance's env by CD.
+
+> ⚠️ The resolver is a genuine **single point of failure**: whatsapp-web.js allows only one session, so
+> it can't be cloned. If `cybercontrol-wa` goes down, WhatsApp *sessions* fail over fine, but
+> *contact resolution* stops cluster-wide until it's back. Making the resolver resilient is a separate,
+> harder problem.
+
 ## Components
 | Piece | Where |
 |---|---|
@@ -63,16 +85,18 @@ and reconnect **without** a QR scan. On boot, an instance also **resumes** the s
 | sticky+failover routing (`waBase`, `healthyInstances`, `pickInstance`) | `backend/src/modules/whatsapp/routes.ts` |
 | heartbeat endpoint `/instance-heartbeat` | same file (mounted at `/api/worker` + `/api/whatsapp`) |
 | heartbeat sender + boot resume | `whatsapp-service/index.js` |
-| tuning: `WA_INSTANCES`, `WA_DEAD_AFTER_MS`, `WA_MIN_HOLD_MS` | `backend/src/config.ts` |
+| tuning: `WA_INSTANCES`, `WA_DEAD_AFTER_MS`, `WA_HEARTBEAT_MS`, `WA_MIN_HOLD_MS`, `RESOLVER_URL` | repo/env GitHub Variables (provisioned by CD) |
 
 ## Backward compatibility
 With **no `WA_INSTANCES`** (and no `WA_INSTANCE_NAME` on the service), everything falls back to the
 single `WA_SERVICE` — current production behaviour is unchanged. The ruleset only activates when you
 configure instances.
 
-## Activation (when you add a 2nd WhatsApp VM)
+## Activation runbook (done for wa-2; reuse for a 3rd VM)
+This was followed on 2026-06-06 to add `cybercontrol-wa-2`; reuse it verbatim for any further instance.
 All env values are provisioned by CD (`_deploy.yml` writes them into each VM's `<service>.env`), so set
-them as **GitHub Variables** — do *not* hand-edit VM files.
+them as **GitHub Variables** — do *not* hand-edit VM files. Also set `RESOLVER_URL=http://cybercontrol-wa:3200`
+(repo var) so the new instance reaches the shared resolver.
 
 1. **Switch auth to Postgres** so sessions can move: set variable `WA_AUTH_BACKEND=postgres` in each
    whatsapp-service environment, and run the migrations on the DB:
