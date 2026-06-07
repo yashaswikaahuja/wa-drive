@@ -31,7 +31,8 @@ gateway/
 storage/
 inbox/
 data/
-tools/
+tools/*
+!tools/forbidden-deps-check.mjs
 tests/
 worker/
 
