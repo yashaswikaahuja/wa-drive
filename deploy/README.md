@@ -9,6 +9,7 @@ Deployment artifacts, organized by type.
       CD.md              continuous deployment (build → GHCR → VM)
       WHATSAPP-SCALING.md  WhatsApp sharding, failover, instance bring-up
       BACKEND-SCALING.md   backend multi-instance (Redis adapter, LB tier)
+      NETWORKING.md        diagram-first network reference (ports, names, tailnet, flows, failures)
     scripts/           operational scripts
       provision-wa-instance.sh    provision a fresh WhatsApp VM (any cloud, env-var config)
       provision-wa-from-image.sh  boot-join script for VMs cloned from a pre-baked image
