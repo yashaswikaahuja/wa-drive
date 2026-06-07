@@ -16,6 +16,8 @@ Deployment artifacts, organized by type.
     compose/           docker compose files used on the VMs
       docker-compose.app.yml      backend + extension-service (app VM)
       docker-compose.wa.yml       whatsapp-service (WA VMs)
+      docker-compose.scale.yml    multi-instance pool: redis + 2 backends + 2 ext-svc + nginx LB
+    loadbalancer/      nginx.conf + lb_proxy_params — the LB ("parent") tier in front of the pool
     tailscale/         tailscale-acl.json   tailnet ACL (tag:cybercontrol)
     k8s-experimental/  parked Kubernetes manifests (not deployed)
 ```

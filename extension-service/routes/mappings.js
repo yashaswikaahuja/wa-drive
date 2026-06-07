@@ -1,28 +1,17 @@
 import { Router } from 'express';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
 import { guessProfileKey } from './label-mapper.js';
+import { loadDoc, saveDoc, KEYS } from '../store.js';
 
 const router = Router();
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || resolve(__dirname, '../data');
-const MAPPINGS_PATH = resolve(DATA_DIR, 'form_mappings.json');
 
-function load() {
-  if (!existsSync(MAPPINGS_PATH)) return {};
-  try { return JSON.parse(readFileSync(MAPPINGS_PATH, 'utf8')); } catch { return {}; }
-}
-function save(data) {
-  mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
-}
+const load = () => loadDoc(KEYS.MAPPINGS);
+const save = (data) => saveDoc(KEYS.MAPPINGS, data);
 
 // POST /api/mappings/cleanup — remove junk/short entries from existing mappings
-router.post('/cleanup', authMiddleware, (_req, res) => {
-  const all = load();
+router.post('/cleanup', authMiddleware, async (_req, res) => {
+  const all = await load();
   let removed = 0;
   for (const formKey of Object.keys(all)) {
     const fields = all[formKey];
@@ -37,7 +26,7 @@ router.post('/cleanup', authMiddleware, (_req, res) => {
       }
     }
   }
-  save(all);
+  await save(all);
   res.json({ ok: true, removed });
 });
 
@@ -62,7 +51,7 @@ router.post('/backfill', authMiddleware, async (req, res) => {
     const params = targetFormKey ? [targetFormKey] : [];
     const { rows } = await pool.query(sql, params);
 
-    const all = load();
+    const all = await load();
     const today = new Date().toISOString().slice(0, 10);
 
     function normLabel(s) {
@@ -159,7 +148,7 @@ router.post('/backfill', authMiddleware, async (req, res) => {
       if (formSeeded > 0) formsSeeded++;
       seededTotal += formSeeded;
     }
-    save(all);
+    await save(all);
     res.json({ ok: true, formsSeeded, seededTotal, mappedTotal });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -168,7 +157,7 @@ router.post('/backfill', authMiddleware, async (req, res) => {
 
 // GET /api/mappings/list — all formKeys with metadata + hostname from sessions
 router.get('/list', authMiddleware, async (_req, res) => {
-  const data = load();
+  const data = await load();
 
   // Backfill hostname/title from sessions table for entries that don't have _meta
   // (existing mappings created before agent v5.79 don't have _meta.hostname)
@@ -209,21 +198,21 @@ router.get('/list', authMiddleware, async (_req, res) => {
 });
 
 // GET /api/mappings — list all form keys (legacy, used by extension)
-router.get('/', (_req, res) => {
-  res.json(Object.keys(load()).filter(k => k !== '_meta'));
+router.get('/', async (_req, res) => {
+  res.json(Object.keys(await load()).filter(k => k !== '_meta'));
 });
 
 // GET /api/mappings/:formKey
-router.get('/:formKey', (req, res) => {
-  const mappings = load();
+router.get('/:formKey', async (req, res) => {
+  const mappings = await load();
   res.json(mappings[req.params.formKey] || null);
 });
 
 // POST /api/mappings/:formKey — bulk update with confidence
-router.post('/:formKey', (req, res) => {
+router.post('/:formKey', async (req, res) => {
   const { updates, meta } = req.body || {};
   if (!updates && !meta) return res.status(400).json({ error: 'updates or meta required' });
-  const mappings = load();
+  const mappings = await load();
   const formKey = req.params.formKey;
   if (!mappings[formKey]) mappings[formKey] = {};
   const today = new Date().toISOString().slice(0, 10);
@@ -249,15 +238,15 @@ router.post('/:formKey', (req, res) => {
       }
     }
   }
-  save(mappings);
+  await save(mappings);
   res.json({ ok: true });
 });
 
 // PATCH /api/mappings/:formKey/:label — update ONE field's profileKey
 // (used by the admin UI's per-row edit)
-router.patch('/:formKey/:label', authMiddleware, (req, res) => {
+router.patch('/:formKey/:label', authMiddleware, async (req, res) => {
   const { profileKey } = req.body || {};
-  const mappings = load();
+  const mappings = await load();
   const formKey = req.params.formKey;
   const label = req.params.label;
   if (!mappings[formKey]) return res.status(404).json({ error: 'formKey not found' });
@@ -268,28 +257,28 @@ router.patch('/:formKey/:label', authMiddleware, (req, res) => {
     mappings[formKey][label].lastSeen = new Date().toISOString().slice(0, 10);
     mappings[formKey][label].source = 'manual';
   }
-  save(mappings);
+  await save(mappings);
   res.json({ ok: true });
 });
 
 // DELETE /api/mappings/:formKey/:label — remove ONE bad mapping
-router.delete('/:formKey/:label', authMiddleware, (req, res) => {
-  const mappings = load();
+router.delete('/:formKey/:label', authMiddleware, async (req, res) => {
+  const mappings = await load();
   const formKey = req.params.formKey;
   const label = req.params.label;
   if (mappings[formKey] && mappings[formKey][label]) {
     delete mappings[formKey][label];
-    save(mappings);
+    await save(mappings);
   }
   res.json({ ok: true });
 });
 
 // DELETE /api/mappings/:formKey — remove an entire form's mappings
-router.delete('/:formKey', authMiddleware, (req, res) => {
-  const mappings = load();
+router.delete('/:formKey', authMiddleware, async (req, res) => {
+  const mappings = await load();
   if (mappings[req.params.formKey]) {
     delete mappings[req.params.formKey];
-    save(mappings);
+    await save(mappings);
   }
   res.json({ ok: true });
 });

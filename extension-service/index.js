@@ -21,6 +21,7 @@ import sessionsRouter from './routes/sessions.js';
 import correctionsRouter from './routes/corrections.js';
 import trainingRouter from './routes/training.js';
 import agentRouter from './routes/agent.js';
+import { ensureSchema } from './store.js';
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();
@@ -72,4 +73,7 @@ app.listen(PORT, () => {
   console.log(`[extension-service] JWT_SECRET starts with: ${jwtPrefix}***`);
   console.log(`[extension-service] DATABASE_URL present: ${!!process.env.DATABASE_URL}`);
   console.log(`[extension-service] DATA_DIR: ${process.env.DATA_DIR || 'default ./data'}`);
+  // Ensure the shared document store table exists (mappings/adapters now live in Postgres,
+  // so multiple replicas share one source of truth). Non-fatal: routes also ensure on first use.
+  ensureSchema().catch((e) => console.error('[extension-service] ensureSchema on boot failed:', e.message));
 });

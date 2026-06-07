@@ -90,7 +90,7 @@ router.get('/status', authMiddleware, async (req: any, res) => {
   const wsId = req.user.workspaceId;
   const base = await waBase(wsId);
   // Snapshot cache state BEFORE worker call (we need ageMs for staleness check)
-  const before = getWorkspaceQRWithAge(wsId);
+  const before = await getWorkspaceQRWithAge(wsId);
   try {
     const r = await fetch(base + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
@@ -98,11 +98,11 @@ router.get('/status', authMiddleware, async (req: any, res) => {
     if (data?.qr) {
       if (data.qr !== before.qr) {
         // New QR! Refresh cache (resets timestamp).
-        setWorkspaceQR(wsId, data.qr);
+        await setWorkspaceQR(wsId, data.qr);
       }
       // If same QR, leave cache untouched — its age keeps growing so we can detect staleness
     }
-    if (data?.connected) setWorkspaceQR(wsId, null);
+    if (data?.connected) await setWorkspaceQR(wsId, null);
     // Self-heal: if worker is stuck on the same QR for >45s (Baileys should regenerate every ~20s),
     // force a restart so the user gets a fresh scannable QR
     if (
@@ -132,13 +132,13 @@ router.get('/status', authMiddleware, async (req: any, res) => {
 
 router.get('/qr', authMiddleware, async (req: any, res) => {
   // Try cache first (instant), then fallback to service
-  const cached = getWorkspaceQR(req.user.workspaceId);
+  const cached = await getWorkspaceQR(req.user.workspaceId);
   if (cached) return res.json({ qrCode: cached, qr: cached });
   try {
     const base = await waBase(req.user.workspaceId);
     const r = await fetch(base + '/sessions/' + req.user.workspaceId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
-    if (data?.qr) setWorkspaceQR(req.user.workspaceId, data.qr);
+    if (data?.qr) await setWorkspaceQR(req.user.workspaceId, data.qr);
     res.json({ qrCode: data.qr || null, qr: data.qr || null });
   } catch { res.json({ qrCode: null, qr: null }); }
 });
@@ -221,17 +221,17 @@ router.post('/instance-heartbeat', async (req, res) => {
 // Worker event relay (WhatsApp service → hub).
 // QR is cached only — frontend polls /status to retrieve it (no socket.io).
 // Other events (connected/disconnected) still emit via socket for UI quickness.
-router.post('/event', (req, res) => {
+router.post('/event', async (req, res) => {
   const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
   if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
   const { workspaceId, event, qr, phone } = req.body;
   if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
   const io = getIO();
   if (event === 'qr') {
-    setWorkspaceQR(workspaceId, qr);
+    await setWorkspaceQR(workspaceId, qr);
     console.log(`[Hub] QR cached for workspace ${workspaceId.slice(0, 8)} (qr_len=${qr?.length || 0})`);
   } else if (event === 'connected') {
-    setWorkspaceQR(workspaceId, null);
+    await setWorkspaceQR(workspaceId, null);
     io.to(workspaceId).emit('connection:status', { connected: true, phone, workspaceId });
     console.log(`[Hub] Connected: ${phone} (${workspaceId.slice(0, 8)})`);
   } else if (event === 'disconnected') {

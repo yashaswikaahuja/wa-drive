@@ -1,23 +1,12 @@
 import { Router } from 'express';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { pool } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { loadDoc, saveDoc, KEYS } from '../store.js';
 
 const router = Router();
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || resolve(__dirname, '../data');
-const MAPPINGS_PATH = resolve(DATA_DIR, 'form_mappings.json');
 
-function loadMappings() {
-  if (!existsSync(MAPPINGS_PATH)) return {};
-  try { return JSON.parse(readFileSync(MAPPINGS_PATH, 'utf8')); } catch { return {}; }
-}
-function saveMappings(data) {
-  mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
-}
+const loadMappings = () => loadDoc(KEYS.MAPPINGS);
+const saveMappings = (data) => saveDoc(KEYS.MAPPINGS, data);
 
 const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -119,7 +108,7 @@ router.post('/', authMiddleware, async (req, res) => {
           [profileId, req.user.workspaceId]
         );
         const profileData = pR.rows[0]?.data || {};
-        const mappings = loadMappings();
+        const mappings = await loadMappings();
         const formKey = semanticFormKey;
         if (!mappings[formKey]) mappings[formKey] = {};
         const today = new Date().toISOString().slice(0, 10);
@@ -149,7 +138,7 @@ router.post('/', authMiddleware, async (req, res) => {
           }
           promoted++;
         }
-        if (promoted > 0) saveMappings(mappings);
+        if (promoted > 0) await saveMappings(mappings);
       } catch (e) {
         console.warn('[ext/corrections] auto-promote failed:', e.message);
       }

@@ -20,9 +20,7 @@
 import express from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { loadDoc, saveDoc, KEYS } from '../store.js';
 
 const router = express.Router();
 router.use(authMiddleware);
@@ -30,19 +28,9 @@ router.use(authMiddleware);
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
 
-// ── Mappings cache (same JSON file used by autofill executor's correction loop)
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = process.env.DATA_DIR || resolve(__dirname, '../data');
-const MAPPINGS_PATH = resolve(DATA_DIR, 'form_mappings.json');
-
-function loadMappings() {
-  if (!existsSync(MAPPINGS_PATH)) return {};
-  try { return JSON.parse(readFileSync(MAPPINGS_PATH, 'utf8')); } catch { return {}; }
-}
-function saveMappings(data) {
-  mkdirSync(DATA_DIR, { recursive: true });
-  writeFileSync(MAPPINGS_PATH, JSON.stringify(data, null, 2));
-}
+// ── Mappings store (same shared document used by autofill executor's correction loop)
+const loadMappings = () => loadDoc(KEYS.MAPPINGS);
+const saveMappings = (data) => saveDoc(KEYS.MAPPINGS, data);
 
 // Compute semanticFormKey identically to extension/autofill/extractor.js
 // so the agent and the autofill flow share the same cache key.
@@ -230,7 +218,7 @@ router.post('/plan', async (req, res) => {
   // Pre-fill any snapshot field whose normalized label matches a known mapping
   // and whose mapped profile key has a value for THIS profile.
   const formKey = computeSemanticFormKey(snapshot);
-  const allMappings = loadMappings();
+  const allMappings = await loadMappings();
   if (!allMappings[formKey]) allMappings[formKey] = {};
   let formMappings = allMappings[formKey];
 
@@ -282,7 +270,7 @@ router.post('/plan', async (req, res) => {
     }
   }
   // Persist if anything new was added (or just _meta updated)
-  saveMappings(allMappings);
+  await saveMappings(allMappings);
 
   const cachedActions = [];
   const cachedFieldKeys = new Set();
@@ -451,7 +439,7 @@ router.post('/plan', async (req, res) => {
           savedMappings++;
         }
       }
-      if (savedMappings > 0) saveMappings(allMappings);
+      if (savedMappings > 0) await saveMappings(allMappings);
     } catch (e) { console.warn('[agent] save proposed mappings failed:', e.message); }
 
     const result = {
@@ -499,7 +487,7 @@ router.post('/trace', async (req, res) => {
   try {
     const formKey = bodyFormKey || (snapshotBefore ? computeSemanticFormKey(snapshotBefore) : null);
     if (formKey && plan.actions && results.steps && Array.isArray(snapshotBefore?.elements)) {
-      const all = loadMappings();
+      const all = await loadMappings();
       if (!all[formKey]) all[formKey] = {};
       const today = new Date().toISOString().slice(0, 10);
       const elementBySelector = new Map();
@@ -535,7 +523,7 @@ router.post('/trace', async (req, res) => {
         }
         learned++;
       }
-      if (learned > 0) saveMappings(all);
+      if (learned > 0) await saveMappings(all);
     }
   } catch (e) {
     console.warn('[agent] learn failed:', e.message);

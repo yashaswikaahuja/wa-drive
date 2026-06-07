@@ -1,0 +1,97 @@
+# docker-compose.scale.yml — MULTI-INSTANCE pool on a single host (the future traffic-distribution setup).
+#
+# Runs the "parent" tier as several interchangeable instances behind one nginx load balancer:
+#
+#     client → nginx LB :8080 ─┬─ backend-1  :3000 ─┐
+#                              ├─ backend-2  :3000 ─┤── shared Postgres (cybercontrol-db)
+#                              ├─ ext-1      :3300 ─┤── shared Redis    (this compose)
+#                              └─ ext-2      :3300 ─┘
+#
+# Why this works as multiple parents (no sticky single instance):
+#   • socket.io events fan out across backends via the Redis adapter (REDIS_URL)
+#   • WhatsApp QR cache is in Redis (REDIS_URL)
+#   • form_mappings + adapters are in Postgres (ext_kv_store)
+#   so every instance is stateless and a request can land on ANY of them.
+#
+# This is a TEMPLATE / single-host demo. In production you'd spread instances across VMs (or a managed
+# orchestrator) and point them all at the same external Postgres + a shared Redis; the LB strategy is
+# identical. Bridge-networked (NOT host-networked like docker-compose.app.yml) so replicas coexist.
+#
+# Usage:
+#   export DATABASE_URL=postgresql://user:pass@host:5432/cybercontrol
+#   export JWT_SECRET=... JWT_REFRESH_SECRET=... WA_SECRET=... GROQ_API_KEY=...
+#   docker compose -f docker-compose.scale.yml up -d
+#   # then hit http://localhost:8080  (all traffic load-balanced across the pool)
+
+x-backend-env: &backend-env
+  NODE_ENV: production
+  PORT: "3000"
+  DATABASE_URL: ${DATABASE_URL}
+  REDIS_URL: redis://redis:6379          # turns on multi-instance fan-out (socket.io + QR cache)
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+  WA_SECRET: ${WA_SECRET}
+  WA_SERVICE: ${WA_SERVICE:-http://cybercontrol-wa:3100}
+  WA_INSTANCES: ${WA_INSTANCES:-}
+  GROQ_API_KEY: ${GROQ_API_KEY:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+
+x-ext-env: &ext-env
+  NODE_ENV: production
+  PORT: "3300"
+  DATABASE_URL: ${DATABASE_URL}
+  JWT_SECRET: ${JWT_SECRET}
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]   # cache only; no persistence needed
+    networks: [ccnet]
+
+  backend-1:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on: [redis]
+    networks: [ccnet]
+
+  backend-2:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-backend:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment: *backend-env
+    depends_on: [redis]
+    networks: [ccnet]
+
+  ext-1:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment: *ext-env
+    networks: [ccnet]
+
+  ext-2:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment: *ext-env
+    networks: [ccnet]
+
+  lb:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ../loadbalancer/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../loadbalancer/lb_proxy_params:/etc/nginx/lb_proxy_params:ro
+    depends_on: [backend-1, backend-2, ext-1, ext-2]
+    networks: [ccnet]
+
+networks:
+  ccnet:
+    driver: bridge
