@@ -20,17 +20,13 @@
 import express from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
-import { loadDoc, saveDoc, KEYS } from '../store.js';
+import { mutateDoc, KEYS } from '../store.js';
 
 const router = express.Router();
 router.use(authMiddleware);
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
-
-// ── Mappings store (same shared document used by autofill executor's correction loop)
-const loadMappings = () => loadDoc(KEYS.MAPPINGS);
-const saveMappings = (data) => saveDoc(KEYS.MAPPINGS, data);
 
 // Compute semanticFormKey identically to extension/autofill/extractor.js
 // so the agent and the autofill flow share the same cache key.
@@ -218,9 +214,6 @@ router.post('/plan', async (req, res) => {
   // Pre-fill any snapshot field whose normalized label matches a known mapping
   // and whose mapped profile key has a value for THIS profile.
   const formKey = computeSemanticFormKey(snapshot);
-  const allMappings = await loadMappings();
-  if (!allMappings[formKey]) allMappings[formKey] = {};
-  let formMappings = allMappings[formKey];
 
   // ── Seed: every visit, add any visible labels NOT yet in mappings ────────
   // Pre-existing profileKey assignments are NEVER overwritten.
@@ -230,47 +223,53 @@ router.post('/plan', async (req, res) => {
   try { pageHostname = new URL(snapshot.url || '').hostname; } catch (e) {}
   const today = new Date().toISOString().slice(0, 10);
 
-  // Update _meta with latest visit info (don't overwrite firstSeen)
-  if (!formMappings._meta) {
-    formMappings._meta = { firstSeen: today };
-  }
-  formMappings._meta.hostname = formMappings._meta.hostname || pageHostname || hostname || null;
-  formMappings._meta.title = formMappings._meta.title || snapshot.title || null;
-  formMappings._meta.lastSeen = today;
+  // Atomic: load → seed → save under a row lock so concurrent /plan calls don't lose seeds.
+  const allMappings = await mutateDoc(KEYS.MAPPINGS, (all) => {
+    if (!all[formKey]) all[formKey] = {};
+    const formMappings = all[formKey];
 
-  for (let i = 0; i < (snapshot.elements || []).length; i++) {
-    const el = snapshot.elements[i];
-    // Only filter out non-field elements. Radios/checkboxes are KEPT (operator
-    // wants to see them in the mappings replica of the form).
-    if (el.kind === 'button' || el.kind === 'link') continue;
-    if (el.disabled) continue;
-    if (!el.label) continue;
-    // Skip junk labels: too short, non-alphabetic, or mismatched stray text
-    const trimmedLabel = el.label.trim();
-    if (trimmedLabel.length < 3) continue;
-    if (!/[a-zA-Z\u0900-\u097F]/.test(trimmedLabel)) continue; // require at least one letter (Latin or Devanagari)
-    const semKey = normLabel(el.label);
-    if (!semKey) continue;
-    if (!formMappings[semKey]) {
-      formMappings[semKey] = {
-        label: el.label,
-        type: el.kind || 'text',           // text|dropdown|radio|checkbox|textarea|file
-        order: i,                           // DOM order for replica display
-        profileKey: null,
-        fills: 0, corrections: 0,
-        lastSeen: today,
-        source: 'seed',
-      };
-      seeded++;
-    } else {
-      // Backfill missing fields without overwriting profileKey
-      if (!formMappings[semKey].label) formMappings[semKey].label = el.label;
-      if (!formMappings[semKey].type) formMappings[semKey].type = el.kind || 'text';
-      if (formMappings[semKey].order === undefined) formMappings[semKey].order = i;
+    // Update _meta with latest visit info (don't overwrite firstSeen)
+    if (!formMappings._meta) {
+      formMappings._meta = { firstSeen: today };
     }
-  }
-  // Persist if anything new was added (or just _meta updated)
-  await saveMappings(allMappings);
+    formMappings._meta.hostname = formMappings._meta.hostname || pageHostname || hostname || null;
+    formMappings._meta.title = formMappings._meta.title || snapshot.title || null;
+    formMappings._meta.lastSeen = today;
+
+    for (let i = 0; i < (snapshot.elements || []).length; i++) {
+      const el = snapshot.elements[i];
+      // Only filter out non-field elements. Radios/checkboxes are KEPT (operator
+      // wants to see them in the mappings replica of the form).
+      if (el.kind === 'button' || el.kind === 'link') continue;
+      if (el.disabled) continue;
+      if (!el.label) continue;
+      // Skip junk labels: too short, non-alphabetic, or mismatched stray text
+      const trimmedLabel = el.label.trim();
+      if (trimmedLabel.length < 3) continue;
+      if (!/[a-zA-Z\u0900-\u097F]/.test(trimmedLabel)) continue; // require at least one letter (Latin or Devanagari)
+      const semKey = normLabel(el.label);
+      if (!semKey) continue;
+      if (!formMappings[semKey]) {
+        formMappings[semKey] = {
+          label: el.label,
+          type: el.kind || 'text',           // text|dropdown|radio|checkbox|textarea|file
+          order: i,                           // DOM order for replica display
+          profileKey: null,
+          fills: 0, corrections: 0,
+          lastSeen: today,
+          source: 'seed',
+        };
+        seeded++;
+      } else {
+        // Backfill missing fields without overwriting profileKey
+        if (!formMappings[semKey].label) formMappings[semKey].label = el.label;
+        if (!formMappings[semKey].type) formMappings[semKey].type = el.kind || 'text';
+        if (formMappings[semKey].order === undefined) formMappings[semKey].order = i;
+      }
+    }
+    return all;
+  });
+  let formMappings = allMappings[formKey];
 
   const cachedActions = [];
   const cachedFieldKeys = new Set();
@@ -412,34 +411,38 @@ router.post('/plan', async (req, res) => {
       const elementBySelector = new Map();
       for (const el of (snapshot.elements || [])) elementBySelector.set(el.selector, el);
       let savedMappings = 0;
-      for (const action of mergedActions) {
-        if (action.name !== 'input.type' && action.name !== 'select.option') continue;
-        const el = elementBySelector.get(action.args?.target);
-        if (!el || !el.label) continue;
-        const semKey = normLabel(el.label);
-        if (!semKey) continue;
-        // Reverse-lookup profileKey from value
-        let profileKey = null;
-        if (profile && typeof profile === 'object') {
-          for (const [k, v] of Object.entries(profile)) {
-            if (v && String(v) === String(action.args.value)) { profileKey = k; break; }
+      await mutateDoc(KEYS.MAPPINGS, (all) => {
+        if (!all[formKey]) all[formKey] = {};
+        const fm = all[formKey];
+        for (const action of mergedActions) {
+          if (action.name !== 'input.type' && action.name !== 'select.option') continue;
+          const el = elementBySelector.get(action.args?.target);
+          if (!el || !el.label) continue;
+          const semKey = normLabel(el.label);
+          if (!semKey) continue;
+          // Reverse-lookup profileKey from value
+          let profileKey = null;
+          if (profile && typeof profile === 'object') {
+            for (const [k, v] of Object.entries(profile)) {
+              if (v && String(v) === String(action.args.value)) { profileKey = k; break; }
+            }
+          }
+          // Only set if not already mapped to something concrete (preserve manual edits)
+          const existing = fm[semKey];
+          if (existing && existing.profileKey && existing.source === 'manual') continue;
+          if (profileKey) {
+            fm[semKey] = fm[semKey] || { fills: 0, corrections: 0, source: 'agent' };
+            fm[semKey].label = fm[semKey].label || el.label;
+            fm[semKey].profileKey = profileKey;
+            fm[semKey].lastSeen = today;
+            if (!fm[semKey].source || fm[semKey].source === 'seed') {
+              fm[semKey].source = action.source || 'agent';
+            }
+            savedMappings++;
           }
         }
-        // Only set if not already mapped to something concrete (preserve manual edits)
-        const existing = formMappings[semKey];
-        if (existing && existing.profileKey && existing.source === 'manual') continue;
-        if (profileKey) {
-          formMappings[semKey] = formMappings[semKey] || { fills: 0, corrections: 0, source: 'agent' };
-          formMappings[semKey].label = formMappings[semKey].label || el.label;
-          formMappings[semKey].profileKey = profileKey;
-          formMappings[semKey].lastSeen = today;
-          if (!formMappings[semKey].source || formMappings[semKey].source === 'seed') {
-            formMappings[semKey].source = action.source || 'agent';
-          }
-          savedMappings++;
-        }
-      }
-      if (savedMappings > 0) await saveMappings(allMappings);
+        return all;
+      });
     } catch (e) { console.warn('[agent] save proposed mappings failed:', e.message); }
 
     const result = {
@@ -487,13 +490,13 @@ router.post('/trace', async (req, res) => {
   try {
     const formKey = bodyFormKey || (snapshotBefore ? computeSemanticFormKey(snapshotBefore) : null);
     if (formKey && plan.actions && results.steps && Array.isArray(snapshotBefore?.elements)) {
-      const all = await loadMappings();
-      if (!all[formKey]) all[formKey] = {};
       const today = new Date().toISOString().slice(0, 10);
       const elementBySelector = new Map();
       for (const el of snapshotBefore.elements) {
         elementBySelector.set(el.selector, el);
       }
+      await mutateDoc(KEYS.MAPPINGS, (all) => {
+      if (!all[formKey]) all[formKey] = {};
       for (let i = 0; i < plan.actions.length; i++) {
         const action = plan.actions[i];
         const step = results.steps[i];
@@ -523,7 +526,8 @@ router.post('/trace', async (req, res) => {
         }
         learned++;
       }
-      if (learned > 0) await saveMappings(all);
+      return all;
+      });
     }
   } catch (e) {
     console.warn('[agent] learn failed:', e.message);

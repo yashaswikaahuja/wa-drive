@@ -1,12 +1,9 @@
 import { Router } from 'express';
 import { pool } from '../db.js';
 import { authMiddleware } from '../auth.js';
-import { loadDoc, saveDoc, KEYS } from '../store.js';
+import { mutateDoc, KEYS } from '../store.js';
 
 const router = Router();
-
-const loadMappings = () => loadDoc(KEYS.MAPPINGS);
-const saveMappings = (data) => saveDoc(KEYS.MAPPINGS, data);
 
 const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 
@@ -108,37 +105,38 @@ router.post('/', authMiddleware, async (req, res) => {
           [profileId, req.user.workspaceId]
         );
         const profileData = pR.rows[0]?.data || {};
-        const mappings = await loadMappings();
         const formKey = semanticFormKey;
-        if (!mappings[formKey]) mappings[formKey] = {};
         const today = new Date().toISOString().slice(0, 10);
 
-        for (const c of corrections) {
-          const operatorValue = c.finalOperatorValue || c.operatorValue;
-          if (!operatorValue) continue;
-          const profileKey = findProfileKeyForValue(profileData, operatorValue, c.field || c.label);
-          if (!profileKey) continue;
-          const semanticKey = normLabel(c.field || c.label);
-          if (!semanticKey) continue;
+        await mutateDoc(KEYS.MAPPINGS, (mappings) => {
+          if (!mappings[formKey]) mappings[formKey] = {};
+          for (const c of corrections) {
+            const operatorValue = c.finalOperatorValue || c.operatorValue;
+            if (!operatorValue) continue;
+            const profileKey = findProfileKeyForValue(profileData, operatorValue, c.field || c.label);
+            if (!profileKey) continue;
+            const semanticKey = normLabel(c.field || c.label);
+            if (!semanticKey) continue;
 
-          const existing = mappings[formKey][semanticKey];
-          if (existing && existing.profileKey === profileKey) {
-            // Confirm existing mapping (boost confidence)
-            existing.fills = (existing.fills || 0) + 1;
-            existing.lastSeen = today;
-          } else {
-            // New or changed mapping (operator overrode the previous)
-            mappings[formKey][semanticKey] = {
-              profileKey,
-              fills: 1,
-              corrections: existing?.corrections ? existing.corrections + 1 : 1,
-              lastSeen: today,
-              source: 'auto-correction',
-            };
+            const existing = mappings[formKey][semanticKey];
+            if (existing && existing.profileKey === profileKey) {
+              // Confirm existing mapping (boost confidence)
+              existing.fills = (existing.fills || 0) + 1;
+              existing.lastSeen = today;
+            } else {
+              // New or changed mapping (operator overrode the previous)
+              mappings[formKey][semanticKey] = {
+                profileKey,
+                fills: 1,
+                corrections: existing?.corrections ? existing.corrections + 1 : 1,
+                lastSeen: today,
+                source: 'auto-correction',
+              };
+            }
+            promoted++;
           }
-          promoted++;
-        }
-        if (promoted > 0) await saveMappings(mappings);
+          return mappings;
+        });
       } catch (e) {
         console.warn('[ext/corrections] auto-promote failed:', e.message);
       }

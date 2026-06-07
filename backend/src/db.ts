@@ -3,11 +3,16 @@ import { DATABASE_URL } from './config.js';
 
 const { Pool } = pg;
 
+// Pool size is per-instance. With multiple backends behind the LB, total connections =
+// PG_POOL_MAX × (backends) + ext-service pools + WhatsApp shards — keep the sum under Postgres
+// max_connections (default 100). Default 10 here leaves headroom; raise via env on a single big instance.
+const PG_POOL_MAX = Number(process.env.PG_POOL_MAX ?? 10);
+
 export const pool = new Pool({ 
   connectionString: DATABASE_URL,
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 30000,
-  max: 20,
+  max: PG_POOL_MAX,
 });
 
 // Retry connection logic with exponential backoff

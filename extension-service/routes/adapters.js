@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { loadDoc, saveDoc, KEYS } from '../store.js';
+import { loadDoc, mutateDoc, KEYS } from '../store.js';
 
 const router = Router();
 
 const load = () => loadDoc(KEYS.ADAPTERS);
-const save = (data) => saveDoc(KEYS.ADAPTERS, data);
+const mutate = (fn) => mutateDoc(KEYS.ADAPTERS, fn);
 
 // GET /api/adapters — get all adapters
 router.get('/', async (_req, res) => {
@@ -23,51 +23,58 @@ router.post('/:hostname', async (req, res) => {
   if (!componentClass || !triggerSelector || !optionSelector) {
     return res.status(400).json({ error: 'componentClass, triggerSelector, optionSelector required' });
   }
-  const store = await load();
   const hostname = req.params.hostname;
-  if (!store[hostname]) store[hostname] = {};
-  const today = new Date().toISOString().slice(0, 10);
-  const existing = store[hostname][componentClass];
-  store[hostname][componentClass] = {
-    componentClass,
-    triggerSelector,
-    optionsContainer: optionsContainer || '',
-    optionSelector,
-    verifySelector: verifySelector || '',
-    adapterVersion: (existing?.adapterVersion || 0) + 1,
-    learnedAt: existing?.learnedAt || today,
-    lastUsedAt: today,
-    successCount: existing?.successCount || 0,
-    failureCount: existing?.failureCount || 0,
-    stale: false,
-  };
-  await save(store);
-  res.json({ ok: true, adapter: store[hostname][componentClass] });
+  let saved;
+  await mutate((store) => {
+    if (!store[hostname]) store[hostname] = {};
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = store[hostname][componentClass];
+    store[hostname][componentClass] = {
+      componentClass,
+      triggerSelector,
+      optionsContainer: optionsContainer || '',
+      optionSelector,
+      verifySelector: verifySelector || '',
+      adapterVersion: (existing?.adapterVersion || 0) + 1,
+      learnedAt: existing?.learnedAt || today,
+      lastUsedAt: today,
+      successCount: existing?.successCount || 0,
+      failureCount: existing?.failureCount || 0,
+      stale: false,
+    };
+    saved = store[hostname][componentClass];
+    return store;
+  });
+  res.json({ ok: true, adapter: saved });
 });
 
 // PATCH /api/adapters/:hostname/:componentClass
 router.patch('/:hostname/:componentClass', async (req, res) => {
   const { success, stale } = req.body || {};
-  const store = await load();
-  const adapter = store[req.params.hostname]?.[req.params.componentClass];
-  if (!adapter) return res.status(404).json({ error: 'adapter not found' });
-  if (success === true) adapter.successCount++;
-  if (success === false) adapter.failureCount++;
-  if (stale !== undefined) adapter.stale = stale;
-  adapter.lastUsedAt = new Date().toISOString().slice(0, 10);
-  await save(store);
+  let notFound = false;
+  await mutate((store) => {
+    const adapter = store[req.params.hostname]?.[req.params.componentClass];
+    if (!adapter) { notFound = true; return store; }
+    if (success === true) adapter.successCount++;
+    if (success === false) adapter.failureCount++;
+    if (stale !== undefined) adapter.stale = stale;
+    adapter.lastUsedAt = new Date().toISOString().slice(0, 10);
+    return store;
+  });
+  if (notFound) return res.status(404).json({ error: 'adapter not found' });
   res.json({ ok: true });
 });
 
 // DELETE /api/adapters/:hostname/:componentClass
 router.delete('/:hostname/:componentClass', async (req, res) => {
   const { hostname, componentClass } = req.params;
-  const data = await load();
-  if (data[hostname]) {
-    delete data[hostname][componentClass];
-    if (Object.keys(data[hostname]).length === 0) delete data[hostname];
-    await save(data);
-  }
+  await mutate((data) => {
+    if (data[hostname]) {
+      delete data[hostname][componentClass];
+      if (Object.keys(data[hostname]).length === 0) delete data[hostname];
+    }
+    return data;
+  });
   res.json({ ok: true });
 });
 

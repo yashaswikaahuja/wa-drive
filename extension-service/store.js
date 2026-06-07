@@ -49,4 +49,44 @@ export async function saveDoc(key, data) {
   );
 }
 
+// Atomic read-modify-write of a whole document.
+//
+// WHY: load()→mutate→save() is a lost-update race when multiple instances (or concurrent requests on
+// one instance) touch the same document — last writer overwrites the other's changes. mutateDoc holds
+// a ROW LOCK (SELECT ... FOR UPDATE) for the whole read-modify-write inside one transaction, so writers
+// serialize on that key instead of clobbering each other.
+//
+// `mutator(data)` receives the current document (mutate in place and/or return a new object). Its return
+// value, if an object, becomes the new document; otherwise the (mutated) input is written. Any second
+// value the caller needs can be smuggled out via a closure variable. mutateDoc resolves to the mutator's
+// return value so callers can also read a result back.
+export async function mutateDoc(key, mutator) {
+  await ensureSchema();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Ensure the row exists so FOR UPDATE has something to lock (no-op if already there).
+    await client.query(
+      `INSERT INTO ext_kv_store (key, data) VALUES ($1, '{}'::jsonb) ON CONFLICT (key) DO NOTHING`,
+      [key]
+    );
+    const { rows } = await client.query('SELECT data FROM ext_kv_store WHERE key = $1 FOR UPDATE', [key]);
+    const current = rows[0]?.data ?? {};
+    const result = await mutator(current);
+    // If the mutator returned a plain object, treat it as the new document; else persist the (mutated) current.
+    const next = (result && typeof result === 'object') ? result : current;
+    await client.query(
+      'UPDATE ext_kv_store SET data = $2::jsonb, updated_at = now() WHERE key = $1',
+      [key, JSON.stringify(next)]
+    );
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export const KEYS = { MAPPINGS: 'form_mappings', ADAPTERS: 'adapters' };

@@ -2,31 +2,32 @@ import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
 import { guessProfileKey } from './label-mapper.js';
-import { loadDoc, saveDoc, KEYS } from '../store.js';
+import { loadDoc, mutateDoc, KEYS } from '../store.js';
 
 const router = Router();
 
 const load = () => loadDoc(KEYS.MAPPINGS);
-const save = (data) => saveDoc(KEYS.MAPPINGS, data);
+const mutate = (fn) => mutateDoc(KEYS.MAPPINGS, fn);
 
 // POST /api/mappings/cleanup — remove junk/short entries from existing mappings
 router.post('/cleanup', authMiddleware, async (_req, res) => {
-  const all = await load();
   let removed = 0;
-  for (const formKey of Object.keys(all)) {
-    const fields = all[formKey];
-    for (const key of Object.keys(fields)) {
-      if (key === '_meta') continue;
-      const lbl = fields[key].label || key;
-      const trimmed = String(lbl).trim();
-      // Same filters as seed: too short OR no letters at all
-      if (trimmed.length < 3 || !/[a-zA-Z\u0900-\u097F]/.test(trimmed)) {
-        delete fields[key];
-        removed++;
+  await mutate((all) => {
+    for (const formKey of Object.keys(all)) {
+      const fields = all[formKey];
+      for (const key of Object.keys(fields)) {
+        if (key === '_meta') continue;
+        const lbl = fields[key].label || key;
+        const trimmed = String(lbl).trim();
+        // Same filters as seed: too short OR no letters at all
+        if (trimmed.length < 3 || !/[a-zA-Z\u0900-\u097F]/.test(trimmed)) {
+          delete fields[key];
+          removed++;
+        }
       }
     }
-  }
-  await save(all);
+    return all;
+  });
   res.json({ ok: true, removed });
 });
 
@@ -51,8 +52,8 @@ router.post('/backfill', authMiddleware, async (req, res) => {
     const params = targetFormKey ? [targetFormKey] : [];
     const { rows } = await pool.query(sql, params);
 
-    const all = await load();
     const today = new Date().toISOString().slice(0, 10);
+    await mutate((all) => {
 
     function normLabel(s) {
       return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -148,7 +149,8 @@ router.post('/backfill', authMiddleware, async (req, res) => {
       if (formSeeded > 0) formsSeeded++;
       seededTotal += formSeeded;
     }
-    await save(all);
+      return all;
+    });
     res.json({ ok: true, formsSeeded, seededTotal, mappedTotal });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -212,33 +214,34 @@ router.get('/:formKey', async (req, res) => {
 router.post('/:formKey', async (req, res) => {
   const { updates, meta } = req.body || {};
   if (!updates && !meta) return res.status(400).json({ error: 'updates or meta required' });
-  const mappings = await load();
   const formKey = req.params.formKey;
-  if (!mappings[formKey]) mappings[formKey] = {};
   const today = new Date().toISOString().slice(0, 10);
-  if (meta) {
-    mappings[formKey]._meta = { ...(mappings[formKey]._meta || {}), ...meta, lastSeen: today };
-  }
-  if (updates) {
-    for (const [semanticKey, info] of Object.entries(updates)) {
-      const { profileKey, delta = {} } = info;
-      const existing = mappings[formKey][semanticKey];
-      if (existing) {
-        existing.fills = (existing.fills || 0) + (delta.fills || 0);
-        existing.corrections = (existing.corrections || 0) + (delta.corrections || 0);
-        existing.profileKey = profileKey;
-        existing.lastSeen = today;
-      } else {
-        mappings[formKey][semanticKey] = {
-          profileKey,
-          fills: delta.fills || 0,
-          corrections: delta.corrections || 0,
-          lastSeen: today,
-        };
+  await mutate((mappings) => {
+    if (!mappings[formKey]) mappings[formKey] = {};
+    if (meta) {
+      mappings[formKey]._meta = { ...(mappings[formKey]._meta || {}), ...meta, lastSeen: today };
+    }
+    if (updates) {
+      for (const [semanticKey, info] of Object.entries(updates)) {
+        const { profileKey, delta = {} } = info;
+        const existing = mappings[formKey][semanticKey];
+        if (existing) {
+          existing.fills = (existing.fills || 0) + (delta.fills || 0);
+          existing.corrections = (existing.corrections || 0) + (delta.corrections || 0);
+          existing.profileKey = profileKey;
+          existing.lastSeen = today;
+        } else {
+          mappings[formKey][semanticKey] = {
+            profileKey,
+            fills: delta.fills || 0,
+            corrections: delta.corrections || 0,
+            lastSeen: today,
+          };
+        }
       }
     }
-  }
-  await save(mappings);
+    return mappings;
+  });
   res.json({ ok: true });
 });
 
@@ -246,40 +249,45 @@ router.post('/:formKey', async (req, res) => {
 // (used by the admin UI's per-row edit)
 router.patch('/:formKey/:label', authMiddleware, async (req, res) => {
   const { profileKey } = req.body || {};
-  const mappings = await load();
   const formKey = req.params.formKey;
   const label = req.params.label;
-  if (!mappings[formKey]) return res.status(404).json({ error: 'formKey not found' });
-  if (!mappings[formKey][label]) {
-    mappings[formKey][label] = { profileKey, fills: 0, corrections: 0, lastSeen: new Date().toISOString().slice(0, 10), source: 'manual' };
-  } else {
-    mappings[formKey][label].profileKey = profileKey || null;
-    mappings[formKey][label].lastSeen = new Date().toISOString().slice(0, 10);
-    mappings[formKey][label].source = 'manual';
-  }
-  await save(mappings);
+  let notFound = false;
+  await mutate((mappings) => {
+    if (!mappings[formKey]) { notFound = true; return mappings; }
+    if (!mappings[formKey][label]) {
+      mappings[formKey][label] = { profileKey, fills: 0, corrections: 0, lastSeen: new Date().toISOString().slice(0, 10), source: 'manual' };
+    } else {
+      mappings[formKey][label].profileKey = profileKey || null;
+      mappings[formKey][label].lastSeen = new Date().toISOString().slice(0, 10);
+      mappings[formKey][label].source = 'manual';
+    }
+    return mappings;
+  });
+  if (notFound) return res.status(404).json({ error: 'formKey not found' });
   res.json({ ok: true });
 });
 
 // DELETE /api/mappings/:formKey/:label — remove ONE bad mapping
 router.delete('/:formKey/:label', authMiddleware, async (req, res) => {
-  const mappings = await load();
   const formKey = req.params.formKey;
   const label = req.params.label;
-  if (mappings[formKey] && mappings[formKey][label]) {
-    delete mappings[formKey][label];
-    await save(mappings);
-  }
+  await mutate((mappings) => {
+    if (mappings[formKey] && mappings[formKey][label]) {
+      delete mappings[formKey][label];
+    }
+    return mappings;
+  });
   res.json({ ok: true });
 });
 
 // DELETE /api/mappings/:formKey — remove an entire form's mappings
 router.delete('/:formKey', authMiddleware, async (req, res) => {
-  const mappings = await load();
-  if (mappings[req.params.formKey]) {
-    delete mappings[req.params.formKey];
-    await save(mappings);
-  }
+  await mutate((mappings) => {
+    if (mappings[req.params.formKey]) {
+      delete mappings[req.params.formKey];
+    }
+    return mappings;
+  });
   res.json({ ok: true });
 });
 
