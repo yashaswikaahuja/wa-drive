@@ -1,0 +1,118 @@
+#cloud-config
+# SELF-CONTAINED user-data — provisions a CyberControl WhatsApp node on FIRST BOOT, ANY cloud.
+# Nothing is fetched from the private repo: the provision script is inlined below.
+# ONE STEP: create a VM and paste this as its "user data", with the 5 values filled in.
+#
+# FILL THESE (search & replace the __PLACEHOLDERS__):
+#   __TS_AUTHKEY__        Tailscale auth key (or OAuth client secret)
+#   __WA_INSTANCE_NAME__  e.g. cybercontrol-wa-3
+#   __GHCR_TOKEN__        GHCR read:packages token
+#   __DATABASE_URL__      postgresql://...@cybercontrol-db:5432/cybercontrol
+#   __WA_SECRET__         shared worker secret (must match the backend)
+
+write_files:
+  - path: /etc/cybercontrol/node.env
+    permissions: '0600'
+    content: |
+      TS_AUTHKEY=__TS_AUTHKEY__
+      TS_TAG=tag:cybercontrol
+      WA_INSTANCE_NAME=__WA_INSTANCE_NAME__
+      GHCR_TOKEN=__GHCR_TOKEN__
+      DATABASE_URL=__DATABASE_URL__
+      WA_SECRET=__WA_SECRET__
+      PARENT_URL=http://cybercontrol-app:3000
+      WA_AUTH_BACKEND=postgres
+  - path: /opt/cc/provision-wa-instance.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      # CLOUD-AGNOSTIC self-provision for a WhatsApp worker VM (GCP, Oracle, AWS, Hetzner, bare VM...).
+      # Installs docker+tailscale, joins the tailnet, creates the deploy user, logs into GHCR, drops the
+      # compose file. ~60-90s on first boot (docker install is the long pole). Then a CD deploy runs it.
+      #
+      # Config comes from ENVIRONMENT VARIABLES (so any cloud's cloud-init / user-data can set them, or run
+      # it by hand). On GCP, if a var is unset it falls back to the instance metadata server.
+      #   TS_AUTHKEY        tskey-auth-...  OR  tskey-client-...  (auth key, or OAuth client secret)
+      #   TS_TAG            tag:cybercontrol  (REQUIRED if TS_AUTHKEY is an OAuth client secret; must be in
+      #                                        the tailnet ACL tagOwners + allowed to reach db/app/resolver)
+      #   WA_INSTANCE_NAME  cybercontrol-wa-N  (this node's tailnet hostname)
+      #   GHCR_TOKEN        ghp_...            (GHCR read:packages token for the deploy user)
+      #
+      # Examples:
+      #   any cloud (cloud-init user-data or manual):
+      #     sudo TS_AUTHKEY=... TS_TAG=tag:cybercontrol WA_INSTANCE_NAME=cybercontrol-wa-3 GHCR_TOKEN=... bash provision-wa-instance.sh
+      #   GCP: pass the same as instance metadata keys ts-authkey/ts-tag/wa-instance-name/ghcr-token.
+      set -e
+      exec >>/var/log/cc-provision.log 2>&1
+      echo "=== cc provision $(date) ==="
+      
+      # Config: prefer env vars; on GCP fall back to the metadata server (2s timeout, harmless elsewhere).
+      gcp_meta() { curl -s -m 2 -H "Metadata-Flavor: Google" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$1" 2>/dev/null; }
+      : "${TS_AUTHKEY:=$(gcp_meta ts-authkey)}"
+      : "${TS_TAG:=$(gcp_meta ts-tag)}"
+      : "${WA_INSTANCE_NAME:=$(gcp_meta wa-instance-name)}"
+      : "${GHCR_TOKEN:=$(gcp_meta ghcr-token)}"
+      TS_KEY="$TS_AUTHKEY"
+      WA_NAME="$WA_INSTANCE_NAME"
+      DEPLOY_PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINp+ul1LemdrPohJ/2OEzUg8QLSmMXjdecQPY6lGS9Xr cybercontrol-cd-deploy'
+      
+      # 1. docker + tailscale
+      command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
+      command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
+      systemctl enable --now docker tailscaled
+      
+      # 2. join the tailnet under the right name.
+      #    OAuth client secret (tskey-client-...) → must advertise a tag; plain auth key → no tag.
+      if [ -n "$TS_TAG" ]; then
+        echo "joining via OAuth client with tag $TS_TAG"
+        tailscale up --auth-key="${TS_KEY}?ephemeral=false&preauthorized=true" --advertise-tags="$TS_TAG" --hostname="$WA_NAME"
+      else
+        echo "joining via auth key"
+        tailscale up --auth-key="$TS_KEY" --hostname="$WA_NAME"
+      fi
+      
+      # 3. deploy user (docker group) + CD public key
+      id deploy >/dev/null 2>&1 || useradd -m -s /bin/bash deploy
+      usermod -aG docker deploy
+      mkdir -p /home/deploy/.ssh
+      echo "$DEPLOY_PUBKEY" > /home/deploy/.ssh/authorized_keys
+      chown -R deploy:deploy /home/deploy/.ssh
+      chmod 700 /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys
+      
+      # 4. GHCR login as deploy (so `docker compose pull` works)
+      echo "$GHCR_TOKEN" | sudo -u deploy -H docker login ghcr.io -u yashaswikaahuja --password-stdin
+      
+      # 5. deploy dir + compose (CD writes <service>.env + pulls/recreates on deploy)
+      mkdir -p /opt/cybercontrol-docker
+      cat > /opt/cybercontrol-docker/docker-compose.wa.yml <<'COMPOSE'
+      services:
+        whatsapp-service:
+          image: ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-service:${IMAGE_TAG:-latest}
+          pull_policy: always
+          restart: unless-stopped
+          network_mode: host
+          environment:
+            NODE_ENV: production
+            WA_PORT: "3100"
+            PARENT_URL: ${PARENT_URL:-http://cybercontrol-app:3000}
+            RESOLVER_URL: ${RESOLVER_URL:-http://cybercontrol-wa:3200}
+            WA_SECRET: ${WA_SECRET}
+            WA_AUTH_BACKEND: ${WA_AUTH_BACKEND:-postgres}
+            WA_INSTANCE_NAME: ${WA_INSTANCE_NAME:-}
+            WA_HEARTBEAT_MS: ${WA_HEARTBEAT_MS:-10000}
+            DATABASE_URL: ${DATABASE_URL}
+            AUTH_DIR: /app/sessions
+          volumes:
+            - wa_sessions:/app/sessions
+      volumes:
+        wa_sessions:
+      COMPOSE
+      chown -R deploy:deploy /opt/cybercontrol-docker
+      
+      echo "=== cc provision complete $(date) ==="
+      touch /opt/cybercontrol-docker/.provisioned
+
+runcmd:
+  - set -a && . /etc/cybercontrol/node.env && set +a && bash /opt/cc/provision-wa-instance.sh
+  - set -a && . /etc/cybercontrol/node.env && set +a && cd /opt/cybercontrol-docker && sudo -u deploy -E docker compose -f docker-compose.wa.yml up -d
+  - echo "cloud-init provision done $(date)" >> /var/log/cc-provision.log
