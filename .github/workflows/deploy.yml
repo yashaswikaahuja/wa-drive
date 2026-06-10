@@ -18,6 +18,8 @@ on:
           - whatsapp-service
           - whatsapp-service-2
           - whatsapp-instance
+          - backend-pool
+          - whatsapp-pool
         default: backend
       version:
         description: "Image tag to deploy (latest, or a commit SHA to roll back)"
@@ -29,6 +31,27 @@ on:
         default: ""
 
 jobs:
+  # Turn the comma-separated host repo-variables into JSON arrays the matrix can consume.
+  # Repo variables (Settings → Variables):
+  #   BACKEND_HOSTS = cybercontrol-app,cybercontrol-app-2,...   (the backend pool)
+  #   WA_HOSTS      = cybercontrol-wa,cybercontrol-wa-2,...      (the WhatsApp shard pool)
+  # Empty / unset → that pool target produces an empty matrix and simply no-ops.
+  prep:
+    if: ${{ inputs.target == 'backend-pool' || inputs.target == 'whatsapp-pool' }}
+    runs-on: ubuntu-latest
+    outputs:
+      backend_hosts: ${{ steps.parse.outputs.backend_hosts }}
+      wa_hosts: ${{ steps.parse.outputs.wa_hosts }}
+    steps:
+      - id: parse
+        env:
+          BACKEND_HOSTS: ${{ vars.BACKEND_HOSTS }}
+          WA_HOSTS: ${{ vars.WA_HOSTS }}
+        run: |
+          csv_to_json() { printf '%s' "$1" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -v '^$' | jq -R . | jq -cs .; }
+          echo "backend_hosts=$(csv_to_json "$BACKEND_HOSTS")" >> "$GITHUB_OUTPUT"
+          echo "wa_hosts=$(csv_to_json "$WA_HOSTS")" >> "$GITHUB_OUTPUT"
+
   backend:
     if: ${{ inputs.target == 'backend' }}
     uses: ./.github/workflows/_deploy.yml
@@ -90,4 +113,43 @@ jobs:
       image_tag: ${{ inputs.version }}
       environment: whatsapp-service
       wa_instance_name: ${{ inputs.wa_host }}
+    secrets: inherit
+
+  # ── Rolling pool deploys ──────────────────────────────────────────────────
+  # max-parallel: 1  → one host at a time (rolling, never all backends down at once).
+  # fail-fast: true (default) → if a host's health-check fails in _deploy.yml, the rollout STOPS
+  #   before touching the rest of the pool (and that host auto-rolls-back to its previous image).
+  backend-pool:
+    needs: prep
+    if: ${{ inputs.target == 'backend-pool' && needs.prep.outputs.backend_hosts != '[]' }}
+    strategy:
+      max-parallel: 1
+      matrix:
+        host: ${{ fromJSON(needs.prep.outputs.backend_hosts) }}
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: ${{ matrix.host }}
+      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
+      services: backend
+      health_url: http://localhost:3000/api/health
+      image_tag: ${{ inputs.version }}
+      environment: backend
+    secrets: inherit
+
+  whatsapp-pool:
+    needs: prep
+    if: ${{ inputs.target == 'whatsapp-pool' && needs.prep.outputs.wa_hosts != '[]' }}
+    strategy:
+      max-parallel: 1
+      matrix:
+        host: ${{ fromJSON(needs.prep.outputs.wa_hosts) }}
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      host: ${{ matrix.host }}
+      compose_path: /opt/cybercontrol-docker/docker-compose.wa.yml
+      services: whatsapp-service
+      health_url: http://localhost:3100/health
+      image_tag: ${{ inputs.version }}
+      environment: whatsapp-service
+      wa_instance_name: ${{ matrix.host }}
     secrets: inherit

@@ -11,9 +11,11 @@ Deployment artifacts, organized by type.
       BACKEND-SCALING.md   backend multi-instance (Redis adapter, LB tier)
       NETWORKING.md        diagram-first network reference (ports, names, tailnet, flows, failures)
       DB-BACKUPS.md        nightly Postgres backups → GCS, retention, and the restore runbook
+      SCALING-AUTOMATION.md  one-step node bring-up (cloud-init) + rolling pool deploys
     scripts/           operational scripts
       provision-wa-instance.sh    provision a fresh WhatsApp VM (any cloud, env-var config)
       provision-wa-from-image.sh  boot-join script for VMs cloned from a pre-baked image
+      cloud-init-wa.yaml          user-data to self-provision a WA node on first boot (any cloud)
       add-wa-shard.sh             add a provisioned VM to the cluster (one command)
       db-backup.sh                nightly pg_dump → gzip → GCS (cloud-agnostic, no gcloud needed)
     compose/           docker compose files used on the VMs

@@ -1,0 +1,43 @@
+#cloud-config
+# cloud-init user-data — self-provision a CyberControl WhatsApp node on FIRST BOOT, any cloud.
+#
+# Works anywhere cloud-init runs (AWS EC2, Oracle Cloud, GCP, Hetzner, DigitalOcean, Azure, …).
+# Paste this as the instance's "user data" at create time, with the 5 values filled in below.
+# On boot the VM will: install docker+tailscale → join the tailnet → GHCR login → drop the compose
+# → start whatsapp-service. No SSH, no manual steps. One step = create the VM with this user-data.
+#
+# ── FILL THESE IN (the only things that change per node) ─────────────────────
+#   TS_AUTHKEY        Tailscale auth key or OAuth client secret
+#   WA_INSTANCE_NAME  this node's tailnet hostname, e.g. cybercontrol-wa-3
+#   GHCR_TOKEN        GHCR read:packages token
+#   DATABASE_URL      postgresql://...@cybercontrol-db:5432/cybercontrol
+#   WA_SECRET         shared worker secret (must match the backend)
+# ─────────────────────────────────────────────────────────────────────────────
+
+write_files:
+  - path: /etc/cybercontrol/node.env
+    permissions: '0600'
+    owner: root:root
+    content: |
+      TS_AUTHKEY=__TS_AUTHKEY__
+      TS_TAG=tag:cybercontrol
+      WA_INSTANCE_NAME=__WA_INSTANCE_NAME__
+      GHCR_TOKEN=__GHCR_TOKEN__
+      DATABASE_URL=__DATABASE_URL__
+      WA_SECRET=__WA_SECRET__
+      PARENT_URL=http://cybercontrol-app:3000
+      WA_AUTH_BACKEND=postgres
+
+runcmd:
+  # 1. fetch the provisioning script (pin to a commit/tag in production instead of master)
+  - curl -fsSL -o /tmp/provision-wa-instance.sh https://raw.githubusercontent.com/yashaswikaahuja/wa-drive/master/deploy/scripts/provision-wa-instance.sh
+  # 2. provision: install docker+tailscale, join tailnet, GHCR login, drop compose (reads node.env)
+  - set -a && . /etc/cybercontrol/node.env && set +a && bash /tmp/provision-wa-instance.sh
+  # 3. start the service (compose reads the same env)
+  - set -a && . /etc/cybercontrol/node.env && set +a && cd /opt/cybercontrol-docker && sudo -u deploy -E docker compose -f docker-compose.wa.yml up -d
+  - echo "cloud-init provision done $(date)" >> /var/log/cc-provision.log
+
+# NOTE on the curl: this downloads the ~50-line BOOTSTRAP SCRIPT, not application code.
+# The application itself ships as the GHCR image (docker pull inside the script) — the VM never
+# builds or clones source. The repo is private, so either: (a) make just this one script reachable,
+# (b) bake it into a base image, or (c) inline the script into this user-data (see README).
