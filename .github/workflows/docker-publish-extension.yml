@@ -43,8 +43,6 @@ jobs:
           context: ./extension-service
           file: ./extension-service/Dockerfile
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           load: true
           push: false
           tags: cybercontrol-extension-service:ci
@@ -78,7 +76,6 @@ jobs:
           context: ./extension-service
           file: ./extension-service/Dockerfile
           platforms: linux/amd64
-          cache-from: type=gha
           push: true
           tags: |
             ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest

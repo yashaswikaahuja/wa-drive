@@ -46,8 +46,6 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           load: true
           push: false
           tags: cybercontrol-backend:ci
@@ -82,7 +80,6 @@ jobs:
           context: ./backend
           file: ./backend/Dockerfile
           platforms: linux/amd64
-          cache-from: type=gha
           push: true
           tags: |
             ghcr.io/yashaswikaahuja/cybercontrol-backend:latest
