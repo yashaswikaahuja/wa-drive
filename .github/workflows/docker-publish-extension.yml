@@ -14,6 +14,20 @@ jobs:
     permissions:
       contents: read
       packages: write
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: cc
+          POSTGRES_PASSWORD: ccpass
+          POSTGRES_DB: cybercontrol
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -23,11 +37,48 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 1. Build + load locally (no push yet).
       - uses: docker/build-push-action@v6
         with:
           context: ./extension-service
           file: ./extension-service/Dockerfile
           platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+          push: false
+          tags: cybercontrol-extension-service:ci
+
+      # 2. Smoke-test: boot against throwaway Postgres (ensureSchema runs on boot) and hit /health.
+      - name: Smoke-test the built image
+        run: |
+          set -e
+          docker run -d --name ext-smoke --network host \
+            -e DATABASE_URL="postgresql://cc:ccpass@localhost:5432/cybercontrol" \
+            -e JWT_SECRET=ci \
+            -e PORT=3300 \
+            cybercontrol-extension-service:ci
+          echo "waiting for /health…"
+          ok=0
+          for i in $(seq 1 24); do
+            if curl -fsS http://localhost:3300/health >/dev/null 2>&1; then ok=1; break; fi
+            sleep 5
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::extension-service image failed to become healthy — not pushing"
+            docker logs ext-smoke || true
+            exit 1
+          fi
+          echo "✓ extension-service image healthy"
+          docker rm -f ext-smoke >/dev/null 2>&1 || true
+
+      # 3. Smoke-test passed → push.
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./extension-service
+          file: ./extension-service/Dockerfile
+          platforms: linux/amd64
+          cache-from: type=gha
           push: true
           tags: |
             ghcr.io/yashaswikaahuja/cybercontrol-extension-service:latest
