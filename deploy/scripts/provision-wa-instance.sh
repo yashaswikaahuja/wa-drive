@@ -1,13 +1,17 @@
 #!/bin/bash
-# CLOUD-AGNOSTIC self-provision for a WhatsApp worker VM (GCP, Oracle, AWS, Hetzner, bare VM...).
-# Installs docker+tailscale, joins the tailnet, creates the deploy user, logs into GHCR, drops the
-# compose file. ~60-90s on first boot (docker install is the long pole). Then a CD deploy runs it.
+# CLOUD-AGNOSTIC self-provision for a WhatsApp worker VM (GCP, Oracle, AWS, Hetzner, bare VM, WSL...).
+# Installs docker+tailscale, starts the daemons (systemd OR manual on no-systemd boxes), joins the
+# tailnet, creates the deploy user, logs into GHCR, drops the compose file. ~60-90s on first boot.
+#
+# Works WITH or WITHOUT systemd: on no-systemd boxes (WSL, minimal containers) it starts tailscaled/
+# dockerd manually and waits for the daemon before joining (so it never silently hangs). Run as root
+# on those (no sudo-password prompt to block it).
 #
 # Config comes from ENVIRONMENT VARIABLES (so any cloud's cloud-init / user-data can set them, or run
 # it by hand). On GCP, if a var is unset it falls back to the instance metadata server.
-#   TS_AUTHKEY        tskey-auth-...  OR  tskey-client-...  (auth key, or OAuth client secret)
-#   TS_TAG            tag:cybercontrol  (REQUIRED if TS_AUTHKEY is an OAuth client secret; must be in
-#                                        the tailnet ACL tagOwners + allowed to reach db/app/resolver)
+#   TS_AUTHKEY        tskey-auth-...  (recommended: a plain AUTH key)  OR  tskey-client-... (OAuth secret)
+#   TS_TAG            tag:cybercontrol  (advertise this tag; must be in the tailnet ACL tagOwners +
+#                                        allowed to reach db/app/resolver)
 #   WA_INSTANCE_NAME  cybercontrol-wa-N  (this node's tailnet hostname)
 #   GHCR_TOKEN        ghp_...            (GHCR read:packages token for the deploy user)
 #
@@ -29,22 +33,50 @@ TS_KEY="$TS_AUTHKEY"
 WA_NAME="$WA_INSTANCE_NAME"
 DEPLOY_PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINp+ul1LemdrPohJ/2OEzUg8QLSmMXjdecQPY6lGS9Xr cybercontrol-cd-deploy'
 
+# Detect whether systemd is the init (PID 1). On boxes WITHOUT systemd (WSL, minimal containers),
+# `systemctl` fails and the daemons must be started by hand — otherwise `tailscale up` hangs forever
+# trying to reach a tailscaled that never started.
+HAS_SYSTEMD=0
+if [ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ] && command -v systemctl >/dev/null; then HAS_SYSTEMD=1; fi
+echo "systemd present: $HAS_SYSTEMD"
+
 # 1. docker + tailscale
 command -v docker >/dev/null || curl -fsSL https://get.docker.com | sh
 command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
-systemctl enable --now docker tailscaled
 
-# 2. join the tailnet under the right name.
-#    OAuth client secret (tskey-client-...) → must advertise a tag; plain auth key → no tag.
-if [ -n "$TS_TAG" ]; then
-  echo "joining via OAuth client with tag $TS_TAG"
-  tailscale up --auth-key="${TS_KEY}?ephemeral=false&preauthorized=true" --advertise-tags="$TS_TAG" --hostname="$WA_NAME"
+# 2. start the daemons (systemd if available, else manual background) and WAIT until tailscaled answers.
+if [ "$HAS_SYSTEMD" = "1" ]; then
+  systemctl enable --now docker tailscaled
 else
-  echo "joining via auth key"
-  tailscale up --auth-key="$TS_KEY" --hostname="$WA_NAME"
+  echo "no systemd → starting daemons manually"
+  mkdir -p /run/tailscale /var/lib/tailscale
+  pgrep -x tailscaled >/dev/null || nohup tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock >/var/log/tailscaled.log 2>&1 &
+  pgrep -x dockerd    >/dev/null || command -v dockerd >/dev/null && (nohup dockerd >/var/log/dockerd.log 2>&1 &) || true
 fi
+# Wait for tailscaled to be reachable before trying to join (prevents the silent hang).
+for i in $(seq 1 20); do
+  if tailscale status >/dev/null 2>&1 || tailscale status 2>&1 | grep -qiE 'logged out|stopped'; then
+    echo "tailscaled is up (after ${i}s)"; break
+  fi
+  [ "$i" = "20" ] && { echo "ERROR: tailscaled did not come up after 20s — see /var/log/tailscaled.log"; exit 1; }
+  sleep 1
+done
 
-# 3. deploy user (docker group) + CD public key
+# 3. join the tailnet under the right name.
+#    Key type matters:
+#      tskey-auth-...   → plain auth key, used directly (NO query string).
+#      tskey-client-... → OAuth client secret; tailscale mints a key (the tag/ephemeral come from the
+#                         OAuth client's own config). Advertise the tag in both cases if TS_TAG is set.
+TAGFLAG=""
+[ -n "$TS_TAG" ] && TAGFLAG="--advertise-tags=$TS_TAG"
+case "$TS_KEY" in
+  tskey-client-*) echo "joining via OAuth client${TS_TAG:+ (tag $TS_TAG)}"
+                  tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$WA_NAME" ;;
+  *)              echo "joining via auth key${TS_TAG:+ (tag $TS_TAG)}"
+                  tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$WA_NAME" ;;
+esac
+
+# 4. deploy user (docker group) + CD public key
 id deploy >/dev/null 2>&1 || useradd -m -s /bin/bash deploy
 usermod -aG docker deploy
 mkdir -p /home/deploy/.ssh
@@ -52,10 +84,11 @@ echo "$DEPLOY_PUBKEY" > /home/deploy/.ssh/authorized_keys
 chown -R deploy:deploy /home/deploy/.ssh
 chmod 700 /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys
 
-# 4. GHCR login as deploy (so `docker compose pull` works)
-echo "$GHCR_TOKEN" | sudo -u deploy -H docker login ghcr.io -u yashaswikaahuja --password-stdin
+# 5. GHCR login as deploy (so `docker compose pull` works). Non-fatal: log a warning but keep going.
+echo "$GHCR_TOKEN" | sudo -u deploy -H docker login ghcr.io -u yashaswikaahuja --password-stdin \
+  || echo "WARN: GHCR login as deploy failed (check GHCR_TOKEN); continuing"
 
-# 5. deploy dir + compose (CD writes <service>.env + pulls/recreates on deploy)
+# 6. deploy dir + compose (CD writes <service>.env + pulls/recreates on deploy)
 mkdir -p /opt/cybercontrol-docker
 cat > /opt/cybercontrol-docker/docker-compose.wa.yml <<'COMPOSE'
 services:
