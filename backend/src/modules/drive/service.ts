@@ -80,6 +80,16 @@ export async function findOrCreateFolder(drive: any, name: string, parentId?: st
   return f.data.id;
 }
 
+/** Download a file's raw bytes from Drive by id (used by the extraction recovery sweeper to
+ *  re-process a document whose in-memory extraction was lost on a restart). */
+export async function downloadFileFromDrive(drive: any, fileId: string): Promise<Buffer> {
+  const res = await drive.files.get(
+    { fileId, alt: 'media' },
+    { responseType: 'arraybuffer' }
+  );
+  return Buffer.from(res.data as ArrayBuffer);
+}
+
 export async function uploadFileToDrive(drive: any, buffer: Buffer, fileName: string, mimetype: string, phone: string, senderName: string) {
   const customersId = await findOrCreateFolder(drive, 'customers');
   const phoneId = await findOrCreateFolder(drive, phone, customersId);

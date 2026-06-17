@@ -19,6 +19,7 @@ setTimeout(() => {
 import { authMiddleware } from './middleware/auth.js';
 import { setupSocket } from './socket/index.js';
 import { loadDriveTokenFromDB } from './modules/drive/service.js';
+import { startExtractionRecovery } from './services/extraction.js';
 
 import authRoutes from './modules/auth/routes.js';
 import processRoutes from './api/routes/process.routes.js';
@@ -83,6 +84,10 @@ setupSocket(httpServer);
 
 // Load Drive tokens on startup
 loadDriveTokenFromDB();
+
+// Start the durable-extraction recovery sweeper (re-processes extractions lost to a restart).
+// No-ops safely if the extraction_jobs table isn't present yet.
+startExtractionRecovery();
 
 // Crash prevention
 process.on('uncaughtException', (err) => { console.error('[FATAL] Uncaught:', err.message); });

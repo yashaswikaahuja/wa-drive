@@ -345,14 +345,17 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
         // Auto-build/update the customer's profile (find-or-create by name)
         if (phone) await upsertProfileFromExtraction(workspaceId, phone, suggested, fileId);
         console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields`);
+        markExtractionJobDone(fileId);
       } else if (docType === 'photo' || docType === 'signature') {
         console.log(`[AutoExtract] ${fileId} → ${docType} (not an ID doc)`);
+        markExtractionJobDone(fileId);
       } else if (attempt < 2) {
         // empty/unknown on a doc that should have data → retry (transient Groq empty)
         console.warn(`[AutoExtract] ↻ ${fileId} empty, retry ${attempt + 1}`);
         setTimeout(() => run(attempt + 1), 4000);
       } else {
         console.log(`[AutoExtract] ${fileId} → no-data after retries`);
+        markExtractionJobDone(fileId);
       }
     } catch (e: any) {
       console.warn(`[AutoExtract] ✗ ${fileId}:`, e.message);
@@ -373,3 +376,113 @@ const DOC_TYPE_LABELS: Record<string, string> = {
   bank_passbook: 'Bank', photo: 'Photo', signature: 'Signature',
   form: 'Form', other: 'Other',
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DURABLE EXTRACTION LEDGER — safety net over the in-memory queue above.
+//
+// The in-memory queue is lost on restart/deploy, silently dropping in-flight extractions. These
+// helpers record each extraction as a durable job (extraction_jobs) and a recovery sweeper
+// re-processes anything the in-memory path didn't finish, re-downloading the bytes from Drive.
+//
+// NON-BREAKING: every function is wrapped so that if the extraction_jobs table is absent (migration
+// not yet run), it silently no-ops — the existing in-memory flow is completely unaffected.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EXTRACTION_STUCK_AFTER = "5 minutes"; // a 'pending' job older than this = the in-memory path lost it
+const EXTRACTION_MAX_ATTEMPTS = 5;
+
+/** Record a durable job when a document is uploaded (called in-request, so it survives a restart). */
+export async function enqueueExtractionJob(fileId: string, workspaceId: string, phone?: string): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO extraction_jobs (file_id, workspace_id, phone, status)
+       VALUES ($1, $2, $3, 'pending')
+       ON CONFLICT (file_id) DO NOTHING`,
+      [fileId, workspaceId, phone || null]
+    );
+  } catch { /* table absent / DB hiccup → no-op (in-memory path still runs) */ }
+}
+
+/** Mark a job done once the in-memory path (or the sweeper) has cached its extraction. */
+export function markExtractionJobDone(fileId: string): void {
+  pool.query(`UPDATE extraction_jobs SET status='done', updated_at=now() WHERE file_id=$1`, [fileId])
+    .catch(() => { /* table absent / DB hiccup → no-op */ });
+}
+
+/**
+ * Recovery sweeper: claim a small batch of jobs the in-memory path didn't finish (stuck 'pending'
+ * past EXTRACTION_STUCK_AFTER — i.e. lost to a restart), re-download the bytes from Drive, and
+ * re-run the SAME extraction logic. Idempotent (cacheExtraction upserts by file_id). Small LIMIT
+ * keeps it gentle on Groq (natural rate-limit). Safe no-op if the table is absent.
+ */
+export async function recoverStuckExtractions(): Promise<void> {
+  let claimed: Array<{ file_id: string; workspace_id: string; phone: string | null }> = [];
+  try {
+    const { rows } = await pool.query(
+      `UPDATE extraction_jobs SET status='processing', attempts=attempts+1, updated_at=now()
+       WHERE file_id IN (
+         SELECT file_id FROM extraction_jobs
+         WHERE status='pending' AND created_at < now() - interval '${EXTRACTION_STUCK_AFTER}'
+         ORDER BY created_at
+         LIMIT 3
+         FOR UPDATE SKIP LOCKED
+       )
+       RETURNING file_id, workspace_id, phone`
+    );
+    claimed = rows as any;
+  } catch { return; /* table absent / DB hiccup → nothing to do */ }
+
+  if (!claimed.length) return;
+  // Import Drive lazily to avoid a startup import cycle.
+  const { getDriveForWorkspace, downloadFileFromDrive } = await import('../modules/drive/service.js');
+
+  for (const job of claimed) {
+    try {
+      const drive = await getDriveForWorkspace(job.workspace_id);
+      if (!drive) throw new Error('no Drive client for workspace');
+      const buffer = await downloadFileFromDrive(drive, job.file_id);
+      const { suggested } = await extractFromBuffer(buffer, job.file_id);
+      if (Object.keys(suggested).length > 0) {
+        await cacheExtraction(job.file_id, job.workspace_id, suggested);
+        if (job.phone) await upsertProfileFromExtraction(job.workspace_id, job.phone, suggested, job.file_id);
+      }
+      await pool.query(`UPDATE extraction_jobs SET status='done', updated_at=now() WHERE file_id=$1`, [job.file_id]);
+      console.log(`[ExtractRecover] ✓ recovered ${job.file_id}`);
+    } catch (e: any) {
+      // failed → back to 'pending' for another pass, or 'failed' after max attempts
+      try {
+        await pool.query(
+          `UPDATE extraction_jobs
+           SET status = CASE WHEN attempts >= $2 THEN 'failed' ELSE 'pending' END,
+               last_error = $3, updated_at = now()
+           WHERE file_id = $1`,
+          [job.file_id, EXTRACTION_MAX_ATTEMPTS, String(e?.message || e).slice(0, 500)]
+        );
+      } catch { /* ignore */ }
+      console.warn(`[ExtractRecover] ✗ ${job.file_id}: ${e?.message || e}`);
+    }
+  }
+}
+
+let _recoveryStarted = false;
+/** Start the periodic recovery sweeper (call once from index.ts). Guarded against double-start. */
+export function startExtractionRecovery(intervalMs = 60_000): void {
+  if (_recoveryStarted) return;
+  _recoveryStarted = true;
+  setInterval(() => { recoverStuckExtractions().catch(() => {}); }, intervalMs);
+  console.log('[ExtractRecover] recovery sweeper started');
+  // Optional one-time backfill of documents uploaded BEFORE this ledger existed (or lost earlier):
+  // enqueue drive_files that have no extraction_cache row. Env-guarded so it's deliberate; the
+  // sweeper drains them slowly (3/min) so it won't spike Groq.
+  if (process.env.EXTRACTION_BACKFILL === '1') {
+    pool.query(
+      `INSERT INTO extraction_jobs (file_id, workspace_id, phone, status)
+       SELECT d.id, d.workspace_id, d.customer_id, 'pending'
+       FROM drive_files d
+       LEFT JOIN extraction_cache c ON c.file_id = d.id
+       WHERE c.file_id IS NULL AND d.workspace_id IS NOT NULL
+       ON CONFLICT (file_id) DO NOTHING`
+    ).then((r: any) => console.log(`[ExtractRecover] backfill enqueued ${r.rowCount} missing doc(s)`))
+     .catch((e: any) => console.warn('[ExtractRecover] backfill skipped:', e.message));
+  }
+}

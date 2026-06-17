@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { pool } from '../../db.js';
 import { getDriveForWorkspace, findOrCreateFolder, uploadFileToDrive } from '../drive/service.js';
 import { getIO } from '../../socket/index.js';
-import { autoExtractInBackground } from '../../services/extraction.js';
+import { autoExtractInBackground, enqueueExtractionJob } from '../../services/extraction.js';
 
 const router = Router();
 
@@ -113,6 +113,10 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
       if (profilePicUrl) await pool.query('UPDATE drive_files SET profile_pic_url = $1 WHERE workspace_id = $2 AND customer_id = $3', [profilePicUrl, uploadWsId, phone]);
       if (senderName) await pool.query('UPDATE drive_files SET customer_name = $1 WHERE workspace_id = $2 AND customer_id = $3 AND customer_name != $1', [senderName, uploadWsId, phone]);
     } catch (e: any) { console.warn('[Upload] DB:', e.message); }
+
+    // Durable extraction ledger (safety net): record the job in-request so it survives a backend
+    // restart even if the in-memory autoExtract above is lost. Non-fatal; no-ops if table absent.
+    if (uploadWsId) enqueueExtractionJob(fileId, uploadWsId, phone);
 
     // Socket emit to workspace room
     const io = getIO();
