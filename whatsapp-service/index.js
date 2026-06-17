@@ -4,6 +4,7 @@ import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import pg from 'pg';
@@ -23,6 +24,10 @@ const WA_AUTH_BACKEND = process.env.WA_AUTH_BACKEND || 'files';
 // boot resume. Empty → single-instance mode (no heartbeat / no resume).
 const WA_INSTANCE_NAME = process.env.WA_INSTANCE_NAME || '';
 const HEARTBEAT_MS = Number(process.env.WA_HEARTBEAT_MS || 20_000);
+// Resource-based admission control: this instance keeps ACCEPTING new sessions until its own RAM
+// usage crosses this %. VM-size-agnostic — a 1GB and an 8GB box each fill to their own ceiling.
+// Keep a burst margin below 100% (a connecting/syncing session spikes RAM; OOM kills ALL sessions).
+const WA_ACCEPT_THRESHOLD_PCT = Number(process.env.WA_ACCEPT_THRESHOLD_PCT || 80);
 const pgPool = (WA_AUTH_BACKEND === 'postgres' && process.env.DATABASE_URL)
   ? new pg.Pool({ connectionString: process.env.DATABASE_URL })
   : null;
@@ -336,16 +341,56 @@ app.get('/sessions', authMiddleware, (_, res) => {
   res.json(list);
 });
 
+// ── Resource metrics for admission control ───────────────────────────────────
+// Report this instance's REAL memory pressure so the hub routes new sessions by headroom.
+// Prefer the cgroup limit (the container's actual RAM ceiling) over os.totalmem() (which reports the
+// HOST's RAM and would over-estimate capacity inside a memory-limited container). Falls back to os.*.
+function readCgroupMem() {
+  // cgroup v2
+  try {
+    const max = fs.readFileSync('/sys/fs/cgroup/memory.max', 'utf8').trim();
+    const cur = fs.readFileSync('/sys/fs/cgroup/memory.current', 'utf8').trim();
+    if (max && max !== 'max') {
+      const total = Number(max), used = Number(cur);
+      if (total > 0) return { total, used };
+    }
+  } catch {}
+  // cgroup v1
+  try {
+    const total = Number(fs.readFileSync('/sys/fs/cgroup/memory/memory.limit_in_bytes', 'utf8').trim());
+    const used = Number(fs.readFileSync('/sys/fs/cgroup/memory/memory.usage_in_bytes', 'utf8').trim());
+    // v1 reports a huge sentinel when unlimited; ignore if larger than host RAM
+    if (total > 0 && total < os.totalmem() * 4) return { total, used };
+  } catch {}
+  return null;
+}
+
+function memStats() {
+  const cg = readCgroupMem();
+  let total, used;
+  if (cg) { total = cg.total; used = cg.used; }
+  else { total = os.totalmem(); used = total - os.freemem(); }
+  const pct = total > 0 ? Math.round((used / total) * 100) : 0;
+  return { mem_pct: pct, mem_total: total, mem_used: used };
+}
+
 // ── Sticky-shard: heartbeat + boot resume ────────────────────────────────────
 // Tell the hub we're alive on the tailnet. If these stop arriving (instance off the tailnet),
 // the hub fails this instance's workspaces over to a healthy instance.
 async function sendHeartbeat() {
   if (!WA_INSTANCE_NAME) return;
+  const { mem_pct } = memStats();
+  const accepting = mem_pct < WA_ACCEPT_THRESHOLD_PCT;   // refuse NEW sessions once near our own RAM ceiling
   try {
     await fetch(`${PARENT_URL}/api/worker/instance-heartbeat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-worker-secret': SERVICE_SECRET },
-      body: JSON.stringify({ instance: WA_INSTANCE_NAME }),
+      body: JSON.stringify({
+        instance: WA_INSTANCE_NAME,
+        mem_pct,                 // current RAM usage %
+        sessions: sessions.size, // sessions this instance is running
+        accepting,               // may the hub assign NEW sessions here?
+      }),
     });
   } catch { /* hub unreachable → hub will mark us dead, which is correct */ }
 }

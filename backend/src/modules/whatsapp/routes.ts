@@ -34,18 +34,46 @@ async function healthyInstances(): Promise<string[]> {
   }
 }
 
-// Least-loaded among the healthy instances.
+// Resource-based admission control: pick the healthy instance that (a) is still ACCEPTING new
+// sessions (its RAM is below its own % threshold) and (b) has the MOST headroom (lowest mem_pct).
+// This makes every VM fill to its OWN capacity regardless of size — no fixed per-instance cap.
+// If NO instance is accepting, the pool is at capacity → log an alert and fall back to the
+// least-memory-pressured healthy instance (best effort) so we degrade rather than hard-refuse.
 async function pickInstance(): Promise<string | null> {
   const healthy = await healthyInstances();
   if (!healthy.length) return null;
-  const { rows } = await pool.query('SELECT instance, count(*)::int AS n FROM wa_assignments GROUP BY instance');
-  const counts = new Map<string, number>(rows.map((r: any) => [r.instance, r.n]));
-  let best = healthy[0], bestN = counts.get(best) ?? Infinity;
-  for (const inst of healthy) {
-    const n = counts.get(inst) ?? 0;
-    if (n < bestN) { best = inst; bestN = n; }
+  try {
+    const { rows } = await pool.query(
+      'SELECT instance, mem_pct, accepting FROM wa_instances WHERE instance = ANY($1)',
+      [healthy]
+    );
+    const meta = new Map<string, { mem_pct: number; accepting: boolean }>(
+      rows.map((r: any) => [r.instance, { mem_pct: r.mem_pct ?? 0, accepting: r.accepting !== false }])
+    );
+    // Prefer instances that are accepting; among those, the one with the most headroom (lowest mem_pct).
+    const accepting = healthy.filter(i => meta.get(i)?.accepting !== false);
+    const pool_ = accepting.length ? accepting : healthy;
+    if (!accepting.length) {
+      console.warn(`[Hub] WA pool at capacity — no instance is accepting new sessions (healthy=${healthy.join(',')}). Add a shard.`);
+    }
+    let best = pool_[0];
+    let bestPct = meta.get(best)?.mem_pct ?? 0;
+    for (const inst of pool_) {
+      const pct = meta.get(inst)?.mem_pct ?? 0;
+      if (pct < bestPct) { best = inst; bestPct = pct; }
+    }
+    return best;
+  } catch {
+    // metrics columns absent / DB hiccup → fall back to least-loaded by assignment count (legacy).
+    const { rows } = await pool.query('SELECT instance, count(*)::int AS n FROM wa_assignments GROUP BY instance');
+    const counts = new Map<string, number>(rows.map((r: any) => [r.instance, r.n]));
+    let best = healthy[0], bestN = counts.get(best) ?? Infinity;
+    for (const inst of healthy) {
+      const n = counts.get(inst) ?? 0;
+      if (n < bestN) { best = inst; bestN = n; }
+    }
+    return best;
   }
-  return best;
 }
 
 async function waBase(workspaceId: string): Promise<string> {
@@ -189,13 +217,18 @@ router.post('/link-lid', authMiddleware, async (req: any, res) => {
 router.post('/instance-heartbeat', async (req, res) => {
   const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
   if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
-  const { instance } = req.body || {};
+  const { instance, mem_pct, sessions, accepting } = req.body || {};
   if (!instance) return res.status(400).json({ error: 'instance required' });
   try {
     await pool.query(
-      `INSERT INTO wa_instances(instance, last_seen, status) VALUES($1, now(), 'up')
-       ON CONFLICT (instance) DO UPDATE SET last_seen = now(), status = 'up'`,
-      [instance]
+      `INSERT INTO wa_instances(instance, last_seen, status, mem_pct, sessions, accepting)
+       VALUES($1, now(), 'up', COALESCE($2,0), COALESCE($3,0), COALESCE($4,true))
+       ON CONFLICT (instance) DO UPDATE SET
+         last_seen = now(), status = 'up',
+         mem_pct   = COALESCE(EXCLUDED.mem_pct, wa_instances.mem_pct),
+         sessions  = COALESCE(EXCLUDED.sessions, wa_instances.sessions),
+         accepting = COALESCE(EXCLUDED.accepting, wa_instances.accepting)`,
+      [instance, mem_pct ?? null, sessions ?? null, accepting ?? null]
     );
   } catch { /* health table absent → ignore (single-instance mode) */ }
   res.json({ ok: true });
@@ -206,13 +239,18 @@ router.post('/instance-heartbeat', async (req, res) => {
 router.post('/instance-heartbeat', async (req, res) => {
   const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
   if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
-  const { instance } = req.body || {};
+  const { instance, mem_pct, sessions, accepting } = req.body || {};
   if (!instance) return res.status(400).json({ error: 'instance required' });
   try {
     await pool.query(
-      `INSERT INTO wa_instances(instance, last_seen, status) VALUES($1, now(), 'up')
-       ON CONFLICT (instance) DO UPDATE SET last_seen = now(), status = 'up'`,
-      [instance]
+      `INSERT INTO wa_instances(instance, last_seen, status, mem_pct, sessions, accepting)
+       VALUES($1, now(), 'up', COALESCE($2,0), COALESCE($3,0), COALESCE($4,true))
+       ON CONFLICT (instance) DO UPDATE SET
+         last_seen = now(), status = 'up',
+         mem_pct   = COALESCE(EXCLUDED.mem_pct, wa_instances.mem_pct),
+         sessions  = COALESCE(EXCLUDED.sessions, wa_instances.sessions),
+         accepting = COALESCE(EXCLUDED.accepting, wa_instances.accepting)`,
+      [instance, mem_pct ?? null, sessions ?? null, accepting ?? null]
     );
   } catch { /* health table absent → ignore (single-instance mode) */ }
   res.json({ ok: true });
