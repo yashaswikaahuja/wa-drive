@@ -6,7 +6,9 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const RESOLVER_URL = 'http://34.100.147.20:3200';
+// Use the tailnet hostname (location-independent) — not a hardcoded VM IP that breaks on rebuild.
+// Override with RESOLVER_URL env if the resolver moves/ports differ.
+const RESOLVER_URL = process.env.RESOLVER_URL || 'http://cybercontrol-wa:3200';
 const WA_SECRET = process.env.WA_SECRET || 'wa-service-secret-2024';
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
