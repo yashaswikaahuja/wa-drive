@@ -12,6 +12,7 @@ services:
       NODE_ENV: production
       PORT: "3000"
       DATABASE_URL: ${DATABASE_URL}              # postgresql://...@cybercontrol-db:5432/cybercontrol
+      REDIS_URL: ${REDIS_URL:-}                  # set → multi-instance socket.io fanout + QR cache; empty → in-memory (single)
       WA_SERVICE: ${WA_SERVICE:-http://cybercontrol-wa:3100}
       WA_INSTANCES: ${WA_INSTANCES:-}            # empty = single-instance; csv for sharding
       WA_DEAD_AFTER_MS: ${WA_DEAD_AFTER_MS:-90000}   # instance dead after this w/o heartbeat → failover
