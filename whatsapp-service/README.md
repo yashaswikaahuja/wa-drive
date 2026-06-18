@@ -44,7 +44,7 @@ curl http://localhost:3100/health
 
 If resolver disconnects, re-scan at:
 ```
-http://34.100.147.20:3200/qr-page?secret=wa-service-secret-2024
+http://cybercontrol-wa:3200/qr-page?secret=wa-service-secret-2024
 ```
 
 ## Full Documentation

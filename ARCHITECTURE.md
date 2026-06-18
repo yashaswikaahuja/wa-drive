@@ -58,7 +58,7 @@ Key principles:
          ▼                              ▼
 ┌─────────────────────────┐   ┌─────────────────────────┐
 │   BACKEND (GCP #1)      │   │  WHATSAPP (GCP #2)      │
-│   api.cybercontrol.fun  │   │  34.100.147.20          │
+│   api.cybercontrol.fun  │   │  cybercontrol-wa        │
 │                         │   │                         │
 │  • Auth (JWT)           │   │  • Baileys (port 3100)  │
 │  • Customers/Profiles   │   │  • wwebjs resolver      │

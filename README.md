@@ -1,5 +1,13 @@
 # CyberControl — WhatsApp Inbox + AI Form Autofill
 
+> ⚠️ **This README's "Architecture / Services / GCP VM" sections below are OUTDATED** (they describe
+> the old Cloudflare-Tunnel + PM2/Baileys single-VM setup). The current system is containerized
+> (GHCR images), runs over a **Tailscale** mesh, and is split across `cybercontrol-app` (backend +
+> extension-service + nginx, public at `https://api.cybercontrol.fun`), `cybercontrol-db` (Postgres),
+> `cybercontrol-wa` (resolver), and `cybercontrol-wa-2` (whatsapp-service shard) — all in the kishynay
+> project `cybercontrol-db-20260605`. The frontend is on Vercel at `app.cybercontrol.fun`.
+> **Source of truth for topology: `deploy/docs/GHCR.md` §4 and `deploy/docs/NETWORKING.md`.**
+
 A cybercafe management tool for operators near Patna, Bihar. Customers send documents via WhatsApp → AI extracts data → staff fills govt forms (SSC/Railway/NEET/UPSC) automatically using the Chrome extension.
 
 ## What It Does

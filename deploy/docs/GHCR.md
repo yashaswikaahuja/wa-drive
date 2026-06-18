@@ -116,13 +116,21 @@ rebuild with `--build-arg VITE_API_URL=http://<host>:3000/api` or add an nginx `
 
 | Tailnet name (MagicDNS) | Tailnet IP | Role | GCP instance / account | Region |
 |-------------------------|-----------|------|------------------------|--------|
-| `cybercontrol-app` | 100.101.187.24 | Backend (+ extension-service) | `whatsapp-worker` / **bharattvv542** | us-central1-f |
-| `cybercontrol-db`  | 100.76.185.22  | Postgres 15 | `cybercontrol-db` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
-| `cybercontrol-wa`  | 100.64.23.97   | whatsapp-service + resolver | `cybercontrol-whatsapp` / **bharattvv542** | asia-south1-a |
+| `cybercontrol-app`  | 100.112.147.34 | Backend + extension-service + host nginx (TLS, `api.cybercontrol.fun`) | `cybercontrol-app` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
+| `cybercontrol-db`   | 100.76.185.22  | Postgres 15 | `cybercontrol-db` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
+| `cybercontrol-wa`   | 100.91.226.105 | resolver `:3200` only (whatsapp-service shard `:3100` NOT currently running) | `cybercontrol-wa` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
+| `cybercontrol-wa-2` | 100.64.134.97  | whatsapp-service shard `:3100` | `cybercontrol-wa-2` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
 
-> Note: the backend VM is confusingly named `whatsapp-worker` in GCP — it is the **app/backend** host.
-> The frontend currently runs on **Vercel** at `app.cybercontrol.fun`; the GHCR frontend image lets you
-> self-host it anywhere.
+> **History (2026-06-18):** the original `cybercontrol-app` (`whatsapp-worker`) and `cybercontrol-wa`
+> (`cybercontrol-whatsapp`) lived in the **bharattvv542** project `gen-lang-client-0847934697`. That
+> project's billing lapsed and its VMs were stopped, so the backend + resolver were rebuilt from the
+> GHCR images / source onto **kishynay** (project `cybercontrol-db-20260605`, alongside the DB). The
+> database was never affected (it was already in the kishynay project). The WhatsApp **shard** on
+> `cybercontrol-wa` was intentionally not restored yet — only the resolver runs there for now.
+>
+> The public backend domain is `api.cybercontrol.fun` (A → `35.225.171.57`, the new `cybercontrol-app`
+> static IP, TLS via Let's Encrypt on the host nginx). The frontend runs on **Vercel** at
+> `app.cybercontrol.fun`; the GHCR frontend image lets you self-host it anywhere.
 
 ---
 

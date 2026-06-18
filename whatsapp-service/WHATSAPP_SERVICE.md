@@ -2,6 +2,15 @@
 
 Multi-tenant WhatsApp session manager for CyberControl SaaS. Each workspace (cybercafe) gets its own independent WhatsApp connection. Runs on a **separate GCP instance** (GCP #2) dedicated to WhatsApp processing.
 
+> ⚠️ **Current topology (2026-06-18) — see `deploy/docs/GHCR.md` §4 for the source of truth.**
+> The diagrams below describe the older single-box layout (one GCP #2 holding both the resolver and
+> the whatsapp-service shard at IP `34.100.147.20`). It has changed:
+> - **resolver** (`:3200`) → runs on `cybercontrol-wa` (kishynay proj `cybercontrol-db-20260605`)
+> - **whatsapp-service shard** (`:3100`) → runs on `cybercontrol-wa-2` (same project)
+> - **backend/parent** → `cybercontrol-app` (kishynay), public at `api.cybercontrol.fun`
+> Always address hosts by their **tailnet MagicDNS names** (`cybercontrol-wa`, `cybercontrol-app`,
+> `cybercontrol-db`), never by IP — IPs change on rebuild.
+
 ---
 
 ## Architecture
