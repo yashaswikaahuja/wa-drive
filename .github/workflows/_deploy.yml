@@ -58,6 +58,7 @@ jobs:
           WA_INSTANCES:         ${{ vars.WA_INSTANCES }}        # backend: shard pool (csv tailnet names)
           WA_INSTANCE_NAME:     ${{ inputs.wa_instance_name || vars.WA_INSTANCE_NAME }}    # whatsapp-service: this instance's tailnet name
           RESOLVER_URL:         ${{ vars.RESOLVER_URL }}        # whatsapp-service: shared resolver over tailnet
+          PARENT_URL:           ${{ vars.PARENT_URL }}          # whatsapp-service: backend/LB URL for heartbeats + relay (HA → the LB)
           WA_HEARTBEAT_MS:      ${{ vars.WA_HEARTBEAT_MS }}     # whatsapp-service: heartbeat interval
           WA_DEAD_AFTER_MS:     ${{ vars.WA_DEAD_AFTER_MS }}    # backend: how long w/o heartbeat → failover
         run: |
@@ -67,7 +68,7 @@ jobs:
           for k in DATABASE_URL JWT_SECRET JWT_REFRESH_SECRET WA_SECRET \
                    GROQ_API_KEY GROQ_API_KEY_2 GOOGLE_CLIENT_SECRET \
                    GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI WA_AUTH_BACKEND \
-                   WA_INSTANCES WA_INSTANCE_NAME RESOLVER_URL WA_HEARTBEAT_MS WA_DEAD_AFTER_MS REDIS_URL; do
+                   WA_INSTANCES WA_INSTANCE_NAME RESOLVER_URL WA_HEARTBEAT_MS WA_DEAD_AFTER_MS REDIS_URL PARENT_URL; do
             v="${!k}"
             if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v" >> /tmp/vm.env; fi
           done
