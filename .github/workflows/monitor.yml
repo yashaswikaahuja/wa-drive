@@ -29,9 +29,11 @@ jobs:
           chk() {  # url, label
             if curl -fsS -m 8 "$1" >/dev/null 2>&1; then out="$out\n✅ $2"; else out="$out\n❌ $2  ($1)"; fail=1; fi
           }
-          chk http://cybercontrol-app:3000/api/health  "backend"
-          chk http://cybercontrol-app:3300/health      "extension-service"
-          chk http://cybercontrol-wa:3200/health       "resolver (single)"
+          chk https://api.cybercontrol.fun/api/health     "LB (public entry)"
+          chk http://cybercontrol-app:3000/api/health     "backend-1"
+          chk http://cybercontrol-app-2:3000/api/health   "backend-2"
+          chk http://cybercontrol-ext:3300/health         "extension-service (ext-1)"
+          chk http://cybercontrol-wa:3200/health          "resolver"
           for i in ${WA_INSTANCES//,/ }; do
             chk "http://$i:3100/health" "whatsapp shard: $i"
           done
