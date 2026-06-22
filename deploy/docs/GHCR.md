@@ -114,23 +114,35 @@ rebuild with `--build-arg VITE_API_URL=http://<host>:3000/api` or add an nginx `
 
 ## 4. The hosts (current deployment)
 
-| Tailnet name (MagicDNS) | Tailnet IP | Role | GCP instance / account | Region |
-|-------------------------|-----------|------|------------------------|--------|
-| `cybercontrol-app`  | 100.112.147.34 | Backend + extension-service + host nginx (TLS, `api.cybercontrol.fun`) | `cybercontrol-app` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
-| `cybercontrol-db`   | 100.76.185.22  | Postgres 15 | `cybercontrol-db` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
-| `cybercontrol-wa`   | 100.91.226.105 | resolver `:3200` only (whatsapp-service shard `:3100` NOT currently running) | `cybercontrol-wa` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
-| `cybercontrol-wa-2` | 100.64.134.97  | whatsapp-service shard `:3100` | `cybercontrol-wa-2` / **kishynay** (proj `cybercontrol-db-20260605`) | us-central1-a |
+| Tailnet name (MagicDNS) | Role | GCP instance / region | Public IP |
+|-------------------------|------|----------------------|-----------|
+| `cybercontrol-lb`   | nginx LB (TLS, `api.cybercontrol.fun`) → backend pool + ext | us-central1-a | **35.225.171.57** (static) |
+| `cybercontrol-lb-2` | nginx LB #2 (HA, DNS round-robin) → same pool over tailnet | **us-east1-c** | **34.75.103.65** (static) |
+| `cybercontrol-app`   | backend-1 (`:3000`) | us-central1-a | none (NAT) |
+| `cybercontrol-app-2` | backend-2 (`:3000`) | us-central1-a | none (NAT) |
+| `cybercontrol-ext`   | extension-service (`:3300`) | us-central1-a | none (NAT) |
+| `cybercontrol-redis` | Redis (socket.io fanout + QR cache, password-auth) | us-central1-a | none (NAT) |
+| `cybercontrol-db`    | Postgres 15 (`:5432`) | us-central1-a | 34.44.226.174 |
+| `cybercontrol-wa`    | resolver `:3200` only (shard `:3100` not running) | us-central1-a | none (NAT) |
+| `cybercontrol-wa-2`  | whatsapp-service shard (`:3100`) | us-central1-a | 34.9.89.255 |
 
-> **History (2026-06-18):** the original `cybercontrol-app` (`whatsapp-worker`) and `cybercontrol-wa`
-> (`cybercontrol-whatsapp`) lived in the **bharattvv542** project `gen-lang-client-0847934697`. That
-> project's billing lapsed and its VMs were stopped, so the backend + resolver were rebuilt from the
-> GHCR images / source onto **kishynay** (project `cybercontrol-db-20260605`, alongside the DB). The
-> database was never affected (it was already in the kishynay project). The WhatsApp **shard** on
-> `cybercontrol-wa` was intentionally not restored yet — only the resolver runs there for now.
->
-> The public backend domain is `api.cybercontrol.fun` (A → `35.225.171.57`, the new `cybercontrol-app`
-> static IP, TLS via Let's Encrypt on the host nginx). The frontend runs on **Vercel** at
-> `app.cybercontrol.fun`; the GHCR frontend image lets you self-host it anywhere.
+All in **kishynay** project `cybercontrol-db-20260605`. Address the DB by its MagicDNS FQDN
+`cybercontrol-db.taild72c71.ts.net` (the bare name collides with GCP VPC DNS on some nodes).
+
+> **Topology notes**
+> - **Ingress (HA):** `api.cybercontrol.fun` has **two A records** (round-robin) → `cybercontrol-lb`
+>   (us-central1) + `cybercontrol-lb-2` (us-east1). Both terminate TLS (Let's Encrypt) and proxy to the
+>   pool over the tailnet: `/api/{profiles,mappings,adapters,sessions,corrections,training,agent}` →
+>   `cybercontrol-ext:3300`; `/socket.io/` → backends (ip_hash, sticky); everything else → backends
+>   (least_conn). lb-2 is cross-region (≈25 ms to the pool) — pure resilience.
+> - **Pool correctness:** backends are stateless because socket.io events + QR cache are in **Redis**
+>   (`REDIS_URL` → `cybercontrol-redis`) and form-mappings/adapters are in Postgres (`ext_kv_store`).
+> - **Only the LBs are public.** All other VMs have no public IP — outbound via **Cloud NAT**
+>   (`cybercontrol-nat`), internal over the tailnet, admin via IAP SSH.
+> - **History (2026-06-18→22):** originally a single box (`whatsapp-worker`) in the **bharattvv542**
+>   project; its billing lapsed, so everything was rebuilt on **kishynay** and then scaled out to the
+>   pool + dual-LB topology above. The database was never affected (always in the kishynay project).
+> - The frontend is on **Vercel** at `app.cybercontrol.fun` (separate from this backend).
 
 ---
 
