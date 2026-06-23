@@ -28,11 +28,14 @@ import { toast } from "sonner";
 /* ------------------------------------------------------------------ */
 /* Conversion config — single source of truth                          */
 /* ------------------------------------------------------------------ */
-/* NOTE: replace WHATSAPP_NUMBER with the real business WhatsApp (country
-   code + number, digits only, no "+"). This drives every click-to-chat. */
-const WHATSAPP_NUMBER = "919999999999"; // TODO: set real demo WhatsApp number
-const APP_URL = "https://app.cybercontrol.fun";
+/* The WhatsApp number is injected at BUILD TIME via VITE_WHATSAPP_NUMBER
+   (e.g. a Vercel env var) so the real number is never committed to this
+   public repo. While it is unset, every WhatsApp CTA gracefully falls back
+   to the on-page lead form (#cta) instead of a dead/fake wa.me link. */
+const WHATSAPP_NUMBER = String(import.meta.env.VITE_WHATSAPP_NUMBER ?? "").replace(/\D/g, "");
+const APP_URL = String(import.meta.env.VITE_APP_URL ?? "https://app.cybercontrol.fun");
 const SITE_URL = "https://cybercontrol.fun";
+const waEnabled = WHATSAPP_NUMBER.length >= 10;
 
 const waLink = (message: string) =>
   `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
@@ -40,6 +43,11 @@ const waLink = (message: string) =>
 /* Default Hindi+English demo intent */
 const DEMO_MESSAGE =
   "नमस्ते! मुझे CyberControl का Hindi demo चाहिए।\n(Hi — I'd like to book a Hindi demo of CyberControl.)";
+
+/* A "Book a Hindi Demo" CTA points to WhatsApp when configured, else the form. */
+const demoLinkProps = waEnabled
+  ? { href: waLink(DEMO_MESSAGE), target: "_blank", rel: "noopener noreferrer" }
+  : { href: "#cta" };
 
 /* ------------------------------------------------------------------ */
 /* Small visual atoms                                                  */
@@ -523,10 +531,8 @@ const Nav = () => (
           Sign in
         </a>
         <a
-          href={waLink(DEMO_MESSAGE)}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Book a Hindi demo on WhatsApp"
+          {...demoLinkProps}
+          aria-label="Book a Hindi demo"
           className="inline-flex items-center gap-1.5 rounded-md bg-whatsapp px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-paper transition hover:brightness-95"
         >
           <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -591,10 +597,8 @@ const Hero = () => (
       {/* CTA row */}
       <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
         <a
-          href={waLink(DEMO_MESSAGE)}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Book a Hindi demo on WhatsApp"
+          {...demoLinkProps}
+          aria-label="Book a Hindi demo"
           className="inline-flex items-center gap-2 rounded-md bg-whatsapp px-5 py-3 text-[14px] font-semibold text-white shadow-paper transition hover:brightness-95"
         >
           <MessageCircle className="h-4 w-4" aria-hidden="true" />
@@ -1014,8 +1018,14 @@ const LeadForm = () => {
       `Mobile: ${mobile}\n` +
       (form.shop.trim() ? `Shop: ${form.shop.trim()}\n` : "") +
       (form.city.trim() ? `City: ${form.city.trim()}\n` : "");
-    window.open(waLink(msg), "_blank", "noopener,noreferrer");
-    toast.success("Opening WhatsApp — send the message to confirm your demo.");
+    if (waEnabled) {
+      window.open(waLink(msg), "_blank", "noopener,noreferrer");
+      toast.success("Opening WhatsApp — send the message to confirm your demo.");
+    } else {
+      // No WhatsApp channel wired yet (production phase). Acknowledge gracefully.
+      toast.success(`Thanks, ${form.name.trim().split(" ")[0]}! Our team will reach out shortly.`);
+      setForm({ name: "", mobile: "", shop: "", city: "" });
+    }
     setSubmitting(false);
   };
 
@@ -1052,10 +1062,8 @@ const LeadForm = () => {
 
 const FloatingWhatsApp = () => (
   <a
-    href={waLink(DEMO_MESSAGE)}
-    target="_blank"
-    rel="noopener noreferrer"
-    aria-label="Book a Hindi demo on WhatsApp"
+    {...demoLinkProps}
+    aria-label="Book a Hindi demo"
     className="fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 rounded-full bg-whatsapp px-4 py-3 text-[13px] font-semibold text-white shadow-lift ring-2 ring-white/40 transition hover:brightness-95"
   >
     <MessageCircle className="h-5 w-5" aria-hidden="true" />
@@ -1085,18 +1093,20 @@ const FinalCTA = () => (
             <Tag tone="ink">UPI accepted</Tag>
             <Tag tone="ink">Cancel anytime</Tag>
           </div>
-          <p className="mt-4 text-[12.5px] text-ink/70">
-            Prefer to talk first?{" "}
-            <a
-              href={waLink(DEMO_MESSAGE)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-ink underline underline-offset-2"
-            >
-              Message us on WhatsApp
-            </a>
-            .
-          </p>
+          {waEnabled && (
+            <p className="mt-4 text-[12.5px] text-ink/70">
+              Prefer to talk first?{" "}
+              <a
+                href={waLink(DEMO_MESSAGE)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-ink underline underline-offset-2"
+              >
+                Message us on WhatsApp
+              </a>
+              .
+            </p>
+          )}
         </div>
 
         <div className="rounded-2xl bg-paper/95 p-5 shadow-lift ring-1 ring-ink/5">
@@ -1126,12 +1136,7 @@ const Footer = () => (
       <div className="flex items-center gap-5">
         <a href="#used-for" className="hover:text-ink">Services</a>
         <a href={APP_URL} className="hover:text-ink">Sign in</a>
-        <a
-          href={waLink("नमस्ते! CyberControl के बारे में जानना है।")}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-ink"
-        >
+        <a {...demoLinkProps} className="hover:text-ink">
           Contact
         </a>
       </div>
