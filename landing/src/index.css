@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  CyberControl design system.
+  Palette: deep ink navy, paper cream, marigold/saffron, WhatsApp green, calm teal "control".
+  Typography: Bricolage Grotesque display, Inter body, JetBrains Mono for labels, Tiro Devanagari for Hindi.
+*/
+
+@layer base {
+  :root {
+    --background: 38 40% 96%;          /* paper cream */
+    --foreground: 220 35% 11%;         /* ink navy */
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 35% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 35% 11%;
+
+    --primary: 220 45% 12%;            /* deep ink */
+    --primary-foreground: 38 40% 96%;
+
+    --secondary: 38 35% 90%;
+    --secondary-foreground: 220 35% 11%;
+
+    --muted: 38 25% 92%;
+    --muted-foreground: 220 12% 38%;
+
+    --accent: 28 95% 55%;              /* marigold */
+    --accent-foreground: 220 45% 10%;
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 28 95% 55%;
+
+    --radius: 0.85rem;
+
+    /* Brand specifics */
+    --ink: 220 45% 10%;
+    --ink-soft: 220 25% 22%;
+    --paper: 38 40% 96%;
+    --paper-deep: 36 35% 92%;
+    --marigold: 28 95% 55%;
+    --marigold-deep: 18 90% 48%;
+    --saffron: 35 95% 58%;
+    --teal: 178 65% 38%;               /* CyberControl signal */
+    --teal-deep: 188 80% 22%;
+    --whatsapp: 142 70% 42%;
+    --whatsapp-bubble: 88 55% 88%;
+    --aadhaar: 18 88% 52%;
+    --gov-blue: 215 75% 30%;
+    --chaos: 358 70% 52%;
+    --confidence: 158 60% 38%;
+    --sticky: 52 95% 70%;
+    --highlight: 52 100% 62%;
+
+    --gradient-control: linear-gradient(135deg, hsl(178 70% 32%), hsl(188 85% 18%));
+    --gradient-chaos: linear-gradient(135deg, hsl(18 80% 92%), hsl(358 60% 88%));
+    --gradient-confidence: linear-gradient(135deg, hsl(158 50% 92%), hsl(178 55% 88%));
+    --gradient-marigold: linear-gradient(135deg, hsl(28 95% 58%), hsl(18 92% 48%));
+
+    --shadow-paper: 0 1px 0 hsl(220 30% 8% / 0.04), 0 8px 24px -12px hsl(220 30% 8% / 0.12);
+    --shadow-lift: 0 2px 0 hsl(220 30% 8% / 0.05), 0 24px 60px -24px hsl(220 30% 8% / 0.22);
+    --shadow-sticky: 2px 3px 0 hsl(220 30% 8% / 0.12), 6px 12px 24px -10px hsl(45 80% 30% / 0.25);
+
+    --noise: radial-gradient(hsl(220 20% 30% / 0.05) 1px, transparent 1px);
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-image:
+      radial-gradient(hsl(220 20% 30% / 0.04) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  ::selection { background: hsl(var(--marigold) / 0.35); }
+}
+
+@layer components {
+  .font-display { font-family: 'Bricolage Grotesque', 'Inter', sans-serif; font-optical-sizing: auto; letter-spacing: -0.02em; }
+  .font-mono   { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .font-hindi  { font-family: 'Tiro Devanagari Hindi', serif; }
+
+  .label-mono {
+    @apply font-mono uppercase tracking-[0.18em] text-[11px];
+  }
+
+  .paper-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-paper);
+  }
+
+  .ink-card {
+    background: hsl(var(--ink));
+    color: hsl(var(--paper));
+    border-radius: var(--radius);
+  }
+
+  .sticky-note {
+    background: hsl(var(--sticky));
+    box-shadow: var(--shadow-sticky);
+    font-family: 'Caveat', 'Bricolage Grotesque', cursive;
+  }
+
+  .tag-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider;
+  }
+
+  .scribble-underline {
+    background-image: linear-gradient(transparent 70%, hsl(var(--marigold) / 0.55) 70%);
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    padding: 0 0.15em;
+  }
+}

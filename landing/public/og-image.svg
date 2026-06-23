@@ -1,0 +1,66 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="marigold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FB9224"/>
+      <stop offset="1" stop-color="#E8590C"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#7FD9D2" stroke-opacity="0.10" stroke-width="1"/>
+    </pattern>
+    <style>
+      .sans { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+      .mono { font-family: 'Consolas', 'JetBrains Mono', monospace; }
+    </style>
+  </defs>
+
+  <!-- background -->
+  <rect width="1200" height="630" fill="#0E1726"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- wordmark -->
+  <g transform="translate(80,78)">
+    <rect width="34" height="34" rx="8" fill="#0E1726" stroke="#FB9224" stroke-width="2"/>
+    <rect x="11" y="11" width="12" height="12" rx="3" fill="#FB9224"/>
+    <text x="50" y="26" class="sans" font-size="28" font-weight="700" fill="#F6F2E9">Cyber<tspan fill="#FB9224">Control</tspan></text>
+  </g>
+
+  <!-- eyebrow -->
+  <text x="80" y="210" class="mono" font-size="20" letter-spacing="4" fill="#FB9224">FOR INDIA'S 3 LAKH CYBERCAFES · हिंदी</text>
+
+  <!-- headline -->
+  <text x="78" y="300" class="sans" font-size="78" font-weight="800" fill="#F6F2E9">Never start from</text>
+  <text x="78" y="392" class="sans" font-size="78" font-weight="800" fill="#F6F2E9">
+    <tspan fill="#FB9224">scratch</tspan> again<tspan fill="#FB9224"> ।</tspan>
+  </text>
+
+  <!-- subtitle -->
+  <text x="80" y="452" class="sans" font-size="26" fill="#C9CEDA">Remember every customer · organize every document · file with confidence.</text>
+
+  <!-- chaos -> control -> confidence pills -->
+  <g transform="translate(80,520)">
+    <g>
+      <rect width="190" height="56" rx="28" fill="#1B2740" stroke="#E0524E" stroke-width="1.5"/>
+      <circle cx="32" cy="28" r="7" fill="#E0524E"/>
+      <text x="50" y="36" class="sans" font-size="22" font-weight="600" fill="#F6F2E9">Chaos</text>
+    </g>
+    <text x="208" y="36" class="sans" font-size="26" fill="#8B93A7">→</text>
+    <g transform="translate(238,0)">
+      <rect width="270" height="56" rx="28" fill="url(#marigold)"/>
+      <circle cx="34" cy="28" r="7" fill="#0E1726"/>
+      <text x="52" y="36" class="sans" font-size="22" font-weight="700" fill="#0E1726">CyberControl</text>
+    </g>
+    <text x="528" y="36" class="sans" font-size="26" fill="#8B93A7">→</text>
+    <g transform="translate(558,0)">
+      <rect width="230" height="56" rx="28" fill="#16352B" stroke="#25A06C" stroke-width="1.5"/>
+      <path d="M28 28 l8 8 l14 -16" fill="none" stroke="#25A06C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="62" y="36" class="sans" font-size="22" font-weight="600" fill="#F6F2E9">Confidence</text>
+    </g>
+  </g>
+
+  <!-- WhatsApp demo chip -->
+  <g transform="translate(905,150)">
+    <rect width="215" height="44" rx="22" fill="#25D366"/>
+    <circle cx="30" cy="22" r="11" fill="#ffffff" fill-opacity="0.25"/>
+    <text x="50" y="29" class="sans" font-size="18" font-weight="700" fill="#ffffff">Book a Hindi Demo</text>
+  </g>
+</svg>
