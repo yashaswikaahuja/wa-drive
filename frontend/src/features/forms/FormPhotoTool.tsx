@@ -134,8 +134,8 @@ export default function FormPhotoTool() {
           <button key={p.kind} onClick={() => { setActive(i); setResult(null); }}
             className="flex-1 rounded-2xl p-1.5 border transition-all active:scale-[0.98]"
             style={{
-              background: active === i ? 'rgba(10,132,255,0.1)' : 'rgba(255,255,255,0.02)',
-              borderColor: active === i ? 'rgba(10,132,255,0.3)' : 'var(--border)',
+              background: active === i ? 'hsl(var(--pt-marigold) / 0.12)' : 'hsl(var(--pt-secondary))',
+              borderColor: active === i ? 'hsl(var(--pt-marigold) / 0.3)' : 'hsl(var(--pt-border))',
               transitionTimingFunction: EASE, transitionDuration: '250ms',
             }}>
             <div className="rounded-xl px-4 py-3 bg-[#1c1c1e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">

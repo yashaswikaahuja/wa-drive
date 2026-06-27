@@ -154,8 +154,8 @@ export default function CustomerDetail() {
             <button key={p.id} onClick={() => setSelectedPerson(p.id)}
               className="group flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full text-sm transition-all active:scale-[0.97]"
               style={{
-                background: selectedPerson === p.id ? 'rgba(10,132,255,0.12)' : 'rgba(255,255,255,0.04)',
-                color: selectedPerson === p.id ? '#0a84ff' : '#94a3b8',
+                background: selectedPerson === p.id ? 'hsl(var(--pt-marigold) / 0.14)' : 'hsl(var(--pt-secondary))',
+                color: selectedPerson === p.id ? 'hsl(var(--pt-marigold-deep))' : 'hsl(var(--pt-muted))',
                 transitionTimingFunction: EASE, transitionDuration: '200ms',
               }}>
               {p.displayLabel || p.name}

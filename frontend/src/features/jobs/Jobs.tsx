@@ -40,7 +40,7 @@ export default function Jobs() {
       <div className="flex gap-2 mb-4 flex-wrap">
         {['', 'queued', 'in_progress', 'needs_review', 'completed'].map(s => (
           <button key={s} onClick={() => setFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filter === s ? 'text-white' : 'bg-white/5 text-gray-400 hover:text-white'}`}
-            style={filter === s ? { background: '#0a84ff' } : undefined}>
+            style={filter === s ? { background: 'hsl(var(--pt-marigold))', color: '#fff' } : undefined}>
             {s ? STATUS_LABEL[s] : 'All'}
           </button>
         ))}

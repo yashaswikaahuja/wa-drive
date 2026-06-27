@@ -58,10 +58,12 @@ const Sidebar = memo(({ user, logout }: any) => {
     : OPERATOR_NAV, [isAdmin]);
 
   return (
-    <aside className="w-52 flex flex-col border-r" style={{ background: '#0a0a0a', borderColor: 'var(--border)' }}>
-      <div className="h-12 flex items-center gap-2 px-4 border-b" style={{ borderColor: 'var(--border)' }}>
-        <Lightning size={18} weight="fill" className="text-blue-400" />
-        <span className="text-sm font-semibold text-white tracking-tight">CyberControl</span>
+    <aside className="w-52 flex flex-col border-r" style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}>
+      <div className="h-12 flex items-center gap-2 px-4 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+        <span className="grid h-7 w-7 place-items-center rounded-md" style={{ background: 'hsl(var(--pt-ink))' }}>
+          <Lightning size={15} weight="fill" style={{ color: 'hsl(var(--pt-marigold))' }} />
+        </span>
+        <span className="pt-display text-sm font-bold tracking-tight">Cyber<span style={{ color: 'hsl(var(--pt-marigold-deep))' }}>Control</span></span>
       </div>
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {nav.map((n, i) => n.path === ''
@@ -69,17 +71,18 @@ const Sidebar = memo(({ user, logout }: any) => {
           : <NavItem key={n.path} {...n} />
         )}
       </nav>
-      <div className="p-3 border-t space-y-2" style={{ borderColor: 'var(--border)' }}>
+      <div className="p-3 border-t space-y-2" style={{ borderColor: 'hsl(var(--pt-border))' }}>
         <ExtensionStatus />
         <div className="flex items-center gap-2 px-2">
-          <div className="w-7 h-7 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-semibold">
+          <div className="w-7 h-7 rounded-md flex items-center justify-center text-xs font-semibold"
+            style={{ background: 'hsl(var(--pt-marigold) / 0.15)', color: 'hsl(var(--pt-marigold-deep))' }}>
             {user?.name?.[0]?.toUpperCase() || '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-gray-200 truncate">{user?.name}</p>
-            <p className="text-[10px] text-gray-500">{user?.role}</p>
+            <p className="text-xs font-medium truncate" style={{ color: 'hsl(var(--pt-ink))' }}>{user?.name}</p>
+            <p className="text-[10px] pt-muted">{user?.role}</p>
           </div>
-          <button onClick={logout} className="text-gray-600 hover:text-red-400 transition-colors" title="Logout">
+          <button onClick={logout} className="pt-muted hover:text-red-500 transition-colors" title="Logout">
             <SignOut size={16} />
           </button>
         </div>
@@ -92,7 +95,7 @@ export default function Layout() {
   const { user, logout } = useAuthStore();
 
   return (
-    <div className="h-screen flex" style={{ background: 'var(--background)' }}>
+    <div className="pt-paper h-screen flex">
       <Sidebar user={user} logout={logout} />
       <main className="flex-1 overflow-auto p-6">
         <Outlet />

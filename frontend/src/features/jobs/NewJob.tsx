@@ -48,7 +48,7 @@ export default function NewJob() {
                       <button key={p.id} onClick={() => { setSelectedPerson({ household: h, person: p }); setStep(2); }}
                         className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-[#0a84ff]/20 text-sm text-white flex items-center gap-2 transition-all"
                         style={{ transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)' }}>
-                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'rgba(10,132,255,0.3)' }}>{p.name?.[0]}</div>
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: 'hsl(var(--pt-marigold) / 0.25)', color: 'hsl(var(--pt-marigold-deep))' }}>{p.name?.[0]}</div>
                         <div>
                           <div>{p.displayLabel || p.name}</div>
                           <div className="text-[11px] text-gray-500 capitalize">{p.relationship}</div>

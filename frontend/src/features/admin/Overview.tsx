@@ -66,7 +66,7 @@ export default function Overview() {
               {data.topForms.map(f => (
                 <div key={f.host} className="flex items-center justify-between py-2">
                   <span className="text-xs text-gray-300 truncate">{f.host}</span>
-                  <span className="text-xs font-medium tabular-nums font-mono" style={{ color: '#0a84ff' }}>{f.count} sessions</span>
+                  <span className="text-xs font-medium tabular-nums font-mono" style={{ color: 'hsl(var(--pt-marigold-deep))' }}>{f.count} sessions</span>
                 </div>
               ))}
             </div>

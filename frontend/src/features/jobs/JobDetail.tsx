@@ -183,9 +183,9 @@ export default function JobDetail() {
 
       {/* Live Progress (in_progress only) */}
       {isInProgress && (
-        <div className="card p-5 mb-4" style={{ borderColor: 'rgba(10,132,255,0.2)' }}>
+        <div className="card p-5 mb-4" style={{ borderColor: 'hsl(var(--pt-marigold) / 0.3)' }}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: '#0a84ff' }} />
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: 'hsl(var(--pt-marigold))' }} />
             <p className="text-sm font-medium text-white">Executing</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
