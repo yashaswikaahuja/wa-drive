@@ -407,6 +407,8 @@
 .pt-paper .text-emerald-400 { color: hsl(158 60% 30%); }
 .pt-paper .text-amber-400   { color: hsl(35 92% 40%); }
 .pt-paper .text-green-400   { color: hsl(158 55% 32%); }
+.pt-paper .text-yellow-400  { color: hsl(40 90% 36%); }
+.pt-paper .text-pink-300    { color: hsl(330 65% 45%); }
 .pt-paper .text-blue-300    { color: hsl(var(--pt-marigold-deep)); }
 
 /* ── Larger touch targets on mobile (~44px) ── */

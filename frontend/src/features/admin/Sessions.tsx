@@ -73,14 +73,14 @@ export default function Sessions() {
         {loadingDetail && records.length === 0 && <div className="h-16 bg-white/[0.03] animate-pulse rounded-xl" />}
         <div className="divide-y divide-white/[0.04]">
           {records.map((r: any, i: number) => (
-            <div key={i} className="px-3 py-2 flex items-center gap-3 text-xs">
-              <span className={resultDot(r.result)}>●</span>
-              <span className="text-gray-300 w-44 truncate font-mono" title={r.selector}>{r.selector}</span>
-              <span className="text-gray-400 w-24 truncate" title={r.type}>{r.type}</span>
-              <span className="text-white flex-1 truncate" title={r.value || ''}>{r.value || (r.label ? <span className="text-gray-600">{r.label}</span> : '—')}</span>
-              {r.source && <span className={`text-[10px] px-1.5 py-0.5 rounded ${sourceColor(r.source)}`}>{r.source}</span>}
-              {r.failReason && <span className="text-red-400 text-[10px]" title={r.failReason}>{r.failReason}</span>}
-              <span className="text-gray-600 w-12 text-right tabular-nums font-mono">{r.durationMs ?? 0}ms</span>
+            <div key={i} className="px-1 sm:px-3 py-2 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 text-xs">
+              <span className={`${resultDot(r.result)} shrink-0`}>●</span>
+              <span className="text-gray-300 w-[calc(100%-2rem)] sm:w-44 truncate font-mono" title={r.selector}>{r.selector}</span>
+              <span className="text-gray-400 w-20 sm:w-24 truncate" title={r.type}>{r.type}</span>
+              <span className="text-white flex-1 min-w-0 truncate" title={r.value || ''}>{r.value || (r.label ? <span className="text-gray-600">{r.label}</span> : '—')}</span>
+              {r.source && <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${sourceColor(r.source)}`}>{r.source}</span>}
+              {r.failReason && <span className="text-red-400 text-[10px] shrink-0" title={r.failReason}>{r.failReason}</span>}
+              <span className="text-gray-600 w-12 text-right tabular-nums font-mono shrink-0">{r.durationMs ?? 0}ms</span>
             </div>
           ))}
           {!loadingDetail && records.length === 0 && <p className="text-gray-600 text-sm py-4">No records</p>}

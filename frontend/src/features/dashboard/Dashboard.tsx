@@ -166,7 +166,7 @@ function PendingCard({ c, onProcess, onAsk }: { c: QueueItem; onProcess: () => v
           </p>
         </div>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button onClick={onProcess}
           className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white active:scale-[0.98] transition-transform"
           style={{ background: MARIGOLD, transitionTimingFunction: EASE, transitionDuration: '200ms' }}>
