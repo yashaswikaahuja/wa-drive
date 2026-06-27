@@ -46,7 +46,7 @@ export default function Login() {
         },
       });
       if (googleBtnRef.current) {
-        w.google.accounts.id.renderButton(googleBtnRef.current, { theme: 'filled_black', size: 'large', width: 320, text: 'signin_with' });
+        w.google.accounts.id.renderButton(googleBtnRef.current, { theme: 'outline', size: 'large', width: 320, text: 'signin_with' });
       }
     }
   }, []);
@@ -63,15 +63,15 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-[100dvh] flex items-center justify-center" style={{ background: 'var(--background)' }}>
+    <div className="pt-paper min-h-[100dvh] flex items-center justify-center px-4">
       <div className="w-full max-w-sm p-8 card">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center">
-            <Lightning size={20} weight="fill" className="text-blue-400" />
+          <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ background: 'hsl(var(--pt-marigold) / 0.15)' }}>
+            <Lightning size={20} weight="fill" style={{ color: 'hsl(var(--pt-marigold-deep))' }} />
           </div>
           <div>
-            <h1 className="text-lg font-semibold text-white tracking-tight">CyberControl</h1>
-            <p className="text-xs text-gray-500">Operator Platform</p>
+            <h1 className="pt-display text-lg font-bold tracking-tight" style={{ color: 'hsl(var(--pt-ink))' }}>CyberControl</h1>
+            <p className="text-xs pt-muted">Operator Platform</p>
           </div>
         </div>
 
@@ -79,20 +79,20 @@ export default function Login() {
 
         <div className="flex items-center gap-3 mb-4">
           <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
-          <span className="text-xs text-gray-600">or</span>
+          <span className="text-xs pt-muted">or</span>
           <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Email or Phone</label>
-            <input type="text" value={identity} onChange={e => setIdentity(e.target.value)} className="input-field" placeholder="you@example.com" />
+            <label htmlFor="login-identity" className="text-xs pt-muted mb-1 block">Email or Phone</label>
+            <input id="login-identity" type="text" autoComplete="username" value={identity} onChange={e => setIdentity(e.target.value)} className="input-field" placeholder="you@example.com" />
           </div>
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="input-field" placeholder="Enter password" />
+            <label htmlFor="login-password" className="text-xs pt-muted mb-1 block">Password</label>
+            <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className="input-field" placeholder="Enter password" />
           </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs" style={{ color: 'hsl(0 65% 48%)' }}>{error}</p>}
           <button type="submit" disabled={loading} className="w-full btn-primary py-2.5">
             {loading ? 'Logging in...' : 'Login'}
           </button>

@@ -31,7 +31,7 @@ const Mappings = lazy(() => import('./features/admin/Mappings'));
 function PageLoader() {
   return (
     <div className="flex items-center justify-center h-64">
-      <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      <div className="w-6 h-6 rounded-full animate-spin" style={{ border: '2px solid hsl(27 95% 55% / 0.25)', borderTopColor: 'hsl(27 95% 55%)' }} />
     </div>
   );
 }
@@ -73,7 +73,7 @@ export default function App() {
           <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
           <Route path="/admin/corrections" element={<Suspense fallback={<PageLoader />}><Corrections /></Suspense>} />
           <Route path="/admin/sessions" element={<Suspense fallback={<PageLoader />}><Sessions /></Suspense>} />
-          <Route path="/admin/mappings" element={<Mappings />} />
+          <Route path="/admin/mappings" element={<Suspense fallback={<PageLoader />}><Mappings /></Suspense>} />
           <Route path="/admin/operators" element={<Placeholder title="Operators" />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Route>
@@ -83,5 +83,10 @@ export default function App() {
 }
 
 function Placeholder({ title }: { title: string }) {
-  return <div className="flex items-center justify-center h-64"><p className="text-gray-500 text-lg">{title} — coming soon</p></div>;
+  return (
+    <div className="flex flex-col items-center justify-center h-64 text-center px-4">
+      <p className="pt-display text-xl font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>{title}</p>
+      <p className="text-sm pt-muted mt-1.5">This section is coming soon.</p>
+    </div>
+  );
 }

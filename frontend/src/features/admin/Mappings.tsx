@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowsClockwise, Trash } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import { toast } from '../../shared/toast';
 
 interface FormSummary {
   formKey: string;
@@ -47,6 +48,7 @@ export default function MappingsPage() {
   const [search, setSearch] = useState('');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmState, setConfirmState] = useState<{ message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
 
   useEffect(() => { loadList(); }, []);
 
@@ -81,31 +83,48 @@ export default function MappingsPage() {
   }
 
   async function deleteField(label: string) {
-    if (!confirm('Remove this mapping?')) return;
-    try {
-      await api.delete('/mappings/' + selected!.formKey + '/' + encodeURIComponent(label));
-      setFields(prev => { const next = { ...prev }; delete next[label]; return next; });
-    } catch (e) { console.warn('delete failed', e); }
+    setConfirmState({
+      message: 'Remove this field mapping?',
+      danger: true,
+      confirmLabel: 'Remove',
+      onConfirm: async () => {
+        try {
+          await api.delete('/mappings/' + selected!.formKey + '/' + encodeURIComponent(label));
+          setFields(prev => { const next = { ...prev }; delete next[label]; return next; });
+        } catch (e) { console.warn('delete failed', e); toast.error('Failed to remove mapping'); }
+      },
+    });
   }
 
   async function deleteForm(formKey: string) {
-    if (!confirm('Remove ALL mappings for this form?')) return;
-    try {
-      await api.delete('/mappings/' + formKey);
-      setForms(prev => prev.filter(f => f.formKey !== formKey));
-      if (selected?.formKey === formKey) { setSelected(null); setFields({}); }
-    } catch { /* ignore */ }
+    setConfirmState({
+      message: 'Remove ALL mappings for this form? This cannot be undone.',
+      danger: true,
+      confirmLabel: 'Delete form',
+      onConfirm: async () => {
+        try {
+          await api.delete('/mappings/' + formKey);
+          setForms(prev => prev.filter(f => f.formKey !== formKey));
+          if (selected?.formKey === formKey) { setSelected(null); setFields({}); }
+        } catch { toast.error('Failed to delete form mappings'); }
+      },
+    });
   }
 
   async function backfillFromSessions() {
-    if (!confirm('Backfill mappings for all forms from past sessions? Existing assignments are kept.')) return;
-    setLoading(true);
-    try {
-      const r = await api.post('/mappings/backfill');
-      alert(`Backfill done: ${r.data.seededTotal} fields added across ${r.data.formsSeeded} forms.`);
-      await loadList();
-    } catch (e) { console.warn('backfill failed', e); alert('Backfill failed'); }
-    finally { setLoading(false); }
+    setConfirmState({
+      message: 'Backfill mappings for all forms from past sessions? Existing assignments are kept.',
+      confirmLabel: 'Backfill',
+      onConfirm: async () => {
+        setLoading(true);
+        try {
+          const r = await api.post('/mappings/backfill');
+          toast.success(`Backfill done: ${r.data.seededTotal} fields added across ${r.data.formsSeeded} forms.`);
+          await loadList();
+        } catch (e) { console.warn('backfill failed', e); toast.error('Backfill failed'); }
+        finally { setLoading(false); }
+      },
+    });
   }
 
   // ── Detail view ────────────────────────────────────────────────────────
@@ -122,7 +141,7 @@ export default function MappingsPage() {
     const pct = total ? Math.round((mapped / total) * 100) : 0;
 
     return (
-      <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <button onClick={() => setSelected(null)} className="btn-ghost text-sm mb-4 flex items-center gap-1">
           <ArrowLeft size={14} /> All forms
         </button>
@@ -224,6 +243,15 @@ export default function MappingsPage() {
           </div>
           {fieldEntries.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">No fields recorded yet.</div>}
         </div>
+        {confirmState && (
+          <ConfirmDialog
+            message={confirmState.message}
+            danger={confirmState.danger}
+            confirmLabel={confirmState.confirmLabel}
+            onCancel={() => setConfirmState(null)}
+            onConfirm={() => { const fn = confirmState.onConfirm; setConfirmState(null); fn(); }}
+          />
+        )}
       </div>
     );
   }
@@ -237,7 +265,7 @@ export default function MappingsPage() {
   );
 
   return (
-    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">Form Mappings</h1>
@@ -308,6 +336,34 @@ export default function MappingsPage() {
           )}
         </div>
       )}
+      {confirmState && (
+        <ConfirmDialog
+          message={confirmState.message}
+          danger={confirmState.danger}
+          confirmLabel={confirmState.confirmLabel}
+          onCancel={() => setConfirmState(null)}
+          onConfirm={() => { const fn = confirmState.onConfirm; setConfirmState(null); fn(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmDialog({ message, danger, confirmLabel, onConfirm, onCancel }: { message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void; onCancel: () => void; }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onCancel} role="dialog" aria-modal="true">
+      <div onClick={e => e.stopPropagation()} className="card max-w-sm w-full p-5">
+        <p className="text-sm" style={{ color: 'hsl(var(--pt-ink))' }}>{message}</p>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onCancel} className="btn-secondary text-sm">Cancel</button>
+          <button
+            onClick={onConfirm}
+            autoFocus
+            className="btn-primary text-sm"
+            style={danger ? { background: 'hsl(0 70% 50%)', boxShadow: 'none' } : undefined}
+          >{confirmLabel || 'Confirm'}</button>
+        </div>
+      </div>
     </div>
   );
 }

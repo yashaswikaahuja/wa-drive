@@ -37,7 +37,7 @@ export default function Settings() {
 
   return (
     <div className="max-w-lg">
-      <h1 className="text-lg font-semibold text-white mb-6">Settings</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-white mb-6">Settings</h1>
 
       <section className="card mb-4">
         <div className="flex items-center gap-2 mb-4">

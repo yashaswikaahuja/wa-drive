@@ -377,3 +377,43 @@
 .pt-paper .text-green-300  { color: hsl(158 55% 30%); }
 .pt-paper .text-yellow-300, .pt-paper .text-yellow-500 { color: hsl(40 90% 36%); }
 .pt-paper .text-red-400    { color: hsl(0 65% 48%); }
+
+
+
+
+/* ── Paper-scoped scrollbar (the global one is white → invisible on cream) ── */
+.pt-paper ::-webkit-scrollbar-thumb { background: hsl(var(--pt-ink) / 0.18); border-radius: 3px; }
+.pt-paper ::-webkit-scrollbar-thumb:hover { background: hsl(var(--pt-ink) / 0.32); }
+.pt-paper { scrollbar-color: hsl(var(--pt-ink) / 0.25) transparent; scrollbar-width: thin; }
+
+/* ── Keyboard focus rings on custom controls (were hover-only) ── */
+.pt-paper .pt-chip:focus-visible,
+.pt-paper .pt-toolbtn:focus-visible,
+.pt-paper .btn-marigold:focus-visible,
+.pt-paper .btn-primary:focus-visible,
+.pt-paper .btn-secondary:focus-visible,
+.pt-paper .btn-ghost:focus-visible,
+.pt-paper .sidebar-item:focus-visible,
+.pt-paper .input-field:focus-visible,
+.pt-paper a:focus-visible,
+.pt-paper button:focus-visible {
+  outline: 2px solid hsl(var(--pt-marigold));
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ── Remaining status colors tuned for paper contrast ── */
+.pt-paper .text-emerald-400 { color: hsl(158 60% 30%); }
+.pt-paper .text-amber-400   { color: hsl(35 92% 40%); }
+.pt-paper .text-green-400   { color: hsl(158 55% 32%); }
+.pt-paper .text-blue-300    { color: hsl(var(--pt-marigold-deep)); }
+
+/* ── Larger touch targets on mobile (~44px) ── */
+@media (max-width: 767px) {
+  .pt-paper .pt-toolbtn { min-height: 2.75rem; min-width: 2.75rem; }
+  .pt-paper .pt-chip,
+  .pt-paper .btn-marigold,
+  .pt-paper .btn-primary,
+  .pt-paper .btn-secondary { min-height: 2.75rem; }
+  .pt-paper .sidebar-item { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+}
