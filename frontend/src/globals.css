@@ -198,6 +198,31 @@
   --pt-marigold: 27 95% 55%;
   --pt-marigold-deep: 22 90% 48%;
 
+  /* Override the original (dark) design tokens to paper values, so any page
+     using var(--card)/var(--secondary)/var(--border)/etc. auto-adapts. */
+  --background: #F6F2E9;
+  --background-secondary: #F0EAD9;
+  --foreground: #131A2B;
+  --card: #ffffff;
+  --card-hover: #FAF6EE;
+  --card-foreground: #131A2B;
+  --popover: #ffffff;
+  --popover-foreground: #131A2B;
+  --primary: #F98A1E;
+  --primary-hover: #E8590C;
+  --primary-foreground: #ffffff;
+  --secondary: #F0EAD9;
+  --secondary-foreground: #131A2B;
+  --muted: #EFE9DC;
+  --muted-foreground: #6B6256;
+  --accent: #F98A1E;
+  --border: #E2D9C8;
+  --border-strong: #D4C9B4;
+  --input: #E2D9C8;
+  --ring: #F98A1E;
+  --glass: rgba(255,255,255,0.72);
+  --glass-border: rgba(20,26,43,0.07);
+
   color: hsl(var(--pt-ink));
   font-family: 'Inter', system-ui, sans-serif;
   background-color: hsl(var(--pt-bg));
@@ -332,3 +357,8 @@
 .pt-paper [class*="hover:bg-[#0a84ff]"]:hover { background-color: hsl(var(--pt-marigold) / 0.18); }
 .pt-paper [class*="hover:border-[#0a84ff]"]:hover { border-color: hsl(var(--pt-marigold) / 0.4); }
 .pt-paper [class*="border-[#0a84ff]"] { border-color: hsl(var(--pt-marigold) / 0.35); }
+
+
+/* blue-500 low-opacity + border variants → marigold */
+.pt-paper .bg-blue-500\/5 { background-color: hsl(var(--pt-marigold) / 0.08); }
+.pt-paper [class*="border-blue-500"] { border-color: hsl(var(--pt-marigold) / 0.4); }
