@@ -560,7 +560,7 @@ const Nav = () => {
         </div>
       </div>
       {open && (
-        <nav className="border-t border-border bg-paper md:hidden">
+        <nav data-testid="mobile-menu" className="border-t border-border bg-paper md:hidden">
           <div className="container flex flex-col py-2">
             {links.map((l) => (
               <a
