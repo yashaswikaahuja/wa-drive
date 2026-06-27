@@ -306,7 +306,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto sm:flex-wrap sm:justify-end">
+        <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto sm:justify-end">
           <button onClick={() => setTplOpen(true)} className="pt-chip md:hidden shrink-0" title="Templates">
             <LayoutGrid className="h-4 w-4" /> Templates
           </button>
