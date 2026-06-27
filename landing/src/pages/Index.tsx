@@ -21,6 +21,8 @@ import {
   Store,
   MapPin,
   Loader2,
+  Menu,
+  X,
 } from "lucide-react";
 import { useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes } from "react";
 import { toast } from "sonner";
@@ -506,42 +508,83 @@ const PillarsStrip = () => (
 /* Nav                                                                  */
 /* ------------------------------------------------------------------ */
 
-const Nav = () => (
-  <header className="sticky top-0 z-50 border-b border-border bg-paper/85 backdrop-blur">
-    <div className="container flex h-14 items-center justify-between">
-      <div className="flex items-center gap-2">
-        <div className="grid h-7 w-7 place-items-center rounded-md bg-ink">
-          <span className="h-2.5 w-2.5 rounded-sm bg-marigold" />
+const Nav = () => {
+  const [open, setOpen] = useState(false);
+  const links = [
+    { href: "#story", label: "How it works" },
+    { href: "#humse", label: "For operators" },
+    { href: "#used-for", label: "Used for" },
+    { href: "#memory", label: "Memory" },
+  ];
+  return (
+    <header className="sticky top-0 z-50 border-b border-border bg-paper/85 backdrop-blur">
+      <div className="container flex h-14 items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="grid h-7 w-7 place-items-center rounded-md bg-ink">
+            <span className="h-2.5 w-2.5 rounded-sm bg-marigold" />
+          </div>
+          <span className="font-display text-lg font-bold tracking-tight text-ink">
+            Cyber<span className="text-marigold-deep">Control</span>
+          </span>
         </div>
-        <span className="font-display text-lg font-bold tracking-tight text-ink">
-          Cyber<span className="text-marigold-deep">Control</span>
-        </span>
+        <nav className="hidden items-center gap-7 text-[13px] font-medium text-ink-soft md:flex">
+          {links.map((l) => (
+            <a key={l.href} href={l.href} className="hover:text-ink">{l.label}</a>
+          ))}
+        </nav>
+        <div className="flex items-center gap-2">
+          <a
+            href={APP_URL}
+            className="hidden text-[13px] font-medium text-ink-soft hover:text-ink sm:block"
+          >
+            Sign in
+          </a>
+          <a
+            {...demoLinkProps}
+            aria-label="Book a Hindi demo"
+            className="inline-flex items-center gap-1.5 rounded-md bg-whatsapp px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-paper transition hover:brightness-95"
+          >
+            <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Book a Hindi Demo</span>
+            <span className="sm:hidden">Demo</span>
+          </a>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            className="grid h-9 w-9 place-items-center rounded-md text-ink-soft transition hover:bg-ink/5 md:hidden"
+          >
+            {open ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
+          </button>
+        </div>
       </div>
-      <nav className="hidden items-center gap-7 text-[13px] font-medium text-ink-soft md:flex">
-        <a href="#story" className="hover:text-ink">How it works</a>
-        <a href="#humse" className="hover:text-ink">For operators</a>
-        <a href="#used-for" className="hover:text-ink">Used for</a>
-        <a href="#memory" className="hover:text-ink">Memory</a>
-      </nav>
-      <div className="flex items-center gap-2">
-        <a
-          href={APP_URL}
-          className="hidden text-[13px] font-medium text-ink-soft hover:text-ink sm:block"
-        >
-          Sign in
-        </a>
-        <a
-          {...demoLinkProps}
-          aria-label="Book a Hindi demo"
-          className="inline-flex items-center gap-1.5 rounded-md bg-whatsapp px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-paper transition hover:brightness-95"
-        >
-          <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
-          Book a Hindi Demo
-        </a>
-      </div>
-    </div>
-  </header>
-);
+      {open && (
+        <nav className="border-t border-border bg-paper md:hidden">
+          <div className="container flex flex-col py-2">
+            {links.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                onClick={() => setOpen(false)}
+                className="py-2.5 text-sm font-medium text-ink-soft hover:text-ink"
+              >
+                {l.label}
+              </a>
+            ))}
+            <a
+              href={APP_URL}
+              onClick={() => setOpen(false)}
+              className="border-t border-border py-2.5 text-sm font-medium text-ink-soft hover:text-ink"
+            >
+              Sign in
+            </a>
+          </div>
+        </nav>
+      )}
+    </header>
+  );
+};
 
 /* ------------------------------------------------------------------ */
 /* Hero — the giant explainer                                           */
