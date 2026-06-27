@@ -367,3 +367,13 @@
 
 /* Keep toolbar buttons full-size inside horizontal-scroll rows */
 .pt-paper .pt-chip, .pt-paper .pt-toolbtn, .pt-paper .btn-marigold { flex-shrink: 0; }
+
+
+
+/* Badge/label text tuned for the light paper theme (was -300/-400 for dark) */
+.pt-paper .text-purple-300 { color: hsl(280 55% 42%); }
+.pt-paper .text-cyan-300   { color: hsl(190 70% 30%); }
+.pt-paper .text-orange-300, .pt-paper .text-orange-400 { color: hsl(28 88% 42%); }
+.pt-paper .text-green-300  { color: hsl(158 55% 30%); }
+.pt-paper .text-yellow-300, .pt-paper .text-yellow-500 { color: hsl(40 90% 36%); }
+.pt-paper .text-red-400    { color: hsl(0 65% 48%); }

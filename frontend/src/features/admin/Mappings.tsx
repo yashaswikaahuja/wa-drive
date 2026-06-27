@@ -122,7 +122,7 @@ export default function MappingsPage() {
     const pct = total ? Math.round((mapped / total) * 100) : 0;
 
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto">
         <button onClick={() => setSelected(null)} className="btn-ghost text-sm mb-4 flex items-center gap-1">
           <ArrowLeft size={14} /> All forms
         </button>
@@ -161,7 +161,7 @@ export default function MappingsPage() {
         </div>
 
         <div className="card overflow-hidden">
-          <div className="grid grid-cols-12 px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04]">
+          <div className="hidden sm:grid grid-cols-12 px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04]">
             <div className="col-span-6">Form Field Label</div>
             <div className="col-span-4">Maps To Profile Key</div>
             <div className="col-span-2 text-right">Stats</div>
@@ -177,7 +177,7 @@ export default function MappingsPage() {
                 type === 'textarea' ? 'bg-[#0a84ff]/20 text-[#0a84ff]' :
                 'bg-white/[0.04] text-gray-300';
               return (
-                <div key={key} className={`grid grid-cols-12 px-4 py-2.5 items-center hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
+                <div key={key} className={`flex flex-col gap-2 sm:grid sm:grid-cols-12 px-4 py-2.5 sm:items-center hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
                   <div className="col-span-6 text-sm text-gray-200 flex items-center gap-2">
                     <span className={`inline-flex items-center justify-center w-9 h-5 rounded text-[9px] font-bold tracking-wider ${typeColor}`} title={type}>
                       {typeAbbr}
@@ -237,8 +237,8 @@ export default function MappingsPage() {
   );
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">Form Mappings</h1>
           <p className="text-sm text-gray-400">
