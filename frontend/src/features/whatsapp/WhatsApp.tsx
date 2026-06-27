@@ -5,6 +5,7 @@ import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
+import { Printer, Camera, X } from '@phosphor-icons/react';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -784,21 +785,41 @@ export default function WhatsApp() {
 
       {/* Document viewer */}
       {viewerFile && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={handleCloseViewer}>
-          <button onClick={handleCloseViewer} className="absolute top-4 right-4 px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs">✕ Close</button>
-          <button onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load: ' + (err.message || 'unknown')); }); }} className="absolute top-4 right-28 px-3 py-1.5 rounded-lg bg-green-600/80 text-white text-xs">🖨 Print</button>
-          <button onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="absolute top-4 right-52 px-3 py-1.5 rounded-lg bg-cyan-600/80 text-white text-xs">📷 Photo Tool</button>
-          <div onClick={e => e.stopPropagation()} className="max-w-[90vw] max-h-[85vh]">
-            {(() => {
-              const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
-              const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || '';
-              const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
-              const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
-              if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[85vh] object-contain rounded-lg" />;
-              if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" /> : null;
-              if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[80vw] h-[75vh] rounded-lg border-0" title="PDF" /> : null;
-              return <div className="bg-[var(--secondary)] rounded-xl p-8 text-center"><p className="text-white">{viewerFile.fileName}</p></div>;
-            })()}
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={handleCloseViewer}>
+          <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
+            <span className="text-white/90 text-sm font-medium truncate flex-1 min-w-0">{viewerFile.fileName}</span>
+            <button
+              onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load: ' + (err.message || 'unknown')); }); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shrink-0"
+              style={{ background: 'linear-gradient(180deg, hsl(27 95% 58%), hsl(22 92% 50%))' }}
+              title="Print"
+            >
+              <Printer size={15} weight="bold" /><span className="hidden sm:inline">Print</span>
+            </button>
+            <button
+              onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white bg-white/10 hover:bg-white/20 shrink-0"
+              title="Open in Photo Tool"
+            >
+              <Camera size={15} /><span className="hidden sm:inline">Photo Tool</span>
+            </button>
+            <button onClick={handleCloseViewer} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white bg-white/10 hover:bg-white/20 shrink-0" title="Close">
+              <X size={15} /><span className="hidden sm:inline">Close</span>
+            </button>
+          </div>
+          <div className="flex-1 flex items-center justify-center p-3 overflow-auto" onClick={handleCloseViewer}>
+            <div onClick={e => e.stopPropagation()} className="flex items-center justify-center max-w-full max-h-full">
+              {(() => {
+                const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
+                const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || '';
+                const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
+                const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
+                if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[80vh] object-contain rounded-lg" />;
+                if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[92vw] max-w-3xl h-[72vh] rounded-lg border-0" /> : null;
+                if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[92vw] max-w-3xl h-[80vh] rounded-lg border-0" title="PDF" /> : null;
+                return <div className="bg-white/10 rounded-xl p-8 text-center"><p className="text-white">{viewerFile.fileName}</p></div>;
+              })()}
+            </div>
           </div>
         </div>
       )}
