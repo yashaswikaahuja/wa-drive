@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { TEMPLATES, TPL_FREE, TEMPLATE_GROUPS } from './templates';
 import type { Slot, Template } from './templates';
-import { Printer, Crop, RotateCw, Contrast, Scissors, Download, FolderOpen, Upload, Plus } from 'lucide-react';
+import { Printer, Crop, RotateCw, Contrast, Scissors, Download, FolderOpen, Upload, Plus, LayoutGrid } from 'lucide-react';
 import { printBlob } from '../../shared/fileCache';
 import api from '../../shared/api';
 import DrivePicker from './DrivePicker';
@@ -34,14 +34,13 @@ function makeDefaultLayer(imageIndex: number, img: ImageBitmap, paperW: number, 
   return { id: _layerSeq++, imageIndex, x, y, w: targetW, h: targetH };
 }
 
-function displaySize(paperW: number, paperH: number) {
-  const ratio = paperW / paperH;
-  if (ratio >= 1) {
-    // landscape or square — fit width
-    return { w: DISPLAY_MAX, h: Math.round(DISPLAY_MAX / ratio) };
-  }
-  // portrait — fit height
-  return { w: Math.round(DISPLAY_MAX * ratio), h: DISPLAY_MAX };
+function displaySize(paperW: number, paperH: number, maxW: number = DISPLAY_MAX) {
+  const aspect = paperW / paperH;
+  // Fit to available width, then cap height so tall portraits stay reasonable.
+  let w = maxW;
+  let h = Math.round(maxW / aspect);
+  if (h > DISPLAY_MAX) { h = DISPLAY_MAX; w = Math.round(DISPLAY_MAX * aspect); }
+  return { w, h };
 }
 
 // Mini SVG preview of a template's real slot geometry, used in the picker.
@@ -74,6 +73,7 @@ export default function PhotoTool() {
   const [templateId, setTemplateId] = useState<string>('passport-4x6-8');
   const [grayscale, setGrayscale] = useState<boolean>(false);
   const [cutLines, setCutLines] = useState<boolean>(true);
+  const [tplOpen, setTplOpen] = useState<boolean>(false);
   const [rotation, setRotation] = useState<0 | 90 | 180 | 270>(0);
   const [drivePickerOpen, setDrivePickerOpen] = useState<boolean>(false);
   const [cropModalOpen, setCropModalOpen] = useState<boolean>(false);
@@ -293,8 +293,8 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
   }, [hasImage, drivePickerOpen, cropModalOpen, selectedSlot]);
 
   return (
-    <div className="pt-paper flex flex-col h-[calc(100vh-4rem)]">
-      <header className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+    <div className="pt-paper flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
+      <header className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
         <div className="flex items-center gap-3 min-w-0">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]" style={{ background: 'hsl(var(--pt-ink))' }}>
             <Printer className="h-5 w-5" style={{ color: 'hsl(var(--pt-bg))' }} />
@@ -306,7 +306,10 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
+          <button onClick={() => setTplOpen(true)} className="pt-chip md:hidden" title="Templates">
+            <LayoutGrid className="h-4 w-4" /> Templates
+          </button>
           <button onClick={() => setCropModalOpen(true)} disabled={!hasImage} className="pt-toolbtn" title="Crop image (C)">
             <Crop className="h-4 w-4" />
           </button>
@@ -321,10 +324,10 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
           </button>
           <span className="mx-1 h-6 w-px" style={{ background: 'hsl(var(--pt-border))' }} />
           <button onClick={loadLatest} className="pt-chip" title="Latest WhatsApp file (L)">
-            <Download className="h-4 w-4" /> Latest
+            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Latest</span>
           </button>
           <button onClick={() => setDrivePickerOpen(true)} className="pt-chip" title="Pick a file from Drive">
-            <FolderOpen className="h-4 w-4" /> Drive
+            <FolderOpen className="h-4 w-4" /> <span className="hidden sm:inline">Drive</span>
           </button>
           <FilePicker onFiles={handleFiles} onAppend={f => handleFile(f, 'append')} />
           <button onClick={handlePrint} disabled={!hasImage} className="btn-marigold" title="Print (Ctrl+P)">
@@ -334,10 +337,19 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <aside className="w-[280px] shrink-0 overflow-y-auto border-r px-4 py-5 space-y-5" style={{ borderColor: 'hsl(var(--pt-border))' }}>
-          <div>
-            <h2 className="pt-display text-[20px] font-bold leading-tight">Templates</h2>
-            <p className="pt-muted text-xs mt-0.5">Pick a layout to start printing</p>
+        {tplOpen && <div className="md:hidden fixed inset-0 z-30 bg-black/30" onClick={() => setTplOpen(false)} />}
+        <aside
+          className={`overflow-y-auto space-y-5 z-40 transition-transform duration-200 bg-[hsl(var(--pt-card))] md:bg-transparent
+            fixed inset-x-0 bottom-0 max-h-[72vh] w-full rounded-t-2xl border-t px-4 py-4 shadow-lift
+            md:static md:bottom-auto md:w-[280px] md:max-h-none md:shrink-0 md:rounded-none md:border-t-0 md:border-r md:py-5 md:shadow-none md:translate-y-0
+            ${tplOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}`}
+          style={{ borderColor: 'hsl(var(--pt-border))' }}>
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="pt-display text-[20px] font-bold leading-tight">Templates</h2>
+              <p className="pt-muted text-xs mt-0.5">Pick a layout to start printing</p>
+            </div>
+            <button onClick={() => setTplOpen(false)} className="md:hidden pt-toolbtn text-lg leading-none" aria-label="Close templates">✕</button>
           </div>
           {TEMPLATE_GROUPS.map(group => (
             <section key={group.title}>
@@ -351,7 +363,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
                   return (
                     <button
                       key={t.id}
-                      onClick={() => setTemplateId(t.id)}
+                      onClick={() => { setTemplateId(t.id); setTplOpen(false); }}
                       title={t.description}
                       className={`paper-card text-left p-2 transition ${isActive ? '' : 'hover:-translate-y-0.5'}`}
                       style={isActive ? { outline: '2px solid hsl(var(--pt-marigold))', outlineOffset: '1px' } : undefined}
@@ -369,7 +381,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
           ))}
         </aside>
 
-        <main className="flex-1 flex items-center justify-center overflow-auto p-8">
+        <main className="flex-1 flex items-center justify-center overflow-auto p-4 sm:p-8">
           <A4Canvas
             images={images}
             template={template}
@@ -450,14 +462,14 @@ function FilePicker({ onFiles, onAppend }: { onFiles: (files: File[]) => void; o
         className="pt-chip"
         title="Choose one or more images"
       >
-        <Upload className="h-4 w-4" /> Choose
+        <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Choose</span>
       </button>
       <button
         onClick={() => appendRef.current?.click()}
         className="pt-chip"
         title="Add another image to the current set"
       >
-        <Plus className="h-4 w-4" /> Add
+        <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add</span>
       </button>
     </>
   );
@@ -487,7 +499,8 @@ function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms,
   const dragRef = useRef<{ slotIdx: number; startX: number; startY: number; startOffset: { x: number; y: number } } | null>(null);
   const paperW = template.paper.w;
   const paperH = template.paper.h;
-  const disp = displaySize(paperW, paperH);
+  const maxW = Math.min(DISPLAY_MAX, (typeof window !== 'undefined' ? window.innerWidth : DISPLAY_MAX) - 40);
+  const disp = displaySize(paperW, paperH, maxW);
   const scale = paperW / disp.w; // display→canvas scale
   const isCompose = template.id.startsWith('compose-');
   // For "N copies of one photo" templates, every slot shares a single
@@ -641,8 +654,8 @@ function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms,
 
   return (
     <div
-      className={`relative shadow-2xl rounded-sm transition-shadow ${dragOver ? 'ring-2 ring-blue-500' : ''}`}
-      style={{ width: disp.w, height: disp.h }}
+      className={`relative max-w-full min-w-0 shadow-2xl rounded-sm transition-shadow ${dragOver ? 'ring-2 ring-blue-500' : ''}`}
+      style={{ maxWidth: '100%' }}
       onDragOver={e => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
@@ -650,7 +663,7 @@ function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms,
       <canvas
         ref={canvasRef}
         id="cc-photo-canvas"
-        style={{ width: disp.w, height: disp.h, display: 'block', cursor: images.length > 0 ? (selectedSlot !== null ? 'move' : 'pointer') : 'default' }}
+        style={{ width: disp.w, maxWidth: '100%', height: 'auto', display: 'block', cursor: images.length > 0 ? (selectedSlot !== null ? 'move' : 'pointer') : 'default' }}
         onMouseDown={onCanvasMouseDown}
         onMouseMove={onCanvasMouseMove}
         onMouseUp={onCanvasMouseUp}
