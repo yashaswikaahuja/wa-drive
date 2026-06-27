@@ -294,7 +294,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
 
   return (
     <div className="pt-paper flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
-      <header className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+      <header className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-3 sm:px-4 py-2 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
         <div className="flex items-center gap-3 min-w-0">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]" style={{ background: 'hsl(var(--pt-ink))' }}>
             <Printer className="h-5 w-5" style={{ color: 'hsl(var(--pt-bg))' }} />
@@ -306,8 +306,8 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <button onClick={() => setTplOpen(true)} className="pt-chip md:hidden" title="Templates">
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto sm:flex-wrap sm:justify-end">
+          <button onClick={() => setTplOpen(true)} className="pt-chip md:hidden shrink-0" title="Templates">
             <LayoutGrid className="h-4 w-4" /> Templates
           </button>
           <button onClick={() => setCropModalOpen(true)} disabled={!hasImage} className="pt-toolbtn" title="Crop image (C)">
@@ -499,7 +499,17 @@ function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms,
   const dragRef = useRef<{ slotIdx: number; startX: number; startY: number; startOffset: { x: number; y: number } } | null>(null);
   const paperW = template.paper.w;
   const paperH = template.paper.h;
-  const maxW = Math.min(DISPLAY_MAX, (typeof window !== 'undefined' ? window.innerWidth : DISPLAY_MAX) - 40);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [hostW, setHostW] = useState<number>(DISPLAY_MAX);
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+    setHostW(el.clientWidth);
+    const ro = new ResizeObserver(entries => { for (const e of entries) setHostW(e.contentRect.width); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const maxW = Math.max(160, Math.min(DISPLAY_MAX, hostW - 8));
   const disp = displaySize(paperW, paperH, maxW);
   const scale = paperW / disp.w; // display→canvas scale
   const isCompose = template.id.startsWith('compose-');
@@ -653,28 +663,30 @@ function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms,
   };
 
   return (
-    <div
-      className={`relative max-w-full min-w-0 shadow-2xl rounded-sm transition-shadow ${dragOver ? 'ring-2 ring-blue-500' : ''}`}
-      style={{ maxWidth: '100%' }}
-      onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-    >
-      <canvas
-        ref={canvasRef}
-        id="cc-photo-canvas"
-        style={{ width: disp.w, maxWidth: '100%', height: 'auto', display: 'block', cursor: images.length > 0 ? (selectedSlot !== null ? 'move' : 'pointer') : 'default' }}
-        onMouseDown={onCanvasMouseDown}
-        onMouseMove={onCanvasMouseMove}
-        onMouseUp={onCanvasMouseUp}
-        onMouseLeave={onCanvasMouseUp}
-        onWheel={onCanvasWheel}
-      />
-      {images.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm pointer-events-none select-none text-center px-4">
-          Drop an image · paste with Ctrl+V · or click "Choose Image"
-        </div>
-      )}
+    <div ref={hostRef} className="w-full flex items-start justify-center">
+      <div
+        className={`relative shadow-2xl rounded-sm transition-shadow ${dragOver ? 'ring-2 ring-blue-500' : ''}`}
+        style={{ width: disp.w, height: disp.h }}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+      >
+        <canvas
+          ref={canvasRef}
+          id="cc-photo-canvas"
+          style={{ width: disp.w, height: disp.h, display: 'block', cursor: images.length > 0 ? (selectedSlot !== null ? 'move' : 'pointer') : 'default' }}
+          onMouseDown={onCanvasMouseDown}
+          onMouseMove={onCanvasMouseMove}
+          onMouseUp={onCanvasMouseUp}
+          onMouseLeave={onCanvasMouseUp}
+          onWheel={onCanvasWheel}
+        />
+        {images.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-xs sm:text-sm pointer-events-none select-none text-center px-3">
+            Drop an image · paste · or "Choose"
+          </div>
+        )}
+      </div>
     </div>
   );
 }

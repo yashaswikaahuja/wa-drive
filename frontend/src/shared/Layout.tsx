@@ -118,7 +118,7 @@ export default function Layout() {
 
       <Sidebar user={user} logout={logout} open={open} onClose={() => setOpen(false)} />
 
-      <main className="flex-1 overflow-auto p-4 md:p-6">
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-6">
         <Outlet />
       </main>
     </div>

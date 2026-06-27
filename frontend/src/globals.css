@@ -362,3 +362,8 @@
 /* blue-500 low-opacity + border variants → marigold */
 .pt-paper .bg-blue-500\/5 { background-color: hsl(var(--pt-marigold) / 0.08); }
 .pt-paper [class*="border-blue-500"] { border-color: hsl(var(--pt-marigold) / 0.4); }
+
+
+
+/* Keep toolbar buttons full-size inside horizontal-scroll rows */
+.pt-paper .pt-chip, .pt-paper .pt-toolbtn, .pt-paper .btn-marigold { flex-shrink: 0; }

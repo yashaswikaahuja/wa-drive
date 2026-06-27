@@ -644,7 +644,7 @@ export default function WhatsApp() {
   }
 
   return (
-    <div className="h-[calc(100vh-48px)] flex">
+    <div className="h-full md:h-[calc(100vh-48px)] flex w-full min-w-0 overflow-hidden">
       <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
         <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -663,22 +663,22 @@ export default function WhatsApp() {
         </div>
       </div>
 
-      <div className={`flex-1 flex-col ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
+      <div className={`flex-1 min-w-0 flex-col ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
         {!activeChat ? (
           <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">Select a customer to view documents</div>
         ) : (
           <>
-            <div className="h-14 px-4 flex items-center gap-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+            <div className="min-h-[3.5rem] px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
               <button onClick={() => setSelectedChat(null)} className="md:hidden -ml-1 text-2xl leading-none pt-muted hover:text-[hsl(var(--pt-ink))]" aria-label="Back to inbox">‹</button>
               <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm">
                 {activeChat.name[0]?.toUpperCase()}
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-white">{activeChat.name}</p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{activeChat.name}</p>
                 <p className="text-xs text-gray-500">{activeChat.messages.length} documents</p>
               </div>
               {!selectionMode ? (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search..." className="input-field w-28 text-xs py-1" />
                   <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="btn-ghost text-xs text-orange-400 hover:text-orange-300">Request</button>
                   <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="btn-ghost text-xs text-blue-400 hover:text-teal-300">Profile</button>
