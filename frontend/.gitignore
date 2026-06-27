@@ -6,3 +6,6 @@
 /blob-report/
 /playwright/.cache/
 .last-run.json
+
+# Build output (Vercel rebuilds from source)
+dist/
