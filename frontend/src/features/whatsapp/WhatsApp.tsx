@@ -645,7 +645,7 @@ export default function WhatsApp() {
 
   return (
     <div className="h-[calc(100vh-48px)] flex">
-      <div className="w-72 border-r flex flex-col" style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
+      <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
         <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span className="text-sm text-white font-medium">Inbox</span>
@@ -663,12 +663,13 @@ export default function WhatsApp() {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex-col ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
         {!activeChat ? (
           <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">Select a customer to view documents</div>
         ) : (
           <>
             <div className="h-14 px-4 flex items-center gap-3 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+              <button onClick={() => setSelectedChat(null)} className="md:hidden -ml-1 text-2xl leading-none pt-muted hover:text-[hsl(var(--pt-ink))]" aria-label="Back to inbox">‹</button>
               <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm">
                 {activeChat.name[0]?.toUpperCase()}
               </div>
