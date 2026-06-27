@@ -4,7 +4,8 @@ import { useAuthStore } from '../features/auth/store';
 import { extensionBridge } from './extensionBridge';
 import {
   Users, ChatCircle, Camera, Gear,
-  ChartPie, PencilSimple, Brain, Broadcast, UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass
+  ChartPie, PencilSimple, Brain, Broadcast, UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,
+  List, X
 } from '@phosphor-icons/react';
 
 const ExtensionStatus = memo(() => {
@@ -39,10 +40,10 @@ const ADMIN_NAV = [
   { path: '/admin/operators', icon: UserCircle, label: 'Operators' },
 ];
 
-const NavItem = memo(({ path, icon: Icon, label, end }: any) => {
+const NavItem = memo(({ path, icon: Icon, label, end, onNavigate }: any) => {
   const badge = path === '/app/whatsapp' ? parseInt(localStorage.getItem('cc-wa-unread') || '0') : 0;
   return (
-    <NavLink to={path} end={end}
+    <NavLink to={path} end={end} onClick={onNavigate}
       className={({ isActive }) => `sidebar-item ${isActive ? 'active' : ''}`}>
       <Icon size={18} weight={undefined} />
       <span>{label}</span>
@@ -51,24 +52,30 @@ const NavItem = memo(({ path, icon: Icon, label, end }: any) => {
   );
 });
 
-const Sidebar = memo(({ user, logout }: any) => {
+const Sidebar = memo(({ user, logout, open, onClose }: any) => {
   const isAdmin = user?.role === 'admin';
   const nav = useMemo(() => isAdmin
     ? [...OPERATOR_NAV, { path: '', icon: null, label: 'Admin' }, ...ADMIN_NAV]
     : OPERATOR_NAV, [isAdmin]);
 
   return (
-    <aside className="w-52 flex flex-col border-r" style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}>
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 w-60 flex flex-col border-r transition-transform duration-200 md:static md:z-auto md:w-52 md:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+      style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}
+    >
       <div className="h-12 flex items-center gap-2 px-4 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
         <span className="grid h-7 w-7 place-items-center rounded-md" style={{ background: 'hsl(var(--pt-ink))' }}>
           <Lightning size={15} weight="fill" style={{ color: 'hsl(var(--pt-marigold))' }} />
         </span>
         <span className="pt-display text-sm font-bold tracking-tight">Cyber<span style={{ color: 'hsl(var(--pt-marigold-deep))' }}>Control</span></span>
+        <button onClick={onClose} className="ml-auto md:hidden pt-toolbtn" aria-label="Close menu">
+          <X size={18} />
+        </button>
       </div>
       <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {nav.map((n, i) => n.path === ''
           ? <div key={i} className="text-[10px] uppercase tracking-wider text-gray-600 px-3 pt-4 pb-1">{n.label}</div>
-          : <NavItem key={n.path} {...n} />
+          : <NavItem key={n.path} {...n} onNavigate={onClose} />
         )}
       </nav>
       <div className="p-3 border-t space-y-2" style={{ borderColor: 'hsl(var(--pt-border))' }}>
@@ -93,14 +100,27 @@ const Sidebar = memo(({ user, logout }: any) => {
 
 export default function Layout() {
   const { user, logout } = useAuthStore();
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="pt-paper h-screen flex">
-      <Sidebar user={user} logout={logout} />
-      <main className="flex-1 overflow-auto p-6">
+    <div className="pt-paper h-screen flex flex-col md:flex-row">
+      {/* Mobile top bar */}
+      <div className="md:hidden flex items-center justify-between h-12 px-3 border-b shrink-0" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+        <button onClick={() => setOpen(true)} className="pt-toolbtn" aria-label="Open menu">
+          <List size={20} />
+        </button>
+        <span className="pt-display text-sm font-bold tracking-tight">Cyber<span style={{ color: 'hsl(var(--pt-marigold-deep))' }}>Control</span></span>
+        <span className="w-9" />
+      </div>
+
+      {/* Mobile backdrop */}
+      {open && <div className="md:hidden fixed inset-0 z-40 bg-black/30" onClick={() => setOpen(false)} />}
+
+      <Sidebar user={user} logout={logout} open={open} onClose={() => setOpen(false)} />
+
+      <main className="flex-1 overflow-auto p-4 md:p-6">
         <Outlet />
       </main>
     </div>
   );
 }
-
