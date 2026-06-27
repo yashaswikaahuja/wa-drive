@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root {
   /* Apple-inspired dark palette */
@@ -177,3 +177,76 @@
     box-shadow: 0 0 20px rgba(48, 209, 88, 0.15), 0 0 60px rgba(48, 209, 88, 0.05);
   }
 }
+
+
+
+/* ───────────────────────────────────────────────────────────────────────
+   Photo Tool — scoped "warm paper" theme (matches landing + paper-print-hub).
+   Everything is namespaced under .pt-paper so the rest of the (dark) Hub
+   is unaffected.
+   ─────────────────────────────────────────────────────────────────────── */
+.pt-paper {
+  --pt-bg: 42 38% 94%;          /* cream */
+  --pt-ink: 222 37% 12%;        /* ink navy */
+  --pt-ink-soft: 222 20% 30%;
+  --pt-muted: 30 10% 40%;
+  --pt-card: 0 0% 100%;
+  --pt-border: 35 18% 82%;
+  --pt-border-soft: 38 20% 88%;
+  --pt-secondary: 38 30% 90%;
+  --pt-paper-deep: 38 30% 88%;
+  --pt-marigold: 27 95% 55%;
+  --pt-marigold-deep: 22 90% 48%;
+
+  color: hsl(var(--pt-ink));
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: hsl(var(--pt-bg));
+  background-image:
+    radial-gradient(hsl(30 25% 78% / 0.35) 1px, transparent 1px),
+    radial-gradient(hsl(30 25% 70% / 0.18) 1px, transparent 1px);
+  background-size: 22px 22px, 7px 7px;
+  background-position: 0 0, 3px 5px;
+}
+
+.pt-paper .pt-display { font-family: 'Bricolage Grotesque', 'Inter', sans-serif; letter-spacing: -0.02em; }
+.pt-paper .pt-label   { font-family: 'JetBrains Mono', ui-monospace, monospace; text-transform: uppercase; letter-spacing: 0.08em; }
+.pt-paper .pt-muted   { color: hsl(var(--pt-muted)); }
+.pt-paper .pt-ink-soft{ color: hsl(var(--pt-ink-soft)); }
+
+.pt-paper .paper-card {
+  background: hsl(var(--pt-card));
+  border: 1px solid hsl(var(--pt-border));
+  border-radius: 14px;
+  box-shadow: 0 1px 0 hsl(35 18% 82% / 0.6), 0 12px 32px -16px hsl(30 30% 30% / 0.18);
+}
+
+.pt-paper .pt-chip {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  height: 2.25rem; padding: 0 0.85rem; border-radius: 9999px;
+  background: hsl(var(--pt-card)); border: 1px solid hsl(var(--pt-border));
+  font-size: 0.8125rem; font-weight: 500; color: hsl(var(--pt-ink));
+  box-shadow: 0 1px 0 hsl(35 18% 82% / 0.6), 0 2px 6px -2px hsl(30 30% 30% / 0.08);
+  transition: all .15s; cursor: pointer; white-space: nowrap;
+}
+.pt-paper .pt-chip:hover:not(:disabled) { border-color: hsl(var(--pt-ink) / 0.3); transform: translateY(-1px); }
+.pt-paper .pt-chip:disabled { opacity: .45; cursor: not-allowed; }
+
+.pt-paper .btn-marigold {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  height: 2.25rem; padding: 0 1.1rem; border-radius: 9999px;
+  font-size: 0.8125rem; font-weight: 600; color: #fff; cursor: pointer;
+  background: linear-gradient(180deg, hsl(27 95% 58%), hsl(22 92% 50%));
+  box-shadow: 0 1px 0 hsl(22 90% 40% / 0.5) inset, 0 8px 20px -8px hsl(27 95% 55% / 0.55);
+  transition: all .15s;
+}
+.pt-paper .btn-marigold:hover:not(:disabled) { filter: brightness(1.04); transform: translateY(-1px); }
+.pt-paper .btn-marigold:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
+
+.pt-paper .pt-toolbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  height: 2rem; padding: 0 0.6rem; border-radius: 8px;
+  color: hsl(var(--pt-ink) / 0.8); font-size: 0.8125rem; cursor: pointer; transition: all .15s;
+}
+.pt-paper .pt-toolbtn:hover:not(:disabled) { color: hsl(var(--pt-ink)); background: hsl(var(--pt-secondary)); }
+.pt-paper .pt-toolbtn[data-active="true"] { background: hsl(var(--pt-marigold) / 0.12); color: hsl(var(--pt-marigold-deep)); }
+.pt-paper .pt-toolbtn:disabled { opacity: .4; cursor: not-allowed; }
