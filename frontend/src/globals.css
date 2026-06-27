@@ -40,21 +40,22 @@
 @layer base {
   * { border-color: var(--border); }
   body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif;
+    background-color: #F6F2E9;
+    color: #131A2B;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: -0.01em;
   }
+  html { background-color: #F6F2E9; }
   ::selection {
-    background: rgba(10, 132, 255, 0.3);
-    color: #fff;
+    background: hsl(27 95% 55% / 0.28);
+    color: #131A2B;
   }
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+  ::-webkit-scrollbar-thumb { background: rgba(19,26,43,0.18); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(19,26,43,0.32); }
 }
 
 @layer components {
