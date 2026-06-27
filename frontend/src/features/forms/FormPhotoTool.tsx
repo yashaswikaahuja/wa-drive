@@ -161,12 +161,12 @@ export default function FormPhotoTool() {
               <p className="text-xs text-gray-600 mt-1">Customer's photo or signature</p>
             </div>
           ) : (
-            <div className="flex items-center gap-6">
-              <div className="shrink-0">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
+              <div className="shrink-0 mx-auto sm:mx-0">
                 <canvas ref={previewRef} className="rounded-lg border border-white/[0.08] bg-white"
                   style={{ width: Math.min(spec!.width, 160), height: Math.min(spec!.width, 160) * (spec!.height / spec!.width) }} />
               </div>
-              <div className="flex-1 space-y-2">
+              <div className="flex-1 min-w-0 w-full space-y-2">
                 {processing ? (
                   <p className="text-sm text-gray-400">Processing...</p>
                 ) : result ? (
@@ -204,10 +204,10 @@ export default function FormPhotoTool() {
 
 function SpecCheck({ label, ok, value, target }: { label: string; ok: boolean; value: string; target?: string }) {
   return (
-    <div className="flex items-center gap-2 text-sm">
-      {ok ? <CheckCircle size={16} weight="fill" className="text-[#30d158]" /> : <XCircle size={16} weight="fill" className="text-[#ff453a]" />}
-      <span className="text-gray-500 w-24">{label}</span>
-      <span className={ok ? 'text-gray-200' : 'text-[#ff453a]'}>{value}</span>
+    <div className="flex items-center gap-2 text-sm flex-wrap">
+      {ok ? <CheckCircle size={16} weight="fill" className="text-[#30d158] shrink-0" /> : <XCircle size={16} weight="fill" className="text-[#ff453a] shrink-0" />}
+      <span className="text-gray-500 w-20 sm:w-24 shrink-0">{label}</span>
+      <span className={`${ok ? 'text-gray-200' : 'text-[#ff453a]'} min-w-0 break-words`}>{value}</span>
       {target && <span className="text-gray-600 text-xs font-mono">({target} KB)</span>}
     </div>
   );
