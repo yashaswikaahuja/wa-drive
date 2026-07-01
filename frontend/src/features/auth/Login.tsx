@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Lightning } from '@phosphor-icons/react';
+import { Lightning, Eye, EyeSlash } from '@phosphor-icons/react';
 import { useAuthStore } from '../auth/store';
 import { extensionBridge } from '../../shared/extensionBridge';
 import axios from 'axios';
@@ -10,6 +10,7 @@ const GOOGLE_CLIENT_ID = '62092486976-jhsn62q3ufj4dvr42c1hpubnujasaqok.apps.goog
 export default function Login() {
   const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { setTokens, setUser } = useAuthStore();
@@ -46,7 +47,9 @@ export default function Login() {
         },
       });
       if (googleBtnRef.current) {
-        w.google.accounts.id.renderButton(googleBtnRef.current, { theme: 'outline', size: 'large', width: 320, text: 'signin_with' });
+        // Clamp to the container so the button never overflows a narrow phone (GSI allows 200–400).
+        const btnW = Math.min(Math.max(Math.floor(googleBtnRef.current.clientWidth) || 320, 200), 400);
+        w.google.accounts.id.renderButton(googleBtnRef.current, { theme: 'outline', size: 'large', width: btnW, text: 'signin_with' });
       }
     }
   }, []);
@@ -86,11 +89,18 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="login-identity" className="text-xs pt-muted mb-1 block">Email or Phone</label>
-            <input id="login-identity" type="text" autoComplete="username" value={identity} onChange={e => setIdentity(e.target.value)} className="input-field" placeholder="you@example.com" />
+            <input id="login-identity" type="text" autoComplete="username" autoFocus value={identity} onChange={e => setIdentity(e.target.value)} className="input-field" placeholder="you@example.com" />
           </div>
           <div>
             <label htmlFor="login-password" className="text-xs pt-muted mb-1 block">Password</label>
-            <input id="login-password" type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className="input-field" placeholder="Enter password" />
+            <div className="relative">
+              <input id="login-password" type={showPw ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} className="input-field pr-10" placeholder="Enter password" />
+              <button type="button" onClick={() => setShowPw(v => !v)} tabIndex={-1}
+                aria-label={showPw ? 'Hide password' : 'Show password'}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 pt-muted transition-colors hover:text-ink">
+                {showPw ? <EyeSlash size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
           {error && <p className="text-xs" style={{ color: 'hsl(0 65% 48%)' }}>{error}</p>}
           <button type="submit" disabled={loading} className="w-full btn-primary py-2.5">
