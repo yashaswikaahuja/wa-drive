@@ -25,8 +25,14 @@ interface Props {
   onPick: (file: File) => void;
 }
 
+// Session cache so reopening the picker is instant (the /drive/files/ws call
+// hits Google Drive and is slow). Stale-while-revalidate: show cached results
+// immediately, refresh in the background when older than the TTL.
+let _driveCache: { data: DriveFile[]; at: number } | null = null;
+const DRIVE_CACHE_TTL = 120_000;
+
 export default function DrivePicker({ open, onClose, onPick }: Props) {
-  const [files, setFiles] = useState<DriveFile[]>([]);
+  const [files, setFiles] = useState<DriveFile[]>(() => _driveCache?.data ?? []);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -34,15 +40,22 @@ export default function DrivePicker({ open, onClose, onPick }: Props) {
 
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
+    let alive = true;
+    const hasCache = !!_driveCache;
+    const fresh = _driveCache && Date.now() - _driveCache.at < DRIVE_CACHE_TTL;
+    if (hasCache) { setFiles(_driveCache!.data); setLoading(false); }
+    else { setLoading(true); }
+    if (fresh) return;            // cache still fresh — no network needed
     setError('');
     api.get('/drive/files/ws')
       .then(res => {
         const data = Array.isArray(res.data) ? res.data : [];
-        setFiles(data);
+        _driveCache = { data, at: Date.now() };
+        if (alive) setFiles(data);
       })
-      .catch(e => setError(e.response?.data?.error || e.message || 'Failed to load files'))
-      .finally(() => setLoading(false));
+      .catch(e => { if (alive && !hasCache) setError(e.response?.data?.error || e.message || 'Failed to load files'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [open]);
 
   if (!open) return null;
@@ -116,6 +129,8 @@ export default function DrivePicker({ open, onClose, onPick }: Props) {
                     <img
                       src={f.fileUrl}
                       alt={f.fileName}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover"
                       onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
