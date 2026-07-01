@@ -226,7 +226,10 @@ export default function Stitch() {
       {/* Header */}
       <div className="border-b px-4 h-12 flex items-center justify-between shrink-0 rounded-t-xl" style={panelBg}>
         <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-sm font-bold pt-display truncate" style={{ color: 'hsl(var(--pt-ink))' }}>Photo Processing</h1>
+          <div className="min-w-0">
+            <h1 className="text-sm font-bold pt-display leading-tight truncate" style={{ color: 'hsl(var(--pt-ink))' }}>Photo Processing</h1>
+            <p className="text-[10px] pt-muted leading-tight truncate">Background removal · Aadhaar layout</p>
+          </div>
           <div className="flex gap-1">
             {(['aadhaar', 'passport'] as Mode[]).map(m => (
               <button key={m} onClick={() => setMode(m)}

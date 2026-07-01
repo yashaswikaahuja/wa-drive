@@ -302,7 +302,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
           <div className="leading-tight min-w-0">
             <div className="pt-display text-[15px] font-bold">Photo Tool</div>
             <div className="pt-muted text-[11px] truncate max-w-[280px]">
-              {fileName || 'documents · passport · ID prints'}
+              {fileName || 'Passport & ID photo print sheets'}
             </div>
           </div>
         </div>
