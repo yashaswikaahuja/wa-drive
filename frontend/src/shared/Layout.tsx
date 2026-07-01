@@ -28,7 +28,7 @@ const OPERATOR_NAV = [
   { path: '/app/customers', icon: Users, label: 'Customers' },
   { path: '/app/forms', icon: MagnifyingGlass, label: 'Find Form' },
   { path: '/app/whatsapp', icon: ChatCircle, label: 'Documents' },
-  { path: '/app/photo', icon: Camera, label: 'Photo Tool' },
+  { path: '/app/photos', icon: Camera, label: 'Photos' },
   { path: '/app/settings', icon: Gear, label: 'Settings' },
 ];
 

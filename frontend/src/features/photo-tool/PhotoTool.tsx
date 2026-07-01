@@ -293,7 +293,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
   }, [hasImage, drivePickerOpen, cropModalOpen, selectedSlot]);
 
   return (
-    <div className="pt-paper flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
+    <div className="pt-paper flex flex-col h-full w-full max-w-full overflow-x-hidden">
       <header className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-3 sm:px-4 py-2 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
         <div className="flex items-center gap-3 min-w-0">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px]" style={{ background: 'hsl(var(--pt-ink))' }}>

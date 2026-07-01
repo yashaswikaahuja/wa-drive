@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useEffect } from 'react';
 import { useAuthStore } from './features/auth/store';
@@ -20,6 +20,7 @@ const FormDirectory = lazy(() => import('./features/forms/FormDirectory'));
 const FormPhotoTool = lazy(() => import('./features/forms/FormPhotoTool'));
 const Stitch = lazy(() => import('./features/services/Stitch'));
 const PhotoTool = lazy(() => import('./features/photo-tool/PhotoTool'));
+const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
 const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
 const Settings = lazy(() => import('./features/settings/Settings'));
@@ -65,9 +66,17 @@ export default function App() {
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/forms" element={<Suspense fallback={<PageLoader />}><FormDirectory /></Suspense>} />
-          <Route path="/app/forms/photo" element={<Suspense fallback={<PageLoader />}><FormPhotoTool /></Suspense>} />
-          <Route path="/app/stitch" element={<Suspense fallback={<PageLoader />}><Stitch /></Suspense>} />
-          <Route path="/app/photo" element={<Suspense fallback={<PageLoader />}><PhotoTool /></Suspense>} />
+          {/* Unified Photos hub (mode tabs) */}
+          <Route path="/app/photos" element={<Suspense fallback={<PageLoader />}><PhotosHub /></Suspense>}>
+            <Route index element={<Navigate to="/app/photos/prints" replace />} />
+            <Route path="prints" element={<Suspense fallback={<PageLoader />}><PhotoTool /></Suspense>} />
+            <Route path="process" element={<Suspense fallback={<PageLoader />}><Stitch /></Suspense>} />
+            <Route path="form" element={<Suspense fallback={<PageLoader />}><FormPhotoTool /></Suspense>} />
+          </Route>
+          {/* Back-compat redirects (preserve query string) */}
+          <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/prints" />} />
+          <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/process" />} />
+          <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/form" />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
           <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
@@ -80,6 +89,11 @@ export default function App() {
       </Routes>
     </BrowserRouter>
   );
+}
+
+function RedirectWithSearch({ to }: { to: string }) {
+  const { search } = useLocation();
+  return <Navigate to={to + search} replace />;
 }
 
 function Placeholder({ title }: { title: string }) {

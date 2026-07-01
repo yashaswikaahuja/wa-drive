@@ -24,13 +24,14 @@ const routes: { name: string; path: string }[] = [
   { name: 'Customers', path: '/app/customers' },
   { name: 'Form Directory', path: '/app/forms' },
   { name: 'Documents', path: '/app/whatsapp' },
-  { name: 'Photo Tool', path: '/app/photo' },
+  { name: 'Photos — prints', path: '/app/photos/prints' },
+  { name: 'Photos — process', path: '/app/photos/process' },
   { name: 'Settings', path: '/app/settings' },
   { name: 'Admin Overview', path: '/admin' },
   { name: 'Sessions', path: '/admin/sessions' },
   { name: 'Mappings', path: '/admin/mappings' },
   { name: 'Corrections', path: '/admin/corrections' },
-  { name: 'Prepare Photo', path: `/app/forms/photo?form=SSC%20CHSL&photo=${photoSpec}&signature=${sigSpec}` },
+  { name: 'Prepare Photo', path: `/app/photos/form?form=SSC%20CHSL&photo=${photoSpec}&signature=${sigSpec}` },
 ];
 
 test.beforeEach(async ({ page }) => {

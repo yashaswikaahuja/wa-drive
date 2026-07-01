@@ -222,7 +222,7 @@ export default function Stitch() {
   const marigoldSoft = { background: 'hsl(var(--pt-marigold) / 0.12)', borderColor: 'hsl(var(--pt-marigold))', color: 'hsl(var(--pt-ink))' } as const;
 
   return (
-    <div className="pt-paper flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
+    <div className="pt-paper flex flex-col h-full w-full max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="border-b px-4 h-12 flex items-center justify-between shrink-0 rounded-t-xl" style={panelBg}>
         <div className="flex items-center gap-3 min-w-0">
