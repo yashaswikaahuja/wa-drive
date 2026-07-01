@@ -69,3 +69,6 @@ CHANGELOG.md
 # Platform
 .vercel
 WORKER_SECRET*
+
+# Keep the packaged extension for landing download (exception to *.zip)
+!landing/public/cybercontrol-extension.zip
