@@ -2,9 +2,10 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   MagnifyingGlass, ArrowRight, Sparkle, Lightning,
-  FileText, ChatCircle
+  FileText, ChatCircle, CheckCircle, Circle, X
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import { extensionBridge } from '../../shared/extensionBridge';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 const INK = 'hsl(var(--pt-ink))';
@@ -74,6 +75,8 @@ export default function Dashboard() {
   return (
     <div className="max-w-2xl mx-auto pt-4">
 
+      <SetupChecklist />
+
       {/* Search — first action: form OR customer */}
       <div style={reveal(0)} className="mb-8">
         <div className="paper-card p-1.5">
@@ -142,6 +145,59 @@ export default function Dashboard() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+/* First-run setup guidance — hides once complete or dismissed */
+function SetupChecklist() {
+  const navigate = useNavigate();
+  const [dismissed, setDismissed] = useState(() => localStorage.getItem('cc-setup-dismissed') === '1');
+  const [ext, setExt] = useState(false);
+  const [wa, setWa] = useState(() => localStorage.getItem('cc-wa-connected') === 'true');
+  const [drive, setDrive] = useState(false);
+
+  useEffect(() => extensionBridge.onStatus((s) => setExt(s === 'connected')), []);
+  useEffect(() => {
+    api.get('/drive/status').then(r => setDrive(!!r.data?.connected)).catch(() => {});
+    api.get('/whatsapp/status').then(r => setWa(!!r.data?.connected)).catch(() => {});
+  }, []);
+
+  const steps = [
+    { done: ext, label: 'Install the browser extension', desc: 'Autofills government forms', action: () => window.open('https://cybercontrol.fun/#extension', '_blank') },
+    { done: wa, label: 'Connect WhatsApp', desc: 'Receive customer documents', action: () => navigate('/app/whatsapp') },
+    { done: drive, label: 'Connect Google Drive', desc: 'Store received files', action: () => navigate('/app/settings') },
+  ];
+  const doneCount = steps.filter(s => s.done).length;
+  if (dismissed || doneCount === steps.length) return null;
+
+  return (
+    <div className="paper-card p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <p className="pt-display text-sm font-bold" style={{ color: INK }}>Set up your workspace</p>
+          <p className="text-xs pt-muted">{doneCount} of {steps.length} done</p>
+        </div>
+        <button onClick={() => { localStorage.setItem('cc-setup-dismissed', '1'); setDismissed(true); }} className="pt-muted hover:text-red-500 p-1 transition-colors" aria-label="Dismiss setup checklist">
+          <X size={16} />
+        </button>
+      </div>
+      <div className="space-y-1.5">
+        {steps.map((s, i) => (
+          <button key={i} onClick={s.action} disabled={s.done}
+            className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition active:scale-[0.99] disabled:cursor-default"
+            style={{ background: 'hsl(var(--pt-secondary) / 0.5)' }}>
+            {s.done
+              ? <CheckCircle size={20} weight="fill" style={{ color: GREEN }} className="shrink-0" />
+              : <Circle size={20} style={{ color: 'hsl(var(--pt-muted))' }} className="shrink-0" />}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium" style={{ color: s.done ? 'hsl(var(--pt-muted))' : INK, textDecoration: s.done ? 'line-through' : 'none' }}>{s.label}</div>
+              <div className="text-[11px] pt-muted">{s.desc}</div>
+            </div>
+            {!s.done && <ArrowRight size={15} className="pt-muted shrink-0" />}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

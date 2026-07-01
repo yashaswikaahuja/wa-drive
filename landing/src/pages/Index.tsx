@@ -537,9 +537,8 @@ const Nav = () => {
         </nav>
         <div className="flex items-center gap-2">
           <a
-            href={EXTENSION_URL}
-            download
-            title={`Download the Chrome extension (v${EXTENSION_VERSION})`}
+            href="#extension"
+            title="Get the Chrome extension"
             className="hidden items-center gap-1.5 rounded-md border border-border px-3 py-2 text-[12.5px] font-medium text-ink-soft transition hover:border-ink/30 hover:text-ink md:inline-flex"
           >
             <Download className="h-3.5 w-3.5" aria-hidden="true" /> Extension
@@ -584,12 +583,11 @@ const Nav = () => {
               </a>
             ))}
             <a
-              href={EXTENSION_URL}
-              download
+              href="#extension"
               onClick={() => setOpen(false)}
               className="inline-flex items-center gap-2 py-2.5 text-sm font-medium text-ink-soft hover:text-ink"
             >
-              <Download className="h-4 w-4" aria-hidden="true" /> Download extension
+              <Download className="h-4 w-4" aria-hidden="true" /> Get the extension
             </a>
             <a
               href={APP_URL}
@@ -1137,6 +1135,50 @@ const FloatingWhatsApp = () => (
 /* Final CTA + footer                                                   */
 /* ------------------------------------------------------------------ */
 
+const EXTENSION_STEPS: readonly (readonly [string, string])[] = [
+  ["Unzip the file", "Right-click the downloaded file → Extract All."],
+  ["Open Chrome extensions", "Type chrome://extensions in the address bar."],
+  ["Enable Developer mode", "Toggle it on — top-right corner of the page."],
+  ["Load unpacked", 'Click "Load unpacked" and pick the unzipped folder.'],
+];
+
+const ExtensionSection = () => (
+  <section id="extension" className="container py-16">
+    <div className="rounded-3xl border border-border bg-paper p-6 shadow-paper sm:p-10">
+      <div className="grid gap-8 md:grid-cols-[1fr_1.1fr] md:items-center">
+        <div>
+          <span className="label-mono text-ink/60">/// browser extension</span>
+          <h3 className="mt-2 font-display text-[clamp(1.5rem,3vw,2.2rem)] font-bold leading-tight text-ink">
+            Autofill on the real government forms.
+          </h3>
+          <p className="mt-3 max-w-md text-[14.5px] leading-relaxed text-ink/75">
+            Install the Chrome extension once. It fills SSC, Railway, NEET and more
+            straight from a customer's saved profile — no retyping.
+          </p>
+          <a
+            href={EXTENSION_URL}
+            download
+            className="mt-5 inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2.5 text-[13px] font-semibold text-paper shadow-paper transition hover:brightness-110"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" /> Download extension (v{EXTENSION_VERSION})
+          </a>
+        </div>
+        <ol className="space-y-3">
+          {EXTENSION_STEPS.map(([title, desc], i) => (
+            <li key={i} className="flex gap-3 rounded-xl border border-border bg-paper-deep/40 p-3">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-marigold text-[12px] font-bold text-ink">{i + 1}</span>
+              <div>
+                <div className="text-[13.5px] font-semibold text-ink">{title}</div>
+                <div className="text-[12.5px] text-ink/70">{desc}</div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  </section>
+);
+
 const FinalCTA = () => (
   <section id="cta" className="container py-20">
     <div className="overflow-hidden rounded-3xl bg-gradient-marigold p-6 shadow-lift sm:p-8 md:p-12">
@@ -1197,7 +1239,7 @@ const Footer = () => (
       </div>
       <div className="flex items-center gap-5">
         <a href="#used-for" className="hover:text-ink">Services</a>
-        <a href={EXTENSION_URL} download className="hover:text-ink">Extension</a>
+        <a href="#extension" className="hover:text-ink">Extension</a>
         <a href={APP_URL} className="hover:text-ink">Sign in</a>
         <a {...demoLinkProps} className="hover:text-ink">
           Contact
@@ -1220,6 +1262,7 @@ const Index = () => (
       <UsedForSection />
       <HumseSection />
       <MemorySection />
+      <ExtensionSection />
       <FinalCTA />
     </main>
     <Footer />
