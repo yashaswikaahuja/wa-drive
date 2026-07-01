@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { ArrowLeft, ArrowsClockwise, Trash } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
+import { useFocusTrap } from '../../shared/useFocusTrap';
 
 interface FormSummary {
   formKey: string;
@@ -350,14 +351,11 @@ export default function MappingsPage() {
 }
 
 function ConfirmDialog({ message, danger, confirmLabel, onConfirm, onCancel }: { message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void; onCancel: () => void; }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, onCancel);
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onCancel} role="dialog" aria-modal="true">
-      <div onClick={e => e.stopPropagation()} className="card max-w-sm w-full p-5">
+      <div ref={dialogRef} onClick={e => e.stopPropagation()} className="card max-w-sm w-full p-5">
         <p className="text-sm" style={{ color: 'hsl(var(--pt-ink))' }}>{message}</p>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onCancel} className="btn-secondary text-sm">Cancel</button>

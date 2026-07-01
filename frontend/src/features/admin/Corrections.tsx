@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, PencilSimple, Plus } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import PageHeader from '../../shared/PageHeader';
 
 interface CorrectionBatch {
   id: string; hostname: string; semanticFormKey: string; trigger: string;
@@ -80,7 +81,7 @@ export default function Corrections() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-white tracking-tight mb-6">Corrections</h1>
+      <PageHeader title="Corrections" subtitle="Operator edits to autofilled forms" />
       {batches.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-20 px-4">
           <PencilSimple size={34} className="pt-muted mb-3" />

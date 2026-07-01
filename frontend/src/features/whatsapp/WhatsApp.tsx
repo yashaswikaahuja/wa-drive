@@ -409,12 +409,26 @@ export default function WhatsApp() {
   }, []);
 
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
+  const viewerRef = useRef<HTMLDivElement>(null);
   const handleCloseViewer = useCallback(() => setViewerFile(null), []);
   useEffect(() => {
     if (!viewerFile) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewerFile(null); };
+    const el = viewerRef.current;
+    const prev = document.activeElement as HTMLElement | null;
+    const sel = 'a[href],button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])';
+    const focusables = () => el ? Array.from(el.querySelectorAll<HTMLElement>(sel)).filter(n => n.offsetParent !== null) : [];
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setViewerFile(null); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
   }, [viewerFile]);
   const handleDeleteDoc = useCallback((id: string) => {
     setChats(prev => {
@@ -793,7 +807,7 @@ export default function WhatsApp() {
 
       {/* Document viewer */}
       {viewerFile && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={handleCloseViewer}>
+        <div ref={viewerRef} className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={handleCloseViewer} role="dialog" aria-modal="true">
           <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
             <span className="text-white/90 text-sm font-medium truncate flex-1 min-w-0">{viewerFile.fileName}</span>
             <button

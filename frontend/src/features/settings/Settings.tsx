@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner } from '@phosphor-icons/react';
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
+import PageHeader from '../../shared/PageHeader';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
@@ -37,7 +38,7 @@ export default function Settings() {
 
   return (
     <div className="max-w-lg">
-      <h1 className="text-2xl font-semibold tracking-tight text-white mb-6">Settings</h1>
+      <PageHeader title="Settings" />
 
       <section className="card mb-4">
         <div className="flex items-center gap-2 mb-4">

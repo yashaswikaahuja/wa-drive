@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Broadcast, CheckCircle, XCircle, PencilSimple, UsersThree, ClipboardText, ChartPie } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import PageHeader from '../../shared/PageHeader';
 
 export default function Overview() {
   const [data, setData] = useState({ sessions: 0, filled: 0, failed: 0, corrections: 0, profiles: 0, jobs: 0, topForms: [] as any[] });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
@@ -18,7 +20,7 @@ export default function Overview() {
       });
       const topForms = Object.values(formCounts).sort((a, b) => b.count - a.count).slice(0, 5);
       setData({ ...stats, topForms });
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   const cards = [
@@ -34,7 +36,18 @@ export default function Overview() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-white tracking-tight mb-6">Admin Overview</h1>
+      <PageHeader title="Admin Overview" subtitle="Autofill performance across your workspace" />
+      {loading ? (
+        <div className="animate-pulse">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="h-[74px] rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />)}
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            {Array.from({ length: 2 }).map((_, i) => <div key={i} className="h-28 rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />)}
+          </div>
+        </div>
+      ) : (
+      <>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
         {cards.map(c => (
           <div key={c.label} className="card p-4">
@@ -73,6 +86,8 @@ export default function Overview() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

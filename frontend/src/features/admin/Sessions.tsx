@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Broadcast } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import PageHeader from '../../shared/PageHeader';
 
 interface Session {
   id: string; hostname: string; semanticFormKey: string; runtimeVersion: string;
@@ -27,8 +28,9 @@ export default function Sessions() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selected, setSelected] = useState<Session | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => { api.get('/sessions').then(r => setSessions(r.data)).catch(() => {}); }, []);
+  useEffect(() => { api.get('/sessions').then(r => setSessions(r.data)).catch(() => {}).finally(() => setLoading(false)); }, []);
 
   async function openSession(s: Session) {
     setSelected(s);
@@ -91,8 +93,12 @@ export default function Sessions() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-white tracking-tight mb-6">Sessions</h1>
-      {sessions.length === 0 ? (
+      <PageHeader title="Sessions" subtitle="Autofill runs from the operator extension" />
+      {loading ? (
+        <div className="space-y-2 animate-pulse">
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-[68px] rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />)}
+        </div>
+      ) : sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center text-center py-20 px-4">
           <Broadcast size={34} className="pt-muted mb-3" />
           <p className="text-sm font-medium" style={{ color: 'hsl(var(--pt-ink))' }}>No sessions yet</p>
