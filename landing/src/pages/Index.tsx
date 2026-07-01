@@ -21,6 +21,7 @@ import {
   Store,
   MapPin,
   Loader2,
+  Download,
   Menu,
   X,
 } from "lucide-react";
@@ -37,6 +38,8 @@ import { toast } from "sonner";
 const WHATSAPP_NUMBER = String(import.meta.env.VITE_WHATSAPP_NUMBER ?? "").replace(/\D/g, "");
 const APP_URL = String(import.meta.env.VITE_APP_URL ?? "https://app.cybercontrol.fun");
 const SITE_URL = "https://cybercontrol.fun";
+const EXTENSION_URL = "/cybercontrol-extension.zip";
+const EXTENSION_VERSION = "5.79";
 const waEnabled = WHATSAPP_NUMBER.length >= 10;
 
 const waLink = (message: string) =>
@@ -534,6 +537,14 @@ const Nav = () => {
         </nav>
         <div className="flex items-center gap-2">
           <a
+            href={EXTENSION_URL}
+            download
+            title={`Download the Chrome extension (v${EXTENSION_VERSION})`}
+            className="hidden items-center gap-1.5 rounded-md border border-border px-3 py-2 text-[12.5px] font-medium text-ink-soft transition hover:border-ink/30 hover:text-ink md:inline-flex"
+          >
+            <Download className="h-3.5 w-3.5" aria-hidden="true" /> Extension
+          </a>
+          <a
             href={APP_URL}
             className="hidden text-[13px] font-medium text-ink-soft hover:text-ink sm:block"
           >
@@ -572,6 +583,14 @@ const Nav = () => {
                 {l.label}
               </a>
             ))}
+            <a
+              href={EXTENSION_URL}
+              download
+              onClick={() => setOpen(false)}
+              className="inline-flex items-center gap-2 py-2.5 text-sm font-medium text-ink-soft hover:text-ink"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" /> Download extension
+            </a>
             <a
               href={APP_URL}
               onClick={() => setOpen(false)}
@@ -1178,6 +1197,7 @@ const Footer = () => (
       </div>
       <div className="flex items-center gap-5">
         <a href="#used-for" className="hover:text-ink">Services</a>
+        <a href={EXTENSION_URL} download className="hover:text-ink">Extension</a>
         <a href={APP_URL} className="hover:text-ink">Sign in</a>
         <a {...demoLinkProps} className="hover:text-ink">
           Contact
