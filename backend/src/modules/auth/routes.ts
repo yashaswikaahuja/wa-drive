@@ -9,6 +9,9 @@ import { authMiddleware, signAccessToken, signRefreshToken } from '../../middlew
 
 const router = Router();
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many attempts, try again later' } });
+// Refresh is automated (fires on access-token expiry) and now single-flight on the client, so it's
+// legitimately more frequent than login — a more generous cap that still blocks abuse.
+const refreshLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, message: { error: 'Too many refresh attempts, try again later' } });
 const googleAuthClient = new GoogleOAuth2Client(GOOGLE_CLIENT_ID);
 
 router.post('/google', authLimiter, async (req, res) => {
@@ -114,7 +117,7 @@ router.post('/login', authLimiter, async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/refresh', async (req, res) => {
+router.post('/refresh', refreshLimiter, async (req, res) => {
   const { refreshToken } = req.body;
   if (!refreshToken) return res.status(400).json({ error: 'refreshToken required' });
   try {
