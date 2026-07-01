@@ -5,7 +5,7 @@ import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
-import { Printer, Camera, X } from '@phosphor-icons/react';
+import { Printer, Camera, X, WhatsappLogo } from '@phosphor-icons/react';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -410,6 +410,12 @@ export default function WhatsApp() {
 
   const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
   const handleCloseViewer = useCallback(() => setViewerFile(null), []);
+  useEffect(() => {
+    if (!viewerFile) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setViewerFile(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [viewerFile]);
   const handleDeleteDoc = useCallback((id: string) => {
     setChats(prev => {
       const map = new Map(prev);
@@ -620,7 +626,9 @@ export default function WhatsApp() {
   if (!connected) {
     return (
       <div className="h-full flex flex-col items-center justify-center max-w-md mx-auto text-center">
-        <div className="text-5xl mb-4">💬</div>
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'hsl(142 60% 40% / 0.12)' }}>
+          <WhatsappLogo size={32} weight="fill" style={{ color: 'hsl(142 64% 34%)' }} />
+        </div>
         <h2 className="text-lg font-bold text-white mb-2">Connect WhatsApp</h2>
         <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
         {qrCode ? (

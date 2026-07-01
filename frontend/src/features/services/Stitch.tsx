@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import api, { API_URL, SOCKET_URL } from '../../shared/api';
+import { Printer, DownloadSimple, Sparkle, Check, Camera, ArrowLeft, ArrowCounterClockwise, Warning } from '@phosphor-icons/react';
+import api, { SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../auth/store';
 
 interface StitchFile { id: string; fileName: string; fileUrl: string; customerName: string; }
@@ -215,149 +216,160 @@ export default function Stitch() {
 
   const previewSrc = sheetUrl ?? processedUrl ?? originalUrl;
 
+  const panelBg = { background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' } as const;
+  const fieldBg = { background: 'hsl(var(--pt-secondary))', borderColor: 'hsl(var(--pt-border))' } as const;
+  const marigold = { background: 'linear-gradient(180deg, hsl(27 95% 58%), hsl(22 92% 50%))' } as const;
+  const marigoldSoft = { background: 'hsl(var(--pt-marigold) / 0.12)', borderColor: 'hsl(var(--pt-marigold))', color: 'hsl(var(--pt-ink))' } as const;
+
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)]">
+    <div className="pt-paper flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
       {/* Header */}
-      <div className="bg-[#0d1220] border-b border-white/5 px-4 h-12 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-sm font-bold text-white">Photo Processing</h1>
-          <div className="flex gap-1 ml-2">
+      <div className="border-b px-4 h-12 flex items-center justify-between shrink-0 rounded-t-xl" style={panelBg}>
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-sm font-bold pt-display truncate" style={{ color: 'hsl(var(--pt-ink))' }}>Photo Processing</h1>
+          <div className="flex gap-1">
             {(['aadhaar', 'passport'] as Mode[]).map(m => (
               <button key={m} onClick={() => setMode(m)}
-                className={`px-3 py-1 rounded text-[10px] font-bold uppercase ${mode === m ? 'bg-blue-600 text-white' : 'text-gray-400 border border-white/10 hover:text-white'}`}>
-                {m === 'aadhaar' ? 'Aadhaar Layout' : 'Passport Photo'}
+                className="px-3 py-1 rounded-full text-[10px] font-bold uppercase border tracking-wide"
+                style={mode === m ? { ...marigold, color: '#fff', borderColor: 'transparent' } : { color: 'hsl(var(--pt-muted))', borderColor: 'hsl(var(--pt-border))' }}>
+                {m === 'aadhaar' ? 'Aadhaar' : 'Passport'}
               </button>
             ))}
           </div>
         </div>
         <div className="flex gap-2">
           {mode === 'aadhaar' && layoutUrl && <>
-            <button onClick={() => printUrl(layoutUrl)} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded">🖨️ Print</button>
-            <button onClick={() => downloadUrl(layoutUrl, 'aadhaar_layout.jpg')} className="px-3 py-1.5 border border-white/10 text-gray-400 text-xs rounded">⬇ Download</button>
+            <button onClick={() => printUrl(layoutUrl)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-semibold" style={marigold}><Printer size={14} weight="bold" /> Print</button>
+            <button onClick={() => downloadUrl(layoutUrl, 'aadhaar_layout.jpg')} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs" style={fieldBg}><DownloadSimple size={14} /> <span className="hidden sm:inline">Download</span></button>
           </>}
           {mode === 'passport' && sheetUrl && <>
-            <button onClick={() => printUrl(sheetUrl)} className="px-3 py-1.5 bg-blue-600 text-white text-xs rounded">🖨️ Print Sheet</button>
-            <button onClick={() => downloadUrl(sheetUrl, `passport_${preset}.jpg`)} className="px-3 py-1.5 border border-white/10 text-gray-400 text-xs rounded">⬇ Download</button>
+            <button onClick={() => printUrl(sheetUrl)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-semibold" style={marigold}><Printer size={14} weight="bold" /> <span className="hidden sm:inline">Print Sheet</span><span className="sm:hidden">Print</span></button>
+            <button onClick={() => downloadUrl(sheetUrl, `passport_${preset}.jpg`)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs" style={fieldBg}><DownloadSimple size={14} /> <span className="hidden sm:inline">Download</span></button>
           </>}
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 md:overflow-hidden">
         {/* ═══ AADHAAR MODE ═══ */}
         {mode === 'aadhaar' && <>
-          <div className="w-48 bg-[#0d1220] border-r border-white/5 p-3 flex flex-col gap-2 shrink-0">
-            <p className="text-[10px] text-gray-500 uppercase">Files ({files.length})</p>
+          <div className="w-full md:w-48 border-b md:border-b-0 md:border-r p-3 flex md:flex-col gap-2 shrink-0" style={panelBg}>
+            <p className="pt-label text-[10px] pt-muted w-full">Files ({files.length})</p>
             {files.map((f, i) => (
-              <div key={f.id} className="bg-[#1a2236] border border-white/5 rounded overflow-hidden">
+              <div key={f.id} className="rounded-lg overflow-hidden border flex-1 md:flex-none" style={fieldBg}>
                 <div className="h-16 relative">
-                  <img src={getFullUrl(f.fileUrl)} className="w-full h-full object-cover" />
-                  <span className="absolute top-1 left-1 bg-blue-600 text-white text-[8px] font-bold px-1 rounded">{i === 0 ? 'FRONT' : 'BACK'}</span>
+                  <img src={getFullUrl(f.fileUrl)} alt={i === 0 ? 'Front' : 'Back'} className="w-full h-full object-cover" />
+                  <span className="absolute top-1 left-1 text-white text-[8px] font-bold px-1 rounded" style={marigold}>{i === 0 ? 'FRONT' : 'BACK'}</span>
                 </div>
               </div>
             ))}
-            {files.length === 2 && <button onClick={() => { setLayoutUrl(null); runAadhaarLayout(files); }} disabled={layoutLoading} className="py-2 bg-blue-600 text-white text-xs rounded mt-auto disabled:opacity-50">{layoutLoading ? 'Generating…' : 'Regenerate'}</button>}
+            {files.length === 2 && <button onClick={() => { setLayoutUrl(null); runAadhaarLayout(files); }} disabled={layoutLoading} className="py-2 px-3 text-white text-xs font-semibold rounded-full md:mt-auto disabled:opacity-50 shrink-0" style={marigold}>{layoutLoading ? 'Generating…' : 'Regenerate'}</button>}
           </div>
-          <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
-            {layoutLoading && <p className="text-gray-400 animate-pulse">Generating layout…</p>}
-            {layoutError && <p className="text-red-400 text-sm">{layoutError} <button onClick={() => runAadhaarLayout(files)} className="ml-2 text-xs border border-red-500/30 px-2 py-0.5 rounded">Retry</button></p>}
-            {layoutUrl && <div className="bg-white rounded shadow-xl max-w-2xl w-full"><img src={layoutUrl} className="w-full" /></div>}
-            {!layoutUrl && !layoutLoading && !layoutError && <p className="text-gray-500 text-sm">Select 2 Aadhaar images from WhatsApp → Build Profile → Stitch</p>}
+          <div className="flex-1 flex items-center justify-center p-6 overflow-auto min-h-[40vh]">
+            {layoutLoading && <p className="pt-muted animate-pulse">Generating layout…</p>}
+            {layoutError && <p className="text-red-500 text-sm">{layoutError} <button onClick={() => runAadhaarLayout(files)} className="ml-2 text-xs border border-red-400/40 px-2 py-0.5 rounded">Retry</button></p>}
+            {layoutUrl && <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full"><img src={layoutUrl} alt="Aadhaar layout" className="w-full" /></div>}
+            {!layoutUrl && !layoutLoading && !layoutError && <p className="pt-muted text-sm text-center">Select 2 Aadhaar images from WhatsApp → Build Profile → Stitch</p>}
           </div>
         </>}
 
         {/* ═══ PASSPORT MODE ═══ */}
         {mode === 'passport' && <>
-          <div className="w-56 bg-[#0d1220] border-r border-white/5 flex flex-col shrink-0 overflow-y-auto">
+          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r flex flex-col shrink-0 md:overflow-y-auto" style={panelBg}>
             {/* Step 1 */}
-            <div className="p-3 border-b border-white/5">
-              <p className="text-[10px] text-gray-500 uppercase mb-2">① Remove Background</p>
+            <div className="p-3 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+              <p className="pt-label text-[10px] pt-muted mb-2">① Remove Background</p>
               <button onClick={removeBackground} disabled={bgLoading || !activeFile}
-                className="w-full py-2 bg-[#1a2236] border border-white/10 text-white text-xs rounded disabled:opacity-40">
-                {bgLoading ? 'Removing…' : '✨ Remove Background'}
+                className="w-full py-2 inline-flex items-center justify-center gap-1.5 border text-xs rounded-lg disabled:opacity-40" style={{ ...fieldBg, color: 'hsl(var(--pt-ink))' }}>
+                <Sparkle size={14} weight="fill" style={{ color: 'hsl(var(--pt-marigold-deep))' }} /> {bgLoading ? 'Removing…' : 'Remove Background'}
               </button>
-              {bgError && <p className="text-[9px] text-red-400 mt-1">{bgError}</p>}
-              {fgDataUrl && !bgError && <p className="text-[9px] text-green-400 mt-1">✓ Done</p>}
+              {bgError && <p className="text-[9px] text-red-500 mt-1">{bgError}</p>}
+              {fgDataUrl && !bgError && <p className="text-[9px] mt-1 inline-flex items-center gap-1" style={{ color: 'hsl(158 60% 30%)' }}><Check size={11} weight="bold" /> Done</p>}
             </div>
             {/* Step 2 */}
-            <div className={`p-3 border-b border-white/5 ${!fgDataUrl ? 'opacity-40 pointer-events-none' : ''}`}>
-              <p className="text-[10px] text-gray-500 uppercase mb-2">② Background Color</p>
+            <div className={`p-3 border-b ${!fgDataUrl ? 'opacity-40 pointer-events-none' : ''}`} style={{ borderColor: 'hsl(var(--pt-border))' }}>
+              <p className="pt-label text-[10px] pt-muted mb-2">② Background Color</p>
               <div className="grid grid-cols-3 gap-1.5 mb-2">
                 {([['white', '#ffffff', 'White'], ['lightblue', '#a8c8e8', 'Blue'], ['red', '#c8102e', 'Red']] as [BgColor, string, string][]).map(([key, hex, label]) => (
                   <button key={key} onClick={() => { setBgColor(key); applyBgColor(hex); }}
-                    className={`h-7 rounded border-2 text-[8px] font-bold ${bgColor === key ? 'border-blue-500' : 'border-white/10'}`}
-                    style={{ background: hex, color: key === 'red' ? '#fff' : '#333' }}>{label}</button>
+                    className="h-7 rounded border-2 text-[8px] font-bold"
+                    style={{ background: hex, color: key === 'red' ? '#fff' : '#333', borderColor: bgColor === key ? 'hsl(var(--pt-marigold))' : 'hsl(var(--pt-border))' }}>{label}</button>
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <input type="color" value={customColor} onChange={e => { setCustomColor(e.target.value); setBgColor('custom'); applyBgColor(e.target.value); }} className="w-7 h-7 rounded border border-white/10 cursor-pointer" />
-                <span className="text-[10px] text-gray-500">Custom</span>
+                <input type="color" value={customColor} onChange={e => { setCustomColor(e.target.value); setBgColor('custom'); applyBgColor(e.target.value); }} className="w-7 h-7 rounded border cursor-pointer" style={{ borderColor: 'hsl(var(--pt-border))' }} />
+                <span className="text-[10px] pt-muted">Custom</span>
               </div>
             </div>
             {/* Step 3 */}
-            <div className="p-3 border-b border-white/5">
-              <p className="text-[10px] text-gray-500 uppercase mb-2">③ Layout</p>
+            <div className="p-3 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+              <p className="pt-label text-[10px] pt-muted mb-2">③ Layout</p>
               <div className="flex flex-col gap-1">
                 {PRESETS.map(p => (
                   <button key={p.key} onClick={() => { setPreset(p.key); setSheetUrl(null); }}
-                    className={`w-full py-1.5 px-2 rounded text-left border text-[10px] ${preset === p.key ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-gray-400 hover:text-white'}`}>
-                    <span className="font-bold">{p.label}</span> <span className="text-[8px] opacity-70">{p.sub}</span>
+                    className="w-full py-1.5 px-2 rounded-lg text-left border text-[10px]"
+                    style={preset === p.key ? marigoldSoft : { ...fieldBg, color: 'hsl(var(--pt-muted))' }}>
+                    <span className="font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>{p.label}</span> <span className="text-[8px] opacity-80">{p.sub}</span>
                   </button>
                 ))}
               </div>
             </div>
             {/* Photo spec */}
-            <div className="p-3 border-b border-white/5">
-              <p className="text-[10px] text-gray-500 uppercase mb-2">Photo Size</p>
+            <div className="p-3 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+              <p className="pt-label text-[10px] pt-muted mb-2">Photo Size</p>
               {SPECS.map(s => (
                 <button key={s.key} onClick={() => { setSpec(s.key); setSheetUrl(null); }}
-                  className={`w-full py-1 px-2 rounded text-left text-[9px] border mb-1 ${spec === s.key ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-gray-400'}`}>
+                  className="w-full py-1 px-2 rounded-lg text-left text-[9px] border mb-1"
+                  style={spec === s.key ? marigoldSoft : { ...fieldBg, color: 'hsl(var(--pt-muted))' }}>
                   {s.label}
                 </button>
               ))}
             </div>
             {/* Text */}
-            <div className="p-3 border-b border-white/5">
-              <p className="text-[10px] text-gray-500 uppercase mb-2">Text (optional)</p>
-              <input placeholder="Name" value={textName} onChange={e => setTextName(e.target.value)} className="w-full mb-1 px-2 py-1.5 bg-[#1a2236] border border-white/10 rounded text-[10px] text-white placeholder-gray-600 outline-none" />
-              <input placeholder="Date" value={textDate} onChange={e => setTextDate(e.target.value)} className="w-full mb-1.5 px-2 py-1.5 bg-[#1a2236] border border-white/10 rounded text-[10px] text-white placeholder-gray-600 outline-none" />
+            <div className="p-3 border-b" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+              <p className="pt-label text-[10px] pt-muted mb-2">Text (optional)</p>
+              <input placeholder="Name" value={textName} onChange={e => setTextName(e.target.value)} className="w-full mb-1 px-2 py-1.5 border rounded-lg text-[10px] outline-none" style={{ ...fieldBg, color: 'hsl(var(--pt-ink))' }} />
+              <input placeholder="Date" value={textDate} onChange={e => setTextDate(e.target.value)} className="w-full mb-1.5 px-2 py-1.5 border rounded-lg text-[10px] outline-none" style={{ ...fieldBg, color: 'hsl(var(--pt-ink))' }} />
               <div className="flex gap-1 mb-1.5">
                 {(['bold', 'normal', 'italic'] as const).map(f => (
-                  <button key={f} onClick={() => setTextFont(f)} className={`flex-1 py-1 rounded text-[9px] border ${textFont === f ? 'bg-blue-600 border-blue-600 text-white' : 'border-white/10 text-gray-400'}`} style={{ fontWeight: f === 'bold' ? 'bold' : 'normal', fontStyle: f === 'italic' ? 'italic' : 'normal' }}>{f}</button>
+                  <button key={f} onClick={() => setTextFont(f)} className="flex-1 py-1 rounded-lg text-[9px] border"
+                    style={{ ...(textFont === f ? marigoldSoft : { ...fieldBg, color: 'hsl(var(--pt-muted))' }), fontWeight: f === 'bold' ? 'bold' : 'normal', fontStyle: f === 'italic' ? 'italic' : 'normal' }}>{f}</button>
                 ))}
               </div>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={textSig} onChange={e => setTextSig(e.target.checked)} className="accent-blue-500" /><span className="text-[9px] text-gray-400">Signature line</span></label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={textSig} onChange={e => setTextSig(e.target.checked)} style={{ accentColor: 'hsl(var(--pt-marigold))' }} /><span className="text-[9px] pt-muted">Signature line</span></label>
             </div>
             {/* Generate */}
             <div className="p-3">
               <button onClick={generateSheet} disabled={sheetLoading || (!processedUrl && !originalUrl)}
-                className="w-full py-2.5 bg-green-700 hover:bg-green-600 disabled:opacity-40 text-white text-xs font-bold rounded">
-                {sheetLoading ? 'Generating…' : `🖼️ Generate ${PRESETS.find(p => p.key === preset)?.label}`}
+                className="w-full py-2.5 disabled:opacity-40 text-white text-xs font-bold rounded-full" style={marigold}>
+                {sheetLoading ? 'Generating…' : `Generate ${PRESETS.find(p => p.key === preset)?.label}`}
               </button>
               {sheetError && (
-                <div className="mt-2 p-2 bg-red-500/10 border border-red-500/30 rounded text-[11px] text-red-300">
-                  <div className="font-medium mb-0.5">⚠ Sheet generation failed</div>
-                  <div className="text-red-400/80">{sheetError}</div>
-                  <button onClick={generateSheet} className="mt-1 text-[10px] underline text-red-300">retry</button>
+                <div className="mt-2 p-2 rounded-lg text-[11px]" style={{ background: 'hsl(0 70% 50% / 0.1)', border: '1px solid hsl(0 70% 50% / 0.3)', color: 'hsl(0 65% 42%)' }}>
+                  <div className="font-medium mb-0.5 inline-flex items-center gap-1"><Warning size={12} weight="fill" /> Sheet generation failed</div>
+                  <div className="opacity-80">{sheetError}</div>
+                  <button onClick={generateSheet} className="mt-1 text-[10px] underline">retry</button>
                 </div>
               )}
-              {(fgDataUrl || processedUrl) && <button onClick={() => { setFgDataUrl(null); setProcessedUrl(null); setSheetUrl(null); setBgError(null); setSheetError(null); }} className="w-full mt-2 py-1 text-gray-500 text-[10px] border border-white/5 rounded">↺ Reset</button>}
+              {(fgDataUrl || processedUrl) && <button onClick={() => { setFgDataUrl(null); setProcessedUrl(null); setSheetUrl(null); setBgError(null); setSheetError(null); }} className="w-full mt-2 py-1 pt-muted text-[10px] border rounded-lg inline-flex items-center justify-center gap-1" style={{ borderColor: 'hsl(var(--pt-border))' }}><ArrowCounterClockwise size={11} /> Reset</button>}
             </div>
           </div>
 
           {/* Preview */}
-          <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
+          <div className="flex-1 flex items-center justify-center p-6 overflow-auto min-h-[40vh]">
             {previewSrc ? (
               <div className="flex flex-col items-center gap-3 max-w-2xl w-full">
-                <p className="text-[10px] text-gray-500 uppercase">{sheetUrl ? 'Print Sheet' : processedUrl ? 'Processed' : 'Original'}</p>
-                <div className={`rounded shadow-xl overflow-hidden w-full ${sheetUrl || processedUrl ? 'bg-white' : 'bg-[#1a2236]'}`}>
-                  <img src={previewSrc} className="w-full" />
+                <p className="pt-label text-[10px] pt-muted">{sheetUrl ? 'Print Sheet' : processedUrl ? 'Processed' : 'Original'}</p>
+                <div className="rounded-lg shadow-xl overflow-hidden w-full bg-white">
+                  <img src={previewSrc} alt="Preview" className="w-full" />
                 </div>
               </div>
             ) : (
-              <div className="text-center text-gray-500">
-                <p className="text-4xl mb-3">📷</p>
-                <p className="text-sm">Select a photo from WhatsApp → Select Documents → Build Profile with Stitch</p>
-                <button onClick={() => navigate('/app/whatsapp')} className="mt-3 px-4 py-2 border border-white/10 text-xs rounded hover:text-white">← Go to WhatsApp</button>
+              <div className="text-center px-4">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style={{ background: 'hsl(var(--pt-marigold) / 0.12)' }}>
+                  <Camera size={26} weight="fill" style={{ color: 'hsl(var(--pt-marigold-deep))' }} />
+                </div>
+                <p className="text-sm pt-muted max-w-xs mx-auto">Select a photo from WhatsApp → Documents → Build Profile with Stitch</p>
+                <button onClick={() => navigate('/app/whatsapp')} className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 border text-xs rounded-full" style={{ ...fieldBg, color: 'hsl(var(--pt-ink))' }}><ArrowLeft size={13} /> Go to WhatsApp</button>
               </div>
             )}
           </div>

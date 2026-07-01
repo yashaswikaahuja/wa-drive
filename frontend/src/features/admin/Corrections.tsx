@@ -80,8 +80,14 @@ export default function Corrections() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-white tracking-tight mb-6">Corrections</h1>
-      {batches.length === 0 ? <p className="text-gray-500 text-center py-12">No corrections captured yet</p> : (
+      <h1 className="text-2xl font-semibold text-white tracking-tight mb-6">Corrections</h1>
+      {batches.length === 0 ? (
+        <div className="flex flex-col items-center justify-center text-center py-20 px-4">
+          <PencilSimple size={34} className="pt-muted mb-3" />
+          <p className="text-sm font-medium" style={{ color: 'hsl(var(--pt-ink))' }}>No corrections yet</p>
+          <p className="text-xs pt-muted mt-1 max-w-xs">Operator edits to autofilled forms will show up here for review.</p>
+        </div>
+      ) : (
         <div className="space-y-2">
           {batches.map(b => (
             <div key={b.id} onClick={() => openBatch(b)}

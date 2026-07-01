@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from '@phosphor-icons/react';
+import { ArrowLeft, Users } from '@phosphor-icons/react';
 import api from '../../shared/api';
 
 interface Person { id: string; name: string; displayLabel: string; relationship: string; }
@@ -31,13 +31,18 @@ export default function NewJob() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <h1 className="text-xl font-semibold text-white tracking-tight mb-6">New Job</h1>
+      <h1 className="text-2xl font-semibold text-white tracking-tight mb-6">New Job</h1>
 
       {step === 1 && (
         <div>
           <p className="text-sm text-gray-400 mb-4">Step 1 — Select Person</p>
           {households.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-8">No customers. Add one first.</p>
+            <div className="flex flex-col items-center justify-center text-center py-16 px-4">
+              <Users size={34} className="pt-muted mb-3" />
+              <p className="text-sm font-medium" style={{ color: 'hsl(var(--pt-ink))' }}>No customers yet</p>
+              <p className="text-xs pt-muted mt-1 mb-4 max-w-xs">Add a customer before starting a job.</p>
+              <button onClick={() => navigate('/app/customers')} className="btn-primary text-sm">Add customer</button>
+            </div>
           ) : (
             <div className="space-y-3">
               {households.map(h => (
