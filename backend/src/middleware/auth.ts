@@ -21,3 +21,15 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     return res.status(401).json({ error: 'Invalid token' });
   }
 }
+
+/**
+ * Role gate — use AFTER authMiddleware. Rejects with 403 if the authenticated
+ * user's role isn't in the allowed set. e.g. router.use(authMiddleware, requireRole('admin'))
+ */
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const role = (req as any).user?.role;
+    if (!role || !roles.includes(role)) return res.status(403).json({ error: 'Forbidden: insufficient role' });
+    next();
+  };
+}

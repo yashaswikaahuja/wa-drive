@@ -19,20 +19,21 @@ router.post('/google', authLimiter, async (req, res) => {
     const payload = ticket.getPayload();
     if (!payload?.email) return res.status(400).json({ error: 'No email in Google token' });
     const { email, name, picture, sub: googleId } = payload;
+    const emailLc = String(email).trim().toLowerCase();
 
     let userRow = (await pool.query(
-      'SELECT id, workspace_id, name, role, status FROM users WHERE email = $1 AND deleted_at IS NULL', [email]
+      'SELECT id, workspace_id, name, role, status FROM users WHERE lower(email) = $1 AND deleted_at IS NULL', [emailLc]
     )).rows[0];
 
     if (!userRow) {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const ws = await client.query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id", [name || email]);
+        const ws = await client.query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id", [name || emailLc]);
         const workspaceId = ws.rows[0].id;
         const u = await client.query(
           "INSERT INTO users (workspace_id, email, name, role, status, password_hash) VALUES ($1,$2,$3,'admin','active','') RETURNING id, workspace_id, name, role",
-          [workspaceId, email, name || email]
+          [workspaceId, emailLc, name || emailLc]
         );
         await client.query('COMMIT');
         userRow = u.rows[0];
@@ -68,7 +69,7 @@ router.post('/register', authLimiter, async (req, res) => {
       const workspaceId = wsResult.rows[0].id;
       const userResult = await client.query(
         "INSERT INTO users (workspace_id, email, phone, password_hash, name, role) VALUES ($1,$2,$3,$4,$5,'admin') RETURNING id",
-        [workspaceId, email || null, phone || null, hash, name || null]
+        [workspaceId, email ? String(email).trim().toLowerCase() : null, phone ? String(phone).trim() : null, hash, name || null]
       );
       const userId = userResult.rows[0].id;
       await client.query('COMMIT');
@@ -91,15 +92,16 @@ router.post('/login', authLimiter, async (req, res) => {
   const { email, phone, password } = req.body;
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
   try {
-    const field = email ? 'email' : 'phone';
-    const value = email || phone;
-    const result = await pool.query(`SELECT id, workspace_id, password_hash, name, role, status FROM users WHERE ${field} = $1 AND deleted_at IS NULL`, [value]);
+    const useEmail = !!email;
+    const value = useEmail ? String(email).trim().toLowerCase() : String(phone).trim();
+    const where = useEmail ? 'lower(email) = $1' : 'phone = $1';
+    const result = await pool.query(`SELECT id, workspace_id, password_hash, name, role, status FROM users WHERE ${where} AND deleted_at IS NULL`, [value]);
     if (!result.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
     const user = result.rows[0];
     if (user.status !== 'active') return res.status(403).json({ error: 'Account not active' });
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
-      await auditLog(user.workspace_id, user.id, 'login_failed', 'user', user.id, { field, value });
+      await auditLog(user.workspace_id, user.id, 'login_failed', 'user', user.id, { field: useEmail ? 'email' : 'phone', value });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     const payload = { userId: user.id, workspaceId: user.workspace_id, role: user.role };
@@ -107,7 +109,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const refreshToken = signRefreshToken(payload);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3) RETURNING id", [user.id, refreshToken, expiresAt]);
-    await auditLog(user.workspace_id, user.id, 'login', 'user', user.id, { field });
+    await auditLog(user.workspace_id, user.id, 'login', 'user', user.id, { field: useEmail ? 'email' : 'phone' });
     res.json({ ok: true, accessToken, refreshToken, user: { id: user.id, workspaceId: user.workspace_id, name: user.name, role: user.role } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -117,16 +119,25 @@ router.post('/refresh', async (req, res) => {
   if (!refreshToken) return res.status(400).json({ error: 'refreshToken required' });
   try {
     const decoded: any = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
+    void decoded;
     const sessResult = await pool.query("SELECT id, user_id FROM auth_sessions WHERE refresh_token = $1 AND revoked_at IS NULL AND expires_at > now()", [refreshToken]);
     if (!sessResult.rows.length) return res.status(401).json({ error: 'Invalid or expired refresh token' });
     const sess = sessResult.rows[0];
+    // Re-read the live user so role changes take effect and suspended/deleted users can't refresh.
+    const userRow = (await pool.query(
+      "SELECT id, workspace_id, role, status FROM users WHERE id = $1 AND deleted_at IS NULL", [sess.user_id]
+    )).rows[0];
+    if (!userRow || userRow.status !== 'active') {
+      await pool.query("UPDATE auth_sessions SET revoked_at = now() WHERE id = $1", [sess.id]);
+      return res.status(401).json({ error: 'Account not active' });
+    }
     await pool.query("UPDATE auth_sessions SET revoked_at = now() WHERE id = $1", [sess.id]);
-    const payload = { userId: decoded.userId, workspaceId: decoded.workspaceId, role: decoded.role };
+    const payload = { userId: userRow.id, workspaceId: userRow.workspace_id, role: userRow.role };
     const newAccessToken = signAccessToken(payload);
     const newRefreshToken = signRefreshToken(payload);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [decoded.userId, newRefreshToken, expiresAt]);
-    await auditLog(decoded.workspaceId, decoded.userId, 'token_refresh', 'auth_session', sess.id, null);
+    await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [userRow.id, newRefreshToken, expiresAt]);
+    await auditLog(userRow.workspace_id, userRow.id, 'token_refresh', 'auth_session', sess.id, null);
     res.json({ ok: true, accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (e) { return res.status(401).json({ error: 'Invalid refresh token' }); }
 });

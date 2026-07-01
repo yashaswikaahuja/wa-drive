@@ -30,6 +30,7 @@ import customersRoutes from './modules/customers/routes.js';
 import jobsRoutes from './modules/jobs/routes.js';
 import dashboardRoutes from './modules/dashboard/routes.js';
 import formsRoutes from './modules/forms/routes.js';
+import usersRoutes from './modules/users/routes.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -61,6 +62,7 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/forms', formsRoutes);
+app.use('/api/users', usersRoutes);
 
 // GET /api/services
 app.get('/api/services', authMiddleware, async (req: any, res) => {
