@@ -5,6 +5,7 @@ import { useAuthStore } from './features/auth/store';
 import { extensionBridge } from './shared/extensionBridge';
 import Toasts from './shared/Toasts';
 import { API_URL } from './shared/api';
+import api from './shared/api';
 import Login from './features/auth/Login';
 import Layout from './shared/Layout';
 
@@ -39,18 +40,39 @@ function PageLoader() {
 }
 
 export default function App() {
-  const { isAuthenticated, accessToken, refreshToken, user } = useAuthStore();
+  const { accessToken, refreshToken, user, setUser, logout } = useAuthStore();
+  const authed = !!accessToken;
+
   useEffect(() => {
-    if (isAuthenticated && accessToken) {
+    if (authed) {
       extensionBridge.connect({ accessToken, refreshToken, user, backendUrl: API_URL }).catch(() => {});
     } else {
       extensionBridge.disconnect();
     }
     return () => { /* keep retry loop alive on route change */ };
-  }, [isAuthenticated, accessToken]);
+  }, [authed, accessToken]);
+
+  // Boot-time session validation: refresh the live user (role/status) and bounce dead/suspended
+  // sessions. A 401 is handled by the api interceptor (single-flight refresh, else logout);
+  // transient/offline errors keep the cached session so the app still opens offline.
+  useEffect(() => {
+    if (!authed) return;
+    let alive = true;
+    api.get('/auth/me')
+      .then((r) => {
+        if (!alive) return;
+        const u = r.data;
+        if (u?.status && u.status !== 'active') { logout(); return; }
+        setUser({ id: u.id, workspaceId: u.workspace_id, name: u.name, email: u.email, role: u.role });
+      })
+      .catch(() => { /* interceptor handles 401; ignore transient/offline errors */ });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Public preview route — design playground accessible without login
   const isPlayground = typeof window !== 'undefined' && window.location.pathname.startsWith('/design-playground');
-  if (!isAuthenticated && !isPlayground) return <Login />;
+  if (!authed && !isPlayground) return <Login />;
 
   return (
     <BrowserRouter>
