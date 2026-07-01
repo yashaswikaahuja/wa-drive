@@ -149,27 +149,48 @@ export default function Dashboard() {
   );
 }
 
-/* First-run setup guidance — hides once complete or dismissed */
+/* First-run setup guidance — hides once complete or dismissed.
+   Never flashes "incomplete": renders nothing until real statuses are known,
+   and remembers completion so set-up workspaces show nothing instantly. */
 function SetupChecklist() {
   const navigate = useNavigate();
+  const cachedComplete = localStorage.getItem('cc-setup-complete') === '1';
   const [dismissed, setDismissed] = useState(() => localStorage.getItem('cc-setup-dismissed') === '1');
-  const [ext, setExt] = useState(false);
-  const [wa, setWa] = useState(() => localStorage.getItem('cc-wa-connected') === 'true');
-  const [drive, setDrive] = useState(false);
+  const [extOk, setExtOk] = useState<boolean | null>(cachedComplete ? true : null);
+  const [waOk, setWaOk] = useState<boolean | null>(cachedComplete ? true : (localStorage.getItem('cc-wa-connected') === 'true' ? true : null));
+  const [driveOk, setDriveOk] = useState<boolean | null>(cachedComplete ? true : (localStorage.getItem('cc-drive-connected') === 'true' ? true : null));
 
-  useEffect(() => extensionBridge.onStatus((s) => setExt(s === 'connected')), []);
+  // Only trust definitive extension states; ignore transient 'unknown'/'connecting'.
+  useEffect(() => extensionBridge.onStatus((s) => {
+    if (s === 'connected') setExtOk(true);
+    else if (s === 'disconnected') setExtOk(false);
+  }), []);
+
   useEffect(() => {
-    api.get('/drive/status').then(r => setDrive(!!r.data?.connected)).catch(() => {});
-    api.get('/whatsapp/status').then(r => setWa(!!r.data?.connected)).catch(() => {});
+    if (cachedComplete) return;   // already set up — skip extra status calls for a faster load
+    let alive = true;
+    api.get('/drive/status').then(r => { const c = !!r.data?.connected; localStorage.setItem('cc-drive-connected', c ? 'true' : 'false'); if (alive) setDriveOk(c); }).catch(() => { if (alive) setDriveOk(false); });
+    api.get('/whatsapp/status').then(r => { if (alive) setWaOk(!!r.data?.connected); }).catch(() => { if (alive) setWaOk(false); });
+    return () => { alive = false; };
   }, []);
 
   const steps = [
-    { done: ext, label: 'Install the browser extension', desc: 'Autofills government forms', action: () => window.open('https://cybercontrol.fun/#extension', '_blank') },
-    { done: wa, label: 'Connect WhatsApp', desc: 'Receive customer documents', action: () => navigate('/app/whatsapp') },
-    { done: drive, label: 'Connect Google Drive', desc: 'Store received files', action: () => navigate('/app/settings') },
+    { done: extOk === true, label: 'Install the browser extension', desc: 'Autofills government forms', action: () => window.open('https://cybercontrol.fun/#extension', '_blank') },
+    { done: waOk === true, label: 'Connect WhatsApp', desc: 'Receive customer documents', action: () => navigate('/app/whatsapp') },
+    { done: driveOk === true, label: 'Connect Google Drive', desc: 'Store received files', action: () => navigate('/app/settings') },
   ];
+  const allKnown = extOk !== null && waOk !== null && driveOk !== null;
+  const allDone = steps.every(s => s.done);
   const doneCount = steps.filter(s => s.done).length;
-  if (dismissed || doneCount === steps.length) return null;
+
+  useEffect(() => {
+    if (allDone) localStorage.setItem('cc-setup-complete', '1');
+    else if (allKnown) localStorage.removeItem('cc-setup-complete');
+  }, [allDone, allKnown]);
+
+  if (dismissed) return null;
+  if (!allKnown) return null;   // render nothing until every status is known → no flash
+  if (allDone) return null;
 
   return (
     <div className="paper-card p-4 mb-6">
