@@ -5,7 +5,7 @@ import { extensionBridge } from './extensionBridge';
 import {
   Users, ChatCircle, Camera, Gear,
   ChartPie, PencilSimple, Brain, Broadcast, UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,
-  List, X, CaretLeft, CaretRight
+  List, CaretLeft, CaretRight
 } from '@phosphor-icons/react';
 
 const ExtensionStatus = memo(({ collapsed }: { collapsed?: boolean }) => {
@@ -71,11 +71,8 @@ const Sidebar = memo(({ user, logout, open, onClose, collapsed, onToggleCollapse
           <Lightning size={15} weight="fill" style={{ color: 'hsl(var(--pt-marigold))' }} />
         </span>
         <span className={`pt-display text-sm font-bold tracking-tight ${collapsed ? 'md:hidden' : ''}`}>Cyber<span style={{ color: 'hsl(var(--pt-marigold-deep))' }}>Control</span></span>
-        <button onClick={onClose} className="ml-auto md:hidden pt-toolbtn" aria-label="Close menu">
-          <X size={18} />
-        </button>
       </div>
-      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto" style={{ scrollbarGutter: 'stable both-edges' }}>
         {nav.map((n, i) => n.path === ''
           ? <div key={i} className={`text-[10px] uppercase tracking-wider text-gray-600 px-3 pt-4 pb-1 ${collapsed ? 'md:hidden' : ''}`}>{n.label}</div>
           : <NavItem key={n.path} {...n} onNavigate={onClose} collapsed={collapsed} />
