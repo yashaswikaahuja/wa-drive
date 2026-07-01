@@ -644,24 +644,30 @@ export default function WhatsApp() {
           <WhatsappLogo size={32} weight="fill" style={{ color: 'hsl(142 64% 34%)' }} />
         </div>
         <h2 className="text-lg font-bold text-white mb-2">Connect WhatsApp</h2>
-        <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
-        {qrCode ? (
-          <div className="bg-white p-4 rounded-xl mb-4 shadow-lg">
-            <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
-          </div>
+        {useAuthStore.getState().user?.role === 'admin' ? (
+          <>
+            <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
+            {qrCode ? (
+              <div className="bg-white p-4 rounded-xl mb-4 shadow-lg">
+                <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 mb-4">
+                {reconnecting && <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
+                <button onClick={handleShowQR} className="px-5 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
+                  {reconnecting ? 'Connecting...' : 'Connect WhatsApp'}
+                </button>
+              </div>
+            )}
+            <div className="text-xs text-gray-600 mt-4 space-y-1">
+              <p>1. Open WhatsApp on your phone</p>
+              <p>2. Go to Settings → Linked Devices</p>
+              <p>3. Scan the QR code above</p>
+            </div>
+          </>
         ) : (
-          <div className="flex flex-col items-center gap-3 mb-4">
-            {reconnecting && <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
-            <button onClick={handleShowQR} className="px-5 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
-              {reconnecting ? 'Connecting...' : 'Connect WhatsApp'}
-            </button>
-          </div>
+          <p className="text-sm pt-muted mb-2 max-w-xs">WhatsApp isn't connected for this workspace yet. Ask an admin to link it — customer documents will appear here once it's connected.</p>
         )}
-        <div className="text-xs text-gray-600 mt-4 space-y-1">
-          <p>1. Open WhatsApp on your phone</p>
-          <p>2. Go to Settings → Linked Devices</p>
-          <p>3. Scan the QR code above</p>
-        </div>
       </div>
     );
   }

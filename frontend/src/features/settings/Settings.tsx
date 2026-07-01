@@ -64,9 +64,13 @@ export default function Settings() {
         <div className="flex items-center gap-3">
           {driveStatus === 'connected' ? <CloudCheck size={20} className="text-emerald-400" /> : driveStatus === 'loading' ? <Spinner size={20} className="text-amber-400 animate-spin" /> : <CloudSlash size={20} className="text-red-400" />}
           <span className="text-sm text-gray-200">{driveStatus === 'connected' ? 'Connected' : driveStatus === 'loading' ? 'Checking...' : 'Disconnected'}</span>
-          <button onClick={connectDrive} disabled={driveStatus === 'loading'} className="ml-auto btn-primary text-xs">
-            {driveStatus === 'connected' ? 'Reconnect' : 'Connect Drive'}
-          </button>
+          {useAuthStore.getState().user?.role === 'admin' ? (
+            <button onClick={connectDrive} disabled={driveStatus === 'loading'} className="ml-auto btn-primary text-xs">
+              {driveStatus === 'connected' ? 'Reconnect' : 'Connect Drive'}
+            </button>
+          ) : (
+            <span className="ml-auto text-xs pt-muted">Managed by an admin</span>
+          )}
         </div>
       </section>
 

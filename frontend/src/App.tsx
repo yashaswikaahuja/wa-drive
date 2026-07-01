@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { useEffect } from 'react';
 import { useAuthStore } from './features/auth/store';
@@ -28,6 +28,7 @@ const Overview = lazy(() => import('./features/admin/Overview'));
 const Sessions = lazy(() => import('./features/admin/Sessions'));
 const Corrections = lazy(() => import('./features/admin/Corrections'));
 const Mappings = lazy(() => import('./features/admin/Mappings'));
+const Operators = lazy(() => import('./features/admin/Operators'));
 
 function PageLoader() {
   return (
@@ -79,11 +80,13 @@ export default function App() {
           <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/form" />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
-          <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
-          <Route path="/admin/corrections" element={<Suspense fallback={<PageLoader />}><Corrections /></Suspense>} />
-          <Route path="/admin/sessions" element={<Suspense fallback={<PageLoader />}><Sessions /></Suspense>} />
-          <Route path="/admin/mappings" element={<Suspense fallback={<PageLoader />}><Mappings /></Suspense>} />
-          <Route path="/admin/operators" element={<Placeholder title="Operators" />} />
+          <Route element={<AdminOnly />}>
+            <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
+            <Route path="/admin/corrections" element={<Suspense fallback={<PageLoader />}><Corrections /></Suspense>} />
+            <Route path="/admin/sessions" element={<Suspense fallback={<PageLoader />}><Sessions /></Suspense>} />
+            <Route path="/admin/mappings" element={<Suspense fallback={<PageLoader />}><Mappings /></Suspense>} />
+            <Route path="/admin/operators" element={<Suspense fallback={<PageLoader />}><Operators /></Suspense>} />
+          </Route>
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Route>
       </Routes>
@@ -94,6 +97,13 @@ export default function App() {
 function RedirectWithSearch({ to }: { to: string }) {
   const { search } = useLocation();
   return <Navigate to={to + search} replace />;
+}
+
+// Route guard: only admins may enter /admin/*; operators are sent to their dashboard.
+function AdminOnly() {
+  const role = useAuthStore((s) => s.user?.role);
+  if (role !== 'admin') return <Navigate to="/app" replace />;
+  return <Outlet />;
 }
 
 function Placeholder({ title }: { title: string }) {
