@@ -1,20 +1,29 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { OAuth2Client as GoogleOAuth2Client } from 'google-auth-library';
 import { pool, auditLog } from '../../db.js';
 import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET } from '../../config.js';
 import { authMiddleware, signAccessToken, signRefreshToken } from '../../middleware/auth.js';
 
 const router = Router();
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'Too many attempts, try again later' } });
+// Login/register: key per (IP + account) so a cybercafe's shared NAT IP with many operators isn't
+// collectively locked out, while brute-force against a single account stays capped at 20/15min.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many attempts, try again later' },
+  keyGenerator: (req) => `${ipKeyGenerator(req.ip || '')}:${String(req.body?.email || req.body?.phone || '').toLowerCase()}`,
+});
+// Google is server-verified (low brute-force risk); key by IP with a higher cap for multi-operator cafes.
+const googleLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, message: { error: 'Too many attempts, try again later' } });
 // Refresh is automated (fires on access-token expiry) and now single-flight on the client, so it's
 // legitimately more frequent than login — a more generous cap that still blocks abuse.
 const refreshLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, message: { error: 'Too many refresh attempts, try again later' } });
 const googleAuthClient = new GoogleOAuth2Client(GOOGLE_CLIENT_ID);
 
-router.post('/google', authLimiter, async (req, res) => {
+router.post('/google', googleLimiter, async (req, res) => {
   const { credential } = req.body;
   if (!credential) return res.status(400).json({ error: 'Missing credential' });
   try {
@@ -59,7 +68,7 @@ router.post('/google', authLimiter, async (req, res) => {
   }
 });
 
-router.post('/register', authLimiter, async (req, res) => {
+router.post('/register', loginLimiter, async (req, res) => {
   const { email, phone, password, name } = req.body;
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -91,7 +100,7 @@ router.post('/register', authLimiter, async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, phone, password } = req.body;
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
   try {
