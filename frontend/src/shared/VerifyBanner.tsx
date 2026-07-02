@@ -28,7 +28,8 @@ export default function VerifyBanner() {
   if (!status) return null;
   const pending: Channel[] = [];
   if (status.canVerifyEmail && status.email && !status.emailVerified) pending.push('email');
-  if (status.canVerifyPhone && status.phone && !status.phoneVerified) pending.push('phone');
+  // Phone: prompt if it's unverified OR not on the account yet (e.g. Google signups have no phone).
+  if (status.canVerifyPhone && !status.phoneVerified) pending.push('phone');
   if (!pending.length) return null;
 
   return (
@@ -37,7 +38,7 @@ export default function VerifyBanner() {
         style={{ background: 'hsl(var(--pt-marigold) / 0.1)', borderColor: 'hsl(var(--pt-marigold) / 0.4)' }}>
         <ShieldWarning size={18} weight="fill" style={{ color: 'hsl(var(--pt-marigold-deep))' }} className="shrink-0" />
         <p className="text-xs flex-1 min-w-0" style={{ color: 'hsl(var(--pt-ink))' }}>
-          Please verify your {pending.join(' and ')} to secure your account.
+          Verify your contact details to secure your account.
         </p>
         <button onClick={() => setOpen(true)} className="btn-primary text-xs shrink-0">Verify now</button>
       </div>
@@ -61,7 +62,7 @@ export function VerifyModal({ pending, status, onClose, onChanged }: { pending: 
         <p className="text-xs pt-muted mt-1 mb-4">We'll send a code to confirm it's really yours.</p>
         <div className="space-y-3">
           {remaining.map(ch => (
-            <ChannelRow key={ch} channel={ch} contact={ch === 'email' ? status.email! : status.phone!}
+            <ChannelRow key={ch} channel={ch} contact={(ch === 'email' ? status.email : status.phone) || ''}
               onVerified={() => { setDone(d => ({ ...d, [ch]: true })); onChanged(); }} />
           ))}
         </div>
@@ -72,6 +73,8 @@ export function VerifyModal({ pending, status, onClose, onChanged }: { pending: 
 }
 
 function ChannelRow({ channel, contact, onVerified }: { channel: Channel; contact: string; onVerified: () => void }) {
+  const hasContact = !!contact;
+  const [value, setValue] = useState(contact);
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -80,8 +83,17 @@ function ChannelRow({ channel, contact, onVerified }: { channel: Channel; contac
 
   async function send() {
     setErr(''); setBusy(true);
-    try { await api.post('/auth/request-verify', { channel }); setSent(true); toast.success(`Code sent to your ${channel}`); }
-    catch (e: any) { setErr(e.response?.data?.error || 'Could not send code'); }
+    try {
+      // No contact on file yet (e.g. Google signup has no phone) → save it first.
+      if (!hasContact) {
+        const v = value.trim();
+        if (!v) { setErr(`Enter your ${channel === 'phone' ? 'phone number' : 'email'}`); setBusy(false); return; }
+        await api.patch('/auth/contact', { [channel]: v }, { skipErrorToast: true } as any);
+      }
+      await api.post('/auth/request-verify', { channel });
+      setSent(true);
+      toast.success(`Code sent to your ${channel}`);
+    } catch (e: any) { setErr(e.response?.data?.error || 'Could not send code'); }
     finally { setBusy(false); }
   }
   async function confirm() {
@@ -96,10 +108,17 @@ function ChannelRow({ channel, contact, onVerified }: { channel: Channel; contac
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-medium" style={{ color: 'hsl(var(--pt-ink))' }}>{label}</p>
-          <p className="text-[11px] pt-muted truncate">{contact}</p>
+          {hasContact && <p className="text-[11px] pt-muted truncate">{contact}</p>}
         </div>
-        {!sent && <button onClick={send} disabled={busy} className="btn-primary text-xs shrink-0">{busy ? '…' : 'Send code'}</button>}
+        {!sent && hasContact && <button onClick={send} disabled={busy} className="btn-primary text-xs shrink-0">{busy ? '…' : 'Send code'}</button>}
       </div>
+      {!sent && !hasContact && (
+        <div className="mt-2 flex gap-2">
+          <input value={value} onChange={e => setValue(e.target.value)} type={channel === 'phone' ? 'tel' : 'email'}
+            className="input-field text-sm flex-1 min-w-0" placeholder={channel === 'phone' ? 'e.g. 9198…' : 'you@example.com'} autoFocus />
+          <button onClick={send} disabled={busy} className="btn-primary text-xs shrink-0">{busy ? '…' : 'Send code'}</button>
+        </div>
+      )}
       {sent && (
         <>
           <div className="mt-2 flex gap-2">
