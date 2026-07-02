@@ -10,15 +10,15 @@ import api from './api';
 import { toast } from './toast';
 import { useFocusTrap } from './useFocusTrap';
 
-type Status = {
+export type VerifyStatus = {
   email?: string; phone?: string;
   emailVerified: boolean; phoneVerified: boolean;
   canVerifyEmail: boolean; canVerifyPhone: boolean;
 };
-type Channel = 'email' | 'phone';
+export type Channel = 'email' | 'phone';
 
 export default function VerifyBanner() {
-  const [status, setStatus] = useState<Status | null>(null);
+  const [status, setStatus] = useState<VerifyStatus | null>(null);
   const [open, setOpen] = useState(false);
   const load = useCallback(() => {
     api.get('/auth/verify-status', { skipErrorToast: true } as any).then(r => setStatus(r.data)).catch(() => setStatus(null));
@@ -46,7 +46,7 @@ export default function VerifyBanner() {
   );
 }
 
-function VerifyModal({ pending, status, onClose, onChanged }: { pending: Channel[]; status: Status; onClose: () => void; onChanged: () => void }) {
+export function VerifyModal({ pending, status, onClose, onChanged }: { pending: Channel[]; status: VerifyStatus; onClose: () => void; onChanged: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, onClose);
   const [done, setDone] = useState<Record<string, boolean>>({});

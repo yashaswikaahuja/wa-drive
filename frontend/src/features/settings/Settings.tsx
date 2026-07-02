@@ -1,12 +1,20 @@
-import { useState, useEffect } from 'react';
-import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner } from '@phosphor-icons/react';
+import { useState, useEffect, useCallback } from 'react';
+import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone } from '@phosphor-icons/react';
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
 import PageHeader from '../../shared/PageHeader';
+import { VerifyModal, type VerifyStatus, type Channel } from '../../shared/VerifyBanner';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
   const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('loading');
+  const [vstatus, setVstatus] = useState<VerifyStatus | null>(null);
+  const [verifyChannel, setVerifyChannel] = useState<Channel | null>(null);
+
+  const loadVerify = useCallback(() => {
+    api.get('/auth/verify-status', { skipErrorToast: true } as any).then(r => setVstatus(r.data)).catch(() => setVstatus(null));
+  }, []);
+  useEffect(() => { loadVerify(); }, [loadVerify]);
 
   useEffect(() => {
     api.get('/drive/status')
@@ -57,6 +65,34 @@ export default function Settings() {
 
       <section className="card mb-4">
         <div className="flex items-center gap-2 mb-4">
+          <SealCheck size={16} className="text-gray-400" />
+          <h3 className="text-sm font-medium text-gray-300">Contact verification</h3>
+        </div>
+        <div className="space-y-3">
+          {[
+            { ch: 'email' as Channel, Icon: EnvelopeSimple, label: 'Email', value: vstatus?.email ?? user?.email ?? null, verified: !!vstatus?.emailVerified, canVerify: !!(vstatus?.canVerifyEmail && vstatus?.email && !vstatus?.emailVerified) },
+            { ch: 'phone' as Channel, Icon: Phone, label: 'Phone', value: vstatus?.phone ?? null, verified: !!vstatus?.phoneVerified, canVerify: !!(vstatus?.canVerifyPhone && vstatus?.phone && !vstatus?.phoneVerified) },
+          ].map(row => (
+            <div key={row.ch} className="flex items-center gap-3">
+              <row.Icon size={16} className="text-gray-400 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-gray-500">{row.label}</p>
+                <p className="text-sm text-gray-200 truncate">{row.value || <span className="text-gray-500">Not added</span>}</p>
+              </div>
+              {row.value && (row.verified ? (
+                <span className="badge badge-success flex items-center gap-1 shrink-0"><SealCheck size={12} weight="fill" /> Verified</span>
+              ) : row.canVerify ? (
+                <button onClick={() => setVerifyChannel(row.ch)} className="btn-primary text-xs shrink-0">Verify</button>
+              ) : (
+                <span className="badge flex items-center gap-1 shrink-0"><WarningCircle size={12} /> Not verified</span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="card mb-4">
+        <div className="flex items-center gap-2 mb-4">
           <GoogleDriveLogo size={16} className="text-gray-400" />
           <h3 className="text-sm font-medium text-gray-300">Google Drive</h3>
         </div>
@@ -81,6 +117,10 @@ export default function Settings() {
           <div className="flex justify-between"><span className="text-gray-500">Workspace</span><span className="text-gray-400 font-mono">{user?.workspaceId?.slice(0, 8)}</span></div>
         </div>
       </section>
+
+      {verifyChannel && vstatus && (
+        <VerifyModal pending={[verifyChannel]} status={vstatus} onClose={() => setVerifyChannel(null)} onChanged={loadVerify} />
+      )}
     </div>
   );
 }
