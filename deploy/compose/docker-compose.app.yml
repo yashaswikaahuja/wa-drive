@@ -23,6 +23,12 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      RESOLVER_URL: ${RESOLVER_URL:-}            # wwebjs oracle → sends phone signup/verify OTPs
+      SIGNUP_CODE: ${SIGNUP_CODE:-}              # optional invite gate (empty → open signup)
+      SES_FROM: ${SES_FROM:-}                    # SES verified sender → enables email OTP (empty → off)
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
 
   extension-service:
     image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}
