@@ -4,8 +4,9 @@ import jwt from 'jsonwebtoken';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { OAuth2Client as GoogleOAuth2Client } from 'google-auth-library';
 import { pool, auditLog } from '../../db.js';
-import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET, SIGNUP_CODE } from '../../config.js';
+import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET, SIGNUP_CODE, EMAIL_VERIFY, PHONE_VERIFY, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from '../../config.js';
 import { authMiddleware, signAccessToken, signRefreshToken } from '../../middleware/auth.js';
+import { genCode, hashCode, sendEmailOtp, sendPhoneOtp } from '../../services/verification.js';
 
 const router = Router();
 // Login/register: key per (IP + account) so a cybercafe's shared NAT IP with many operators isn't
@@ -23,8 +24,8 @@ const googleLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, message: { 
 const refreshLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, message: { error: 'Too many refresh attempts, try again later' } });
 const googleAuthClient = new GoogleOAuth2Client(GOOGLE_CLIENT_ID);
 
-// Public: lets the sign-up form know whether an invite code is required.
-router.get('/signup-config', (_req, res) => res.json({ requiresInvite: !!SIGNUP_CODE }));
+// Public: lets the sign-up form know whether an invite code and/or contact verification is required.
+router.get('/signup-config', (_req, res) => res.json({ requiresInvite: !!SIGNUP_CODE, verifyEmail: EMAIL_VERIFY, verifyPhone: PHONE_VERIFY }));
 
 router.post('/google', googleLimiter, async (req, res) => {
   const { credential } = req.body;
@@ -71,36 +72,140 @@ router.post('/google', googleLimiter, async (req, res) => {
   }
 });
 
+// Create workspace + admin user + first refresh session, and mint tokens. Shared by direct
+// register (no verification configured) and verify-signup (after OTP). Throws 23505 on dup.
+async function createAccount(opts: { email: string | null; phone: string | null; name: string | null; passwordHash: string }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ws = await client.query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id", [opts.name || opts.email || opts.phone]);
+    const workspaceId = ws.rows[0].id;
+    const u = await client.query(
+      "INSERT INTO users (workspace_id, email, phone, password_hash, name, role) VALUES ($1,$2,$3,$4,$5,'admin') RETURNING id",
+      [workspaceId, opts.email, opts.phone, opts.passwordHash, opts.name]
+    );
+    const userId = u.rows[0].id;
+    await client.query('COMMIT');
+    const payload = { userId, workspaceId, role: 'admin' };
+    const accessToken = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [userId, refreshToken, expiresAt]);
+    await auditLog(workspaceId, userId, 'register', 'user', userId, { email: opts.email, phone: opts.phone });
+    return { accessToken, refreshToken, user: { id: userId, workspaceId, email: opts.email, phone: opts.phone, name: opts.name, role: 'admin' } };
+  } catch (e) { await client.query('ROLLBACK'); throw e; }
+  finally { client.release(); }
+}
+
 router.post('/register', loginLimiter, async (req, res) => {
-  const { email, phone, password, name } = req.body;
+  let { email, phone, password, name } = req.body || {};
   if (SIGNUP_CODE && req.body.inviteCode !== SIGNUP_CODE) return res.status(403).json({ error: 'A valid invite code is required to sign up' });
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  email = email ? String(email).trim().toLowerCase() : null;
+  phone = phone ? String(phone).trim() : null;
+  name = name ? String(name).trim() : null;
   try {
+    // Reject already-registered contacts up front (clear error; don't send an OTP to a taken contact).
+    const dup = await pool.query(
+      "SELECT 1 FROM users WHERE deleted_at IS NULL AND ((email IS NOT NULL AND lower(email)=$1) OR (phone IS NOT NULL AND phone=$2)) LIMIT 1",
+      [email, phone]
+    );
+    if (dup.rows.length) return res.status(409).json({ error: 'Email or phone already registered' });
+
+    const needEmail = EMAIL_VERIFY && !!email;
+    const needPhone = PHONE_VERIFY && !!phone;
     const hash = await bcrypt.hash(password, 12);
-    const client = await pool.connect();
+
+    // No verification configured → create immediately (unchanged behavior).
+    if (!needEmail && !needPhone) {
+      try {
+        const out = await createAccount({ email, phone, name, passwordHash: hash });
+        return res.json({ ok: true, ...out });
+      } catch (e: any) {
+        if (e.code === '23505') return res.status(409).json({ error: 'Email or phone already registered' });
+        throw e;
+      }
+    }
+
+    // Verification required → stash a pending signup and send the code(s). No account yet.
+    const emailCode = needEmail ? genCode() : null;
+    const phoneCode = needPhone ? genCode() : null;
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+    const { rows } = await pool.query(
+      `INSERT INTO pending_signups (email, phone, name, password_hash, email_code_hash, phone_code_hash, email_verified, phone_verified, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [email, phone, name, hash, emailCode ? hashCode(emailCode) : null, phoneCode ? hashCode(phoneCode) : null, !needEmail, !needPhone, expiresAt]
+    );
+    const pendingId = rows[0].id;
     try {
-      await client.query('BEGIN');
-      const wsResult = await client.query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id", [name || email || phone]);
-      const workspaceId = wsResult.rows[0].id;
-      const userResult = await client.query(
-        "INSERT INTO users (workspace_id, email, phone, password_hash, name, role) VALUES ($1,$2,$3,$4,$5,'admin') RETURNING id",
-        [workspaceId, email ? String(email).trim().toLowerCase() : null, phone ? String(phone).trim() : null, hash, name || null]
-      );
-      const userId = userResult.rows[0].id;
-      await client.query('COMMIT');
-      const payload = { userId, workspaceId, role: 'admin' };
-      const accessToken = signAccessToken(payload);
-      const refreshToken = signRefreshToken(payload);
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3) RETURNING id", [userId, refreshToken, expiresAt]);
-      await auditLog(workspaceId, userId, 'register', 'user', userId, { email, phone });
-      res.json({ ok: true, accessToken, refreshToken, user: { id: userId, workspaceId, email, phone, name, role: 'admin' } });
+      if (needEmail) await sendEmailOtp(email!, emailCode!);
+      if (needPhone) await sendPhoneOtp(phone!, phoneCode!);
     } catch (e: any) {
-      await client.query('ROLLBACK');
-      if (e.code === '23505') return res.status(409).json({ error: 'Email or phone already registered' });
+      await pool.query('DELETE FROM pending_signups WHERE id=$1', [pendingId]).catch(() => {});
+      return res.status(502).json({ error: e.message || 'Could not send verification code' });
+    }
+    return res.json({ ok: true, pending: true, pendingId, needsEmail: needEmail, needsPhone: needPhone });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Verify signup OTP(s); on success create the real account and return tokens.
+router.post('/verify-signup', loginLimiter, async (req, res) => {
+  const { pendingId, emailCode, phoneCode } = req.body || {};
+  if (!pendingId) return res.status(400).json({ error: 'pendingId required' });
+  try {
+    const p = (await pool.query('SELECT * FROM pending_signups WHERE id=$1', [pendingId])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Signup not found or already completed' });
+    if (new Date(p.expires_at).getTime() < Date.now()) {
+      await pool.query('DELETE FROM pending_signups WHERE id=$1', [pendingId]);
+      return res.status(410).json({ error: 'Code expired — please sign up again' });
+    }
+    if (p.attempts >= OTP_MAX_ATTEMPTS) {
+      await pool.query('DELETE FROM pending_signups WHERE id=$1', [pendingId]);
+      return res.status(429).json({ error: 'Too many attempts — please sign up again' });
+    }
+    let emailOk = p.email_verified;
+    let phoneOk = p.phone_verified;
+    if (!emailOk && p.email_code_hash) emailOk = !!emailCode && hashCode(String(emailCode)) === p.email_code_hash;
+    if (!phoneOk && p.phone_code_hash) phoneOk = !!phoneCode && hashCode(String(phoneCode)) === p.phone_code_hash;
+    if (!emailOk || !phoneOk) {
+      await pool.query('UPDATE pending_signups SET attempts = attempts + 1, email_verified=$2, phone_verified=$3 WHERE id=$1', [pendingId, emailOk, phoneOk]);
+      return res.status(401).json({ error: 'Incorrect or missing code' });
+    }
+    let out;
+    try {
+      out = await createAccount({ email: p.email, phone: p.phone, name: p.name, passwordHash: p.password_hash });
+    } catch (e: any) {
+      if (e.code === '23505') { await pool.query('DELETE FROM pending_signups WHERE id=$1', [pendingId]); return res.status(409).json({ error: 'Email or phone already registered' }); }
       throw e;
-    } finally { client.release(); }
+    }
+    await pool.query('DELETE FROM pending_signups WHERE id=$1', [pendingId]);
+    return res.json({ ok: true, ...out });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Resend signup OTP(s) for the still-unverified channels (rate-limited).
+router.post('/resend-otp', loginLimiter, async (req, res) => {
+  const { pendingId } = req.body || {};
+  if (!pendingId) return res.status(400).json({ error: 'pendingId required' });
+  try {
+    const p = (await pool.query('SELECT * FROM pending_signups WHERE id=$1', [pendingId])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Signup not found' });
+    if (p.last_sent_at && Date.now() - new Date(p.last_sent_at).getTime() < 30_000)
+      return res.status(429).json({ error: 'Please wait a moment before requesting a new code' });
+    const emailCode = (!p.email_verified && p.email) ? genCode() : null;
+    const phoneCode = (!p.phone_verified && p.phone) ? genCode() : null;
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+    await pool.query(
+      `UPDATE pending_signups SET email_code_hash=COALESCE($2,email_code_hash), phone_code_hash=COALESCE($3,phone_code_hash),
+       expires_at=$4, last_sent_at=now(), attempts=0 WHERE id=$1`,
+      [pendingId, emailCode ? hashCode(emailCode) : null, phoneCode ? hashCode(phoneCode) : null, expiresAt]
+    );
+    try {
+      if (emailCode) await sendEmailOtp(p.email, emailCode);
+      if (phoneCode) await sendPhoneOtp(p.phone, phoneCode);
+    } catch (e: any) { return res.status(502).json({ error: e.message || 'Could not resend code' }); }
+    return res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

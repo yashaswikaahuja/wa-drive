@@ -129,6 +129,26 @@ app.get('/contact', auth, async (req, res) => {
   }
 });
 
+// Send a WhatsApp message (used for signup OTPs — the resolver is the always-on system sender)
+app.post('/send', auth, async (req, res) => {
+  const { phone, message } = req.body || {};
+  if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
+  if (!ready) return res.status(503).json({ error: 'Not connected' });
+  try {
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length < 10) return res.status(400).json({ error: 'invalid phone' });
+    const chatId = `${digits}@c.us`;
+    // Guard: only send if the number is actually on WhatsApp (avoids errors / wasted sends)
+    const registered = await client.isRegisteredUser(chatId).catch(() => true);
+    if (!registered) return res.status(422).json({ error: 'number not on WhatsApp' });
+    await client.sendMessage(chatId, message);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[Resolver] send error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/health', (_, res) => res.json({ status: 'ok', connected: ready }));
 app.get('/qr', auth, (_, res) => res.json({ qr: currentQr }));
 

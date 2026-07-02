@@ -17,6 +17,20 @@ export const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://lo
 // Empty (default) → registration is open self-serve (current behavior).
 export const SIGNUP_CODE = process.env.SIGNUP_CODE || '';
 
+// ── Contact verification for self-serve signup (all optional / progressive) ──
+// EMAIL: set SES_FROM (a verified SES identity) to require email OTP at signup.
+//        AWS creds come from the standard provider chain (env AWS_ACCESS_KEY_ID/SECRET or instance role).
+// PHONE: set RESOLVER_URL (the whatsapp-resolver wwebjs oracle, always-on) to require phone OTP —
+//        the backend asks the resolver to WhatsApp the code from its connected number.
+// If NEITHER is set, /auth/register creates the account directly (current behavior) — non-breaking.
+export const SES_FROM = process.env.SES_FROM || '';            // e.g. "CyberControl <noreply@cybercontrol.fun>"
+export const AWS_REGION = process.env.AWS_REGION || 'ap-south-1';
+export const RESOLVER_URL = process.env.RESOLVER_URL || '';     // e.g. http://cybercontrol-wa:3200
+export const EMAIL_VERIFY = !!SES_FROM;
+export const PHONE_VERIFY = !!RESOLVER_URL;
+export const OTP_TTL_MS = Number(process.env.OTP_TTL_MS ?? 10 * 60 * 1000);
+export const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS ?? 5);
+
 export const WORKER_SECRET = process.env.WORKER_SECRET ?? 'worker-secret';
 export const WA_SERVICE = process.env.WA_SERVICE || 'http://cybercontrol-wa:3100';
 export const WA_SECRET = process.env.WA_SECRET || 'wa-service-secret-2024';

@@ -11,6 +11,7 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1078.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@types/node": "^20.19.39",
     "bcrypt": "^6.0.0",
