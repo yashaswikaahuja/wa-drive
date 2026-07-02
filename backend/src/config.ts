@@ -13,6 +13,10 @@ export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 export const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/drive/callback';
 
+// Optional signup gate: if set, self-serve /auth/register requires this invite code.
+// Empty (default) → registration is open self-serve (current behavior).
+export const SIGNUP_CODE = process.env.SIGNUP_CODE || '';
+
 export const WORKER_SECRET = process.env.WORKER_SECRET ?? 'worker-secret';
 export const WA_SERVICE = process.env.WA_SERVICE || 'http://cybercontrol-wa:3100';
 export const WA_SECRET = process.env.WA_SECRET || 'wa-service-secret-2024';

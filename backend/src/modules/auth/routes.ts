@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { OAuth2Client as GoogleOAuth2Client } from 'google-auth-library';
 import { pool, auditLog } from '../../db.js';
-import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET } from '../../config.js';
+import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET, SIGNUP_CODE } from '../../config.js';
 import { authMiddleware, signAccessToken, signRefreshToken } from '../../middleware/auth.js';
 
 const router = Router();
@@ -22,6 +22,9 @@ const googleLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, message: { 
 // legitimately more frequent than login — a more generous cap that still blocks abuse.
 const refreshLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60, message: { error: 'Too many refresh attempts, try again later' } });
 const googleAuthClient = new GoogleOAuth2Client(GOOGLE_CLIENT_ID);
+
+// Public: lets the sign-up form know whether an invite code is required.
+router.get('/signup-config', (_req, res) => res.json({ requiresInvite: !!SIGNUP_CODE }));
 
 router.post('/google', googleLimiter, async (req, res) => {
   const { credential } = req.body;
@@ -70,6 +73,7 @@ router.post('/google', googleLimiter, async (req, res) => {
 
 router.post('/register', loginLimiter, async (req, res) => {
   const { email, phone, password, name } = req.body;
+  if (SIGNUP_CODE && req.body.inviteCode !== SIGNUP_CODE) return res.status(403).json({ error: 'A valid invite code is required to sign up' });
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   try {
