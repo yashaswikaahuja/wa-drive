@@ -52,7 +52,7 @@ api.interceptors.response.use(
       }
       useAuthStore.getState().logout();
     }
-    if (error.response?.status !== 401) {
+    if (error.response?.status !== 401 && !(error.config as any)?.skipErrorToast) {
       const msg = error.response?.data?.error || error.response?.data?.message || error.message || 'Request failed';
       toast.error(msg);
     }

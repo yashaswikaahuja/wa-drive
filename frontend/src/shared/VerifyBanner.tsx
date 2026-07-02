@@ -21,7 +21,7 @@ export default function VerifyBanner() {
   const [status, setStatus] = useState<Status | null>(null);
   const [open, setOpen] = useState(false);
   const load = useCallback(() => {
-    api.get('/auth/verify-status').then(r => setStatus(r.data)).catch(() => setStatus(null));
+    api.get('/auth/verify-status', { skipErrorToast: true } as any).then(r => setStatus(r.data)).catch(() => setStatus(null));
   }, []);
   useEffect(() => { load(); }, [load]);
 
