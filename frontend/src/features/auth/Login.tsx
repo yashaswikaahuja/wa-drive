@@ -15,6 +15,8 @@ export default function Login() {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [requiresInvite, setRequiresInvite] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,6 +30,13 @@ export default function Login() {
     setUser(data.user);
     extensionBridge.connect({ accessToken: data.accessToken, refreshToken: data.refreshToken, user: data.user, backendUrl: API_URL }).catch(() => {});
   }
+
+  // Does self-serve signup require an invite code? (open by default)
+  useEffect(() => {
+    axios.get(`${API_URL}/auth/signup-config`)
+      .then(r => setRequiresInvite(!!r.data?.requiresInvite))
+      .catch(() => setRequiresInvite(false));
+  }, []);
 
   useEffect(() => {
     const scriptId = 'google-gsi';
@@ -68,6 +77,7 @@ export default function Login() {
       if (!email && !phone) { setError('Enter an email or phone'); return; }
       if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
       if (password !== confirm) { setError('Passwords do not match'); return; }
+      if (requiresInvite && !inviteCode.trim()) { setError('An invite code is required to sign up'); return; }
       setLoading(true);
       try {
         const res = await axios.post(`${API_URL}/auth/register`, {
@@ -75,6 +85,7 @@ export default function Login() {
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
           password,
+          inviteCode: inviteCode.trim() || undefined,
         });
         onLoginSuccess(res.data);
       } catch (err: any) { setError(err.response?.data?.error || 'Registration failed'); }
@@ -153,6 +164,13 @@ export default function Login() {
             <div>
               <label htmlFor="reg-confirm" className="text-xs pt-muted mb-1 block">Confirm password</label>
               <input id="reg-confirm" type={showPw ? 'text' : 'password'} autoComplete="new-password" value={confirm} onChange={e => setConfirm(e.target.value)} className="input-field" placeholder="Re-enter password" />
+            </div>
+          )}
+
+          {mode === 'register' && requiresInvite && (
+            <div>
+              <label htmlFor="reg-invite" className="text-xs pt-muted mb-1 block">Invite code</label>
+              <input id="reg-invite" type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value)} className="input-field" placeholder="Enter your invite code" />
             </div>
           )}
 
