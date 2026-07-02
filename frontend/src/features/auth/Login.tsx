@@ -8,7 +8,7 @@ import { API_URL } from '../../shared/api';
 const GOOGLE_CLIENT_ID = '62092486976-jhsn62q3ufj4dvr42c1hpubnujasaqok.apps.googleusercontent.com';
 
 export default function Login() {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'verify'>('login');
   const [identity, setIdentity] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -20,6 +20,13 @@ export default function Login() {
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // verify step
+  const [pendingId, setPendingId] = useState('');
+  const [needsEmail, setNeedsEmail] = useState(false);
+  const [needsPhone, setNeedsPhone] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
+  const [phoneCode, setPhoneCode] = useState('');
+  const [notice, setNotice] = useState('');
   const { setTokens, setUser } = useAuthStore();
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
@@ -87,7 +94,15 @@ export default function Login() {
           password,
           inviteCode: inviteCode.trim() || undefined,
         });
-        onLoginSuccess(res.data);
+        if (res.data?.pending) {
+          setPendingId(res.data.pendingId);
+          setNeedsEmail(!!res.data.needsEmail);
+          setNeedsPhone(!!res.data.needsPhone);
+          setEmailCode(''); setPhoneCode(''); setNotice('');
+          setMode('verify');
+        } else {
+          onLoginSuccess(res.data);
+        }
       } catch (err: any) { setError(err.response?.data?.error || 'Registration failed'); }
       finally { setLoading(false); }
       return;
@@ -99,6 +114,28 @@ export default function Login() {
       onLoginSuccess(res.data);
     } catch (err: any) { setError(err.response?.data?.error || 'Login failed'); }
     finally { setLoading(false); }
+  };
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(''); setNotice(''); setLoading(true);
+    try {
+      const res = await axios.post(`${API_URL}/auth/verify-signup`, {
+        pendingId,
+        emailCode: emailCode.trim() || undefined,
+        phoneCode: phoneCode.trim() || undefined,
+      });
+      onLoginSuccess(res.data);
+    } catch (err: any) { setError(err.response?.data?.error || 'Verification failed'); }
+    finally { setLoading(false); }
+  };
+
+  const handleResend = async () => {
+    setError(''); setNotice('');
+    try {
+      await axios.post(`${API_URL}/auth/resend-otp`, { pendingId });
+      setNotice('A new code has been sent.');
+    } catch (err: any) { setError(err.response?.data?.error || 'Could not resend code'); }
   };
 
   return (
@@ -114,6 +151,36 @@ export default function Login() {
           </div>
         </div>
 
+        {mode === 'verify' ? (
+          <form onSubmit={handleVerify} className="space-y-4">
+            <div>
+              <h2 className="pt-display text-base font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>Verify your contact</h2>
+              <p className="text-xs pt-muted mt-1">
+                Enter the code we sent to {[needsEmail && email, needsPhone && `WhatsApp ${phone}`].filter(Boolean).join(' and ')}.
+              </p>
+            </div>
+            {needsEmail && (
+              <div>
+                <label htmlFor="v-email" className="text-xs pt-muted mb-1 block">Email code</label>
+                <input id="v-email" inputMode="numeric" autoComplete="one-time-code" autoFocus value={emailCode} onChange={e => setEmailCode(e.target.value)} className="input-field tracking-widest" placeholder="6-digit code" />
+              </div>
+            )}
+            {needsPhone && (
+              <div>
+                <label htmlFor="v-phone" className="text-xs pt-muted mb-1 block">WhatsApp code</label>
+                <input id="v-phone" inputMode="numeric" autoComplete="one-time-code" value={phoneCode} onChange={e => setPhoneCode(e.target.value)} className="input-field tracking-widest" placeholder="6-digit code" />
+              </div>
+            )}
+            {notice && <p className="text-xs" style={{ color: 'hsl(142 64% 34%)' }}>{notice}</p>}
+            {error && <p className="text-xs" style={{ color: 'hsl(0 65% 48%)' }}>{error}</p>}
+            <button type="submit" disabled={loading} className="w-full btn-primary py-2.5">{loading ? 'Verifying…' : 'Verify & create account'}</button>
+            <div className="flex items-center justify-between text-xs">
+              <button type="button" onClick={handleResend} className="font-semibold" style={{ color: 'hsl(var(--pt-marigold-deep))' }}>Resend code</button>
+              <button type="button" onClick={() => switchMode('register')} className="pt-muted hover:text-ink">Back</button>
+            </div>
+          </form>
+        ) : (
+        <>
         <div ref={googleBtnRef} className="mb-4 flex justify-center" />
 
         <div className="flex items-center gap-3 mb-4">
@@ -191,6 +258,8 @@ export default function Login() {
             </>
           )}
         </p>
+        </>
+        )}
       </div>
     </div>
   );
