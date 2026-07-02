@@ -6,7 +6,7 @@ import { OAuth2Client as GoogleOAuth2Client } from 'google-auth-library';
 import { pool, auditLog } from '../../db.js';
 import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET, SIGNUP_CODE, EMAIL_VERIFY, PHONE_VERIFY, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from '../../config.js';
 import { authMiddleware, signAccessToken, signRefreshToken } from '../../middleware/auth.js';
-import { genCode, hashCode, sendEmailOtp, sendPhoneOtp } from '../../services/verification.js';
+import { genCode, hashCode, sendEmailOtp, sendPhoneOtp, sendWelcomeEmail } from '../../services/verification.js';
 
 const router = Router();
 // Login/register: key per (IP + account) so a cybercafe's shared NAT IP with many operators isn't
@@ -41,6 +41,7 @@ router.post('/google', googleLimiter, async (req, res) => {
       'SELECT id, workspace_id, name, role, status FROM users WHERE lower(email) = $1 AND deleted_at IS NULL', [emailLc]
     )).rows[0];
 
+    let isNewSignup = false;
     if (!userRow) {
       const client = await pool.connect();
       try {
@@ -53,6 +54,7 @@ router.post('/google', googleLimiter, async (req, res) => {
         );
         await client.query('COMMIT');
         userRow = u.rows[0];
+        isNewSignup = true;
       } catch (e) { await client.query('ROLLBACK'); throw e; }
       finally { client.release(); }
     }
@@ -60,8 +62,10 @@ router.post('/google', googleLimiter, async (req, res) => {
     if (userRow.status && userRow.status !== 'active')
       return res.status(403).json({ error: 'Account not active' });
 
-    // Google verified this email — mark it (no-op if column not migrated yet).
+    // Google verified this email — mark it (no-op if column not migrated yet). No OTP needed.
     await pool.query('UPDATE users SET email_verified=true WHERE id=$1 AND email_verified=false', [userRow.id]).catch(() => {});
+    // First-time Google signup → greet instead of verifying (best-effort; no-op if SES off).
+    if (isNewSignup) sendWelcomeEmail(emailLc, userRow.name || name).catch(() => {});
 
     const tokenPayload = { userId: userRow.id, workspaceId: userRow.workspace_id, role: userRow.role };
     const accessToken = signAccessToken(tokenPayload);

@@ -45,3 +45,21 @@ export async function sendPhoneOtp(phone: string, code: string): Promise<void> {
     throw new Error(e.error || 'Failed to send WhatsApp code');
   }
 }
+
+// Greeting for accounts that don't need OTP verification (e.g. Google sign-in — email already
+// verified by Google). Best-effort: no-op if SES isn't configured; callers ignore failures.
+export async function sendWelcomeEmail(email: string, name?: string | null): Promise<void> {
+  if (!ses || !email) return;
+  const hi = name ? `Hi ${name},` : 'Hello,';
+  await ses.send(new SendEmailCommand({
+    Source: SES_FROM,
+    Destination: { ToAddresses: [email] },
+    Message: {
+      Subject: { Data: 'Welcome to CyberControl 🎉' },
+      Body: { Text: { Data:
+        `${hi}\n\nWelcome to CyberControl — your workspace is ready.\n\n` +
+        `You can now connect WhatsApp and Google Drive, add your operators, and start ` +
+        `processing customer documents.\n\nGlad to have you on board!\n\n— The CyberControl Team` } },
+    },
+  }));
+}
