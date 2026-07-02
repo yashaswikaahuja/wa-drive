@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone } from '@phosphor-icons/react';
+import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone, PencilSimple } from '@phosphor-icons/react';
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
 import PageHeader from '../../shared/PageHeader';
@@ -15,6 +15,14 @@ export default function Settings() {
     api.get('/auth/verify-status', { skipErrorToast: true } as any).then(r => setVstatus(r.data)).catch(() => setVstatus(null));
   }, []);
   useEffect(() => { loadVerify(); }, [loadVerify]);
+
+  const onContactSaved = useCallback((channel: Channel, value: string) => {
+    loadVerify();
+    if (channel === 'email') {
+      const u = useAuthStore.getState().user;
+      if (u) useAuthStore.getState().setUser({ ...u, email: value });
+    }
+  }, [loadVerify]);
 
   useEffect(() => {
     api.get('/drive/status')
@@ -68,26 +76,15 @@ export default function Settings() {
           <SealCheck size={16} className="text-gray-400" />
           <h3 className="text-sm font-medium text-gray-300">Contact verification</h3>
         </div>
-        <div className="space-y-3">
-          {[
-            { ch: 'email' as Channel, Icon: EnvelopeSimple, label: 'Email', value: vstatus?.email ?? user?.email ?? null, verified: !!vstatus?.emailVerified, canVerify: !!(vstatus?.canVerifyEmail && vstatus?.email && !vstatus?.emailVerified) },
-            { ch: 'phone' as Channel, Icon: Phone, label: 'Phone', value: vstatus?.phone ?? null, verified: !!vstatus?.phoneVerified, canVerify: !!(vstatus?.canVerifyPhone && vstatus?.phone && !vstatus?.phoneVerified) },
-          ].map(row => (
-            <div key={row.ch} className="flex items-center gap-3">
-              <row.Icon size={16} className="text-gray-400 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-gray-500">{row.label}</p>
-                <p className="text-sm text-gray-200 truncate">{row.value || <span className="text-gray-500">Not added</span>}</p>
-              </div>
-              {row.value && (row.verified ? (
-                <span className="badge badge-success flex items-center gap-1 shrink-0"><SealCheck size={12} weight="fill" /> Verified</span>
-              ) : row.canVerify ? (
-                <button onClick={() => setVerifyChannel(row.ch)} className="btn-primary text-xs shrink-0">Verify</button>
-              ) : (
-                <span className="badge flex items-center gap-1 shrink-0"><WarningCircle size={12} /> Not verified</span>
-              ))}
-            </div>
-          ))}
+        <div className="space-y-4">
+          <ContactRow channel="email" Icon={EnvelopeSimple} label="Email"
+            value={vstatus?.email ?? user?.email ?? null} verified={!!vstatus?.emailVerified}
+            canVerify={!!(vstatus?.canVerifyEmail && vstatus?.email && !vstatus?.emailVerified)}
+            onVerify={() => setVerifyChannel('email')} onSaved={onContactSaved} />
+          <ContactRow channel="phone" Icon={Phone} label="Phone"
+            value={vstatus?.phone ?? null} verified={!!vstatus?.phoneVerified}
+            canVerify={!!(vstatus?.canVerifyPhone && vstatus?.phone && !vstatus?.phoneVerified)}
+            onVerify={() => setVerifyChannel('phone')} onSaved={onContactSaved} />
         </div>
       </section>
 
@@ -120,6 +117,69 @@ export default function Settings() {
 
       {verifyChannel && vstatus && (
         <VerifyModal pending={[verifyChannel]} status={vstatus} onClose={() => setVerifyChannel(null)} onChanged={loadVerify} />
+      )}
+    </div>
+  );
+}
+
+function ContactRow({ channel, Icon, label, value, verified, canVerify, onVerify, onSaved }: {
+  channel: Channel;
+  Icon: React.ComponentType<any>;
+  label: string;
+  value: string | null;
+  verified: boolean;
+  canVerify: boolean;
+  onVerify: () => void;
+  onSaved: (channel: Channel, value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState(value || '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { setInput(value || ''); }, [value]);
+
+  async function save() {
+    const v = input.trim();
+    if (!v) { setErr('Enter a value'); return; }
+    setErr(''); setBusy(true);
+    try {
+      const r = await api.patch('/auth/contact', { [channel]: v }, { skipErrorToast: true } as any);
+      setEditing(false);
+      onSaved(channel, r.data?.[channel] ?? v);
+    } catch (e: any) { setErr(e.response?.data?.error || 'Could not save'); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="flex items-start gap-3">
+      <Icon size={16} className="text-gray-400 shrink-0 mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-gray-500">{label}</p>
+        {editing ? (
+          <div className="mt-1 flex flex-wrap gap-2">
+            <input value={input} onChange={e => setInput(e.target.value)} type={channel === 'email' ? 'email' : 'tel'}
+              className="input-field text-sm flex-1 min-w-0" placeholder={channel === 'email' ? 'you@example.com' : '9876543210'} autoFocus />
+            <button onClick={save} disabled={busy} className="btn-primary text-xs shrink-0">{busy ? '…' : 'Save'}</button>
+            <button onClick={() => { setEditing(false); setErr(''); setInput(value || ''); }} className="pt-chip text-xs shrink-0">Cancel</button>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-200 truncate">{value || <span className="text-gray-500">Not added</span>}</p>
+        )}
+        {err && <p className="text-[11px] mt-1" style={{ color: 'hsl(0 65% 48%)' }}>{err}</p>}
+      </div>
+      {!editing && (
+        <div className="flex items-center gap-2 shrink-0">
+          {value && (verified ? (
+            <span className="badge badge-success flex items-center gap-1"><SealCheck size={12} weight="fill" /> Verified</span>
+          ) : canVerify ? (
+            <button onClick={onVerify} className="btn-primary text-xs">Verify</button>
+          ) : (
+            <span className="badge flex items-center gap-1"><WarningCircle size={12} /> Not verified</span>
+          ))}
+          <button onClick={() => setEditing(true)} className="pt-muted hover:text-ink transition-colors" title={value ? `Change ${label}` : `Add ${label}`} aria-label={value ? `Change ${label}` : `Add ${label}`}>
+            <PencilSimple size={15} />
+          </button>
+        </div>
       )}
     </div>
   );

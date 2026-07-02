@@ -285,6 +285,39 @@ router.post('/confirm-verify', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// Add/change the caller's own email or phone. Resets that channel's verified flag so it must be
+// re-verified. Globally unique (409 on clash). Keeps at least one contact on the account.
+router.patch('/contact', authMiddleware, async (req: any, res) => {
+  const b = req.body || {};
+  const hasEmail = Object.prototype.hasOwnProperty.call(b, 'email');
+  const hasPhone = Object.prototype.hasOwnProperty.call(b, 'phone');
+  if (!hasEmail && !hasPhone) return res.status(400).json({ error: 'email or phone required' });
+  const email = hasEmail ? (b.email ? String(b.email).trim().toLowerCase() : null) : undefined;
+  const phone = hasPhone ? (b.phone ? String(b.phone).trim() : null) : undefined;
+  if (email !== undefined && email && !email.includes('@')) return res.status(400).json({ error: 'Enter a valid email' });
+  if (phone !== undefined && phone && phone.replace(/[^0-9]/g, '').length < 10) return res.status(400).json({ error: 'Enter a valid phone number' });
+  try {
+    const cur = (await pool.query('SELECT email, phone FROM users WHERE id=$1', [req.user.userId])).rows[0];
+    if (!cur) return res.status(404).json({ error: 'User not found' });
+    const nextEmail = email !== undefined ? email : cur.email;
+    const nextPhone = phone !== undefined ? phone : cur.phone;
+    if (!nextEmail && !nextPhone) return res.status(400).json({ error: 'Keep at least an email or phone on your account' });
+    const sets: string[] = []; const params: any[] = []; let i = 1;
+    if (email !== undefined) { sets.push(`email=$${i++}`); params.push(email); }
+    if (phone !== undefined) { sets.push(`phone=$${i++}`); params.push(phone); }
+    params.push(req.user.userId);
+    await pool.query(`UPDATE users SET ${sets.join(', ')}, updated_at=now() WHERE id=$${i}`, params);
+    // Changed contact must be re-verified (no-op if the column isn't migrated yet).
+    if (email !== undefined) await pool.query('UPDATE users SET email_verified=false WHERE id=$1', [req.user.userId]).catch(() => {});
+    if (phone !== undefined) await pool.query('UPDATE users SET phone_verified=false WHERE id=$1', [req.user.userId]).catch(() => {});
+    await auditLog(req.user.workspaceId, req.user.userId, 'contact_update', 'user', req.user.userId, { email: hasEmail, phone: hasPhone });
+    res.json({ ok: true, email: nextEmail, phone: nextPhone });
+  } catch (e: any) {
+    if (e.code === '23505') return res.status(409).json({ error: 'That email or phone is already in use' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/login', loginLimiter, async (req, res) => {
   const { email, phone, password } = req.body;
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
