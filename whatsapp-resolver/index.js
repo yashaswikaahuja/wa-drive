@@ -137,11 +137,11 @@ app.post('/send', auth, async (req, res) => {
   try {
     const digits = String(phone).replace(/[^0-9]/g, '');
     if (digits.length < 10) return res.status(400).json({ error: 'invalid phone' });
-    const chatId = `${digits}@c.us`;
-    // Guard: only send if the number is actually on WhatsApp (avoids errors / wasted sends)
-    const registered = await client.isRegisteredUser(chatId).catch(() => true);
-    if (!registered) return res.status(422).json({ error: 'number not on WhatsApp' });
-    await client.sendMessage(chatId, message);
+    // Resolve to the real WhatsApp id (handles LID addressing on newer WA; avoids "No LID for it").
+    // getNumberId returns null if the number isn't on WhatsApp.
+    const numberId = await client.getNumberId(digits);
+    if (!numberId) return res.status(422).json({ error: 'number not on WhatsApp' });
+    await client.sendMessage(numberId._serialized, message);
     res.json({ ok: true });
   } catch (e) {
     console.error('[Resolver] send error:', e.message);
