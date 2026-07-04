@@ -36,9 +36,25 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 
-// CORS
+// CORS — credentialed allowlist for first-party web origins (so the HttpOnly refresh cookie can be
+// sent/received on app.→api. XHR); wildcard fallback (no credentials) for everything else (extension
+// chrome-extension:// origin uses Bearer tokens, not cookies, and server-to-server has no Origin).
+// NOTE: '*' together with Allow-Credentials is illegal — so credentials are only enabled for allowlisted origins.
+const ALLOWED_ORIGINS = new Set([
+  'https://app.cybercontrol.fun',
+  'https://cybercontrol.fun',
+  'http://localhost:5173',
+  'http://localhost:3000',
+]);
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Vary', 'Origin');
+  } else {
+    res.header('Access-Control-Allow-Origin', '*');
+  }
   res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') { res.sendStatus(204); return; }

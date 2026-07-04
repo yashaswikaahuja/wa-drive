@@ -7,7 +7,7 @@ import { pool, auditLog } from '../../db.js';
 import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET, SIGNUP_CODE, EMAIL_VERIFY, PHONE_VERIFY, OTP_TTL_MS } from '../../config.js';
 import { authMiddleware, signAccessToken, signRefreshToken } from '../../middleware/auth.js';
 import { genCode, hashCode, sendEmailOtp, sendPhoneOtp, sendWelcomeEmail } from '../../services/verification.js';
-import { createAccount, loginLimiter } from './service.js';
+import { createAccount, loginLimiter, setRefreshCookie, clearRefreshCookie, readRefreshCookie } from './service.js';
 import verifyRouter from './verify.routes.js';
 
 const router = Router();
@@ -69,6 +69,7 @@ router.post('/google', googleLimiter, async (req, res) => {
     const refreshToken = signRefreshToken(tokenPayload);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [userRow.id, refreshToken, expiresAt]);
+    setRefreshCookie(res, refreshToken);
     res.json({ ok: true, accessToken, refreshToken, user: { id: userRow.id, workspaceId: userRow.workspace_id, email, name: userRow.name || name, role: userRow.role } });
   } catch (e: any) {
     console.error('[Auth] Google login error:', e.message);
@@ -100,6 +101,7 @@ router.post('/register', loginLimiter, async (req, res) => {
     if (!needEmail && !needPhone) {
       try {
         const out = await createAccount({ email, phone, name, passwordHash: hash });
+        setRefreshCookie(res, out.refreshToken);
         return res.json({ ok: true, ...out });
       } catch (e: any) {
         if (e.code === '23505') return res.status(409).json({ error: 'Email or phone already registered' });
@@ -183,12 +185,14 @@ router.post('/login', loginLimiter, async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3) RETURNING id", [user.id, refreshToken, expiresAt]);
     await auditLog(user.workspace_id, user.id, 'login', 'user', user.id, { field: useEmail ? 'email' : 'phone' });
+    setRefreshCookie(res, refreshToken);
     res.json({ ok: true, accessToken, refreshToken, user: { id: user.id, workspaceId: user.workspace_id, name: user.name, role: user.role } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 router.post('/refresh', refreshLimiter, async (req, res) => {
-  const { refreshToken } = req.body;
+  // Web sends the token via the HttpOnly cookie; the extension sends it in the body. Cookie wins.
+  const refreshToken = readRefreshCookie(req) ?? req.body?.refreshToken;
   if (!refreshToken) return res.status(400).json({ error: 'refreshToken required' });
   try {
     const decoded: any = jwt.verify(refreshToken, JWT_REFRESH_SECRET);
@@ -211,6 +215,7 @@ router.post('/refresh', refreshLimiter, async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [userRow.id, newRefreshToken, expiresAt]);
     await auditLog(userRow.workspace_id, userRow.id, 'token_refresh', 'auth_session', sess.id, null);
+    setRefreshCookie(res, newRefreshToken);
     res.json({ ok: true, accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (e) { return res.status(401).json({ error: 'Invalid refresh token' }); }
 });
@@ -219,6 +224,7 @@ router.post('/logout', authMiddleware, async (req: any, res) => {
   try {
     await pool.query("UPDATE auth_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL", [req.user.userId]);
     await auditLog(req.user.workspaceId, req.user.userId, 'logout', 'user', req.user.userId, null);
+    clearRefreshCookie(res);
     res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

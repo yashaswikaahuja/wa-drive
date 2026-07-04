@@ -2,8 +2,41 @@
  * Shared auth helpers used by both the core routes and the verification routes.
  */
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import type { Request, Response } from 'express';
 import { pool, auditLog } from '../../db.js';
 import { signAccessToken, signRefreshToken } from '../../middleware/auth.js';
+
+// ── HttpOnly refresh cookie (web) ────────────────────────────────────────────
+// The web app moves its refresh token out of JS-readable localStorage into this cookie.
+// The extension is unaffected (keeps token-in-storage + body refresh). /refresh accepts the
+// token from EITHER the cookie (web) OR the body (extension). See deploy/docs/AUTH-COOKIE-MIGRATION.md.
+export const REFRESH_COOKIE = 'cc_refresh';
+const COOKIE_OPTS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax' as const,
+  domain: '.cybercontrol.fun',   // shared registrable domain → sent on app.→api. XHR
+  path: '/api/auth',             // scope: only the auth endpoints ever receive it
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+export function setRefreshCookie(res: Response, token: string): void {
+  try { res.cookie(REFRESH_COOKIE, token, COOKIE_OPTS); } catch { /* non-prod host: body token still works */ }
+}
+export function clearRefreshCookie(res: Response): void {
+  try { res.clearCookie(REFRESH_COOKIE, { domain: COOKIE_OPTS.domain, path: COOKIE_OPTS.path }); } catch { /* ignore */ }
+}
+// Manual Cookie-header parse (avoids a cookie-parser dependency).
+export function readRefreshCookie(req: Request): string | null {
+  const header = req.headers?.cookie;
+  if (!header) return null;
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    if (part.slice(0, idx).trim() === REFRESH_COOKIE) return decodeURIComponent(part.slice(idx + 1).trim());
+  }
+  return null;
+}
 
 // Login/register: key per (IP + account) so a cybercafe's shared NAT IP with many operators isn't
 // collectively locked out, while brute-force against a single account stays capped at 20/15min.

@@ -7,7 +7,7 @@ import { pool } from '../../db.js';
 import { EMAIL_VERIFY, PHONE_VERIFY, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from '../../config.js';
 import { authMiddleware } from '../../middleware/auth.js';
 import { genCode, hashCode, sendEmailOtp, sendPhoneOtp } from '../../services/verification.js';
-import { createAccount, loginLimiter } from './service.js';
+import { createAccount, loginLimiter, setRefreshCookie } from './service.js';
 
 const router = Router();
 
@@ -45,6 +45,7 @@ router.post('/verify-signup', loginLimiter, async (req, res) => {
     // Record which contacts were verified at signup (no-op if the column isn't migrated yet).
     await pool.query('UPDATE users SET email_verified=$2, phone_verified=$3 WHERE id=$1',
       [out.user.id, EMAIL_VERIFY && !!p.email, PHONE_VERIFY && !!p.phone]).catch(() => {});
+    setRefreshCookie(res, out.refreshToken);
     return res.json({ ok: true, ...out });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
