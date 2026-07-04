@@ -30,6 +30,6 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       logout: () => set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false }),
     }),
-    { name: 'cc-auth' }
+    { name: 'cc-auth', partialize: (s) => ({ accessToken: s.accessToken, user: s.user, isAuthenticated: s.isAuthenticated }) }
   )
 );

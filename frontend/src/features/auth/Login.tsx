@@ -63,7 +63,7 @@ export default function Login() {
         callback: async (response: any) => {
           setLoading(true); setError('');
           try {
-            const res = await axios.post(`${API_URL}/auth/google`, { credential: response.credential });
+            const res = await axios.post(`${API_URL}/auth/google`, { credential: response.credential }, { withCredentials: true });
             onLoginSuccess(res.data);
           } catch (e: any) { setError(e.response?.data?.error || 'Google login failed'); }
           finally { setLoading(false); }
@@ -93,7 +93,7 @@ export default function Login() {
           phone: phone.trim() || undefined,
           password,
           inviteCode: inviteCode.trim() || undefined,
-        });
+        }, { withCredentials: true });
         if (res.data?.pending) {
           setPendingId(res.data.pendingId);
           setNeedsEmail(!!res.data.needsEmail);
@@ -110,7 +110,7 @@ export default function Login() {
     setLoading(true);
     try {
       const isEmail = identity.includes('@');
-      const res = await axios.post(`${API_URL}/auth/login`, { email: isEmail ? identity : undefined, phone: isEmail ? undefined : identity, password });
+      const res = await axios.post(`${API_URL}/auth/login`, { email: isEmail ? identity : undefined, phone: isEmail ? undefined : identity, password }, { withCredentials: true });
       onLoginSuccess(res.data);
     } catch (err: any) { setError(err.response?.data?.error || 'Login failed'); }
     finally { setLoading(false); }
@@ -124,7 +124,7 @@ export default function Login() {
         pendingId,
         emailCode: emailCode.trim() || undefined,
         phoneCode: phoneCode.trim() || undefined,
-      });
+      }, { withCredentials: true });
       onLoginSuccess(res.data);
     } catch (err: any) { setError(err.response?.data?.error || 'Verification failed'); }
     finally { setLoading(false); }

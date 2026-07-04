@@ -10,6 +10,10 @@ const api = axios.create({ baseURL: API_URL });
 api.interceptors.request.use((config) => {
   const { accessToken } = useAuthStore.getState();
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  // Send/receive the HttpOnly refresh cookie only on auth endpoints. Other cross-origin calls
+  // (e.g. extension-service, which returns Access-Control-Allow-Origin: *) must stay
+  // non-credentialed — '*' with credentials is rejected by the browser.
+  if ((config.url || '').includes('/auth')) config.withCredentials = true;
   return config;
 });
 
@@ -23,9 +27,11 @@ let refreshPromise: Promise<string | null> | null = null;
 function refreshAccessToken(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
   const { refreshToken, setTokens } = useAuthStore.getState();
-  if (!refreshToken) return Promise.resolve(null);
+  // Web sends the refresh token via the HttpOnly cookie (withCredentials). A legacy in-memory
+  // token (pre-cookie sessions) is still sent as a body fallback until that session gets a cookie
+  // on its next refresh — so no one is forced to re-login by this migration.
   refreshPromise = axios
-    .post(`${API_URL}/auth/refresh`, { refreshToken })
+    .post(`${API_URL}/auth/refresh`, refreshToken ? { refreshToken } : {}, { withCredentials: true })
     .then((res) => {
       if (res.data?.accessToken) {
         setTokens(res.data.accessToken, res.data.refreshToken);
