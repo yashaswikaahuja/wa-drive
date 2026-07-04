@@ -29,7 +29,9 @@ export const RESOLVER_URL = process.env.RESOLVER_URL || '';     // e.g. http://c
 
 // Email provider: 'resend' (HTTP API, no sandbox) or 'ses' (Amazon). Auto-picks resend if its
 // key is present, else ses if SES_FROM is set, else '' (email OTP off — flow degrades to phone-only).
-export const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+// Sanitize the key: strip any non-printable-ASCII (e.g. a UTF-8 BOM from CI secret entry) that would
+// otherwise make an invalid HTTP Authorization header.
+export const RESEND_API_KEY = (process.env.RESEND_API_KEY || '').replace(/[^\x21-\x7E]/g, '');
 export const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || (RESEND_API_KEY ? 'resend' : (SES_FROM ? 'ses' : ''))).toLowerCase();
 // From address used by whichever provider (Resend requires a verified-domain sender; SES a verified identity).
 export const EMAIL_FROM = SES_FROM || 'CyberControl <noreply@cybercontrol.fun>';
