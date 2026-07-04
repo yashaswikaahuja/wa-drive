@@ -62,7 +62,9 @@ jobs:
           WA_HEARTBEAT_MS:      ${{ vars.WA_HEARTBEAT_MS }}     # whatsapp-service: heartbeat interval
           WA_DEAD_AFTER_MS:     ${{ vars.WA_DEAD_AFTER_MS }}    # backend: how long w/o heartbeat → failover
           SIGNUP_CODE:          ${{ vars.SIGNUP_CODE }}         # backend: optional signup invite gate (empty → open self-serve)
-          SES_FROM:             ${{ vars.SES_FROM }}            # backend: SES verified sender → enables email signup OTP
+          EMAIL_PROVIDER:       ${{ vars.EMAIL_PROVIDER }}      # backend: 'resend' | 'ses' | '' (auto-picks resend if key present)
+          RESEND_API_KEY:       ${{ secrets.RESEND_API_KEY }}   # backend: Resend HTTP API key → email OTP + welcome (no sandbox)
+          SES_FROM:             ${{ vars.SES_FROM }}            # backend: verified sender / from-address (used by both providers)
           AWS_REGION:           ${{ vars.AWS_REGION }}          # backend: SES region
           AWS_ACCESS_KEY_ID:    ${{ secrets.AWS_ACCESS_KEY_ID }}      # backend: SES creds (or use an instance role instead)
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -74,6 +76,7 @@ jobs:
                    GROQ_API_KEY GROQ_API_KEY_2 GOOGLE_CLIENT_SECRET \
                    GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI WA_AUTH_BACKEND \
                    WA_INSTANCES WA_INSTANCE_NAME RESOLVER_URL WA_HEARTBEAT_MS WA_DEAD_AFTER_MS REDIS_URL PARENT_URL SIGNUP_CODE \
+                   EMAIL_PROVIDER RESEND_API_KEY \
                    SES_FROM AWS_REGION AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
             v="${!k}"
             if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v" >> /tmp/vm.env; fi

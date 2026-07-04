@@ -26,7 +26,15 @@ export const SIGNUP_CODE = process.env.SIGNUP_CODE || '';
 export const SES_FROM = process.env.SES_FROM || '';            // e.g. "CyberControl <noreply@cybercontrol.fun>"
 export const AWS_REGION = process.env.AWS_REGION || 'ap-south-1';
 export const RESOLVER_URL = process.env.RESOLVER_URL || '';     // e.g. http://cybercontrol-wa:3200
-export const EMAIL_VERIFY = !!SES_FROM;
+
+// Email provider: 'resend' (HTTP API, no sandbox) or 'ses' (Amazon). Auto-picks resend if its
+// key is present, else ses if SES_FROM is set, else '' (email OTP off — flow degrades to phone-only).
+export const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+export const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || (RESEND_API_KEY ? 'resend' : (SES_FROM ? 'ses' : ''))).toLowerCase();
+// From address used by whichever provider (Resend requires a verified-domain sender; SES a verified identity).
+export const EMAIL_FROM = SES_FROM || 'CyberControl <noreply@cybercontrol.fun>';
+
+export const EMAIL_VERIFY = !!EMAIL_PROVIDER;
 export const PHONE_VERIFY = !!RESOLVER_URL;
 export const OTP_TTL_MS = Number(process.env.OTP_TTL_MS ?? 10 * 60 * 1000);
 export const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS ?? 5);
