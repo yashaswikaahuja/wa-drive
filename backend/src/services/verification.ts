@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { SES_FROM, AWS_REGION, RESOLVER_URL, WA_SECRET,
   EMAIL_PROVIDER, EMAIL_FROM, RESEND_API_KEY } from '../config.js';
+import { otpEmail, welcomeEmail } from './emailTemplates.js';
 
 const ses = SES_FROM ? new SESClient({ region: AWS_REGION }) : null;
 
@@ -23,12 +24,12 @@ const body = (code: string) =>
   `Your CyberControl verification code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this message.`;
 
 // Single email dispatcher — picks the configured provider. No-op if none configured.
-async function sendMail(to: string, subject: string, text: string): Promise<void> {
+async function sendMail(to: string, subject: string, html: string, text: string): Promise<void> {
   if (EMAIL_PROVIDER === 'resend') {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: EMAIL_FROM, to, subject, text }),
+      body: JSON.stringify({ from: EMAIL_FROM, to, subject, html, text }),
     });
     if (!r.ok) {
       const e = await r.text().catch(() => '');
@@ -40,7 +41,7 @@ async function sendMail(to: string, subject: string, text: string): Promise<void
     await ses.send(new SendEmailCommand({
       Source: EMAIL_FROM,
       Destination: { ToAddresses: [to] },
-      Message: { Subject: { Data: subject }, Body: { Text: { Data: text } } },
+      Message: { Subject: { Data: subject }, Body: { Html: { Data: html }, Text: { Data: text } } },
     }));
     return;
   }
@@ -49,7 +50,8 @@ async function sendMail(to: string, subject: string, text: string): Promise<void
 
 export async function sendEmailOtp(email: string, code: string): Promise<void> {
   if (!EMAIL_PROVIDER) return;
-  await sendMail(email, 'Your CyberControl verification code', body(code));
+  const m = otpEmail(code);
+  await sendMail(email, m.subject, m.html, m.text);
 }
 
 export async function sendPhoneOtp(phone: string, code: string): Promise<void> {
@@ -69,9 +71,6 @@ export async function sendPhoneOtp(phone: string, code: string): Promise<void> {
 // verified by Google). Best-effort: no-op if no email provider; callers ignore failures.
 export async function sendWelcomeEmail(email: string, name?: string | null): Promise<void> {
   if (!EMAIL_PROVIDER || !email) return;
-  const hi = name ? `Hi ${name},` : 'Hello,';
-  await sendMail(email, 'Welcome to CyberControl 🎉',
-    `${hi}\n\nWelcome to CyberControl — your workspace is ready.\n\n` +
-    `You can now connect WhatsApp and Google Drive, add your operators, and start ` +
-    `processing customer documents.\n\nGlad to have you on board!\n\n— The CyberControl Team`);
+  const m = welcomeEmail(name);
+  await sendMail(email, m.subject, m.html, m.text);
 }
