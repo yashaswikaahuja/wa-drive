@@ -22,7 +22,7 @@ import { loadDriveTokenFromDB } from './modules/drive/service.js';
 import { startExtractionRecovery } from './services/extraction.js';
 
 import authRoutes from './modules/auth/routes.js';
-import processRoutes from './api/routes/process.routes.js';
+import processRoutes from './modules/process/routes.js';
 import driveRoutes from './modules/drive/routes.js';
 import uploadRoutes from './modules/upload/routes.js';
 import whatsappRoutes from './modules/whatsapp/routes.js';
