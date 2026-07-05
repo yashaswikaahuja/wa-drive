@@ -71,4 +71,39 @@ router.get('/workspaces', async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+/**
+ * GET /owner/workspaces/:id — one café's full detail: operators, WhatsApp sessions, file stats, dates.
+ */
+router.get('/workspaces/:id', async (req: any, res) => {
+  const { id } = req.params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'bad id' });
+  try {
+    const [ws, ops, wa, files] = await Promise.all([
+      req.pool.query(
+        `SELECT id, name, plan, status, created_at AS "createdAt", last_active_at AS "lastActiveAt"
+         FROM workspaces WHERE id = $1`, [id]),
+      req.pool.query(
+        `SELECT id, name, email, phone, role, status, created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM users WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY created_at`, [id]),
+      req.pool.query(
+        `SELECT phone_number AS "phoneNumber", status, connected_at AS "connectedAt"
+         FROM whatsapp_sessions WHERE workspace_id = $1 AND deleted_at IS NULL
+         ORDER BY connected_at DESC NULLS LAST`, [id]),
+      req.pool.query(
+        `SELECT count(*)::int AS total,
+                count(*) FILTER (WHERE uploaded_at > now() - interval '7 days')::int  AS last7,
+                count(*) FILTER (WHERE uploaded_at > now() - interval '30 days')::int AS last30,
+                max(uploaded_at) AS "lastUpload"
+         FROM drive_files WHERE workspace_id = $1`, [id]),
+    ]);
+    if (!ws.rows.length) return res.status(404).json({ error: 'not found' });
+    res.json({
+      workspace: ws.rows[0],
+      operators: ops.rows,
+      whatsapp: wa.rows,
+      files: files.rows[0],
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

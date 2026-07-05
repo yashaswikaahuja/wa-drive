@@ -3,7 +3,9 @@ import { ApiError, fetchMetrics, fetchWorkspaces, loadConfig, saveConfig } from 
 import type { Config, Metrics, Workspace } from './api';
 import { MetricsGrid, MetricsSkeleton } from './components/StatCards';
 import { WorkspacesTable, TableSkeleton } from './components/WorkspacesTable';
+import { WorkspaceDrawer } from './components/WorkspaceDrawer';
 import { Setup } from './components/Setup';
+import { exportWorkspacesCsv } from './lib/csv';
 
 type Sort = 'last_active' | 'created' | 'files';
 
@@ -18,6 +20,7 @@ export function App() {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<Sort>('last_active');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Full refresh: metrics + workspaces together (used on connect + manual refresh).
   const refreshAll = useCallback(async (c: Config, query: string, s: Sort) => {
@@ -85,8 +88,11 @@ export function App() {
 
       {metrics ? <MetricsGrid m={metrics} /> : <MetricsSkeleton />}
       {rows ? (
-        <WorkspacesTable rows={rows} q={q} onQ={setQ} sort={sort} onSort={setSort} />
+        <WorkspacesTable rows={rows} q={q} onQ={setQ} sort={sort} onSort={setSort}
+          onSelect={setSelectedId} onExport={() => exportWorkspacesCsv(rows)} />
       ) : <TableSkeleton />}
+
+      {selectedId && <WorkspaceDrawer cfg={cfg} id={selectedId} onClose={() => setSelectedId(null)} />}
     </div>
   );
 }

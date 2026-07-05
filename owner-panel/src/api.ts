@@ -26,6 +26,19 @@ export interface Config {
   key: string;
 }
 
+export interface Operator {
+  id: string; name: string | null; email: string | null; phone: string | null;
+  role: string; status: string; createdAt: string | null; updatedAt: string | null;
+}
+export interface WaSession { phoneNumber: string | null; status: string; connectedAt: string | null; }
+export interface FileStats { total: number; last7: number; last30: number; lastUpload: string | null; }
+export interface WorkspaceDetail {
+  workspace: Workspace;
+  operators: Operator[];
+  whatsapp: WaSession[];
+  files: FileStats;
+}
+
 const STORE_KEY = 'cc-owner-cfg';
 // Default to the cybercontrol-app VM's tailscale IP + owner port.
 const DEFAULT_BASE = 'http://100.112.147.34:3010';
@@ -68,3 +81,5 @@ async function get<T>(cfg: Config, path: string): Promise<T> {
 export const fetchMetrics = (cfg: Config) => get<Metrics>(cfg, '/owner/metrics');
 export const fetchWorkspaces = (cfg: Config, q: string, sort: string) =>
   get<Workspace[]>(cfg, `/owner/workspaces?limit=500&q=${encodeURIComponent(q)}&sort=${sort}`);
+export const fetchWorkspace = (cfg: Config, id: string) =>
+  get<WorkspaceDetail>(cfg, `/owner/workspaces/${id}`);

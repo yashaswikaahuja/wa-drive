@@ -9,9 +9,11 @@ interface Props {
   onQ: (v: string) => void;
   sort: Sort;
   onSort: (s: Sort) => void;
+  onSelect: (id: string) => void;
+  onExport: () => void;
 }
 
-export function WorkspacesTable({ rows, q, onQ, sort, onSort }: Props) {
+export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport }: Props) {
   return (
     <section className="card" aria-label="Cybercafés">
       <div className="row between" style={{ padding: '14px 16px', flexWrap: 'wrap', gap: 10 }}>
@@ -30,6 +32,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort }: Props) {
             <option value="created">Newest</option>
             <option value="files">Most files</option>
           </select>
+          <button className="btn" onClick={onExport} disabled={rows.length === 0}>Export CSV</button>
         </div>
       </div>
 
@@ -51,7 +54,8 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort }: Props) {
               {rows.map(w => (
                 <tr key={w.id}>
                   <td>
-                    <div style={{ fontWeight: 600 }}>{w.name || 'Untitled'}</div>
+                    <button className="linklike" onClick={() => onSelect(w.id)}
+                      aria-label={`Open ${w.name || 'cybercafé'} detail`}>{w.name || 'Untitled'}</button>
                     <div className="muted" style={{ fontSize: 12 }}>joined {relativeTime(w.createdAt)}</div>
                   </td>
                   <td>{w.plan !== 'free'
