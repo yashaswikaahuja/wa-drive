@@ -68,6 +68,9 @@ jobs:
           AWS_REGION:           ${{ vars.AWS_REGION }}          # backend: SES region
           AWS_ACCESS_KEY_ID:    ${{ secrets.AWS_ACCESS_KEY_ID }}      # backend: SES creds (or use an instance role instead)
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          OWNER_KEY:            ${{ secrets.OWNER_KEY }}         # backend: tailnet owner-panel shared credential (empty → owner API off)
+          OWNER_PORT:           ${{ vars.OWNER_PORT }}           # backend: owner listener port (empty → off)
+          OWNER_BIND:           ${{ vars.OWNER_BIND }}           # backend: 'auto' → each VM binds its own tailscale IP
         run: |
           # Build a MINIMAL .env from only the values present for this environment.
           # Values arrive as env vars (not inlined), so special chars are safe; empty ones are skipped.
@@ -77,7 +80,8 @@ jobs:
                    GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI WA_AUTH_BACKEND \
                    WA_INSTANCES WA_INSTANCE_NAME RESOLVER_URL WA_HEARTBEAT_MS WA_DEAD_AFTER_MS REDIS_URL PARENT_URL SIGNUP_CODE \
                    EMAIL_PROVIDER RESEND_API_KEY \
-                   SES_FROM AWS_REGION AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY; do
+                   SES_FROM AWS_REGION AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
+                   OWNER_KEY OWNER_PORT OWNER_BIND; do
             v="${!k}"
             if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v" >> /tmp/vm.env; fi
           done

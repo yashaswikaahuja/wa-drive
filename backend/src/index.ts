@@ -1,6 +1,7 @@
 import express from 'express';
 import compression from 'compression';
 import { createServer } from 'http';
+import os from 'os';
 import { createRequire } from 'module';
 import { PORT, OWNER_PORT, OWNER_BIND } from './config.js';
 import { pool } from './db.js';
@@ -121,6 +122,24 @@ process.on('SIGINT', () => httpServer.close(() => process.exit(0)));
 // internet-facing surface. Disabled unless OWNER_PORT is set. Gated again at the route layer by
 // tailnetOnly + requireOwner (defense in depth).
 if (OWNER_PORT) {
+  // Resolve the bind address: 'auto'/empty → this VM's tailscale IP (100.64.0.0/10). This lets the
+  // SAME env deploy to every backend VM (each binds its own tailnet IP). Falls back to loopback.
+  const resolveOwnerBind = (): string => {
+    const want = (OWNER_BIND || '').trim();
+    if (want && want.toLowerCase() !== 'auto') return want;
+    const ifaces = os.networkInterfaces();
+    const names = Object.keys(ifaces).sort((a, b) =>
+      Number(b.startsWith('tailscale')) - Number(a.startsWith('tailscale')));
+    for (const n of names) {
+      for (const a of ifaces[n] || []) {
+        const m = a.family === 'IPv4' && !a.internal && a.address.match(/^100\.(\d+)\./);
+        if (m && Number(m[1]) >= 64 && Number(m[1]) <= 127) return a.address;
+      }
+    }
+    console.warn('[Owner] no tailscale interface found — binding to 127.0.0.1 (local only)');
+    return '127.0.0.1';
+  };
+  const bind = resolveOwnerBind();
   const ownerApp = express();
   ownerApp.set('trust proxy', false); // no proxy in front — remoteAddress is the real tailnet peer
   ownerApp.use(express.json());
@@ -137,8 +156,10 @@ if (OWNER_PORT) {
   ownerApp.use((req: any, _res, next) => { req.pool = pool; next(); });
   ownerApp.get('/health', (_req, res) => res.json({ status: 'ok' }));
   ownerApp.use('/owner', ownerRoutes);
-  createServer(ownerApp).listen(OWNER_PORT, OWNER_BIND, () =>
-    console.log(`[Owner] tailnet-only API on ${OWNER_BIND}:${OWNER_PORT}`));
+  const ownerServer = createServer(ownerApp);
+  ownerServer.on('error', (e: any) => console.error('[Owner] listen error:', e?.message || e));
+  ownerServer.listen(OWNER_PORT, bind, () =>
+    console.log(`[Owner] tailnet-only API on ${bind}:${OWNER_PORT}`));
 }
 
 export { app, httpServer };

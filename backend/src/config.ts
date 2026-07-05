@@ -63,10 +63,11 @@ export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 //   OWNER_KEY   a shared secret credential (defense-in-depth on top of the tailnet). Sent by the
 //               panel as `x-owner-key`, a Bearer token, or an HTTP Basic password. Empty → API off.
 //   OWNER_PORT  port for the owner listener. 0 (default) DISABLES the owner API entirely.
-//   OWNER_BIND  address to bind. In prod set to the VM's tailscale IP (100.x). Never expose publicly.
+//   OWNER_BIND  'auto' (default) → auto-detect this VM's tailscale IP (100.64.0.0/10); or an explicit
+//               IP to override. Falls back to 127.0.0.1 if no tailnet interface is found. Never public.
 export const OWNER_KEY = process.env.OWNER_KEY || '';
 export const OWNER_PORT = Number(process.env.OWNER_PORT ?? 0);
-export const OWNER_BIND = process.env.OWNER_BIND || '0.0.0.0';
+export const OWNER_BIND = process.env.OWNER_BIND || 'auto';
 // Optional: enables the socket.io Redis adapter so realtime events fan out across multiple backend
 // instances. Empty = single-instance (no adapter, current behavior). e.g. redis://cybercontrol-redis:6379
 export const REDIS_URL = process.env.REDIS_URL || '';
