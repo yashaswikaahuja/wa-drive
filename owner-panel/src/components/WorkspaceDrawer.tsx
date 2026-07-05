@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError, fetchWorkspace, patchLocation } from '../api';
 import type { Config, WorkspaceDetail } from '../api';
 import { relativeTime, fmt } from '../lib/format';
+import { SourceBadge } from './SourceBadge';
 
 interface Props { cfg: Config; id: string; onClose: () => void; onLocationSaved?: (id: string, location: string | null) => void; }
 
@@ -76,7 +77,13 @@ export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
             </section>
 
             <section>
-              <div className="label section__title" style={{ marginBottom: 8 }}>Location</div>
+              <div className="label section__title" style={{ marginBottom: 8 }}>
+                Location <SourceBadge source={w!.locationSource} />
+                {w!.lat != null && w!.lng != null && (
+                  <a href={`https://maps.google.com/?q=${w!.lat},${w!.lng}`} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 11, marginLeft: 8, color: 'hsl(var(--marigold-deep))' }}>map ↗</a>
+                )}
+              </div>
               <div className="row" style={{ gap: 8 }}>
                 <input className="input grow" value={loc} onChange={e => { setLoc(e.target.value); setLocMsg(''); }}
                   placeholder="City / area (e.g. Patna, Boring Road)" aria-label="Location" maxLength={200} />

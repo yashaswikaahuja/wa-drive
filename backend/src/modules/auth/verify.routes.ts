@@ -8,6 +8,7 @@ import { EMAIL_VERIFY, PHONE_VERIFY, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from '../../
 import { authMiddleware } from '../../middleware/auth.js';
 import { genCode, hashCode, sendEmailOtp, sendPhoneOtp } from '../../services/verification.js';
 import { createAccount, loginLimiter, setRefreshCookie } from './service.js';
+import { captureIpLocation } from '../../services/geoip.js';
 
 const router = Router();
 
@@ -42,6 +43,7 @@ router.post('/verify-signup', loginLimiter, async (req, res) => {
       throw e;
     }
     await pool.query('DELETE FROM pending_signups WHERE id=$1', [pendingId]);
+    captureIpLocation(req, out.user.workspaceId).catch(() => {});
     // Record which contacts were verified at signup (no-op if the column isn't migrated yet).
     await pool.query('UPDATE users SET email_verified=$2, phone_verified=$3 WHERE id=$1',
       [out.user.id, EMAIL_VERIFY && !!p.email, PHONE_VERIFY && !!p.phone]).catch(() => {});

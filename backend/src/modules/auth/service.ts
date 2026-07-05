@@ -53,7 +53,7 @@ export async function createAccount(opts: { email: string | null; phone: string 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const ws = await client.query("INSERT INTO workspaces (name, location) VALUES ($1,$2) RETURNING id", [opts.name || opts.email || opts.phone, opts.location ?? null]);
+    const ws = await client.query("INSERT INTO workspaces (name, location, location_source) VALUES ($1,$2,$3) RETURNING id", [opts.name || opts.email || opts.phone, opts.location ?? null, opts.location ? 'manual' : null]);
     const workspaceId = ws.rows[0].id;
     const u = await client.query(
       "INSERT INTO users (workspace_id, email, phone, password_hash, name, role) VALUES ($1,$2,$3,$4,$5,'admin') RETURNING id",

@@ -8,6 +8,7 @@ import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET, SIGNUP_CODE, EMAIL_VERIFY, PHONE_
 import { authMiddleware, signAccessToken, signRefreshToken } from '../../middleware/auth.js';
 import { genCode, hashCode, sendEmailOtp, sendPhoneOtp, sendWelcomeEmail } from '../../services/verification.js';
 import { createAccount, loginLimiter, setRefreshCookie, clearRefreshCookie, readRefreshCookie } from './service.js';
+import { captureIpLocation } from '../../services/geoip.js';
 import verifyRouter from './verify.routes.js';
 
 const router = Router();
@@ -102,6 +103,7 @@ router.post('/register', loginLimiter, async (req, res) => {
     if (!needEmail && !needPhone) {
       try {
         const out = await createAccount({ email, phone, name, passwordHash: hash, location });
+        captureIpLocation(req, out.user.workspaceId).catch(() => {});
         setRefreshCookie(res, out.refreshToken);
         return res.json({ ok: true, ...out });
       } catch (e: any) {
@@ -188,6 +190,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     await auditLog(user.workspace_id, user.id, 'login', 'user', user.id, { field: useEmail ? 'email' : 'phone' });
     // Owner-panel activity signal (best-effort; column added in migration 007).
     pool.query('UPDATE workspaces SET last_active_at = now() WHERE id = $1', [user.workspace_id]).catch(() => {});
+    // Tier-2 location capture (best-effort, only if the café has no location yet).
+    captureIpLocation(req, user.workspace_id).catch(() => {});
     setRefreshCookie(res, refreshToken);
     res.json({ ok: true, accessToken, refreshToken, user: { id: user.id, workspaceId: user.workspace_id, name: user.name, role: user.role } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -244,18 +248,31 @@ router.get('/me', authMiddleware, async (req: any, res) => {
 // operators whose café has no location yet (surfaced in the owner panel).
 router.get('/workspace', authMiddleware, async (req: any, res) => {
   try {
-    const w = (await pool.query('SELECT id, name, location FROM workspaces WHERE id = $1', [req.user.workspaceId])).rows[0];
+    const w = (await pool.query('SELECT id, name, location, lat, lng, location_source FROM workspaces WHERE id = $1', [req.user.workspaceId])).rows[0];
     if (!w) return res.status(404).json({ error: 'Workspace not found' });
-    res.json({ id: w.id, name: w.name, location: w.location || null });
+    res.json({ id: w.id, name: w.name, location: w.location || null, lat: w.lat, lng: w.lng, source: w.location_source || null });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// Location waterfall write. Accepts { location, lat, lng, source } where source ∈ gps|manual|ip.
+// UPGRADE rule: gps(3) > manual(2) > ip(1) — a write is ignored if it would DOWNGRADE the
+// current source (so a stale IP value can't overwrite a precise GPS/manual one).
+const LOC_RANK: Record<string, number> = { gps: 3, manual: 2, ip: 1 };
 router.patch('/workspace', authMiddleware, async (req: any, res) => {
-  const raw = req.body?.location;
-  const location = raw == null || String(raw).trim() === '' ? null : String(raw).trim().slice(0, 200);
+  const b = req.body || {};
+  const source = LOC_RANK[b.source] ? b.source : 'manual';
+  const location = b.location == null || String(b.location).trim() === '' ? null : String(b.location).trim().slice(0, 200);
+  const lat = typeof b.lat === 'number' && isFinite(b.lat) ? b.lat : null;
+  const lng = typeof b.lng === 'number' && isFinite(b.lng) ? b.lng : null;
   try {
-    await pool.query('UPDATE workspaces SET location = $1, updated_at = now() WHERE id = $2', [location, req.user.workspaceId]);
-    res.json({ ok: true, location });
+    const cur = (await pool.query('SELECT location_source FROM workspaces WHERE id = $1', [req.user.workspaceId])).rows[0];
+    const curRank = LOC_RANK[cur?.location_source] || 0;
+    if (LOC_RANK[source] < curRank) return res.json({ ok: true, skipped: 'lower-priority source' });
+    await pool.query(
+      'UPDATE workspaces SET location = $1, lat = $2, lng = $3, location_source = $4, updated_at = now() WHERE id = $5',
+      [location, lat, lng, source, req.user.workspaceId]
+    );
+    res.json({ ok: true, location, lat, lng, source });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

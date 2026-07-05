@@ -1,5 +1,6 @@
 import type { Workspace } from '../api';
 import { relativeTime, isDormant, fmt } from '../lib/format';
+import { SourceBadge } from './SourceBadge';
 
 type Sort = 'last_active' | 'created' | 'files';
 
@@ -63,7 +64,9 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
                     {w.phone ? <div className="muted">{w.phone}</div> : null}
                     {!w.email && !w.phone ? <span className="muted">—</span> : null}
                   </td>
-                  <td style={{ fontSize: 13 }}>{w.location || <span className="muted">—</span>}</td>
+                  <td style={{ fontSize: 13 }}>
+                    {w.location ? <>{w.location}<SourceBadge source={w.locationSource} /></> : <span className="muted">—</span>}
+                  </td>
                   <td>{w.plan !== 'free'
                     ? <span className="pill pill--paid">{w.plan}</span>
                     : <span className="muted" style={{ fontSize: 13 }}>free</span>}

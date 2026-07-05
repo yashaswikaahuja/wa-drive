@@ -54,6 +54,7 @@ router.get('/workspaces', async (req: any, res) => {
     const { rows } = await req.pool.query(`
       SELECT
         w.id, w.name, w.plan, w.status, w.location, w.created_at AS "createdAt", w.last_active_at AS "lastActiveAt",
+        w.location_source AS "locationSource", w.lat, w.lng,
         pc.email, pc.phone,
         (SELECT count(*) FROM users u WHERE u.workspace_id = w.id AND u.deleted_at IS NULL) AS operators,
         EXISTS(SELECT 1 FROM whatsapp_sessions ws WHERE ws.workspace_id = w.id
@@ -86,7 +87,7 @@ router.get('/workspaces/:id', async (req: any, res) => {
   try {
     const [ws, ops, wa, files] = await Promise.all([
       req.pool.query(
-        `SELECT id, name, plan, status, location, created_at AS "createdAt", last_active_at AS "lastActiveAt"
+        `SELECT id, name, plan, status, location, location_source AS "locationSource", lat, lng, created_at AS "createdAt", last_active_at AS "lastActiveAt"
          FROM workspaces WHERE id = $1`, [id]),
       req.pool.query(
         `SELECT id, name, email, phone, role, status, created_at AS "createdAt", updated_at AS "updatedAt"
@@ -123,7 +124,7 @@ router.patch('/workspaces/:id', async (req: any, res) => {
   const location = raw == null || String(raw).trim() === '' ? null : String(raw).trim().slice(0, 200);
   try {
     const { rowCount } = await req.pool.query(
-      'UPDATE workspaces SET location = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL',
+      "UPDATE workspaces SET location = $1, location_source = CASE WHEN $1 IS NULL THEN NULL ELSE 'manual' END, updated_at = now() WHERE id = $2 AND deleted_at IS NULL",
       [location, id]);
     if (!rowCount) return res.status(404).json({ error: 'not found' });
     res.json({ ok: true, location });

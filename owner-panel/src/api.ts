@@ -15,6 +15,9 @@ export interface Workspace {
   plan: string;
   status: string;
   location: string | null;
+  locationSource: string | null;
+  lat: number | null;
+  lng: number | null;
   email: string | null;
   phone: string | null;
   createdAt: string | null;
