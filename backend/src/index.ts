@@ -150,7 +150,7 @@ if (OWNER_PORT) {
   ownerApp.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
     res.header('Vary', 'Origin');
-    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET, PATCH, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-owner-key');
     if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
     next();

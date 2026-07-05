@@ -14,6 +14,9 @@ export interface Workspace {
   name: string;
   plan: string;
   status: string;
+  location: string | null;
+  email: string | null;
+  phone: string | null;
   createdAt: string | null;
   lastActiveAt: string | null;
   operators: number;
@@ -87,3 +90,20 @@ export const fetchWorkspaces = (cfg: Config, q: string, sort: string) =>
   get<Workspace[]>(cfg, `/owner/workspaces?limit=500&q=${encodeURIComponent(q)}&sort=${sort}`);
 export const fetchWorkspace = (cfg: Config, id: string) =>
   get<WorkspaceDetail>(cfg, `/owner/workspaces/${id}`);
+
+export async function patchLocation(cfg: Config, id: string, location: string | null): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/owner/workspaces/${id}`, {
+      method: 'PATCH',
+      headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ location }),
+    });
+  } catch { throw new ApiError(0, 'Cannot reach the owner API.'); }
+  if (res.status === 401) throw new ApiError(401, 'Invalid owner key.');
+  if (!res.ok) {
+    let m = `Save failed (${res.status}).`;
+    try { m = (await res.json()).error || m; } catch { /* ignore */ }
+    throw new ApiError(res.status, m);
+  }
+}

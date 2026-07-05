@@ -1,23 +1,39 @@
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, fetchWorkspace } from '../api';
+import { ApiError, fetchWorkspace, patchLocation } from '../api';
 import type { Config, WorkspaceDetail } from '../api';
 import { relativeTime, fmt } from '../lib/format';
 
-interface Props { cfg: Config; id: string; onClose: () => void; }
+interface Props { cfg: Config; id: string; onClose: () => void; onLocationSaved?: (id: string, location: string | null) => void; }
 
-export function WorkspaceDrawer({ cfg, id, onClose }: Props) {
+export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
   const [detail, setDetail] = useState<WorkspaceDetail | null>(null);
   const [error, setError] = useState('');
+  const [loc, setLoc] = useState('');
+  const [savingLoc, setSavingLoc] = useState(false);
+  const [locMsg, setLocMsg] = useState('');
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let alive = true;
-    setDetail(null); setError('');
+    setDetail(null); setError(''); setLocMsg('');
     fetchWorkspace(cfg, id)
-      .then(d => { if (alive) setDetail(d); })
+      .then(d => { if (alive) { setDetail(d); setLoc(d.workspace.location || ''); } })
       .catch((e: ApiError) => { if (alive) setError(e.message); });
     return () => { alive = false; };
   }, [cfg, id]);
+
+  const primary = detail && (detail.operators.find(o => o.role === 'admin') || detail.operators[0]);
+
+  const saveLoc = async () => {
+    setSavingLoc(true); setLocMsg('');
+    const value = loc.trim() || null;
+    try {
+      await patchLocation(cfg, id, value);
+      setLocMsg('Saved');
+      onLocationSaved?.(id, value);
+    } catch (e) { setLocMsg((e as ApiError).message); }
+    finally { setSavingLoc(false); }
+  };
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -54,7 +70,20 @@ export function WorkspaceDrawer({ cfg, id, onClose }: Props) {
                 <div><div className="k">Status</div><div className="v">{w!.status}</div></div>
                 <div><div className="k">Joined</div><div className="v">{relativeTime(w!.createdAt)}</div></div>
                 <div><div className="k">Last active</div><div className="v">{relativeTime(w!.lastActiveAt)}</div></div>
+                <div><div className="k">Email</div><div className="v" style={{ fontWeight: 500, fontSize: 13 }}>{primary?.email || '—'}</div></div>
+                <div><div className="k">Phone</div><div className="v" style={{ fontWeight: 500, fontSize: 13 }}>{primary?.phone || '—'}</div></div>
               </div>
+            </section>
+
+            <section>
+              <div className="label section__title" style={{ marginBottom: 8 }}>Location</div>
+              <div className="row" style={{ gap: 8 }}>
+                <input className="input grow" value={loc} onChange={e => { setLoc(e.target.value); setLocMsg(''); }}
+                  placeholder="City / area (e.g. Patna, Boring Road)" aria-label="Location" maxLength={200} />
+                <button className="btn btn--primary" onClick={saveLoc}
+                  disabled={savingLoc || loc.trim() === (w!.location || '')}>{savingLoc ? 'Saving…' : 'Save'}</button>
+              </div>
+              {locMsg && <p className="muted" style={{ fontSize: 12, marginTop: 6, color: locMsg === 'Saved' ? 'hsl(var(--good))' : 'hsl(var(--danger))' }}>{locMsg}</p>}
             </section>
 
             <section>

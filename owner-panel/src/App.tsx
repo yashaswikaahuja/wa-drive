@@ -92,7 +92,8 @@ export function App() {
           onSelect={setSelectedId} onExport={() => exportWorkspacesCsv(rows)} />
       ) : <TableSkeleton />}
 
-      {selectedId && <WorkspaceDrawer cfg={cfg} id={selectedId} onClose={() => setSelectedId(null)} />}
+      {selectedId && <WorkspaceDrawer cfg={cfg} id={selectedId} onClose={() => setSelectedId(null)}
+        onLocationSaved={(wid, location) => setRows(rs => rs ? rs.map(r => r.id === wid ? { ...r, location } : r) : rs)} />}
     </div>
   );
 }

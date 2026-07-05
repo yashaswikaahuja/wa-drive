@@ -53,12 +53,18 @@ router.get('/workspaces', async (req: any, res) => {
     params.push(limit);
     const { rows } = await req.pool.query(`
       SELECT
-        w.id, w.name, w.plan, w.status, w.created_at AS "createdAt", w.last_active_at AS "lastActiveAt",
+        w.id, w.name, w.plan, w.status, w.location, w.created_at AS "createdAt", w.last_active_at AS "lastActiveAt",
+        pc.email, pc.phone,
         (SELECT count(*) FROM users u WHERE u.workspace_id = w.id AND u.deleted_at IS NULL) AS operators,
         EXISTS(SELECT 1 FROM whatsapp_sessions ws WHERE ws.workspace_id = w.id
                AND ws.status = 'connected' AND ws.deleted_at IS NULL)                       AS "whatsappConnected",
         (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id)                   AS files
       FROM workspaces w
+      LEFT JOIN LATERAL (
+        SELECT email, phone FROM users u
+        WHERE u.workspace_id = w.id AND u.deleted_at IS NULL
+        ORDER BY (u.role = 'admin') DESC, u.created_at ASC LIMIT 1
+      ) pc ON true
       WHERE ${where}
       ORDER BY ${sort} DESC NULLS LAST
       LIMIT $${params.length}
@@ -80,7 +86,7 @@ router.get('/workspaces/:id', async (req: any, res) => {
   try {
     const [ws, ops, wa, files] = await Promise.all([
       req.pool.query(
-        `SELECT id, name, plan, status, created_at AS "createdAt", last_active_at AS "lastActiveAt"
+        `SELECT id, name, plan, status, location, created_at AS "createdAt", last_active_at AS "lastActiveAt"
          FROM workspaces WHERE id = $1`, [id]),
       req.pool.query(
         `SELECT id, name, email, phone, role, status, created_at AS "createdAt", updated_at AS "updatedAt"
@@ -103,6 +109,24 @@ router.get('/workspaces/:id', async (req: any, res) => {
       whatsapp: wa.rows,
       files: files.rows[0],
     });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+/**
+ * PATCH /owner/workspaces/:id — owner-editable fields. Currently: location (free text, nullable).
+ */
+router.patch('/workspaces/:id', async (req: any, res) => {
+  const { id } = req.params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'bad id' });
+  if (!('location' in (req.body || {}))) return res.status(400).json({ error: 'nothing to update' });
+  const raw = req.body.location;
+  const location = raw == null || String(raw).trim() === '' ? null : String(raw).trim().slice(0, 200);
+  try {
+    const { rowCount } = await req.pool.query(
+      'UPDATE workspaces SET location = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL',
+      [location, id]);
+    if (!rowCount) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true, location });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

@@ -46,7 +46,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
           <table>
             <thead>
               <tr>
-                <th>Café</th><th>Plan</th><th>Ops</th><th>WhatsApp</th>
+                <th>Café</th><th>Contact</th><th>Location</th><th>Plan</th><th>Ops</th><th>WhatsApp</th>
                 <th className="num">Files</th><th>Last active</th><th>Status</th>
               </tr>
             </thead>
@@ -58,6 +58,12 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
                       aria-label={`Open ${w.name || 'cybercafé'} detail`}>{w.name || 'Untitled'}</button>
                     <div className="muted" style={{ fontSize: 12 }}>joined {relativeTime(w.createdAt)}</div>
                   </td>
+                  <td style={{ fontSize: 13 }}>
+                    {w.email ? <div>{w.email}</div> : null}
+                    {w.phone ? <div className="muted">{w.phone}</div> : null}
+                    {!w.email && !w.phone ? <span className="muted">—</span> : null}
+                  </td>
+                  <td style={{ fontSize: 13 }}>{w.location || <span className="muted">—</span>}</td>
                   <td>{w.plan !== 'free'
                     ? <span className="pill pill--paid">{w.plan}</span>
                     : <span className="muted" style={{ fontSize: 13 }}>free</span>}
