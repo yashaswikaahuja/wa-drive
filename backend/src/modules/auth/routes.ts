@@ -240,4 +240,23 @@ router.get('/me', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// Caller's café (workspace) location. GET to check, PATCH to set — used to prompt existing
+// operators whose café has no location yet (surfaced in the owner panel).
+router.get('/workspace', authMiddleware, async (req: any, res) => {
+  try {
+    const w = (await pool.query('SELECT id, name, location FROM workspaces WHERE id = $1', [req.user.workspaceId])).rows[0];
+    if (!w) return res.status(404).json({ error: 'Workspace not found' });
+    res.json({ id: w.id, name: w.name, location: w.location || null });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/workspace', authMiddleware, async (req: any, res) => {
+  const raw = req.body?.location;
+  const location = raw == null || String(raw).trim() === '' ? null : String(raw).trim().slice(0, 200);
+  try {
+    await pool.query('UPDATE workspaces SET location = $1, updated_at = now() WHERE id = $2', [location, req.user.workspaceId]);
+    res.json({ ok: true, location });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

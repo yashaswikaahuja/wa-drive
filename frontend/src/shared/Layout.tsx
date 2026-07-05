@@ -3,6 +3,7 @@ import { memo, useMemo, useEffect, useState } from 'react';
 import { useAuthStore } from '../features/auth/store';
 import { extensionBridge } from './extensionBridge';
 import VerifyBanner from './VerifyBanner';
+import LocationBanner from './LocationBanner';
 import {
   Users, ChatCircle, Camera, Gear,
   ChartPie, PencilSimple, Brain, Broadcast, UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,
@@ -136,6 +137,7 @@ export default function Layout() {
 
       <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-6">
         <VerifyBanner />
+        <LocationBanner />
         <Outlet />
       </main>
     </div>
