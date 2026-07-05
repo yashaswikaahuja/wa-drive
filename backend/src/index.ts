@@ -2,6 +2,8 @@ import express from 'express';
 import compression from 'compression';
 import { createServer } from 'http';
 import os from 'os';
+import fs from 'fs';
+import path from 'path';
 import { createRequire } from 'module';
 import { PORT, OWNER_PORT, OWNER_BIND } from './config.js';
 import { pool } from './db.js';
@@ -156,6 +158,18 @@ if (OWNER_PORT) {
   ownerApp.use((req: any, _res, next) => { req.pool = pool; next(); });
   ownerApp.get('/health', (_req, res) => res.json({ status: 'ok' }));
   ownerApp.use('/owner', ownerRoutes);
+  // Serve the built owner panel (baked into the image) so the dashboard opens directly at the tailnet
+  // URL — no local dev server. Static shell is not sensitive (data still needs the key); SPA fallback
+  // to index.html for client routing, but never for /owner or /health.
+  const panelDir = process.env.OWNER_PANEL_DIR || path.join(process.cwd(), 'owner-panel');
+  if (fs.existsSync(path.join(panelDir, 'index.html'))) {
+    ownerApp.use(express.static(panelDir));
+    ownerApp.get('*', (req, res, next) => {
+      if (req.path.startsWith('/owner') || req.path === '/health') return next();
+      res.sendFile(path.join(panelDir, 'index.html'));
+    });
+    console.log('[Owner] serving panel from', panelDir);
+  }
   const ownerServer = createServer(ownerApp);
   ownerServer.on('error', (e: any) => console.error('[Owner] listen error:', e?.message || e));
   ownerServer.listen(OWNER_PORT, bind, () =>

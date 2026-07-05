@@ -40,8 +40,12 @@ export interface WorkspaceDetail {
 }
 
 const STORE_KEY = 'cc-owner-cfg';
-// Default to the cybercontrol-app VM's tailscale IP + owner port.
-const DEFAULT_BASE = 'http://100.112.147.34:3010';
+// When the panel is served BY the owner listener (same origin), default to that origin — the API is
+// right there. When running the local dev server (vite on :5180), fall back to the tailscale IP.
+const DEFAULT_BASE =
+  typeof window !== 'undefined' && window.location.protocol.startsWith('http') && window.location.port !== '5180'
+    ? window.location.origin
+    : 'http://100.112.147.34:3010';
 
 export function loadConfig(): Config {
   try {

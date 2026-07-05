@@ -16,6 +16,9 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY providers ./providers
 COPY migrations ./migrations
+# Owner panel static bundle (built by CI into ./owner-panel-dist before the image build).
+# Served by the tailnet-only owner listener. Optional: absent in local builds → owner API still works.
+COPY owner-panel-dist ./owner-panel
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 EXPOSE 3000
