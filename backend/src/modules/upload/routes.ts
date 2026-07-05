@@ -112,6 +112,8 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
       );
       if (profilePicUrl) await pool.query('UPDATE drive_files SET profile_pic_url = $1 WHERE workspace_id = $2 AND customer_id = $3', [profilePicUrl, uploadWsId, phone]);
       if (senderName) await pool.query('UPDATE drive_files SET customer_name = $1 WHERE workspace_id = $2 AND customer_id = $3 AND customer_name != $1', [senderName, uploadWsId, phone]);
+      // Owner-panel activity signal (best-effort; column added in migration 007).
+      pool.query('UPDATE workspaces SET last_active_at = now() WHERE id = $1', [uploadWsId]).catch(() => {});
     } catch (e: any) { console.warn('[Upload] DB:', e.message); }
 
     // Durable extraction ledger (safety net): record the job in-request so it survives a backend

@@ -2,7 +2,7 @@ import express from 'express';
 import compression from 'compression';
 import { createServer } from 'http';
 import { createRequire } from 'module';
-import { PORT } from './config.js';
+import { PORT, OWNER_PORT, OWNER_BIND } from './config.js';
 import { pool } from './db.js';
 
 // Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
@@ -31,6 +31,7 @@ import jobsRoutes from './modules/jobs/routes.js';
 import dashboardRoutes from './modules/dashboard/routes.js';
 import formsRoutes from './modules/forms/routes.js';
 import usersRoutes from './modules/users/routes.js';
+import ownerRoutes from './modules/owner/routes.js';
 
 const app = express();
 app.set('trust proxy', 1);
@@ -113,5 +114,21 @@ process.on('unhandledRejection', (err: any) => { console.error('[FATAL] Unhandle
 
 httpServer.listen(PORT, () => console.log(`[Hub] Running on http://localhost:${PORT}`));
 process.on('SIGINT', () => httpServer.close(() => process.exit(0)));
+
+// ── Owner control panel API (tailnet-only) ──────────────────────────────────────
+// A SEPARATE listener the public LB does not proxy, bound to OWNER_BIND (the VM's tailscale IP in
+// prod). Owner routes are never mounted on the public `app` above, so /owner is absent from the
+// internet-facing surface. Disabled unless OWNER_PORT is set. Gated again at the route layer by
+// tailnetOnly + requireOwner (defense in depth).
+if (OWNER_PORT) {
+  const ownerApp = express();
+  ownerApp.set('trust proxy', false); // no proxy in front — remoteAddress is the real tailnet peer
+  ownerApp.use(express.json());
+  ownerApp.use((req: any, _res, next) => { req.pool = pool; next(); });
+  ownerApp.get('/health', (_req, res) => res.json({ status: 'ok' }));
+  ownerApp.use('/owner', ownerRoutes);
+  createServer(ownerApp).listen(OWNER_PORT, OWNER_BIND, () =>
+    console.log(`[Owner] tailnet-only API on ${OWNER_BIND}:${OWNER_PORT}`));
+}
 
 export { app, httpServer };

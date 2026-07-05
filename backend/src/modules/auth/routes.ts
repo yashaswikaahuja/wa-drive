@@ -185,6 +185,8 @@ router.post('/login', loginLimiter, async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3) RETURNING id", [user.id, refreshToken, expiresAt]);
     await auditLog(user.workspace_id, user.id, 'login', 'user', user.id, { field: useEmail ? 'email' : 'phone' });
+    // Owner-panel activity signal (best-effort; column added in migration 007).
+    pool.query('UPDATE workspaces SET last_active_at = now() WHERE id = $1', [user.workspace_id]).catch(() => {});
     setRefreshCookie(res, refreshToken);
     res.json({ ok: true, accessToken, refreshToken, user: { id: user.id, workspaceId: user.workspace_id, name: user.name, role: user.role } });
   } catch (e: any) { res.status(500).json({ error: e.message }); }

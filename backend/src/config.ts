@@ -56,6 +56,16 @@ export const WA_DEAD_AFTER_MS = Number(process.env.WA_DEAD_AFTER_MS ?? 90_000);
 export const WA_MIN_HOLD_MS = Number(process.env.WA_MIN_HOLD_MS ?? 86_400_000);
 
 export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+
+// ── Owner control panel (tailnet-only) ──────────────────────────────────────────
+// The owner API runs on a SEPARATE listener that the public load-balancer does NOT proxy, so it is
+// physically absent from the internet-facing surface. Reach it only over the tailnet.
+//   OWNER_EMAILS  comma-separated allowlist of owner logins (JWT identity must match one of these).
+//   OWNER_PORT    port for the owner listener. 0 (default) DISABLES the owner API entirely.
+//   OWNER_BIND    address to bind. In prod set to the VM's tailscale IP (100.x). Never expose publicly.
+export const OWNER_EMAILS = (process.env.OWNER_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+export const OWNER_PORT = Number(process.env.OWNER_PORT ?? 0);
+export const OWNER_BIND = process.env.OWNER_BIND || '0.0.0.0';
 // Optional: enables the socket.io Redis adapter so realtime events fan out across multiple backend
 // instances. Empty = single-instance (no adapter, current behavior). e.g. redis://cybercontrol-redis:6379
 export const REDIS_URL = process.env.REDIS_URL || '';
