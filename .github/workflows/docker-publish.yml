@@ -42,7 +42,7 @@ jobs:
           node-version: 20
       - name: Build owner panel into backend context
         run: |
-          (cd owner-panel && npm ci && npm run build)
+          (cd owner-panel && npm install --no-audit --no-fund && npm run build)
           rm -rf backend/owner-panel-dist
           cp -r owner-panel/dist backend/owner-panel-dist
           echo "panel bundle:" && ls backend/owner-panel-dist
