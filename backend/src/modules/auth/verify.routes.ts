@@ -36,7 +36,7 @@ router.post('/verify-signup', loginLimiter, async (req, res) => {
     }
     let out;
     try {
-      out = await createAccount({ email: p.email, phone: p.phone, name: p.name, passwordHash: p.password_hash });
+      out = await createAccount({ email: p.email, phone: p.phone, name: p.name, passwordHash: p.password_hash, location: p.location });
     } catch (e: any) {
       if (e.code === '23505') { await pool.query('DELETE FROM pending_signups WHERE id=$1', [pendingId]); return res.status(409).json({ error: 'Email or phone already registered' }); }
       throw e;

@@ -13,6 +13,7 @@ export default function Login() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [location, setLocation] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -92,6 +93,7 @@ export default function Login() {
           email: email.trim() || undefined,
           phone: phone.trim() || undefined,
           password,
+          location: location.trim() || undefined,
           inviteCode: inviteCode.trim() || undefined,
         }, { withCredentials: true });
         if (res.data?.pending) {
@@ -211,6 +213,10 @@ export default function Login() {
               <div>
                 <label htmlFor="reg-phone" className="text-xs pt-muted mb-1 block">Phone</label>
                 <input id="reg-phone" type="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} className="input-field" placeholder="9876543210" />
+              </div>
+              <div>
+                <label htmlFor="reg-location" className="text-xs pt-muted mb-1 block">City / Area</label>
+                <input id="reg-location" type="text" autoComplete="address-level2" value={location} onChange={e => setLocation(e.target.value)} className="input-field" placeholder="e.g. Patna, Boring Road" />
               </div>
             </>
           )}

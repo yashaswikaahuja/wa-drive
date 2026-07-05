@@ -49,11 +49,11 @@ export const loginLimiter = rateLimit({
 
 // Create workspace + admin user + first refresh session, and mint tokens. Shared by direct
 // register (no verification configured) and verify-signup (after OTP). Throws 23505 on dup.
-export async function createAccount(opts: { email: string | null; phone: string | null; name: string | null; passwordHash: string }) {
+export async function createAccount(opts: { email: string | null; phone: string | null; name: string | null; passwordHash: string; location?: string | null }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const ws = await client.query("INSERT INTO workspaces (name) VALUES ($1) RETURNING id", [opts.name || opts.email || opts.phone]);
+    const ws = await client.query("INSERT INTO workspaces (name, location) VALUES ($1,$2) RETURNING id", [opts.name || opts.email || opts.phone, opts.location ?? null]);
     const workspaceId = ws.rows[0].id;
     const u = await client.query(
       "INSERT INTO users (workspace_id, email, phone, password_hash, name, role) VALUES ($1,$2,$3,$4,$5,'admin') RETURNING id",

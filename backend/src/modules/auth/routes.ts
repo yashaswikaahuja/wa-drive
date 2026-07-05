@@ -78,13 +78,14 @@ router.post('/google', googleLimiter, async (req, res) => {
 });
 
 router.post('/register', loginLimiter, async (req, res) => {
-  let { email, phone, password, name } = req.body || {};
+  let { email, phone, password, name, location } = req.body || {};
   if (SIGNUP_CODE && req.body.inviteCode !== SIGNUP_CODE) return res.status(403).json({ error: 'A valid invite code is required to sign up' });
   if (!password || (!email && !phone)) return res.status(400).json({ error: 'email/phone and password required' });
   if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   email = email ? String(email).trim().toLowerCase() : null;
   phone = phone ? String(phone).trim() : null;
   name = name ? String(name).trim() : null;
+  location = location ? (String(location).trim().slice(0, 200) || null) : null;
   try {
     // Reject already-registered contacts up front (clear error; don't send an OTP to a taken contact).
     const dup = await pool.query(
@@ -100,7 +101,7 @@ router.post('/register', loginLimiter, async (req, res) => {
     // No verification configured → create immediately (unchanged behavior).
     if (!needEmail && !needPhone) {
       try {
-        const out = await createAccount({ email, phone, name, passwordHash: hash });
+        const out = await createAccount({ email, phone, name, passwordHash: hash, location });
         setRefreshCookie(res, out.refreshToken);
         return res.json({ ok: true, ...out });
       } catch (e: any) {
@@ -114,9 +115,9 @@ router.post('/register', loginLimiter, async (req, res) => {
     const phoneCode = needPhone ? genCode() : null;
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
     const { rows } = await pool.query(
-      `INSERT INTO pending_signups (email, phone, name, password_hash, email_code_hash, phone_code_hash, email_verified, phone_verified, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [email, phone, name, hash, emailCode ? hashCode(emailCode) : null, phoneCode ? hashCode(phoneCode) : null, !needEmail, !needPhone, expiresAt]
+      `INSERT INTO pending_signups (email, phone, name, password_hash, email_code_hash, phone_code_hash, email_verified, phone_verified, expires_at, location)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [email, phone, name, hash, emailCode ? hashCode(emailCode) : null, phoneCode ? hashCode(phoneCode) : null, !needEmail, !needPhone, expiresAt, location]
     );
     const pendingId = rows[0].id;
     try {
