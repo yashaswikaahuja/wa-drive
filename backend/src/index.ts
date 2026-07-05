@@ -124,6 +124,16 @@ if (OWNER_PORT) {
   const ownerApp = express();
   ownerApp.set('trust proxy', false); // no proxy in front — remoteAddress is the real tailnet peer
   ownerApp.use(express.json());
+  // CORS: the panel is a separate tailnet origin. No cookies are used (auth is the x-owner-key
+  // header), so echoing the origin is safe — the key + tailnet remain the gates.
+  ownerApp.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Vary', 'Origin');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-owner-key');
+    if (req.method === 'OPTIONS') { res.sendStatus(204); return; }
+    next();
+  });
   ownerApp.use((req: any, _res, next) => { req.pool = pool; next(); });
   ownerApp.get('/health', (_req, res) => res.json({ status: 'ok' }));
   ownerApp.use('/owner', ownerRoutes);

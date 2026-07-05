@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/components/setup.tsx","./src/components/statcards.tsx","./src/components/workspacestable.tsx","./src/lib/format.ts"],"errors":true,"version":"5.9.3"}
