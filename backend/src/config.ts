@@ -60,10 +60,11 @@ export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 // ── Owner control panel (tailnet-only) ──────────────────────────────────────────
 // The owner API runs on a SEPARATE listener that the public load-balancer does NOT proxy, so it is
 // physically absent from the internet-facing surface. Reach it only over the tailnet.
-//   OWNER_EMAILS  comma-separated allowlist of owner logins (JWT identity must match one of these).
-//   OWNER_PORT    port for the owner listener. 0 (default) DISABLES the owner API entirely.
-//   OWNER_BIND    address to bind. In prod set to the VM's tailscale IP (100.x). Never expose publicly.
-export const OWNER_EMAILS = (process.env.OWNER_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+//   OWNER_KEY   a shared secret credential (defense-in-depth on top of the tailnet). Sent by the
+//               panel as `x-owner-key`, a Bearer token, or an HTTP Basic password. Empty → API off.
+//   OWNER_PORT  port for the owner listener. 0 (default) DISABLES the owner API entirely.
+//   OWNER_BIND  address to bind. In prod set to the VM's tailscale IP (100.x). Never expose publicly.
+export const OWNER_KEY = process.env.OWNER_KEY || '';
 export const OWNER_PORT = Number(process.env.OWNER_PORT ?? 0);
 export const OWNER_BIND = process.env.OWNER_BIND || '0.0.0.0';
 // Optional: enables the socket.io Redis adapter so realtime events fan out across multiple backend
