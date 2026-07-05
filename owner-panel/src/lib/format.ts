@@ -24,3 +24,8 @@ export function isDormant(iso: string | null): boolean {
 export function fmt(n: number): string {
   return n.toLocaleString('en-IN');
 }
+
+// Official Google Maps URL — opens the Maps app on mobile, the website on desktop.
+export function mapsUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+}

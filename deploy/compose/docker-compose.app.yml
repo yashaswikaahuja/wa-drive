@@ -34,6 +34,7 @@ services:
       OWNER_KEY: ${OWNER_KEY:-}                   # tailnet owner-panel credential (empty → owner API off)
       OWNER_PORT: ${OWNER_PORT:-}                 # owner listener port, e.g. 3010 (empty → off)
       OWNER_BIND: ${OWNER_BIND:-}                 # 'auto' → bind this VM's tailscale IP
+      GEOCODE_API_KEY: ${GEOCODE_API_KEY:-}       # server-side reverse-geocode of GPS captures
 
   extension-service:
     image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}

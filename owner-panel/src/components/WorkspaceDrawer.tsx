@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError, fetchWorkspace, patchLocation } from '../api';
 import type { Config, WorkspaceDetail } from '../api';
 import { relativeTime, fmt } from '../lib/format';
+import { mapsUrl } from '../lib/format';
 import { SourceBadge } from './SourceBadge';
 
 interface Props { cfg: Config; id: string; onClose: () => void; onLocationSaved?: (id: string, location: string | null) => void; }
@@ -80,8 +81,8 @@ export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
               <div className="label section__title" style={{ marginBottom: 8 }}>
                 Location <SourceBadge source={w!.locationSource} />
                 {w!.lat != null && w!.lng != null && (
-                  <a href={`https://maps.google.com/?q=${w!.lat},${w!.lng}`} target="_blank" rel="noreferrer"
-                    style={{ fontSize: 11, marginLeft: 8, color: 'hsl(var(--marigold-deep))' }}>map ↗</a>
+                  <a href={mapsUrl(w!.lat, w!.lng)} target="_blank" rel="noreferrer"
+                    style={{ fontSize: 11, marginLeft: 8, color: 'hsl(var(--marigold-deep))' }}>Open in Google Maps ↗</a>
                 )}
               </div>
               <div className="row" style={{ gap: 8 }}>

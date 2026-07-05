@@ -57,6 +57,11 @@ export const WA_MIN_HOLD_MS = Number(process.env.WA_MIN_HOLD_MS ?? 86_400_000);
 
 export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 
+// Server-side reverse-geocoding key (Google Geocoding API). Used to turn GPS lat/lng captured in the
+// browser into a human address on save — reliable + independent of the browser's referrer-restricted
+// key. Empty → server skips geocoding (stores coords as-is). Never exposed to clients.
+export const GEOCODE_API_KEY = process.env.GEOCODE_API_KEY || '';
+
 // ── Owner control panel (tailnet-only) ──────────────────────────────────────────
 // The owner API runs on a SEPARATE listener that the public load-balancer does NOT proxy, so it is
 // physically absent from the internet-facing surface. Reach it only over the tailnet.

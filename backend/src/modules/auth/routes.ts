@@ -9,6 +9,7 @@ import { authMiddleware, signAccessToken, signRefreshToken } from '../../middlew
 import { genCode, hashCode, sendEmailOtp, sendPhoneOtp, sendWelcomeEmail } from '../../services/verification.js';
 import { createAccount, loginLimiter, setRefreshCookie, clearRefreshCookie, readRefreshCookie } from './service.js';
 import { captureIpLocation } from '../../services/geoip.js';
+import { reverseGeocode } from '../../services/geocode.js';
 import verifyRouter from './verify.routes.js';
 
 const router = Router();
@@ -261,9 +262,15 @@ const LOC_RANK: Record<string, number> = { gps: 3, manual: 2, ip: 1 };
 router.patch('/workspace', authMiddleware, async (req: any, res) => {
   const b = req.body || {};
   const source = LOC_RANK[b.source] ? b.source : 'manual';
-  const location = b.location == null || String(b.location).trim() === '' ? null : String(b.location).trim().slice(0, 200);
+  let location = b.location == null || String(b.location).trim() === '' ? null : String(b.location).trim().slice(0, 200);
   const lat = typeof b.lat === 'number' && isFinite(b.lat) ? b.lat : null;
   const lng = typeof b.lng === 'number' && isFinite(b.lng) ? b.lng : null;
+  // For a GPS capture, resolve the address server-side (reliable, browser-independent). Fall back to
+  // whatever the client sent, then to a coordinate string, so we always store something.
+  if (source === 'gps' && lat != null && lng != null) {
+    const addr = await reverseGeocode(lat, lng);
+    location = addr || location || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  }
   try {
     const cur = (await pool.query('SELECT location_source FROM workspaces WHERE id = $1', [req.user.workspaceId])).rows[0];
     const curRank = LOC_RANK[cur?.location_source] || 0;

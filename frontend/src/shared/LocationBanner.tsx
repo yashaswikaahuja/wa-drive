@@ -59,23 +59,12 @@ export default function LocationBanner() {
     finally { setBusy(false); }
   }
 
-  // Tier ① — precise: geolocation popup → reverse-geocode → save gps.
+  // Tier ① — precise: geolocation popup → send coords; the SERVER reverse-geocodes to an address.
   function useExact() {
     if (!navigator.geolocation) { toast.error('Location not supported on this device'); return; }
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const lat = pos.coords.latitude, lng = pos.coords.longitude;
-        let address = '';
-        const g = await loadGoogleMaps();
-        if (g?.maps) {
-          try {
-            const { results } = await new g.maps.Geocoder().geocode({ location: { lat, lng } });
-            address = results?.[0]?.formatted_address || '';
-          } catch { /* keep coords */ }
-        }
-        await save({ location: address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng, source: 'gps' });
-      },
+      (pos) => { void save({ location: null, lat: pos.coords.latitude, lng: pos.coords.longitude, source: 'gps' }); },
       (err) => { setBusy(false); toast.error(err.code === 1 ? 'Location permission denied' : 'Could not get your location'); },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
     );
