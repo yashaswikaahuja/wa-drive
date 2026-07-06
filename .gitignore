@@ -26,7 +26,7 @@ upload_queue/
 *.json.bak
 
 # Legacy/obsolete (local only)
-whatsapp/
+/whatsapp/
 gateway/
 storage/
 inbox/
