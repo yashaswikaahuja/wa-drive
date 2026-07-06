@@ -6,7 +6,7 @@ import { Router } from 'express';
 import { pool } from '../../db.js';
 import { EMAIL_VERIFY, PHONE_VERIFY, OTP_TTL_MS, OTP_MAX_ATTEMPTS } from '../../config.js';
 import { authMiddleware } from '../../middleware/auth.js';
-import { genCode, hashCode, sendEmailOtp, sendPhoneOtp } from '../../services/verification.js';
+import { genCode, hashCode, sendEmailOtp, sendPhoneOtp, sendWelcomeEmail, sendPhoneWelcome } from '../../services/verification.js';
 import { createAccount, loginLimiter, setRefreshCookie } from './service.js';
 import { captureIpLocation } from '../../services/geoip.js';
 
@@ -47,6 +47,9 @@ router.post('/verify-signup', loginLimiter, async (req, res) => {
     // Record which contacts were verified at signup (no-op if the column isn't migrated yet).
     await pool.query('UPDATE users SET email_verified=$2, phone_verified=$3 WHERE id=$1',
       [out.user.id, EMAIL_VERIFY && !!p.email, PHONE_VERIFY && !!p.phone]).catch(() => {});
+    // Branded welcome on the verified channel(s) — best-effort, never blocks the response.
+    if (p.email) sendWelcomeEmail(p.email, p.name).catch(() => {});
+    if (p.phone) sendPhoneWelcome(p.phone, p.name).catch(() => {});
     setRefreshCookie(res, out.refreshToken);
     return res.json({ ok: true, ...out });
   } catch (e: any) { res.status(500).json({ error: e.message }); }

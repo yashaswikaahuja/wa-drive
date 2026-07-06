@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { RESOLVER_URL, WA_SECRET, EMAIL_PROVIDER } from '../config.js';
 import { sendMail } from './email/send.js';
 import { otpEmail, welcomeEmail } from './email/templates.js';
+import { otpMessage, welcomeMessage } from './whatsapp/templates.js';
 
 export function genCode(): string {
   return String(crypto.randomInt(100000, 1000000)); // 6-digit
@@ -17,27 +18,28 @@ export function hashCode(code: string): string {
   return crypto.createHash('sha256').update(String(code)).digest('hex');
 }
 
-// Plaintext OTP line used by the WhatsApp channel.
-const smsBody = (code: string) =>
-  `Your CyberControl verification code is ${code}. It expires in 10 minutes. If you didn't request this, ignore this message.`;
-
 export async function sendEmailOtp(email: string, code: string): Promise<void> {
   if (!EMAIL_PROVIDER) return;
   const m = otpEmail(code);
   await sendMail(email, m.subject, m.html, m.text);
 }
 
-export async function sendPhoneOtp(phone: string, code: string): Promise<void> {
+// Low-level: send an arbitrary text to a WhatsApp number via the resolver oracle.
+async function sendWhatsApp(phone: string, message: string): Promise<void> {
   if (!RESOLVER_URL) return;
   const r = await fetch(`${RESOLVER_URL}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
-    body: JSON.stringify({ phone, message: smsBody(code) }),
+    body: JSON.stringify({ phone, message }),
   });
   if (!r.ok) {
     const e: any = await r.json().catch(() => ({}));
-    throw new Error(e.error || 'Failed to send WhatsApp code');
+    throw new Error(e.error || 'Failed to send WhatsApp message');
   }
+}
+
+export async function sendPhoneOtp(phone: string, code: string): Promise<void> {
+  await sendWhatsApp(phone, otpMessage(code));
 }
 
 // Greeting for accounts that skip OTP (e.g. Google sign-in — email already verified by Google).
@@ -46,4 +48,11 @@ export async function sendWelcomeEmail(email: string, name?: string | null): Pro
   if (!EMAIL_PROVIDER || !email) return;
   const m = welcomeEmail(name);
   await sendMail(email, m.subject, m.html, m.text);
+}
+
+// WhatsApp welcome (parity with the email one) — e.g. after a phone-verified signup.
+// Best-effort: no-op if the resolver isn't configured; callers ignore failures.
+export async function sendPhoneWelcome(phone: string, name?: string | null): Promise<void> {
+  if (!RESOLVER_URL || !phone) return;
+  await sendWhatsApp(phone, welcomeMessage(name));
 }
