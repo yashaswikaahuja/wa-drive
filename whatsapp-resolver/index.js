@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const express = require('express');
 
 const PORT = process.env.PORT || 3200;
@@ -129,10 +129,13 @@ app.get('/contact', auth, async (req, res) => {
   }
 });
 
-// Send a WhatsApp message (used for signup OTPs — the resolver is the always-on system sender)
+// Send a WhatsApp message (used for signup OTPs — the resolver is the always-on system sender).
+// Body: { phone, message?, media?, caption? }
+//   • media present (base64 PNG, no data: prefix) → sends an image with an optional caption
+//   • else → sends `message` as text
 app.post('/send', auth, async (req, res) => {
-  const { phone, message } = req.body || {};
-  if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
+  const { phone, message, media, caption } = req.body || {};
+  if (!phone || (!message && !media)) return res.status(400).json({ error: 'phone and message or media required' });
   if (!ready) return res.status(503).json({ error: 'Not connected' });
   try {
     const digits = String(phone).replace(/[^0-9]/g, '');
@@ -141,7 +144,12 @@ app.post('/send', auth, async (req, res) => {
     // getNumberId returns null if the number isn't on WhatsApp.
     const numberId = await client.getNumberId(digits);
     if (!numberId) return res.status(422).json({ error: 'number not on WhatsApp' });
-    await client.sendMessage(numberId._serialized, message);
+    if (media) {
+      const m = new MessageMedia('image/png', media, 'cybercontrol.png');
+      await client.sendMessage(numberId._serialized, m, caption ? { caption } : {});
+    } else {
+      await client.sendMessage(numberId._serialized, message);
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error('[Resolver] send error:', e.message);

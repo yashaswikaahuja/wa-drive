@@ -9,6 +9,7 @@ import { RESOLVER_URL, WA_SECRET, EMAIL_PROVIDER } from '../config.js';
 import { sendMail } from './email/send.js';
 import { otpEmail, welcomeEmail } from './email/templates.js';
 import { otpMessage, welcomeMessage } from './whatsapp/templates.js';
+import { renderOtpCard, renderWelcomeCard } from './whatsapp/render.js';
 
 export function genCode(): string {
   return String(crypto.randomInt(100000, 1000000)); // 6-digit
@@ -38,8 +39,31 @@ async function sendWhatsApp(phone: string, message: string): Promise<void> {
   }
 }
 
+// Low-level: send a base64 PNG (branded card) as an image with a caption.
+async function sendWhatsAppMedia(phone: string, media: string, caption: string): Promise<void> {
+  if (!RESOLVER_URL) return;
+  const r = await fetch(`${RESOLVER_URL}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
+    body: JSON.stringify({ phone, media, caption }),
+  });
+  if (!r.ok) {
+    const e: any = await r.json().catch(() => ({}));
+    throw new Error(e.error || 'Failed to send WhatsApp image');
+  }
+}
+
+// OTP → branded PNG card + a caption that still contains the code as text (so it stays copyable).
+// Falls back to plain text if rendering or media-send fails, so delivery never breaks.
 export async function sendPhoneOtp(phone: string, code: string): Promise<void> {
-  await sendWhatsApp(phone, otpMessage(code));
+  if (!RESOLVER_URL) return;
+  const caption = otpMessage(code);
+  try {
+    const png = await renderOtpCard(code);
+    await sendWhatsAppMedia(phone, png, caption);
+  } catch {
+    await sendWhatsApp(phone, caption);
+  }
 }
 
 // Greeting for accounts that skip OTP (e.g. Google sign-in — email already verified by Google).
@@ -50,9 +74,15 @@ export async function sendWelcomeEmail(email: string, name?: string | null): Pro
   await sendMail(email, m.subject, m.html, m.text);
 }
 
-// WhatsApp welcome (parity with the email one) — e.g. after a phone-verified signup.
+// WhatsApp welcome (parity with the email one) — branded PNG card + caption, text fallback.
 // Best-effort: no-op if the resolver isn't configured; callers ignore failures.
 export async function sendPhoneWelcome(phone: string, name?: string | null): Promise<void> {
   if (!RESOLVER_URL || !phone) return;
-  await sendWhatsApp(phone, welcomeMessage(name));
+  const caption = welcomeMessage(name);
+  try {
+    const png = await renderWelcomeCard(name);
+    await sendWhatsAppMedia(phone, png, caption);
+  } catch {
+    await sendWhatsApp(phone, caption).catch(() => {});
+  }
 }
