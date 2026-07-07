@@ -80,7 +80,9 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
                   <td>
                     <span className="row" style={{ gap: 7 }}>
                       <span className={`dot ${w.whatsappConnected ? 'dot--on' : 'dot--off'}`} aria-hidden />
-                      <span style={{ fontSize: 13 }}>{w.whatsappConnected ? 'Connected' : 'Off'}</span>
+                      {w.whatsappNumber
+                        ? <span className="num" style={{ fontSize: 13, fontWeight: w.whatsappConnected ? 600 : 400 }}>{w.whatsappNumber}</span>
+                        : <span className="muted" style={{ fontSize: 13 }}>Off</span>}
                     </span>
                   </td>
                   <td className="num">{fmt(w.files)}</td>

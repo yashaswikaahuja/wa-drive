@@ -105,16 +105,22 @@ export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
             </section>
 
             <section>
-              <div className="label section__title" style={{ marginBottom: 8 }}>WhatsApp {detail.whatsapp.length > 0 && `(${detail.whatsapp.length})`}</div>
+              <div className="label section__title" style={{ marginBottom: 8 }}>
+                WhatsApp number{detail.whatsapp.length > 1 ? `s (${detail.whatsapp.length})` : ''}
+              </div>
               {detail.whatsapp.length === 0 ? (
-                <p className="muted" style={{ fontSize: 13 }}>No WhatsApp session.</p>
+                <p className="muted" style={{ fontSize: 13 }}>Never connected.</p>
               ) : detail.whatsapp.map((s, i) => (
-                <div key={i} className="row" style={{ gap: 8, padding: '6px 0' }}>
-                  <span className={`dot ${s.status === 'connected' ? 'dot--on' : 'dot--off'}`} aria-hidden />
-                  <span style={{ fontWeight: 600 }}>{s.phoneNumber || '—'}</span>
-                  <span className="muted" style={{ fontSize: 13 }}>
-                    {s.status}{s.connectedAt ? ` · ${relativeTime(s.connectedAt)}` : ''}
+                <div key={i} className="row between" style={{ padding: '6px 0' }}>
+                  <span className="row" style={{ gap: 8 }}>
+                    <span className={`dot ${s.connected ? 'dot--on' : 'dot--off'}`} aria-hidden />
+                    <span className="num" style={{ fontWeight: s.isCurrent ? 700 : 500 }}>{s.phoneNumber || '—'}</span>
+                    {s.isCurrent
+                      ? <span className="pill" style={{ fontSize: 11, color: s.connected ? 'hsl(var(--good))' : 'hsl(var(--muted))' }}>
+                          {s.connected ? 'current · online' : 'current · offline'}</span>
+                      : <span className="pill" style={{ fontSize: 11, color: 'hsl(var(--muted))' }}>past</span>}
                   </span>
+                  <span className="muted" style={{ fontSize: 12 }}>{relativeTime(s.lastConnectedAt)}</span>
                 </div>
               ))}
             </section>

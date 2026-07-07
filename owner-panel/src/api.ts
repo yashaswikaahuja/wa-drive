@@ -24,6 +24,7 @@ export interface Workspace {
   lastActiveAt: string | null;
   operators: number;
   whatsappConnected: boolean;
+  whatsappNumber: string | null;
   files: number;
 }
 
@@ -36,7 +37,14 @@ export interface Operator {
   id: string; name: string | null; email: string | null; phone: string | null;
   role: string; status: string; createdAt: string | null; updatedAt: string | null;
 }
-export interface WaSession { phoneNumber: string | null; status: string; connectedAt: string | null; }
+export interface WaSession {
+  phoneNumber: string | null;
+  isCurrent: boolean;
+  connected: boolean;
+  firstConnectedAt: string | null;
+  lastConnectedAt: string | null;
+  disconnectedAt: string | null;
+}
 export interface FileStats { total: number; last7: number; last30: number; lastUpload: string | null; }
 export interface WorkspaceDetail {
   workspace: Workspace;

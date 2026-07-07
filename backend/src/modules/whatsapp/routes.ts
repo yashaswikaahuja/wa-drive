@@ -272,9 +272,23 @@ router.post('/event', async (req, res) => {
     await setWorkspaceQR(workspaceId, null);
     io.to(workspaceId).emit('connection:status', { connected: true, phone, workspaceId });
     console.log(`[Hub] Connected: ${phone} (${workspaceId.slice(0, 8)})`);
+    if (phone) {
+      // Record the connected number + keep the history (past numbers stay as is_current=false).
+      // Best-effort; no-op if the whatsapp_numbers table isn't migrated yet (deploy-order-safe).
+      pool.query('UPDATE whatsapp_numbers SET is_current = false WHERE workspace_id = $1 AND phone <> $2', [workspaceId, phone])
+        .then(() => pool.query(
+          `INSERT INTO whatsapp_numbers (workspace_id, phone, is_current, last_connected_at, disconnected_at)
+           VALUES ($1, $2, true, now(), NULL)
+           ON CONFLICT (workspace_id, phone)
+           DO UPDATE SET is_current = true, last_connected_at = now(), disconnected_at = NULL`,
+          [workspaceId, phone]))
+        .catch(() => {});
+    }
   } else if (event === 'disconnected') {
     io.to(workspaceId).emit('connection:status', { connected: false, workspaceId });
     console.log(`[Hub] Disconnected (${workspaceId.slice(0, 8)})`);
+    // Mark the current number offline (keeps it as the current number, just disconnected). Best-effort.
+    pool.query('UPDATE whatsapp_numbers SET disconnected_at = now() WHERE workspace_id = $1 AND is_current = true AND disconnected_at IS NULL', [workspaceId]).catch(() => {});
   }
   res.json({ ok: true });
 });

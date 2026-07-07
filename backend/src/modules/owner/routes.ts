@@ -57,8 +57,8 @@ router.get('/workspaces', async (req: any, res) => {
         w.location_source AS "locationSource", w.lat, w.lng,
         pc.email, pc.phone,
         (SELECT count(*) FROM users u WHERE u.workspace_id = w.id AND u.deleted_at IS NULL) AS operators,
-        EXISTS(SELECT 1 FROM whatsapp_sessions ws WHERE ws.workspace_id = w.id
-               AND ws.status = 'connected' AND ws.deleted_at IS NULL)                       AS "whatsappConnected",
+        wn.phone                                        AS "whatsappNumber",
+        (wn.phone IS NOT NULL AND wn.disconnected_at IS NULL) AS "whatsappConnected",
         (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id)                   AS files
       FROM workspaces w
       LEFT JOIN LATERAL (
@@ -66,6 +66,11 @@ router.get('/workspaces', async (req: any, res) => {
         WHERE u.workspace_id = w.id AND u.deleted_at IS NULL
         ORDER BY (u.role = 'admin') DESC, u.created_at ASC LIMIT 1
       ) pc ON true
+      LEFT JOIN LATERAL (
+        SELECT phone, disconnected_at FROM whatsapp_numbers wn
+        WHERE wn.workspace_id = w.id AND wn.is_current = true
+        ORDER BY wn.last_connected_at DESC LIMIT 1
+      ) wn ON true
       WHERE ${where}
       ORDER BY ${sort} DESC NULLS LAST
       LIMIT $${params.length}
@@ -93,9 +98,12 @@ router.get('/workspaces/:id', async (req: any, res) => {
         `SELECT id, name, email, phone, role, status, created_at AS "createdAt", updated_at AS "updatedAt"
          FROM users WHERE workspace_id = $1 AND deleted_at IS NULL ORDER BY created_at`, [id]),
       req.pool.query(
-        `SELECT phone_number AS "phoneNumber", status, connected_at AS "connectedAt"
-         FROM whatsapp_sessions WHERE workspace_id = $1 AND deleted_at IS NULL
-         ORDER BY connected_at DESC NULLS LAST`, [id]),
+        `SELECT phone AS "phoneNumber", is_current AS "isCurrent",
+                (disconnected_at IS NULL) AS "connected",
+                first_connected_at AS "firstConnectedAt", last_connected_at AS "lastConnectedAt",
+                disconnected_at AS "disconnectedAt"
+         FROM whatsapp_numbers WHERE workspace_id = $1
+         ORDER BY is_current DESC, last_connected_at DESC NULLS LAST`, [id]),
       req.pool.query(
         `SELECT count(*)::int AS total,
                 count(*) FILTER (WHERE uploaded_at > now() - interval '7 days')::int  AS last7,
