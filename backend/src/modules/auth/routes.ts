@@ -3,7 +3,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import { OAuth2Client as GoogleOAuth2Client } from 'google-auth-library';
-import { pool, auditLog } from '../../db.js';
+import { pool, auditLog, logActivity } from '../../db.js';
 import { GOOGLE_CLIENT_ID, JWT_REFRESH_SECRET, SIGNUP_CODE, EMAIL_VERIFY, PHONE_VERIFY, OTP_TTL_MS } from '../../config.js';
 import { authMiddleware, signAccessToken, signRefreshToken } from '../../middleware/auth.js';
 import { genCode, hashCode, sendEmailOtp, sendPhoneOtp, sendWelcomeEmail } from '../../services/verification.js';
@@ -65,6 +65,7 @@ router.post('/google', googleLimiter, async (req, res) => {
     await pool.query('UPDATE users SET email_verified=true WHERE id=$1 AND email_verified=false', [userRow.id]).catch(() => {});
     // First-time Google signup → greet instead of verifying (best-effort; no-op if SES off).
     if (isNewSignup) sendWelcomeEmail(emailLc, userRow.name || name).catch(() => {});
+    if (isNewSignup) logActivity(userRow.workspace_id, 'workspace.signed_up', { via: 'google' }, userRow.id);
 
     const tokenPayload = { userId: userRow.id, workspaceId: userRow.workspace_id, role: userRow.role };
     const accessToken = signAccessToken(tokenPayload);

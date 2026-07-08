@@ -59,7 +59,9 @@ router.get('/workspaces', async (req: any, res) => {
         (SELECT count(*) FROM users u WHERE u.workspace_id = w.id AND u.deleted_at IS NULL) AS operators,
         wn.phone                                        AS "whatsappNumber",
         (wn.phone IS NOT NULL AND wn.disconnected_at IS NULL) AS "whatsappConnected",
-        (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id)                   AS files
+        (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id)                   AS files,
+        (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id
+             AND df.uploaded_at > now() - interval '7 days')                                AS "filesLast7"
       FROM workspaces w
       LEFT JOIN LATERAL (
         SELECT email, phone FROM users u
@@ -79,6 +81,7 @@ router.get('/workspaces', async (req: any, res) => {
       ...r,
       operators: +r.operators,
       files: +r.files,
+      filesLast7: +r.filesLast7,
     })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -111,12 +114,21 @@ router.get('/workspaces/:id', async (req: any, res) => {
                 max(uploaded_at) AS "lastUpload"
          FROM drive_files WHERE workspace_id = $1`, [id]),
     ]);
+    // Activity timeline (append-only event stream). Separate query so a missing table can't 500 the drawer.
+    let activity: any[] = [];
+    try {
+      activity = (await req.pool.query(
+        `SELECT action, properties, created_at AS "createdAt"
+         FROM activity_events WHERE workspace_id = $1
+         ORDER BY created_at DESC LIMIT 60`, [id])).rows;
+    } catch { /* table not migrated yet → empty timeline */ }
     if (!ws.rows.length) return res.status(404).json({ error: 'not found' });
     res.json({
       workspace: ws.rows[0],
       operators: ops.rows,
       whatsapp: wa.rows,
       files: files.rows[0],
+      activity,
     });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });

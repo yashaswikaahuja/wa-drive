@@ -26,6 +26,7 @@ export interface Workspace {
   whatsappConnected: boolean;
   whatsappNumber: string | null;
   files: number;
+  filesLast7: number;
 }
 
 export interface Config {
@@ -46,11 +47,17 @@ export interface WaSession {
   disconnectedAt: string | null;
 }
 export interface FileStats { total: number; last7: number; last30: number; lastUpload: string | null; }
+export interface ActivityEvent {
+  action: string;
+  properties: Record<string, unknown> | null;
+  createdAt: string;
+}
 export interface WorkspaceDetail {
   workspace: Workspace;
   operators: Operator[];
   whatsapp: WaSession[];
   files: FileStats;
+  activity: ActivityEvent[];
 }
 
 const STORE_KEY = 'cc-owner-cfg';

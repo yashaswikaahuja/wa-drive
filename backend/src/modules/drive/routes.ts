@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { pool } from '../../db.js';
+import { pool, logActivity } from '../../db.js';
 import { authMiddleware } from '../../middleware/auth.js';
 import { oauth2Client, getDrive, getDriveAccessToken, getDriveForWorkspace } from './service.js';
 
@@ -34,6 +34,7 @@ router.get('/callback', async (req, res) => {
       if (wsId) await pool.query(`INSERT INTO workspace_secrets(workspace_id,key,value,updated_at) VALUES($1,'drive_access_token',$2,now()) ON CONFLICT(workspace_id,key) DO UPDATE SET value=$2,updated_at=now()`, [wsId, tokens.access_token]);
     }
     console.log('[Drive] Connected for workspace:', wsId || 'global');
+    if (wsId) logActivity(wsId, 'drive.linked');
     res.send('<script>window.opener?.postMessage({type:"DRIVE_CONNECTED"},"*");window.close();</script>');
   } catch (e: any) {
     console.error('[Drive] Callback error:', e.message);

@@ -3,7 +3,7 @@
  */
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response } from 'express';
-import { pool, auditLog } from '../../db.js';
+import { pool, auditLog, logActivity } from '../../db.js';
 import { signAccessToken, signRefreshToken } from '../../middleware/auth.js';
 
 // ── HttpOnly refresh cookie (web) ────────────────────────────────────────────
@@ -67,6 +67,7 @@ export async function createAccount(opts: { email: string | null; phone: string 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await pool.query("INSERT INTO auth_sessions (user_id, refresh_token, expires_at) VALUES ($1,$2,$3)", [userId, refreshToken, expiresAt]);
     await auditLog(workspaceId, userId, 'register', 'user', userId, { email: opts.email, phone: opts.phone });
+    logActivity(workspaceId, 'workspace.signed_up', { hasEmail: !!opts.email, hasPhone: !!opts.phone }, userId);
     return { accessToken, refreshToken, user: { id: userId, workspaceId, email: opts.email, phone: opts.phone, name: opts.name, role: 'admin' } };
   } catch (e) { await client.query('ROLLBACK'); throw e; }
   finally { client.release(); }

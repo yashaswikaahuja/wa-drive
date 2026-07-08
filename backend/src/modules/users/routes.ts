@@ -8,7 +8,7 @@
  */
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
-import { pool, auditLog } from '../../db.js';
+import { pool, auditLog, logActivity } from '../../db.js';
 import { authMiddleware, requireRole } from '../../middleware/auth.js';
 
 const router = Router();
@@ -47,6 +47,7 @@ router.post('/', async (req: any, res) => {
       [req.user.workspaceId, email, phone, hash, name || null, role]
     );
     await auditLog(req.user.workspaceId, req.user.userId, 'user_create', 'user', rows[0].id, { role, email, phone });
+    logActivity(req.user.workspaceId, 'operator.added', { role }, req.user.userId);
     res.status(201).json(rows[0]);
   } catch (e: any) {
     if (e.code === '23505') return res.status(409).json({ error: 'Email or phone already in use' });

@@ -54,3 +54,15 @@ export async function auditLog(workspaceId: string, userId: string, eventType: s
     );
   } catch {}
 }
+
+// Append-only activity stream for the owner panel timeline + engagement signals.
+// action = low-cardinality Object.Action (e.g. 'whatsapp.connected'). Best-effort: never
+// breaks the request; no-op if the table isn't migrated yet (deploy-order-safe).
+export async function logActivity(workspaceId: string, action: string, properties?: any, actorUserId?: string | null): Promise<void> {
+  try {
+    await pool.query(
+      'INSERT INTO activity_events (workspace_id, actor_user_id, action, properties) VALUES ($1,$2,$3,$4)',
+      [workspaceId, actorUserId ?? null, action, properties ? JSON.stringify(properties) : null]
+    );
+  } catch {}
+}

@@ -7,6 +7,21 @@ import { SourceBadge } from './SourceBadge';
 
 interface Props { cfg: Config; id: string; onClose: () => void; onLocationSaved?: (id: string, location: string | null) => void; }
 
+// Human label for an activity event (Object.Action → readable line).
+function activityLabel(action: string, p: Record<string, unknown> | null): string {
+  const phone = p && typeof p.phone === 'string' ? p.phone : '';
+  switch (action) {
+    case 'workspace.signed_up': return p?.via === 'google' ? 'Signed up with Google' : 'Signed up';
+    case 'whatsapp.connected': return `Connected WhatsApp${phone ? ' · ' + phone : ''}`;
+    case 'whatsapp.disconnected': return 'WhatsApp disconnected';
+    case 'drive.linked': return 'Linked Google Drive';
+    case 'operator.added': return 'Added an operator';
+    case 'file.first_processed': return 'Processed first document';
+    case 'plan.changed': return `Plan changed${p?.plan ? ' to ' + p.plan : ''}`;
+    default: return action.replace(/[._]/g, ' ');
+  }
+}
+
 export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
   const [detail, setDetail] = useState<WorkspaceDetail | null>(null);
   const [error, setError] = useState('');
@@ -92,6 +107,27 @@ export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
                   disabled={savingLoc || loc.trim() === (w!.location || '')}>{savingLoc ? 'Saving…' : 'Save'}</button>
               </div>
               {locMsg && <p className="muted" style={{ fontSize: 12, marginTop: 6, color: locMsg === 'Saved' ? 'hsl(var(--good))' : 'hsl(var(--danger))' }}>{locMsg}</p>}
+            </section>
+
+            <section>
+              <div className="label section__title" style={{ marginBottom: 8 }}>
+                Activity{detail.activity.length > 0 && ` (${detail.activity.length})`}
+              </div>
+              {detail.activity.length === 0 ? (
+                <p className="muted" style={{ fontSize: 13 }}>No activity recorded yet.</p>
+              ) : (
+                <div>
+                  {detail.activity.map((e, i) => (
+                    <div key={i} className="row between" style={{ padding: '5px 0' }}>
+                      <span className="row" style={{ gap: 8, minWidth: 0 }}>
+                        <span className="dot" style={{ background: 'hsl(var(--marigold-deep))', flexShrink: 0 }} aria-hidden />
+                        <span style={{ fontSize: 13 }}>{activityLabel(e.action, e.properties)}</span>
+                      </span>
+                      <span className="muted" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{relativeTime(e.createdAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
 
             <section>

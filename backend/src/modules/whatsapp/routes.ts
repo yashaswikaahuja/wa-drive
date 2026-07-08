@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../../db.js';
+import { logActivity } from '../../db.js';
 import { authMiddleware } from '../../middleware/auth.js';
 import { WA_SERVICE, WA_SECRET, WA_INSTANCES, WA_DEAD_AFTER_MS } from '../../config.js';
 import { getIO, getWorkspaceQR, setWorkspaceQR, getWorkspaceQRWithAge } from '../../socket/index.js';
@@ -283,12 +284,14 @@ router.post('/event', async (req, res) => {
            DO UPDATE SET is_current = true, last_connected_at = now(), disconnected_at = NULL`,
           [workspaceId, phone]))
         .catch(() => {});
+      logActivity(workspaceId, 'whatsapp.connected', { phone });
     }
   } else if (event === 'disconnected') {
     io.to(workspaceId).emit('connection:status', { connected: false, workspaceId });
     console.log(`[Hub] Disconnected (${workspaceId.slice(0, 8)})`);
     // Mark the current number offline (keeps it as the current number, just disconnected). Best-effort.
     pool.query('UPDATE whatsapp_numbers SET disconnected_at = now() WHERE workspace_id = $1 AND is_current = true AND disconnected_at IS NULL', [workspaceId]).catch(() => {});
+    logActivity(workspaceId, 'whatsapp.disconnected');
   }
   res.json({ ok: true });
 });

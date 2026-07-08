@@ -49,7 +49,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
             <thead>
               <tr>
                 <th>Café</th><th>Contact</th><th>Location</th><th>Plan</th><th>Ops</th><th>WhatsApp</th>
-                <th className="num">Files</th><th>Last active</th><th>Status</th>
+                <th className="num">Files</th><th>Activity</th><th>Last active</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -86,6 +86,16 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
                     </span>
                   </td>
                   <td className="num">{fmt(w.files)}</td>
+                  <td>
+                    {w.filesLast7 > 0
+                      ? <span className="row" style={{ gap: 6 }}>
+                          <span className="dot dot--on" aria-hidden />
+                          <span className="num" style={{ fontSize: 13 }}>{fmt(w.filesLast7)}<span className="muted" style={{ fontSize: 11 }}> /wk</span></span>
+                        </span>
+                      : isDormant(w.lastActiveAt)
+                        ? <span className="muted" style={{ fontSize: 13 }}>dormant</span>
+                        : <span className="muted" style={{ fontSize: 13 }}>idle</span>}
+                  </td>
                   <td style={{ color: isDormant(w.lastActiveAt) ? 'hsl(var(--muted))' : undefined, fontSize: 13 }}>
                     {relativeTime(w.lastActiveAt)}
                   </td>
