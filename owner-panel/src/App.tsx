@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, fetchMetrics, fetchWorkspaces, loadConfig, saveConfig } from './api';
-import type { Config, Metrics, Workspace } from './api';
+import { ApiError, fetchMetrics, fetchFunnel, fetchWorkspaces, loadConfig, saveConfig } from './api';
+import type { Config, Metrics, Funnel, Workspace } from './api';
 import { MetricsGrid, MetricsSkeleton } from './components/StatCards';
+import { FunnelWidget } from './components/Funnel';
 import { WorkspacesTable, TableSkeleton } from './components/WorkspacesTable';
 import { WorkspaceDrawer } from './components/WorkspaceDrawer';
 import { Setup } from './components/Setup';
 import { exportWorkspacesCsv } from './lib/csv';
 
-type Sort = 'last_active' | 'created' | 'files';
+type Sort = 'last_active' | 'created' | 'files' | 'health';
 
 export function App() {
   const [cfg, setCfg] = useState<Config>(loadConfig);
   const [needsSetup, setNeedsSetup] = useState(!cfg.key);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
+  const [funnel, setFunnel] = useState<Funnel | null>(null);
   const [rows, setRows] = useState<Workspace[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -26,8 +28,8 @@ export function App() {
   const refreshAll = useCallback(async (c: Config, query: string, s: Sort) => {
     setLoading(true); setError('');
     try {
-      const [m, w] = await Promise.all([fetchMetrics(c), fetchWorkspaces(c, query, s)]);
-      setMetrics(m); setRows(w); setUpdatedAt(new Date()); setNeedsSetup(false);
+      const [m, fn, w] = await Promise.all([fetchMetrics(c), fetchFunnel(c), fetchWorkspaces(c, query, s)]);
+      setMetrics(m); setFunnel(fn); setRows(w); setUpdatedAt(new Date()); setNeedsSetup(false);
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) { setNeedsSetup(true); setSetupError(err.message); }
@@ -87,12 +89,14 @@ export function App() {
       {error && <p className="banner" role="alert" style={{ margin: '16px 0' }}>{error}</p>}
 
       {metrics ? <MetricsGrid m={metrics} /> : <MetricsSkeleton />}
+      {funnel && <FunnelWidget f={funnel} />}
       {rows ? (
         <WorkspacesTable rows={rows} q={q} onQ={setQ} sort={sort} onSort={setSort}
           onSelect={setSelectedId} onExport={() => exportWorkspacesCsv(rows)} />
       ) : <TableSkeleton />}
 
       {selectedId && <WorkspaceDrawer cfg={cfg} id={selectedId} onClose={() => setSelectedId(null)}
+        hint={(() => { const s = rows?.find(r => r.id === selectedId); return s ? { health: s.health, healthBand: s.healthBand, healthFlags: s.healthFlags } : null; })()}
         onLocationSaved={(wid, location) => setRows(rs => rs ? rs.map(r => r.id === wid ? { ...r, location, locationSource: location ? 'manual' : null } : r) : rs)} />}
     </div>
   );

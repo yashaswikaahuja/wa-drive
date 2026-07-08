@@ -27,11 +27,22 @@ export interface Workspace {
   whatsappNumber: string | null;
   files: number;
   filesLast7: number;
+  health: number;
+  healthBand: 'healthy' | 'watch' | 'at-risk' | 'onboarding';
+  healthFlags: string[];
 }
 
 export interface Config {
   baseUrl: string;
   key: string;
+}
+
+export interface Funnel {
+  signedUp: number;
+  connected: number;
+  activated: number;
+  weeklyActive: number;
+  paying: number;
 }
 
 export interface Operator {
@@ -104,6 +115,7 @@ async function get<T>(cfg: Config, path: string): Promise<T> {
 }
 
 export const fetchMetrics = (cfg: Config) => get<Metrics>(cfg, '/owner/metrics');
+export const fetchFunnel = (cfg: Config) => get<Funnel>(cfg, '/owner/funnel');
 export const fetchWorkspaces = (cfg: Config, q: string, sort: string) =>
   get<Workspace[]>(cfg, `/owner/workspaces?limit=500&q=${encodeURIComponent(q)}&sort=${sort}`);
 export const fetchWorkspace = (cfg: Config, id: string) =>

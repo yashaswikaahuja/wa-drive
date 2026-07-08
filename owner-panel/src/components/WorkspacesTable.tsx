@@ -1,9 +1,28 @@
+import { useMemo, useState } from 'react';
 import type { Workspace } from '../api';
 import { relativeTime, isDormant, fmt } from '../lib/format';
 import { mapsUrl } from '../lib/format';
 import { SourceBadge } from './SourceBadge';
 
-type Sort = 'last_active' | 'created' | 'files';
+type Sort = 'last_active' | 'created' | 'files' | 'health';
+type BandFilter = 'all' | 'healthy' | 'watch' | 'at-risk' | 'onboarding';
+
+const BAND_COLOR: Record<string, string> = {
+  healthy: 'hsl(var(--good))',
+  watch: 'hsl(var(--marigold-deep))',
+  'at-risk': 'hsl(var(--danger))',
+  onboarding: 'hsl(var(--muted))',
+};
+
+function HealthChip({ score, band }: { score: number; band: string }) {
+  const color = BAND_COLOR[band] || 'hsl(var(--muted))';
+  return (
+    <span className="pill" style={{ color, borderColor: 'currentColor', fontSize: 11, whiteSpace: 'nowrap' }}
+      title={`Health ${score}/100 — ${band}`}>
+      {band === 'onboarding' ? 'onboarding' : `${score} · ${band === 'at-risk' ? 'at risk' : band}`}
+    </span>
+  );
+}
 
 interface Props {
   rows: Workspace[];
@@ -16,32 +35,48 @@ interface Props {
 }
 
 export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport }: Props) {
+  const [band, setBand] = useState<BandFilter>('all');
+  const view = useMemo(() => {
+    let v = band === 'all' ? rows : rows.filter(r => r.healthBand === band);
+    if (sort === 'health') v = [...v].sort((a, b) => a.health - b.health); // worst first — triage view
+    return v;
+  }, [rows, band, sort]);
+
   return (
     <section className="card" aria-label="Cybercafés">
       <div className="row between" style={{ padding: '14px 16px', flexWrap: 'wrap', gap: 10 }}>
         <div className="row" style={{ gap: 8 }}>
           <h2 className="display" style={{ fontSize: 16 }}>Cybercafés</h2>
-          <span className="muted num" style={{ fontSize: 13 }}>{fmt(rows.length)}</span>
+          <span className="muted num" style={{ fontSize: 13 }}>{fmt(view.length)}</span>
         </div>
         <div className="row" style={{ gap: 8 }}>
           <input
             className="input" type="search" value={q} onChange={e => onQ(e.target.value)}
             placeholder="Search name…" aria-label="Search cybercafés" style={{ width: 200 }}
           />
+          <label className="label" htmlFor="band">Health</label>
+          <select id="band" className="input" value={band} onChange={e => setBand(e.target.value as BandFilter)} style={{ width: 'auto' }}>
+            <option value="all">All</option>
+            <option value="at-risk">At-risk</option>
+            <option value="watch">Watch</option>
+            <option value="healthy">Healthy</option>
+            <option value="onboarding">Onboarding</option>
+          </select>
           <label className="label" htmlFor="sort">Sort</label>
           <select id="sort" className="input" value={sort} onChange={e => onSort(e.target.value as Sort)} style={{ width: 'auto' }}>
             <option value="last_active">Last active</option>
             <option value="created">Newest</option>
             <option value="files">Most files</option>
+            <option value="health">Health (worst first)</option>
           </select>
           <button className="btn" onClick={onExport} disabled={rows.length === 0}>Export CSV</button>
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {view.length === 0 ? (
         <div className="state">
-          <h3>No cybercafés{q ? ' match' : ' yet'}</h3>
-          <p className="muted" style={{ marginTop: 4 }}>{q ? 'Try a different search.' : 'Signups will appear here.'}</p>
+          <h3>No cybercafés{q || band !== 'all' ? ' match' : ' yet'}</h3>
+          <p className="muted" style={{ marginTop: 4 }}>{q || band !== 'all' ? 'Try a different search or filter.' : 'Signups will appear here.'}</p>
         </div>
       ) : (
         <div className="table-wrap">
@@ -49,11 +84,11 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
             <thead>
               <tr>
                 <th>Café</th><th>Contact</th><th>Location</th><th>Plan</th><th>Ops</th><th>WhatsApp</th>
-                <th className="num">Files</th><th>Activity</th><th>Last active</th><th>Status</th>
+                <th className="num">Files</th><th>Activity</th><th>Health</th><th>Last active</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(w => (
+              {view.map(w => (
                 <tr key={w.id}>
                   <td>
                     <button className="linklike" onClick={() => onSelect(w.id)}
@@ -96,6 +131,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
                         ? <span className="muted" style={{ fontSize: 13 }}>dormant</span>
                         : <span className="muted" style={{ fontSize: 13 }}>idle</span>}
                   </td>
+                  <td><HealthChip score={w.health} band={w.healthBand} /></td>
                   <td style={{ color: isDormant(w.lastActiveAt) ? 'hsl(var(--muted))' : undefined, fontSize: 13 }}>
                     {relativeTime(w.lastActiveAt)}
                   </td>

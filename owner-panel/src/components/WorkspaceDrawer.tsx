@@ -5,7 +5,20 @@ import { relativeTime, fmt } from '../lib/format';
 import { mapsUrl } from '../lib/format';
 import { SourceBadge } from './SourceBadge';
 
-interface Props { cfg: Config; id: string; onClose: () => void; onLocationSaved?: (id: string, location: string | null) => void; }
+interface HealthHint { health: number; healthBand: string; healthFlags: string[]; }
+interface Props { cfg: Config; id: string; onClose: () => void; hint?: HealthHint | null; onLocationSaved?: (id: string, location: string | null) => void; }
+
+const BAND_COLOR: Record<string, string> = {
+  healthy: 'hsl(var(--good))', watch: 'hsl(var(--marigold-deep))',
+  'at-risk': 'hsl(var(--danger))', onboarding: 'hsl(var(--muted))',
+};
+const FLAG_LABEL: Record<string, string> = {
+  'no-whatsapp': 'No WhatsApp connected',
+  'no-drive': 'No Google Drive linked',
+  'connected-no-files': 'Connected but no documents yet',
+  cooling: 'Usage cooling down',
+  dormant: 'Dormant (30+ days)',
+};
 
 // Human label for an activity event (Object.Action → readable line).
 function activityLabel(action: string, p: Record<string, unknown> | null): string {
@@ -22,7 +35,7 @@ function activityLabel(action: string, p: Record<string, unknown> | null): strin
   }
 }
 
-export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
+export function WorkspaceDrawer({ cfg, id, onClose, hint, onLocationSaved }: Props) {
   const [detail, setDetail] = useState<WorkspaceDetail | null>(null);
   const [error, setError] = useState('');
   const [loc, setLoc] = useState('');
@@ -108,6 +121,29 @@ export function WorkspaceDrawer({ cfg, id, onClose, onLocationSaved }: Props) {
               </div>
               {locMsg && <p className="muted" style={{ fontSize: 12, marginTop: 6, color: locMsg === 'Saved' ? 'hsl(var(--good))' : 'hsl(var(--danger))' }}>{locMsg}</p>}
             </section>
+
+            {hint && (
+              <section>
+                <div className="label section__title" style={{ marginBottom: 8 }}>Health</div>
+                <div className="row" style={{ gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: BAND_COLOR[hint.healthBand] || 'hsl(var(--muted))' }}>
+                    {hint.healthBand === 'onboarding' ? '—' : hint.health}
+                  </span>
+                  <span className="pill" style={{ color: BAND_COLOR[hint.healthBand] || 'hsl(var(--muted))', borderColor: 'currentColor', fontSize: 12 }}>
+                    {hint.healthBand === 'at-risk' ? 'at risk' : hint.healthBand}
+                  </span>
+                </div>
+                {hint.healthFlags.length > 0 && (
+                  <div className="row" style={{ gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                    {hint.healthFlags.map(fl => (
+                      <span key={fl} className="pill" style={{ fontSize: 11, color: 'hsl(var(--danger))', borderColor: 'hsl(var(--danger) / 0.3)' }}>
+                        {FLAG_LABEL[fl] || fl}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             <section>
               <div className="label section__title" style={{ marginBottom: 8 }}>

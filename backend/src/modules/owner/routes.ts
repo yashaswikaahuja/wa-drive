@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { tailnetOnly, requireOwner } from './gate.js';
+import { computeHealth } from './health.js';
 
 const router = Router();
 
@@ -39,6 +40,37 @@ router.get('/metrics', async (req: any, res) => {
 });
 
 /**
+ * GET /owner/funnel — activation funnel across live cafés:
+ * signed up → WhatsApp connected → activated (1st file) → weekly-active → paying.
+ * Shows where cafés drop off on the path to value.
+ */
+router.get('/funnel', async (req: any, res) => {
+  try {
+    const { rows } = await req.pool.query(`
+      SELECT
+        count(*) FILTER (WHERE w.deleted_at IS NULL)                                            AS signed_up,
+        count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
+            SELECT 1 FROM whatsapp_numbers wn WHERE wn.workspace_id = w.id))                    AS connected,
+        count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
+            SELECT 1 FROM drive_files df WHERE df.workspace_id = w.id))                         AS activated,
+        count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
+            SELECT 1 FROM drive_files df WHERE df.workspace_id = w.id
+              AND df.uploaded_at > now() - interval '7 days'))                                  AS weekly_active,
+        count(*) FILTER (WHERE w.deleted_at IS NULL AND w.plan <> 'free')                       AS paying
+      FROM workspaces w
+    `);
+    const r = rows[0];
+    res.json({
+      signedUp: +r.signed_up,
+      connected: +r.connected,
+      activated: +r.activated,
+      weeklyActive: +r.weekly_active,
+      paying: +r.paying,
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+/**
  * GET /owner/workspaces — per-customer drill-down.
  * ?limit (default 200), ?q (name search), ?sort (last_active|created|files).
  */
@@ -59,9 +91,17 @@ router.get('/workspaces', async (req: any, res) => {
         (SELECT count(*) FROM users u WHERE u.workspace_id = w.id AND u.deleted_at IS NULL) AS operators,
         wn.phone                                        AS "whatsappNumber",
         (wn.phone IS NOT NULL AND wn.disconnected_at IS NULL) AS "whatsappConnected",
+        EXISTS(SELECT 1 FROM workspace_secrets s WHERE s.workspace_id = w.id
+               AND s.key = 'drive_refresh_token')                                           AS "driveLinked",
         (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id)                   AS files,
         (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id
-             AND df.uploaded_at > now() - interval '7 days')                                AS "filesLast7"
+             AND df.uploaded_at > now() - interval '7 days')                                AS "filesLast7",
+        (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id
+             AND df.uploaded_at > now() - interval '14 days'
+             AND df.uploaded_at <= now() - interval '7 days')                               AS "filesPrev7",
+        (SELECT count(*) FROM drive_files df WHERE df.workspace_id = w.id
+             AND df.uploaded_at > now() - interval '30 days')                               AS "filesLast30",
+        (SELECT max(uploaded_at) FROM drive_files df WHERE df.workspace_id = w.id)           AS "lastUpload"
       FROM workspaces w
       LEFT JOIN LATERAL (
         SELECT email, phone FROM users u
@@ -77,12 +117,27 @@ router.get('/workspaces', async (req: any, res) => {
       ORDER BY ${sort} DESC NULLS LAST
       LIMIT $${params.length}
     `, params);
-    res.json(rows.map((r: any) => ({
-      ...r,
-      operators: +r.operators,
-      files: +r.files,
-      filesLast7: +r.filesLast7,
-    })));
+    res.json(rows.map((r: any) => {
+      const health = computeHealth({
+        createdAt: r.createdAt,
+        lastUpload: r.lastUpload,
+        filesLast7: +r.filesLast7,
+        filesPrev7: +r.filesPrev7,
+        filesLast30: +r.filesLast30,
+        whatsappConnected: !!r.whatsappConnected,
+        driveLinked: !!r.driveLinked,
+        operators: +r.operators,
+      });
+      return {
+        ...r,
+        operators: +r.operators,
+        files: +r.files,
+        filesLast7: +r.filesLast7,
+        health: health.score,
+        healthBand: health.band,
+        healthFlags: health.flags,
+      };
+    }));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

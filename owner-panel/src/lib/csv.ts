@@ -1,7 +1,7 @@
 import type { Workspace } from '../api';
 
 const COLS: (keyof Workspace)[] = [
-  'name', 'email', 'phone', 'location', 'plan', 'status', 'operators', 'whatsappConnected', 'whatsappNumber', 'files', 'createdAt', 'lastActiveAt',
+  'name', 'email', 'phone', 'location', 'plan', 'status', 'operators', 'whatsappConnected', 'whatsappNumber', 'files', 'filesLast7', 'health', 'healthBand', 'createdAt', 'lastActiveAt',
 ];
 
 function esc(v: unknown): string {
