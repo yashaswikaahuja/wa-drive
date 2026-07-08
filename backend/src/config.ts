@@ -73,6 +73,9 @@ export const GEOCODE_API_KEY = process.env.GEOCODE_API_KEY || '';
 export const OWNER_KEY = process.env.OWNER_KEY || '';
 export const OWNER_PORT = Number(process.env.OWNER_PORT ?? 0);
 export const OWNER_BIND = process.env.OWNER_BIND || 'auto';
+// Owner's WhatsApp number for proactive health-drop alerts (daily digest via the resolver).
+// Empty → health monitoring still runs + records state, but sends no WhatsApp (no-op).
+export const OWNER_ALERT_PHONE = (process.env.OWNER_ALERT_PHONE || '').replace(/[^0-9]/g, '');
 // Optional: enables the socket.io Redis adapter so realtime events fan out across multiple backend
 // instances. Empty = single-instance (no adapter, current behavior). e.g. redis://cybercontrol-redis:6379
 export const REDIS_URL = process.env.REDIS_URL || '';

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { tailnetOnly, requireOwner } from './gate.js';
 import { computeHealth } from './health.js';
+import { runHealthSweep } from '../../services/healthMonitor.js';
 
 const router = Router();
 
@@ -68,6 +69,76 @@ router.get('/funnel', async (req: any, res) => {
       paying: +r.paying,
     });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+/**
+ * GET /owner/trends — North-Star engagement over time:
+ *  • wauSeries  Weekly Active Cafés for the last 8 weeks (≥1 doc processed that week)
+ *  • stickiness WAU / MAU (how many monthly-active cafés are also active this week)
+ *  • cohorts    monthly signup cohorts × % still active k months later (retention triangle)
+ */
+router.get('/trends', async (req: any, res) => {
+  try {
+    const [wau, stick, coh, act] = await Promise.all([
+      req.pool.query(`
+        SELECT to_char(wk, 'YYYY-MM-DD') AS week,
+          (SELECT count(DISTINCT df.workspace_id) FROM drive_files df
+             WHERE df.uploaded_at >= wk AND df.uploaded_at < wk + interval '7 days') AS active
+        FROM generate_series(date_trunc('week', now()) - interval '7 weeks', date_trunc('week', now()), interval '1 week') AS wk
+        ORDER BY wk`),
+      req.pool.query(`
+        SELECT (SELECT count(DISTINCT workspace_id) FROM drive_files WHERE uploaded_at > now() - interval '7 days')  AS wau,
+               (SELECT count(DISTINCT workspace_id) FROM drive_files WHERE uploaded_at > now() - interval '30 days') AS mau`),
+      req.pool.query(`SELECT id, to_char(date_trunc('month', created_at), 'YYYY-MM') AS cohort FROM workspaces WHERE deleted_at IS NULL`),
+      req.pool.query(`SELECT DISTINCT workspace_id AS id, to_char(date_trunc('month', uploaded_at), 'YYYY-MM') AS m FROM drive_files WHERE uploaded_at IS NOT NULL`),
+    ]);
+
+    // Cohort retention computed in JS (clean triangle).
+    const MONTHS = 6;
+    const now = new Date();
+    const curYm = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+    const addMonths = (ym: string, k: number) => {
+      const [y, m] = ym.split('-').map(Number);
+      const d = new Date(Date.UTC(y, m - 1 + k, 1));
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+    };
+    const actByWs = new Map<string, Set<string>>();
+    for (const r of act.rows) {
+      let set = actByWs.get(r.id);
+      if (!set) { set = new Set<string>(); actByWs.set(r.id, set); }
+      set.add(r.m);
+    }
+    const cohortMap = new Map<string, string[]>();
+    for (const r of coh.rows) {
+      let arr = cohortMap.get(r.cohort);
+      if (!arr) { arr = []; cohortMap.set(r.cohort, arr); }
+      arr.push(r.id);
+    }
+    const cohorts = [...cohortMap.keys()].sort().slice(-MONTHS).map(cohort => {
+      const ids = cohortMap.get(cohort)!;
+      const retention: (number | null)[] = [];
+      for (let k = 0; k < MONTHS; k++) {
+        const month = addMonths(cohort, k);
+        if (month > curYm) { retention.push(null); continue; }   // future — unknown
+        const active = ids.filter(id => actByWs.get(id)?.has(month)).length;
+        retention.push(ids.length ? Math.round((active / ids.length) * 100) : 0);
+      }
+      return { cohort, size: ids.length, retention };
+    });
+
+    const w = +stick.rows[0].wau, m = +stick.rows[0].mau;
+    res.json({
+      wauSeries: wau.rows.map((r: any) => ({ week: r.week, active: +r.active })),
+      stickiness: { wau: w, mau: m, ratio: m ? Math.round((w / m) * 100) : 0 },
+      cohorts,
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /owner/health-sweep — run the health sweep on demand (bypasses the daily leader guard).
+router.post('/health-sweep', async (_req, res) => {
+  try { res.json(await runHealthSweep({ skipLeader: true })); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 /**

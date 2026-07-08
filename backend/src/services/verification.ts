@@ -53,6 +53,11 @@ async function sendWhatsAppMedia(phone: string, media: string, caption: string):
   }
 }
 
+// Generic WhatsApp text — used by the health monitor to send the owner a digest.
+export async function notifyWhatsApp(phone: string, message: string): Promise<void> {
+  await sendWhatsApp(phone, message);
+}
+
 // OTP → branded PNG card + a caption that still contains the code as text (so it stays copyable).
 // Falls back to plain text if rendering or media-send fails, so delivery never breaks.
 export async function sendPhoneOtp(phone: string, code: string): Promise<void> {

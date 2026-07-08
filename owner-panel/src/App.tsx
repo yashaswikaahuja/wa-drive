@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, fetchMetrics, fetchFunnel, fetchWorkspaces, loadConfig, saveConfig } from './api';
-import type { Config, Metrics, Funnel, Workspace } from './api';
+import { ApiError, fetchMetrics, fetchFunnel, fetchTrends, fetchWorkspaces, loadConfig, saveConfig } from './api';
+import type { Config, Metrics, Funnel, Trends, Workspace } from './api';
 import { MetricsGrid, MetricsSkeleton } from './components/StatCards';
 import { FunnelWidget } from './components/Funnel';
+import { TrendsPanel } from './components/Trends';
 import { WorkspacesTable, TableSkeleton } from './components/WorkspacesTable';
 import { WorkspaceDrawer } from './components/WorkspaceDrawer';
 import { Setup } from './components/Setup';
@@ -15,6 +16,7 @@ export function App() {
   const [needsSetup, setNeedsSetup] = useState(!cfg.key);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [funnel, setFunnel] = useState<Funnel | null>(null);
+  const [trends, setTrends] = useState<Trends | null>(null);
   const [rows, setRows] = useState<Workspace[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -28,8 +30,8 @@ export function App() {
   const refreshAll = useCallback(async (c: Config, query: string, s: Sort) => {
     setLoading(true); setError('');
     try {
-      const [m, fn, w] = await Promise.all([fetchMetrics(c), fetchFunnel(c), fetchWorkspaces(c, query, s)]);
-      setMetrics(m); setFunnel(fn); setRows(w); setUpdatedAt(new Date()); setNeedsSetup(false);
+      const [m, fn, tr, w] = await Promise.all([fetchMetrics(c), fetchFunnel(c), fetchTrends(c), fetchWorkspaces(c, query, s)]);
+      setMetrics(m); setFunnel(fn); setTrends(tr); setRows(w); setUpdatedAt(new Date()); setNeedsSetup(false);
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) { setNeedsSetup(true); setSetupError(err.message); }
@@ -90,6 +92,7 @@ export function App() {
 
       {metrics ? <MetricsGrid m={metrics} /> : <MetricsSkeleton />}
       {funnel && <FunnelWidget f={funnel} />}
+      {trends && <TrendsPanel t={trends} />}
       {rows ? (
         <WorkspacesTable rows={rows} q={q} onQ={setQ} sort={sort} onSort={setSort}
           onSelect={setSelectedId} onExport={() => exportWorkspacesCsv(rows)} />

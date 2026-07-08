@@ -2,6 +2,13 @@ declare module 'uuid' {
   export function v4(): string;
 }
 
+declare module 'node-cron' {
+  export interface ScheduleOptions { timezone?: string; scheduled?: boolean; }
+  export function schedule(expression: string, task: () => void, options?: ScheduleOptions): { stop: () => void; start: () => void };
+  const nodeCron: { schedule: typeof schedule };
+  export default nodeCron;
+}
+
 declare module 'qrcode' {
   export function toDataURL(input: string): Promise<string>;
 

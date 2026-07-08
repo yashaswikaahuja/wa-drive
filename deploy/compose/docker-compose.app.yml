@@ -34,6 +34,7 @@ services:
       OWNER_KEY: ${OWNER_KEY:-}                   # tailnet owner-panel credential (empty → owner API off)
       OWNER_PORT: ${OWNER_PORT:-}                 # owner listener port, e.g. 3010 (empty → off)
       OWNER_BIND: ${OWNER_BIND:-}                 # 'auto' → bind this VM's tailscale IP
+      OWNER_ALERT_PHONE: ${OWNER_ALERT_PHONE:-}   # owner WhatsApp for daily health-drop digest (empty → no alerts)
       GEOCODE_API_KEY: ${GEOCODE_API_KEY:-}       # server-side reverse-geocode of GPS captures
 
   extension-service:
