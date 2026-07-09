@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, fetchWorkspace, patchLocation } from '../api';
+import { ApiError, fetchWorkspace, patchLocation, setWorkspaceStatus, deleteWorkspace } from '../api';
 import type { Config, WorkspaceDetail } from '../api';
 import { relativeTime, fmt } from '../lib/format';
 import { mapsUrl } from '../lib/format';
 import { SourceBadge } from './SourceBadge';
 
 interface HealthHint { health: number; healthBand: string; healthFlags: string[]; }
-interface Props { cfg: Config; id: string; onClose: () => void; hint?: HealthHint | null; onLocationSaved?: (id: string, location: string | null) => void; }
+interface Props { cfg: Config; id: string; onClose: () => void; hint?: HealthHint | null; onLocationSaved?: (id: string, location: string | null) => void; onStatusChanged?: (id: string, status: string) => void; onDeleted?: (id: string) => void; }
 
 const BAND_COLOR: Record<string, string> = {
   healthy: 'hsl(var(--good))', watch: 'hsl(var(--marigold-deep))',
@@ -35,13 +35,38 @@ function activityLabel(action: string, p: Record<string, unknown> | null): strin
   }
 }
 
-export function WorkspaceDrawer({ cfg, id, onClose, hint, onLocationSaved }: Props) {
+export function WorkspaceDrawer({ cfg, id, onClose, hint, onLocationSaved, onStatusChanged, onDeleted }: Props) {
   const [detail, setDetail] = useState<WorkspaceDetail | null>(null);
   const [error, setError] = useState('');
   const [loc, setLoc] = useState('');
   const [savingLoc, setSavingLoc] = useState(false);
   const [locMsg, setLocMsg] = useState('');
+  const [acctBusy, setAcctBusy] = useState(false);
+  const [acctMsg, setAcctMsg] = useState('');
+  const [showDelete, setShowDelete] = useState(false);
+  const [delConfirm, setDelConfirm] = useState('');
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  const doStatus = async (action: 'block' | 'unblock') => {
+    if (action === 'block' && !window.confirm('Block this café? All its users are logged out and cannot sign in until you unblock it.')) return;
+    setAcctBusy(true); setAcctMsg('');
+    const status = action === 'block' ? 'suspended' : 'active';
+    try {
+      await setWorkspaceStatus(cfg, id, action);
+      setDetail(d => d ? { ...d, workspace: { ...d.workspace, status } } : d);
+      onStatusChanged?.(id, status);
+    } catch (e) { setAcctMsg((e as ApiError).message); }
+    finally { setAcctBusy(false); }
+  };
+  const doDelete = async () => {
+    setAcctBusy(true); setAcctMsg('');
+    try {
+      await deleteWorkspace(cfg, id, delConfirm);
+      onDeleted?.(id);
+      onClose();
+    } catch (e) { setAcctMsg((e as ApiError).message); }
+    finally { setAcctBusy(false); }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -214,6 +239,42 @@ export function WorkspaceDrawer({ cfg, id, onClose, hint, onLocationSaved }: Pro
                   </tbody>
                 </table>
               </div>
+            </section>
+
+            <section>
+              <div className="label section__title" style={{ marginBottom: 8, color: 'hsl(var(--danger))' }}>Account controls</div>
+              {w!.status === 'suspended' && (
+                <p className="muted" style={{ fontSize: 12, marginBottom: 8, color: 'hsl(var(--danger))' }}>
+                  Blocked — users cannot log in.
+                </p>
+              )}
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                {w!.status === 'suspended'
+                  ? <button className="btn" onClick={() => doStatus('unblock')} disabled={acctBusy}>Unblock</button>
+                  : <button className="btn" onClick={() => doStatus('block')} disabled={acctBusy}>Block</button>}
+                {!showDelete && (
+                  <button className="btn" style={{ color: 'hsl(var(--danger))', borderColor: 'hsl(var(--danger) / 0.4)' }}
+                    onClick={() => { setShowDelete(true); setAcctMsg(''); }} disabled={acctBusy}>Delete permanently…</button>
+                )}
+              </div>
+              {showDelete && (
+                <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: '1px solid hsl(var(--danger) / 0.4)', background: 'hsl(var(--danger) / 0.06)' }}>
+                  <p style={{ fontSize: 13, marginBottom: 8 }}>
+                    Permanently deletes <strong>{w!.name || 'this café'}</strong> and ALL its data
+                    (documents, jobs, WhatsApp, operators). This cannot be undone. Type the café name to confirm:
+                  </p>
+                  <div className="row" style={{ gap: 8 }}>
+                    <input className="input grow" value={delConfirm} onChange={e => setDelConfirm(e.target.value)}
+                      placeholder={w!.name || 'café name'} aria-label="Type café name to confirm deletion" />
+                    <button className="btn" style={{ background: 'hsl(var(--danger))', color: '#fff', borderColor: 'transparent' }}
+                      disabled={acctBusy || delConfirm !== (w!.name || '')} onClick={doDelete}>
+                      {acctBusy ? 'Deleting…' : 'Delete'}
+                    </button>
+                    <button className="btn" onClick={() => { setShowDelete(false); setDelConfirm(''); }} disabled={acctBusy}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              {acctMsg && <p style={{ fontSize: 12, marginTop: 6, color: 'hsl(var(--danger))' }}>{acctMsg}</p>}
             </section>
           </div>
         )}

@@ -100,6 +100,8 @@ export function App() {
 
       {selectedId && <WorkspaceDrawer cfg={cfg} id={selectedId} onClose={() => setSelectedId(null)}
         hint={(() => { const s = rows?.find(r => r.id === selectedId); return s ? { health: s.health, healthBand: s.healthBand, healthFlags: s.healthFlags } : null; })()}
+        onStatusChanged={(wid, status) => setRows(rs => rs ? rs.map(r => r.id === wid ? { ...r, status } : r) : rs)}
+        onDeleted={(wid) => { setRows(rs => rs ? rs.filter(r => r.id !== wid) : rs); setSelectedId(null); }}
         onLocationSaved={(wid, location) => setRows(rs => rs ? rs.map(r => r.id === wid ? { ...r, location, locationSource: location ? 'manual' : null } : r) : rs)} />}
     </div>
   );

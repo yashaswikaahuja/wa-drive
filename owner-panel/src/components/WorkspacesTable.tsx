@@ -136,11 +136,13 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
                     {relativeTime(w.lastActiveAt)}
                   </td>
                   <td>
-                    {w.status === 'churned'
-                      ? <span className="pill pill--churned">churned</span>
-                      : isDormant(w.lastActiveAt)
-                        ? <span className="pill" style={{ color: 'hsl(var(--muted))' }}>dormant</span>
-                        : <span className="pill" style={{ color: 'hsl(var(--good))', borderColor: 'hsl(var(--good) / 0.3)' }}>active</span>}
+                    {w.status === 'suspended'
+                      ? <span className="pill" style={{ color: 'hsl(var(--danger))', borderColor: 'hsl(var(--danger) / 0.4)' }}>blocked</span>
+                      : w.status === 'churned'
+                        ? <span className="pill pill--churned">churned</span>
+                        : isDormant(w.lastActiveAt)
+                          ? <span className="pill" style={{ color: 'hsl(var(--muted))' }}>dormant</span>
+                          : <span className="pill" style={{ color: 'hsl(var(--good))', borderColor: 'hsl(var(--good) / 0.3)' }}>active</span>}
                   </td>
                 </tr>
               ))}

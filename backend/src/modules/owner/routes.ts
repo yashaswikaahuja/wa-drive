@@ -277,4 +277,65 @@ router.patch('/workspaces/:id', async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// PATCH /owner/workspaces/:id/status — block (suspend) or unblock a café.
+// Block gates every login for all its users and revokes active sessions → locked out now + future.
+router.patch('/workspaces/:id/status', async (req: any, res) => {
+  const { id } = req.params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'bad id' });
+  const action = req.body?.action;
+  if (action !== 'block' && action !== 'unblock') return res.status(400).json({ error: "action must be 'block' or 'unblock'" });
+  const status = action === 'block' ? 'suspended' : 'active';
+  try {
+    const { rowCount } = await req.pool.query(
+      'UPDATE workspaces SET status = $1, updated_at = now() WHERE id = $2 AND deleted_at IS NULL', [status, id]);
+    if (!rowCount) return res.status(404).json({ error: 'not found' });
+    await req.pool.query('UPDATE users SET status = $1, updated_at = now() WHERE workspace_id = $2 AND deleted_at IS NULL', [status, id]);
+    if (action === 'block') {
+      // revoke live refresh tokens so the block bites immediately (access tokens expire ≤24h).
+      await req.pool.query(
+        'UPDATE auth_sessions SET revoked_at = now() WHERE revoked_at IS NULL AND user_id IN (SELECT id FROM users WHERE workspace_id = $1)', [id]);
+    }
+    console.log(`[Owner] ${action} workspace ${id}`);
+    res.json({ ok: true, status });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /owner/workspaces/:id — PERMANENT hard delete of a café and ALL its data. Irreversible.
+// Requires body { confirm: "<exact café name>" } to guard against accidents. Cascades every
+// workspace/user-scoped table (all FKs are NO ACTION) inside one transaction.
+router.delete('/workspaces/:id', async (req: any, res) => {
+  const { id } = req.params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return res.status(400).json({ error: 'bad id' });
+  const client = await req.pool.connect();
+  try {
+    const w = (await client.query('SELECT name FROM workspaces WHERE id = $1', [id])).rows[0];
+    if (!w) { client.release(); return res.status(404).json({ error: 'not found' }); }
+    const confirm = (req.body?.confirm ?? '').toString();
+    if (confirm !== (w.name || '')) {
+      client.release();
+      return res.status(400).json({ error: 'Confirmation text does not match the café name.' });
+    }
+    await client.query('BEGIN');
+    // Every table with a workspace_id column (except users + workspaces), discovered live so new
+    // tables are covered automatically. Then user-only tables, then users, then the workspace.
+    const tbls = (await client.query(
+      `SELECT table_name FROM information_schema.columns
+       WHERE column_name = 'workspace_id' AND table_schema = 'public'
+         AND table_name NOT IN ('users', 'workspaces')`)).rows;
+    for (const t of tbls) {
+      await client.query(`DELETE FROM "${t.table_name}" WHERE workspace_id = $1`, [id]);
+    }
+    await client.query('DELETE FROM auth_sessions WHERE user_id IN (SELECT id FROM users WHERE workspace_id = $1)', [id]);
+    await client.query('DELETE FROM contact_otps  WHERE user_id IN (SELECT id FROM users WHERE workspace_id = $1)', [id]);
+    await client.query('DELETE FROM users WHERE workspace_id = $1', [id]);
+    await client.query('DELETE FROM workspaces WHERE id = $1', [id]);
+    await client.query('COMMIT');
+    console.log(`[Owner] HARD-DELETED workspace ${id} ("${w.name}") + ${tbls.length} child tables`);
+    res.json({ ok: true });
+  } catch (e: any) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(500).json({ error: e.message });
+  } finally { client.release(); }
+});
+
 export default router;

@@ -144,3 +144,28 @@ export async function patchLocation(cfg: Config, id: string, location: string | 
     throw new ApiError(res.status, m);
   }
 }
+
+async function send(cfg: Config, method: string, path: string, body?: unknown): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}${path}`, {
+      method,
+      headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch { throw new ApiError(0, 'Cannot reach the owner API.'); }
+  if (res.status === 401) throw new ApiError(401, 'Invalid owner key.');
+  if (!res.ok) {
+    let m = `Request failed (${res.status}).`;
+    try { m = (await res.json()).error || m; } catch { /* ignore */ }
+    throw new ApiError(res.status, m);
+  }
+}
+
+// Block (suspend) or unblock a café — gates login for all its users.
+export const setWorkspaceStatus = (cfg: Config, id: string, action: 'block' | 'unblock') =>
+  send(cfg, 'PATCH', `/owner/workspaces/${id}/status`, { action });
+
+// Permanently hard-delete a café + all its data. `confirm` must equal the café name.
+export const deleteWorkspace = (cfg: Config, id: string, confirm: string) =>
+  send(cfg, 'DELETE', `/owner/workspaces/${id}`, { confirm });
