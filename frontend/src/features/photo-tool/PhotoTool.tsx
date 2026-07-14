@@ -172,7 +172,7 @@ export default function PhotoTool() {
       if (files.length === 0) { setError('No files in Drive yet'); return; }
       const latest = files[0]; // backend returns newest first
       const dl = await api.get(`/drive/download/${latest.id}`, { responseType: 'blob' });
-      const blob = new Blob([dl.data], { type: dl.headers['content-type'] || 'image/jpeg' });
+      const blob = new Blob([dl.data], { type: String(dl.headers['content-type'] ?? 'image/jpeg') });
       const file = new File([blob], latest.fileName || 'latest', { type: blob.type });
       await handleFile(file);
     } catch (e: any) {
@@ -237,7 +237,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
     if (fileId) {
       api.get(`/drive/download/${fileId}`, { responseType: 'blob' })
         .then(res => {
-          const blob = new Blob([res.data], { type: res.headers['content-type'] || 'image/jpeg' });
+          const blob = new Blob([res.data], { type: String(res.headers['content-type'] ?? 'image/jpeg') });
           const file = new File([blob], 'drive-file', { type: blob.type });
           handleFile(file);
         })
@@ -324,24 +324,7 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
           </button>
           <span className="mx-1 h-6 w-px" style={{ background: 'hsl(var(--pt-border))' }} />
           <button onClick={loadLatest} className="pt-chip" title="Latest WhatsApp file (L)">
-            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Latest</span>
-          </button>
-          <button onClick={() => setDrivePickerOpen(true)} className="pt-chip" title="Pick a file from Drive">
-            <FolderOpen className="h-4 w-4" /> <span className="hidden sm:inline">Drive</span>
-          </button>
-          <FilePicker onFiles={handleFiles} onAppend={f => handleFile(f, 'append')} />
-          <button onClick={handlePrint} disabled={!hasImage} className="btn-marigold" title="Print (Ctrl+P)">
-            <Printer className="h-4 w-4" /> Print
-          </button>
-        </div>
-      </header>
-
-      <div className="flex-1 flex overflow-hidden">
-        {tplOpen && <div className="md:hidden fixed inset-0 z-30 bg-black/30" onClick={() => setTplOpen(false)} />}
-        <aside
-          className={`overflow-y-auto space-y-5 z-40 transition-transform duration-200 bg-[hsl(var(--pt-card))] md:bg-transparent
-            fixed inset-x-0 bottom-0 max-h-[72vh] w-full rounded-t-2xl border-t px-4 py-4 shadow-lift
-            md:static md:bottom-auto md:w-[280px] md:max-h-none md:shrink-0 md:rounded-none md:border-t-0 md:border-r md:py-5 md:shadow-none md:translate-y-0
+            <DownßÝ­¢G§²ÚîÆ­yÚpy-5 md:shadow-none md:translate-y-0
             ${tplOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}`}
           style={{ borderColor: 'hsl(var(--pt-border))' }}>
           <div className="flex items-start justify-between">
@@ -397,8 +380,6 @@ img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
             })}
             layers={layers}
             selectedLayer={selectedLayer}
-            onSelectLayer={setSelectedLayer}
-            onUpdateLayer={(id, fn) => setLayers(prev => prev.map(L => L.id === id ? fn(L) : L))}
             onDrop={handleFile}
           />
         </main>
@@ -478,7 +459,7 @@ function FilePicker({ onFiles, onAppend }: { onFiles: (files: File[]) => void; o
 type SlotXf = { zoom: number; offsetX: number; offsetY: number };
 type XfMap = Record<number, SlotXf>;
 
-function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms, selectedSlot, onSelectSlot, onTransformSlot, layers, selectedLayer, onSelectLayer, onUpdateLayer, onDrop }: {
+function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms, selectedSlot, onSelectSlot, onTransformSlot, layers, selectedLayer, onDrop }: {
   images: ImageBitmap[];
   template: Template;
   grayscale: boolean;
@@ -490,8 +471,6 @@ function A4Canvas({ images, template, grayscale, rotation, cutLines, transforms,
   onTransformSlot: (idx: number, fn: (cur: SlotXf) => SlotXf) => void;
   layers: Layer[];
   selectedLayer: number | null;
-  onSelectLayer: (id: number | null) => void;
-  onUpdateLayer: (id: number, fn: (cur: Layer) => Layer) => void;
   onDrop: (f: File) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
