@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
-import api, { API_URL, SOCKET_URL } from '../../shared/api';
+import api, { SOCKET_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
@@ -130,9 +130,9 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
           <div className="flex flex-wrap gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
             <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.04] text-blue-400 hover:bg-white/[0.06]">Open</button>
             <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="text-[10px] px-2 py-0.5 rounded-md bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">Tag</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30">Photo Tool</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/octet-stream'}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30">Download</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30">Download</button>
             <button onClick={(e) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }} className="text-[10px] px-2 py-0.5 rounded-md bg-red-600/20 text-red-400 hover:bg-red-600/30">Delete</button>
           </div>
         )}
@@ -209,778 +209,4 @@ export default function WhatsApp() {
       if (r.data.qr) setQrCode(r.data.qr);
     }).catch(() => {});
     // Load cached data instantly, then refresh from server
-    const cached = localStorage.getItem('cc-drive-files');
-    if (cached) {
-      try { const msgs = JSON.parse(cached); groupMessages(msgs); } catch {}
-    }
-    api.get('/drive/files/ws').then(r => {
-      const msgs: Message[] = r.data.map((f: any) => ({
-        id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-        fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
-      }));
-      localStorage.setItem('cc-drive-files', JSON.stringify(msgs));
-      groupMessages(msgs);
-    }).catch(() => {});
-    const baseUrl = SOCKET_URL;
-    const token = useAuthStore.getState().accessToken || '';
-    const socket = io(baseUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000,
-      auth: { token },
-      query: { token },
-    });
-    socketRef.current = socket;
-    // â”€â”€ QR delivery via HTTP polling (no Socket.IO) â”€â”€
-    // Polls /whatsapp/status every 3s. Stops when connected. Resumes if disconnected.
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-    const pollStatus = async () => {
-      try {
-        const r = await api.get('/whatsapp/status');
-        if (r.data.connected) {
-          setConnected(true); setQrCode(null); setReconnecting(false);
-          localStorage.setItem('cc-wa-connected', 'true');
-          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-        } else {
-          if (r.data.qr) setQrCode(r.data.qr);
-          setConnected(false);
-        }
-      } catch (e) {
-        console.warn('[WhatsApp] status poll failed:', (e as any)?.message);
-      }
-    };
-    const startPolling = () => {
-      if (pollTimer) return;
-      pollStatus();
-      pollTimer = setInterval(pollStatus, 3000);
-    };
-    // Kick off polling immediately
-    startPolling();
-    // Connection events still come via socket (single emit, low cost) â€” these toggle polling
-    socket.on('connection:status', (data: any) => {
-      if (data.connected) {
-        setConnected(true); setQrCode(null); setReconnecting(false);
-        localStorage.setItem('cc-wa-connected', 'true');
-        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      } else {
-        // Resumed disconnect â†’ restart polling for fresh QR
-        startPolling();
-      }
-    });
-    socket.on('new_whatsapp_file', (file: any) => {
-      const phone = file.phoneNumber || file.customerId || 'unknown';
-      const name = file.customerName || file.phoneNumber || 'Unknown';
-      addMessage({ id: file.id || Date.now().toString(), phone, name, fileName: file.fileName,
-        fileUrl: file.fileUrl, timestamp: file.timestamp || new Date().toISOString(), dpUrl: file.dpUrl || file.profilePicUrl });
-      // Browser notification
-      if (Notification.permission === 'granted') {
-        new Notification(`ðŸ“„ ${name}`, { body: file.fileName || 'New document received', icon: '/favicon.ico' });
-        new Audio('/notify.mp3').play().catch(() => {});
-      }
-      // Track unread
-      setUnread(prev => { const m = new Map(prev); m.set(phone, (m.get(phone) || 0) + 1); const total = Array.from(m.values()).reduce((a,b)=>a+b,0); localStorage.setItem('cc-wa-unread', String(total)); return m; });
-    });
-    // Request notification permission
-    if (Notification.permission === 'default') Notification.requestPermission();
-    return () => {
-      socket.disconnect();
-      if (pollTimer) clearInterval(pollTimer);
-    };
-  }, []);
-
-  const groupMessages = useCallback((msgs: Message[]) => {
-    const map = new Map<string, Chat>();
-    msgs.forEach(m => {
-      const key = m.phone;
-      if (!map.has(key)) map.set(key, { phone: key, name: m.name, lastTime: m.timestamp, messages: [], newCount: 0, dpUrl: m.dpUrl });
-      const chat = map.get(key)!;
-      chat.messages.push(m);
-      if (m.timestamp > chat.lastTime) chat.lastTime = m.timestamp;
-      if (m.dpUrl) chat.dpUrl = m.dpUrl;
-      chat.newCount = chat.messages.length;
-    });
-    setChats(map);
-  }, []);
-
-  const addMessage = useCallback((msg: Message) => {
-    setChats(prev => {
-      const map = new Map(prev);
-      const key = msg.phone;
-      if (!map.has(key)) map.set(key, { phone: key, name: msg.name, lastTime: msg.timestamp, messages: [], newCount: 0, dpUrl: msg.dpUrl });
-      const chat = map.get(key)!;
-      if (chat.messages.some(m => m.id === msg.id)) return prev; // dedupe
-      chat.messages.unshift(msg);
-      chat.lastTime = msg.timestamp;
-      chat.newCount++;
-      if (msg.dpUrl) chat.dpUrl = msg.dpUrl;
-      return map;
-    });
-  }, []);
-
-  const handleShowQR = useCallback(async () => {
-    setReconnecting(true);
-    // Force start a new session â€” this generates a fresh QR
-    await api.post('/whatsapp/connect').catch(() => {});
-    // Poll for QR (takes 3-10s for Baileys to generate)
-    let attempts = 0;
-    const poll = setInterval(async () => {
-      attempts++;
-      try {
-        const r = await api.get('/whatsapp/status');
-        if (r.data.connected) { clearInterval(poll); setConnected(true); setQrCode(null); setReconnecting(false); return; }
-        if (r.data.qr) { clearInterval(poll); setQrCode(r.data.qr); setReconnecting(false); }
-      } catch {}
-      if (attempts > 15) { clearInterval(poll); setReconnecting(false); }
-    }, 2000);
-  }, []);
-
-  // Poll status - detect connect/disconnect
-  useEffect(() => {
-    let disconnectCount = 0;
-    const interval = connected ? 3000 : 3000;
-    const poll = setInterval(() => {
-      api.get('/whatsapp/status').then(r => {
-        if (r.data.connected) {
-          if (!connected) { setConnected(true); setQrCode(null); setReconnecting(false); }
-          localStorage.setItem('cc-wa-connected', 'true');
-          // Refresh files when connected
-          api.get('/drive/files/ws').then(fr => {
-            const msgs: Message[] = fr.data.map((f: any) => ({
-              id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-              fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
-            }));
-            if (msgs.length > 0) { localStorage.setItem('cc-drive-files', JSON.stringify(msgs)); groupMessages(msgs); }
-          }).catch(() => {});
-          disconnectCount = 0;
-        } else if (r.data.qr) {
-          disconnectCount++;
-          if (disconnectCount >= 2) { setQrCode(r.data.qr || null); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
-          if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
-        } else {
-          disconnectCount++;
-          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); localStorage.removeItem('cc-drive-files'); }
-        }
-      }).catch(() => {});
-    }, interval);
-    return () => clearInterval(poll);
-  }, [connected]);
-
-  const handleSelectChat = useCallback((phone: string) => {
-    setSelectedChat(phone);
-    setSelectionMode(false);
-    setSelectedDocs(new Map());
-    setUnread(prev => { const m = new Map(prev); m.delete(phone); const total = Array.from(m.values()).reduce((a,b)=>a+b,0); localStorage.setItem('cc-wa-unread', String(total)); return m; });
-    userScrolledUpRef.current = false;
-    setMsgSearch('');
-    setTimeout(() => messagesEndRef.current?.scrollIntoView(), 100);
-  }, []);
-
-  const togglePin = useCallback((phone: string) => {
-    setPinnedChats(prev => {
-      const next = new Set(prev);
-      if (next.has(phone)) next.delete(phone); else next.add(phone);
-      localStorage.setItem('cc-pinned-chats', JSON.stringify([...next]));
-      return next;
-    });
-  }, []);
-
-  const assignChat = useCallback(async (phone: string, name: string) => {
-    const isLid = !/^[0-9]{10,13}$/.test(phone);
-    const realPhone = isLid ? prompt(`Enter real phone for "${name}" (e.g. 919876543210):`) : phone;
-    if (!realPhone) return;
-    try {
-      await api.post('/customers/persons', { phone: realPhone, name, displayLabel: name, relationship: 'self' });
-      if (isLid) await api.post('/whatsapp/link-lid', { lid: phone, phone: realPhone }).catch(() => {});
-      toast.success(`Assigned ${name} â†’ ${realPhone}`);
-    } catch (e: any) {
-      if (e.response?.status === 409) toast.info('Already assigned');
-      else toast.error(e.response?.data?.error || 'Failed to assign');
-    }
-  }, []);
-
-  const requestDocs = useCallback(async (phone: string) => {
-    try {
-      await api.post('/whatsapp/send', { phone, message: 'à¤¨à¤®à¤¸à¥à¤¤à¥‡! à¤•à¥ƒà¤ªà¤¯à¤¾ à¤…à¤ªà¤¨à¥‡ à¤¡à¥‰à¤•à¥à¤¯à¥‚à¤®à¥‡à¤‚à¤Ÿà¥à¤¸ (à¤†à¤§à¤¾à¤° à¤•à¤¾à¤°à¥à¤¡, à¤®à¤¾à¤°à¥à¤•à¤¶à¥€à¤Ÿ, à¤«à¥‹à¤Ÿà¥‹ à¤†à¤¦à¤¿) WhatsApp à¤ªà¤° à¤­à¥‡à¤œà¥‡à¤‚à¥¤ / Hello! Please send your documents (Aadhaar, marksheets, photo etc.) on this WhatsApp.' });
-      toast.success('Document request sent');
-    } catch { toast.error('Failed to send request'); }
-  }, []);
-
-  const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
-  const viewerRef = useRef<HTMLDivElement>(null);
-  const handleCloseViewer = useCallback(() => setViewerFile(null), []);
-  useEffect(() => {
-    if (!viewerFile) return;
-    const el = viewerRef.current;
-    const prev = document.activeElement as HTMLElement | null;
-    const sel = 'a[href],button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])';
-    const focusables = () => el ? Array.from(el.querySelectorAll<HTMLElement>(sel)).filter(n => n.offsetParent !== null) : [];
-    focusables()[0]?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setViewerFile(null); return; }
-      if (e.key !== 'Tab') return;
-      const items = focusables();
-      if (!items.length) return;
-      const first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
-  }, [viewerFile]);
-  const handleDeleteDoc = useCallback((id: string) => {
-    setChats(prev => {
-      const map = new Map(prev);
-      for (const [key, chat] of map) {
-        const filtered = chat.messages.filter(m => m.id !== id);
-        if (filtered.length !== chat.messages.length) map.set(key, { ...chat, messages: filtered, newCount: filtered.length });
-      }
-      return map;
-    });
-    try { const cached = localStorage.getItem('cc-drive-files'); if (cached) localStorage.setItem('cc-drive-files', JSON.stringify(JSON.parse(cached).filter((m: any) => m.id !== id))); } catch {}
-  }, []);
-
-  const toggleDocSelection = useCallback((msg: Message) => {
-    setSelectedDocs(prev => {
-      const next = new Map(prev);
-      if (next.has(msg.id)) next.delete(msg.id);
-      else next.set(msg.id, msg);
-      return next;
-    });
-  }, []);
-
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
-    setSelectedDocs(new Map());
-  };
-
-  const startBuildProfile = async () => {
-    setShowPicker(true);
-  };
-
-  const onPickerConfirm = async (personId: string) => {
-    setShowPicker(false);
-    targetPersonIdRef.current = personId;
-    setTargetPersonId(personId);
-    setExtracting(true);
-    setExtractError('');
-    try {
-      // Multi-document extraction â€” call extract per doc, merge results
-      const docs = Array.from(selectedDocs.values()).filter(d => d.fileName && !['mp4','3gp','mov','avi','webm','mp3','ogg','wav'].includes(d.fileName.split('.').pop()?.toLowerCase() || ''));
-      console.log('[Extract] selectedDocs size:', selectedDocs.size, 'filtered docs:', docs.length, docs.map(d => ({id:d.id, name:d.fileName})));
-      if (docs.length === 0) { setExtractError('No images or PDFs in selection'); setExtracting(false); return; }
-      // Run extractions in parallel for speed
-      // Extract one-by-one (sequential) for accuracy â€” parallel calls hit Groq rate
-      // limits and degrade quality. Most docs are already cached by auto-extract on
-      // arrival, so this stays fast (cache hits return instantly).
-      const results: any[] = [];
-      for (const d of docs) {
-        try {
-          const r = await api.post('/process/extract', { fileId: d.id });
-          results.push({ doc: d, result: r.data });
-        } catch (e: any) {
-          results.push({ doc: d, result: { error: e.message } });
-        }
-      }
-      // Priority-based merge: each field has a "best source" priority by doc type.
-      // Higher priority document types overwrite lower for the same field.
-      const TYPE_PRIORITY: Record<string, number> = {
-        aadhaar: 100, pan: 95, passport: 95, voter_id: 90, driving_license: 90,
-        marksheet_postgrad: 85, marksheet_graduation: 85, marksheet_12th: 80, marksheet_10th: 75,
-        admit_card: 70, certificate: 65, bank_passbook: 60, ration_card: 55,
-        result: 50, form: 40, other: 20, photo: 10, signature: 10,
-      };
-      // Field-specific priority overrides (e.g., name from Aadhaar > name from admit card)
-      const FIELD_PREFERRED_TYPE: Record<string, string[]> = {
-        // Identity fields prefer Aadhaar/PAN/Passport
-        name: ['aadhaar', 'pan', 'passport', 'voter_id', 'driving_license'],
-        father_name: ['aadhaar', 'pan'],
-        dob: ['aadhaar', 'passport', 'pan'],
-        gender: ['aadhaar', 'passport'],
-        address: ['aadhaar', 'voter_id', 'passport'],
-        permanent_address: ['aadhaar', 'voter_id', 'passport'],
-        // Marksheet fields prefer their specific marksheet type
-        passing_year_10th: ['marksheet_10th'],
-        marks_10th: ['marksheet_10th'],
-        percentage_10th: ['marksheet_10th'],
-        board_10th: ['marksheet_10th'],
-        passing_year_12th: ['marksheet_12th'],
-        marks_12th: ['marksheet_12th'],
-        percentage_12th: ['marksheet_12th'],
-        board_12th: ['marksheet_12th'],
-        // Exam fields prefer admit card
-        roll_number: ['admit_card', 'marksheet_10th', 'marksheet_12th', 'marksheet_graduation'],
-        registration_number: ['admit_card'],
-        exam_name: ['admit_card'],
-        exam_date: ['admit_card'],
-        exam_center: ['admit_card'],
-        application_number: ['admit_card', 'form'],
-      };
-
-      const merged: Record<string, any> = {};
-      const errors: string[] = [];
-
-      for (const r of results) {
-        if (!r) continue;
-        if (r.result?.error) {
-          errors.push(r.doc.fileName + ': ' + (r.result.message || r.result.error));
-          continue;
-        }
-        if (!r.result?.suggested) continue;
-        const docType = r.result.suggested.document_type?.value || 'other';
-        const docPriority = TYPE_PRIORITY[docType] || 30;
-
-        for (const [k, v] of Object.entries(r.result.suggested)) {
-          if (k === 'document_type') continue;  // skip the type marker itself
-          const fieldInfo = v as any;
-          if (!fieldInfo.value || !String(fieldInfo.value).trim()) continue;
-
-          const existing = merged[k];
-
-          // No existing value â€” accept it
-          if (!existing) {
-            merged[k] = { ...fieldInfo, documentId: r.doc.id, sourceDocType: docType, _priority: docPriority };
-            continue;
-          }
-
-          // Field has preferred doc types â€” check those first
-          const preferred = FIELD_PREFERRED_TYPE[k];
-          if (preferred) {
-            const existingPreferredIdx = preferred.indexOf(existing.sourceDocType);
-            const newPreferredIdx = preferred.indexOf(docType);
-            if (newPreferredIdx !== -1 && (existingPreferredIdx === -1 || newPreferredIdx < existingPreferredIdx)) {
-              merged[k] = { ...fieldInfo, documentId: r.doc.id, sourceDocType: docType, _priority: docPriority };
-              continue;
-            }
-            if (existingPreferredIdx !== -1 && newPreferredIdx === -1) continue;  // existing wins
-          }
-
-          // Fall back to general type priority
-          if (docPriority > (existing._priority || 0)) {
-            merged[k] = { ...fieldInfo, documentId: r.doc.id, sourceDocType: docType, _priority: docPriority };
-          }
-        }
-      }
-      // Strip internal merge metadata before showing to operator
-      Object.values(merged).forEach((v: any) => { delete v._priority; delete v.sourceDocType; });
-      // Debug log so operator can inspect in browser devtools (F12)
-      console.log('[Build Profile] Per-document results:', results.map((r: any) => ({
-        file: r?.doc?.fileName,
-        type: r?.result?.suggested?.document_type?.value,
-        fields: r?.result?.suggested ? Object.keys(r.result.suggested) : null,
-        error: r?.result?.error || r?.result?.message,
-      })));
-      console.log('[Build Profile] Merged fields:', Object.keys(merged), merged);
-      // Remove document_type from saved fields (it's just a classification, not profile data)
-      delete merged.document_type;
-      if (Object.keys(merged).length === 0) {
-        const errMsg = errors.length > 0
-          ? errors.join('\n')
-          : 'No extractable data found in selected documents. Make sure you selected actual ID/document images, not photos or screenshots.';
-        setExtractError(errMsg);
-        return;
-      }
-      setExtractedSuggestions(merged);
-    } catch (e: any) {
-      setExtractError(e.message || 'Extraction failed');
-    } finally {
-      setExtracting(false);
-    }
-  };
-
-  const onConfirmExtraction = async (acceptedFields: Record<string, any>) => {
-    const pid = targetPersonIdRef.current || targetPersonId;
-    console.log('[Save] personId:', pid, 'fields:', Object.keys(acceptedFields).length);
-    if (!pid) { setExtractError('No target person â€” pick a person first'); return; }
-    try {
-      await api.patch(`/customers/persons/${pid}`, { fields: acceptedFields });
-      setExtractedSuggestions(null);
-      setTargetPersonId(null);
-      exitSelectionMode();
-      toast.success('âœ… Profile updated! Open a govt form and use the extension to fill.');
-    } catch (e: any) { setExtractError(e.message); }
-  };
-
-  const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
-  const filteredChats = useMemo(() => {
-    let list = sortedChats;
-    if (chatSearch.trim()) {
-      const q = chatSearch.toLowerCase();
-      list = list.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
-    }
-    // Pinned chats first
-    return [...list].sort((a, b) => {
-      const ap = pinnedChats.has(a.phone) ? 1 : 0;
-      const bp = pinnedChats.has(b.phone) ? 1 : 0;
-      return bp - ap;
-    });
-  }, [sortedChats, chatSearch, pinnedChats]);
-  const activeChat = selectedChat ? chats.get(selectedChat) : null;
-  const reversedMessages = useMemo(() => {
-    if (!activeChat) return [];
-    let msgs = [...activeChat.messages].reverse();
-    if (msgSearch.trim()) {
-      const q = msgSearch.toLowerCase();
-      msgs = msgs.filter(m => m.fileName?.toLowerCase().includes(q) || m.text?.toLowerCase().includes(q));
-    }
-    return msgs;
-  }, [activeChat, msgSearch]);
-
-  // Auto-scroll on new messages if user hasn't scrolled up
-  useEffect(() => {
-    if (!userScrolledUpRef.current) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [reversedMessages.length]);
-
-  if (connected === null) {
-    return <div className="h-full flex items-center justify-center"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>;
-  }
-
-  if (!connected) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center max-w-md mx-auto text-center">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'hsl(142 60% 40% / 0.12)' }}>
-          <WhatsappLogo size={32} weight="fill" style={{ color: 'hsl(142 64% 34%)' }} />
-        </div>
-        <h2 className="text-lg font-bold text-white mb-2">Connect WhatsApp</h2>
-        {useAuthStore.getState().user?.role === 'admin' ? (
-          <>
-            <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
-            {qrCode ? (
-              <div className="bg-white p-4 rounded-xl mb-4 shadow-lg">
-                <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-3 mb-4">
-                {reconnecting && <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
-                <button onClick={handleShowQR} className="px-5 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
-                  {reconnecting ? 'Connecting...' : 'Connect WhatsApp'}
-                </button>
-              </div>
-            )}
-            <div className="text-xs text-gray-600 mt-4 space-y-1">
-              <p>1. Open WhatsApp on your phone</p>
-              <p>2. Go to Settings â†’ Linked Devices</p>
-              <p>3. Scan the QR code above</p>
-            </div>
-          </>
-        ) : (
-          <p className="text-sm pt-muted mb-2 max-w-xs">WhatsApp isn't connected for this workspace yet. Ask an admin to link it â€” customer documents will appear here once it's connected.</p>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-full md:h-[calc(100vh-48px)] flex w-full min-w-0 overflow-hidden">
-      <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
-        <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span className="text-sm text-white font-medium">Inbox</span>
-          <span className="text-xs text-gray-500 ml-auto">{sortedChats.length} customers</span>
-        </div>
-        <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
-          <input value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="Search customers..." className="input-field text-xs" />
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          {filteredChats.length === 0 ? (
-            <p className="text-center text-gray-600 text-xs py-8">{chatSearch ? 'No match' : 'No documents received'}</p>
-          ) : filteredChats.map(chat => (
-            <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} unreadCount={unread.get(chat.phone) || 0} pinned={pinnedChats.has(chat.phone)} onPin={togglePin} />
-          ))}
-        </div>
-      </div>
-
-      <div className={`flex-1 min-w-0 flex-col ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
-        {!activeChat ? (
-          <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">Select a customer to view documents</div>
-        ) : (
-          <>
-            <div className="min-h-[3.5rem] px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
-              <button onClick={() => setSelectedChat(null)} className="md:hidden -ml-1 text-2xl leading-none pt-muted hover:text-[hsl(var(--pt-ink))]" aria-label="Back to inbox">â€¹</button>
-              <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm">
-                {activeChat.name[0]?.toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{activeChat.name}</p>
-                <p className="text-xs text-gray-500">{activeChat.messages.length} documents</p>
-              </div>
-              {!selectionMode ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search..." className="input-field w-28 text-xs py-1" />
-                  <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="btn-ghost text-xs text-orange-400 hover:text-orange-300">Request</button>
-                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="btn-ghost text-xs text-blue-400 hover:text-teal-300">Profile</button>
-                  <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="btn-ghost text-xs">Assign</button>
-                  <button onClick={() => setSelectionMode(true)} className="btn-ghost text-xs">Select</button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <button onClick={() => {
-                    // Smart-select only document-type files (skip greetings/photos/junk)
-                    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
-                    const msgs = activeChat?.messages || [];
-                    const next = new Map(selectedDocs);
-                    let n = 0;
-                    for (const m of msgs) {
-                      const tag = m.tag || (m.fileName ? docCategory(m.fileName)?.category : null);
-                      if (tag && ID_TAGS.includes(tag)) { next.set(m.id, m); n++; }
-                    }
-                    setSelectedDocs(next);
-                    if (n === 0) toast.info('No ID documents detected yet â€” select manually');
-                  }} className="btn-ghost text-xs text-teal-400 hover:text-teal-300">Select IDs</button>
-                  <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
-                </div>
-              )}
-            </div>
-            <div ref={msgContainerRef} onScroll={() => { const el = msgContainerRef.current; if (el) userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 100; }} className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
-              {reversedMessages.map((msg, i) => {
-                const msgDate = new Date(msg.timestamp).toLocaleDateString();
-                const prevDate = i > 0 ? new Date(reversedMessages[i-1].timestamp).toLocaleDateString() : null;
-                const showDate = msgDate !== prevDate;
-                const today = new Date().toLocaleDateString();
-                const yesterday = new Date(Date.now()-86400000).toLocaleDateString();
-                const label = msgDate === today ? 'Today' : msgDate === yesterday ? 'Yesterday' : msgDate;
-                return (<>
-                  {showDate && <div key={'d-'+i} className="text-center py-2"><span className="text-[10px] bg-white/[0.03] text-gray-500 px-3 py-1 rounded-full">{label}</span></div>}
-                  <MessageCard
-                    key={msg.id} msg={msg} onClick={handleOpenFile}
-                    selectionMode={selectionMode}
-                    selected={selectedDocs.has(msg.id)}
-                    onToggleSelect={toggleDocSelection}
-                    onDelete={handleDeleteDoc}
-                  />
-                </>);
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Floating action bar when items selected */}
-            {selectionMode && selectedDocs.size > 0 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full shadow-xl flex items-center gap-3 z-10" style={{ background: 'var(--primary)' }}>
-                <span className="text-sm font-medium text-white">{selectedDocs.size} selected</span>
-                <button onClick={startBuildProfile}
-                  className="px-3 py-1 bg-white text-gray-900 rounded-full text-xs font-bold hover:bg-gray-100">
-                  Build Profile
-                </button>
-                <button onClick={() => { const files = Array.from(selectedDocs.values()).map(m => ({ id: m.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || m.id, fileName: m.fileName || '', fileUrl: m.fileUrl || '', customerName: m.name })); window.location.href = '/app/stitch?files=' + encodeURIComponent(JSON.stringify(files)); }}
-                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  Photo Tool
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* Customer Picker Modal */}
-      {showPicker && (
-        <CustomerPicker
-          onCancel={() => setShowPicker(false)}
-          onConfirm={onPickerConfirm}
-          docCount={selectedDocs.size}
-        />
-      )}
-
-      {/* Extracting overlay */}
-      {extracting && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
-          <div className="bg-[var(--card)] rounded-xl p-6 text-center">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-white text-sm">Extracting from {selectedDocs.size} document{selectedDocs.size !== 1 ? 's' : ''}...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Extraction error */}
-      {extractError && !extracting && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setExtractError('')}>
-          <div className="bg-[var(--card)] border border-red-500/30 rounded-xl p-6 max-w-sm">
-            <p className="text-red-400 text-sm mb-3">Extraction failed</p>
-            <p className="text-gray-400 text-xs">{extractError}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Extraction confirm modal */}
-      {extractedSuggestions && (
-        <ExtractionConfirmModal
-          suggestions={extractedSuggestions}
-          onCancel={() => { setExtractedSuggestions(null); setTargetPersonId(null); }}
-          onConfirm={onConfirmExtraction}
-        />
-      )}
-
-      {/* Document viewer */}
-      {viewerFile && (
-        <div ref={viewerRef} className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={handleCloseViewer} role="dialog" aria-modal="true">
-          <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
-            <span className="text-white/90 text-sm font-medium truncate flex-1 min-w-0">{viewerFile.fileName}</span>
-            <button
-              onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: res.headers['content-type']||'application/pdf'}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load: ' + (err.message || 'unknown')); }); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shrink-0"
-              style={{ background: 'linear-gradient(180deg, hsl(27 95% 58%), hsl(22 92% 50%))' }}
-              title="Print"
-            >
-              <Printer size={15} weight="bold" /><span className="hidden sm:inline">Print</span>
-            </button>
-            <button
-              onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white bg-white/10 hover:bg-white/20 shrink-0"
-              title="Open in Photo Tool"
-            >
-              <Camera size={15} /><span className="hidden sm:inline">Photo Tool</span>
-            </button>
-            <button onClick={handleCloseViewer} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white bg-white/10 hover:bg-white/20 shrink-0" title="Close">
-              <X size={15} /><span className="hidden sm:inline">Close</span>
-            </button>
-          </div>
-          <div className="flex-1 flex items-center justify-center p-3 overflow-auto" onClick={handleCloseViewer}>
-            <div onClick={e => e.stopPropagation()} className="flex items-center justify-center max-w-full max-h-full">
-              {(() => {
-                const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
-                const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || '';
-                const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
-                const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
-                if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[80vh] object-contain rounded-lg" />;
-                if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[92vw] max-w-3xl h-[72vh] rounded-lg border-0" /> : null;
-                if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[92vw] max-w-3xl h-[80vh] rounded-lg border-0" title="PDF" /> : null;
-                return <div className="bg-white/10 rounded-xl p-8 text-center"><p className="text-white">{viewerFile.fileName}</p></div>;
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => void; onConfirm: (personId: string) => void; docCount: number }) {
-  const [households, setHouseholds] = useState<Household[]>([]);
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ phone: '', name: '', relationship: 'self' });
-  const [createdInHousehold, setCreatedInHousehold] = useState<string | null>(null);
-
-  useEffect(() => { api.get('/customers/households').then(r => setHouseholds(r.data)); }, []);
-
-  const handleCreatePerson = async (phone: string, name: string, relationship: string) => {
-    const r = await api.post('/customers/persons', { phone, name, displayLabel: name, relationship });
-    return r.data.id;
-  };
-
-  const handleQuickCreate = async () => {
-    if (!form.phone || !form.name) return;
-    const id = await handleCreatePerson(form.phone, form.name, form.relationship);
-    onConfirm(id);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto">
-        <h3 className="text-base font-bold text-white mb-1">Build profile from {docCount} document{docCount !== 1 ? 's' : ''}</h3>
-        <p className="text-xs text-gray-500 mb-4">Select an existing person, or create a new one</p>
-
-        {!showCreate ? (
-          <>
-            <div className="space-y-3 mb-4">
-              {households.map(h => (
-                <div key={h.phone}>
-                  <p className="text-[10px] text-gray-500 uppercase mb-1 px-1">{h.phone}</p>
-                  <div className="space-y-1">
-                    {h.persons.map(p => (
-                      <button key={p.id} onClick={() => onConfirm(p.id)}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/[0.04] text-sm text-white flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold">{p.name?.[0]}</div>
-                        <div className="flex-1">
-                          <div className="text-sm">{p.displayLabel || p.name}</div>
-                          <div className="text-[10px] text-gray-500 capitalize">{p.relationship}</div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button onClick={() => setShowCreate(true)} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">+ Create New Person</button>
-          </>
-        ) : (
-          <div className="space-y-3">
-            <div>
-              <label className="text-[11px] text-gray-500 uppercase">Phone</label>
-              <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
-                placeholder="9823745234"
-                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-gray-500 uppercase">Name</label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none" />
-            </div>
-            <div>
-              <label className="text-[11px] text-gray-500 uppercase">Relationship</label>
-              <select value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none">
-                <option value="self">Self</option>
-                <option value="spouse">Spouse</option>
-                <option value="parent">Parent</option>
-                <option value="child">Child</option>
-                <option value="sibling">Sibling</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button onClick={handleQuickCreate} disabled={!form.phone || !form.name}
-                className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm disabled:opacity-50">Create & Use</button>
-              <button onClick={() => setShowCreate(false)} className="px-3 py-2 bg-white/5 text-gray-400 rounded-lg text-sm">Back</button>
-            </div>
-          </div>
-        )}
-
-        <button onClick={onCancel} className="w-full mt-3 text-xs text-gray-500 hover:text-white">Cancel</button>
-      </div>
-    </div>
-  );
-}
-
-function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
-  const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
-
-  const toggle = (key: string) => {
-    setAccepted((prev: any) => {
-      const next = { ...prev };
-      if (next[key]) delete next[key];
-      else next[key] = suggestions[key];
-      return next;
-    });
-  };
-  const updateValue = (key: string, value: string) => {
-    setAccepted((prev: any) => ({ ...prev, [key]: { ...prev[key], value, source: 'document_corrected' } }));
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-blue-500/30 rounded-xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
-        <p className="text-sm font-medium text-blue-400 mb-3">Review extracted fields</p>
-        <p className="text-xs text-gray-500 mb-4">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
-        <div className="space-y-2 mb-4">
-          {Object.entries(suggestions).map(([k, v]: [string, any]) => (
-            <div key={k} className="flex items-center gap-2">
-              <input type="checkbox" checked={!!accepted[k]} onChange={() => toggle(k)} className="accent-blue-500" />
-              <span className="text-xs text-gray-400 w-24 capitalize shrink-0">{k.replace(/_/g, ' ')}</span>
-              <input
-                value={accepted[k]?.value || v.value || ''}
-                onChange={e => updateValue(k, e.target.value)}
-                disabled={!accepted[k]}
-                className="flex-1 px-2 py-1 bg-[var(--secondary)] border border-[var(--border)] rounded text-xs text-white outline-none disabled:opacity-50" />
-            </div>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => onConfirm(accepted)} className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded">Confirm & Save</button>
-          <button onClick={onCancel} className="px-3 py-1.5 bg-white/5 text-gray-400 text-sm rounded">Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
+    const cached = localStorage.getIteóß4¶‰žËkºwµç@€€€€€ñ‘¥ØÉ•˜õíµÍ½¹Ñ…¥¹•ÉI•™ô½¹MÉ½±°õì ¤€ôøì½¹ÍÐ•°€ôµÍ½¹Ñ…¥¹•ÉI•˜¹ÕÉÉ•¹Ðì¥˜€¡•°¤ÕÍ•ÉMÉ½±±•‘UÁI•˜¹ÕÉÉ•¹Ð€ô•°¹ÍÉ½±±!•¥¡Ð€´•°¹ÍÉ½±±Q½À€´•°¹±¥•¹Ñ!•¥¡Ð€ø€ÄÀÀìõô±…ÍÍ9…µ”ô‰™±•à´Ä½Ù•É™±½Üµäµ…ÕÑ¼À´ÐÍÁ…”µä´ÈÁˆ´ÈÀˆø4(€€€€€€€€€€€€€íÉ•Ù•ÉÍ•‘5•ÍÍ…•Ì¹µ…À ¡µÍœ°¤¤€ôøì4(€€€€€€€€€€€€€€€½¹ÍÐµÍ…Ñ”€ô¹•Ü…Ñ”¡µÍœ¹Ñ¥µ•ÍÑ…µÀ¤¹Ñ½1½…±•…Ñ•MÑÉ¥¹œ ¤ì4(€€€€€€€€€€€€€€€½¹ÍÐÁÉ•Ù…Ñ”€ô¤€ø€À€ü¹•Ü…Ñ”¡É•Ù•ÉÍ•‘5•ÍÍ…•Ím¤´Åt¹Ñ¥µ•ÍÑ…µÀ¤¹Ñ½1½…±•…Ñ•MÑÉ¥¹œ ¤€è¹Õ±°ì4(€€€€€€€€€€€€€€€½¹ÍÐÍ¡½Ý…Ñ”€ôµÍ…Ñ”€„ôôÁÉ•Ù…Ñ”ì4(€€€€€€€€€€€€€€€½¹ÍÐÑ½‘…ä€ô¹•Ü…Ñ” ¤¹Ñ½1½…±•…Ñ•MÑÉ¥¹œ ¤ì4(€€€€€€€€€€€€€€€½¹ÍÐå•ÍÑ•É‘…ä€ô¹•Ü…Ñ”¡…Ñ”¹¹½Ü ¤´àØÐÀÀÀÀÀ¤¹Ñ½1½…±•…Ñ•MÑÉ¥¹œ ¤ì4(€€€€€€€€€€€€€€€½¹ÍÐ±…‰•°€ôµÍ…Ñ”€ôôôÑ½‘…ä€ü€Q½‘…äœ€èµÍ…Ñ”€ôôôå•ÍÑ•É‘…ä€ü€e•ÍÑ•É‘…äœ€èµÍ…Ñ”ì4(€€€€€€€€€€€€€€€É•ÑÕÉ¸€ ðø4(€€€€€€€€€€€€€€€€€íÍ¡½Ý…Ñ”€˜˜€ñ‘¥Ø­•äõì´œ­¥ô±…ÍÍ9…µ”ô‰Ñ•áÐµ•¹Ñ•ÈÁä´ÈˆøñÍÁ…¸±…ÍÍ9…µ”ô‰Ñ•áÐµlÄÁÁát‰œµÝ¡¥Ñ”½lÀ¸ÀÍtÑ•áÐµÉ…ä´ÔÀÀÁà´ÌÁä´ÄÉ½Õ¹‘•µ™Õ±°ˆùí±…‰•±ôð½ÍÁ…¸øð½‘¥Øùô4(€€€€€€€€€€€€€€€€€€ñ5•ÍÍ…•…É4(€€€€€€€€€€€€€€€€€€€­•äõíµÍœ¹¥‘ôµÍœõíµÍô½¹±¥¬õí¡…¹‘±•=Á•¹¥±•ô4(€€€€€€€€€€€€€€€€€€€Í•±•Ñ¥½¹5½‘”õíÍ•±•Ñ¥½¹5½‘•ô4(€€€€€€€€€€€€€€€€€€€Í•±•Ñ•õíÍ•±•Ñ•‘½Ì¹¡…Ì¡µÍœ¹¥¥ô4(€€€€€€€€€€€€€€€€€€€½¹Q½±•M•±•ÐõíÑ½±•½M•±•Ñ¥½¹ô4(€€€€€€€€€€€€€€€€€€€½¹•±•Ñ”õí¡…¹‘±••±•Ñ•½ô4(€€€€€€€€€€€€€€€€€€¼ø4(€€€€€€€€€€€€€€€€ð¼ø¤ì4(€€€€€€€€€€€€€ô¥ô4(€€€€€€€€€€€€€€ñ‘¥ØÉ•˜õíµ•ÍÍ…•Í¹‘I•™ô€¼ø4(€€€€€€€€€€€€ð½‘¥Øø4(4(€€€€€€€€€€€ì¼¨±½…Ñ¥¹œ…Ñ¥½¸‰…ÈÝ¡•¸¥Ñ•µÌÍ•±•Ñ•€¨½ô4(€€€€€€€€€€€íÍ•±•Ñ¥½¹5½‘”€˜˜Í•±•Ñ•‘½Ì¹Í¥é”€ø€À€˜˜€ 4(€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰…‰Í½±ÕÑ”‰½ÑÑ½´´Ð±•™Ð´Ä¼È€µÑÉ…¹Í±…Ñ”µà´Ä¼ÈÁà´ÔÁä´ÌÉ½Õ¹‘•µ™Õ±°Í¡…‘½Üµá°™±•à¥Ñ•µÌµ•¹Ñ•È…À´Ìè´ÄÀˆÍÑå±”õíì‰…­É½Õ¹è€Ù…È ´µÁÉ¥µ…Éä¤œõôø4(€€€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÍ9…µ”ô‰Ñ•áÐµÍ´™½¹Ðµµ•‘¥Õ´Ñ•áÐµÝ¡¥Ñ”ˆùíÍ•±•Ñ•‘½Ì¹Í¥é•ôÍ•±•Ñ•ð½ÍÁ…¸ø4(€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õíÍÑ…ÉÑ	Õ¥±‘AÉ½™¥±•ô4(€€€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰Áà´ÌÁä´Ä‰œµÝ¡¥Ñ”Ñ•áÐµÉ…ä´äÀÀÉ½Õ¹‘•µ™Õ±°Ñ•áÐµáÌ™½¹Ðµ‰½±¡½Ù•Èé‰œµÉ…ä´ÄÀÀˆø4(€€€€€€€€€€€€€€€€€	Õ¥±AÉ½™¥±”4(€€€€€€€€€€€€€€€€ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õì ¤€ôøì½¹ÍÐ™¥±•Ì€ôÉÉ…ä¹™É½´¡Í•±•Ñ•‘½Ì¹Ù…±Õ•Ì ¤¤¹µ…À¡´€ôø€¡ì¥è´¹™¥±•UÉ°ü¹µ…Ñ  ½lü™u¥ô¡m„µéµhÀ´å|µt¬¤¼¤ü¹lÅtñð´¹¥°™¥±•9…µ”è´¹™¥±•9…µ”ñð€œœ°™¥±•UÉ°è´¹™¥±•UÉ°ñð€œœ°ÕÍÑ½µ•É9…µ”è´¹¹…µ”ô¤¤ìÝ¥¹‘½Ü¹±½…Ñ¥½¸¹¡É•˜€ô€œ½…ÁÀ½ÍÑ¥Ñ ý™¥±•Ìôœ€¬•¹½‘•UI%½µÁ½¹•¹Ð¡)M=8¹ÍÑÉ¥¹¥™ä¡™¥±•Ì¤¤ìõô4(€€€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰Áà´ÌÁä´Ä‰œµÝ¡¥Ñ”¼ÈÀÑ•áÐµÝ¡¥Ñ”É½Õ¹‘•µ™Õ±°Ñ•áÐµáÌ™½¹Ðµ‰½±¡½Ù•Èé‰œµÝ¡¥Ñ”¼ÌÀˆø4(€€€€€€€€€€€€€€€€€A¡½Ñ¼Q½½°4(€€€€€€€€€€€€€€€€ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€¥ô4(€€€€€€€€€€ð¼ø4(€€€€€€€€¥ô4(€€€€€€ð½‘¥Øø4(4(€€€€€ì¼¨ÕÍÑ½µ•ÈA¥­•È5½‘…°€¨½ô4(€€€€€íÍ¡½ÝA¥­•È€˜˜€ 4(€€€€€€€€ñÕÍÑ½µ•ÉA¥­•È4(€€€€€€€€€½¹…¹•°õì ¤€ôøÍ•ÑM¡½ÝA¥­•È¡™…±Í”¥ô4(€€€€€€€€€½¹½¹™¥É´õí½¹A¥­•É½¹™¥Éµô4(€€€€€€€€€‘½½Õ¹ÐõíÍ•±•Ñ•‘½Ì¹Í¥é•ô4(€€€€€€€€¼ø4(€€€€€€¥ô4(4(€€€€€ì¼¨áÑÉ…Ñ¥¹œ½Ù•É±…ä€¨½ô4(€€€€€í•áÑÉ…Ñ¥¹œ€˜˜€ 4(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥á•¥¹Í•Ð´Àè´ÔÀ‰œµ‰±…¬¼àÀ™±•à¥Ñ•µÌµ•¹Ñ•È©ÕÍÑ¥™äµ•¹Ñ•Èˆø4(€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰‰œµmÙ…È ´µ…É¥tÉ½Õ¹‘•µá°À´ØÑ•áÐµ•¹Ñ•Èˆø4(€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ü´à ´à‰½É‘•È´È‰½É‘•Èµ‰±Õ”´ÔÀÀ‰½É‘•ÈµÐµÑÉ…¹ÍÁ…É•¹ÐÉ½Õ¹‘•µ™Õ±°…¹¥µ…Ñ”µÍÁ¥¸µàµ…ÕÑ¼µˆ´Ìˆ€¼ø4(€€€€€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµÝ¡¥Ñ”Ñ•áÐµÍ´ˆùáÑÉ…Ñ¥¹œ™É½´íÍ•±•Ñ•‘½Ì¹Í¥é•ô‘½Õµ•¹ÑíÍ•±•Ñ•‘½Ì¹Í¥é”€„ôô€Ä€ü€Ìœ€è€œô¸¸¸ð½Àø4(€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€ð½‘¥Øø4(€€€€€€¥ô4(4(€€€€€ì¼¨áÑÉ…Ñ¥½¸•ÉÉ½È€¨½ô4(€€€€€í•áÑÉ…ÑÉÉ½È€˜˜€…•áÑÉ…Ñ¥¹œ€˜˜€ 4(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥á•¥¹Í•Ð´Àè´ÔÀ‰œµ‰±…¬¼àÀ™±•à¥Ñ•µÌµ•¹Ñ•È©ÕÍÑ¥™äµ•¹Ñ•Èˆ½¹±¥¬õì ¤€ôøÍ•ÑáÑÉ…ÑÉÉ½È œœ¥ôø4(€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰‰œµmÙ…È ´µ…É¥t‰½É‘•È‰½É‘•ÈµÉ•´ÔÀÀ¼ÌÀÉ½Õ¹‘•µá°À´Øµ…àµÜµÍ´ˆø4(€€€€€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµÉ•´ÐÀÀÑ•áÐµÍ´µˆ´ÌˆùáÑÉ…Ñ¥½¸™…¥±•ð½Àø4(€€€€€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµÉ…ä´ÐÀÀÑ•áÐµáÌˆùí•áÑÉ…ÑÉÉ½Éôð½Àø4(€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€ð½‘¥Øø4(€€€€€€¥ô4(4(€€€€€ì¼¨áÑÉ…Ñ¥½¸½¹™¥É´µ½‘…°€¨½ô4(€€€€€í•áÑÉ…Ñ•‘MÕ•ÍÑ¥½¹Ì€˜˜€ 4(€€€€€€€€ñáÑÉ…Ñ¥½¹½¹™¥Éµ5½‘…°4(€€€€€€€€€ÍÕ•ÍÑ¥½¹Ìõí•áÑÉ…Ñ•‘MÕ•ÍÑ¥½¹Íô4(€€€€€€€€€½¹…¹•°õì ¤€ôøìÍ•ÑáÑÉ…Ñ•‘MÕ•ÍÑ¥½¹Ì¡¹Õ±°¤ìÍ•ÑQ…É•ÑA•ÉÍ½¹%¡¹Õ±°¤ìõô4(€€€€€€€€€½¹½¹™¥É´õí½¹½¹™¥ÉµáÑÉ…Ñ¥½¹ô4(€€€€€€€€¼ø4(€€€€€€¥ô4(4(€€€€€ì¼¨½Õµ•¹ÐÙ¥•Ý•È€¨½ô4(€€€€€íÙ¥•Ý•É¥±”€˜˜€ 4(€€€€€€€€ñ‘¥ØÉ•˜õíÙ¥•Ý•ÉI•™ô±…ÍÍ9…µ”ô‰™¥á•¥¹Í•Ð´Àè´ÔÀ‰œµ‰±…¬¼äÀ™±•à™±•àµ½°ˆ½¹±¥¬õí¡…¹‘±•±½Í•Y¥•Ý•ÉôÉ½±”ô‰‘¥…±½œˆ…É¥„µµ½‘…°ô‰ÑÉÕ”ˆø4(€€€€€€€€€€ñ‘¥Ø½¹±¥¬õí”€ôø”¹ÍÑ½ÁAÉ½Á……Ñ¥½¸ ¥ô±…ÍÍ9…µ”ô‰™±•à¥Ñ•µÌµ•¹Ñ•È…À´ÈÁà´ÌÁä´È¸Ô‰½É‘•Èµˆ‰½É‘•ÈµÝ¡¥Ñ”¼ÄÀˆø4(€€€€€€€€€€€€ñÍÁ…¸±…ÍÍ9…µ”ô‰Ñ•áÐµÝ¡¥Ñ”¼äÀÑ•áÐµÍ´™½¹Ðµµ•‘¥Õ´ÑÉÕ¹…Ñ”™±•à´Äµ¥¸µÜ´ÀˆùíÙ¥•Ý•É¥±”¹™¥±•9…µ•ôð½ÍÁ…¸ø4(€€€€€€€€€€€€ñ‰ÕÑÑ½¸4(€€€€€€€€€€€€€½¹±¥¬õì ¤€ôøì½¹ÍÐ‘É¥Ù•%€ôÙ¥•Ý•É¥±”¹™¥±•UÉ°ü¹µ…Ñ  ½lü™u¥ô¡m„µéµhÀ´å|µt¬¤¼¤ü¹lÅtì¥˜€ …‘É¥Ù•%¤É•ÑÕÉ¸ì•Ñ…¡•‘	±½ˆ¡‘É¥Ù•%°…Íå¹Œ€ ¤€ôøì½¹ÍÐÉ•Ì€ô…Ý…¥Ð…Á¤¹•Ð¡€½‘É¥Ù”½‘½Ý¹±½…¼‘í‘É¥Ù•%‘õ€°íÉ•ÍÁ½¹Í•QåÁ”è‰±½ˆô¤ìÉ•ÑÕÉ¸¹•Ü	±½ˆ¡mÉ•Ì¹‘…Ñ…t°íÑåÁ”èMÑÉ¥¹œ¡É•Ì¹¡•…‘•ÉÍl½¹Ñ•¹ÐµÑåÁ”t€üü€…ÁÁ±¥…Ñ¥½¸½Á‘˜œ¥ô¤ìô¤¹Ñ¡•¸¡‰±½ˆ€ôøìÁÉ¥¹Ñ	±½ˆ¡‰±½ˆ¤ìô¤¹…Ñ  ¡•ÉÈ¤€ôøìÑ½…ÍÐ¹•ÉÉ½È …¥±•Ñ¼±½…è€œ€¬€¡•ÉÈ¹µ•ÍÍ…”ñð€Õ¹­¹½Ý¸œ¤¤ìô¤ìõô(€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰™±•à¥Ñ•µÌµ•¹Ñ•È…À´Ä¸ÔÁà´ÌÁä´Ä¸ÔÉ½Õ¹‘•µ™Õ±°Ñ•áÐµáÌ™½¹ÐµÍ•µ¥‰½±Ñ•áÐµÝ¡¥Ñ”Í¡É¥¹¬´Àˆ4(€€€€€€€€€€€€€ÍÑå±”õíì‰…­É½Õ¹è€±¥¹•…ÈµÉ…‘¥•¹Ð ÄàÁ‘•œ°¡Í° ÈÜ€äÔ”€Ôà”¤°¡Í° ÈÈ€äÈ”€ÔÀ”¤¤œõô4(€€€€€€€€€€€€€Ñ¥Ñ±”ô‰AÉ¥¹Ðˆ4(€€€€€€€€€€€€ø4(€€€€€€€€€€€€€€ñAÉ¥¹Ñ•ÈÍ¥é”õìÄÕôÝ•¥¡Ðô‰‰½±ˆ€¼øñÍÁ…¸±…ÍÍ9…µ”ô‰¡¥‘‘•¸Í´é¥¹±¥¹”ˆùAÉ¥¹Ðð½ÍÁ…¸ø4(€€€€€€€€€€€€ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€ñ‰ÕÑÑ½¸4(€€€€€€€€€€€€€½¹±¥¬õì ¤€ôøì½¹ÍÐ‘É¥Ù•%€ôÙ¥•Ý•É¥±”¹™¥±•UÉ°ü¹µ…Ñ  ½lü™u¥ô¡m„µéµhÀ´å|µt¬¤¼¤ü¹lÅtì¥˜€ …‘É¥Ù•%¤É•ÑÕÉ¸ìÝ¥¹‘½Ü¹½Á•¸ œ½…ÁÀ½Á¡½Ñ¼ý™¥±•%ôœ€¬‘É¥Ù•%°€}‰±…¹¬œ¤ìõô4(€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰™±•à¥Ñ•µÌµ•¹Ñ•È…À´Ä¸ÔÁà´ÌÁä´Ä¸ÔÉ½Õ¹‘•µ™Õ±°Ñ•áÐµáÌ™½¹Ðµµ•‘¥Õ´Ñ•áÐµÝ¡¥Ñ”‰œµÝ¡¥Ñ”¼ÄÀ¡½Ù•Èé‰œµÝ¡¥Ñ”¼ÈÀÍ¡É¥¹¬´Àˆ4(€€€€€€€€€€€€€Ñ¥Ñ±”ô‰=Á•¸¥¸A¡½Ñ¼Q½½°ˆ4(€€€€€€€€€€€€ø4(€€€€€€€€€€€€€€ñ…µ•É„Í¥é”õìÄÕô€¼øñÍÁ…¸±…ÍÍ9…µ”ô‰¡¥‘‘•¸Í´é¥¹±¥¹”ˆùA¡½Ñ¼Q½½°ð½ÍÁ…¸ø4(€€€€€€€€€€€€ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õí¡…¹‘±•±½Í•Y¥•Ý•Éô±…ÍÍ9…µ”ô‰™±•à¥Ñ•µÌµ•¹Ñ•È…À´Ä¸ÔÁà´ÌÁä´Ä¸ÔÉ½Õ¹‘•µ™Õ±°Ñ•áÐµáÌ™½¹Ðµµ•‘¥Õ´Ñ•áÐµÝ¡¥Ñ”‰œµÝ¡¥Ñ”¼ÄÀ¡½Ù•Èé‰œµÝ¡¥Ñ”¼ÈÀÍ¡É¥¹¬´ÀˆÑ¥Ñ±”ô‰±½Í”ˆø4(€€€€€€€€€€€€€€ñ`Í¥é”õìÄÕô€¼øñÍÁ…¸±…ÍÍ9…µ”ô‰¡¥‘‘•¸Í´é¥¹±¥¹”ˆù±½Í”ð½ÍÁ…¸ø4(€€€€€€€€€€€€ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™±•à´Ä™±•à¥Ñ•µÌµ•¹Ñ•È©ÕÍÑ¥™äµ•¹Ñ•ÈÀ´Ì½Ù•É™±½Üµ…ÕÑ¼ˆ½¹±¥¬õí¡…¹‘±•±½Í•Y¥•Ý•Éôø4(€€€€€€€€€€€€ñ‘¥Ø½¹±¥¬õí”€ôø”¹ÍÑ½ÁAÉ½Á……Ñ¥½¸ ¥ô±…ÍÍ9…µ”ô‰™±•à¥Ñ•µÌµ•¹Ñ•È©ÕÍÑ¥™äµ•¹Ñ•Èµ…àµÜµ™Õ±°µ…àµ µ™Õ±°ˆø4(€€€€€€€€€€€€€ì  ¤€ôøì4(€€€€€€€€€€€€€€€½¹ÍÐ•áÐ€ôÙ¥•Ý•É¥±”¹™¥±•9…µ”ü¹ÍÁ±¥Ð œ¸œ¤¹Á½À ¤ü¹Ñ½1½Ý•É…Í” ¤ñð€œœì4(€€€€€€€€€€€€€€€½¹ÍÐ‘É¥Ù•%€ôÙ¥•Ý•É¥±”¹™¥±•UÉ°ü¹µ…Ñ  ½lü™u¥ô¡m„µéµhÀ´å|µt¬¤¼¤ü¹lÅtñð€œœì4(€€€€€€€€€€€€€€€½¹ÍÐ¥µUÉ°€ô‘É¥Ù•%€ü¡ÑÑÁÌè¼½‘É¥Ù”¹½½±”¹½´½Ñ¡Õµ‰¹…¥°ý¥ô‘í‘É¥Ù•%‘ô™ÍèõÜÄÈÀÁ€€èÙ¥•Ý•É¥±”¹™¥±•UÉ°ñð€œœì4(€€€€€€€€€€€€€€€½¹ÍÐÁÉ•Ù¥•ÝUÉ°€ô‘É¥Ù•%€ü¡ÑÑÁÌè¼½‘É¥Ù”¹½½±”¹½´½™¥±”½¼‘í‘É¥Ù•%‘ô½ÁÉ•Ù¥•Ý€€è€œœì4(€€€€€€€€€€€€€€€¥˜€¡l©Áœœ°©Á•œœ°Á¹œœ°¥˜œ°Ý•‰Àœ°‰µÀt¹¥¹±Õ‘•Ì¡•áÐ¤¤É•ÑÕÉ¸€ñ¥µœÍÉŒõí¥µUÉ±ô±…ÍÍ9…µ”ô‰µ…àµÜµ™Õ±°µ…àµ µlàÁÙ¡t½‰©•Ðµ½¹Ñ…¥¸É½Õ¹‘•µ±œˆ€¼øì4(€€€€€€€€€€€€€€€¥˜€¡lµÀÐœ°œÍÀœ°µ½Øœ°…Ù¤œ°Ý•‰´t¹¥¹±Õ‘•Ì¡•áÐ¤¤É•ÑÕÉ¸ÁÉ•Ù¥•ÝUÉ°€ü€ñ¥™É…µ”ÍÉŒõíÁÉ•Ù¥•ÝUÉ±ô±…ÍÍ9…µ”ô‰ÜµläÉÙÝtµ…àµÜ´Íá° µlÜÉÙ¡tÉ½Õ¹‘•µ±œ‰½É‘•È´Àˆ€¼ø€è¹Õ±°ì4(€€€€€€€€€€€€€€€¥˜€¡•áÐ€ôôô€Á‘˜œ¤É•ÑÕÉ¸ÁÉ•Ù¥•ÝUÉ°€ü€ñ¥™É…µ”ÍÉŒõíÁÉ•Ù¥•ÝUÉ±ô±…ÍÍ9…µ”ô‰ÜµläÉÙÝtµ…àµÜ´Íá° µlàÁÙ¡tÉ½Õ¹‘•µ±œ‰½É‘•È´ÀˆÑ¥Ñ±”ô‰Aˆ€¼ø€è¹Õ±°ì4(€€€€€€€€€€€€€€€É•ÑÕÉ¸€ñ‘¥Ø±…ÍÍ9…µ”ô‰‰œµÝ¡¥Ñ”¼ÄÀÉ½Õ¹‘•µá°À´àÑ•áÐµ•¹Ñ•ÈˆøñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµÝ¡¥Ñ”ˆùíÙ¥•Ý•É¥±”¹™¥±•9…µ•ôð½Àøð½‘¥Øøì4(€€€€€€€€€€€€€ô¤ ¥ô4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€ð½‘¥Øø4(€€€€€€¥ô4(€€€€ð½‘¥Øø4(€€¤ì4)ô4(4)™Õ¹Ñ¥½¸ÕÍÑ½µ•ÉA¥­•È¡ì½¹…¹•°°½¹½¹™¥É´°‘½½Õ¹Ðôèì½¹…¹•°è€ ¤€ôøÙ½¥ì½¹½¹™¥É´è€¡Á•ÉÍ½¹%èÍÑÉ¥¹œ¤€ôøÙ½¥ì‘½½Õ¹Ðè¹Õµ‰•Èô¤ì4(€½¹ÍÐm¡½ÕÍ•¡½±‘Ì°Í•Ñ!½ÕÍ•¡½±‘Ít€ôÕÍ•MÑ…Ñ”ñ!½ÕÍ•¡½±‘mtø¡mt¤ì4(€½¹ÍÐmÍ¡½ÝÉ•…Ñ”°Í•ÑM¡½ÝÉ•…Ñ•t€ôÕÍ•MÑ…Ñ”¡™…±Í”¤ì4(€½¹ÍÐm™½É´°Í•Ñ½Éµt€ôÕÍ•MÑ…Ñ”¡ìÁ¡½¹”è€œœ°¹…µ”è€œœ°É•±…Ñ¥½¹Í¡¥Àè€Í•±˜œô¤ì4(4(€ÕÍ•™™•Ð  ¤€ôøì…Á¤¹•Ð œ½ÕÍÑ½µ•ÉÌ½¡½ÕÍ•¡½±‘Ìœ¤¹Ñ¡•¸¡È€ôøÍ•Ñ!½ÕÍ•¡½±‘Ì¡È¹‘…Ñ„¤¤ìô°mt¤ì4(4(€½¹ÍÐ¡…¹‘±•É•…Ñ•A•ÉÍ½¸€ô…Íå¹Œ€¡Á¡½¹”èÍÑÉ¥¹œ°¹…µ”èÍÑÉ¥¹œ°É•±…Ñ¥½¹Í¡¥ÀèÍÑÉ¥¹œ¤€ôøì4(€€€½¹ÍÐÈ€ô…Ý…¥Ð…Á¤¹Á½ÍÐ œ½ÕÍÑ½µ•ÉÌ½Á•ÉÍ½¹Ìœ°ìÁ¡½¹”°¹…µ”°‘¥ÍÁ±…å1…‰•°è¹…µ”°É•±…Ñ¥½¹Í¡¥Àô¤ì4(€€€É•ÑÕÉ¸È¹‘…Ñ„¹¥ì4(€ôì4(4(€½¹ÍÐ¡…¹‘±•EÕ¥­É•…Ñ”€ô…Íå¹Œ€ ¤€ôøì4(€€€¥˜€ …™½É´¹Á¡½¹”ñð€…™½É´¹¹…µ”¤É•ÑÕÉ¸ì4(€€€½¹ÍÐ¥€ô…Ý…¥Ð¡…¹‘±•É•…Ñ•A•ÉÍ½¸¡™½É´¹Á¡½¹”°™½É´¹¹…µ”°™½É´¹É•±…Ñ¥½¹Í¡¥À¤ì4(€€€½¹½¹™¥É´¡¥¤ì4(€ôì4(4(€É•ÑÕÉ¸€ 4(€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥á•¥¹Í•Ð´Àè´ÔÀ‰œµ‰±…¬¼àÀ™±•à¥Ñ•µÌµ•¹Ñ•È©ÕÍÑ¥™äµ•¹Ñ•ÈÀ´Ðˆ½¹±¥¬õí½¹…¹•±ôø4(€€€€€€ñ‘¥Ø½¹±¥¬õí”€ôø”¹ÍÑ½ÁAÉ½Á……Ñ¥½¸ ¥ô±…ÍÍ9…µ”ô‰‰œµmÙ…È ´µ…É¥t‰½É‘•È‰½É‘•ÈµmÙ…È ´µ‰½É‘•È¥tÉ½Õ¹‘•µá°À´Ôµ…àµÜµµÜµ™Õ±°µ…àµ µlàÁÙ¡t½Ù•É™±½Üµäµ…ÕÑ¼ˆø4(€€€€€€€€ñ Ì±…ÍÍ9…µ”ô‰Ñ•áÐµ‰…Í”™½¹Ðµ‰½±Ñ•áÐµÝ¡¥Ñ”µˆ´Äˆù	Õ¥±ÁÉ½™¥±”™É½´í‘½½Õ¹Ñô‘½Õµ•¹Ñí‘½½Õ¹Ð€„ôô€Ä€ü€Ìœ€è€œôð½ Ìø4(€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµáÌÑ•áÐµÉ…ä´ÔÀÀµˆ´ÐˆùM•±•Ð…¸•á¥ÍÑ¥¹œÁ•ÉÍ½¸°½ÈÉ•…Ñ”„¹•Ü½¹”ð½Àø4(4(€€€€€€€ì…Í¡½ÝÉ•…Ñ”€ü€ 4(€€€€€€€€€€ðø4(€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰ÍÁ…”µä´Ìµˆ´Ðˆø4(€€€€€€€€€€€€€í¡½ÕÍ•¡½±‘Ì¹µ…À¡ €ôø€ 4(€€€€€€€€€€€€€€€€ñ‘¥Ø­•äõí ¹Á¡½¹•ôø4(€€€€€€€€€€€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµlÄÁÁátÑ•áÐµÉ…ä´ÔÀÀÕÁÁ•É…Í”µˆ´ÄÁà´Äˆùí ¹Á¡½¹•ôð½Àø4(€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰ÍÁ…”µä´Äˆø4(€€€€€€€€€€€€€€€€€€€í ¹Á•ÉÍ½¹Ì¹µ…À¡À€ôø€ 4(€€€€€€€€€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸­•äõíÀ¹¥‘ô½¹±¥¬õì ¤€ôø½¹½¹™¥É´¡À¹¥¥ô4(€€€€€€€€€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰Üµ™Õ±°Ñ•áÐµ±•™ÐÁà´ÌÁä´ÈÉ½Õ¹‘•µ±œ‰œµÝ¡¥Ñ”¼Ô¡½Ù•Èé‰œµÝ¡¥Ñ”½lÀ¸ÀÑtÑ•áÐµÍ´Ñ•áÐµÝ¡¥Ñ”™±•à¥Ñ•µÌµ•¹Ñ•È…À´Èˆø4(€€€€€€€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ü´Ü ´ÜÉ½Õ¹‘•µ™Õ±°‰œµ‰±Õ”´ØÀÀ¼ÌÀ™±•à¥Ñ•µÌµ•¹Ñ•È©ÕÍÑ¥™äµ•¹Ñ•ÈÑ•áÐµáÌ™½¹Ðµ‰½±ˆùíÀ¹¹…µ”ü¹lÁuôð½‘¥Øø4(€€€€€€€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™±•à´Äˆø4(€€€€€€€€€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ñ•áÐµÍ´ˆùíÀ¹‘¥ÍÁ±…å1…‰•°ñðÀ¹¹…µ•ôð½‘¥Øø4(€€€€€€€€€€€€€€€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰Ñ•áÐµlÄÁÁátÑ•áÐµÉ…ä´ÔÀÀ…Á¥Ñ…±¥é”ˆùíÀ¹É•±…Ñ¥½¹Í¡¥Áôð½‘¥Øø4(€€€€€€€€€€€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€€€€€€€€€ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€€€€€€€¤¥ô4(€€€€€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€€€¤¥ô4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õì ¤€ôøÍ•ÑM¡½ÝÉ•…Ñ”¡ÑÉÕ”¥ô±…ÍÍ9…µ”ô‰Üµ™Õ±°Áà´ÌÁä´È‰œµ‰±Õ”´ØÀÀÑ•áÐµÝ¡¥Ñ”É½Õ¹‘•µ±œÑ•áÐµÍ´¡½Ù•Èé‰œµ‰±Õ”´ÜÀÀˆø¬É•…Ñ”9•ÜA•ÉÍ½¸ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€ð¼ø4(€€€€€€€€¤€è€ 4(€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰ÍÁ…”µä´Ìˆø4(€€€€€€€€€€€€ñ‘¥Øø4(€€€€€€€€€€€€€€ñ±…‰•°±…ÍÍ9…µ”ô‰Ñ•áÐµlÄÅÁátÑ•áÐµÉ…ä´ÔÀÀÕÁÁ•É…Í”ˆùA¡½¹”ð½±…‰•°ø4(€€€€€€€€€€€€€€ñ¥¹ÁÕÐÙ…±Õ”õí™½É´¹Á¡½¹•ô½¹¡…¹”õí”€ôøÍ•Ñ½É´¡ì€¸¸¹™½É´°Á¡½¹”è”¹Ñ…É•Ð¹Ù…±Õ”ô¥ô4(€€€€€€€€€€€€€€€Á±…•¡½±‘•ÈôˆäàÈÌÜÐÔÈÌÐˆ4(€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰Üµ™Õ±°µÐ´ÄÁà´ÌÁä´È‰œµmÙ…È ´µÍ•½¹‘…Éä¥t‰½É‘•È‰½É‘•ÈµmÙ…È ´µ‰½É‘•È¥tÉ½Õ¹‘•µ±œÑ•áÐµÍ´Ñ•áÐµÝ¡¥Ñ”½ÕÑ±¥¹”µ¹½¹”ˆ€¼ø4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€ñ‘¥Øø4(€€€€€€€€€€€€€€ñ±…‰•°±…ÍÍ9…µ”ô‰Ñ•áÐµlÄÅÁátÑ•áÐµÉ…ä´ÔÀÀÕÁÁ•É…Í”ˆù9…µ”ð½±…‰•°ø4(€€€€€€€€€€€€€€ñ¥¹ÁÕÐÙ…±Õ”õí™½É´¹¹…µ•ô½¹¡…¹”õí”€ôøÍ•Ñ½É´¡ì€¸¸¹™½É´°¹…µ”è”¹Ñ…É•Ð¹Ù…±Õ”ô¥ô4(€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰Üµ™Õ±°µÐ´ÄÁà´ÌÁä´È‰œµmÙ…È ´µÍ•½¹‘…Éä¥t‰½É‘•È‰½É‘•ÈµmÙ…È ´µ‰½É‘•È¥tÉ½Õ¹‘•µ±œÑ•áÐµÍ´Ñ•áÐµÝ¡¥Ñ”½ÕÑ±¥¹”µ¹½¹”ˆ€¼ø4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€ñ‘¥Øø4(€€€€€€€€€€€€€€ñ±…‰•°±…ÍÍ9…µ”ô‰Ñ•áÐµlÄÅÁátÑ•áÐµÉ…ä´ÔÀÀÕÁÁ•É…Í”ˆùI•±…Ñ¥½¹Í¡¥Àð½±…‰•°ø4(€€€€€€€€€€€€€€ñÍ•±•ÐÙ…±Õ”õí™½É´¹É•±…Ñ¥½¹Í¡¥Áô½¹¡…¹”õí”€ôøÍ•Ñ½É´¡ì€¸¸¹™½É´°É•±…Ñ¥½¹Í¡¥Àè”¹Ñ…É•Ð¹Ù…±Õ”ô¥ô4(€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰Üµ™Õ±°µÐ´ÄÁà´ÌÁä´È‰œµmÙ…È ´µÍ•½¹‘…Éä¥t‰½É‘•È‰½É‘•ÈµmÙ…È ´µ‰½É‘•È¥tÉ½Õ¹‘•µ±œÑ•áÐµÍ´Ñ•áÐµÝ¡¥Ñ”½ÕÑ±¥¹”µ¹½¹”ˆø4(€€€€€€€€€€€€€€€€ñ½ÁÑ¥½¸Ù…±Õ”ô‰Í•±˜ˆùM•±˜ð½½ÁÑ¥½¸ø4(€€€€€€€€€€€€€€€€ñ½ÁÑ¥½¸Ù…±Õ”ô‰ÍÁ½ÕÍ”ˆùMÁ½ÕÍ”ð½½ÁÑ¥½¸ø4(€€€€€€€€€€€€€€€€ñ½ÁÑ¥½¸Ù…±Õ”ô‰Á…É•¹ÐˆùA…É•¹Ðð½½ÁÑ¥½¸ø4(€€€€€€€€€€€€€€€€ñ½ÁÑ¥½¸Ù…±Õ”ô‰¡¥±ˆù¡¥±ð½½ÁÑ¥½¸ø4(€€€€€€€€€€€€€€€€ñ½ÁÑ¥½¸Ù…±Õ”ô‰Í¥‰±¥¹œˆùM¥‰±¥¹œð½½ÁÑ¥½¸ø4(€€€€€€€€€€€€€€€€ñ½ÁÑ¥½¸Ù…±Õ”ô‰½Ñ¡•Èˆù=Ñ¡•Èð½½ÁÑ¥½¸ø4(€€€€€€€€€€€€€€ð½Í•±•Ðø4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™±•à…À´ÈÁÐ´Èˆø4(€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õí¡…¹‘±•EÕ¥­É•…Ñ•ô‘¥Í…‰±•õì…™½É´¹Á¡½¹”ñð€…™½É´¹¹…µ•ô4(€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰™±•à´ÄÁà´ÌÁä´È‰œµÉ••¸´ØÀÀÑ•áÐµÝ¡¥Ñ”É½Õ¹‘•µ±œÑ•áÐµÍ´‘¥Í…‰±•é½Á…¥Ñä´ÔÀˆùÉ•…Ñ”€˜UÍ”ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õì ¤€ôøÍ•ÑM¡½ÝÉ•…Ñ”¡™…±Í”¥ô±…ÍÍ9…µ”ô‰Áà´ÌÁä´È‰œµÝ¡¥Ñ”¼ÔÑ•áÐµÉ…ä´ÐÀÀÉ½Õ¹‘•µ±œÑ•áÐµÍ´ˆù	…¬ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€¥ô4(4(€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õí½¹…¹•±ô±…ÍÍ9…µ”ô‰Üµ™Õ±°µÐ´ÌÑ•áÐµáÌÑ•áÐµÉ…ä´ÔÀÀ¡½Ù•ÈéÑ•áÐµÝ¡¥Ñ”ˆù…¹•°ð½‰ÕÑÑ½¸ø4(€€€€€€ð½‘¥Øø4(€€€€ð½‘¥Øø4(€€¤ì4)ô4(4)™Õ¹Ñ¥½¸áÑÉ…Ñ¥½¹½¹™¥Éµ5½‘…°¡ìÍÕ•ÍÑ¥½¹Ì°½¹…¹•°°½¹½¹™¥É´ôè…¹ä¤ì4(€½¹ÍÐm…•ÁÑ•°Í•Ñ•ÁÑ•‘t€ôÕÍ•MÑ…Ñ”ñI•½ÉñÍÑÉ¥¹œ°…¹äøø¡ì€¸¸¹ÍÕ•ÍÑ¥½¹Ìô¤ì4(4(€½¹ÍÐÑ½±”€ô€¡­•äèÍÑÉ¥¹œ¤€ôøì4(€€€Í•Ñ•ÁÑ• ¡ÁÉ•Øè…¹ä¤€ôøì4(€€€€€½¹ÍÐ¹•áÐ€ôì€¸¸¹ÁÉ•Øôì4(€€€€€¥˜€¡¹•áÑm­•åt¤‘•±•Ñ”¹•áÑm­•åtì4(€€€€€•±Í”¹•áÑm­•åt€ôÍÕ•ÍÑ¥½¹Ím­•åtì4(€€€€€É•ÑÕÉ¸¹•áÐì4(€€€ô¤ì4(€ôì4(€½¹ÍÐÕÁ‘…Ñ•Y…±Õ”€ô€¡­•äèÍÑÉ¥¹œ°Ù…±Õ”èÍÑÉ¥¹œ¤€ôøì4(€€€Í•Ñ•ÁÑ• ¡ÁÉ•Øè…¹ä¤€ôø€¡ì€¸¸¹ÁÉ•Ø°m­•åtèì€¸¸¹ÁÉ•Ùm­•åt°Ù…±Õ”°Í½ÕÉ”è€‘½Õµ•¹Ñ}½ÉÉ•Ñ•œôô¤¤ì4(€ôì4(4(€É•ÑÕÉ¸€ 4(€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™¥á•¥¹Í•Ð´Àè´ÔÀ‰œµ‰±…¬¼àÀ™±•à¥Ñ•µÌµ•¹Ñ•È©ÕÍÑ¥™äµ•¹Ñ•ÈÀ´Ðˆ½¹±¥¬õí½¹…¹•±ôø4(€€€€€€ñ‘¥Ø½¹±¥¬õí”€ôø”¹ÍÑ½ÁAÉ½Á……Ñ¥½¸ ¥ô±…ÍÍ9…µ”ô‰‰œµmÙ…È ´µ…É¥t‰½É‘•È‰½É‘•Èµ‰±Õ”´ÔÀÀ¼ÌÀÉ½Õ¹‘•µá°À´Ôµ…àµÜµ±œÜµ™Õ±°µ…àµ µlàÕÙ¡t½Ù•É™±½Üµäµ…ÕÑ¼ˆø4(€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµÍ´™½¹Ðµµ•‘¥Õ´Ñ•áÐµ‰±Õ”´ÐÀÀµˆ´ÌˆùI•Ù¥•Ü•áÑÉ…Ñ•™¥•±‘Ìð½Àø4(€€€€€€€€ñÀ±…ÍÍ9…µ”ô‰Ñ•áÐµáÌÑ•áÐµÉ…ä´ÔÀÀµˆ´ÐˆùU¹¡•¬™¥•±‘ÌÑ¼Í­¥À¸‘¥ÐÙ…±Õ•Ì¥¹±¥¹”¸½¹™¥É´Ñ¼Í…Ù”Ý¥Ñ ÁÉ½Ù•¹…¹”¸ð½Àø4(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰ÍÁ…”µä´Èµˆ´Ðˆø4(€€€€€€€€€í=‰©•Ð¹•¹ÑÉ¥•Ì¡ÍÕ•ÍÑ¥½¹Ì¤¹µ…À ¡m¬°ÙtèmÍÑÉ¥¹œ°…¹åt¤€ôø€ 4(€€€€€€€€€€€€ñ‘¥Ø­•äõí­ô±…ÍÍ9…µ”ô‰™±•à¥Ñ•µÌµ•¹Ñ•È…À´Èˆø4(€€€€€€€€€€€€€€ñ¥¹ÁÕÐÑåÁ”ô‰¡•­‰½àˆ¡•­•õì„……•ÁÑ•‘m­uô½¹¡…¹”õì ¤€ôøÑ½±”¡¬¥ô±…ÍÍ9…µ”ô‰…•¹Ðµ‰±Õ”´ÔÀÀˆ€¼ø4(€€€€€€€€€€€€€€ñÍÁ…¸±…ÍÍ9…µ”ô‰Ñ•áÐµáÌÑ•áÐµÉ…ä´ÐÀÀÜ´ÈÐ…Á¥Ñ…±¥é”Í¡É¥¹¬´Àˆùí¬¹É•Á±…” ½|½œ°€œ€œ¥ôð½ÍÁ…¸ø4(€€€€€€€€€€€€€€ñ¥¹ÁÕÐ4(€€€€€€€€€€€€€€€Ù…±Õ”õí…•ÁÑ•‘m­tü¹Ù…±Õ”ñðØ¹Ù…±Õ”ñð€œô4(€€€€€€€€€€€€€€€½¹¡…¹”õí”€ôøÕÁ‘…Ñ•Y…±Õ”¡¬°”¹Ñ…É•Ð¹Ù…±Õ”¥ô4(€€€€€€€€€€€€€€€‘¥Í…‰±•õì……•ÁÑ•‘m­uô4(€€€€€€€€€€€€€€€±…ÍÍ9…µ”ô‰™±•à´ÄÁà´ÈÁä´Ä‰œµmÙ…È ´µÍ•½¹‘…Éä¥t‰½É‘•È‰½É‘•ÈµmÙ…È ´µ‰½É‘•È¥tÉ½Õ¹‘•Ñ•áÐµáÌÑ•áÐµÝ¡¥Ñ”½ÕÑ±¥¹”µ¹½¹”‘¥Í…‰±•é½Á…¥Ñä´ÔÀˆ€¼ø4(€€€€€€€€€€€€ð½‘¥Øø4(€€€€€€€€€€¤¥ô4(€€€€€€€€ð½‘¥Øø4(€€€€€€€€ñ‘¥Ø±…ÍÍ9…µ”ô‰™±•à…À´Èˆø4(€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õì ¤€ôø½¹½¹™¥É´¡…•ÁÑ•¥ô±…ÍÍ9…µ”ô‰™±•à´ÄÁà´ÌÁä´Ä¸Ô‰œµÉ••¸´ØÀÀÑ•áÐµÝ¡¥Ñ”Ñ•áÐµÍ´É½Õ¹‘•ˆù½¹™¥É´€˜M…Ù”ð½‰ÕÑÑ½¸ø4(€€€€€€€€€€ñ‰ÕÑÑ½¸½¹±¥¬õí½¹…¹•±ô±…ÍÍ9…µ”ô‰Áà´ÌÁä´Ä¸Ô‰œµÝ¡¥Ñ”¼ÔÑ•áÐµÉ…ä´ÐÀÀÑ•áÐµÍ´É½Õ¹‘•ˆù…¹•°ð½‰ÕÑÑ½¸ø4(€€€€€€€€ð½‘¥Øø4(€€€€€€ð½‘¥Øø4(€€€€ð½‘¥Øø4(€€¤ì4)ô4(4(
