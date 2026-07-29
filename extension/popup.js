@@ -21,6 +21,24 @@ const progressInner = document.getElementById('progress-inner');
 const resultsEl = document.getElementById('results');
 document.getElementById('ver').textContent = 'v' + VERSION;
 
+// Side panel stays open across tab switches — always resolve the active *page* tab
+// (never chrome:// or the extension itself).
+async function getActivePageTab() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  let tab = tabs[0];
+  if (!tab?.url || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
+    const allTabs = await chrome.tabs.query({ currentWindow: true });
+    tab = allTabs.find(t =>
+      t.url &&
+      !t.url.startsWith('chrome') &&
+      !t.url.startsWith('edge://') &&
+      !t.url.startsWith('about:') &&
+      !t.url.startsWith('devtools:')
+    ) || tab;
+  }
+  return tab || null;
+}
+
 function showStatus(msg, color) {
   statusEl.textContent = msg;
   statusEl.style.color = color || '#f59e0b';
@@ -44,14 +62,14 @@ const KNOWN_SITES = {
 
 async function detectSite() {
   try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    let tab = tabs[0];
-    // If popup is opened as a tab, find the real target tab
-    if (!tab?.url || tab.url.startsWith('chrome-extension://')) {
-      const allTabs = await chrome.tabs.query({ currentWindow: true });
-      tab = allTabs.find(t => t.url && !t.url.startsWith('chrome') && !t.url.startsWith('about')) || tab;
+    const tab = await getActivePageTab();
+    if (!tab?.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
+      siteIcon.textContent = '🌐';
+      siteName.textContent = 'No page detected';
+      const conf = document.getElementById('site-confidence');
+      if (conf) conf.style.display = 'none';
+      return;
     }
-    if (!tab?.url || tab.url.startsWith('chrome')) { siteName.textContent = 'No page detected'; return; }
     const url = new URL(tab.url);
     const host = url.hostname.replace('www.', '');
     const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
@@ -60,6 +78,20 @@ async function detectSite() {
     // Network-effect confidence badge: "filled 29× by operators · 100%"
     fetchConfidence(host);
   } catch { siteName.textContent = 'Unknown page'; }
+}
+
+// Keep site bar in sync while the side panel stays open
+if (chrome.tabs?.onActivated) {
+  chrome.tabs.onActivated.addListener(() => { detectSite(); });
+}
+if (chrome.tabs?.onUpdated) {
+  chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+    if (info.status === 'complete' || info.url) {
+      chrome.tabs.query({ active: true, currentWindow: true }).then(([active]) => {
+        if (active?.id === tabId) detectSite();
+      }).catch(() => {});
+    }
+  });
 }
 
 async function fetchConfidence(host) {
@@ -374,8 +406,11 @@ fillBtn.addEventListener('click', async () => {
   saveRecent(selectedProfile.id);
 
   try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = await getActivePageTab();
     if (!tab?.id) { showStatus('No active tab', '#ef4444'); hideProgress(); return; }
+    if (!tab.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://')) {
+      showStatus('Open a form page first', '#ef4444'); hideProgress(); return;
+    }
     _lastFillTabId = tab.id;
 
     // Capture pre-fill values for undo
@@ -636,7 +671,7 @@ document.getElementById('open-btn').addEventListener('click', async () => {
   const existing = tabs.find(t => t.url?.startsWith(frontendUrl));
   if (existing) { chrome.tabs.update(existing.id, {active:true}); chrome.windows.update(existing.windowId,{focused:true}); }
   else chrome.tabs.create({ url: frontendUrl || 'http://localhost:5173' });
-  window.close();
+  // Side panel stays open (ChatGPT-style) — do not window.close()
 });
 
 // ── AI Agent flow ─────────────────────────────────────────────────────────
@@ -680,7 +715,8 @@ agentBtn.addEventListener('click', async () => {
 
   try {
     const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = await getActivePageTab();
+    if (!tab?.id) throw new Error('No active page tab');
     await injectDriversInto(tab.id);
 
     // Get snapshot + driver list from page via cc.do

@@ -69,7 +69,7 @@ export default function JobDetail() {
     const socket = io(baseUrl, { transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
-    socket.on(`job:${id}:dispatched`, (data: any) => {
+    socket.on(`job:${id}:dispatched`, () => {
       setJob(prev => prev ? { ...prev, status: 'in_progress' } : prev);
     });
 

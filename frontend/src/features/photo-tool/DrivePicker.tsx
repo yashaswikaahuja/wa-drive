@@ -82,7 +82,7 @@ export default function DrivePicker({ open, onClose, onPick }: Props) {
     setError('');
     try {
       const res = await api.get(`/drive/download/${df.id}`, { responseType: 'blob' });
-      const blob = new Blob([res.data], { type: res.headers['content-type'] || 'image/jpeg' });
+      const blob = new Blob([res.data], { type: String(res.headers['content-type'] ?? 'image/jpeg') });
       const file = new File([blob], df.fileName || 'image.jpg', { type: blob.type });
       onPick(file);
       onClose();

@@ -25,6 +25,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes } from "react";
 import { toast } from "sonner";
 
@@ -177,7 +178,7 @@ const StickyNote = ({ children, rotate = "4deg", className = "" }: { children: R
 );
 
 /* Document chip */
-const DocChip = ({ label, icon: Icon, tone = "paper" }: { label: string; icon: any; tone?: "paper" | "ok" }) => (
+const DocChip = ({ label, icon: Icon, tone = "paper" }: { label: string; icon: LucideIcon; tone?: "paper" | "ok" }) => (
   <div
     className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium ${
       tone === "ok"
@@ -1038,7 +1039,7 @@ const Field = ({
 }: {
   id: string;
   label: string;
-  icon: any;
+  icon: LucideIcon;
 } & InputHTMLAttributes<HTMLInputElement>) => (
   <label htmlFor={id} className="block">
     <span className="label-mono mb-1 block text-ink-soft">{label}</span>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Trash, PencilSimple, FileText, Image as ImageIcon,
+  ArrowLeft, Plus, PencilSimple, FileText,
   Sparkle, CheckCircle, X, FilePdf, UserPlus
 } from '@phosphor-icons/react';
 import api from '../../shared/api';

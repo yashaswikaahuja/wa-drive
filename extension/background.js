@@ -4,9 +4,20 @@ function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fi
 
 console.log("[CC] background.js loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
 
+// Side panel (ChatGPT-style right sidebar): toolbar icon opens the panel, not a dropdown popup.
+// Requires sidePanel permission + side_panel.default_path in manifest; no action.default_popup.
+if (chrome.sidePanel?.setPanelBehavior) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => {
+    console.warn('[CC] setPanelBehavior failed:', e?.message || e);
+  });
+}
+
 // Content script handles bridge via manifest injection — no manual injection needed
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[CC] Extension installed/updated');
+  if (chrome.sidePanel?.setPanelBehavior) {
+    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+  }
 });
 
 // SW stays alive via chrome.runtime.onMessage (wakes on demand)

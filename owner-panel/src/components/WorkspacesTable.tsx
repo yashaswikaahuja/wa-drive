@@ -49,10 +49,10 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
           <h2 className="display" style={{ fontSize: 16 }}>Cybercafés</h2>
           <span className="muted num" style={{ fontSize: 13 }}>{fmt(view.length)}</span>
         </div>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           <input
             className="input" type="search" value={q} onChange={e => onQ(e.target.value)}
-            placeholder="Search name…" aria-label="Search cybercafés" style={{ width: 200 }}
+            placeholder="Search name…" aria-label="Search cybercafés" style={{ width: 200, maxWidth: '100%' }}
           />
           <label className="label" htmlFor="band">Health</label>
           <select id="band" className="input" value={band} onChange={e => setBand(e.target.value as BandFilter)} style={{ width: 'auto' }}>

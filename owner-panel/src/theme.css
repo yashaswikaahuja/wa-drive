@@ -155,3 +155,19 @@ tbody tr:hover { background: hsl(var(--bg) / 0.6); }
   color: hsl(var(--muted)); padding: 2px 8px; border-radius: 6px;
 }
 .iconbtn:hover { background: hsl(var(--paper-deep)); color: hsl(var(--ink)); }
+
+/* ── Responsive (phone / tablet) ─────────────────────────────────────────── */
+@media (max-width: 720px) {
+  .wrap { padding: 16px 12px 48px; }
+  /* top-level header + toolbars stack instead of overflowing */
+  .between { flex-wrap: wrap; row-gap: 10px; }
+  .kv { grid-template-columns: 1fr; }
+  .stat__value { font-size: 24px; }
+  thead th, tbody td { padding: 9px 10px; }
+  .drawer__body { padding: 16px; gap: 18px; }
+  .drawer__head { padding: 14px 16px; }
+}
+@media (max-width: 440px) {
+  .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { padding: 13px; }
+}
