@@ -39,12 +39,21 @@ async function getActivePageTab() {
   return tab || null;
 }
 
+// Paper-theme status colors (match frontend .pt-paper)
+const CC = {
+  warning: 'hsl(35 92% 38%)',
+  danger: 'hsl(0 65% 45%)',
+  success: 'hsl(158 60% 28%)',
+  info: 'hsl(22 90% 42%)',
+  muted: 'hsl(30 10% 40%)',
+};
+
 function showStatus(msg, color) {
   statusEl.textContent = msg;
-  statusEl.style.color = color || '#f59e0b';
+  statusEl.style.color = color || CC.warning;
   statusEl.style.display = 'block';
   // Only auto-dismiss non-error messages
-  if (color !== '#ef4444') {
+  if (color !== CC.danger && color !== '#ef4444') {
     setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
   }
 }
@@ -109,7 +118,7 @@ async function fetchConfidence(host) {
       el.style.display = 'block';
     } else {
       el.textContent = `First time on this form — I'll fill what I'm sure about`;
-      el.style.color = '#94a3b8';
+      el.style.color = 'hsl(30 10% 40%)';
       el.style.display = 'block';
     }
   } catch {}
@@ -140,10 +149,10 @@ function showResults(filled, skipped, failed, records) {
   const issues = (records || []).filter(r => r.result && r.result !== 'filled');
   if (issues.length) {
     detailEl.innerHTML = issues.slice(0, 8).map(r => {
-      const color = r.result === 'unmapped' ? '#f59e0b' : '#ef4444';
+      const color = r.result === 'unmapped' ? 'hsl(35 92% 38%)' : 'hsl(0 65% 45%)';
       const label = r.label || r.selector?.replace(/[#.\[\]]/g, '').slice(0, 20) || '?';
       return `<span class="field-tag" style="border-color:${color};color:${color}">${label}</span>`;
-    }).join('') + (issues.length > 8 ? `<span class="field-tag" style="color:#64748b">+${issues.length-8} more</span>` : '');
+    }).join('') + (issues.length > 8 ? `<span class="field-tag" style="color:hsl(30 10% 40%)">+${issues.length-8} more</span>` : '');
     detailEl.style.display = 'flex';
   } else {
     detailEl.style.display = 'none';
@@ -407,9 +416,9 @@ fillBtn.addEventListener('click', async () => {
 
   try {
     const tab = await getActivePageTab();
-    if (!tab?.id) { showStatus('No active tab', '#ef4444'); hideProgress(); return; }
+    if (!tab?.id) { showStatus('No active tab', CC.danger); hideProgress(); return; }
     if (!tab.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://')) {
-      showStatus('Open a form page first', '#ef4444'); hideProgress(); return;
+      showStatus('Open a form page first', CC.danger); hideProgress(); return;
     }
     _lastFillTabId = tab.id;
 
@@ -474,7 +483,7 @@ fillBtn.addEventListener('click', async () => {
         ]
       });
     } catch (e) {
-      showStatus('Failed to load autofill scripts: ' + e.message, '#ef4444');
+      showStatus('Failed to load autofill scripts: ' + e.message, CC.danger);
       hideProgress();
       return;
     }
@@ -630,11 +639,11 @@ fillBtn.addEventListener('click', async () => {
       undoBtn.style.display = 'block';
     } else {
       hideProgress();
-      showStatus(r?.error || 'Fill failed', '#ef4444');
+      showStatus(r?.error || 'Fill failed', CC.danger);
     }
   } catch (e) {
     hideProgress();
-    showStatus('Error: ' + e.message, '#ef4444');
+    showStatus('Error: ' + e.message, CC.danger);
   } finally {
     fillBtn.disabled = false;
     fillBtn.innerHTML = '⚡ Fill Form';
@@ -657,8 +666,8 @@ undoBtn.addEventListener('click', async () => {
     });
     undoBtn.style.display = 'none';
     resultsEl.style.display = 'none';
-    showStatus('↩ Fill undone', '#22c55e');
-  } catch (e) { showStatus('Undo failed: ' + e.message, '#ef4444'); }
+    showStatus('↩ Fill undone', CC.success);
+  } catch (e) { showStatus('Undo failed: ' + e.message, CC.danger); }
 });
 
 // Open CyberControl
@@ -711,7 +720,7 @@ agentBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
   agentBtn.disabled = true;
   agentBtn.textContent = '🤖 ...';
-  showStatus('Snapshotting page + planning…', '#3b82f6');
+  showStatus('Snapshotting page + planning…', CC.info);
 
   try {
     const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
@@ -783,7 +792,7 @@ agentBtn.addEventListener('click', async () => {
     const plan = await planRes.json();
 
     if (!plan.actions || plan.actions.length === 0) {
-      showStatus('Agent returned 0 actions. Check console for raw response.', '#f59e0b');
+      showStatus('Agent returned 0 actions. Check console for raw response.', CC.warning);
       console.log('[CC agent] empty plan, raw:', plan);
       agentBtn.disabled = false;
       agentBtn.textContent = '🤖';
@@ -793,9 +802,9 @@ agentBtn.addEventListener('click', async () => {
     _pendingPlan = { plan, snapshot: pageData.snapshot, tab, profile: flatProfile };
     renderPlan(plan.actions);
     agentPanel.style.display = 'block';
-    showStatus(`Agent proposed ${plan.actions.length} actions (${plan.durationMs}ms, ${plan.model}). Review + execute.`, '#10b981');
+    showStatus(`Agent proposed ${plan.actions.length} actions (${plan.durationMs}ms, ${plan.model}). Review + execute.`, CC.success);
   } catch (e) {
-    showStatus('Agent error: ' + e.message, '#ef4444');
+    showStatus('Agent error: ' + e.message, CC.danger);
     console.error('[CC agent]', e);
   } finally {
     agentBtn.disabled = false;
@@ -806,10 +815,10 @@ agentBtn.addEventListener('click', async () => {
 function renderPlan(actions) {
   agentActionsEl.innerHTML = actions.map((a, i) => {
     const args = JSON.stringify(a.args).slice(0, 80);
-    return `<div style="font-size: 11px; padding: 4px 6px; border-bottom: 1px solid #222; font-family: monospace;">
-      <span style="color: #888;">${i + 1}.</span>
-      <span style="color: #3b82f6;">${a.name}</span>
-      <span style="color: #ccc;">${args}</span>
+    return `<div class="agent-step">
+      <span class="n">${i + 1}.</span>
+      <span class="name">${a.name}</span>
+      <span class="args">${args}</span>
     </div>`;
   }).join('');
 }
@@ -824,7 +833,7 @@ agentExecuteBtn.addEventListener('click', async () => {
   const { plan, snapshot, tab } = _pendingPlan;
   agentExecuteBtn.disabled = true;
   agentExecuteBtn.textContent = '...';
-  showStatus('Executing ' + plan.actions.length + ' actions…', '#3b82f6');
+  showStatus('Executing ' + plan.actions.length + ' actions…', CC.info);
 
   try {
     const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
