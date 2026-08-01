@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { pool } from '../../db.js';
 import { logActivity } from '../../db.js';
 import { authMiddleware } from '../../middleware/auth.js';
-import { WA_SERVICE, WA_SECRET, WA_INSTANCES, WA_DEAD_AFTER_MS } from '../../config.js';
+import { WA_SERVICE, WA_SECRET, WA_DEAD_AFTER_MS } from '../../config.js';
 import { getIO, getWorkspaceQR, setWorkspaceQR, getWorkspaceQRWithAge } from '../../socket/index.js';
 
 const router = Router();
@@ -16,22 +16,16 @@ const router = Router();
 // Backward-compatible: with no WA_INSTANCES / no shard tables, falls back to the single WA_SERVICE.
 
 // Instances that have heartbeat within the dead-after window.
+// Pure DB discovery — no static env list. Any instance that heartbeats is in the pool.
 async function healthyInstances(): Promise<string[]> {
-  if (!WA_INSTANCES.length) return [];
   try {
     const { rows } = await pool.query(
       `SELECT instance FROM wa_instances WHERE last_seen > now() - ($1::double precision * interval '1 millisecond')`,
       [WA_DEAD_AFTER_MS]
     );
-    const live = new Set<string>(rows.map((r: any) => r.instance));
-    const healthy = WA_INSTANCES.filter(i => live.has(i));
-    if (healthy.length) return healthy;
-    // Bootstrap: before ANY instance has heartbeat (fresh deploy), treat all configured instances as
-    // healthy so routing works; once heartbeats exist, an empty result means genuinely all-down.
-    const seen = await pool.query('SELECT 1 FROM wa_instances LIMIT 1');
-    return seen.rows.length ? [] : WA_INSTANCES.slice();
+    return rows.map((r: any) => r.instance as string);
   } catch {
-    return WA_INSTANCES.slice(); // health table absent / DB hiccup → don't break routing
+    return []; // health table absent / DB hiccup
   }
 }
 
@@ -53,19 +47,19 @@ async function pickInstance(): Promise<string | null> {
     );
     // Prefer instances that are accepting; among those, the one with the most headroom (lowest mem_pct).
     const accepting = healthy.filter(i => meta.get(i)?.accepting !== false);
-    const pool_ = accepting.length ? accepting : healthy;
+    const candidates = accepting.length ? accepting : healthy;
     if (!accepting.length) {
       console.warn(`[Hub] WA pool at capacity — no instance is accepting new sessions (healthy=${healthy.join(',')}). Add a shard.`);
     }
-    let best = pool_[0];
+    let best = candidates[0];
     let bestPct = meta.get(best)?.mem_pct ?? 0;
-    for (const inst of pool_) {
+    for (const inst of candidates) {
       const pct = meta.get(inst)?.mem_pct ?? 0;
       if (pct < bestPct) { best = inst; bestPct = pct; }
     }
     return best;
   } catch {
-    // metrics columns absent / DB hiccup → fall back to least-loaded by assignment count (legacy).
+    // metrics columns absent / DB hiccup → fall back to least-loaded by assignment count.
     const { rows } = await pool.query('SELECT instance, count(*)::int AS n FROM wa_assignments GROUP BY instance');
     const counts = new Map<string, number>(rows.map((r: any) => [r.instance, r.n]));
     let best = healthy[0], bestN = counts.get(best) ?? Infinity;
@@ -84,7 +78,7 @@ async function waBase(workspaceId: string): Promise<string> {
       const cur = rows[0].instance as string;
       const healthy = await healthyInstances();
       // STICKY: assigned instance still alive → keep it (the normal path; session never moves).
-      if (!WA_INSTANCES.length || healthy.includes(cur)) return `http://${cur}:3100`;
+      if (healthy.includes(cur)) return `http://${cur}:3100`;
       // FAILOVER (rare): assigned instance is dead (off tailnet). Move to a healthy instance.
       // DB-backed auth → the new instance restores the session, no QR re-scan.
       const target = await pickInstance();
@@ -99,11 +93,12 @@ async function waBase(workspaceId: string): Promise<string> {
         console.log(`[Hub] WA failover ws=${workspaceId.slice(0, 8)}: ${cur} (dead) → ${target}`);
         return `http://${target}:3100`;
       }
-      return `http://${cur}:3100`; // no healthy alternative → keep pointing at current (best effort)
+      // No healthy alternative → keep pointing at current (best effort)
+      return `http://${cur}:3100`;
     }
     // No assignment yet → pin to least-loaded healthy instance.
     const inst = await pickInstance();
-    if (!inst) return WA_SERVICE;
+    if (!inst) return WA_SERVICE; // absolute fallback (bootstrap / all-down)
     await pool.query(
       'INSERT INTO wa_assignments(workspace_id, instance) VALUES($1,$2) ON CONFLICT (workspace_id) DO NOTHING',
       [workspaceId, inst]

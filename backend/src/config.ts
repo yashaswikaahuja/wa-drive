@@ -42,7 +42,7 @@ export const OTP_TTL_MS = Number(process.env.OTP_TTL_MS ?? 10 * 60 * 1000);
 export const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS ?? 5);
 
 export const WORKER_SECRET = process.env.WORKER_SECRET ?? 'worker-secret';
-export const WA_SERVICE = process.env.WA_SERVICE || 'http://cybercontrol-wa:3100';
+export const WA_SERVICE = process.env.WA_SERVICE || 'http://cybercontrol-wa.taild72c71.ts.net:3100';
 export const WA_SECRET = process.env.WA_SECRET || 'wa-service-secret-2024';
 // Comma-separated tailnet hostnames of whatsapp-service shards, e.g. "cybercontrol-wa-1,cybercontrol-wa-2".
 // Empty → single-instance mode (routing falls back to WA_SERVICE).

@@ -24,6 +24,7 @@ import { setupSocket } from './socket/index.js';
 import { loadDriveTokenFromDB } from './modules/drive/service.js';
 import { startExtractionRecovery } from './services/extraction.js';
 import { scheduleHealthMonitor } from './services/healthMonitor.js';
+import { scheduleWaFailover } from './services/waFailover.js';
 
 import authRoutes from './modules/auth/routes.js';
 import processRoutes from './modules/process/routes.js';
@@ -114,6 +115,9 @@ startExtractionRecovery();
 
 // Daily café-health monitor → owner WhatsApp digest on at-risk drops (leader-guarded across instances).
 scheduleHealthMonitor();
+
+// Proactive WA failover — every 60s reassigns workspaces from dead instances to healthy ones.
+scheduleWaFailover();
 
 // Crash prevention
 process.on('uncaughtException', (err) => { console.error('[FATAL] Uncaught:', err.message); });
