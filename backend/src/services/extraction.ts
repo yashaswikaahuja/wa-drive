@@ -78,44 +78,41 @@ function groqKeys(): string[] {
   return raw.split(',').map(k => k.trim()).filter(Boolean);
 }
 
-/** Gemini API key (Google AI Studio). */
-function geminiKey(): string {
-  return process.env['GEMINI_API_KEY'] || '';
+/** Mistral API key. */
+function mistralKey(): string {
+  return process.env['MISTRAL_API_KEY'] || '';
 }
 
-/** Single Gemini vision call. Accepts one or more page images. Falls back to Groq if Gemini unavailable. */
+/** Vision call: Mistral primary → Groq fallback. */
 async function callVision(base64s: string | string[], prompt: string, maxTokens: number): Promise<string> {
-  const gKey = geminiKey();
   const images = (Array.isArray(base64s) ? base64s : [base64s]).slice(0, 3);
 
-  // ── Primary: Gemini 2.0 Flash (if key has quota) ──
-  if (gKey) {
-    const parts: any[] = [{ text: prompt }, ...images.map(b => ({ inline_data: { mime_type: 'image/jpeg', data: b } }))];
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: { maxOutputTokens: maxTokens },
-        }),
-      }
-    );
+  // ── Primary: Mistral (Small 4 — fast, clean JSON, good Indian doc OCR) ──
+  const mKey = mistralKey();
+  if (mKey) {
+    const content: any[] = [{ type: 'text', text: prompt },
+      ...images.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } }))];
+    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${mKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'mistral-small-latest',
+        messages: [{ role: 'user', content }],
+        max_tokens: maxTokens,
+      }),
+    });
     if (response.ok) {
       const data = await response.json() as any;
-      const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '';
-      // Strip any thinking blocks or markdown fences
-      return text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const text = data?.choices?.[0]?.message?.content || '';
+      return text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     }
-    // Don't log 429 (quota) — just fall through to Groq silently
-    if (response.status !== 429) console.warn('[Extract] Gemini failed:', response.status, await response.text().catch(() => ''));
+    if (response.status !== 429) console.warn('[Extract] Mistral failed:', response.status, await response.text().catch(() => ''));
   }
 
-  // ── Fallback: Groq (Qwen) ──
+  // ── Fallback: Groq (Qwen 3.6-27B vision) ──
   const keys = groqKeys();
-  if (!keys.length && !gKey) throw new Error('No vision API key configured (GEMINI_API_KEY or GROQ_API_KEY)');
-  if (!keys.length) throw new Error('Gemini call failed and no GROQ fallback key');
+  if (!keys.length && !mKey) throw new Error('No vision API key configured (MISTRAL_API_KEY or GROQ_API_KEY)');
+  if (!keys.length) throw new Error('Mistral call failed and no GROQ fallback key');
   const content: any[] = [{ type: 'text', text: prompt },
     ...images.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } }))];
   for (let i = 0; i < keys.length; i++) {
