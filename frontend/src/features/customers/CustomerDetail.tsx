@@ -20,6 +20,12 @@ const RELATIONSHIPS = [
   { value: 'sibling', label: 'Sibling' }, { value: 'other', label: 'Other' },
 ];
 
+function DocThumb({ src, isPdf }: { src: string; isPdf: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return isPdf ? <FilePdf size={32} className="text-gray-600" /> : <FileText size={32} className="text-gray-600" />;
+  return <img src={src} className="w-full h-full object-cover" onError={() => setFailed(true)} />;
+}
+
 export default function CustomerDetail() {
   const { id: phoneParam } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -362,14 +368,20 @@ export default function CustomerDetail() {
             {documents.slice(0, 12).map(d => {
               const ext = d.fileName?.split('.').pop()?.toLowerCase() || '';
               const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext);
-              const thumb = d.fileUrl?.replace('sz=w200', 'sz=w400');
+              const isPdf = ext === 'pdf';
+              const driveId = d.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+              const thumb = isImg
+                ? (d.fileUrl?.replace('sz=w200', 'sz=w400'))
+                : isPdf && driveId
+                  ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w400`
+                  : null;
               return (
                 <div key={d.id} className="rounded-xl p-1.5 bg-white/[0.02] border border-white/[0.05]">
                   <div className="rounded-lg bg-[#1c1c1e] overflow-hidden">
-                    <div className="aspect-[4/3] bg-black/40 flex items-center justify-center overflow-hidden">
-                      {isImg ? <img src={thumb} className="w-full h-full object-cover" />
-                        : ext === 'pdf' ? <FilePdf size={32} className="text-gray-600" />
-                          : <FileText size={32} className="text-gray-600" />}
+                    <div className="aspect-[4/3] bg-black/40 flex items-center justify-center overflow-hidden relative">
+                      {thumb
+                        ? <DocThumb src={thumb} isPdf={isPdf} />
+                        : <FileText size={32} className="text-gray-600" />}
                     </div>
                     <div className="p-2.5">
                       <p className="text-[11px] text-gray-400 truncate mb-1.5">{ext.toUpperCase()} · {new Date(d.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
