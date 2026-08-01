@@ -112,8 +112,11 @@ export default function CustomerDetail() {
     setExtractError('');
     setSaving(true);
     try {
-      const fields = { ...acceptedFields };
-      delete (fields as any).document_type; // classification, not a profile field
+      const fields: Record<string, any> = {};
+      for (const [k, v] of Object.entries(acceptedFields)) {
+        if (k === 'document_type') continue;
+        fields[k] = { ...v, source: 'document_corrected' };
+      }
       await api.patch(`/customers/persons/${selectedPerson}`, { fields });
       setExtractedSuggestions(null); setExtractDocId(null);
       await loadPerson(selectedPerson); loadReadiness();
