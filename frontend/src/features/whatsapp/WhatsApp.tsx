@@ -861,13 +861,14 @@ export default function WhatsApp() {
             </button>
             <button
               onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white bg-white/10 hover:bg-white/20 shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shrink-0"
+              style={{ background: 'linear-gradient(180deg, hsl(210 90% 56%), hsl(220 85% 48%))' }}
               title="Open in Photo Tool"
             >
-              <Camera size={15} /><span className="hidden sm:inline">Photo Tool</span>
+              <Camera size={15} weight="bold" /><span className="hidden sm:inline">Photo Tool</span>
             </button>
-            <button onClick={handleCloseViewer} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-white bg-white/10 hover:bg-white/20 shrink-0" title="Close">
-              <X size={15} /><span className="hidden sm:inline">Close</span>
+            <button onClick={handleCloseViewer} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-red-500/80 hover:bg-red-500 shrink-0" title="Close">
+              <X size={15} weight="bold" /><span className="hidden sm:inline">Close</span>
             </button>
           </div>
           <div className="flex-1 flex items-center justify-center p-3 overflow-auto" onClick={handleCloseViewer}>
