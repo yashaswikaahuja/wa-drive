@@ -88,7 +88,7 @@ async function callVision(base64s: string | string[], prompt: string, maxTokens:
   const gKey = geminiKey();
   const images = (Array.isArray(base64s) ? base64s : [base64s]).slice(0, 3);
 
-  // ── Primary: Gemini 2.0 Flash ──
+  // ── Primary: Gemini 2.0 Flash (if key has quota) ──
   if (gKey) {
     const parts: any[] = [{ text: prompt }, ...images.map(b => ({ inline_data: { mime_type: 'image/jpeg', data: b } }))];
     const response = await fetch(
@@ -108,7 +108,8 @@ async function callVision(base64s: string | string[], prompt: string, maxTokens:
       // Strip any thinking blocks or markdown fences
       return text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     }
-    console.warn('[Extract] Gemini failed:', response.status, await response.text().catch(() => ''));
+    // Don't log 429 (quota) — just fall through to Groq silently
+    if (response.status !== 429) console.warn('[Extract] Gemini failed:', response.status, await response.text().catch(() => ''));
   }
 
   // ── Fallback: Groq (Qwen) ──
