@@ -5,7 +5,7 @@ import api, { SOCKET_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
-import { Printer, Camera, X, WhatsappLogo } from '@phosphor-icons/react';
+import { Printer, Camera, X, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle, PaperPlaneTilt, AddressBook, CheckSquare } from '@phosphor-icons/react';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -127,13 +127,13 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
           <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}{category && <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-medium ${category.color}`}>{category.category}</span>}</p>
         </div>
         {!selectionMode && (
-          <div className="flex flex-wrap gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
-            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]">Open</button>
-            <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="text-[10px] px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20">Tag</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20">Print</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]">Photo Tool</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]">Download</button>
-            <button onClick={(e) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }} className="text-[10px] px-2 py-0.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20">Delete</button>
+          <div className="flex flex-wrap gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition">
+            <button onClick={() => onClick(msg)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Open"><Eye size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="p-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" title="Tag"><Tag size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="p-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" title="Print"><Printer size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Photo Tool"><Camera size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Download"><DownloadSimple size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }} className="p-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20" title="Delete"><Trash size={14} /></button>
           </div>
         )}
       </div>
@@ -185,6 +185,7 @@ export default function WhatsApp() {
     try { return new Set(JSON.parse(localStorage.getItem('cc-pinned-chats') || '[]')); } catch { return new Set(); }
   });
   const [msgSearch, setMsgSearch] = useState('');
+  const [dpPreview, setDpPreview] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
@@ -724,8 +725,10 @@ export default function WhatsApp() {
           <>
             <div className="min-h-[3.5rem] px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
               <button onClick={() => setSelectedChat(null)} className="md:hidden -ml-1 text-2xl leading-none pt-muted hover:text-[hsl(var(--pt-ink))]" aria-label="Back to inbox">‹</button>
-              <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm">
-                {activeChat.name[0]?.toUpperCase()}
+              <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm overflow-hidden cursor-pointer shrink-0"
+                onClick={() => activeChat.dpUrl && setDpPreview(activeChat.dpUrl)}>
+                {activeChat.dpUrl ? <img src={activeChat.dpUrl} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none'; }} /> : null}
+                {!activeChat.dpUrl && (activeChat.name[0]?.toUpperCase() || '?')}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white truncate">{activeChat.name}</p>
@@ -734,10 +737,10 @@ export default function WhatsApp() {
               {!selectionMode ? (
                 <div className="flex flex-wrap items-center gap-1.5">
                   <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search..." className="input-field w-28 text-xs py-1" />
-                  <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="btn-ghost text-xs text-orange-400 hover:text-orange-300">Request</button>
-                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="btn-ghost text-xs text-blue-400 hover:text-teal-300">Profile</button>
-                  <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="btn-ghost text-xs">Assign</button>
-                  <button onClick={() => setSelectionMode(true)} className="btn-ghost text-xs">Select</button>
+                  <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-orange-400 hover:bg-[var(--card-hover)]" title="Request documents"><PaperPlaneTilt size={16} /></button>
+                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-blue-400 hover:bg-[var(--card-hover)]" title="Profile"><UserCircle size={16} /></button>
+                  <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:bg-[var(--card-hover)]" title="Assign"><AddressBook size={16} /></button>
+                  <button onClick={() => setSelectionMode(true)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:bg-[var(--card-hover)]" title="Select"><CheckSquare size={16} /></button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
@@ -834,6 +837,13 @@ export default function WhatsApp() {
           onCancel={() => { setExtractedSuggestions(null); setTargetPersonId(null); }}
           onConfirm={onConfirmExtraction}
         />
+      )}
+
+      {/* DP preview */}
+      {dpPreview && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={() => setDpPreview(null)}>
+          <img src={dpPreview} className="max-w-[80vw] max-h-[80vh] rounded-xl shadow-2xl object-contain" alt="Profile picture" />
+        </div>
       )}
 
       {/* Document viewer */}
