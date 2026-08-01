@@ -402,7 +402,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+              model: 'llama-3.3-70b-versatile',
               messages: [{ role: 'user', content: 'Identify the dropdown component class and trigger selector from these HTML snippets near field "' + field.label + '". Reply ONLY as JSON: {"componentClass":"...","triggerSelector":"..."}. Snippets: ' + domText }],
               max_tokens: 80,
             }),
@@ -511,7 +511,7 @@ Reply with ONLY valid JSON (no markdown):
     const r1 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'meta-llama/llama-4-scout-17b-16e-instruct', messages: [{ role: 'user', content: prompt1 }], max_tokens: 100 }),
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt1 }], max_tokens: 100 }),
     }).then(r => r.json()).catch(() => null);
 
     const txt1 = r1?.choices?.[0]?.message?.content?.trim() || '';
@@ -561,7 +561,7 @@ Reply with ONLY valid JSON:
     const r2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'meta-llama/llama-4-scout-17b-16e-instruct', messages: [{ role: 'user', content: prompt2 }], max_tokens: 150 }),
+      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt2 }], max_tokens: 150 }),
     }).then(r => r.json()).catch(() => null);
 
     const txt2 = r2?.choices?.[0]?.message?.content?.trim() || '';

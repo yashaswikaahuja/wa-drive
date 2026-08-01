@@ -335,7 +335,7 @@ Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
       method: 'POST',
       headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'llama-3.3-70b-versatile',
         messages: [{ role: 'system', content: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.' }, { role: 'user', content: prompt }],
         max_tokens: 300,
       }),

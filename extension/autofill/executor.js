@@ -645,7 +645,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                  model: 'llama-3.3-70b-versatile',
                   messages: [{ role: 'user', content: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts }],
                   max_tokens: 50,
                 })

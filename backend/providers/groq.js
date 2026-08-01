@@ -5,7 +5,7 @@
  */
 
 const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const MODEL = 'llama-3.3-70b-versatile';
 
 function normalizeObservation(observation) {
   const { fields, profile, formKey, hostname } = observation;

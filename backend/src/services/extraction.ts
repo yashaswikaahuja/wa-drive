@@ -90,7 +90,7 @@ async function callGroqVision(base64s: string | string[], prompt: string, maxTok
       method: 'POST',
       headers: { 'Authorization': `Bearer ${keys[i]}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: 'qwen/qwen3.6-27b',
         messages: [{ role: 'user', content }],
         max_tokens: maxTokens,
         temperature: 0,
