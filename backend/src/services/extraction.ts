@@ -88,17 +88,17 @@ async function callVision(base64s: string | string[], prompt: string, maxTokens:
   const gKey = geminiKey();
   const images = (Array.isArray(base64s) ? base64s : [base64s]).slice(0, 3);
 
-  // ── Primary: Gemini 2.5 Flash ──
+  // ── Primary: Gemini 2.0 Flash ──
   if (gKey) {
     const parts: any[] = [{ text: prompt }, ...images.map(b => ({ inline_data: { mime_type: 'image/jpeg', data: b } }))];
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${gKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { maxOutputTokens: maxTokens, temperature: 0 },
+          generationConfig: { maxOutputTokens: maxTokens },
         }),
       }
     );
