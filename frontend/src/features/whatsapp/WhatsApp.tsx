@@ -128,12 +128,12 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         </div>
         {!selectionMode && (
           <div className="flex flex-wrap gap-2 mt-2 opacity-0 group-hover:opacity-100 transition">
-            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md bg-white/[0.04] text-blue-400 hover:bg-white/[0.06]">Open</button>
-            <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="text-[10px] px-2 py-0.5 rounded-md bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30">Tag</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-green-600/20 text-green-400 hover:bg-green-600/30">Print</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md bg-cyan-600/20 text-cyan-400 hover:bg-cyan-600/30">Photo Tool</button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md bg-purple-600/20 text-purple-400 hover:bg-purple-600/30">Download</button>
-            <button onClick={(e) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }} className="text-[10px] px-2 py-0.5 rounded-md bg-red-600/20 text-red-400 hover:bg-red-600/30">Delete</button>
+            <button onClick={() => onClick(msg)} className="text-[10px] px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]">Open</button>
+            <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="text-[10px] px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20">Tag</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="text-[10px] px-2 py-0.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20">Print</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="text-[10px] px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]">Photo Tool</button>
+            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="text-[10px] px-2 py-0.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]">Download</button>
+            <button onClick={(e) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }} className="text-[10px] px-2 py-0.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20">Delete</button>
           </div>
         )}
       </div>
@@ -170,6 +170,9 @@ export default function WhatsApp() {
   });
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
+  const [qrExpired, setQrExpired] = useState(false);
+  const qrStartRef = useRef<number | null>(null);
+  const QR_TIMEOUT_MS = 120_000; // 2 minutes
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [viewerFile, setViewerFile] = useState<Message | null>(null);
@@ -241,11 +244,21 @@ export default function WhatsApp() {
       try {
         const r = await api.get('/whatsapp/status');
         if (r.data.connected) {
-          setConnected(true); setQrCode(null); setReconnecting(false);
+          setConnected(true); setQrCode(null); setReconnecting(false); setQrExpired(false);
+          qrStartRef.current = null;
           localStorage.setItem('cc-wa-connected', 'true');
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         } else {
-          if (r.data.qr) setQrCode(r.data.qr);
+          if (r.data.qr) {
+            // Track when QR first appeared; expire after 2 min
+            if (!qrStartRef.current) qrStartRef.current = Date.now();
+            if (Date.now() - qrStartRef.current > QR_TIMEOUT_MS) {
+              setQrExpired(true);
+              if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            } else {
+              setQrCode(r.data.qr);
+            }
+          }
           setConnected(false);
         }
       } catch (e) {
@@ -322,6 +335,8 @@ export default function WhatsApp() {
 
   const handleShowQR = useCallback(async () => {
     setReconnecting(true);
+    setQrExpired(false);
+    qrStartRef.current = null;
     // Force start a new session — this generates a fresh QR
     await api.post('/whatsapp/connect').catch(() => {});
     // Poll for QR (takes 3-10s for Baileys to generate)
@@ -331,7 +346,7 @@ export default function WhatsApp() {
       try {
         const r = await api.get('/whatsapp/status');
         if (r.data.connected) { clearInterval(poll); setConnected(true); setQrCode(null); setReconnecting(false); return; }
-        if (r.data.qr) { clearInterval(poll); setQrCode(r.data.qr); setReconnecting(false); }
+        if (r.data.qr) { clearInterval(poll); setQrCode(r.data.qr); setReconnecting(false); qrStartRef.current = Date.now(); }
       } catch {}
       if (attempts > 15) { clearInterval(poll); setReconnecting(false); }
     }, 2000);
@@ -647,9 +662,19 @@ export default function WhatsApp() {
         {useAuthStore.getState().user?.role === 'admin' ? (
           <>
             <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
-            {qrCode ? (
+            {qrCode && !qrExpired ? (
               <div className="bg-white p-4 rounded-xl mb-4 shadow-lg">
                 <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
+              </div>
+            ) : qrExpired ? (
+              <div className="relative bg-white p-4 rounded-xl mb-4 shadow-lg">
+                <img src={qrCode?.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode || '')}`} alt="QR expired" className="w-48 h-48 blur-sm" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <p className="text-gray-800 text-xs font-medium mb-2">QR code expired</p>
+                  <button onClick={handleShowQR} className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 shadow-md">
+                    Refresh QR
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3 mb-4">

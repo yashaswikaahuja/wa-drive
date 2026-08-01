@@ -67,6 +67,7 @@ async function startSession(workspaceId) {
     auth: state,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
+    markOnlineOnConnect: false,  // Don't broadcast "online" when the socket connects
     browser: ['CyberControl', 'Chrome', '1.0'],
   });
 
@@ -90,6 +91,10 @@ async function startSession(workspaceId) {
       session.qr = null;
       session.phone = sock.user?.id?.split(':')[0] || null;
       console.log(`[WA:${workspaceId.slice(0,8)}] Connected as ${session.phone}`);
+      // Mark presence as UNAVAILABLE so the user's contacts don't see them "online" 24/7.
+      // The socket stays open for receiving messages, but presence is hidden. Critical for
+      // avoiding WhatsApp bans and not alarming contacts.
+      sock.sendPresenceUpdate('unavailable').catch(() => {});
       notifyParent(workspaceId, 'connected', { phone: session.phone });
       broadcastToWs(workspaceId, { type: 'status', connected: true, phone: session.phone, workspaceId });
     }
