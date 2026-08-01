@@ -78,11 +78,43 @@ function groqKeys(): string[] {
   return raw.split(',').map(k => k.trim()).filter(Boolean);
 }
 
-/** Single Groq vision call with key rotation on rate-limit. Accepts one or more page images. */
-async function callGroqVision(base64s: string | string[], prompt: string, maxTokens: number): Promise<string> {
-  const keys = groqKeys();
-  if (!keys.length) throw new Error('GROQ_API_KEY not configured');
+/** Gemini API key (Google AI Studio). */
+function geminiKey(): string {
+  return process.env['GEMINI_API_KEY'] || '';
+}
+
+/** Single Gemini vision call. Accepts one or more page images. Falls back to Groq if Gemini unavailable. */
+async function callVision(base64s: string | string[], prompt: string, maxTokens: number): Promise<string> {
+  const gKey = geminiKey();
   const images = (Array.isArray(base64s) ? base64s : [base64s]).slice(0, 3);
+
+  // ── Primary: Gemini 2.5 Flash ──
+  if (gKey) {
+    const parts: any[] = [{ text: prompt }, ...images.map(b => ({ inline_data: { mime_type: 'image/jpeg', data: b } }))];
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${gKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { maxOutputTokens: maxTokens, temperature: 0 },
+        }),
+      }
+    );
+    if (response.ok) {
+      const data = await response.json() as any;
+      const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || '').join('') || '';
+      // Strip any thinking blocks or markdown fences
+      return text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    }
+    console.warn('[Extract] Gemini failed:', response.status, await response.text().catch(() => ''));
+  }
+
+  // ── Fallback: Groq (Qwen) ──
+  const keys = groqKeys();
+  if (!keys.length && !gKey) throw new Error('No vision API key configured (GEMINI_API_KEY or GROQ_API_KEY)');
+  if (!keys.length) throw new Error('Gemini call failed and no GROQ fallback key');
   const content: any[] = [{ type: 'text', text: prompt },
     ...images.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } }))];
   for (let i = 0; i < keys.length; i++) {
@@ -96,7 +128,7 @@ async function callGroqVision(base64s: string | string[], prompt: string, maxTok
         temperature: 0,
       }),
     });
-    if (response.status === 429 && i < keys.length - 1) continue; // rate-limited → next key
+    if (response.status === 429 && i < keys.length - 1) continue;
     const data = await response.json() as any;
     const content2 = data?.choices?.[0]?.message?.content;
     if (content2) return content2.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -186,7 +218,7 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
   const prompt = buildExtractPrompt(fields);
   let parsed: any = {};
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await callGroqVision(base64s, prompt, 4000);
+    const text = await callVision(base64s, prompt, 4000);
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = {}; } }
     if (Object.values(parsed).some(v => v && String(v).trim())) break;
