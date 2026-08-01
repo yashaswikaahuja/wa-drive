@@ -99,7 +99,7 @@ async function callGroqVision(base64s: string | string[], prompt: string, maxTok
     if (response.status === 429 && i < keys.length - 1) continue; // rate-limited → next key
     const data = await response.json() as any;
     const content2 = data?.choices?.[0]?.message?.content;
-    if (content2) return content2;
+    if (content2) return content2.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     if (data?.error && i < keys.length - 1) continue;
     return content2 ?? '';
   }
@@ -186,7 +186,7 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
   const prompt = buildExtractPrompt(fields);
   let parsed: any = {};
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await callGroqVision(base64s, prompt, 2000);
+    const text = await callGroqVision(base64s, prompt, 4000);
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = {}; } }
     if (Object.values(parsed).some(v => v && String(v).trim())) break;
