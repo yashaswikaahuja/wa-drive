@@ -5,7 +5,7 @@ import api, { SOCKET_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
-import { Printer, Camera, X, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle, PaperPlaneTilt, AddressBook, CheckSquare } from '@phosphor-icons/react';
+import { Printer, Camera, X, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle, PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise } from '@phosphor-icons/react';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -373,7 +373,7 @@ export default function WhatsApp() {
           disconnectCount = 0;
         } else if (r.data.qr) {
           disconnectCount++;
-          if (disconnectCount >= 2) { setQrCode(r.data.qr || null); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
+          if (disconnectCount >= 2 && !qrExpired) { setQrCode(r.data.qr || null); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
           if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
         } else {
           disconnectCount++;
@@ -382,7 +382,7 @@ export default function WhatsApp() {
       }).catch(() => {});
     }, interval);
     return () => clearInterval(poll);
-  }, [connected]);
+  }, [connected, qrExpired]);
 
   const handleSelectChat = useCallback((phone: string) => {
     setSelectedChat(phone);
@@ -672,8 +672,8 @@ export default function WhatsApp() {
                 <img src={qrCode?.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode || '')}`} alt="QR expired" className="w-48 h-48 blur-sm" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
                   <p className="text-gray-800 text-xs font-medium mb-2">QR code expired</p>
-                  <button onClick={handleShowQR} className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 shadow-md">
-                    Refresh QR
+                  <button onClick={handleShowQR} className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 shadow-md">
+                    <ArrowClockwise size={16} weight="bold" /> Refresh
                   </button>
                 </div>
               </div>
