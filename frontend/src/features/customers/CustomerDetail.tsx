@@ -334,7 +334,7 @@ export default function CustomerDetail() {
                                   className="flex items-center gap-1.5 group text-left">
                                   <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
                                   {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
-                                  <PencilSimple size={11} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                  <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
                                 </button>
                               )}
                             </div>
@@ -355,7 +355,7 @@ export default function CustomerDetail() {
                                 <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
                                   <span className="text-sm text-gray-100 truncate" title={val || ''}>{val}</span>
                                   <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />
-                                  <PencilSimple size={11} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                  <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
                                 </button>
                               )}
                             </div>
