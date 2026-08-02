@@ -599,7 +599,12 @@ fillBtn.addEventListener('click', async () => {
         try { const r = await fetch(backendUrl+'/adapters/'+location.hostname,{headers}); adp=await r.json(); } catch {}
 
         // AI mapping for fields fuzzyMatch couldn't handle (with 10s timeout)
-        const unmappedAI = formFields.filter(f => !mapping[f.selector] && !handled.has(f.selector));
+        // Exclude radio/checkbox — those are handled by the rule engine, not key-mapping.
+        const unmappedAI = formFields.filter(f => {
+          if (mapping[f.selector] || handled.has(f.selector)) return false;
+          const g = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
+          return g !== 'radio' && g !== 'checkbox';
+        });
         if (unmappedAI.length > 0 && groqKey) {
           try {
             const aiPromise = aiMatch(unmappedAI, profile, groqKey, llmBaseUrl, llmModel);
@@ -609,6 +614,29 @@ fillBtn.addEventListener('click', async () => {
               if (!mapping[sel]) { mapping[sel] = val; fbs[sel] = { label: 'ai', source: 'ai' }; }
             }
           } catch(e) { console.warn('[CC] aiMatch skipped:', e.message); }
+        }
+
+        // ── Option validation: demote dropdown/radio fills whose value doesn't
+        // match any available option. Better to leave them for the AI resolver
+        // (which sees the OPTIONS list) than to send an unmatchable value to the
+        // executor where it will timeout with "no-matching-option". ──────────
+        for (const f of formFields) {
+          if (!mapping[f.selector]) continue;
+          if (!f.options || !f.options.length) continue;
+          const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
+          if (grp !== 'dropdown' && grp !== 'radio') continue;
+          const val = String(mapping[f.selector].value || '').toLowerCase().trim();
+          if (!val) continue;
+          // Check if any option matches (exact, contains, or token)
+          const matched = f.options.some(o => {
+            const on = o.toLowerCase().trim();
+            return on === val || on.includes(val) || val.includes(on);
+          });
+          if (!matched) {
+            console.log('[CC] demoted unmatched dropdown value:', f.label, '→', mapping[f.selector].value, '(options:', f.options.slice(0,5).join(', '), ')');
+            delete mapping[f.selector];
+            delete fbs[f.selector];
+          }
         }
 
         // ── Final pass: AI resolves VALUES for fields still blank ──────────────

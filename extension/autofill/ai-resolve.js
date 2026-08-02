@@ -30,6 +30,8 @@ async function ccAiResolveValues(pendingFields, profile, apiKey, baseUrl, model)
     if (f.placeholder) line += ` placeholder="${f.placeholder}"`;
     if (f.options && f.options.length) {
       line += `\n   OPTIONS (must pick EXACTLY one of these): ${f.options.map(o => `"${o}"`).join(' | ')}`;
+    } else if (f.type === 'ng-dropdown' || f.type === 'mat-select' || f.type === 'dropdown') {
+      line += `\n   (DROPDOWN — options not pre-loaded, but the system will fuzzy-match your answer against the real options. Give the most standard/common phrasing.)`;
     }
     return line;
   }).join('\n');
@@ -95,7 +97,10 @@ Example: {"0": "Intermediate", "2": "1234567", "3": "No"}`;
         }
         out[f.selector] = { value, kind: 'option', source: 'ai-resolve' };
       } else {
-        out[f.selector] = { value, kind: 'value', source: 'ai-resolve' };
+        // No pre-captured options (ng-dropdown, mat-select) OR text field.
+        // For dropdowns without options: the executor adapter will fuzzy-match.
+        const isDD = /dropdown|select/i.test(f.type || '');
+        out[f.selector] = { value, kind: isDD ? 'option' : 'value', source: 'ai-resolve' };
       }
     }
     return out;
