@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
-  Sparkle, CheckCircle, X, FilePdf, UserPlus
+  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
@@ -48,6 +48,7 @@ export default function CustomerDetail() {
   const [newFieldKey, setNewFieldKey] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
   const [readiness, setReadiness] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const loadHousehold = async () => {
     const r = await api.get('/customers/households');
@@ -67,6 +68,22 @@ export default function CustomerDetail() {
 
   const loadReadiness = async () => {
     try { const r = await api.get(`/forms/readiness/${encodeURIComponent(phone)}`); setReadiness(r.data || []); } catch {}
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setUploading(true); setError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('phone', phone);
+      fd.append('personName', personDetail?.display_label || personDetail?.name || '');
+      await api.post('/customers/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await loadDocuments();
+    } catch (e: any) { setError(e.response?.data?.error || e.message || 'Upload failed'); }
+    finally { setUploading(false); }
   };
 
   const addPerson = async (form: { name: string; relationship: string }) => {
@@ -366,7 +383,13 @@ export default function CustomerDetail() {
       {/* Documents */}
       {documents.length > 0 && (
         <section className="mb-6">
-          <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Documents · {documents.length}</h2>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Documents · {documents.length}</h2>
+            <label className={`flex items-center gap-1.5 text-[11px] text-[#0a84ff] hover:text-[#409cff] cursor-pointer transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              <UploadSimple size={13} weight="bold" /> {uploading ? 'Uploading…' : 'Upload'}
+              <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+            </label>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {documents.slice(0, 12).map(d => {
               const ext = d.fileName?.split('.').pop()?.toLowerCase() || '';
@@ -397,6 +420,23 @@ export default function CustomerDetail() {
                 </div>
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {/* Upload section when no documents */}
+      {documents.length === 0 && (
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Documents</h2>
+            <label className={`flex items-center gap-1.5 text-[11px] text-[#0a84ff] hover:text-[#409cff] cursor-pointer transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              <UploadSimple size={13} weight="bold" /> {uploading ? 'Uploading…' : 'Upload'}
+              <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+            </label>
+          </div>
+          <div className="rounded-xl border border-dashed border-white/10 p-6 flex flex-col items-center gap-2 text-gray-500 text-xs">
+            <UploadSimple size={24} className="text-gray-600" />
+            <p>No documents yet. Upload a hardcopy scan to get started.</p>
           </div>
         </section>
       )}

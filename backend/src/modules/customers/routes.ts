@@ -1,8 +1,12 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { pool } from '../../db.js';
 import { authMiddleware } from '../../middleware/auth.js';
+import { getDriveForWorkspace, uploadFileToDrive } from '../drive/service.js';
+import { autoExtractInBackground } from '../../services/extraction.js';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // GET /api/customers/households
 router.get('/households', authMiddleware, async (req: any, res) => {
@@ -186,6 +190,38 @@ router.get('/group-docs/:phone', authMiddleware, async (req: any, res) => {
 
     res.json({ groups, ungrouped });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/customers/upload — operator uploads a hardcopy scan for a customer
+router.post('/upload', authMiddleware, upload.single('file') as any, async (req: any, res) => {
+  const { phone, personName } = req.body;
+  if (!phone) return res.status(400).json({ error: 'phone required' });
+  if (!req.file) return res.status(400).json({ error: 'No file attached' });
+
+  const wsId = req.user.workspaceId;
+  try {
+    const drive = await getDriveForWorkspace(wsId);
+    if (!drive) return res.status(500).json({ error: 'Drive not connected' });
+
+    const fileName = `${phone}_${Date.now()}_${req.file.originalname || 'scan.jpg'}`;
+    const mimetype = req.file.mimetype || 'image/jpeg';
+    const { fileId, webContentLink } = await uploadFileToDrive(drive, req.file.buffer, fileName, mimetype, phone, personName || 'Operator Upload');
+
+    // Insert into drive_files
+    await pool.query(
+      `INSERT INTO drive_files(id, workspace_id, file_name, customer_id, customer_name, file_url, uploaded_at)
+       VALUES($1,$2,$3,$4,$5,$6,now()) ON CONFLICT(id) DO NOTHING`,
+      [fileId, wsId, fileName, phone, personName || '', `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`]
+    );
+
+    // Auto-extract in background
+    autoExtractInBackground(req.file.buffer, fileId, wsId, mimetype, phone);
+
+    res.json({ ok: true, fileId, fileName });
+  } catch (e: any) {
+    console.error('[Customers] upload error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 export default router;
