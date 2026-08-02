@@ -305,8 +305,8 @@ export default function CustomerDetail() {
                   return dt && SECTION_FOR_DOCTYPE[dt] === section.id;
                 });
                 const hasAny = section.fields.some(f => sflat[f.key]) || extras.length > 0;
-                const visibleFields = section.fields.filter(f => sflat[f.key] || f.required);
-                if (!visibleFields.length && !extras.length) return null;
+                const visibleFields = section.fields;
+                if (!hasAny && !extras.length) return null;
                 return (
                   <div key={section.id} className="card">
                     <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{section.title}</p>
