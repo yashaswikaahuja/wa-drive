@@ -482,7 +482,14 @@ fillBtn.addEventListener('click', async () => {
           'autofill/derive.js',
           'autofill/ai-resolve.js',
           'autofill/mapper.js',
-          'autofill/executor.js'
+          'autofill/executor.js',
+          'core/memory.js',
+          'core/world.js',
+          'core/goal.js',
+          'core/judgment.js',
+          'core/action.js',
+          'core/observation.js',
+          'core/engine.js'
         ]
       });
     } catch (e) {
@@ -499,6 +506,57 @@ fillBtn.addEventListener('click', async () => {
       if (gRes.ok) { const gd = await gRes.json(); groqKey = gd.key || ''; llmBaseUrl = gd.baseUrl || llmBaseUrl; llmModel = gd.model || llmModel; }
     } catch {}
     updateProgress('Filling form fields...', 70);
+
+    // ── v2 KNOWLEDGE ENGINE (behind a flag) ───────────────────────────────
+    // Enable by setting chrome.storage.local { cc_engine_v2: true }.
+    // Runs the six-primitive engine; falls back to legacy if it errors.
+    let _useV2 = false;
+    try { _useV2 = (await chrome.storage.local.get('cc_engine_v2')).cc_engine_v2 === true; } catch {}
+    if (_useV2) {
+      try {
+        const flatProfile = (() => {
+          const flat = {}; const raw = selectedProfile.data || selectedProfile;
+          for (const [k, v] of Object.entries(raw)) flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+          if (selectedProfile.name) flat.name = flat.name || selectedProfile.name;
+          if (Array.isArray(selectedProfile.documents)) flat.documents = selectedProfile.documents;
+          return flat;
+        })();
+        const v2res = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          args: [flatProfile, selectedProfile.id || '', data.backendUrl, data.accessToken, groqKey, llmBaseUrl, llmModel],
+          func: async (profile, profileId, backendUrl, accessToken, groqKey, llmBaseUrl, llmModel) => {
+            try {
+              document.body.setAttribute('data-cc-backend', backendUrl);
+              document.body.setAttribute('data-cc-token', accessToken);
+              document.body.setAttribute('data-cc-profile-id', profileId || '');
+            } catch {}
+            if (!window.CCEngine) return { ok: false, error: 'engine not loaded' };
+            return await window.CCEngine.run({ profile, backendUrl, accessToken, groqKey, llmBaseUrl, llmModel });
+          },
+        });
+        const er = v2res?.[0]?.result;
+        if (er && er.ok) {
+          const s = er.summary;
+          // Sync learned mappings back (reinforce knowledge)
+          if (er.syncUpdates && Object.keys(er.syncUpdates).length && er.syncFormKey) {
+            try {
+              await fetch(data.backendUrl + '/mappings/' + er.syncFormKey, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
+                body: JSON.stringify({ updates: er.syncUpdates, meta: { hostname: er.syncHost, title: er.syncTitle, lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 3 } }),
+              });
+            } catch {}
+          }
+          window._lastFilledRecords = (er.records || []).filter(r => r.result === 'filled').slice(0, 25);
+          showResults(s.filled, s.unresolved + s.skipped?.length || s.unresolved, s.failed, (er.records || []).filter(r => r.result !== 'filled').slice(0, 10));
+          undoBtn.style.display = 'block';
+          fillBtn.disabled = false; fillBtn.innerHTML = '⚡ Fill Form';
+          console.log('[CC] v2 engine:', JSON.stringify(s));
+          return; // v2 handled the fill
+        }
+        console.warn('[CC] v2 engine failed, falling back to legacy:', er?.error);
+      } catch (e) { console.warn('[CC] v2 engine threw, falling back:', e.message); }
+    }
+
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       args: [(() => {
