@@ -224,4 +224,78 @@ router.post('/upload', authMiddleware, upload.single('file') as any, async (req:
   }
 });
 
+// POST /api/customers/share/:personId — generate a share token for a profile
+router.post('/share/:personId', authMiddleware, async (req: any, res) => {
+  const { personId } = req.params;
+  const wsId = req.user.workspaceId;
+  try {
+    const { rows: profiles } = await pool.query(
+      'SELECT id, primary_contact_phone, name, display_label, data FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL',
+      [personId, wsId]
+    );
+    if (!profiles.length) return res.status(404).json({ error: 'Person not found' });
+    const profile = profiles[0];
+    // Generate a short token
+    const crypto = await import('crypto');
+    const token = crypto.randomBytes(16).toString('hex');
+    await pool.query(
+      `INSERT INTO profile_shares(token, source_workspace_id, profile_id, phone, created_by)
+       VALUES($1, $2, $3, $4, $5)`,
+      [token, wsId, personId, profile.primary_contact_phone, req.user.userId]
+    );
+    res.json({ ok: true, token, expiresIn: '7 days' });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/customers/import-shared — import a shared profile into this workspace
+router.post('/import-shared', authMiddleware, async (req: any, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'token required' });
+  const wsId = req.user.workspaceId;
+  try {
+    // Find the share
+    const { rows: shares } = await pool.query(
+      `SELECT s.*, p.name, p.display_label, p.primary_contact_phone, p.data, p.relationship
+       FROM profile_shares s JOIN profiles p ON p.id = s.profile_id
+       WHERE s.token = $1 AND s.expires_at > now()`,
+      [token]
+    );
+    if (!shares.length) return res.status(404).json({ error: 'Invalid or expired share token' });
+    const share = shares[0];
+    if (share.source_workspace_id === wsId) return res.status(400).json({ error: 'Cannot import to same workspace' });
+
+    // Check if profile already exists in target workspace for this phone+name
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM profiles WHERE workspace_id = $1 AND primary_contact_phone = $2 AND display_label = $3 AND deleted_at IS NULL`,
+      [wsId, share.primary_contact_phone, share.display_label || share.name]
+    );
+    if (existing.length) return res.status(409).json({ error: 'Profile already exists in your workspace' });
+
+    // Copy profile
+    const { rows: [newProfile] } = await pool.query(
+      `INSERT INTO profiles(workspace_id, primary_contact_phone, name, display_label, relationship, data, created_by)
+       VALUES($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [wsId, share.primary_contact_phone, share.name, share.display_label, share.relationship || 'self', share.data || '{}', req.user.userId]
+    );
+
+    // Copy extraction_cache entries for this phone+person_key
+    const personKey = (share.display_label || share.name || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+    const { rows: extractions } = await pool.query(
+      `SELECT file_id, suggested FROM extraction_cache WHERE workspace_id = $1 AND phone = $2 AND person_key = $3`,
+      [share.source_workspace_id, share.primary_contact_phone, personKey]
+    );
+    for (const ext of extractions) {
+      await pool.query(
+        `INSERT INTO extraction_cache(file_id, workspace_id, phone, person_key, suggested) VALUES($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+        [ext.file_id, wsId, share.primary_contact_phone, personKey, ext.suggested]
+      ).catch(() => {});
+    }
+
+    // Mark share as used
+    await pool.query('UPDATE profile_shares SET used_by_workspace_id = $1, used_at = now() WHERE id = $2', [wsId, share.id]);
+
+    res.json({ ok: true, profileId: newProfile.id, name: share.display_label || share.name, fieldsImported: extractions.length });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

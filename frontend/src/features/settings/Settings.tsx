@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone, PencilSimple } from '@phosphor-icons/react';
+import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone, PencilSimple, Brain, FloppyDisk } from '@phosphor-icons/react';
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
 import PageHeader from '../../shared/PageHeader';
@@ -107,6 +107,8 @@ export default function Settings() {
         </div>
       </section>
 
+      {user?.role === 'admin' && <AiModelsSection />}
+
       <section className="card">
         <h3 className="text-sm font-medium text-gray-300 mb-3">Platform</h3>
         <div className="space-y-2 text-xs">
@@ -119,6 +121,98 @@ export default function Settings() {
         <VerifyModal pending={[verifyChannel]} status={vstatus} onClose={() => setVerifyChannel(null)} onChanged={loadVerify} />
       )}
     </div>
+  );
+}
+
+function AiModelsSection() {
+  const [ai, setAi] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => { api.get('/settings/ai').then(r => setAi(r.data)).catch(() => {}); }, []);
+
+  const save = async () => {
+    setSaving(true); setMsg('');
+    try {
+      await api.patch('/settings/ai', ai);
+      setMsg('Saved');
+      setTimeout(() => setMsg(''), 2000);
+    } catch (e: any) { setMsg(e.response?.data?.error || 'Save failed'); }
+    finally { setSaving(false); }
+  };
+
+  if (!ai) return null;
+  return (
+    <section className="card mb-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Brain size={16} className="text-gray-400" />
+        <h3 className="text-sm font-medium text-gray-300">AI Models</h3>
+      </div>
+
+      <div className="space-y-4">
+        {/* Extraction (Vision) */}
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Extraction (Vision / OCR)</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] text-gray-500 block mb-1">Provider</label>
+              <select value={ai.extractionProvider} onChange={e => setAi({ ...ai, extractionProvider: e.target.value })}
+                className="input-field text-xs w-full">
+                <option value="mistral">Mistral</option>
+                <option value="groq">Groq (Qwen)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-500 block mb-1">Model</label>
+              <input value={ai.extractionModel} onChange={e => setAi({ ...ai, extractionModel: e.target.value })}
+                className="input-field text-xs w-full" placeholder="mistral-small-latest" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <label className="text-[11px] text-gray-500 block mb-1">Mistral API Key</label>
+            <input value={ai.mistralKey} onChange={e => setAi({ ...ai, mistralKey: e.target.value })}
+              className="input-field text-xs w-full font-mono" placeholder="••••••••" />
+          </div>
+        </div>
+
+        {/* Text LLM (Form Fill / Mapping) */}
+        <div>
+          <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Text LLM (Form Fill / Mapping)</p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[11px] text-gray-500 block mb-1">Provider</label>
+              <select value={ai.textProvider} onChange={e => setAi({ ...ai, textProvider: e.target.value })}
+                className="input-field text-xs w-full">
+                <option value="openrouter">OpenRouter</option>
+                <option value="groq">Groq</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] text-gray-500 block mb-1">Model</label>
+              <input value={ai.textModel} onChange={e => setAi({ ...ai, textModel: e.target.value })}
+                className="input-field text-xs w-full" placeholder="meta-llama/llama-3.3-70b-instruct" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <label className="text-[11px] text-gray-500 block mb-1">OpenRouter API Key</label>
+            <input value={ai.openrouterKey} onChange={e => setAi({ ...ai, openrouterKey: e.target.value })}
+              className="input-field text-xs w-full font-mono" placeholder="sk-or-v1-••••••••" />
+          </div>
+          <div className="mt-2">
+            <label className="text-[11px] text-gray-500 block mb-1">Groq API Key (fallback)</label>
+            <input value={ai.groqKey} onChange={e => setAi({ ...ai, groqKey: e.target.value })}
+              className="input-field text-xs w-full font-mono" placeholder="gsk_••••••••" />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3 mt-4">
+        <button onClick={save} disabled={saving} className="btn-primary text-xs flex items-center gap-1.5">
+          <FloppyDisk size={13} weight="bold" /> {saving ? 'Saving…' : 'Save'}
+        </button>
+        {msg && <span className={`text-xs ${msg === 'Saved' ? 'text-emerald-400' : 'text-red-400'}`}>{msg}</span>}
+      </div>
+    </section>
   );
 }
 

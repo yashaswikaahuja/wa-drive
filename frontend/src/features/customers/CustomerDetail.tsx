@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
-  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple
+  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
@@ -49,6 +49,10 @@ export default function CustomerDetail() {
   const [newFieldValue, setNewFieldValue] = useState('');
   const [readiness, setReadiness] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [importToken, setImportToken] = useState('');
+  const [importMsg, setImportMsg] = useState('');
 
   const loadHousehold = async () => {
     const r = await api.get('/customers/households');
@@ -84,6 +88,25 @@ export default function CustomerDetail() {
       await loadDocuments();
     } catch (e: any) { setError(e.response?.data?.error || e.message || 'Upload failed'); }
     finally { setUploading(false); }
+  };
+
+  const handleShare = async () => {
+    if (!selectedPerson) return;
+    try {
+      const r = await api.post(`/customers/share/${selectedPerson}`);
+      setShareToken(r.data.token);
+    } catch (e: any) { setError(e.response?.data?.error || 'Share failed'); }
+  };
+
+  const handleImport = async () => {
+    if (!importToken.trim()) return;
+    setImportMsg('');
+    try {
+      const r = await api.post('/customers/import-shared', { token: importToken.trim() });
+      setImportMsg(`✓ Imported "${r.data.name}" (${r.data.fieldsImported} documents)`);
+      setImportToken('');
+      await loadHousehold(); await loadDocuments();
+    } catch (e: any) { setImportMsg(e.response?.data?.error || 'Import failed'); }
   };
 
   const addPerson = async (form: { name: string; relationship: string }) => {
@@ -170,6 +193,14 @@ export default function CustomerDetail() {
             {phone.match(/^\d{10,13}$/) ? `+${phone}` : phone}
             {household.persons.length > 1 && ` · ${household.persons.length} people`}
           </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={handleShare} disabled={!selectedPerson} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#0a84ff] transition-colors disabled:opacity-40" title="Share profile">
+            <ShareNetwork size={15} /> Share
+          </button>
+          <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#30d158] transition-colors" title="Import shared profile">
+            <Export size={15} /> Import
+          </button>
         </div>
       </div>
 
@@ -445,6 +476,43 @@ export default function CustomerDetail() {
       {extractedSuggestions && (
         <ExtractionConfirm suggestions={extractedSuggestions} documentId={extractDocId || ''} error={extractError} saving={saving}
           onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }} onConfirm={confirmExtraction} />
+      )}
+
+      {/* Share token modal */}
+      {shareToken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShareToken(null)}>
+          <div onClick={e => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#1c1c1e] border border-white/10 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <ShareNetwork size={16} className="text-[#0a84ff]" />
+              <h3 className="text-sm font-semibold text-white">Share Code</h3>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">Give this code to another cybercafe. They can import this profile within 7 days.</p>
+            <div className="flex items-center gap-2">
+              <input readOnly value={shareToken} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
+              <button onClick={() => { navigator.clipboard.writeText(shareToken); }} className="btn-primary text-xs shrink-0">Copy</button>
+            </div>
+            <button onClick={() => setShareToken(null)} className="mt-3 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Import modal */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => { setShowImport(false); setImportMsg(''); }}>
+          <div onClick={e => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#1c1c1e] border border-white/10 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Export size={16} className="text-[#30d158]" />
+              <h3 className="text-sm font-semibold text-white">Import Shared Profile</h3>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">Paste the share code from another cybercafe.</p>
+            <div className="flex items-center gap-2">
+              <input value={importToken} onChange={e => setImportToken(e.target.value)} placeholder="Paste share code" className="input-field text-xs font-mono flex-1" />
+              <button onClick={handleImport} disabled={!importToken.trim()} className="btn-primary text-xs shrink-0 disabled:opacity-50">Import</button>
+            </div>
+            {importMsg && <p className={`text-xs mt-3 ${importMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{importMsg}</p>}
+            <button onClick={() => { setShowImport(false); setImportMsg(''); }} className="mt-3 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
+          </div>
+        </div>
       )}
 
       {error && <div className="rounded-xl bg-[#ff453a]/10 border border-[#ff453a]/20 p-3 mt-4 text-sm text-[#ff453a]">{error}</div>}
