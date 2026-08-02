@@ -260,14 +260,23 @@ router.post('/:formKey', async (req, res) => {
       mappings[formKey]._meta = { ...(mappings[formKey]._meta || {}), ...meta, lastSeen: today };
     }
     if (updates) {
+      // Sources that a background sync must NOT overwrite (set by admin/owner review).
+      const PROTECTED = new Set(['manual', 'confirmed']);
       for (const [semanticKey, info] of Object.entries(updates)) {
-        const { profileKey, delta = {}, label, type, order, options } = info;
+        const { profileKey, delta = {}, label, type, order, options,
+                fillMode, rules, constantValue, fallback } = info;
         const existing = mappings[formKey][semanticKey];
         if (existing) {
           existing.fills = (existing.fills || 0) + (delta.fills || 0);
           existing.corrections = (existing.corrections || 0) + (delta.corrections || 0);
-          // Only update profileKey if provided and not already manually set
-          if (profileKey !== undefined && existing.source !== 'manual') existing.profileKey = profileKey;
+          const locked = PROTECTED.has(existing.source);
+          // profileKey + rule config are only overwritten when the field isn't locked
+          if (profileKey !== undefined && !locked) existing.profileKey = profileKey;
+          if (fillMode !== undefined && !locked) existing.fillMode = fillMode;
+          if (rules !== undefined && !locked) existing.rules = rules;
+          if (constantValue !== undefined && !locked) existing.constantValue = constantValue;
+          if (fallback !== undefined && !locked) existing.fallback = fallback;
+          // Structural metadata (label/type/order/options) always refreshes from the live form
           if (label) existing.label = label;
           if (type) existing.type = type;
           if (order !== undefined) existing.order = order;
@@ -280,6 +289,10 @@ router.post('/:formKey', async (req, res) => {
             type: type || 'text',
             order: order !== undefined ? order : null,
             options: options || null,
+            fillMode: fillMode || null,
+            rules: rules || null,
+            constantValue: constantValue !== undefined ? constantValue : null,
+            fallback: fallback !== undefined ? fallback : null,
             fills: delta.fills || 0,
             corrections: delta.corrections || 0,
             lastSeen: today,
@@ -293,22 +306,26 @@ router.post('/:formKey', async (req, res) => {
   res.json({ ok: true });
 });
 
-// PATCH /api/mappings/:formKey/:label — update ONE field's profileKey
-// (used by the admin UI's per-row edit)
+// PATCH /api/mappings/:formKey/:label — update ONE field's mapping/rule config
+// (used by the admin UI's per-row edit + rule builder). Stored as source:'manual'
+// so the extension's background sync never overwrites it.
 router.patch('/:formKey/:label', authMiddleware, async (req, res) => {
-  const { profileKey } = req.body || {};
+  const { profileKey, fillMode, rules, constantValue, fallback } = req.body || {};
   const formKey = req.params.formKey;
   const label = req.params.label;
+  const today = new Date().toISOString().slice(0, 10);
   let notFound = false;
   await mutate((mappings) => {
     if (!mappings[formKey]) { notFound = true; return mappings; }
-    if (!mappings[formKey][label]) {
-      mappings[formKey][label] = { profileKey, fills: 0, corrections: 0, lastSeen: new Date().toISOString().slice(0, 10), source: 'manual' };
-    } else {
-      mappings[formKey][label].profileKey = profileKey || null;
-      mappings[formKey][label].lastSeen = new Date().toISOString().slice(0, 10);
-      mappings[formKey][label].source = 'manual';
-    }
+    const cur = mappings[formKey][label] || { fills: 0, corrections: 0 };
+    if (profileKey !== undefined) cur.profileKey = profileKey || null;
+    if (fillMode !== undefined) cur.fillMode = fillMode || null;
+    if (rules !== undefined) cur.rules = rules || null;
+    if (constantValue !== undefined) cur.constantValue = constantValue;
+    if (fallback !== undefined) cur.fallback = fallback;
+    cur.lastSeen = today;
+    cur.source = 'manual';
+    mappings[formKey][label] = cur;
     return mappings;
   });
   if (notFound) return res.status(404).json({ error: 'formKey not found' });
