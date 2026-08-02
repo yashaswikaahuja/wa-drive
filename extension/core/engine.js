@@ -76,6 +76,23 @@
     const mappingUpdates = window.CCObservation.buildMappingSync(resolutions, records);
     log('result:', summary.filled + '/' + summary.total, 'filled;', summary.checkpoints, 'checkpoints;', summary.unresolved, 'unresolved');
 
+    // Record a session (tagged rv:2.0-engine) for A/B comparison with the legacy pipeline.
+    try {
+      const taggedRecords = records.map(r => ({ ...r, rv: '2.0-engine' }));
+      await fetch(ctx.backendUrl + '/sessions', {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          hostname: page.interface.hostname,
+          semanticFormKey: page.interface.formKey,
+          runtimeVersion: '2.0-engine',
+          totalFilled: summary.filled,
+          totalFailed: summary.failed,
+          records: taggedRecords,
+          meta: { totalDetected: summary.total, engine: 'v2', checkpoints: summary.checkpoints, unresolved: summary.unresolved, lowConfidence: summary.lowConfidence, derived: customer.derived },
+        }),
+      });
+    } catch (e) { log('session post failed:', e.message); }
+
     return {
       ok: true,
       summary,
