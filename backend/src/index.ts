@@ -116,46 +116,6 @@ app.get('/api/settings/groq-key', authMiddleware, async (req: any, res) => {
   });
 });
 
-// GET /api/settings/ai — read AI config for this workspace
-app.get('/api/settings/ai', authMiddleware, async (req: any, res) => {
-  try {
-    const { rows } = await pool.query('SELECT settings FROM workspaces WHERE id = $1', [req.user.workspaceId]);
-    const ai = rows[0]?.settings?.ai || {};
-    // Mask keys for display (show last 8 chars)
-    const mask = (k: string) => k ? '•'.repeat(Math.max(0, k.length - 8)) + k.slice(-8) : '';
-    res.json({
-      extractionProvider: ai.extractionProvider || 'mistral',
-      extractionModel: ai.extractionModel || 'mistral-small-latest',
-      mistralKey: mask(ai.mistralKey || process.env.MISTRAL_API_KEY || ''),
-      textProvider: ai.textProvider || (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'groq'),
-      textModel: ai.textModel || (process.env.OPENROUTER_API_KEY ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile'),
-      openrouterKey: mask(ai.openrouterKey || process.env.OPENROUTER_API_KEY || ''),
-      groqKey: mask(ai.groqKey || process.env.GROQ_API_KEY || ''),
-    });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
-});
-
-// PATCH /api/settings/ai — update AI config (admin only)
-app.patch('/api/settings/ai', authMiddleware, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  const { extractionProvider, extractionModel, mistralKey, textProvider, textModel, openrouterKey, groqKey } = req.body;
-  try {
-    const { rows } = await pool.query('SELECT settings FROM workspaces WHERE id = $1', [req.user.workspaceId]);
-    const settings = rows[0]?.settings || {};
-    const ai = settings.ai || {};
-    if (extractionProvider !== undefined) ai.extractionProvider = extractionProvider;
-    if (extractionModel !== undefined) ai.extractionModel = extractionModel;
-    if (mistralKey && !mistralKey.startsWith('•')) ai.mistralKey = mistralKey;
-    if (textProvider !== undefined) ai.textProvider = textProvider;
-    if (textModel !== undefined) ai.textModel = textModel;
-    if (openrouterKey && !openrouterKey.startsWith('•')) ai.openrouterKey = openrouterKey;
-    if (groqKey && !groqKey.startsWith('•')) ai.groqKey = groqKey;
-    settings.ai = ai;
-    await pool.query('UPDATE workspaces SET settings = $1 WHERE id = $2', [JSON.stringify(settings), req.user.workspaceId]);
-    res.json({ ok: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
-});
-
 // HTTP server + Socket.IO
 const httpServer = createServer(app);
 setupSocket(httpServer);
