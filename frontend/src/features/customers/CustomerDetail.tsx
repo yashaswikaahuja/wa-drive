@@ -401,15 +401,25 @@ export default function CustomerDetail() {
                   <div key={g.title} className="card">
                     <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{g.title}</p>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      {g.fields.map(([k, val]) => (
-                        <div key={k} className="flex flex-col gap-0.5">
-                          <span className="text-[10px] uppercase tracking-wide text-gray-500">{k.replace(/_/g, ' ')}</span>
-                          <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
-                            <span className="text-sm text-gray-100 truncate">{val}</span>
-                            <PencilSimple size={11} className="text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </button>
-                        </div>
-                      ))}
+                      {g.fields.map(([k, val]) => {
+                        const isEditing = editingField === k;
+                        return (
+                          <div key={k} className="flex flex-col gap-0.5">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-500">{k.replace(/_/g, ' ')}</span>
+                            {isEditing ? (
+                              <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
+                                onBlur={() => { if (editValue !== (val || '')) saveField(k, editValue); else setEditingField(null); }}
+                                onKeyDown={e => { if (e.key === 'Enter') saveField(k, editValue); if (e.key === 'Escape') setEditingField(null); }}
+                                className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
+                            ) : (
+                              <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
+                                <span className="text-sm text-gray-100 truncate">{val}</span>
+                                <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ));
