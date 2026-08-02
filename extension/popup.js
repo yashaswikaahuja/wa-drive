@@ -629,6 +629,28 @@ fillBtn.addEventListener('click', async () => {
             }),
           });
         } catch (e) { console.warn('[CC] session post failed:', e.message); }
+
+        // Sync mappings — update with correct labels, order, and fill counts
+        try {
+          const norm = l => (l||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
+          const updates = {};
+          for (let i = 0; i < formFields.length; i++) {
+            const f = formFields[i];
+            const sk = norm(f.label);
+            if (!sk || sk.length < 2) continue;
+            const fbsInfo = fbs[f.selector];
+            const profileKey = fbsInfo?.profileKey || (mapping[f.selector] ? Object.entries(profile).find(([,v]) => v === mapping[f.selector].value)?.[0] : null) || null;
+            const wasFilled = records.some(r => r.selector === f.selector && r.result === 'filled');
+            updates[sk] = { profileKey, label: f.label, type: f.type === 'select' ? 'dropdown' : f.type === 'radio' ? 'radio' : f.type === 'checkbox' ? 'checkbox' : 'text', order: i, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+          }
+          if (Object.keys(updates).length > 0) {
+            await fetch(backendUrl + '/mappings/' + semanticFormKey, {
+              method: 'POST', headers,
+              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: document.title.slice(0, 80), lastSeen: new Date().toISOString().slice(0, 10) } }),
+            });
+          }
+        } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }
+
         return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length, records: records.filter(r => r.result !== 'filled').slice(0, 10), filledRecords: records.filter(r => r.result === 'filled').slice(0, 25) };
       }
     });

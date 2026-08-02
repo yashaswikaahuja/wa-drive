@@ -223,19 +223,27 @@ router.post('/:formKey', async (req, res) => {
     }
     if (updates) {
       for (const [semanticKey, info] of Object.entries(updates)) {
-        const { profileKey, delta = {} } = info;
+        const { profileKey, delta = {}, label, type, order } = info;
         const existing = mappings[formKey][semanticKey];
         if (existing) {
           existing.fills = (existing.fills || 0) + (delta.fills || 0);
           existing.corrections = (existing.corrections || 0) + (delta.corrections || 0);
-          existing.profileKey = profileKey;
+          // Only update profileKey if provided and not already manually set
+          if (profileKey !== undefined && existing.source !== 'manual') existing.profileKey = profileKey;
+          if (label) existing.label = label;
+          if (type) existing.type = type;
+          if (order !== undefined) existing.order = order;
           existing.lastSeen = today;
         } else {
           mappings[formKey][semanticKey] = {
-            profileKey,
+            profileKey: profileKey || null,
+            label: label || null,
+            type: type || 'text',
+            order: order !== undefined ? order : null,
             fills: delta.fills || 0,
             corrections: delta.corrections || 0,
             lastSeen: today,
+            source: profileKey ? 'agent' : 'seed',
           };
         }
       }
