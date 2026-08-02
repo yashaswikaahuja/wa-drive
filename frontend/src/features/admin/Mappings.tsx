@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { ArrowLeft, ArrowsClockwise, Trash } from '@phosphor-icons/react';
+import { ArrowLeft, Trash } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { useFocusTrap } from '../../shared/useFocusTrap';
@@ -132,22 +132,6 @@ export default function MappingsPage() {
           setForms(prev => prev.filter(f => f.formKey !== formKey));
           if (selected?.formKey === formKey) { setSelected(null); setFields({}); }
         } catch { toast.error('Failed to delete form mappings'); }
-      },
-    });
-  }
-
-  async function backfillFromSessions() {
-    setConfirmState({
-      message: 'Backfill mappings for all forms from past sessions? Existing assignments are kept.',
-      confirmLabel: 'Backfill',
-      onConfirm: async () => {
-        setLoading(true);
-        try {
-          const r = await api.post('/mappings/backfill');
-          toast.success(`Backfill done: ${r.data.seededTotal} fields added across ${r.data.formsSeeded} forms.`);
-          await loadList();
-        } catch (e) { console.warn('backfill failed', e); toast.error('Backfill failed'); }
-        finally { setLoading(false); }
       },
     });
   }
@@ -324,17 +308,12 @@ export default function MappingsPage() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">Form Mappings</h1>
-          <p className="text-sm text-gray-400">
-            Each form your operators visit gets recorded here. Click any form to assign which profile field
-            fills which form field. Edits take effect on the next fill.
-          </p>
-        </div>
-        <button onClick={backfillFromSessions} className="btn-secondary flex items-center gap-2 flex-shrink-0" title="Add fields from past autofill sessions to mappings">
-          <ArrowsClockwise size={16} /> Backfill from sessions
-        </button>
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">Form Mappings</h1>
+        <p className="text-sm text-gray-400">
+          Each form your operators visit gets recorded here. Click any form to assign which profile field
+          fills which form field. Edits take effect on the next fill.
+        </p>
       </div>
 
       <input
