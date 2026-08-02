@@ -33,11 +33,13 @@ async function generateFillPlan({ tabId, profile, backendUrl, groqKey, llmBaseUr
     for (const field of formFields) {
       const semanticKey = getSemanticKey(field.label);
       const saved = savedMapping[semanticKey];
-      if (!saved) continue;
+      if (!saved || !saved.profileKey || !profile[saved.profileKey]) continue;
+      // Manual mappings always apply; auto mappings need confidence >= 0.2
       const conf = calcConfidence(saved.fills || 0, saved.corrections || 0);
-      if (conf >= 0.2 && saved.profileKey && profile[saved.profileKey]) {
+      const isManual = saved.source === 'manual';
+      if (isManual || conf >= 0.2) {
         mapping[field.selector] = { value: profile[saved.profileKey], type: field.type };
-        filledBySource[field.selector] = { label: field.label, semanticKey, profileKey: saved.profileKey, source: 'saved', confidence: conf };
+        filledBySource[field.selector] = { label: field.label, semanticKey, profileKey: saved.profileKey, source: 'saved', confidence: isManual ? 1 : conf };
       }
     }
   }

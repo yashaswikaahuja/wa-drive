@@ -27,13 +27,14 @@ interface FieldMapping {
 }
 
 const PROFILE_KEY_GROUPS: { label: string; keys: string[] }[] = [
-  { label: 'Identity', keys: ['name', 'father_name', 'mother_name', 'dob', 'gender', 'nationality', 'category', 'religion', 'marital_status'] },
+  { label: 'Identity', keys: ['name', 'first_name', 'middle_name', 'last_name', 'father_name', 'mother_name', 'husband_name', 'dob', 'gender', 'nationality', 'category', 'religion', 'marital_status'] },
   { label: 'Contact', keys: ['phone', 'email', 'email_id'] },
   { label: 'IDs', keys: ['aadhaar_number', 'vid', 'pan_number', 'epic_number'] },
-  { label: 'Address', keys: ['pincode', 'state', 'district', 'block', 'village', 'sub_division', 'police_station', 'post_office', 'street', 'house_no', 'address', 'permanent_address', 'domicile_state'] },
-  { label: 'Education (10th)', keys: ['roll_number_10th', 'board_10th', 'passing_year_10th', 'marks_10th', 'stream_10th'] },
-  { label: 'Education (12th)', keys: ['roll_number_12th', 'board_12th', 'passing_year_12th', 'marks_12th', 'stream_12th'] },
-  { label: 'Education (other)', keys: ['roll_number', 'board_name', 'year_of_passing', 'grade', 'division', 'subject', 'subjects', 'school_name', 'university_name', 'degree_name', 'highest_education_qualification'] },
+  { label: 'Address', keys: ['pincode', 'state', 'district', 'block', 'village', 'sub_division', 'police_station', 'post_office', 'ward_no', 'city', 'street', 'house_no', 'address', 'permanent_address', 'domicile_state'] },
+  { label: 'Education (10th)', keys: ['roll_number_10th', 'board_10th', 'passing_year_10th', 'marks_obtained_10th', 'total_marks_10th', 'percentage_10th', 'division_10th', 'school_name', 'certificate_number_10th'] },
+  { label: 'Education (12th)', keys: ['roll_number_12th', 'board_12th', 'passing_year_12th', 'marks_obtained_12th', 'total_marks_12th', 'percentage_12th', 'division_12th', 'stream_12th', 'school_name_12th', 'certificate_number_12th'] },
+  { label: 'Education (Graduation)', keys: ['roll_number_grad', 'university_name', 'degree', 'passing_year_grad', 'marks_obtained_grad', 'total_marks_grad', 'percentage_grad', 'division_grad', 'registration_number_grad'] },
+  { label: 'Education (other)', keys: ['roll_number', 'board_name', 'year_of_passing', 'grade', 'division', 'subject', 'subjects', 'school_name', 'degree_name', 'highest_education_qualification', 'qualification_status'] },
   { label: 'Documents', keys: ['registration_number', 'certificate_number_10th', 'certificate_number_12th'] },
 ];
 
@@ -153,27 +154,21 @@ export default function MappingsPage() {
               <img src={favicon(selected.hostname)!} alt="" className="w-10 h-10 rounded-xl bg-white p-1" />
             )}
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-semibold text-white tracking-tight truncate">{selected.hostname || 'Unknown host'}</h1>
-              {selected.title && <div className="text-sm text-gray-400 truncate mt-0.5">{selected.title}</div>}
-              <div className="flex gap-3 mt-3 text-xs text-gray-500 flex-wrap">
-                <span>formKey: <code className="bg-white/[0.04] px-1.5 py-0.5 rounded text-gray-300">{selected.formKey}</code></span>
-                <span>·</span>
+              <h1 className="text-xl font-semibold text-white tracking-tight truncate">{selected.title || selected.hostname || 'Unknown form'}</h1>
+              {selected.title && selected.hostname && <div className="text-xs text-gray-500 mt-0.5">{selected.hostname}</div>}
+              <div className="flex gap-3 mt-2 text-xs text-gray-500">
                 <span>{total} fields</span>
                 <span>·</span>
-                <span className="tabular-nums font-mono">{selected.fills} fills</span>
-                {selected.lastSeen && <><span>·</span><span>last seen {selected.lastSeen}</span></>}
+                <span>{mapped} mapped</span>
+                {selected.fills > 0 && <><span>·</span><span>{selected.fills} fills</span></>}
               </div>
             </div>
             <button onClick={() => deleteForm(selected.formKey)} className="btn-ghost text-red-400 text-xs flex items-center gap-1">
-              <Trash size={14} /> delete form
+              <Trash size={14} /> Delete
             </button>
           </div>
 
-          <div className="mt-5">
-            <div className="flex justify-between items-center mb-1.5 text-xs">
-              <span className="text-gray-400">{mapped} of {total} fields mapped</span>
-              <span className="text-gray-300 tabular-nums font-mono">{pct}%</span>
-            </div>
+          <div className="mt-4">
             <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
               <div className={`h-full transition-all ${pct === 100 ? 'bg-green-500' : pct > 50 ? 'bg-[#0a84ff]' : 'bg-yellow-500'}`} style={{ width: pct + '%' }} />
             </div>
@@ -181,63 +176,35 @@ export default function MappingsPage() {
         </div>
 
         <div className="card overflow-hidden">
-          <div className="hidden sm:grid grid-cols-12 px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04]">
-            <div className="col-span-6">Form Field Label</div>
-            <div className="col-span-4">Maps To Profile Key</div>
-            <div className="col-span-2 text-right">Stats</div>
+          <div className="flex items-center px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04]">
+            <div className="flex-1">Form Field</div>
+            <div className="w-52 flex-shrink-0">Profile Key</div>
+            <div className="w-6 flex-shrink-0" />
           </div>
           <div className="divide-y divide-white/[0.04]">
             {fieldEntries.map(([key, m]) => {
-              const display = m.label || key;
-              const type = m.type || 'text';
-              const typeAbbr = type === 'dropdown' ? 'SEL' : type === 'radio' ? 'RAD' : type === 'checkbox' ? 'CHK' : type === 'textarea' ? 'TXT' : 'INP';
-              const typeColor = type === 'dropdown' ? 'bg-purple-500/20 text-purple-300' :
-                type === 'radio' ? 'bg-orange-500/20 text-orange-300' :
-                type === 'checkbox' ? 'bg-green-500/20 text-green-300' :
-                type === 'textarea' ? 'bg-[#0a84ff]/20 text-[#0a84ff]' :
-                'bg-white/[0.04] text-gray-300';
+              const display = m.label || key.replace(/_/g, ' ');
               return (
-                <div key={key} className={`flex flex-col gap-2 sm:grid sm:grid-cols-12 px-4 py-2.5 sm:items-center hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
-                  <div className="col-span-6 text-sm text-gray-200 flex items-center gap-2">
-                    <span className={`inline-flex items-center justify-center w-9 h-5 rounded text-[9px] font-bold tracking-wider ${typeColor}`} title={type}>
-                      {typeAbbr}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="truncate" title={display}>{display}</div>
-                      {m.label && m.label !== key && (
-                        <div className="text-[10px] text-gray-600 font-mono mt-0.5 truncate">key: {key}</div>
-                      )}
-                    </div>
+                <div key={key} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-200 truncate" title={display}>{display}</div>
                   </div>
-                  <div className="col-span-4">
+                  <div className="w-52 flex-shrink-0">
                     <select
                       value={m.profileKey || ''}
                       onChange={(e) => updateField(key, e.target.value)}
                       disabled={savingKey === key}
-                      className="input-field text-sm w-full"
+                      className="input-field text-xs w-full py-1.5"
                     >
-                      <option value="">— skip / no mapping —</option>
+                      <option value="">— skip —</option>
                       {PROFILE_KEY_GROUPS.map(group => (
                         <optgroup key={group.label} label={group.label}>
-                          {group.keys.map(k => <option key={k} value={k}>{k}</option>)}
+                          {group.keys.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
                         </optgroup>
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-2 flex items-center justify-end gap-2">
-                    <span className="text-[11px] text-gray-500 tabular-nums font-mono">f:{m.fills} c:{m.corrections}</span>
-                    {m.source && (
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                        m.source === 'manual' ? 'bg-cyan-500/20 text-cyan-300' :
-                        m.source === 'agent' ? 'bg-[#0a84ff]/20 text-[#0a84ff]' :
-                        m.source === 'heuristic' ? 'bg-purple-500/20 text-purple-300' :
-                        m.source === 'backfill' ? 'bg-green-500/20 text-green-300' :
-                        m.source === 'seed' ? 'bg-yellow-500/20 text-yellow-300' :
-                        'bg-white/[0.04] text-gray-400'
-                      }`}>{m.source}</span>
-                    )}
-                    <button onClick={() => deleteField(key)} className="text-gray-500 hover:text-red-400 text-base" title="Remove">×</button>
-                  </div>
+                  <button onClick={() => deleteField(key)} className="text-gray-600 hover:text-red-400 text-lg flex-shrink-0" title="Remove">×</button>
                 </div>
               );
             })}
@@ -299,29 +266,23 @@ export default function MappingsPage() {
                 onClick={() => openForm(f)}
                 className="card p-4 cursor-pointer hover:border-white/10 transition group"
               >
-                <div className="flex items-start gap-4">
+                <div className="flex items-center gap-3">
                   <img
                     src={favicon(f.hostname) || ''}
                     alt=""
                     onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }}
-                    className="w-9 h-9 rounded-xl bg-white p-1 flex-shrink-0"
+                    className="w-8 h-8 rounded-lg bg-white p-0.5 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <h3 className="font-semibold text-white tracking-tight truncate">{f.hostname || '(unknown host)'}</h3>
-                      <span className="text-[11px] text-gray-500 flex-shrink-0">{f.lastSeen || '—'}</span>
-                    </div>
-                    {f.title && <div className="text-xs text-gray-500 truncate mt-0.5">{f.title}</div>}
-                    <div className="flex items-center gap-3 mt-2.5">
-                      <code className="text-[10px] text-gray-600 font-mono">{f.formKey}</code>
-                      <div className="flex items-center gap-2 flex-1 max-w-md">
-                        <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden flex-1">
-                          <div className={`h-full ${pct === 100 ? 'bg-green-500' : pct > 50 ? 'bg-[#0a84ff]' : 'bg-yellow-500'}`} style={{ width: pct + '%' }} />
-                        </div>
-                        <span className="text-[11px] text-gray-400 flex-shrink-0 tabular-nums font-mono">{f.fieldCount - f.unmapped}/{f.fieldCount}</span>
+                    <h3 className="font-medium text-white text-sm truncate">{f.title || f.hostname || '(unknown)'}</h3>
+                    {f.title && f.hostname && <div className="text-[11px] text-gray-600 truncate">{f.hostname}</div>}
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="flex items-center gap-2 w-32">
+                      <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden flex-1">
+                        <div className={`h-full ${pct === 100 ? 'bg-green-500' : pct > 50 ? 'bg-[#0a84ff]' : 'bg-yellow-500'}`} style={{ width: pct + '%' }} />
                       </div>
-                      {f.fills > 0 && <span className="text-[10px] text-gray-500 tabular-nums font-mono">{f.fills} fills</span>}
-                      {f.unmapped > 0 && <span className="text-[10px] text-yellow-500 tabular-nums font-mono">{f.unmapped} unmapped</span>}
+                      <span className="text-[11px] text-gray-500 tabular-nums">{f.fieldCount - f.unmapped}/{f.fieldCount}</span>
                     </div>
                   </div>
                 </div>
