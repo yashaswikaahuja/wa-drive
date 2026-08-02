@@ -806,7 +806,11 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       const { value, type } = fieldData;
       const isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
       const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
-      const isDependent = PRIORITY_KEYS.some(k => fieldLabel.includes(k) || selector.toLowerCase().includes(k));
+      // Cascade treatment only applies to actual dropdowns (state→district→block
+      // selects that load options via AJAX). A TEXT field labeled "district"
+      // must NOT wait for <option>s it will never have.
+      const _selectLike = /^(select|dropdown|ng-dropdown|mat-select)$/.test(type || '');
+      const isDependent = _selectLike && PRIORITY_KEYS.some(k => fieldLabel.includes(k) || selector.toLowerCase().includes(k));
 
       // Resolve element
       let el;
