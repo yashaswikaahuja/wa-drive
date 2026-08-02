@@ -172,6 +172,25 @@ async function runJobDispatch(envelope, tabId) {
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
         const records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]');
         const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
+        // Sync mappings — labels, types, order, options (same as popup path)
+        try {
+          const updates = {};
+          for (let i = 0; i < formFields.length; i++) {
+            const f = formFields[i];
+            const sk = gsk(f.label);
+            if (!sk || sk.length < 2) continue;
+            const info = fbs[f.selector];
+            const profileKey = info?.profileKey || (mapping[f.selector] ? Object.entries(prof).find(([,v]) => v === mapping[f.selector].value)?.[0] : null) || null;
+            const wasFilled = records.some(r => r.selector === f.selector && r.result === 'filled');
+            updates[sk] = { profileKey, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+          }
+          if (Object.keys(updates).length > 0) {
+            await fetch(bUrl + '/mappings/' + pk, {
+              method: 'POST', headers,
+              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: document.title.slice(0, 80), lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
+            });
+          }
+        } catch (e) { console.warn('[CC] bg mapping sync failed:', e.message); }
         return { ok: true, filled: filled || 0, failed, fields: Object.keys(mapping).length, records, primaryKey: pk };
       },
     });

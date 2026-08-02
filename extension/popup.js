@@ -653,7 +653,7 @@ fillBtn.addEventListener('click', async () => {
           if (Object.keys(updates).length > 0) {
             await fetch(backendUrl + '/mappings/' + semanticFormKey, {
               method: 'POST', headers,
-              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: document.title.slice(0, 80), lastSeen: new Date().toISOString().slice(0, 10) } }),
+              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: document.title.slice(0, 80), lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
             });
           }
         } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }
