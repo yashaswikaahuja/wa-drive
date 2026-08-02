@@ -641,7 +641,14 @@ fillBtn.addEventListener('click', async () => {
             const fbsInfo = fbs[f.selector];
             const profileKey = fbsInfo?.profileKey || (mapping[f.selector] ? Object.entries(profile).find(([,v]) => v === mapping[f.selector].value)?.[0] : null) || null;
             const wasFilled = records.some(r => r.selector === f.selector && r.result === 'filled');
-            updates[sk] = { profileKey, label: f.label, type: f.type === 'select' ? 'dropdown' : f.type === 'radio' ? 'radio' : f.type === 'checkbox' ? 'checkbox' : 'text', order: i, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+            updates[sk] = {
+              profileKey,
+              label: f.label,
+              type: f.type,
+              order: i,
+              options: f.options || null,
+              delta: { fills: wasFilled ? 1 : 0, corrections: 0 },
+            };
           }
           if (Object.keys(updates).length > 0) {
             await fetch(backendUrl + '/mappings/' + semanticFormKey, {

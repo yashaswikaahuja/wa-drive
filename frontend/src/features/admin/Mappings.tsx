@@ -19,6 +19,7 @@ interface FieldMapping {
   label?: string;
   type?: string;
   order?: number;
+  options?: string[] | null;
   profileKey: string | null;
   fills: number;
   corrections: number;
@@ -51,9 +52,30 @@ export default function MappingsPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [translations, setTranslations] = useState<Record<string, string>>({});
+  const [newTransKey, setNewTransKey] = useState('');
+  const [newTransVal, setNewTransVal] = useState('');
   const [confirmState, setConfirmState] = useState<{ message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
 
-  useEffect(() => { loadList(); }, []);
+  useEffect(() => { loadList(); loadTranslations(); }, []);
+
+  async function loadTranslations() {
+    try { const r = await api.get('/mappings/translations'); setTranslations(r.data || {}); } catch {}
+  }
+
+  async function saveTranslation(key: string, value: string) {
+    try {
+      await api.patch('/mappings/translations', { entries: { [key]: value } });
+      setTranslations(prev => ({ ...prev, [key]: value }));
+    } catch { toast.error('Failed to save translation'); }
+  }
+
+  async function removeTranslation(key: string) {
+    try {
+      await api.patch('/mappings/translations', { entries: { [key]: null } });
+      setTranslations(prev => { const n = { ...prev }; delete n[key]; return n; });
+    } catch { toast.error('Failed to remove'); }
+  }
 
   async function loadList() {
     setLoading(true);
@@ -144,8 +166,8 @@ export default function MappingsPage() {
     const getTypeGroup = (t: string) => {
       if (!t || t === 'text' || t === 'textarea' || t === 'number' || t === 'email' || t === 'tel') return 'text';
       if (t === 'dropdown' || t === 'select' || t === 'mat-select' || t === 'ng-dropdown') return 'dropdown';
-      if (t === 'radio' || t === 'mat-radio') return 'radio';
-      if (t === 'checkbox' || t === 'mat-checkbox') return 'checkbox';
+      if (t === 'radio' || t === 'radio-group' || t === 'mat-radio') return 'radio';
+      if (t === 'checkbox' || t === 'checkbox-group' || t === 'checkbox-agreement' || t === 'mat-checkbox') return 'checkbox';
       if (t === 'date') return 'date';
       return 'text';
     };
@@ -226,42 +248,53 @@ export default function MappingsPage() {
               const display = m.label || key.replace(/_/g, ' ');
               const type = m.type || 'text';
               const typeIcon = type === 'dropdown' || type === 'select' || type === 'mat-select' || type === 'ng-dropdown' ? '▾'
-                : type === 'radio' || type === 'mat-radio' ? '◉'
-                : type === 'checkbox' || type === 'mat-checkbox' ? '☑'
+                : type === 'radio-group' || type === 'radio' || type === 'mat-radio' ? '◉'
+                : type === 'checkbox-group' || type === 'checkbox' || type === 'checkbox-agreement' || type === 'mat-checkbox' ? '☑'
                 : type === 'date' ? '📅'
                 : '⎽';
               const typeLabel = type === 'dropdown' || type === 'select' || type === 'mat-select' || type === 'ng-dropdown' ? 'Dropdown'
-                : type === 'radio' || type === 'mat-radio' ? 'Radio'
-                : type === 'checkbox' || type === 'mat-checkbox' ? 'Checkbox'
+                : type === 'radio-group' || type === 'radio' || type === 'mat-radio' ? 'Radio'
+                : type === 'checkbox-group' || type === 'checkbox' || type === 'checkbox-agreement' || type === 'mat-checkbox' ? 'Checkbox'
                 : type === 'date' ? 'Date'
                 : 'Text';
               const typeColor = type === 'dropdown' || type === 'select' || type === 'mat-select' || type === 'ng-dropdown' ? 'text-purple-400'
-                : type === 'radio' || type === 'mat-radio' ? 'text-orange-400'
-                : type === 'checkbox' || type === 'mat-checkbox' ? 'text-green-400'
+                : type === 'radio-group' || type === 'radio' || type === 'mat-radio' ? 'text-orange-400'
+                : type === 'checkbox-group' || type === 'checkbox' || type === 'checkbox-agreement' || type === 'mat-checkbox' ? 'text-green-400'
                 : type === 'date' ? 'text-sky-400'
                 : 'text-gray-500';
+              const hasOptions = m.options && m.options.length > 0;
               return (
-                <div key={key} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
-                  <span className={`text-sm flex-shrink-0 w-5 text-center ${typeColor}`} title={typeLabel}>{typeIcon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-200 truncate" title={display}>{display}</div>
+                <div key={key} className={`px-4 py-2.5 hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm flex-shrink-0 w-5 text-center ${typeColor}`} title={typeLabel}>{typeIcon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-gray-200 truncate" title={display}>{display}</div>
+                    </div>
+                    <div className="w-52 flex-shrink-0">
+                      <select
+                        value={m.profileKey || ''}
+                        onChange={(e) => updateField(key, e.target.value)}
+                        disabled={savingKey === key}
+                        className="input-field text-xs w-full py-1.5"
+                      >
+                        <option value="">{type === 'checkbox-agreement' ? '— auto-check —' : '— skip —'}</option>
+                        {PROFILE_KEY_GROUPS.map(group => (
+                          <optgroup key={group.label} label={group.label}>
+                            {group.keys.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                    <button onClick={() => deleteField(key)} className="text-gray-600 hover:text-red-400 text-lg flex-shrink-0" title="Remove">×</button>
                   </div>
-                  <div className="w-52 flex-shrink-0">
-                    <select
-                      value={m.profileKey || ''}
-                      onChange={(e) => updateField(key, e.target.value)}
-                      disabled={savingKey === key}
-                      className="input-field text-xs w-full py-1.5"
-                    >
-                      <option value="">— skip —</option>
-                      {PROFILE_KEY_GROUPS.map(group => (
-                        <optgroup key={group.label} label={group.label}>
-                          {group.keys.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
-                        </optgroup>
+                  {hasOptions && (
+                    <div className="ml-8 mt-1.5 flex flex-wrap gap-1.5">
+                      {m.options!.slice(0, 8).map((opt, i) => (
+                        <span key={i} className={`inline-block px-2 py-0.5 rounded text-[11px] ${typeColor} bg-white/[0.03] border border-white/[0.06]`}>{opt}</span>
                       ))}
-                    </select>
-                  </div>
-                  <button onClick={() => deleteField(key)} className="text-gray-600 hover:text-red-400 text-lg flex-shrink-0" title="Remove">×</button>
+                      {m.options!.length > 8 && <span className="text-[11px] text-gray-600">+{m.options!.length - 8} more</span>}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -364,6 +397,39 @@ export default function MappingsPage() {
           onConfirm={() => { const fn = confirmState.onConfirm; setConfirmState(null); fn(); }}
         />
       )}
+
+      {/* Value Translations Table */}
+      <div className="mt-10">
+        <h2 className="text-lg font-semibold text-white mb-1">Value Translations</h2>
+        <p className="text-xs text-gray-500 mb-4">
+          When a profile value doesn't match a form option exactly (e.g. "OBC" vs "Other Backward Class"), add a translation here. These apply globally across all forms.
+        </p>
+        <div className="card overflow-hidden">
+          <div className="divide-y divide-white/[0.04]">
+            {Object.entries(translations).sort(([a], [b]) => a.localeCompare(b)).map(([key, val]) => (
+              <div key={key} className="flex items-center gap-3 px-4 py-2">
+                <span className="text-sm text-gray-300 font-mono flex-1">{key}</span>
+                <span className="text-gray-600">→</span>
+                <span className="text-sm text-gray-200 flex-1">{val}</span>
+                <button onClick={() => removeTranslation(key)} className="text-gray-600 hover:text-red-400 text-lg">×</button>
+              </div>
+            ))}
+            {Object.keys(translations).length === 0 && (
+              <div className="px-4 py-6 text-center text-gray-600 text-sm">No translations yet. Add common ones like OBC → Other Backward Class.</div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 px-4 py-3 border-t border-white/[0.04]">
+            <input value={newTransKey} onChange={e => setNewTransKey(e.target.value)} placeholder="Profile value (e.g. OBC)" className="input-field text-xs flex-1 py-1.5" />
+            <span className="text-gray-600 text-sm">→</span>
+            <input value={newTransVal} onChange={e => setNewTransVal(e.target.value)} placeholder="Form option text (e.g. Other Backward Class)" className="input-field text-xs flex-1 py-1.5" />
+            <button
+              onClick={() => { if (newTransKey.trim() && newTransVal.trim()) { saveTranslation(newTransKey.trim(), newTransVal.trim()); setNewTransKey(''); setNewTransVal(''); } }}
+              disabled={!newTransKey.trim() || !newTransVal.trim()}
+              className="btn-primary text-xs px-3 py-1.5"
+            >Add</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

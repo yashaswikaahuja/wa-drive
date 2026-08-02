@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
 import { guessProfileKey } from './label-mapper.js';
-import { loadDoc, mutateDoc, KEYS } from '../store.js';
+import { loadDoc, saveDoc, mutateDoc, KEYS } from '../store.js';
 
 const router = Router();
 
@@ -204,6 +204,44 @@ router.get('/', async (_req, res) => {
   res.json(Object.keys(await load()).filter(k => k !== '_meta'));
 });
 
+// ── Global value translations ──────────────────────────────────────────────────
+// Used by the extension at fill time to match profile values to form option text.
+// Stored as: { profileValue: formOptionText, ... }
+// Example: { "OBC": "Other Backward Class", "SC": "Scheduled Caste", "Male": "पुरुष" }
+
+const TRANSLATIONS_KEY = 'value_translations';
+
+// GET /api/mappings/translations — return all translations
+router.get('/translations', async (_req, res) => {
+  const data = await loadDoc(TRANSLATIONS_KEY);
+  res.json(data || {});
+});
+
+// POST /api/mappings/translations — bulk save translations
+router.post('/translations', authMiddleware, async (req, res) => {
+  const { translations } = req.body || {};
+  if (!translations || typeof translations !== 'object') return res.status(400).json({ error: 'translations object required' });
+  await saveDoc(TRANSLATIONS_KEY, translations);
+  res.json({ ok: true });
+});
+
+// PATCH /api/mappings/translations — add/update individual entries
+router.patch('/translations', authMiddleware, async (req, res) => {
+  const { entries } = req.body || {};
+  if (!entries || typeof entries !== 'object') return res.status(400).json({ error: 'entries object required' });
+  await mutateDoc(TRANSLATIONS_KEY, (current) => {
+    for (const [key, value] of Object.entries(entries)) {
+      if (value === null || value === '') {
+        delete current[key];
+      } else {
+        current[key] = value;
+      }
+    }
+    return current;
+  });
+  res.json({ ok: true });
+});
+
 // GET /api/mappings/:formKey
 router.get('/:formKey', async (req, res) => {
   const mappings = await load();
@@ -223,7 +261,7 @@ router.post('/:formKey', async (req, res) => {
     }
     if (updates) {
       for (const [semanticKey, info] of Object.entries(updates)) {
-        const { profileKey, delta = {}, label, type, order } = info;
+        const { profileKey, delta = {}, label, type, order, options } = info;
         const existing = mappings[formKey][semanticKey];
         if (existing) {
           existing.fills = (existing.fills || 0) + (delta.fills || 0);
@@ -233,6 +271,7 @@ router.post('/:formKey', async (req, res) => {
           if (label) existing.label = label;
           if (type) existing.type = type;
           if (order !== undefined) existing.order = order;
+          if (options) existing.options = options;
           existing.lastSeen = today;
         } else {
           mappings[formKey][semanticKey] = {
@@ -240,6 +279,7 @@ router.post('/:formKey', async (req, res) => {
             label: label || null,
             type: type || 'text',
             order: order !== undefined ? order : null,
+            options: options || null,
             fills: delta.fills || 0,
             corrections: delta.corrections || 0,
             lastSeen: today,

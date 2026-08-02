@@ -95,6 +95,10 @@ function extractFormFieldsWithFingerprint() {
     'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
   );
 
+  // ── Group radios and checkboxes by name ──
+  const radioGroups = {}; // name → { labels: [], selectors: [], groupLabel: '' }
+  const checkboxGroups = {}; // name → { labels: [], selectors: [], groupLabel: '' }
+
   let idx = 0;
   inputs.forEach((el) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' ||
@@ -105,13 +109,113 @@ function extractFormFieldsWithFingerprint() {
     const meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
     if (/search|query|filter|captcha|otp|token|csrf|recaptcha/i.test(meta)) return;
 
+    // Group radio buttons by name
+    if (el.type === 'radio' && el.name) {
+      if (!radioGroups[el.name]) {
+        radioGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx };
+        // Try to find a group-level label (legend, preceding heading, or fieldset label)
+        const fieldset = el.closest('fieldset');
+        const legend = fieldset && fieldset.querySelector('legend');
+        if (legend && isGoodLabel(legend.textContent.trim())) {
+          radioGroups[el.name].groupLabel = legend.textContent.trim();
+        } else {
+          // Look for a label/heading before this radio group's container
+          const container = el.closest('.form-group,.form-field,[class*="form-row"],tr,div');
+          if (container) {
+            const lbl = container.querySelector('label,.label,.field-label,td:first-child');
+            if (lbl && !lbl.querySelector('input') && isGoodLabel(lbl.textContent.trim())) {
+              radioGroups[el.name].groupLabel = lbl.textContent.trim();
+            }
+          }
+        }
+      }
+      const optLabel = getLabel(el) || el.value || '';
+      radioGroups[el.name].options.push(optLabel);
+      radioGroups[el.name].selectors.push(el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[name="${el.name}"][value="${el.value}"]`);
+      idx++;
+      return;
+    }
+
+    // Group non-agreement checkboxes by name (agreements handled separately)
+    if ((el.type === 'checkbox') && el.name) {
+      const lbl = getLabel(el) || el.value || '';
+      const isAgreement = /\b(i\s+)?(agree|accept|confirm|declare|certify|consent|terms|self.declaration)\b/i.test(lbl);
+      if (isAgreement) {
+        // Agreement checkboxes stay as individual fields
+        const selector = el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[name="${el.name}"]`;
+        formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: '', label: lbl, type: 'checkbox-agreement', index: idx, options: null });
+        idx++;
+        return;
+      }
+      if (!checkboxGroups[el.name]) {
+        checkboxGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx };
+        const container = el.closest('.form-group,.form-field,[class*="form-row"],tr,div,fieldset');
+        if (container) {
+          const legend = container.querySelector('legend');
+          const lbl2 = legend || container.querySelector('label:not(:has(input)),.label,.field-label');
+          if (lbl2 && isGoodLabel(lbl2.textContent.trim())) checkboxGroups[el.name].groupLabel = lbl2.textContent.trim();
+        }
+      }
+      checkboxGroups[el.name].options.push(lbl);
+      checkboxGroups[el.name].selectors.push(el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[name="${el.name}"][value="${el.value}"]`);
+      idx++;
+      return;
+    }
+
     const label = getLabel(el);
     const selector = el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : el.name ? `[name="${el.name}"]` : `form-field-${idx}`;
-    const type = el.tagName === 'SELECT' ? 'select' : el.type || 'text';
+
+    // For <select>, capture options
+    if (el.tagName === 'SELECT') {
+      const options = Array.from(el.querySelectorAll('option')).map(o => o.textContent.trim()).filter(t => t && !/^(select|choose|--)/i.test(t));
+      if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+      formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type: 'dropdown', index: idx, options: options.length > 0 ? options : null });
+      idx++;
+      return;
+    }
+
+    const type = el.type || 'text';
     if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: idx });
+    formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: idx, options: null });
     idx++;
   });
+
+  // ── Emit grouped radio fields ──
+  for (const [name, group] of Object.entries(radioGroups)) {
+    const groupLabel = group.groupLabel || group.options.join(' / ');
+    if (groupLabel) labelList.push(groupLabel.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    formFields.push({
+      selector: `[name="${name}"]`,
+      id: '', name,
+      value: '',
+      placeholder: '',
+      label: groupLabel,
+      type: 'radio-group',
+      index: group.index,
+      options: group.options,
+      optionSelectors: group.selectors,
+    });
+  }
+
+  // ── Emit grouped checkbox fields ──
+  for (const [name, group] of Object.entries(checkboxGroups)) {
+    const groupLabel = group.groupLabel || group.options.join(' / ');
+    if (groupLabel) labelList.push(groupLabel.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
+    formFields.push({
+      selector: `[name="${name}"]`,
+      id: '', name,
+      value: '',
+      placeholder: '',
+      label: groupLabel,
+      type: 'checkbox-group',
+      index: group.index,
+      options: group.options,
+      optionSelectors: group.selectors,
+    });
+  }
+
+  // Sort formFields by index to maintain form order
+  formFields.sort((a, b) => a.index - b.index);
 
   // ── Angular Material: mat-select ──
   let matIdx = 10000;

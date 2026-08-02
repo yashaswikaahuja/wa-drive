@@ -28,6 +28,28 @@ async function generateFillPlan({ tabId, profile, backendUrl, groqKey, llmBaseUr
     }
   }
 
+  // Step 2b: Load value translations
+  let translations = {};
+  if (backendUrl) {
+    try {
+      const res = await fetch(`${backendUrl}/mappings/translations`);
+      translations = await res.json() || {};
+    } catch {}
+  }
+
+  // Helper: translate profile value using global translations table
+  function translateValue(val) {
+    if (!val) return val;
+    // Exact match first
+    if (translations[val]) return translations[val];
+    // Case-insensitive match
+    const lower = val.toLowerCase();
+    for (const [k, v] of Object.entries(translations)) {
+      if (k.toLowerCase() === lower) return v;
+    }
+    return val;
+  }
+
   // Step 3: Apply saved mappings
   if (savedMapping) {
     for (const field of formFields) {
@@ -38,7 +60,12 @@ async function generateFillPlan({ tabId, profile, backendUrl, groqKey, llmBaseUr
       const conf = calcConfidence(saved.fills || 0, saved.corrections || 0);
       const isManual = saved.source === 'manual';
       if (isManual || conf >= 0.2) {
-        mapping[field.selector] = { value: profile[saved.profileKey], type: field.type };
+        let value = profile[saved.profileKey];
+        // For radio-group and dropdowns, apply translations for option matching
+        if (field.type === 'radio-group' || field.type === 'dropdown' || field.type === 'checkbox-group') {
+          value = translateValue(value);
+        }
+        mapping[field.selector] = { value, type: field.type };
         filledBySource[field.selector] = { label: field.label, semanticKey, profileKey: saved.profileKey, source: 'saved', confidence: isManual ? 1 : conf };
       }
     }
@@ -105,13 +132,18 @@ async function generateFillPlan({ tabId, profile, backendUrl, groqKey, llmBaseUr
   }
 
   // Step 6: Fuzzy match (skip if AI already ran on new form)
+  // Build translated profile for radio/dropdown matching
+  const translatedProfile = { ...profile };
+  for (const [k, v] of Object.entries(translatedProfile)) {
+    if (v && translations[v]) translatedProfile[k] = translations[v];
+  }
   const unmapped1 = isNewForm && groqKey ? [] : formFields.filter(f => !mapping[f.selector]);
-  const fuzzyResult = fuzzyMatch(unmapped1, profile);
+  const fuzzyResult = fuzzyMatch(unmapped1, translatedProfile);
   for (const [sel, val] of Object.entries(fuzzyResult)) {
     mapping[sel] = val;
     const field = formFields.find(f => f.selector === sel);
     if (field) {
-      const profileKey = Object.entries(profile).find(([, v]) => v === val.value)?.[0];
+      const profileKey = Object.entries(profile).find(([, v]) => v === val.value)?.[0] || Object.entries(translatedProfile).find(([, v]) => v === val.value)?.[0];
       filledBySource[sel] = { label: field.label, semanticKey: getSemanticKey(field.label), profileKey, source: 'fuzzy', confidence: 0.6 };
     }
   }
@@ -143,5 +175,5 @@ async function generateFillPlan({ tabId, profile, backendUrl, groqKey, llmBaseUr
     } catch {}
   }
 
-  return { mapping, filledBySource, formFields, formKey, semanticFormKey, primaryKey, portalAdapters, isNewForm };
+  return { mapping, filledBySource, formFields, formKey, semanticFormKey, primaryKey, portalAdapters, isNewForm, translations };
 }
