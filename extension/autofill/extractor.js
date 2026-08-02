@@ -112,7 +112,7 @@ function extractFormFieldsWithFingerprint() {
     // Group radio buttons by name
     if (el.type === 'radio' && el.name) {
       if (!radioGroups[el.name]) {
-        radioGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx };
+        radioGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx, firstEl: el };
         // Try to find a group-level label (legend, preceding heading, or fieldset label)
         const fieldset = el.closest('fieldset');
         const legend = fieldset && fieldset.querySelector('legend');
@@ -143,12 +143,12 @@ function extractFormFieldsWithFingerprint() {
       if (isAgreement) {
         // Agreement checkboxes stay as individual fields
         const selector = el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[name="${el.name}"]`;
-        formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: '', label: lbl, type: 'checkbox-agreement', index: idx, options: null });
+        formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: '', label: lbl, type: 'checkbox-agreement', index: idx, options: null, _el: el });
         idx++;
         return;
       }
       if (!checkboxGroups[el.name]) {
-        checkboxGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx };
+        checkboxGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx, firstEl: el };
         const container = el.closest('.form-group,.form-field,[class*="form-row"],tr,div,fieldset');
         if (container) {
           const legend = container.querySelector('legend');
@@ -169,14 +169,14 @@ function extractFormFieldsWithFingerprint() {
     if (el.tagName === 'SELECT') {
       const options = Array.from(el.querySelectorAll('option')).map(o => o.textContent.trim()).filter(t => t && !/^(select|choose|--)/i.test(t));
       if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-      formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type: 'dropdown', index: idx, options: options.length > 0 ? options : null });
+      formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type: 'dropdown', index: idx, options: options.length > 0 ? options : null, _el: el });
       idx++;
       return;
     }
 
     const type = el.type || 'text';
     if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: idx, options: null });
+    formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type, index: idx, options: null, _el: el });
     idx++;
   });
 
@@ -194,6 +194,7 @@ function extractFormFieldsWithFingerprint() {
       index: group.index,
       options: group.options,
       optionSelectors: group.selectors,
+      _el: group.firstEl,
     });
   }
 
@@ -211,11 +212,11 @@ function extractFormFieldsWithFingerprint() {
       index: group.index,
       options: group.options,
       optionSelectors: group.selectors,
+      _el: group.firstEl,
     });
   }
 
-  // Sort formFields by index to maintain form order
-  formFields.sort((a, b) => a.index - b.index);
+  // (final visual-position sort happens after all widgets are collected — see below)
 
   // ── Angular Material: mat-select ──
   let matIdx = 10000;
@@ -228,7 +229,7 @@ function extractFormFieldsWithFingerprint() {
     if (!el.id) el.setAttribute('data-cc-id', id);
     const type = el.tagName === 'SELECT' ? 'select' : 'mat-select';
     labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || el.name || '', value: '', placeholder: '', label, type, index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || el.name || '', value: '', placeholder: '', label, type, index: matIdx++, _el: el });
   });
 
   // ── mat-checkbox / mat-radio ──
@@ -238,7 +239,7 @@ function extractFormFieldsWithFingerprint() {
     if (!isGoodLabel(label)) return;
     const id = el.id || `mat-cb-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
-    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-checkbox', index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-checkbox', index: matIdx++, _el: el });
   });
   document.querySelectorAll('mat-radio-button').forEach(el => {
     if (isInSkipContext(el)) return;
@@ -247,7 +248,7 @@ function extractFormFieldsWithFingerprint() {
     const name = el.getAttribute('name') || el.closest('mat-radio-group')?.getAttribute('formcontrolname') || '';
     const id = el.id || `mat-rb-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
-    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name, value: label, placeholder: '', label, type: 'mat-radio', index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name, value: label, placeholder: '', label, type: 'mat-radio', index: matIdx++, _el: el });
   });
 
   // ── role=combobox (non-input, non-search) ──
@@ -261,7 +262,7 @@ function extractFormFieldsWithFingerprint() {
     const id = el.id || `combobox-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++ });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++, _el: el });
   });
 
   // ── Angular ng-select / ng-dropdown custom widgets ──
@@ -317,8 +318,29 @@ function extractFormFieldsWithFingerprint() {
       label,
       type: 'ng-dropdown',
       index: matIdx++,
+      _el: el,
     });
   });
+
+  // ── Order fields by TRUE VISUAL position ────────────────────────────────────
+  // Uses rendered geometry (getBoundingClientRect) so fields sort in real
+  // top-to-bottom, left-to-right order — correct even when CSS (flex `order`,
+  // grid) or custom widgets (mat-select/ng-dropdown) diverge from DOM order,
+  // and for multi-column layouts. Element refs are stripped before return
+  // (DOM nodes can't cross the executeScript boundary).
+  const ROW_BAND = 8; // px: fields within this vertical distance are the same row
+  function _visualPos(el) {
+    if (!el || typeof el.getBoundingClientRect !== 'function') return { row: 1e9, left: 1e9 };
+    const r = el.getBoundingClientRect();
+    const top = r.top + (window.pageYOffset || 0);
+    const left = r.left + (window.pageXOffset || 0);
+    // Unrendered / display:none → send to the end
+    if (r.width === 0 && r.height === 0 && top === 0 && left === 0) return { row: 1e9, left: 1e9 };
+    return { row: Math.round(top / ROW_BAND), left: Math.round(left) };
+  }
+  formFields.forEach(f => { f._pos = _visualPos(f._el); });
+  formFields.sort((a, b) => (a._pos.row - b._pos.row) || (a._pos.left - b._pos.left));
+  formFields.forEach((f, i) => { f.index = i; delete f._el; delete f._pos; });
 
   // ── Fingerprint ──
   const labelSig = labelList.sort().slice(0, 10).join('|');
