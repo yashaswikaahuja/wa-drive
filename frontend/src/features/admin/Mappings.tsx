@@ -50,6 +50,7 @@ export default function MappingsPage() {
   const [search, setSearch] = useState('');
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [confirmState, setConfirmState] = useState<{ message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
 
   useEffect(() => { loadList(); }, []);
@@ -138,9 +139,28 @@ export default function MappingsPage() {
       if (bo !== undefined) return 1;
       return a[0].localeCompare(b[0]);
     });
+
+    // Type grouping helper
+    const getTypeGroup = (t: string) => {
+      if (!t || t === 'text' || t === 'textarea' || t === 'number' || t === 'email' || t === 'tel') return 'text';
+      if (t === 'dropdown' || t === 'select' || t === 'mat-select' || t === 'ng-dropdown') return 'dropdown';
+      if (t === 'radio' || t === 'mat-radio') return 'radio';
+      if (t === 'checkbox' || t === 'mat-checkbox') return 'checkbox';
+      if (t === 'date') return 'date';
+      return 'text';
+    };
+
+    const filteredEntries = typeFilter === 'all' ? fieldEntries : fieldEntries.filter(([, m]) => getTypeGroup(m.type || 'text') === typeFilter);
     const mapped = fieldEntries.filter(([, m]) => m.profileKey).length;
     const total = fieldEntries.length;
     const pct = total ? Math.round((mapped / total) * 100) : 0;
+
+    // Count by type for filter tabs
+    const typeCounts: Record<string, number> = { all: fieldEntries.length };
+    for (const [, m] of fieldEntries) {
+      const g = getTypeGroup(m.type || 'text');
+      typeCounts[g] = (typeCounts[g] || 0) + 1;
+    }
 
     return (
       <div className="max-w-5xl mx-auto">
@@ -175,17 +195,54 @@ export default function MappingsPage() {
           </div>
         </div>
 
+        <div className="flex gap-1.5 mb-3 flex-wrap">
+          {[
+            { key: 'all', label: 'All', icon: '' },
+            { key: 'text', label: 'Text', icon: '⎽' },
+            { key: 'dropdown', label: 'Dropdown', icon: '▾' },
+            { key: 'radio', label: 'Radio', icon: '◉' },
+            { key: 'checkbox', label: 'Checkbox', icon: '☑' },
+            { key: 'date', label: 'Date', icon: '📅' },
+          ].filter(t => typeCounts[t.key]).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTypeFilter(t.key)}
+              className={`px-3 py-1 rounded-full text-xs transition ${typeFilter === t.key ? 'bg-[#0a84ff] text-white' : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'}`}
+            >
+              {t.icon && <span className="mr-1">{t.icon}</span>}{t.label} <span className="ml-1 opacity-60">{typeCounts[t.key]}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="card overflow-hidden">
           <div className="flex items-center px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04]">
-            <div className="flex-1">Form Field</div>
+            <span className="w-5 flex-shrink-0" />
+            <div className="flex-1 ml-3">Form Field</div>
             <div className="w-52 flex-shrink-0">Profile Key</div>
             <div className="w-6 flex-shrink-0" />
           </div>
           <div className="divide-y divide-white/[0.04]">
-            {fieldEntries.map(([key, m]) => {
+            {filteredEntries.map(([key, m]) => {
               const display = m.label || key.replace(/_/g, ' ');
+              const type = m.type || 'text';
+              const typeIcon = type === 'dropdown' || type === 'select' || type === 'mat-select' || type === 'ng-dropdown' ? '▾'
+                : type === 'radio' || type === 'mat-radio' ? '◉'
+                : type === 'checkbox' || type === 'mat-checkbox' ? '☑'
+                : type === 'date' ? '📅'
+                : '⎽';
+              const typeLabel = type === 'dropdown' || type === 'select' || type === 'mat-select' || type === 'ng-dropdown' ? 'Dropdown'
+                : type === 'radio' || type === 'mat-radio' ? 'Radio'
+                : type === 'checkbox' || type === 'mat-checkbox' ? 'Checkbox'
+                : type === 'date' ? 'Date'
+                : 'Text';
+              const typeColor = type === 'dropdown' || type === 'select' || type === 'mat-select' || type === 'ng-dropdown' ? 'text-purple-400'
+                : type === 'radio' || type === 'mat-radio' ? 'text-orange-400'
+                : type === 'checkbox' || type === 'mat-checkbox' ? 'text-green-400'
+                : type === 'date' ? 'text-sky-400'
+                : 'text-gray-500';
               return (
                 <div key={key} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
+                  <span className={`text-sm flex-shrink-0 w-5 text-center ${typeColor}`} title={typeLabel}>{typeIcon}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-200 truncate" title={display}>{display}</div>
                   </div>
@@ -209,7 +266,7 @@ export default function MappingsPage() {
               );
             })}
           </div>
-          {fieldEntries.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">No fields recorded yet.</div>}
+          {filteredEntries.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">{typeFilter === 'all' ? 'No fields recorded yet.' : 'No fields of this type.'}</div>}
         </div>
         {confirmState && (
           <ConfirmDialog
