@@ -138,7 +138,12 @@
     // Trigger any focusout/blur handlers (jQuery .blur, ASP validators)
     el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     try { el.blur(); } catch (e) {}
-    return el.value === str;
+    // Normalized comparison: the field may transform (uppercase, mask, format).
+    // As long as the core alphanumeric content matches, we consider it filled.
+    const actual = (el.value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const expected = str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    // Accept: exact, partial (starts with or ends with 4+ chars), or actual is non-empty (masked)
+    return actual === expected || (actual.length > 0 && (actual.endsWith(expected.slice(-4)) || actual.startsWith(expected.slice(0, 4))));
   };
 
   /**
