@@ -100,11 +100,22 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     settleMs = (typeof settleMs === 'number') ? settleMs : 150;
     // Wait for framework to react (validators, formatters, ControlValueAccessor)
     if (settleMs > 0) await new Promise(r => setTimeout(r, settleMs));
-    const liveEl = (selector && selector.startsWith && (selector.startsWith('form-field-') || selector.startsWith('ng-dropdown-')))
-      ? null
-      : document.querySelector(selector);
+    // Resolve element — index-based selectors use the same getEl() helper
+    let liveEl;
+    if (selector && selector.startsWith && selector.startsWith('form-field-')) {
+      liveEl = getEl(selector);
+    } else if (selector && selector.startsWith && selector.startsWith('ng-dropdown-')) {
+      liveEl = null; // ng-dropdown verify handled by plugin's own verify
+    } else {
+      liveEl = document.querySelector(selector);
+    }
     if (!liveEl) return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'no-element-on-verify' };
     const tag = (liveEl.tagName || '').toLowerCase();
+    // Checkbox: verify by .checked state, not .value
+    if (liveEl.type === 'checkbox' || liveEl.type === 'radio') {
+      const want = /^(true|yes|1|on|checked)$/i.test(String(expected));
+      return { ok: liveEl.checked === want, actualValue: String(liveEl.checked), normExpected: String(want), normActual: String(liveEl.checked) };
+    }
     if (tag === 'select') {
       // For selects: compare selected option's text or value
       const opt = liveEl.options[liveEl.selectedIndex];
@@ -121,12 +132,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     const normAct = actual.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (normExp === normAct) return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct };
     if (normAct.length > 0 && (normAct.startsWith(normExp.slice(0, Math.max(8, normExp.length - 2))) || normExp.startsWith(normAct.slice(0, 8)))) {
-      // Partial — accept if actual contains expected prefix (some sites trim trailing whitespace)
       return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, partial: true };
     }
     // Masked-input pattern (UIDAI, banks): actual shows '********6597' but real value is full 12 digits.
-    // If actual ends with the LAST 4-6 chars of expected AND actual length matches expected length,
-    // consider it filled (the * are placeholders, not real).
     if (actual.length >= 8 && actual.length === expStr.length) {
       const tail = expStr.slice(-4).toLowerCase();
       if (actual.toLowerCase().endsWith(tail)) {
