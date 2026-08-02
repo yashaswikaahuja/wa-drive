@@ -479,6 +479,8 @@ fillBtn.addEventListener('click', async () => {
           'drivers/interaction.js',
           'autofill/extractor.js',
           'autofill/rule-engine.js',
+          'autofill/derive.js',
+          'autofill/ai-resolve.js',
           'autofill/mapper.js',
           'autofill/executor.js'
         ]
@@ -512,6 +514,15 @@ fillBtn.addEventListener('click', async () => {
         })(), selectedProfile.id || '', data.backendUrl, data.accessToken, groqKey, llmBaseUrl, llmModel],
       func: async (profile, profileId, backendUrl, accessToken, groqKey, llmBaseUrl, llmModel) => {
         const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken };
+        // ── Pass 0: derive implied values (highest qualification, aliases, age,
+        // eligibility flags). Deterministic, free; never overwrites real data.
+        try {
+          if (typeof ccDeriveProfile === 'function') {
+            const before = Object.keys(profile).length;
+            profile = ccDeriveProfile(profile);
+            console.log('[CC] derived keys:', (profile._derived || []).join(', ') || 'none', `(${before}→${Object.keys(profile).length})`);
+          }
+        } catch (e) { console.warn('[CC] derive failed:', e.message); }
         const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
         // Stash backend URL + token + formkey + profileId on document.body so executor's
         // post-fill correction observer can authenticate its POSTs and link to profile
@@ -598,6 +609,48 @@ fillBtn.addEventListener('click', async () => {
               if (!mapping[sel]) { mapping[sel] = val; fbs[sel] = { label: 'ai', source: 'ai' }; }
             }
           } catch(e) { console.warn('[CC] aiMatch skipped:', e.message); }
+        }
+
+        // ── Final pass: AI resolves VALUES for fields still blank ──────────────
+        // Direct + derived + fuzzy + aiMatch have run. Anything left is either a
+        // form-specific question or needs reasoning over the profile (e.g. which
+        // dropdown option fits). One batched call; option values are validated
+        // against the field's real options so nothing unusable gets filled.
+        const stillBlank = formFields.filter(f =>
+          !mapping[f.selector] && !handled.has(f.selector) &&
+          f.type !== 'checkbox-agreement' &&
+          !/captcha|otp|password|verification code/i.test(f.label || '')
+        );
+        if (stillBlank.length > 0 && groqKey && typeof ccAiResolveValues === 'function') {
+          try {
+            const pending = stillBlank.map(f => ({
+              selector: f.selector, label: f.label, type: f.type,
+              options: f.options || null, placeholder: f.placeholder || '',
+            }));
+            const rPromise = ccAiResolveValues(pending, profile, groqKey, llmBaseUrl, llmModel);
+            const rTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('ai-resolve timeout')), 15000));
+            const resolved = await Promise.race([rPromise, rTimeout]);
+            let n = 0;
+            for (const [sel, info] of Object.entries(resolved)) {
+              if (mapping[sel]) continue;
+              const f = formFields.find(x => x.selector === sel);
+              if (!f) continue;
+              const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
+              // Radio → click the matching option directly; others go through executor
+              if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
+                const oi = (f.options || []).indexOf(info.value);
+                if (oi >= 0 && f.optionSelectors[oi]) {
+                  directChecks.push({ selector: f.optionSelectors[oi], check: true, label: f.label, profileKey: null });
+                  handled.add(f.selector); n++;
+                }
+              } else {
+                mapping[sel] = { value: info.value, type: f.type };
+                fbs[sel] = { label: f.label, source: 'ai-resolve' };
+                n++;
+              }
+            }
+            if (n) console.log('[CC] ai-resolve filled', n, 'residual field(s)');
+          } catch (e) { console.warn('[CC] ai-resolve skipped:', e.message); }
         }
         const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
 
