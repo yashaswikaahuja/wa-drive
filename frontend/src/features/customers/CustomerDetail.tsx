@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
-  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export
+  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
@@ -53,6 +53,8 @@ export default function CustomerDetail() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
   const [sharePhone, setSharePhone] = useState('');
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importToken, setImportToken] = useState('');
   const [importMsg, setImportMsg] = useState('');
@@ -486,7 +488,7 @@ export default function CustomerDetail() {
 
       {/* Share modal */}
       {showShareModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); setCopiedCode(false); setCopiedLink(false); }}>
           <div onClick={e => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#1c1c1e] border border-white/10 p-5">
             <div className="flex items-center gap-2 mb-3">
               <ShareNetwork size={16} className="text-[#0a84ff]" />
@@ -516,20 +518,26 @@ export default function CustomerDetail() {
                     <label className="text-[11px] text-gray-500 block mb-1">Share Code</label>
                     <div className="flex items-center gap-2">
                       <input readOnly value={shareToken} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
-                      <button onClick={() => navigator.clipboard.writeText(shareToken)} className="btn-primary text-xs shrink-0">Copy</button>
+                      <button onClick={() => { navigator.clipboard.writeText(shareToken); setCopiedCode(true); }} disabled={copiedCode}
+                        className={`p-2 rounded-lg transition-all ${copiedCode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}>
+                        {copiedCode ? <Check size={15} weight="bold" /> : <CopySimple size={15} />}
+                      </button>
                     </div>
                   </div>
                   <div>
                     <label className="text-[11px] text-gray-500 block mb-1">Public Link</label>
                     <div className="flex items-center gap-2">
                       <input readOnly value={`${window.location.origin}/shared/${shareToken}`} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
-                      <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`)} className="btn-primary text-xs shrink-0">Copy</button>
+                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`); setCopiedLink(true); }} disabled={copiedLink}
+                        className={`p-2 rounded-lg transition-all ${copiedLink ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}>
+                        {copiedLink ? <Check size={15} weight="bold" /> : <CopySimple size={15} />}
+                      </button>
                     </div>
                   </div>
                 </div>
               </>
             )}
-            <button onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); }} className="mt-4 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
+            <button onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); setCopiedCode(false); setCopiedLink(false); }} className="mt-4 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
           </div>
         </div>
       )}

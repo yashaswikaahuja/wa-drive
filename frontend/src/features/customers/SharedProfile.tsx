@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Spinner } from '@phosphor-icons/react';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
+import { SOCKET_URL } from '../../shared/api';
 
 export default function SharedProfile() {
   const { token } = useParams<{ token: string }>();
@@ -12,7 +11,7 @@ export default function SharedProfile() {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${API_URL}/api/customers/shared/${token}`)
+    fetch(`${SOCKET_URL}/api/customers/shared/${token}`)
       .then(r => r.ok ? r.json() : r.json().then(d => { throw new Error(d.error); }))
       .then(d => setProfile(d))
       .catch(e => setError(e.message || 'Failed to load'))
