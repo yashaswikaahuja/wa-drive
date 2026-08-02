@@ -21,6 +21,18 @@ const progressInner = document.getElementById('progress-inner');
 const resultsEl = document.getElementById('results');
 document.getElementById('ver').textContent = 'v' + VERSION;
 
+// ── v2 Knowledge Engine toggle (persists to chrome.storage.local.cc_engine_v2) ──
+(function initV2Toggle() {
+  const cb = document.getElementById('v2-engine-toggle');
+  const state = document.getElementById('v2-engine-state');
+  if (!cb) return;
+  const paint = (on) => { if (state) { state.textContent = on ? 'ON' : 'OFF'; state.style.color = on ? '#16a34a' : '#9ca3af'; } };
+  chrome.storage.local.get('cc_engine_v2', (r) => { cb.checked = r.cc_engine_v2 === true; paint(cb.checked); });
+  cb.addEventListener('change', () => {
+    chrome.storage.local.set({ cc_engine_v2: cb.checked }, () => paint(cb.checked));
+  });
+})();
+
 // Side panel stays open across tab switches — always resolve the active *page* tab
 // (never chrome:// or the extension itself).
 async function getActivePageTab() {
