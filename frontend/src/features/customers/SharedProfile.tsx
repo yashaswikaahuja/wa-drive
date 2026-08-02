@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { Spinner } from '@phosphor-icons/react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Spinner, DownloadSimple, Check, SignIn } from '@phosphor-icons/react';
 import { SOCKET_URL } from '../../shared/api';
+import api from '../../shared/api';
+import { useAuthStore } from '../auth/store';
 
 export default function SharedProfile() {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
+  const { accessToken } = useAuthStore();
+  const isLoggedIn = !!accessToken;
   const [profile, setProfile] = useState<any>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState(false);
+  const [importError, setImportError] = useState('');
 
   useEffect(() => {
     if (!token) return;
@@ -17,6 +25,15 @@ export default function SharedProfile() {
       .catch(e => setError(e.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  const handleImport = async () => {
+    setImporting(true); setImportError('');
+    try {
+      await api.post('/customers/import-shared', { token });
+      setImported(true);
+    } catch (e: any) { setImportError(e.response?.data?.error || 'Import failed'); }
+    finally { setImporting(false); }
+  };
 
   if (loading) return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -54,10 +71,32 @@ export default function SharedProfile() {
             <div className="w-12 h-12 rounded-xl bg-[#0a84ff]/10 flex items-center justify-center text-[#0a84ff] text-lg font-semibold">
               {(profile.name || '?')[0]?.toUpperCase()}
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <h1 className="text-lg font-semibold text-white">{profile.name}</h1>
               <p className="text-xs text-gray-500">{profile.phone} · {profile.relationship}</p>
             </div>
+          </div>
+
+          {/* Save / Import button */}
+          <div className="mb-6">
+            {imported ? (
+              <div className="flex items-center gap-2 justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <Check size={16} weight="bold" className="text-emerald-400" />
+                <span className="text-sm text-emerald-400 font-medium">Saved to your customers!</span>
+                <button onClick={() => navigate('/app/customers')} className="text-xs text-[#0a84ff] ml-2 hover:underline">View →</button>
+              </div>
+            ) : isLoggedIn ? (
+              <button onClick={handleImport} disabled={importing}
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-white text-sm font-medium transition-colors disabled:opacity-50">
+                <DownloadSimple size={16} weight="bold" />
+                {importing ? 'Saving...' : 'Save to My Customers'}
+              </button>
+            ) : (
+              <a href="/app" className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-white text-sm font-medium transition-colors">
+                <SignIn size={16} weight="bold" /> Login to Save This Profile
+              </a>
+            )}
+            {importError && <p className="text-xs text-red-400 mt-2 text-center">{importError}</p>}
           </div>
 
           {/* Fields */}
