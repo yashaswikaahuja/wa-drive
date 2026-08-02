@@ -478,6 +478,7 @@ fillBtn.addEventListener('click', async () => {
           'drivers/select.js',
           'drivers/interaction.js',
           'autofill/extractor.js',
+          'autofill/rule-engine.js',
           'autofill/mapper.js',
           'autofill/executor.js'
         ]
@@ -525,8 +526,12 @@ fillBtn.addEventListener('click', async () => {
         } catch {}
         if (!formFields.length) return { ok: false, error: 'No form fields detected' };
 
-        // Try saved mappings
+        // Try saved mappings (rule-aware: fillMode / rules / constant / conditions)
         let mapping = {}, fbs = {};
+        const directChecks = [];    // radio/checkbox toggles (executor value-strategies don't set .checked)
+        const handled = new Set();  // formField selectors resolved via saved rules
+        let translations = {};
+        try { const tr = await fetch(backendUrl + '/mappings/translations', { headers }); translations = (await tr.json()) || {}; } catch {}
         try {
           const r = await fetch(backendUrl + '/mappings/' + semanticFormKey, { headers });
           const saved = await r.json();
@@ -534,16 +539,42 @@ fillBtn.addEventListener('click', async () => {
             const norm = l => (l||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
             for (const f of formFields) {
               const sk = norm(f.label); const s = saved[sk];
-              if (s?.profileKey && profile[s.profileKey]) {
-                mapping[f.selector] = { value: profile[s.profileKey], type: f.type };
-                fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'mapping' };
+              if (!s) continue;
+              const act = (typeof ccEvaluateField === 'function') ? ccEvaluateField(s, f, profile, translations)
+                : (s.profileKey && profile[s.profileKey] ? { kind: 'value', value: String(profile[s.profileKey]) } : { kind: 'skip' });
+              if (!act || act.kind === 'skip') continue;
+              const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
+              const setFbs = () => { fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); };
+              if (act.kind === 'value') {
+                mapping[f.selector] = { value: act.value, type: f.type };
+                setFbs();
+              } else if (act.kind === 'option') {
+                if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
+                  const idx = (f.options || []).indexOf(act.option);
+                  const optSel = idx >= 0 ? f.optionSelectors[idx] : null;
+                  if (optSel) directChecks.push({ selector: optSel, check: true, label: f.label, profileKey: s.profileKey });
+                } else {
+                  mapping[f.selector] = { value: act.option, type: f.type };  // dropdown: executor selects by option text
+                }
+                setFbs();
+              } else if (act.kind === 'check') {
+                if (act.check) directChecks.push({ selector: f.selector, check: true, label: f.label, profileKey: s.profileKey });
+                setFbs();
+              } else if (act.kind === 'checkOptions') {
+                const sels = f.optionSelectors || [];
+                for (const optText of act.options) {
+                  const idx = (f.options || []).indexOf(optText);
+                  const optSel = idx >= 0 ? sels[idx] : null;
+                  if (optSel) directChecks.push({ selector: optSel, check: true, label: f.label, profileKey: s.profileKey });
+                }
+                setFbs();
               }
             }
           }
         } catch {}
 
-        // Fuzzy fill remaining
-        const unmapped = formFields.filter(f => !mapping[f.selector]);
+        // Fuzzy fill remaining (skip fields already resolved by rules)
+        const unmapped = formFields.filter(f => !mapping[f.selector] && !handled.has(f.selector));
         if (unmapped.length) {
           const fz = fuzzyMatch(unmapped, profile);
           for (const [s,v] of Object.entries(fz)) {
@@ -557,7 +588,7 @@ fillBtn.addEventListener('click', async () => {
         try { const r = await fetch(backendUrl+'/adapters/'+location.hostname,{headers}); adp=await r.json(); } catch {}
 
         // AI mapping for fields fuzzyMatch couldn't handle (with 10s timeout)
-        const unmappedAI = formFields.filter(f => !mapping[f.selector]);
+        const unmappedAI = formFields.filter(f => !mapping[f.selector] && !handled.has(f.selector));
         if (unmappedAI.length > 0 && groqKey) {
           try {
             const aiPromise = aiMatch(unmappedAI, profile, groqKey, llmBaseUrl, llmModel);
@@ -569,9 +600,26 @@ fillBtn.addEventListener('click', async () => {
           } catch(e) { console.warn('[CC] aiMatch skipped:', e.message); }
         }
         const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
+
+        // Apply radio/checkbox selections directly — the executor's value strategies
+        // don't toggle .checked. Guarded by current state so we never toggle back off.
+        const directRecords = [];
+        for (const dc of directChecks) {
+          try {
+            const el = document.querySelector(dc.selector);
+            if (!el) { directRecords.push({ selector: dc.selector, value: dc.check ? 'checked' : 'unchecked', type: 'toggle', result: 'skipped', failReason: 'not-found', source: 'mapping', label: dc.label }); continue; }
+            const want = !!dc.check;
+            if (el.checked !== want) el.click();
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            fbs[dc.selector] = { label: dc.label, profileKey: dc.profileKey, source: 'mapping' };
+            directRecords.push({ selector: dc.selector, value: 'checked', type: 'toggle', result: 'filled', source: 'mapping', label: dc.label });
+          } catch { /* skip */ }
+        }
+
         // Read structured records the executor flushed to document.body
         let records = [];
         try { records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
+        records = records.concat(directRecords);
 
         // Index formFields by selector for label lookup
         const fieldBySelector = {};
