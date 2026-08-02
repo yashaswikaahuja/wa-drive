@@ -433,8 +433,38 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
               console.log('[CC][poll] id='+session.id+' attempt='+attempts+' opts='+opts.length+' v='+v);
               if (opts.length > 0 && attempts === 1) console.log('[CC][poll] sample:', opts.slice(0,3).map(o=>o.textContent.trim()));
 
-              const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
-                          opts.find(o => o.textContent.trim().toLowerCase().includes(v));
+              // ── Matching cascade: exact → contains → reverse-contains → token overlap → synonym
+              function _matchScore(optText) {
+                const ot = optText.toLowerCase().trim();
+                if (ot === v) return 100;
+                if (ot.includes(v)) return 80;
+                if (v.includes(ot) && ot.length > 3) return 70;
+                // Token overlap: split both into words, count matching tokens
+                const vToks = v.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
+                const oToks = ot.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
+                const overlap = vToks.filter(t => oToks.some(o => o.includes(t) || t.includes(o))).length;
+                if (overlap >= 2) return 60;
+                if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
+                // Common education synonyms
+                const eduSynonyms = [
+                  ['intermediate','higher secondary','10+2','12th','hsc','senior secondary'],
+                  ['matriculation','10th','sslc','secondary','high school','class 10','class x'],
+                  ['graduation','graduate','degree','bachelor','ug'],
+                  ['post graduation','post graduate','masters','pg','m.a','m.sc','m.com'],
+                ];
+                for (const group of eduSynonyms) {
+                  const vIn = group.some(s => v.includes(s));
+                  const oIn = group.some(s => ot.includes(s));
+                  if (vIn && oIn) return 55;
+                }
+                return 0;
+              }
+              let bestOpt = null, bestScore = 0;
+              for (const o of opts) {
+                const score = _matchScore(o.textContent.trim());
+                if (score > bestScore) { bestScore = score; bestOpt = o; }
+              }
+              const opt = bestScore >= 50 ? bestOpt : null;
 
               if (opt) {
                 clearInterval(session.pollTimer);

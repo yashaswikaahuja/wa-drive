@@ -622,20 +622,28 @@ fillBtn.addEventListener('click', async () => {
         // executor where it will timeout with "no-matching-option". ──────────
         for (const f of formFields) {
           if (!mapping[f.selector]) continue;
-          if (!f.options || !f.options.length) continue;
           const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
           if (grp !== 'dropdown' && grp !== 'radio') continue;
           const val = String(mapping[f.selector].value || '').toLowerCase().trim();
           if (!val) continue;
-          // Check if any option matches (exact, contains, or token)
-          const matched = f.options.some(o => {
-            const on = o.toLowerCase().trim();
-            return on === val || on.includes(val) || val.includes(on);
-          });
-          if (!matched) {
-            console.log('[CC] demoted unmatched dropdown value:', f.label, '→', mapping[f.selector].value, '(options:', f.options.slice(0,5).join(', '), ')');
-            delete mapping[f.selector];
-            delete fbs[f.selector];
+          const src = fbs[f.selector]?.source || '';
+          if (f.options && f.options.length) {
+            // Has pre-captured options: validate against them
+            const matched = f.options.some(o => {
+              const on = o.toLowerCase().trim();
+              return on === val || on.includes(val) || val.includes(on);
+            });
+            if (!matched) {
+              console.log('[CC] demoted unmatched dropdown:', f.label, '→', mapping[f.selector].value);
+              delete mapping[f.selector]; delete fbs[f.selector];
+            }
+          } else if (src !== 'mapping' && src !== 'manual') {
+            // Ng-dropdown without pre-captured options: ONLY trust saved mappings
+            // (they were verified by a previous successful fill). Fuzzy/AI-key
+            // guesses haven't been validated against real options and will likely
+            // timeout in the executor. Let the AI resolver handle with reasoning.
+            console.log('[CC] demoted unverified ng-dropdown:', f.label, '→', mapping[f.selector].value, '(source:', src, ')');
+            delete mapping[f.selector]; delete fbs[f.selector];
           }
         }
 
