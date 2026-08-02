@@ -1,6 +1,9 @@
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 var FIELD_ALIASES = {
   name:           ['candidate_name', 'candidates_name', 'applicant_name', 'applicants_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname', 'pratyashi_ka_naam', 'your_name', 'enter_name'],
+  first_name:     ['first_name', 'firstname', 'fname', 'given_name', 'givenname', 'txt_firstname', 'txt_first_name'],
+  middle_name:    ['middle_name', 'middlename', 'mname', 'txt_middlename', 'txt_middle_name'],
+  last_name:      ['last_name', 'lastname', 'lname', 'surname', 'family_name', 'familyname', 'txt_lastname', 'txt_last_name', 'txt_surname'],
   dob:            ['dob', 'date_of_birth', 'dateofbirth', 'birth_date', 'janm_tithi', 'janm', 'birthdate', 'date_of_birth_dd_mm_yyyy', 'janm_tithi_', 'txt_dob', 'txtdob', 'txt_date_of_birth'],
   father_name:    ['father_name', 'fathername', 'fathers_name', 'father_s_name', 'pita_ka_naam', 'pita_naam', 'father', 'father_husband_name', 'pita_pati_ka_naam', 'txt_father', 'txtfather', 'txt_father_name', 'fathers_name_and_verify', 'pitaji_ka_naam'],
   mother_name:    ['mother_name', 'mothername', 'mothers_name', 'mother_s_name', 'mata_ka_naam', 'mata_naam', 'mother', 'txt_mother', 'txtmother', 'txt_mother_name', 'mothers_name_and_verify', 'mata_ka_naam'],
@@ -53,10 +56,16 @@ var FIELD_ALIASES = {
 
 function fuzzyMatch(formFields, profile) {
   var mapping = {};
-  var nameParts = (profile.name || '').trim().split(/\s+/);
-  var firstName = nameParts[0] || '';
-  var lastName = nameParts.slice(1).join(' ') || nameParts[0] || '';
-  var middleName = nameParts.length >= 3 ? nameParts[1] : '';
+  // Use granular name fields if available, else split full name
+  var firstName = profile.first_name || '';
+  var middleName = profile.middle_name || '';
+  var lastName = profile.last_name || '';
+  if (!firstName && profile.name) {
+    var nameParts = (profile.name || '').trim().split(/\s+/);
+    firstName = nameParts[0] || '';
+    lastName = nameParts.length >= 2 ? nameParts[nameParts.length - 1] : '';
+    middleName = nameParts.length >= 3 ? nameParts.slice(1, -1).join(' ') : '';
+  }
 
   for (const field of formFields) {
     // Prioritize label text — for ServicePlus/dynamic forms, label is the only meaningful identifier
@@ -146,13 +155,13 @@ function fuzzyMatch(formFields, profile) {
       (field.label.toLowerCase().includes('new name') || field.label.toLowerCase().includes('changed name'));
     if (isChangedName && !profile.changed_name) continue;
 
-    // Handle first/last/middle name fields
-    if (!isFatherMother && profile.name) {
+    // Handle first/last/middle name fields — use granular profile fields when available
+    if (!isFatherMother) {
       if (ident.includes('first_name') || ident.includes('firstname') || ident === 'fname') {
-        mapping[field.selector] = { value: firstName, type: field.type }; continue;
+        if (firstName) { mapping[field.selector] = { value: firstName, type: field.type }; continue; }
       }
       if (ident.includes('last_name') || ident.includes('lastname') || ident === 'lname' || ident.includes('surname')) {
-        mapping[field.selector] = { value: lastName, type: field.type }; continue;
+        if (lastName) { mapping[field.selector] = { value: lastName, type: field.type }; continue; }
       }
       if (ident.includes('middle_name') || ident.includes('middlename')) {
         mapping[field.selector] = { value: middleName, type: field.type }; continue;
@@ -193,6 +202,8 @@ function fuzzyMatch(formFields, profile) {
       if (!profile[profileKey]) continue;
       // Strict separation: name must not match father/mother/state/district fields
       if (profileKey === 'name' && (isFatherMother || isStateDistrict)) continue;
+      // name must not fill first/last/middle name specific fields when granular fields exist
+      if (profileKey === 'name' && (ident.includes('first_name') || ident.includes('firstname') || ident.includes('last_name') || ident.includes('lastname') || ident.includes('surname') || ident.includes('middle_name') || ident.includes('middlename'))) continue;
       // father_name only if field is clearly a father field; mother_name only if clearly mother
       if (profileKey === 'father_name' && !isFatherMother) continue;
       if (profileKey === 'mother_name' && !(ident.includes('mother') || ident.includes('mata'))) continue;
@@ -314,10 +325,14 @@ async function aiMatch(formFields, profile, groqKey, llmBaseUrl, llmModel) {
 RULES:
 - Return ONLY a valid JSON object, nothing else
 - Map each field to the profile key whose VALUE should fill that field
-- "first name" fields → use "name__first" (first word of name)
-- "last name" / "surname" fields → use "name__last" (last word of name)
+- "first name" fields → use "first_name" profile key
+- "last name" / "surname" fields → use "last_name" profile key
+- "middle name" fields → use "middle_name" profile key
+- "full name" / "candidate name" fields → use "name" profile key
 - Separate day/month/year dropdowns → use "dob__day", "dob__month", "dob__year"
 - Single "date of birth" text field → use "dob"
+- For address parts: use "village", "post_office", "police_station", "block", "sub_division", "district", "state", "pincode" as available
+- Only use "address" for full address text fields
 - Confirm/retype fields → same key as primary field
 - Skip: captcha, OTP, verification code, password, file upload
 - Use EXACT profile key names from the list below
@@ -328,7 +343,7 @@ ${fieldDescriptions}
 Available profile keys and values:
 ${profileKeys}
 
-Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
+Return JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}`;
 
   try {
     var apiUrl = llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions';
@@ -354,10 +369,10 @@ Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
       var field = formFields[parseInt(idx)];
       if (!field) continue;
       let value = null;
-      // Handle split keys
-      if (profileKey === 'name__first') value = nameParts[0] || '';
-      else if (profileKey === 'name__last') value = nameParts[nameParts.length - 1] || '';
-      else if (profileKey === 'name__middle') value = nameParts.length >= 3 ? nameParts.slice(1, -1).join(' ') : '';
+      // Handle split keys (backward compat + DOB splits)
+      if (profileKey === 'name__first') value = profile.first_name || nameParts[0] || '';
+      else if (profileKey === 'name__last') value = profile.last_name || nameParts[nameParts.length - 1] || '';
+      else if (profileKey === 'name__middle') value = profile.middle_name || (nameParts.length >= 3 ? nameParts.slice(1, -1).join(' ') : '');
       else if (profileKey === 'dob__day') value = dobParts[0] || '';
       else if (profileKey === 'dob__month') {
         var _m = parseInt(dobParts[1] || '0');

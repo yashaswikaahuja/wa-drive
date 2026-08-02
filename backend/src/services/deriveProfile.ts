@@ -6,7 +6,7 @@ const DOC_AUTHORITY: Record<string, number> = {
   marksheet_10th: 40, marksheet_12th: 40, marksheet_graduation: 40, marksheet_postgrad: 40,
   certificate: 30, result: 30, admit_card: 30, bank_passbook: 50, form: 10, other: 10,
 };
-const IDENTITY_FIELDS = new Set(['name','father_name','mother_name','husband_name','dob','gender','nationality','category','religion','aadhaar_number','pan_number','voter_id_number','address','permanent_address','phone','email','city','district','state','pincode']);
+const IDENTITY_FIELDS = new Set(['name','first_name','middle_name','last_name','father_name','mother_name','husband_name','dob','gender','nationality','category','religion','marital_status','aadhaar_number','pan_number','voter_id_number','address','permanent_address','village','post_office','police_station','block','sub_division','ward_no','phone','email','city','district','state','pincode']);
 
 /**
  * Derive a person's profile from their per-document extractions (NO stored blob).
@@ -53,5 +53,25 @@ export async function deriveProfile(workspaceId: string, phone: string, personKe
     const mobile = String(phone).slice(-10);
     if (/^[6-9]\d{9}$/.test(mobile)) result.phone = { value: mobile, source: 'whatsapp', confidence: 0.95, needsReview: false };
   }
+
+  // ── Name synthesis: derive full name ↔ parts ──
+  const val = (k: string) => String(result[k]?.value ?? '').trim();
+  // If we have parts but no full name, synthesize it
+  if (!val('name') && val('first_name')) {
+    const parts = [val('first_name'), val('middle_name'), val('last_name')].filter(Boolean);
+    result.name = { value: parts.join(' '), source: 'derived', confidence: 0.95, needsReview: false };
+  }
+  // If we have full name but no parts, split it (simple heuristic — AI should provide parts for new extractions)
+  if (val('name') && !val('first_name')) {
+    const parts = val('name').split(/\s+/);
+    result.first_name = { value: parts[0] || '', source: 'derived', confidence: 0.9, needsReview: false };
+    if (parts.length >= 3) {
+      result.middle_name = { value: parts.slice(1, -1).join(' '), source: 'derived', confidence: 0.85, needsReview: false };
+      result.last_name = { value: parts[parts.length - 1], source: 'derived', confidence: 0.9, needsReview: false };
+    } else if (parts.length === 2) {
+      result.last_name = { value: parts[1], source: 'derived', confidence: 0.9, needsReview: false };
+    }
+  }
+
   return result;
 }
