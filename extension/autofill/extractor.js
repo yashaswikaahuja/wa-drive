@@ -113,20 +113,15 @@ function extractFormFieldsWithFingerprint() {
     if (el.type === 'radio' && el.name) {
       if (!radioGroups[el.name]) {
         radioGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx, firstEl: el };
-        // Try to find a group-level label (legend, preceding heading, or fieldset label)
+        // Try to find a group-level label from a fieldset legend (reliable).
+        // The question label (e.g. "Have you changed your name?") is derived at
+        // emit time via deriveGroupQuestion — climbing ancestors and subtracting
+        // the option texts — because a naive container search grabs the option
+        // label ("Yes") on inline Yes/No layouts.
         const fieldset = el.closest('fieldset');
         const legend = fieldset && fieldset.querySelector('legend');
         if (legend && isGoodLabel(legend.textContent.trim())) {
           radioGroups[el.name].groupLabel = legend.textContent.trim();
-        } else {
-          // Look for a label/heading before this radio group's container
-          const container = el.closest('.form-group,.form-field,[class*="form-row"],tr,div');
-          if (container) {
-            const lbl = container.querySelector('label,.label,.field-label,td:first-child');
-            if (lbl && !lbl.querySelector('input') && isGoodLabel(lbl.textContent.trim())) {
-              radioGroups[el.name].groupLabel = lbl.textContent.trim();
-            }
-          }
         }
       }
       const optLabel = getLabel(el) || el.value || '';
@@ -149,12 +144,9 @@ function extractFormFieldsWithFingerprint() {
       }
       if (!checkboxGroups[el.name]) {
         checkboxGroups[el.name] = { options: [], selectors: [], groupLabel: '', index: idx, firstEl: el };
-        const container = el.closest('.form-group,.form-field,[class*="form-row"],tr,div,fieldset');
-        if (container) {
-          const legend = container.querySelector('legend');
-          const lbl2 = legend || container.querySelector('label:not(:has(input)),.label,.field-label');
-          if (lbl2 && isGoodLabel(lbl2.textContent.trim())) checkboxGroups[el.name].groupLabel = lbl2.textContent.trim();
-        }
+        const fieldset = el.closest('fieldset');
+        const legend = fieldset && fieldset.querySelector('legend');
+        if (legend && isGoodLabel(legend.textContent.trim())) checkboxGroups[el.name].groupLabel = legend.textContent.trim();
       }
       checkboxGroups[el.name].options.push(lbl);
       checkboxGroups[el.name].selectors.push(el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[name="${el.name}"][value="${el.value}"]`);
@@ -180,9 +172,29 @@ function extractFormFieldsWithFingerprint() {
     idx++;
   });
 
+  // Derive a radio/checkbox group's question label by climbing ancestors and
+  // subtracting the option texts. Handles inline "Question? Yes No" layouts where
+  // the question sits a couple of levels above the option labels.
+  function deriveGroupQuestion(firstEl, options) {
+    if (!firstEl) return '';
+    const opts = (options || []).map(o => (o || '').trim()).filter(Boolean);
+    const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let node = firstEl.parentElement;
+    for (let i = 0; i < 6 && node; i++) {
+      const clone = node.cloneNode(true);
+      clone.querySelectorAll('input,button,select,textarea').forEach(n => n.remove());
+      let residual = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+      for (const o of opts) residual = residual.replace(new RegExp('\\b' + esc(o) + '\\b', 'ig'), ' ');
+      residual = residual.replace(/\s+/g, ' ').replace(/[\s*:]+$/, '').trim();
+      if (residual.length >= 3 && /[a-z]/i.test(residual) && isGoodLabel(residual)) return residual;
+      node = node.parentElement;
+    }
+    return '';
+  }
+
   // ── Emit grouped radio fields ──
   for (const [name, group] of Object.entries(radioGroups)) {
-    const groupLabel = group.groupLabel || group.options.join(' / ');
+    const groupLabel = group.groupLabel || deriveGroupQuestion(group.firstEl, group.options) || group.options.join(' / ');
     if (groupLabel) labelList.push(groupLabel.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({
       selector: `[name="${name}"]`,
@@ -200,7 +212,7 @@ function extractFormFieldsWithFingerprint() {
 
   // ── Emit grouped checkbox fields ──
   for (const [name, group] of Object.entries(checkboxGroups)) {
-    const groupLabel = group.groupLabel || group.options.join(' / ');
+    const groupLabel = group.groupLabel || deriveGroupQuestion(group.firstEl, group.options) || group.options.join(' / ');
     if (groupLabel) labelList.push(groupLabel.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({
       selector: `[name="${name}"]`,
