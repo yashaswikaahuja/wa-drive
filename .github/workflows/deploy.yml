@@ -68,7 +68,7 @@ jobs:
     if: ${{ inputs.target == 'extension-service' }}
     uses: ./.github/workflows/_deploy.yml
     with:
-      host: cybercontrol-app
+      host: cybercontrol-ext
       compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
       services: extension-service
       health_url: http://localhost:3300/health
