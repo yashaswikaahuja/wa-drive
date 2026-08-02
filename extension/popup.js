@@ -530,8 +530,12 @@ fillBtn.addEventListener('click', async () => {
               document.body.setAttribute('data-cc-token', accessToken);
               document.body.setAttribute('data-cc-profile-id', profileId || '');
             } catch {}
-            if (!window.CCEngine) return { ok: false, error: 'engine not loaded' };
-            return await window.CCEngine.run({ profile, backendUrl, accessToken, groqKey, llmBaseUrl, llmModel });
+            if (!window.CCEngine) return { ok: false, error: 'engine not loaded (core/*.js missing from injection)' };
+            try {
+              return await window.CCEngine.run({ profile, backendUrl, accessToken, groqKey, llmBaseUrl, llmModel });
+            } catch (e) {
+              return { ok: false, error: (e && e.message) || String(e), stack: (e && e.stack || '').slice(0, 400) };
+            }
           },
         });
         const er = v2res?.[0]?.result;
@@ -553,9 +557,31 @@ fillBtn.addEventListener('click', async () => {
           console.log('[CC] v2 engine:', JSON.stringify(s));
           return; // v2 handled the fill
         }
-        console.warn('[CC] v2 engine failed, falling back to legacy:', er?.error);
-      } catch (e) { console.warn('[CC] v2 engine threw, falling back:', e.message); }
+        console.warn('[CC] v2 engine failed, falling back to legacy:', er?.error, er?.stack || '');
+        _recordV2Fallback(er?.error || 'unknown', er?.stack);
+      } catch (e) {
+        console.warn('[CC] v2 engine threw, falling back:', e.message);
+        _recordV2Fallback('popup-threw: ' + e.message);
+      }
     }
+
+    // Records a fallback marker session so every legacy fallback is visible + explained in the DB.
+    async function _recordV2Fallback(reason, stack) {
+      try {
+        let host = ''; try { host = new URL(tab.url).hostname; } catch {}
+        await fetch(data.backendUrl + '/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
+          body: JSON.stringify({
+            hostname: host,
+            semanticFormKey: null,
+            runtimeVersion: '2.0-fallback',
+            totalFilled: 0,
+            totalFailed: 0,
+            records: [{ rv: '2.0-fallback', type: 'fallback', label: 'v2 engine fell back to legacy', value: String(reason || '').slice(0, 300), result: 'fallback', stack: (stack || '').slice(0, 300) }],
+          }),
+        });
+      } catch {}
 
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
