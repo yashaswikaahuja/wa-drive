@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.82",
+  "version": "5.83",
   "description": "Auto-fill SSC/Railway/NEET forms from CyberControl student profiles",
   "permissions": [
     "storage",
