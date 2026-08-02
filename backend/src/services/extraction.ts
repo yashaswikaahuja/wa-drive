@@ -24,6 +24,7 @@ document_label: a short human title for this document (e.g. "Caste Certificate",
 extra_fields: an OBJECT of any other important labelled values present that don't fit the keys above, using snake_case keys (e.g. {"caste":"OBC","certificate_authority":"Tahsildar","valid_until":"2026"}). Use {} if none.
 Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. phone is a 10-digit mobile only — never put an Aadhaar/ID number in phone. For marksheets, marks_obtained is the marks the student scored and total_marks is the maximum/out-of marks (e.g. "391/500" → marks_obtained 391, total_marks 500); percentage is the % if printed. division is the class/grade if printed (e.g. "FIRST","SECOND","Distinction") — put it in division NOT percentage. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit.
 NAME SPLITTING: "name" is the full name as printed. ALSO split it into "first_name" (first word), "middle_name" (middle words if any, empty if only 2 words), "last_name" (last word/surname). Example: "Ram Prakash Singh" → name="Ram Prakash Singh", first_name="Ram", middle_name="Prakash", last_name="Singh". "Kamaljeet Kumar" → first_name="Kamaljeet", middle_name="", last_name="Kumar".
+RELATIONSHIP PARSING: On Aadhaar cards, "S/O" (Son of) or "D/O" (Daughter of) = father_name. "W/O" (Wife of) = husband_name. "C/O" (Care of) = father_name (unless context indicates otherwise). The name AFTER S/O, D/O, C/O, W/O is the relationship person — extract it into the correct field (father_name or husband_name). Do NOT put this in mother_name unless it explicitly says "Mother:" or similar. Example: "S/O: Rajesh Kumar" → father_name="Rajesh Kumar". "W/O: Sunil Prasad" → husband_name="Sunil Prasad". "C/O: Ramesh Singh" → father_name="Ramesh Singh".
 ADDRESS SPLITTING: "address" is the full address as printed. ALSO extract individual components into: "village" (village/town/locality name), "post_office" (post office name if mentioned), "police_station" (thana/PS if mentioned), "block" (block/tehsil/taluka if mentioned), "sub_division" (sub-division/anchal if mentioned), "ward_no" (ward number if mentioned), "city" (city/town name for urban areas), "district", "state", "pincode". Use common sense: on an Aadhaar card the address format is typically "S/O: X, House, Village/Town, PO: Y, District, State - PIN". Extract each component to its field.
 Return ONLY the JSON.`;
 }
@@ -228,6 +229,26 @@ export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise
   const docType = String(parsed.document_type || '').trim().toLowerCase();
   if (docType === 'photo' || docType === 'signature') return { suggested: {}, raw: { document_type: docType } };
   parsed = normalizeKeys(parsed, docType);
+
+  // ── Post-process: fix S/O, C/O, D/O → father_name; W/O → husband_name ──
+  // Some models put the S/O name in mother_name by mistake on Aadhaar cards
+  const rawAddr = String(parsed.address || '').trim();
+  const fName = String(parsed.father_name || '').trim();
+  const mName = String(parsed.mother_name || '').trim();
+  if (!fName && mName && (docType === 'aadhaar' || /\b[SsDdCc]\/[Oo]\b/.test(rawAddr))) {
+    // If mother_name is filled but father_name is not, and it's an Aadhaar (which uses S/O, not mother), swap
+    parsed.father_name = mName;
+    parsed.mother_name = '';
+  }
+  // Also extract father/husband from address S/O, C/O, D/O, W/O if not already extracted
+  const soMatch = rawAddr.match(/\b(?:[Ss]\/[Oo]|[Dd]\/[Oo]|[Cc]\/[Oo])\s*:?\s*([^,]+)/);
+  const woMatch = rawAddr.match(/\b[Ww]\/[Oo]\s*:?\s*([^,]+)/);
+  if (soMatch && !String(parsed.father_name || '').trim()) {
+    parsed.father_name = soMatch[1].trim();
+  }
+  if (woMatch && !String(parsed.husband_name || '').trim()) {
+    parsed.husband_name = woMatch[1].trim();
+  }
 
   // Validate → real per-field confidence + needsReview flag
   const suggested: any = {};
