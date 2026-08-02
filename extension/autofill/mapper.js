@@ -110,8 +110,15 @@ function fuzzyMatch(formFields, profile) {
     var isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     var isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
-    // 'candidate name as per matriculation' is a name field, not education row
-    var isCandidateNameField = ident.includes('candidate_name') || ident.includes('candidates_name') || (ident.includes('name') && ident.includes('candidate'));
+    // 'candidate name as per matriculation' is a name field, not education row.
+    // A person-name field (full/candidate/applicant/student name) must never be
+    // mis-detected as an education row just because the label says "certificate".
+    var _hasName = ident.includes('name');
+    var _isRelativeName = ident.includes('father') || ident.includes('mother') || ident.includes('husband') || ident.includes('spouse') || ident.includes('guardian');
+    var isCandidateNameField = _hasName && !_isRelativeName && (
+      ident.includes('candidate') || ident.includes('applicant') || ident.includes('student') ||
+      ident.includes('full_name') || ident.includes('your_name') || /^name/.test(ident) || ident.includes('_name_as_per')
+    );
     // 'highest level of educational qualification' contains 'graduation' but is NOT an education row
     var isHighestEduField = ident.includes('highest');
     var isEducationRow = !isCandidateNameField && !isHighestEduField && (ident.includes('matric') || ident.includes('10th') || ident.includes('12th') || ident.includes('graduation') || ident.includes('diploma') || ident.includes('board') || ident.includes('university') || ident.includes('certificate') || ident.includes('year_of') || ident.includes('percentage') || ident.includes('subject') || ident.includes('inter_roll'));
