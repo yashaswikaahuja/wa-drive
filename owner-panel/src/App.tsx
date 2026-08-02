@@ -7,6 +7,7 @@ import { TrendsPanel } from './components/Trends';
 import { WorkspacesTable, TableSkeleton } from './components/WorkspacesTable';
 import { WorkspaceDrawer } from './components/WorkspaceDrawer';
 import { Setup } from './components/Setup';
+import { AiSettingsPanel } from './components/AiSettings';
 import { exportWorkspacesCsv } from './lib/csv';
 
 type Sort = 'last_active' | 'created' | 'files' | 'health';
@@ -93,6 +94,7 @@ export function App() {
       {metrics ? <MetricsGrid m={metrics} /> : <MetricsSkeleton />}
       {funnel && <FunnelWidget f={funnel} />}
       {trends && <TrendsPanel t={trends} />}
+      <AiSettingsPanel cfg={cfg} />
       {rows ? (
         <WorkspacesTable rows={rows} q={q} onQ={setQ} sort={sort} onSort={setSort}
           onSelect={setSelectedId} onExport={() => exportWorkspacesCsv(rows)} />

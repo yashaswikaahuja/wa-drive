@@ -338,4 +338,42 @@ router.delete('/workspaces/:id', async (req: any, res) => {
   } finally { client.release(); }
 });
 
+// GET /owner/ai-settings — current AI model configuration (env-level)
+router.get('/ai-settings', async (req: any, res) => {
+  const mask = (k: string) => k ? '•'.repeat(Math.max(0, k.length - 8)) + k.slice(-8) : '';
+  res.json({
+    extractionProvider: 'mistral',
+    extractionModel: 'mistral-small-latest',
+    mistralKey: mask(process.env.MISTRAL_API_KEY || ''),
+    textProvider: process.env.OPENROUTER_API_KEY ? 'openrouter' : 'groq',
+    textModel: process.env.OPENROUTER_API_KEY ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile',
+    openrouterKey: mask(process.env.OPENROUTER_API_KEY || ''),
+    groqKey: mask(process.env.GROQ_API_KEY || ''),
+  });
+});
+
+// PATCH /owner/ai-settings — update AI keys (writes to all workspace settings as global override)
+router.patch('/ai-settings', async (req: any, res) => {
+  const { extractionProvider, extractionModel, mistralKey, textProvider, textModel, openrouterKey, groqKey } = req.body;
+  try {
+    // Store globally in all workspaces (or we could just use a global table, but this reuses existing infra)
+    const updates: string[] = [];
+    if (extractionProvider) updates.push(`settings = jsonb_set(settings, '{ai,extractionProvider}', '"${extractionProvider}"'::jsonb)`);
+    if (extractionModel) updates.push(`settings = jsonb_set(settings, '{ai,extractionModel}', '"${extractionModel}"'::jsonb)`);
+    if (textProvider) updates.push(`settings = jsonb_set(settings, '{ai,textProvider}', '"${textProvider}"'::jsonb)`);
+    if (textModel) updates.push(`settings = jsonb_set(settings, '{ai,textModel}', '"${textModel}"'::jsonb)`);
+    if (mistralKey && !mistralKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,mistralKey}', '"${mistralKey}"'::jsonb)`);
+    if (openrouterKey && !openrouterKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,openrouterKey}', '"${openrouterKey}"'::jsonb)`);
+    if (groqKey && !groqKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,groqKey}', '"${groqKey}"'::jsonb)`);
+    if (updates.length > 0) {
+      // Ensure ai key exists first
+      await req.pool.query(`UPDATE workspaces SET settings = jsonb_set(settings, '{ai}', COALESCE(settings->'ai', '{}'::jsonb)) WHERE settings->'ai' IS NULL`);
+      for (const u of updates) {
+        await req.pool.query(`UPDATE workspaces SET ${u}`);
+      }
+    }
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 export default router;

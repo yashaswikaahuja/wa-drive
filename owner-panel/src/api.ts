@@ -169,3 +169,28 @@ export const setWorkspaceStatus = (cfg: Config, id: string, action: 'block' | 'u
 // Permanently hard-delete a café + all its data. `confirm` must equal the café name.
 export const deleteWorkspace = (cfg: Config, id: string, confirm: string) =>
   send(cfg, 'DELETE', `/owner/workspaces/${id}`, { confirm });
+
+export interface AiSettings {
+  extractionProvider: string;
+  extractionModel: string;
+  mistralKey: string;
+  textProvider: string;
+  textModel: string;
+  openrouterKey: string;
+  groqKey: string;
+}
+
+export const fetchAiSettings = (cfg: Config) => get<AiSettings>(cfg, '/owner/ai-settings');
+
+export async function patchAiSettings(cfg: Config, data: Partial<AiSettings>): Promise<void> {
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/owner/ai-settings`, {
+    method: 'PATCH',
+    headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    let msg = 'Save failed';
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new ApiError(res.status, msg);
+  }
+}
