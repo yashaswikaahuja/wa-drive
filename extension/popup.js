@@ -582,6 +582,7 @@ fillBtn.addEventListener('click', async () => {
           }),
         });
       } catch {}
+    }
 
     const result = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
