@@ -24,6 +24,7 @@ const PhotoTool = lazy(() => import('./features/photo-tool/PhotoTool'));
 const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
 const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
+const SharedProfile = lazy(() => import('./features/customers/SharedProfile'));
 const Settings = lazy(() => import('./features/settings/Settings'));
 const Overview = lazy(() => import('./features/admin/Overview'));
 const Sessions = lazy(() => import('./features/admin/Sessions'));
@@ -70,9 +71,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Public preview route — design playground accessible without login
+  // Public preview route — design playground and shared profiles accessible without login
   const isPlayground = typeof window !== 'undefined' && window.location.pathname.startsWith('/design-playground');
-  if (!authed && !isPlayground) return <Login />;
+  const isSharedProfile = typeof window !== 'undefined' && window.location.pathname.startsWith('/shared/');
+  if (!authed && !isPlayground && !isSharedProfile) return <Login />;
 
   return (
     <BrowserRouter>
@@ -80,6 +82,7 @@ export default function App() {
       <Routes>
         <Route path="/design-playground" element={<Suspense fallback={<PageLoader />}><PlaygroundIndex /></Suspense>} />
         <Route path="/design-playground/counter" element={<Suspense fallback={<PageLoader />}><PlaygroundCounter /></Suspense>} />
+        <Route path="/shared/:token" element={<Suspense fallback={<PageLoader />}><SharedProfile /></Suspense>} />
         <Route element={<Layout />}>
           <Route path="/app" element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
           <Route path="/app/customers" element={<Suspense fallback={<PageLoader />}><Customers /></Suspense>} />

@@ -46,7 +46,7 @@ export async function deriveProfile(workspaceId: string, phone: string, personKe
   // operator overrides always win
   for (const [k, v] of Object.entries(overrides || {})) {
     const ov = v as any;
-    if (ov && (ov.source === 'manual' || ov.source === 'document_corrected')) result[k] = ov;
+    if (ov && (ov.source === 'manual' || ov.source === 'document_corrected' || ov.source === 'shared')) result[k] = ov;
   }
   // auto-fill mobile from the WhatsApp number if no doc provided one
   if (!result.phone || !String(result.phone?.value ?? '').trim()) {

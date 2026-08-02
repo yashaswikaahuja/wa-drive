@@ -50,6 +50,9 @@ export default function CustomerDetail() {
   const [readiness, setReadiness] = useState<any[]>([]);
   const [uploading, setUploading] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [sharePhone, setSharePhone] = useState('');
   const [showImport, setShowImport] = useState(false);
   const [importToken, setImportToken] = useState('');
   const [importMsg, setImportMsg] = useState('');
@@ -93,7 +96,10 @@ export default function CustomerDetail() {
   const handleShare = async () => {
     if (!selectedPerson) return;
     try {
-      const r = await api.post(`/customers/share/${selectedPerson}`);
+      const r = await api.post(`/customers/share/${selectedPerson}`, {
+        targetEmail: shareEmail.trim() || undefined,
+        targetPhone: sharePhone.trim() || undefined,
+      });
       setShareToken(r.data.token);
     } catch (e: any) { setError(e.response?.data?.error || 'Share failed'); }
   };
@@ -195,7 +201,7 @@ export default function CustomerDetail() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={handleShare} disabled={!selectedPerson} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#0a84ff] transition-colors disabled:opacity-40" title="Share profile">
+          <button onClick={() => setShowShareModal(true)} disabled={!selectedPerson} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#0a84ff] transition-colors disabled:opacity-40" title="Share profile">
             <ShareNetwork size={15} /> Share
           </button>
           <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#30d158] transition-colors" title="Import shared profile">
@@ -478,20 +484,52 @@ export default function CustomerDetail() {
           onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }} onConfirm={confirmExtraction} />
       )}
 
-      {/* Share token modal */}
-      {shareToken && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShareToken(null)}>
+      {/* Share modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); }}>
           <div onClick={e => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#1c1c1e] border border-white/10 p-5">
             <div className="flex items-center gap-2 mb-3">
               <ShareNetwork size={16} className="text-[#0a84ff]" />
-              <h3 className="text-sm font-semibold text-white">Share Code</h3>
+              <h3 className="text-sm font-semibold text-white">Share Profile</h3>
             </div>
-            <p className="text-xs text-gray-400 mb-3">Give this code to another cybercafe. They can import this profile within 7 days.</p>
-            <div className="flex items-center gap-2">
-              <input readOnly value={shareToken} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
-              <button onClick={() => { navigator.clipboard.writeText(shareToken); }} className="btn-primary text-xs shrink-0">Copy</button>
-            </div>
-            <button onClick={() => setShareToken(null)} className="mt-3 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
+
+            {!shareToken ? (
+              <>
+                <p className="text-xs text-gray-400 mb-4">Share this profile with another cybercafe. Optionally restrict to a specific recipient.</p>
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="text-[11px] text-gray-500 block mb-1">Recipient email (optional)</label>
+                    <input value={shareEmail} onChange={e => setShareEmail(e.target.value)} placeholder="cafe@example.com" className="input-field text-xs w-full" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-500 block mb-1">Recipient phone (optional)</label>
+                    <input value={sharePhone} onChange={e => setSharePhone(e.target.value)} placeholder="9876543210" className="input-field text-xs w-full" />
+                  </div>
+                </div>
+                <button onClick={handleShare} className="btn-primary text-xs w-full">Generate Share Link</button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-400 mb-3">Share this code or link with the recipient. Valid for 7 days.</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] text-gray-500 block mb-1">Share Code</label>
+                    <div className="flex items-center gap-2">
+                      <input readOnly value={shareToken} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
+                      <button onClick={() => navigator.clipboard.writeText(shareToken)} className="btn-primary text-xs shrink-0">Copy</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-500 block mb-1">Public Link</label>
+                    <div className="flex items-center gap-2">
+                      <input readOnly value={`${window.location.origin}/shared/${shareToken}`} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
+                      <button onClick={() => navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`)} className="btn-primary text-xs shrink-0">Copy</button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            <button onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); }} className="mt-4 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
           </div>
         </div>
       )}
