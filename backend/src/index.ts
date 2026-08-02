@@ -97,9 +97,14 @@ app.get('/api/services', authMiddleware, async (req: any, res) => {
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
-// Groq key for extension
+// LLM key for extension (OpenRouter for field mapping / form fill)
 app.get('/api/settings/groq-key', authMiddleware, (_req, res) => {
-  res.json({ key: process.env.GROQ_API_KEY || '' });
+  res.json({
+    key: process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY || '',
+    provider: process.env.OPENROUTER_API_KEY ? 'openrouter' : 'groq',
+    baseUrl: process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://api.groq.com/openai/v1/chat/completions',
+    model: process.env.OPENROUTER_API_KEY ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile',
+  });
 });
 
 // HTTP server + Socket.IO

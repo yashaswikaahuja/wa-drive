@@ -489,11 +489,11 @@ fillBtn.addEventListener('click', async () => {
     }
 
     updateProgress('Mapping fields to profile...', 50);
-    // Get Groq key from backend settings
-    let groqKey = '';
+    // Get LLM key from backend settings (OpenRouter or Groq)
+    let groqKey = '', llmBaseUrl = 'https://api.groq.com/openai/v1/chat/completions', llmModel = 'llama-3.3-70b-versatile';
     try {
       const gRes = await fetch(data.backendUrl + '/settings/groq-key', { headers: { 'Authorization': 'Bearer ' + data.accessToken } });
-      if (gRes.ok) { const gd = await gRes.json(); groqKey = gd.key || ''; }
+      if (gRes.ok) { const gd = await gRes.json(); groqKey = gd.key || ''; llmBaseUrl = gd.baseUrl || llmBaseUrl; llmModel = gd.model || llmModel; }
     } catch {}
     updateProgress('Filling form fields...', 70);
     const result = await chrome.scripting.executeScript({
@@ -508,8 +508,8 @@ fillBtn.addEventListener('click', async () => {
           // Also include top-level fields
           if (selectedProfile.name) flat.name = flat.name || selectedProfile.name;
           return flat;
-        })(), selectedProfile.id || '', data.backendUrl, data.accessToken, groqKey],
-      func: async (profile, profileId, backendUrl, accessToken, groqKey) => {
+        })(), selectedProfile.id || '', data.backendUrl, data.accessToken, groqKey, llmBaseUrl, llmModel],
+      func: async (profile, profileId, backendUrl, accessToken, groqKey, llmBaseUrl, llmModel) => {
         const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken };
         const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
         // Stash backend URL + token + formkey + profileId on document.body so executor's
@@ -519,6 +519,9 @@ fillBtn.addEventListener('click', async () => {
           document.body.setAttribute('data-cc-token', accessToken);
           document.body.setAttribute('data-cc-formkey', semanticFormKey || '');
           document.body.setAttribute('data-cc-profile-id', profileId || '');
+          document.body.setAttribute('data-cc-llm-url', llmBaseUrl || '');
+          document.body.setAttribute('data-cc-llm-model', llmModel || '');
+          document.body.setAttribute('data-cc-llm-key', groqKey || '');
         } catch {}
         if (!formFields.length) return { ok: false, error: 'No form fields detected' };
 
@@ -557,7 +560,7 @@ fillBtn.addEventListener('click', async () => {
         const unmappedAI = formFields.filter(f => !mapping[f.selector]);
         if (unmappedAI.length > 0 && groqKey) {
           try {
-            const aiPromise = aiMatch(unmappedAI, profile, groqKey);
+            const aiPromise = aiMatch(unmappedAI, profile, groqKey, llmBaseUrl, llmModel);
             const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('AI timeout')), 10000));
             const aiMapping = await Promise.race([aiPromise, timeout]);
             for (const [sel, val] of Object.entries(aiMapping)) {
@@ -850,20 +853,20 @@ agentExecuteBtn.addEventListener('click', async () => {
     if (execResult.error) throw new Error(execResult.error);
 
     const okCount = execResult.steps.filter(s => s.ok).length;
-    showStatus(`Done: ${okCount}/${execResult.steps.length} actions succeeded`, execResult.ok ? '#10b981' : '#f59e0b');
+    showStatus(`Done: ${okCount}/${execResult.steps.length} actions succeeded`, execResult.ok ? CC.success : CC.warning);
 
     // Render per-step results inline so operator sees what happened
     agentActionsEl.innerHTML = plan.actions.map((a, i) => {
       const r = execResult.steps[i];
       const ok = r && r.ok;
-      const color = ok ? '#10b981' : '#ef4444';
+      const color = ok ? 'hsl(158 60% 28%)' : 'hsl(0 65% 45%)';
       const summary = r?.error || (r?.result ? JSON.stringify(r.result).slice(0, 80) : '?');
       const args = JSON.stringify(a.args).slice(0, 60);
-      return `<div style="font-size: 11px; padding: 4px 6px; border-bottom: 1px solid #222; font-family: monospace;">
-        <span style="color: ${color};">${ok ? '✓' : '✗'}</span>
-        <span style="color: #3b82f6;">${a.name}</span>
-        <span style="color: #ccc;">${args}</span>
-        <div style="color: #888; padding-left: 16px; font-size: 10px;">${summary}</div>
+      return `<div class="agent-step">
+        <span style="color:${color}">${ok ? '✓' : '✗'}</span>
+        <span class="name">${a.name}</span>
+        <span class="args">${args}</span>
+        <div class="n" style="padding-left:16px;font-size:10px;margin-top:2px">${summary}</div>
       </div>`;
     }).join('');
 
@@ -894,7 +897,7 @@ agentExecuteBtn.addEventListener('click', async () => {
     setTimeout(() => { agentExecuteBtn.textContent = '▶ Execute'; }, 3000);
     _pendingPlan = null;
   } catch (e) {
-    showStatus('Execute error: ' + e.message, '#ef4444');
+    showStatus('Execute error: ' + e.message, CC.danger);
     console.error('[CC agent execute]', e);
   } finally {
     agentExecuteBtn.disabled = false;

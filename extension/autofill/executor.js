@@ -637,15 +637,17 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           if (opt2) { clearInterval(interval); applySelect(el, opt2); return; }
           if (++attempts >= 15) {
             clearInterval(interval);
-            // Groq AI fallback — ask AI to pick the best option
-            const groqKey = window._cc_groq_key;
+            // AI fallback — ask LLM to pick the best option
+            const groqKey = window._cc_groq_key || (document.body.getAttribute('data-cc-llm-key') || '');
+            const llmUrl = document.body.getAttribute('data-cc-llm-url') || 'https://openrouter.ai/api/v1/chat/completions';
+            const llmModel = document.body.getAttribute('data-cc-llm-model') || 'meta-llama/llama-3.3-70b-instruct';
             if (groqKey && realOpts.length > 0) {
               const optTexts = realOpts.map(o => o.text.trim()).join('\n');
-              fetch('https://api.groq.com/openai/v1/chat/completions', {
+              fetch(llmUrl, {
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  model: 'llama-3.3-70b-versatile',
+                  model: llmModel,
                   messages: [{ role: 'user', content: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts }],
                   max_tokens: 50,
                 })
@@ -653,7 +655,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
                 const aiText = res?.choices?.[0]?.message?.content?.trim();
                 if (aiText) {
                   const aiOpt = realOpts.find(o => o.text.trim() === aiText) || realOpts.find(o => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
-                  if (aiOpt) { console.debug('[CC] Groq matched:', aiText, '->', aiOpt.text); applySelect(el, aiOpt); }
+                  if (aiOpt) { console.debug('[CC] AI matched:', aiText, '->', aiOpt.text); applySelect(el, aiOpt); }
                 }
               }).catch(() => {});
             }

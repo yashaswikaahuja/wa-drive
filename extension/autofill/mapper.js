@@ -299,8 +299,8 @@ function fuzzyMatch(formFields, profile) {
   return mapping;
 }
 
-// ── AI matching via Groq ──────────────────────────────────────────────────────
-async function aiMatch(formFields, profile, groqKey) {
+// ── AI matching via LLM (OpenRouter / Groq) ──────────────────────────────────
+async function aiMatch(formFields, profile, groqKey, llmBaseUrl, llmModel) {
   var fieldDescriptions = formFields.map((f, i) =>
     `${i}: label="${f.label || ''}" id="${f.id || ''}" name="${f.name || ''}" placeholder="${f.placeholder || ''}"`
   ).join('\n');
@@ -331,11 +331,13 @@ ${profileKeys}
 Return JSON only: {"0": "profileKey", "2": "dob", "5": "name__first"}`;
 
   try {
-    var res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    var apiUrl = llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions';
+    var model = llmModel || 'meta-llama/llama-3.3-70b-instruct';
+    var res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: model,
         messages: [{ role: 'system', content: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.' }, { role: 'user', content: prompt }],
         max_tokens: 300,
       }),

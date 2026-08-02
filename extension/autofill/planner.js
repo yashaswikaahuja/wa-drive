@@ -2,7 +2,7 @@
 // Callable from popup, background, floating button, or remote trigger
 // Does NOT touch DOM or execute fills — only produces the plan
 
-async function generateFillPlan({ tabId, profile, backendUrl, groqKey }) {
+async function generateFillPlan({ tabId, profile, backendUrl, groqKey, llmBaseUrl, llmModel }) {
   // Step 1: Extract form fields
   const fieldsResult = await chrome.scripting.executeScript({
     target: { tabId },
@@ -47,7 +47,7 @@ async function generateFillPlan({ tabId, profile, backendUrl, groqKey }) {
   if (isNewForm && groqKey) {
     const allUnmappedForAI = formFields.filter(f => !mapping[f.selector] && !/captcha|otp|token|password|security.code/i.test(f.label));
     if (allUnmappedForAI.length > 0) {
-      const aiFirst = await aiMatch(allUnmappedForAI, profile, groqKey);
+      const aiFirst = await aiMatch(allUnmappedForAI, profile, groqKey, llmBaseUrl, llmModel);
       for (const [sel, val] of Object.entries(aiFirst)) {
         mapping[sel] = val;
         const field = formFields.find(f => f.selector === sel);
@@ -119,7 +119,7 @@ async function generateFillPlan({ tabId, profile, backendUrl, groqKey }) {
     const unmapped2 = formFields.filter(f => !mapping[f.selector]);
     const worthMapping = unmapped2.filter(f => !/verify|confirm|captcha|otp|token|password/i.test(f.label));
     if (worthMapping.length > 0 && groqKey) {
-      const aiMapping = await aiMatch(worthMapping, profile, groqKey);
+      const aiMapping = await aiMatch(worthMapping, profile, groqKey, llmBaseUrl, llmModel);
       for (const [sel, val] of Object.entries(aiMapping)) {
         mapping[sel] = val;
         const field = formFields.find(f => f.selector === sel);

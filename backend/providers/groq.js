@@ -1,11 +1,15 @@
 /**
- * Groq Provider Adapter
- * Normalizes observation -> Groq prompt, Groq response -> action plan.
+ * LLM Provider Adapter (OpenRouter)
+ * Normalizes observation -> LLM prompt, LLM response -> action plan.
  * Schema: EXECUTION_SCHEMA v1.0
  */
 
-const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL = 'llama-3.3-70b-versatile';
+const LLM_API = process.env.OPENROUTER_API_KEY
+  ? 'https://openrouter.ai/api/v1/chat/completions'
+  : 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL = process.env.OPENROUTER_API_KEY
+  ? 'meta-llama/llama-3.3-70b-instruct'
+  : 'llama-3.3-70b-versatile';
 
 function normalizeObservation(observation) {
   const { fields, profile, formKey, hostname } = observation;
@@ -45,7 +49,7 @@ function normalizeResponse(groqResponse) {
     return {
       actions: validated,
       confidence: validated.length / Math.max(actions.length, 1),
-      provider: 'groq',
+      provider: 'openrouter',
       model: MODEL,
       rawTokens: groqResponse.usage?.total_tokens || 0
     };
@@ -54,4 +58,4 @@ function normalizeResponse(groqResponse) {
   }
 }
 
-export { normalizeObservation, normalizeResponse, GROQ_API };
+export { normalizeObservation, normalizeResponse, LLM_API as GROQ_API };

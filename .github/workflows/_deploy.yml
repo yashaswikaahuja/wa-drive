@@ -52,6 +52,7 @@ jobs:
           GROQ_API_KEY_2:       ${{ secrets.GROQ_API_KEY_2 }}
           GEMINI_API_KEY:       ${{ secrets.GEMINI_API_KEY }}
           MISTRAL_API_KEY:      ${{ secrets.MISTRAL_API_KEY }}
+          OPENROUTER_API_KEY:   ${{ secrets.OPENROUTER_API_KEY }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           # config (non-secret) — repo or environment variables
           GOOGLE_CLIENT_ID:     ${{ vars.GOOGLE_CLIENT_ID }}
@@ -80,7 +81,7 @@ jobs:
           # Values arrive as env vars (not inlined), so special chars are safe; empty ones are skipped.
           : > /tmp/vm.env
           for k in DATABASE_URL JWT_SECRET JWT_REFRESH_SECRET WA_SECRET \
-                   GROQ_API_KEY GROQ_API_KEY_2 GEMINI_API_KEY MISTRAL_API_KEY GOOGLE_CLIENT_SECRET \
+                   GROQ_API_KEY GROQ_API_KEY_2 GEMINI_API_KEY MISTRAL_API_KEY OPENROUTER_API_KEY GOOGLE_CLIENT_SECRET \
                    GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI WA_AUTH_BACKEND \
                    WA_INSTANCES WA_INSTANCE_NAME RESOLVER_URL WA_HEARTBEAT_MS WA_DEAD_AFTER_MS REDIS_URL PARENT_URL SIGNUP_CODE \
                    EMAIL_PROVIDER RESEND_API_KEY \

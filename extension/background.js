@@ -331,7 +331,7 @@ function stopKeepalive() {
   _keepaliveInterval = null;
 }
 
-async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey }) {
+async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, llmBaseUrl, llmModel }) {
   _teachRunning = true;
   startKeepalive();
   // Resolve tabId if missing
@@ -358,7 +358,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
     // Try Groq auto-teach first
     if (groqKey) {
       const profileValue = field.profileValue || '';
-      const autoSuccess = await groqAutoTeach(tabId, { ...field, profileValue }, groqKey, backendUrl, hostname);
+      const autoSuccess = await groqAutoTeach(tabId, { ...field, profileValue }, groqKey, backendUrl, hostname, llmBaseUrl, llmModel);
       if (autoSuccess) {
         notifyPopup({ type: 'TEACH_PROGRESS', status: `✓ AI learned "${label}" automatically!`, done: false });
         await sleep(800);
@@ -398,11 +398,11 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
         }).catch(() => [{ result: '' }]);
         const domText = domSnap?.[0]?.result || '';
         if (domText) {
-          const aiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          const aiRes = await fetch(llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              model: 'llama-3.3-70b-versatile',
+              model: llmModel || 'meta-llama/llama-3.3-70b-instruct',
               messages: [{ role: 'user', content: 'Identify the dropdown component class and trigger selector from these HTML snippets near field "' + field.label + '". Reply ONLY as JSON: {"componentClass":"...","triggerSelector":"..."}. Snippets: ' + domText }],
               max_tokens: 80,
             }),
@@ -480,7 +480,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey })
 
 
 // ── groqAutoTeach — tries to fill a custom dropdown using Groq AI ──
-async function groqAutoTeach(tabId, field, groqKey, backendUrl, hostname) {
+async function groqAutoTeach(tabId, field, groqKey, backendUrl, hostname, llmBaseUrl, llmModel) {
   try {
     // Step 1: Get DOM snapshot of the component (closed state)
     const snap1 = await chrome.scripting.executeScript({
@@ -508,10 +508,10 @@ ${closedHtml}
 Reply with ONLY valid JSON (no markdown):
 {"triggerSelector":"CSS selector to click to open dropdown","componentClass":"root element class name"}`;
 
-    const r1 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const r1 = await fetch(llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt1 }], max_tokens: 100 }),
+      body: JSON.stringify({ model: llmModel || 'meta-llama/llama-3.3-70b-instruct', messages: [{ role: 'user', content: prompt1 }], max_tokens: 100 }),
     }).then(r => r.json()).catch(() => null);
 
     const txt1 = r1?.choices?.[0]?.message?.content?.trim() || '';
@@ -558,10 +558,10 @@ Options overlay HTML: ${openState.overlayHtml}
 Reply with ONLY valid JSON:
 {"optionSelector":"CSS selector for each option li/div","optionText":"exact text of option to click","verifySelector":"CSS selector showing selected value after close"}`;
 
-    const r2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const r2 = await fetch(llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: prompt2 }], max_tokens: 150 }),
+      body: JSON.stringify({ model: llmModel || 'meta-llama/llama-3.3-70b-instruct', messages: [{ role: 'user', content: prompt2 }], max_tokens: 150 }),
     }).then(r => r.json()).catch(() => null);
 
     const txt2 = r2?.choices?.[0]?.message?.content?.trim() || '';
