@@ -65,63 +65,77 @@ export default function SharedProfile() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] p-4 sm:p-8">
       <div className="max-w-lg mx-auto">
-        <div className="rounded-2xl bg-[#1c1c1e] border border-white/10 p-6">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-[#0a84ff]/10 flex items-center justify-center text-[#0a84ff] text-lg font-semibold">
-              {(profile.name || '?')[0]?.toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-semibold text-white">{profile.name}</h1>
-              <p className="text-xs text-gray-500">{profile.phone} · {profile.relationship}</p>
-            </div>
+        {/* Branding */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-7 h-7 rounded-lg bg-[#0a84ff]/10 flex items-center justify-center">
+            <span className="text-[#0a84ff] text-xs font-bold">CC</span>
           </div>
-
-          {/* Save / Import button */}
-          <div className="mb-6">
-            {imported ? (
-              <div className="flex items-center gap-2 justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <Check size={16} weight="bold" className="text-emerald-400" />
-                <span className="text-sm text-emerald-400 font-medium">Saved to your customers!</span>
-                <button onClick={() => navigate('/app/customers')} className="text-xs text-[#0a84ff] ml-2 hover:underline">View →</button>
-              </div>
-            ) : isLoggedIn ? (
-              <button onClick={handleImport} disabled={importing}
-                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-white text-sm font-medium transition-colors disabled:opacity-50">
-                <DownloadSimple size={16} weight="bold" />
-                {importing ? 'Saving...' : 'Save to My Customers'}
-              </button>
-            ) : (
-              <a href="/app" className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-white text-sm font-medium transition-colors">
-                <SignIn size={16} weight="bold" /> Login to Save This Profile
-              </a>
-            )}
-            {importError && <p className="text-xs text-red-400 mt-2 text-center">{importError}</p>}
-          </div>
-
-          {/* Fields */}
-          {Object.entries(sections).map(([section, entries]) => (
-            <div key={section} className="mb-4">
-              <h3 className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">{section}</h3>
-              <div className="space-y-1.5">
-                {entries.map(([k, val]) => (
-                  <div key={k} className="flex justify-between text-sm">
-                    <span className="text-gray-400 capitalize">{k.replace(/_/g, ' ')}</span>
-                    <span className="text-gray-200 text-right max-w-[60%] truncate">{String(val)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {Object.keys(fields).length === 0 && (
-            <p className="text-xs text-gray-600 text-center">No profile data available.</p>
-          )}
-
-          <p className="text-[10px] text-gray-600 mt-6 text-center">
-            Shared via CyberControl · Expires {new Date(profile.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-          </p>
+          <span className="text-xs text-gray-500">CyberControl · Shared Profile</span>
         </div>
+
+        {/* Card */}
+        <div className="rounded-[1.5rem] p-1.5 bg-white/[0.03] border border-white/[0.08]">
+          <div className="rounded-[1.1rem] bg-[#1c1c1e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] p-5 sm:p-6">
+            {/* Header */}
+            <div className="flex items-center gap-4 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-[#0a84ff]/10 flex items-center justify-center text-[#0a84ff] text-lg font-semibold shrink-0">
+                {(profile.name || '?')[0]?.toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-lg font-semibold text-white truncate">{profile.name}</h1>
+                <p className="text-xs text-gray-500">{profile.phone} · {profile.relationship}</p>
+              </div>
+            </div>
+
+            {/* Save / Import button */}
+            <div className="mb-5">
+              {imported ? (
+                <div className="flex items-center gap-2 justify-center p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <Check size={16} weight="bold" className="text-emerald-400" />
+                  <span className="text-sm text-emerald-400 font-medium">Saved to your customers!</span>
+                  <button onClick={() => navigate('/app/customers')} className="text-xs text-[#0a84ff] ml-2 hover:underline">View →</button>
+                </div>
+              ) : isLoggedIn ? (
+                <button onClick={handleImport} disabled={importing}
+                  className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0a84ff] hover:bg-[#409cff] text-white text-sm font-medium transition-colors disabled:opacity-50">
+                  <DownloadSimple size={16} weight="bold" />
+                  {importing ? 'Saving...' : 'Save to My Customers'}
+                </button>
+              ) : (
+                <a href="/app" className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-[#0a84ff] hover:bg-[#409cff] text-white text-sm font-medium transition-colors no-underline">
+                  <SignIn size={16} weight="bold" /> Login to Save This Profile
+                </a>
+              )}
+              {importError && <p className="text-xs text-[#ff453a] mt-2 text-center">{importError}</p>}
+            </div>
+
+            {/* Divider */}
+            <div className="h-px bg-white/[0.06] mb-5" />
+
+            {/* Fields */}
+            {Object.entries(sections).map(([section, entries]) => (
+              <div key={section} className="mb-4">
+                <h3 className="text-[10px] uppercase tracking-[0.15em] text-gray-500 mb-2">{section}</h3>
+                <div className="space-y-2">
+                  {entries.map(([k, val]) => (
+                    <div key={k} className="flex items-start justify-between gap-4">
+                      <span className="text-xs text-gray-500 capitalize shrink-0">{k.replace(/_/g, ' ')}</span>
+                      <span className="text-xs text-gray-200 text-right break-words">{String(val)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {Object.keys(fields).length === 0 && (
+              <p className="text-xs text-gray-600 text-center py-4">No profile data available.</p>
+            )}
+          </div>
+        </div>
+
+        <p className="text-[10px] text-gray-600 mt-4 text-center">
+          Expires {new Date(profile.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </p>
       </div>
     </div>
   );
