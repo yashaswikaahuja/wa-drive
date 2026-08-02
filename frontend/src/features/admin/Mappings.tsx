@@ -15,29 +15,49 @@ interface FormSummary {
   lastSeen: string | null;
 }
 
+interface Condition { key: string; op: string; value?: string; }
+interface Rule { when: Condition[]; then: string; }  // then = option text, or 'check' for single checkbox
+
+type FillMode = 'match' | 'always' | 'constant' | 'condition' | 'skip';
+
 interface FieldMapping {
   label?: string;
   type?: string;
   order?: number;
   options?: string[] | null;
   profileKey: string | null;
+  fillMode?: FillMode | null;
+  rules?: Rule[] | null;
+  constantValue?: string | null;
+  fallback?: string | null;
   fills: number;
   corrections: number;
   lastSeen: string;
   source?: string;
 }
 
+const OPERATORS: { op: string; label: string; needsValue: boolean }[] = [
+  { op: 'eq', label: 'is', needsValue: true },
+  { op: 'neq', label: 'is not', needsValue: true },
+  { op: 'contains', label: 'contains', needsValue: true },
+  { op: 'notEmpty', label: 'exists', needsValue: false },
+  { op: 'empty', label: 'is empty', needsValue: false },
+];
+
 const PROFILE_KEY_GROUPS: { label: string; keys: string[] }[] = [
   { label: 'Identity', keys: ['name', 'first_name', 'middle_name', 'last_name', 'father_name', 'mother_name', 'husband_name', 'dob', 'gender', 'nationality', 'category', 'religion', 'marital_status'] },
   { label: 'Contact', keys: ['phone', 'email', 'email_id'] },
   { label: 'IDs', keys: ['aadhaar_number', 'vid', 'pan_number', 'epic_number'] },
   { label: 'Address', keys: ['pincode', 'state', 'district', 'block', 'village', 'sub_division', 'police_station', 'post_office', 'ward_no', 'city', 'street', 'house_no', 'address', 'permanent_address', 'domicile_state'] },
+  { label: 'Eligibility', keys: ['occupation', 'ex_serviceman', 'ews_certificate', 'disability_certificate', 'domicile_certificate', 'income_certificate', 'caste_certificate', 'languages', 'skills'] },
   { label: 'Education (10th)', keys: ['roll_number_10th', 'board_10th', 'passing_year_10th', 'marks_obtained_10th', 'total_marks_10th', 'percentage_10th', 'division_10th', 'school_name', 'certificate_number_10th'] },
   { label: 'Education (12th)', keys: ['roll_number_12th', 'board_12th', 'passing_year_12th', 'marks_obtained_12th', 'total_marks_12th', 'percentage_12th', 'division_12th', 'stream_12th', 'school_name_12th', 'certificate_number_12th'] },
   { label: 'Education (Graduation)', keys: ['roll_number_grad', 'university_name', 'degree', 'passing_year_grad', 'marks_obtained_grad', 'total_marks_grad', 'percentage_grad', 'division_grad', 'registration_number_grad'] },
   { label: 'Education (other)', keys: ['roll_number', 'board_name', 'year_of_passing', 'grade', 'division', 'subject', 'subjects', 'school_name', 'degree_name', 'highest_education_qualification', 'qualification_status'] },
   { label: 'Documents', keys: ['registration_number', 'certificate_number_10th', 'certificate_number_12th'] },
 ];
+
+const ALL_PROFILE_KEYS: string[] = PROFILE_KEY_GROUPS.flatMap(g => g.keys);
 
 function favicon(host: string | null) {
   if (!host) return null;
@@ -50,6 +70,7 @@ export default function MappingsPage() {
   const [fields, setFields] = useState<Record<string, FieldMapping>>({});
   const [search, setSearch] = useState('');
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [translations, setTranslations] = useState<Record<string, string>>({});
@@ -104,6 +125,23 @@ export default function MappingsPage() {
       await api.patch('/mappings/' + selected!.formKey + '/' + encodeURIComponent(label), { profileKey: profileKey || null });
       setFields(prev => ({ ...prev, [label]: { ...prev[label], profileKey: profileKey || null, source: 'manual' } }));
     } catch (e) { console.warn('save failed', e); }
+    finally { setSavingKey(null); }
+  }
+
+  // Save the full rule config for a field (radio/dropdown/checkbox rule builder)
+  async function saveFieldConfig(label: string, cfg: Partial<FieldMapping>) {
+    setSavingKey(label);
+    try {
+      await api.patch('/mappings/' + selected!.formKey + '/' + encodeURIComponent(label), {
+        profileKey: cfg.profileKey ?? null,
+        fillMode: cfg.fillMode ?? null,
+        rules: cfg.rules ?? null,
+        constantValue: cfg.constantValue ?? null,
+        fallback: cfg.fallback ?? null,
+      });
+      setFields(prev => ({ ...prev, [label]: { ...prev[label], ...cfg, source: 'manual' } }));
+      toast.success('Saved');
+    } catch (e) { console.warn('save config failed', e); toast.error('Save failed'); }
     finally { setSavingKey(null); }
   }
 
@@ -247,6 +285,16 @@ export default function MappingsPage() {
                 : type === 'date' ? 'text-sky-400'
                 : 'text-gray-500';
               const hasOptions = m.options && m.options.length > 0;
+              const grp = getTypeGroup(type);
+              const isRuleType = grp === 'radio' || grp === 'dropdown' || grp === 'checkbox';
+              const mode: FillMode | null = (m.fillMode as FillMode) || (m.profileKey ? 'match' : (type === 'checkbox-agreement' ? 'always' : null));
+              const summary = mode === 'match' ? (m.profileKey ? '= ' + m.profileKey.replace(/_/g, ' ') : 'match…')
+                : mode === 'always' ? 'always check'
+                : mode === 'constant' ? '= "' + (m.constantValue || '…') + '"'
+                : mode === 'condition' ? ((m.rules?.length || 0) + ' rule' + ((m.rules?.length || 0) === 1 ? '' : 's'))
+                : mode === 'skip' ? 'skip'
+                : 'not set';
+              const isOpen = expandedKey === key;
               return (
                 <div key={key} className={`px-4 py-2.5 hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
                   <div className="flex items-center gap-3">
@@ -254,21 +302,32 @@ export default function MappingsPage() {
                     <div className="flex-1 min-w-0">
                       <div className="text-sm text-gray-200 truncate" title={display}>{display}</div>
                     </div>
-                    <div className="w-52 flex-shrink-0">
-                      <select
-                        value={m.profileKey || ''}
-                        onChange={(e) => updateField(key, e.target.value)}
-                        disabled={savingKey === key}
-                        className="input-field text-xs w-full py-1.5"
+                    {isRuleType ? (
+                      <button
+                        onClick={() => setExpandedKey(isOpen ? null : key)}
+                        className={`w-52 flex-shrink-0 text-left input-field text-xs py-1.5 flex items-center justify-between gap-2 ${isOpen ? 'ring-1 ring-[#0a84ff]' : ''}`}
+                        title="Configure how this field is filled"
                       >
-                        <option value="">{type === 'checkbox-agreement' ? '— auto-check —' : '— skip —'}</option>
-                        {PROFILE_KEY_GROUPS.map(group => (
-                          <optgroup key={group.label} label={group.label}>
-                            {group.keys.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </div>
+                        <span className={`truncate ${mode ? 'text-gray-200' : 'text-gray-500'}`}>{summary}</span>
+                        <span className="text-gray-500 flex-shrink-0">{isOpen ? '▴' : '▾'}</span>
+                      </button>
+                    ) : (
+                      <div className="w-52 flex-shrink-0">
+                        <select
+                          value={m.profileKey || ''}
+                          onChange={(e) => updateField(key, e.target.value)}
+                          disabled={savingKey === key}
+                          className="input-field text-xs w-full py-1.5"
+                        >
+                          <option value="">— skip —</option>
+                          {PROFILE_KEY_GROUPS.map(group => (
+                            <optgroup key={group.label} label={group.label}>
+                              {group.keys.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     <button onClick={() => deleteField(key)} className="text-gray-600 hover:text-red-400 text-lg flex-shrink-0" title="Remove">×</button>
                   </div>
                   {hasOptions && (
@@ -278,6 +337,15 @@ export default function MappingsPage() {
                       ))}
                       {m.options!.length > 8 && <span className="text-[11px] text-gray-600">+{m.options!.length - 8} more</span>}
                     </div>
+                  )}
+                  {isOpen && isRuleType && (
+                    <FieldRuleEditor
+                      typeGroup={grp}
+                      mapping={m}
+                      saving={savingKey === key}
+                      onSave={(cfg) => saveFieldConfig(key, cfg)}
+                      onClose={() => setExpandedKey(null)}
+                    />
                   )}
                 </div>
               );
@@ -408,6 +476,171 @@ export default function MappingsPage() {
             >Add</button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ConditionRows({ conditions, onChange }: { conditions: Condition[]; onChange: (c: Condition[]) => void; }) {
+  const update = (i: number, patch: Partial<Condition>) =>
+    onChange(conditions.map((c, idx) => (idx === i ? { ...c, ...patch } : c)));
+  return (
+    <div className="space-y-1.5">
+      {conditions.map((c, i) => {
+        const opDef = OPERATORS.find(o => o.op === c.op) || OPERATORS[0];
+        return (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="text-[10px] text-gray-500 w-8 flex-shrink-0">{i === 0 ? 'IF' : 'AND'}</span>
+            <select value={c.key} onChange={e => update(i, { key: e.target.value })} className="input-field text-xs py-1 flex-1 min-w-0">
+              <option value="">field…</option>
+              {ALL_PROFILE_KEYS.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
+            </select>
+            <select value={c.op} onChange={e => update(i, { op: e.target.value })} className="input-field text-xs py-1 w-24 flex-shrink-0">
+              {OPERATORS.map(o => <option key={o.op} value={o.op}>{o.label}</option>)}
+            </select>
+            {opDef.needsValue && (
+              <input value={c.value || ''} onChange={e => update(i, { value: e.target.value })} placeholder="value" className="input-field text-xs py-1 flex-1 min-w-0" />
+            )}
+            <button onClick={() => onChange(conditions.filter((_, idx) => idx !== i))} className="text-gray-600 hover:text-red-400 flex-shrink-0" title="Remove condition">×</button>
+          </div>
+        );
+      })}
+      <button onClick={() => onChange([...conditions, { key: '', op: 'eq', value: '' }])} className="text-[11px] text-[#0a84ff] hover:underline">+ AND condition</button>
+    </div>
+  );
+}
+
+function FieldRuleEditor({ typeGroup, mapping, saving, onSave, onClose }: {
+  typeGroup: string;
+  mapping: FieldMapping;
+  saving: boolean;
+  onSave: (cfg: Partial<FieldMapping>) => void;
+  onClose: () => void;
+}) {
+  const options = mapping.options || [];
+  const isCheckbox = typeGroup === 'checkbox';
+  const isMulti = mapping.type === 'checkbox-group' || (isCheckbox && options.length > 1);
+  const [mode, setMode] = useState<FillMode>(
+    (mapping.fillMode as FillMode) || (mapping.profileKey ? 'match' : (isCheckbox && !isMulti ? 'always' : 'condition'))
+  );
+  const [profileKey, setProfileKey] = useState(mapping.profileKey || '');
+  const [constantValue, setConstantValue] = useState(mapping.constantValue || '');
+  const [rules, setRules] = useState<Rule[]>(
+    mapping.rules && mapping.rules.length
+      ? mapping.rules
+      : [{ when: [{ key: '', op: 'eq', value: '' }], then: isCheckbox ? 'check' : (options[0] || '') }]
+  );
+  const [fallback, setFallback] = useState(mapping.fallback || '');
+
+  const modes: { m: FillMode; label: string }[] = isCheckbox
+    ? (isMulti
+      ? [{ m: 'match', label: 'Match list' }, { m: 'condition', label: 'Per-option rules' }, { m: 'skip', label: 'Skip' }]
+      : [{ m: 'always', label: 'Always check' }, { m: 'condition', label: 'Check if…' }, { m: 'skip', label: 'Skip' }])
+    : [{ m: 'match', label: 'Match field' }, { m: 'constant', label: 'Constant' }, { m: 'condition', label: 'Condition' }, { m: 'skip', label: 'Skip' }];
+
+  const setRuleConds = (ri: number, conds: Condition[]) => setRules(rs => rs.map((r, i) => i === ri ? { ...r, when: conds } : r));
+  const setRuleThen = (ri: number, then: string) => setRules(rs => rs.map((r, i) => i === ri ? { ...r, then } : r));
+  const addRule = () => setRules(rs => [...rs, { when: [{ key: '', op: 'eq', value: '' }], then: options[0] || '' }]);
+  const removeRule = (ri: number) => setRules(rs => rs.filter((_, i) => i !== ri));
+
+  function save() {
+    const cfg: Partial<FieldMapping> = { fillMode: mode, profileKey: null, constantValue: null, rules: null, fallback: null };
+    if (mode === 'match') cfg.profileKey = profileKey || null;
+    else if (mode === 'constant') cfg.constantValue = constantValue || null;
+    else if (mode === 'condition') {
+      cfg.rules = isCheckbox && !isMulti ? [{ when: rules[0]?.when || [], then: 'check' }] : rules;
+      cfg.fallback = fallback || null;
+    }
+    onSave(cfg);
+    onClose();
+  }
+
+  return (
+    <div className="ml-8 mt-2 mb-1 p-3 rounded-lg bg-white/[0.03] border border-white/[0.06] space-y-3">
+      {/* Mode selector */}
+      <div className="flex gap-1.5 flex-wrap">
+        {modes.map(x => (
+          <button key={x.m} onClick={() => setMode(x.m)}
+            className={`px-2.5 py-1 rounded-full text-[11px] transition ${mode === x.m ? 'bg-[#0a84ff] text-white' : 'bg-white/[0.05] text-gray-400 hover:bg-white/[0.1]'}`}>
+            {x.label}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'match' && (
+        <div>
+          <label className="text-[11px] text-gray-500 block mb-1">
+            {isMulti ? 'Check each option contained in this profile list:' : 'Fill from profile field (option matched by value):'}
+          </label>
+          <select value={profileKey} onChange={e => setProfileKey(e.target.value)} className="input-field text-xs py-1.5 w-full">
+            <option value="">field…</option>
+            {PROFILE_KEY_GROUPS.map(g => (
+              <optgroup key={g.label} label={g.label}>{g.keys.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}</optgroup>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {mode === 'constant' && (
+        <div>
+          <label className="text-[11px] text-gray-500 block mb-1">Always select:</label>
+          {options.length ? (
+            <select value={constantValue} onChange={e => setConstantValue(e.target.value)} className="input-field text-xs py-1.5 w-full">
+              <option value="">option…</option>
+              {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
+            </select>
+          ) : (
+            <input value={constantValue} onChange={e => setConstantValue(e.target.value)} placeholder="value" className="input-field text-xs py-1.5 w-full" />
+          )}
+        </div>
+      )}
+
+      {mode === 'always' && (
+        <p className="text-[11px] text-gray-500">This box is always checked (declarations, agreements).</p>
+      )}
+
+      {mode === 'skip' && (
+        <p className="text-[11px] text-gray-500">This field is left untouched during autofill.</p>
+      )}
+
+      {mode === 'condition' && isCheckbox && !isMulti && (
+        <div>
+          <label className="text-[11px] text-gray-500 block mb-1.5">Check this box when all are true:</label>
+          <ConditionRows conditions={rules[0]?.when || []} onChange={c => setRuleConds(0, c)} />
+        </div>
+      )}
+
+      {mode === 'condition' && (!isCheckbox || isMulti) && (
+        <div className="space-y-2.5">
+          {rules.map((r, ri) => (
+            <div key={ri} className="p-2 rounded bg-black/20 border border-white/[0.05] space-y-1.5">
+              <ConditionRows conditions={r.when} onChange={c => setRuleConds(ri, c)} />
+              <div className="flex items-center gap-1.5 pt-1">
+                <span className="text-[10px] text-gray-500 w-8 flex-shrink-0">{isMulti ? 'CHECK' : 'THEN'}</span>
+                <select value={r.then} onChange={e => setRuleThen(ri, e.target.value)} className="input-field text-xs py-1 flex-1">
+                  <option value="">select option…</option>
+                  {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
+                </select>
+                {rules.length > 1 && <button onClick={() => removeRule(ri)} className="text-gray-600 hover:text-red-400 flex-shrink-0" title="Remove rule">×</button>}
+              </div>
+            </div>
+          ))}
+          <button onClick={addRule} className="text-[11px] text-[#0a84ff] hover:underline">+ {isMulti ? 'option rule' : 'rule'}</button>
+          {!isMulti && (
+            <div className="flex items-center gap-1.5 pt-1">
+              <span className="text-[10px] text-gray-500 w-14 flex-shrink-0">OTHERWISE</span>
+              <select value={fallback} onChange={e => setFallback(e.target.value)} className="input-field text-xs py-1 flex-1">
+                <option value="">— nothing —</option>
+                {options.map((o, i) => <option key={i} value={o}>{o}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex justify-end gap-2 pt-1">
+        <button onClick={onClose} className="btn-secondary text-xs px-3 py-1">Cancel</button>
+        <button onClick={save} disabled={saving} className="btn-primary text-xs px-3 py-1">{saving ? 'Saving…' : 'Save'}</button>
       </div>
     </div>
   );
