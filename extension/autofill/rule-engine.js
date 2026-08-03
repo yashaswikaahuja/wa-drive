@@ -35,20 +35,26 @@ function ccRuleMet(rule, profile) {
 }
 
 // Match a profile value to one of the field's option texts.
-// Order: translation → exact → contains(either way) → token overlap.
+// Delegates to the shared ccMatchOption (shared/option-match.js).
+// If shared not loaded (standalone usage), falls back to inline logic.
 function ccMatchOption(value, options, translations) {
   if (value == null || !options || !options.length) return null;
-  const v = String(value).trim();
-  const vn = ccNormVal(v);
+  // Use shared implementation if available
+  if (typeof window !== 'undefined' && window.ccMatchOption && window.ccMatchOption !== ccMatchOption) {
+    return window.ccMatchOption(value, options, { translations: translations, excludePlaceholders: false });
+  }
+  // Inline fallback (for contexts where shared/option-match.js isn't loaded)
+  var v = String(value).trim();
+  var vn = ccNormVal(v);
   if (!vn) return null;
-  const tr = translations && (translations[v] || translations[vn]);
-  if (tr) { const hit = options.find(o => ccNormVal(o) === ccNormVal(tr)); if (hit) return hit; }
-  let hit = options.find(o => ccNormVal(o) === vn);
+  var tr = translations && (translations[v] || translations[vn]);
+  if (tr) { var hit = options.find(function(o) { return ccNormVal(o) === ccNormVal(tr); }); if (hit) return hit; }
+  var hit = options.find(function(o) { return ccNormVal(o) === vn; });
   if (hit) return hit;
-  hit = options.find(o => { const on = ccNormVal(o); return on && (on.includes(vn) || vn.includes(on)); });
+  hit = options.find(function(o) { var on = ccNormVal(o); return on && (on.includes(vn) || vn.includes(on)); });
   if (hit) return hit;
-  const vtok = vn.split(/\s+/).filter(t => t.length > 2);
-  hit = options.find(o => { const on = ccNormVal(o); return vtok.some(t => on.includes(t)); });
+  var vtok = vn.split(/\s+/).filter(function(t) { return t.length > 2; });
+  hit = options.find(function(o) { var on = ccNormVal(o); return vtok.some(function(t) { return on.includes(t); }); });
   return hit || null;
 }
 

@@ -41,11 +41,15 @@ var CascadeSelectPlugin = {
   },
 
   fill(el, value, context) {
-    var norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    var v = norm(value);
-    var vWords = v.split(' ').filter(w => w.length > 1);
-
     function findOpt(options) {
+      // Delegate to shared option matcher if available
+      if (typeof window.ccMatchOption === 'function') {
+        return window.ccMatchOption(value, options);
+      }
+      // Inline fallback
+      var norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+      var v = norm(value);
+      var vWords = v.split(' ').filter(w => w.length > 1);
       var opts = options.filter(o => {
         if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
         var txt = o.text.toLowerCase();

@@ -192,46 +192,37 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
   /**
    * Resolve when the page network has been idle for `quietMs` consecutive
-   * milliseconds — i.e. the network monitor reports active=0 AND no new
-   * activity for at least `quietMs`. Falls back to a max wait if the monitor
-   * isn't loaded or the network never settles.
-   *
-   * Returns:
-   *   { idle: true, waitedMs }   on idle
-   *   { idle: false, waitedMs }  on timeout
+   * milliseconds. Delegates to shared/network-idle.js if available.
    */
   function waitForNetworkIdle(quietMs, maxMs) {
+    // Delegate to shared implementation if available
+    if (typeof window.ccWaitForNetworkIdle === 'function') {
+      return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
+    }
+    // Inline fallback
     quietMs = quietMs || 200;
     maxMs = maxMs || 8000;
     return new Promise(function (resolve) {
       var start = Date.now();
       var deadline = start + maxMs;
-      var lastSeenActive = -1;
-      var monitorMissing = false;
       function tick() {
         var ds = document.body.dataset || {};
         var active = parseInt(ds.ccAjaxActive || 'NaN', 10);
         var lastActivity = parseInt(ds.ccAjaxLastActivity || '0', 10);
         if (Number.isNaN(active)) {
-          // Monitor not installed — fall back to DOM-quiet only
-          monitorMissing = true;
-        }
-        if (Date.now() >= deadline) {
-          resolve({ idle: false, waitedMs: Date.now() - start, monitorMissing });
-          return;
-        }
-        if (monitorMissing) {
-          // No network monitor → wait quietMs unconditionally then resolve
           setTimeout(function () {
             resolve({ idle: true, waitedMs: Date.now() - start, monitorMissing: true });
           }, quietMs);
+          return;
+        }
+        if (Date.now() >= deadline) {
+          resolve({ idle: false, waitedMs: Date.now() - start, monitorMissing: false });
           return;
         }
         if (active === 0 && lastActivity && Date.now() - lastActivity >= quietMs) {
           resolve({ idle: true, waitedMs: Date.now() - start });
           return;
         }
-        lastSeenActive = active;
         setTimeout(tick, 50);
       }
       tick();
@@ -576,13 +567,17 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         const vWords = v.split(' ').filter(w => w.length > 1);
         const extraValues = [];
         if (mapping[selector]?.monthNum) { extraValues.push(mapping[selector].monthNum.toString()); if (mapping[selector].monthShort) extraValues.push(mapping[selector].monthShort.toLowerCase()); }
-        const overlapScore = o => { const ot = norm(o.text); return vWords.filter(w => ot.includes(w)).length; };
 
         function findOpt(options) {
+          // Delegate to shared option matcher if available
+          if (typeof window.ccMatchOption === 'function') {
+            return window.ccMatchOption(value, options, { extraValues: extraValues });
+          }
+          // Inline fallback (preserves original behavior)
+          const overlapScore = o => { const ot = norm(o.text); return vWords.filter(w => ot.includes(w)).length; };
           const opts = options.filter(o => {
             if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
             const txt = o.text.toLowerCase();
-            // Exclude placeholder/loading options
             if (txt.includes('select') || txt.includes('choose') || txt.includes('loading') || txt === '--') return false;
             return true;
           });

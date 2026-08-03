@@ -90,37 +90,36 @@ var NgDropdownPlugin = {
 
         if (opts.length === 0 && attempts < 15) return; // keep waiting
 
-        // Match option — scoring cascade: exact → contains → reverse → token overlap → synonyms
-        var v = value.toLowerCase().trim();
-        function _matchScore(optText) {
-          var ot = optText.toLowerCase().trim();
-          if (ot === v) return 100;
-          if (ot.includes(v)) return 80;
-          if (v.includes(ot) && ot.length > 3) return 70;
-          var vToks = v.split(/[\s()+,/\-]+/).filter(function(t){return t.length>2;});
-          var oToks = ot.split(/[\s()+,/\-]+/).filter(function(t){return t.length>2;});
-          var overlap = vToks.filter(function(t){return oToks.some(function(o){return o.includes(t)||t.includes(o);});}).length;
-          if (overlap >= 2) return 60;
-          if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
-          var eduSynonyms = [
-            ['intermediate','higher secondary','10+2','12th','hsc','senior secondary'],
-            ['matriculation','10th','sslc','secondary','high school','class 10','class x'],
-            ['graduation','graduate','degree','bachelor','ug'],
-            ['post graduation','post graduate','masters','pg'],
-          ];
-          for (var g = 0; g < eduSynonyms.length; g++) {
-            var vIn = eduSynonyms[g].some(function(s){return v.includes(s);});
-            var oIn = eduSynonyms[g].some(function(s){return ot.includes(s);});
-            if (vIn && oIn) return 55;
+        // Match option using shared matcher if available, else inline scoring
+        var match = null;
+        if (typeof window.ccMatchOption === 'function') {
+          var optTexts = opts.map(function(o) { return o.textContent.trim(); });
+          var matched = window.ccMatchOption(value, optTexts);
+          if (matched) {
+            match = opts.find(function(o) { return o.textContent.trim() === matched; });
           }
-          return 0;
+        } else {
+          // Inline fallback scoring
+          var v = value.toLowerCase().trim();
+          function _matchScore(optText) {
+            var ot = optText.toLowerCase().trim();
+            if (ot === v) return 100;
+            if (ot.includes(v)) return 80;
+            if (v.includes(ot) && ot.length > 3) return 70;
+            var vToks = v.split(/[\s()+,/\-]+/).filter(function(t){return t.length>2;});
+            var oToks = ot.split(/[\s()+,/\-]+/).filter(function(t){return t.length>2;});
+            var overlap = vToks.filter(function(t){return oToks.some(function(o){return o.includes(t)||t.includes(o);});}).length;
+            if (overlap >= 2) return 60;
+            if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
+            return 0;
+          }
+          var bestOpt = null, bestScore = 0;
+          for (var oi = 0; oi < opts.length; oi++) {
+            var score = _matchScore(opts[oi].textContent.trim());
+            if (score > bestScore) { bestScore = score; bestOpt = opts[oi]; }
+          }
+          match = bestScore >= 50 ? bestOpt : null;
         }
-        var bestOpt = null, bestScore = 0;
-        for (var oi = 0; oi < opts.length; oi++) {
-          var score = _matchScore(opts[oi].textContent.trim());
-          if (score > bestScore) { bestScore = score; bestOpt = opts[oi]; }
-        }
-        var match = bestScore >= 50 ? bestOpt : null;
 
         if (match) {
           clearInterval(poll);

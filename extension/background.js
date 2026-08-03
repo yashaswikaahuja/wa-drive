@@ -1,6 +1,9 @@
-// Helper functions for AUTOFILL_TRIGGER handler
-function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
-function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
+// Helper functions — use shared/label-utils.js as canonical source.
+// These are thin wrappers because background.js (service worker) cannot import
+// page-context scripts directly. Kept in sync with shared/label-utils.js.
+function getSemanticKey(label) { return normalizeLabel(label); }
+function calcConfidence(fills, corrections) { if (fills + corrections === 0) return 0.5; return fills / (fills + corrections * 3); }
+function normalizeLabel(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 
 console.log("[CC] background.js loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
 

@@ -12,7 +12,9 @@
   if (!window.cc || !window.cc.registerDriver) return;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+  // Delegate to shared/dom-utils.js if available, else inline fallback
   function isVisible(el) {
+    if (window.ccDomUtils && window.ccDomUtils.isVisible) return window.ccDomUtils.isVisible(el);
     if (!el) return false;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) return false;
@@ -22,6 +24,7 @@
   }
 
   function getLabelFor(el) {
+    if (window.ccDomUtils && window.ccDomUtils.getLabel) return window.ccDomUtils.getLabel(el);
     if (!el) return '';
     if (el.id) {
       const lbl = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
