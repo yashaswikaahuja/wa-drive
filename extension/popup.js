@@ -474,6 +474,7 @@ fillBtn.addEventListener('click', async () => {
           'shared/llm-client.js',
           'shared/select-apply.js',
           'models/ir.js',
+          'capabilities/registry.js',
           'autofill/plugins/interface.js',
           'autofill/plugins/cascade-select.js',
           'autofill/plugins/ng-dropdown.js',
