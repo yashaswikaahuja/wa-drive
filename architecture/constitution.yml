@@ -1,0 +1,163 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Architecture Constitution
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# This file defines the fundamental responsibilities of each runtime.
+# It is the SOURCE OF TRUTH for what each runtime is allowed to do.
+#
+# Enforcement: .github/workflows/architecture.yml
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.0"
+date: "2026-08-03"
+status: active
+
+runtimes:
+  extension:
+    name: "Extension (Execution Engine)"
+    environment: "Chrome browser, Manifest V3"
+    context: "Content scripts (ISOLATED world) + Service Worker"
+    principle: "Stateless execution. Same plan → same result."
+
+    allowed_responsibilities:
+      - perception:
+          description: "Read page, extract structure, detect widgets"
+          examples:
+            - "DOM scanning for form fields"
+            - "Label resolution"
+            - "Component type detection (ng-select, mat-select)"
+            - "Option list extraction"
+
+      - execution:
+          description: "Execute action plans received from service"
+          examples:
+            - "Fill text inputs (keystroke simulation)"
+            - "Select dropdown options"
+            - "Click buttons/radios/checkboxes"
+            - "Wait for network idle / DOM mutations"
+            - "Handle date formatting"
+            - "File upload"
+
+      - observation:
+          description: "Watch for post-execution changes and report"
+          examples:
+            - "Capture operator corrections"
+            - "Capture manual enrichments"
+            - "Report fill success/failure per field"
+            - "Detect page navigation / form submission"
+
+      - tactical_intelligence:
+          description: "Real-time decisions that cannot tolerate round-trip latency"
+          examples:
+            - "Fuzzy option matching (map 'Bihar' to <option> text)"
+            - "Date format adaptation (DD/MM/YYYY vs YYYY-MM-DD)"
+            - "Basic value validation (reject pincode > 6 digits)"
+            - "Retry logic for framework-reset fields"
+          rationale: >
+            These require live DOM state and sub-100ms response.
+            Moving them to the service would require round-tripping
+            every dropdown's option list, adding unacceptable latency.
+
+      - session_state:
+          description: "Ephemeral state scoped to current fill session"
+          examples:
+            - "Which fields have been filled"
+            - "MutationObserver callbacks"
+            - "Cascade dependency tracking"
+            - "Retry counters"
+          rationale: >
+            This is not long-term memory. It's destroyed on page
+            navigation and never persisted.
+
+    forbidden_responsibilities:
+      - strategic_mapping:
+          description: "Deciding which profile field maps to which form field"
+      - ai_reasoning:
+          description: "LLM calls for planning or judgment"
+          note: "TEMPORARY EXCEPTION: mapper.js, ai-resolve.js, executor.js AI fallback remain until service provides /fill-plan endpoint"
+      - knowledge_storage:
+          description: "Storing or managing field mappings, adapters, semantic aliases long-term"
+      - learning:
+          description: "Updating rules based on corrections"
+      - customer_profiles:
+          description: "Owning or deriving profile data"
+      - planning:
+          description: "Deciding fill order or cascade dependencies"
+          note: "TEMPORARY EXCEPTION: popup.js inline planning remains until service provides ordered fill plans"
+
+  extension_service:
+    name: "Extension-Service (Brain)"
+    environment: "Server-side, Node.js / Python"
+    context: "HTTP API, persistent storage"
+    principle: "Owns ALL intelligence. Extension is replaceable; intelligence is not."
+
+    responsibilities:
+      - world_model:
+          description: "Understanding of portal structure, adapters, quirks"
+      - goal:
+          description: "What the operator wants to achieve (fill form X with profile Y)"
+      - memory:
+          description: "Session history, correction patterns, mapping cache"
+      - judgment:
+          description: "Confidence scoring, conflict resolution, validation"
+      - planner:
+          description: "Generate ordered fill plans with dependencies"
+      - knowledge_model:
+          description: "Field mappings, semantic aliases, synonyms, derivation rules"
+      - learning:
+          description: "Improve mappings from corrections, generalize across users"
+      - ai:
+          description: "LLM calls for field mapping, value resolution, document extraction"
+      - customer_profiles:
+          description: "Profile CRUD, derived values, document extraction results"
+      - sessions:
+          description: "Fill session records, progress tracking"
+      - corrections:
+          description: "Operator edit storage and interpretation"
+      - documents:
+          description: "Uploaded documents, Mistral extraction results"
+      - services:
+          description: "Available services (form types, portal catalog)"
+      - records:
+          description: "Completed application records"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TEMPORARY EXCEPTIONS
+# These violations are acknowledged and will be removed when the
+# extension-service provides the corresponding capability.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+temporary_exceptions:
+  - id: EXC-001
+    description: "AI/LLM calls in page context"
+    files:
+      - "extension/autofill/mapper.js"
+      - "extension/autofill/ai-resolve.js"
+      - "extension/autofill/executor.js"
+    removal_condition: "Service provides POST /fill-plan with AI-resolved values"
+
+  - id: EXC-002
+    description: "Strategic mapping in extension"
+    files:
+      - "extension/autofill/mapper.js"
+      - "extension/autofill/rule-engine.js"
+      - "extension/shared/label-utils.js"
+    removal_condition: "Service provides field→value mapping in fill plan response"
+
+  - id: EXC-003
+    description: "Fill planning in popup.js"
+    files:
+      - "extension/popup.js"
+    removal_condition: "Service returns ordered, dependency-aware fill plans"
+
+  - id: EXC-004
+    description: "Teach/auto-teach in background.js"
+    files:
+      - "extension/background.js"
+    removal_condition: "Service owns teach sessions via API"
+
+  - id: EXC-005
+    description: "Derived values in extension"
+    files:
+      - "extension/autofill/derive.js"
+    removal_condition: "Service computes derived values and includes them in profile response"

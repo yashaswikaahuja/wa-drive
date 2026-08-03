@@ -1,0 +1,110 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Architecture Verification Checks
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Defines the checks that CI runs on every push/PR.
+# Each check produces a PASS/WARN/FAIL result.
+#
+# FAIL = PR cannot merge
+# WARN = PR can merge but reviewer should inspect
+# PASS = no issue
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.0"
+
+checks:
+  # ── HARD FAILURES ──────────────────────────────────────────────────
+
+  - id: CHECK-001
+    name: "No new duplicate implementations"
+    severity: fail
+    description: >
+      Detects new function definitions that duplicate shared modules.
+      Uses forbidden_patterns from boundaries.yml (FB-002 through FB-007).
+    method: "grep_diff"
+    scope: "added_lines_only"
+    note: "Only checks NEW code in the diff, not existing violations"
+
+  - id: CHECK-002
+    name: "No new inline LLM fetch calls"
+    severity: fail
+    description: >
+      New fetch() calls to LLM endpoints must use shared/llm-client.js.
+      Enforces FB-001 from boundaries.yml.
+    method: "grep_diff"
+    scope: "added_lines_only"
+    allowed_exceptions:
+      - "extension/shared/llm-client.js"
+      - "extension/background.js"
+
+  - id: CHECK-003
+    name: "Tests pass"
+    severity: fail
+    description: "All test suites must pass (unit + integration + mapping guards)"
+    method: "run_tests"
+    commands:
+      - "node extension/test/test-shared-modules.js"
+      - "node extension/test/test-integration.js"
+      - "node extension/test/test-mapping-guards.js"
+
+  # ── WARNINGS ───────────────────────────────────────────────────────
+
+  - id: CHECK-004
+    name: "Frozen file modification"
+    severity: warn
+    description: >
+      Files listed in phases.yml as frozen are being modified.
+      Reviewer should verify the change is a permitted type
+      (bug fix, non-breaking addition, performance improvement).
+    method: "check_frozen_files"
+    source: "architecture/phases.yml"
+
+  - id: CHECK-005
+    name: "Service-owned code modified"
+    severity: warn
+    description: >
+      Code owned by extension-service (per ownership.yml) is being
+      modified in the extension. This is expected during transition
+      but reviewer should verify it's not expanding the violation.
+    method: "check_ownership"
+    source: "architecture/ownership.yml"
+    filter: "status == temporary_violation"
+
+  - id: CHECK-006
+    name: "Dependency direction"
+    severity: warn
+    description: >
+      Checks that shared/ modules don't reference autofill/ or drivers/.
+      Checks that drivers/ don't reference autofill/ or popup.js.
+      Uses allowed_dependencies from boundaries.yml.
+    method: "grep_imports"
+    scope: "full_file"
+    note: "Warning only — some patterns are hard to detect statically"
+
+  # ── INFO (always passes, generates report) ─────────────────────────
+
+  - id: CHECK-007
+    name: "Architecture health report"
+    severity: info
+    description: "Generates a summary of current architecture state"
+    method: "generate_report"
+    outputs:
+      - "Total temporary exceptions remaining"
+      - "Lines of code per subsystem"
+      - "Test count and coverage areas"
+      - "Files modified in this PR by subsystem"
+
+# ── Report format ────────────────────────────────────────────────────
+
+report:
+  format: "markdown"
+  output: "architecture-report.md"
+  sections:
+    - title: "Verification Results"
+      content: "Table of CHECK-001..007 with PASS/WARN/FAIL"
+    - title: "Temporary Exceptions"
+      content: "List from constitution.yml with file count"
+    - title: "Phase Status"
+      content: "Table from phases.yml"
+    - title: "Subsystem Changes"
+      content: "Which subsystems were touched in this PR"

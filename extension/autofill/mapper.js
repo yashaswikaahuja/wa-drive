@@ -353,22 +353,17 @@ ${profileKeys}
 Return JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}`;
 
   try {
-    var apiUrl = llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions';
-    var model = llmModel || 'meta-llama/llama-3.3-70b-instruct';
-    var res = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'system', content: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.' }, { role: 'user', content: prompt }],
-        max_tokens: 300,
-      }),
+    var result = await window.ccLLM.call({
+      apiKey: groqKey,
+      baseUrl: llmBaseUrl,
+      model: llmModel,
+      systemPrompt: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.',
+      userPrompt: prompt,
+      maxTokens: 300,
     });
-    var data = await res.json();
-    var text = data?.choices?.[0]?.message?.content ?? '';
-    var match = text.match(/\{[\s\S]*\}/);
-    if (!match) return {};
-    var indexMap = JSON.parse(match[0]);
+    if (result.error) return {};
+    var indexMap = window.ccLLM.parseJSON(result.text);
+    if (!indexMap) return {};
     var mapping = {};
     var nameParts = (profile.name || '').trim().split(/\s+/);
     var dobParts = (profile.dob || '').split('/'); // DD/MM/YYYY

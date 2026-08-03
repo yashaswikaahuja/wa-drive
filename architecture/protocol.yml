@@ -1,0 +1,468 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Extension ↔ Service Protocol
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# This is the communication contract between the two runtimes.
+# The service produces ActionPlans. The extension produces Observations.
+#
+# Version history:
+#   v1 — initial protocol (CSS selectors, linear plans)
+#   v2 — semantic targets, execution graph, human interaction
+#
+# NO other message shapes are permitted across the boundary.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: 2
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 1: SEMANTIC TARGETS (Issue #62)
+# ══════════════════════════════════════════════════════════════════════
+#
+# The service NEVER sends raw CSS selectors. It sends semantic targets.
+# The extension resolves them to live DOM elements at runtime.
+# This keeps the service browser-independent.
+
+targeting:
+  description: >
+    A semantic target identifies a field by its meaning, not its DOM path.
+    The extension uses its perception layer to resolve targets to elements.
+
+  target_schema:
+    # At least ONE of these must be present. Extension tries in priority order.
+    field_id: string | null       # stable field ID from extraction (e.g. "field_3")
+    semantic_key: string | null   # semantic meaning (e.g. "father_name", "dob")
+    label: string | null          # human-readable label text (e.g. "Father's Name")
+    field_index: integer | null   # positional index in extracted form fields
+    hint:
+      type: object | null
+      properties:
+        placeholder: string | null
+        name: string | null
+        aria_label: string | null
+        near_text: string | null  # text near the element for disambiguation
+      description: "Additional hints for disambiguation when primary identifiers are ambiguous"
+
+  resolution_order:
+    - "field_id (exact match from last extraction)"
+    - "semantic_key (resolved via SEMANTIC_ALIASES + label matching)"
+    - "label (fuzzy text match against extracted labels)"
+    - "field_index (positional fallback)"
+    - "hint fields (disambiguation when multiple candidates exist)"
+
+  fallback:
+    css_selector: string | null
+    description: >
+      DEPRECATED. Kept for backward compatibility with v1 plans only.
+      New plans MUST NOT use css_selector.
+      Extension logs a warning if a plan uses this field.
+
+  resolution_failure:
+    behavior: >
+      If the extension cannot resolve a semantic target to a DOM element,
+      it reports status=failed with error="target_not_resolved" for that action.
+      The service may re-plan with different targeting hints.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 2: EXECUTION GRAPH (Issue #63)
+# ══════════════════════════════════════════════════════════════════════
+#
+# Plans are execution graphs, not flat lists.
+# A linear plan is a special case (chain of nodes with no branches).
+
+workflow:
+  description: >
+    An execution graph represents a multi-step workflow with branching,
+    checkpoints, retries, and resume paths. The extension traverses the
+    graph following edges based on action outcomes.
+
+  graph_schema:
+    plan_id: string
+    session_id: string
+    version: integer          # protocol version (must be 2)
+    entry_node: string        # ID of the first node to execute
+
+    nodes:
+      type: map
+      key: string             # unique node ID (e.g. "n1", "fill_name", "otp_wait")
+      value:
+        type: enum [action, checkpoint, branch, parallel, terminal]
+        action: object | null         # present when type=action
+        checkpoint: object | null     # present when type=checkpoint
+        condition: object | null      # present when type=branch
+        parallel_actions: array | null # present when type=parallel
+
+    edges:
+      type: array
+      items:
+        from: string          # source node ID
+        to: string            # target node ID
+        condition: enum [success, failure, timeout, skip, human_complete, always]
+        description: string | null
+
+  node_types:
+    action:
+      description: "A single executable action"
+      schema:
+        action: string        # verb from allowed_actions
+        target: object        # semantic target (see targeting section)
+        value: string | null
+        options: object | null
+        timeout_ms: integer
+        retry:
+          max_attempts: integer   # default 1 (no retry)
+          delay_ms: integer       # delay between retries
+
+    checkpoint:
+      description: >
+        A named save point. If execution fails later, the service can
+        issue a resume-from-checkpoint command. The extension tracks
+        which checkpoints have been passed.
+      schema:
+        checkpoint_id: string
+        label: string         # human-readable name (e.g. "Personal details complete")
+        save_state: boolean   # whether extension should snapshot current form state
+
+    branch:
+      description: >
+        A conditional node. Extension evaluates the condition against
+        current page state and follows the matching edge.
+      schema:
+        condition_type: enum [element_exists, element_visible, value_equals, page_url_matches, field_has_value]
+        target: object | null       # semantic target for element conditions
+        expected: string | null     # expected value for value conditions
+        pattern: string | null      # regex for URL/value matching
+
+    parallel:
+      description: >
+        Multiple independent actions that can execute simultaneously.
+        All must complete before following edges.
+      schema:
+        actions:
+          type: array
+          items:
+            action: string
+            target: object
+            value: string | null
+            options: object | null
+            timeout_ms: integer
+
+    terminal:
+      description: "End of workflow. Reports final status."
+      schema:
+        status: enum [complete, aborted, needs_replan]
+        reason: string | null
+
+  # Linear plan compatibility
+  linear_plan:
+    description: >
+      A linear plan is syntactic sugar. It is converted to a graph where
+      each node has a single 'success' edge to the next node, and a
+      single 'failure' edge to a terminal(aborted) node.
+    example: >
+      actions: [{...}, {...}, {...}] is equivalent to:
+      nodes: {n1: action1, n2: action2, n3: action3, end: terminal(complete)}
+      edges: [{n1→n2, success}, {n2→n3, success}, {n3→end, success},
+              {n1→abort, failure}, {n2→abort, failure}, {n3→abort, failure}]
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 3: HUMAN INTERACTION (Issue #64)
+# ══════════════════════════════════════════════════════════════════════
+#
+# The protocol models operator-required checkpoints explicitly.
+# The extension pauses execution and waits for human input.
+
+human_interaction:
+  description: >
+    CyberControl is operator-assisted. Certain steps require human
+    intervention: OTP entry, CAPTCHA solving, payment authorization,
+    signature, or manual review before submission.
+
+  actions:
+    - name: request_human
+      description: >
+        Pause execution and request operator action. The extension
+        displays a prompt and waits until the operator signals completion.
+      schema:
+        reason: enum [otp, captcha, payment, signature, manual_review, file_upload, custom]
+        prompt: string          # message to show operator (e.g. "Enter OTP sent to 98***10")
+        target: object | null   # semantic target of field where human should act
+        timeout_ms: integer     # max wait time (0 = no timeout, wait indefinitely)
+        auto_detect_completion:
+          type: object | null
+          description: "If set, extension auto-detects when human is done"
+          properties:
+            watch_field: object  # semantic target to monitor
+            expect: enum [non_empty, value_changed, element_gone, page_navigated]
+
+    - name: confirm_submission
+      description: >
+        Ask operator to approve an irreversible action (form submit,
+        payment, signature). Extension MUST NOT proceed without explicit
+        operator approval.
+      schema:
+        prompt: string          # e.g. "Submit application for Kamaljeet Singh?"
+        destructive: boolean    # if true, UI shows extra warning
+        show_summary: boolean   # if true, extension shows filled values before confirm
+        timeout_ms: integer     # 0 = wait indefinitely
+
+    - name: wait_external
+      description: >
+        Wait for an external event that neither the extension nor
+        operator directly controls (e.g. server processing, redirect,
+        email verification link).
+      schema:
+        reason: string          # e.g. "Waiting for payment gateway redirect"
+        detect:
+          type: enum [url_change, element_appears, network_idle, timeout]
+          pattern: string | null  # URL pattern or selector for detection
+        timeout_ms: integer
+        on_timeout: enum [abort, replan, notify_operator]
+
+  observation_extensions:
+    description: >
+      When a human interaction node completes, the observation includes
+      additional data about the human checkpoint.
+    schema:
+      human_action:
+        type: object | null
+        properties:
+          checkpoint_type: string     # otp, captcha, payment, etc.
+          duration_ms: integer        # how long the operator took
+          outcome: enum [completed, skipped, timed_out, cancelled]
+          value_entered: boolean      # did the human type something (no actual value logged)
+          auto_detected: boolean      # was completion auto-detected or manually signaled
+
+  safety_rules:
+    - "Extension MUST pause on confirm_submission — never auto-submit"
+    - "Extension MUST show operator the prompt from request_human"
+    - "Extension MUST NOT log actual OTP/password values in observations"
+    - "Extension MUST NOT auto-fill CAPTCHA fields (human responsibility)"
+    - "Extension MUST report timeout if operator doesn't respond within timeout_ms"
+    - "Payment confirmation MUST be destructive=true"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 4: MESSAGES (Updated for v2)
+# ══════════════════════════════════════════════════════════════════════
+
+allowed_messages:
+  - name: Execute
+    direction: service → extension
+    payload: ActionPlan (graph or linear)
+    description: "Service tells extension to execute a fill plan"
+
+  - name: Resume
+    direction: service → extension
+    payload:
+      plan_id: string
+      from_checkpoint: string   # checkpoint_id to resume from
+      updated_nodes: map | null # optional node replacements (re-plan partial)
+    description: "Service tells extension to resume from a checkpoint after pause/failure"
+
+  - name: Observe
+    direction: extension → service
+    payload: Observation
+    description: "Extension reports execution results back to service"
+
+  - name: HumanComplete
+    direction: extension → service
+    payload:
+      plan_id: string
+      node_id: string           # which human interaction node completed
+      outcome: enum [completed, skipped, timed_out, cancelled]
+      duration_ms: integer
+    description: "Extension reports that operator completed a human checkpoint"
+
+  - name: CapabilityResult
+    direction: extension → service
+    payload:
+      capabilities:
+        type: array
+        items: string
+      protocol_version: integer   # highest protocol version supported
+    description: "Extension declares what actions it can execute"
+
+  - name: Error
+    direction: bidirectional
+    payload:
+      code: string
+      message: string
+      recoverable: boolean
+      node_id: string | null    # which node failed (if applicable)
+    description: "Either side reports an unrecoverable or degraded state"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 5: ACTION VOCABULARY (Updated for v2)
+# ══════════════════════════════════════════════════════════════════════
+
+allowed_actions:
+  # ── Form filling ───────────────────────────────────────────────────
+  - fill_text:
+      description: "Type a value into a text/textarea input"
+      requires: [target, value]
+
+  - select_option:
+      description: "Select a dropdown option by value or fuzzy match"
+      requires: [target, value]
+      options: [match_mode]  # exact | fuzzy | index
+
+  - click:
+      description: "Click an element (button, radio, checkbox, link)"
+      requires: [target]
+      options: [double, right]
+
+  - check:
+      description: "Set checkbox/radio to checked or unchecked"
+      requires: [target, value]  # value = "true" | "false"
+
+  # ── Waiting ────────────────────────────────────────────────────────
+  - wait_network:
+      description: "Wait for network idle"
+      requires: []
+      options: [quiet_ms, max_ms]
+
+  - wait_element:
+      description: "Wait for an element to appear in DOM"
+      requires: [target]
+      options: [timeout_ms, visible]
+
+  - wait_time:
+      description: "Fixed delay"
+      requires: []
+      options: [ms]
+
+  # ── Navigation ─────────────────────────────────────────────────────
+  - scroll_to:
+      description: "Scroll element into view"
+      requires: [target]
+
+  - navigate:
+      description: "Navigate to a URL"
+      requires: [value]  # value = URL
+
+  # ── File ───────────────────────────────────────────────────────────
+  - upload_file:
+      description: "Trigger file input and upload"
+      requires: [target, value]  # value = file reference from service
+
+  # ── Perception ─────────────────────────────────────────────────────
+  - extract:
+      description: "Read current page state and return to service"
+      requires: []
+      options: [fields_only, full_dom, screenshot]
+
+  - assert:
+      description: "Verify a condition (value matches, element exists)"
+      requires: [target]
+      options: [expected_value, exists, visible]
+
+  # ── Human interaction ──────────────────────────────────────────────
+  - request_human:
+      description: "Pause for operator action (OTP, CAPTCHA, payment)"
+      requires: [reason, prompt]
+      options: [target, timeout_ms, auto_detect_completion]
+
+  - confirm_submission:
+      description: "Ask operator to approve irreversible action"
+      requires: [prompt]
+      options: [destructive, show_summary, timeout_ms]
+
+  - wait_external:
+      description: "Wait for external event (redirect, email, processing)"
+      requires: [reason, detect]
+      options: [timeout_ms, on_timeout]
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 6: OBSERVATION SCHEMA (Updated for v2)
+# ══════════════════════════════════════════════════════════════════════
+
+extension_output:
+  type: Observation
+  schema:
+    plan_id: string
+    session_id: string
+    protocol_version: integer     # 2
+    execution_path:
+      type: array
+      description: "Ordered list of nodes visited during execution"
+      items:
+        node_id: string
+        status: enum [success, failed, skipped, timeout, waiting_human, resumed]
+        actual_value: string | null
+        error: string | null
+        duration_ms: integer
+    checkpoints_reached:
+      type: array
+      items: string               # checkpoint IDs successfully passed
+    corrections:
+      type: array
+      items:
+        target: object            # semantic target of corrected field
+        original_value: string
+        corrected_value: string
+        timestamp: integer
+    human_interactions:
+      type: array
+      items:
+        node_id: string
+        checkpoint_type: string
+        outcome: enum [completed, skipped, timed_out, cancelled]
+        duration_ms: integer
+    page_state:
+      url: string
+      navigated: boolean
+      form_submitted: boolean
+      fields_snapshot: array | null  # current field values if checkpoint save_state=true
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 7: PROTOCOL RULES
+# ══════════════════════════════════════════════════════════════════════
+
+rules:
+  - "Extension MUST NOT generate actions — only execute them"
+  - "Extension MUST NOT interpret action semantics beyond execution"
+  - "Extension MUST report every action result, including skipped ones"
+  - "Extension MUST resolve semantic targets locally — never ask service for selectors"
+  - "Service MUST NOT send raw CSS selectors in v2 plans"
+  - "Service MUST NOT send actions outside allowed_actions vocabulary"
+  - "Service MUST include on_failure for every action node"
+  - "Service MUST mark destructive actions with confirm_submission"
+  - "New actions require version bump and both-side implementation"
+  - "Extension MAY refuse actions not in its declared capabilities"
+  - "Extension MUST pause on request_human and confirm_submission"
+  - "Extension MUST NOT log sensitive values (OTP, passwords, payment details)"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 8: DEGRADED MODE
+# ══════════════════════════════════════════════════════════════════════
+
+degraded_mode:
+  trigger: "Service unreachable for > 3 seconds"
+  behavior: >
+    Extension uses last cached ActionPlan for this form (if available).
+    If no cache exists, extension shows "Service unavailable" to operator.
+    Extension NEVER generates its own plan in degraded mode.
+  cache_key: "form_key + profile_id"
+  cache_ttl: "7 days"
+  limitations:
+    - "Cached plans may have stale semantic targets if form changed"
+    - "Human interaction nodes still pause (even in degraded mode)"
+    - "No re-planning available — if a node fails, execution aborts"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 9: MIGRATION (v1 → v2)
+# ══════════════════════════════════════════════════════════════════════
+
+migration:
+  v1_compatibility:
+    description: >
+      v1 plans (with css_selector and linear action lists) are accepted
+      during transition. The extension converts them internally:
+      - css_selector → fallback field in semantic target
+      - linear actions[] → graph with chain topology
+    deprecation: "v1 plans will be rejected after Phase 2 completion"
+
+  extension_capabilities:
+    description: >
+      Extension declares protocol_version in CapabilityResult.
+      Service sends plans compatible with the declared version.
+      Extension supporting v2 also accepts v1 (backward compatible).

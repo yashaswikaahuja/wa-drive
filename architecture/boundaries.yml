@@ -1,0 +1,164 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Dependency Boundaries
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Defines which files/directories may depend on which.
+# "depend" means: call functions from, import, or reference globals from.
+#
+# CI uses these rules to detect NEW violations in diffs.
+# Existing violations are tracked in constitution.yml temporary_exceptions.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.0"
+
+# ── Allowed dependency directions ────────────────────────────────────
+#
+# Extension layering (top depends on bottom):
+#
+#   popup.js (orchestrator)
+#       ↓
+#   executor.js / extractor.js (domain)
+#       ↓
+#   plugins/ (component adapters)
+#       ↓
+#   shared/ (utilities)
+#       ↓
+#   drivers/ (low-level DOM ops)
+#
+# NO upward dependencies. NO circular dependencies.
+
+allowed_dependencies:
+  # Shared modules: NO dependencies on anything above them
+  "extension/shared/option-match.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/dom-utils.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/network-idle.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/llm-client.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/select-apply.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/label-utils.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  # Drivers: may use shared, must not use autofill or popup
+  "extension/drivers/":
+    may_use:
+      - "window.ccMatchOption"
+      - "window.ccDomUtils"
+      - "window.ccWaitForNetworkIdle"
+      - "window.ccApplySelect"
+    must_not_use: ["extension/autofill/", "extension/popup.js", "extension/background.js"]
+
+  # Plugins: may use shared, must not use executor or popup
+  "extension/autofill/plugins/":
+    may_use:
+      - "window.ccMatchOption"
+      - "window.ccDomUtils"
+      - "window.ccApplySelect"
+      - "window.ccWaitForNetworkIdle"
+    must_not_use: ["extension/autofill/executor.js", "extension/popup.js"]
+
+  # Executor: may use shared + plugins, must not use popup
+  "extension/autofill/executor.js":
+    may_use:
+      - "window.ccMatchOption"
+      - "window.ccDomUtils"
+      - "window.ccWaitForNetworkIdle"
+      - "window.ccLLM"
+      - "window.ccApplySelect"
+      - "window._ccPlugins"
+    must_not_use: ["extension/popup.js", "chrome.storage"]
+
+  # Extractor: may use shared/dom-utils only
+  "extension/autofill/extractor.js":
+    may_use:
+      - "window.ccDomUtils"
+    must_not_use: ["extension/autofill/executor.js", "extension/popup.js", "window.ccLLM"]
+
+  # Mapper: may use shared (temporary — will migrate to service)
+  "extension/autofill/mapper.js":
+    may_use:
+      - "window.ccLLM"
+      - "window.ccMatchOption"
+    must_not_use: ["extension/autofill/executor.js", "extension/drivers/", "chrome.tabs"]
+
+  # Background.js: isolated (service worker, no page-context access)
+  "extension/background.js":
+    may_use:
+      - "chrome.runtime"
+      - "chrome.tabs"
+      - "chrome.scripting"
+      - "chrome.storage"
+      - "fetch"
+    must_not_use: ["window.ccMatchOption", "window.ccDomUtils", "window.ccLLM", "document."]
+
+# ── Forbidden patterns (NEW code only) ───────────────────────────────
+# These patterns must NOT appear in new files or new lines added to
+# existing files. Existing violations are grandfathered.
+
+forbidden_patterns:
+  - id: FB-001
+    description: "No new inline LLM fetch calls"
+    pattern: "fetch\\(.*(openrouter|groq|chat/completions)"
+    allowed_in:
+      - "extension/shared/llm-client.js"
+      - "extension/background.js"  # service worker can't use shared
+    message: "Use window.ccLLM.call() instead of inline fetch to LLM endpoints"
+
+  - id: FB-002
+    description: "No new isVisible implementations"
+    pattern: "function isVisible|isVisible\\s*[:=]\\s*function"
+    allowed_in:
+      - "extension/shared/dom-utils.js"
+    message: "Use window.ccDomUtils.isVisible() from shared/dom-utils.js"
+
+  - id: FB-003
+    description: "No new getLabel implementations"
+    pattern: "function getLabel|function getLabelFor"
+    allowed_in:
+      - "extension/shared/dom-utils.js"
+    message: "Use window.ccDomUtils.getLabel() from shared/dom-utils.js"
+
+  - id: FB-004
+    description: "No new option matching implementations"
+    pattern: "function.*matchOption|function.*findOpt|function.*pickOption"
+    allowed_in:
+      - "extension/shared/option-match.js"
+    message: "Use window.ccMatchOption() from shared/option-match.js"
+
+  - id: FB-005
+    description: "No new applySelect implementations"
+    pattern: "function applySelect|function.*dispatchSelect"
+    allowed_in:
+      - "extension/shared/select-apply.js"
+      - "extension/autofill/executor.js"  # extended version with verify
+    message: "Use window.ccApplySelect() from shared/select-apply.js"
+
+  - id: FB-006
+    description: "No new normalizeFieldLabel implementations"
+    pattern: "function normalizeFieldLabel"
+    allowed_in:
+      - "extension/shared/label-utils.js"
+      - "extension/background.js"  # service worker copy
+    message: "Use normalizeFieldLabel from shared/label-utils.js"
+
+  - id: FB-007
+    description: "No new calcConfidence implementations"
+    pattern: "function calcConfidence"
+    allowed_in:
+      - "extension/shared/label-utils.js"
+      - "extension/background.js"  # service worker copy
+    message: "Use calcConfidence from shared/label-utils.js"

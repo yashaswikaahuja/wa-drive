@@ -1,0 +1,120 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Phase Freeze Rules
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Frozen phases have stabilized code that must not be casually modified.
+# Changes to frozen files require explicit justification in the PR.
+#
+# This is NOT a hard block — it's a review gate.
+# CI will WARN (not fail) when frozen files are touched.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.0"
+
+phases:
+  phase_0:
+    name: "Foundation"
+    status: frozen
+    frozen_date: "2026-08-03"
+    issues: ["#55", "#56", "#57", "#58"]
+    description: >
+      Shared modules created, duplicates consolidated, runtime integration
+      verified. 59 tests validate the foundation.
+
+    frozen_files:
+      - path: "extension/shared/option-match.js"
+        reason: "Canonical option matching — 5 callers depend on this API"
+      - path: "extension/shared/dom-utils.js"
+        reason: "Canonical label resolution + isVisible — 6 callers"
+      - path: "extension/shared/network-idle.js"
+        reason: "Canonical network idle — 2 callers"
+      - path: "extension/shared/select-apply.js"
+        reason: "Canonical select event dispatch — 1 caller + executor variant"
+      - path: "extension/shared/label-utils.js"
+        reason: "Canonical semantic keys + confidence — background.js mirrors this"
+
+    allowed_changes:
+      - "Bug fixes with test coverage"
+      - "Adding new exports (non-breaking)"
+      - "Performance improvements that don't change behavior"
+
+    forbidden_changes:
+      - "Changing function signatures"
+      - "Removing exports"
+      - "Changing matching algorithm behavior without updating all callers"
+      - "Adding external dependencies"
+
+  phase_0_4:
+    name: "Slim Extension Architecture"
+    status: frozen
+    frozen_date: "2026-08-03"
+    issues: ["#59"]
+    description: >
+      Architecture audit documents the two-layer split.
+      Extension = perception/execution/observation.
+      Service = planning/knowledge/memory/judgment/AI.
+
+    frozen_files:
+      - path: "extension/ARCHITECTURE_AUDIT.md"
+        reason: "Architecture contract — changes require architectural review"
+
+    allowed_changes:
+      - "Updating metrics/status as phases complete"
+      - "Adding new sections"
+      - "Correcting factual errors"
+
+    forbidden_changes:
+      - "Changing the runtime boundary definition"
+      - "Moving responsibilities between runtimes without new issue"
+      - "Removing the migration plan"
+
+  phase_0_5:
+    name: "Architecture Governance"
+    status: active
+    issues: ["#60"]
+    description: "This governance framework itself."
+
+    frozen_files: []
+    note: "Will freeze once deployed to GitHub and CI is green"
+
+# ── Future phases (not yet started) ─────────────────────────────────
+
+  phase_1:
+    name: "Execution Engine"
+    status: planned
+    description: "Build every browser capability. Define action plan schema."
+    prerequisites:
+      - "Action Plan schema specification"
+      - "Extension↔Service protocol definition"
+
+  phase_2:
+    name: "Browser Perception"
+    status: planned
+    description: "Page understanding beyond DOM extraction."
+    prerequisites:
+      - "Phase 1 action vocabulary defined"
+
+  phase_3:
+    name: "Knowledge Model"
+    status: planned
+    description: "Service-owned field mappings, portal catalog, semantic graph."
+
+  phase_4:
+    name: "Planner"
+    status: planned
+    description: "Service generates ordered, dependency-aware fill plans."
+
+  phase_5:
+    name: "Learning Engine"
+    status: planned
+    description: "Corrections → improved mappings. Cross-user generalization."
+
+  phase_6:
+    name: "AI Reasoning"
+    status: planned
+    description: "LLM-powered field mapping, document understanding, judgment."
+
+  phase_7:
+    name: "Autonomous CyberCafe Agent"
+    status: planned
+    description: "End-to-end autonomous form filling with minimal operator input."

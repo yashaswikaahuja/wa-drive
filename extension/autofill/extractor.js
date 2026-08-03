@@ -12,67 +12,13 @@ function extractFormFieldsWithFingerprint() {
 
   // ── Meaningful label: must be non-empty, not just symbols, min 2 chars ──
   function isGoodLabel(s) {
-    if (!s) return false;
-    const t = s.replace(/[*:\s]/g, '');
-    if (t.length < 2) return false;
-    // Reject obvious placeholder-only text (when option text gets captured as label)
-    const lower = s.toLowerCase().trim();
-    if (/^(please\s+select|select\s+(an?|one)|--\s*select|choose|select\.{2,})/i.test(lower)) return false;
-    // Reject if mostly years/numbers separated by whitespace (option list of years got captured)
-    const nonDigits = s.replace(/[\d\s\n\r,]/g, '').trim();
-    if (s.length > 30 && nonDigits.length < s.length * 0.3) return false;
-    // Reject if too long (>250 chars likely a paragraph or option list dump)
-    if (s.length > 250) return false;
-    // Reject if has too many newlines (option list captured)
-    if ((s.match(/\n/g) || []).length > 3) return false;
-    return true;
+    return window.ccDomUtils.isGoodLabel(s);
   }
 
   // ── Get label for an input element ──
   function getLabel(el) {
-    // 1. Explicit <label for="id">
-    if (el.id) {
-      const l = document.querySelector(`label[for="${el.id}"]`);
-      if (l && isGoodLabel(l.textContent.trim())) return l.textContent.trim();
-    }
-    // 2. aria-label / aria-labelledby
-    const ariaLabel = el.getAttribute('aria-label');
-    if (ariaLabel && isGoodLabel(ariaLabel)) return ariaLabel.trim();
-    const labelledBy = el.getAttribute('aria-labelledby');
-    if (labelledBy) {
-      const lEl = document.getElementById(labelledBy);
-      if (lEl && isGoodLabel(lEl.textContent.trim())) return lEl.textContent.trim();
-    }
-    // 3. Wrapping <label>
-    const wrappingLabel = el.closest('label');
-    if (wrappingLabel) {
-      const clone = wrappingLabel.cloneNode(true);
-      clone.querySelectorAll('input,select,textarea').forEach(e => e.remove());
-      const t = clone.textContent.trim();
-      if (isGoodLabel(t)) return t;
-    }
-    // 4. Preceding <td> in a table row
-    const td = el.closest('td');
-    if (td) {
-      const prev = td.previousElementSibling;
-      if (prev && isGoodLabel(prev.textContent.trim())) return prev.textContent.trim().slice(0, 60);
-    }
-    // 5. Sibling or parent label within a form-field container
-    const container = el.closest('.form-group,.form-field,.field-wrapper,.input-group,mat-form-field,[class*="form-row"],[class*="field-row"]');
-    if (container) {
-      const l = container.querySelector('label,mat-label,.label,.field-label,.control-label');
-      if (l && isGoodLabel(l.textContent.trim())) return l.textContent.trim();
-    }
-    // 6. Immediately preceding sibling element that looks like a label
-    let prev = el.previousElementSibling;
-    if (prev && ['LABEL','SPAN','DIV','P'].includes(prev.tagName)) {
-      const t = prev.textContent.trim();
-      // Must be short (label-like) and not contain other inputs
-      if (isGoodLabel(t) && t.length < 80 && !prev.querySelector('input,select,textarea')) return t;
-    }
-    // 7. placeholder as last resort (only if meaningful)
-    if (el.placeholder && isGoodLabel(el.placeholder) && el.placeholder.length < 60) return el.placeholder;
-    return '';
+    // Delegate to shared/dom-utils.js (injected before extractor runs)
+    return window.ccDomUtils.getLabel(el);
   }
 
   // ── Determine if a page has a real form worth scanning ──
