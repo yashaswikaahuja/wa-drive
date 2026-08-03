@@ -84,8 +84,8 @@ function fuzzyMatch(formFields, profile) {
     var rawLbl = (field.label || '').trim();
     var isTwin = /^(?:[a-z]\.|\d+\.|\(\w\)|[ixv]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b/i.test(rawLbl)
               || /retype|re_type|reenter|re_enter|^confirm/i.test(ident)
-              || (field.id && /^(c|re|retype|verify|confirm)/i.test(field.id))
-              || (field.name && /^(re|retype|verify|confirm)/i.test(field.name));
+              || (field.id && /^(conf|c_|re_|retype|verify|confirm)/i.test(field.id))
+              || (field.name && /^(re_|retype|verify|confirm)/i.test(field.name));
     if (isTwin) continue;
 
     // Skip yes/no question radio buttons (not data fields)
@@ -214,8 +214,8 @@ function fuzzyMatch(formFields, profile) {
       // father_name only if field is clearly a father field; mother_name only if clearly mother
       if (profileKey === 'father_name' && !isFatherMother) continue;
       if (profileKey === 'mother_name' && !(ident.includes('mother') || ident.includes('mata'))) continue;
-      // name must not fill husband/wife/spouse fields
-      if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
+      // name must not fill husband/wife/spouse/guardian fields
+      if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('guardian') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
       // post_office/village must not fill 'purpose' or 'office' fields
       if ((profileKey === 'post_office' || profileKey === 'village') && (ident.includes('purpose') || ident.includes('uddeshya') || (ident.includes('apply') && ident.includes('office')))) continue;
       // degree_name/course_name must not match 'highest level of education' fields
@@ -384,6 +384,24 @@ Return JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}`
       else if (profileKey === 'dob__year') value = dobParts[2] || '';
       else if (profile[profileKey]) value = profile[profileKey];
       if (value !== null && value !== undefined) {
+        // ── Guard: apply the same semantic constraints as fuzzyMatch ──
+        // Prevents LLM from assigning profile.name to relative/spouse fields,
+        // or profile.father_name to non-father fields, etc.
+        var fieldIdent = [field.label, field.id, field.name, field.placeholder]
+          .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_');
+        var isRelativeField = /husband|wife|spouse|guardian|pati(?!_pati_ka_naam)/i.test(fieldIdent);
+        var isFatherField = /father|pita/i.test(fieldIdent);
+        var isMotherField = /mother|mata/i.test(fieldIdent);
+
+        // name must not fill relative/father/mother fields
+        if (profileKey === 'name' && (isRelativeField || isFatherField || isMotherField)) continue;
+        if ((profileKey === 'name' || profileKey === 'first_name' || profileKey === 'last_name' || profileKey === 'middle_name')
+            && isRelativeField) continue;
+        // father_name must only fill father-related fields
+        if (profileKey === 'father_name' && !isFatherField) continue;
+        // mother_name must only fill mother-related fields
+        if (profileKey === 'mother_name' && !isMotherField) continue;
+
         mapping[field.selector] = { value, type: field.type };
       }
     }
