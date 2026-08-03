@@ -307,7 +307,22 @@ function extractFormFieldsWithFingerprint() {
   for (let i = 0; i < semRaw.length; i++) { semHash = ((semHash << 5) - semHash) + semRaw.charCodeAt(i); semHash |= 0; }
   const semanticFormKey = 's_' + Math.abs(semHash).toString(36);
 
-  return { formFields, formKey, semanticFormKey };
+  // ── Build formal IR (PageModel) if models/ir.js is loaded ──
+  var pageModel = null;
+  if (typeof window.ccModels !== 'undefined' && window.ccModels.createPageModel) {
+    pageModel = window.ccModels.createPageModel(
+      { formFields: formFields, formKey: formKey, semanticFormKey: semanticFormKey },
+      { url: location.href, hostname: hostname, title: title }
+    );
+    // Strip _el references from pageModel (not serializable)
+    if (pageModel && pageModel.forms) {
+      pageModel.forms.forEach(function (form) {
+        form.fields.forEach(function (f) { delete f._el; });
+      });
+    }
+  }
+
+  return { formFields, formKey, semanticFormKey, pageModel };
 }
 
 // ── Correction observer (injected after autofill) ─────────────────────────────
