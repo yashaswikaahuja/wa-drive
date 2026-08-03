@@ -286,7 +286,7 @@ function extractFormFieldsWithFingerprint() {
   }
   formFields.forEach(f => { f._pos = _visualPos(f._el); });
   formFields.sort((a, b) => (a._pos.row - b._pos.row) || (a._pos.left - b._pos.left));
-  formFields.forEach((f, i) => { f.index = i; delete f._el; delete f._pos; });
+  formFields.forEach((f, i) => { f.index = i; delete f._pos; });
 
   // ── Fingerprint ──
   const labelSig = labelList.sort().slice(0, 10).join('|');
@@ -296,7 +296,6 @@ function extractFormFieldsWithFingerprint() {
   const formKey = Math.abs(hash).toString(36);
 
   // ── Semantic formKey — stable across DOM changes, based on normalized labels ──
-  // Uses hostname + sorted normalized field labels (labels rarely change, selectors do)
   const semanticLabels = formFields
     .map(f => (f.label || '').toLowerCase().replace(/[^a-z\s]/g, '').trim())
     .filter(l => l.length > 2)
@@ -307,20 +306,18 @@ function extractFormFieldsWithFingerprint() {
   for (let i = 0; i < semRaw.length; i++) { semHash = ((semHash << 5) - semHash) + semRaw.charCodeAt(i); semHash |= 0; }
   const semanticFormKey = 's_' + Math.abs(semHash).toString(36);
 
-  // ── Build formal IR (PageModel) if models/ir.js is loaded ──
+  // ── Build formal IR (PageModel) BEFORE stripping _el ──
+  // _el references are still available here for aria/state extraction
   var pageModel = null;
   if (typeof window.ccModels !== 'undefined' && window.ccModels.createPageModel) {
     pageModel = window.ccModels.createPageModel(
       { formFields: formFields, formKey: formKey, semanticFormKey: semanticFormKey },
       { url: location.href, hostname: hostname, title: title }
     );
-    // Strip _el references from pageModel (not serializable)
-    if (pageModel && pageModel.forms) {
-      pageModel.forms.forEach(function (form) {
-        form.fields.forEach(function (f) { delete f._el; });
-      });
-    }
   }
+
+  // ── Strip DOM references (not serializable) ──
+  formFields.forEach(f => { delete f._el; });
 
   return { formFields, formKey, semanticFormKey, pageModel };
 }

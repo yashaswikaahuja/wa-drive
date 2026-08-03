@@ -135,6 +135,21 @@
   }
 
   // ══════════════════════════════════════════════════════════════════════
+  // Helpers: stable ID generation
+  // ══════════════════════════════════════════════════════════════════════
+
+  function generateStableId(f, index) {
+    // Priority: id > name > label-based hash > positional fallback
+    if (f.id) return 'id:' + f.id;
+    if (f.name) return 'name:' + f.name + (f.type === 'radio-group' ? '' : ':' + index);
+    // Hash from label + type for fields without id/name
+    var raw = (f.label || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30) + ':' + (f.type || 'text');
+    var h = 0;
+    for (var i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
+    return 'f_' + Math.abs(h).toString(36);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
   // createPageModel — converts raw extractor output to PageModel
   // ══════════════════════════════════════════════════════════════════════
 
@@ -149,8 +164,11 @@
    */
   function createPageModel(extractorOutput, pageContext) {
     var fields = (extractorOutput.formFields || []).map(function (f, i) {
+      // Generate stable field ID from label + name + type + index
+      // More stable than CSS selector across page reloads
+      var stableId = generateStableId(f, i);
       return FieldModel({
-        fieldId: f.selector || ('field_' + i),
+        fieldId: stableId,
         semanticKey: null,  // computed by service, not extension
         label: f.label || '',
         placeholder: f.placeholder || '',

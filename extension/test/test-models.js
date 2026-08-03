@@ -148,10 +148,25 @@ assert(page.hasOtp === true, 'hasOtp preserved');
 assert(typeof page.extractedAt === 'string', 'extractedAt auto-generated');
 
 console.log('\n=== createPageModel bridge ===');
-// Simulate legacy extractor output
+// Simulate legacy extractor output (with _el still present, as fixed)
+const mockEl = {
+  getAttribute: function(attr) {
+    if (attr === 'aria-label') return 'Full Name';
+    if (attr === 'aria-describedby') return 'name-help';
+    if (attr === 'aria-required') return 'true';
+    if (attr === 'aria-disabled') return null;
+    return null;
+  },
+  type: 'text',
+  required: true,
+  disabled: false,
+  readOnly: false,
+  closest: function() { return null; },
+  getBoundingClientRect: function() { return { width: 200, height: 30 }; },
+};
 const legacyOutput = {
   formFields: [
-    { selector: '#name', id: 'name', name: 'name', value: '', placeholder: 'Full name', label: 'Candidate Name', type: 'text', index: 0, options: null, _el: null },
+    { selector: '#name', id: 'name', name: 'name', value: '', placeholder: 'Full name', label: 'Candidate Name', type: 'text', index: 0, options: null, _el: mockEl },
     { selector: '#state', id: 'state', name: 'state', value: '', placeholder: '', label: 'State', type: 'dropdown', index: 1, options: ['Bihar', 'UP', 'Maharashtra'], _el: null },
     { selector: '#dob', id: 'dob', name: 'dob', value: '', placeholder: 'dd-mm-yyyy', label: 'Date of Birth', type: 'text', index: 2, options: null, _el: null },
   ],
@@ -167,13 +182,41 @@ assert(result.hostname === 'portal.gov.in', 'bridge: hostname from context');
 assert(result.forms.length === 1, 'bridge: one form created');
 assert(result.forms[0].formKey === 'test123', 'bridge: formKey preserved');
 assert(result.forms[0].fields.length === 3, 'bridge: all fields converted');
-assert(result.forms[0].fields[0].fieldId === '#name', 'bridge: fieldId from selector');
+assert(result.forms[0].fields[0].fieldId === 'id:name', 'bridge: stable fieldId from id');
 assert(result.forms[0].fields[0].label === 'Candidate Name', 'bridge: label preserved');
 assert(result.forms[0].fields[0].placeholder === 'Full name', 'bridge: placeholder preserved');
+assert(result.forms[0].fields[0].ariaLabel === 'Full Name', 'bridge: ariaLabel extracted from _el');
+assert(result.forms[0].fields[0].ariaDescribedBy === 'name-help', 'bridge: ariaDescribedBy extracted from _el');
+assert(result.forms[0].fields[0].required === true, 'bridge: required extracted from _el');
+assert(result.forms[0].fields[0].inputType === 'text', 'bridge: inputType extracted from _el');
 assert(result.forms[0].fields[1].type === 'dropdown', 'bridge: type preserved');
 assert(result.forms[0].fields[1].options.length === 3, 'bridge: options preserved');
 assert(result.forms[0].fields[1].widgetType === 'native-select', 'bridge: widgetType detected');
+assert(result.forms[0].fields[1].fieldId === 'id:state', 'bridge: stable fieldId for state');
 assert(result.pageFingerprint === 's_test456', 'bridge: fingerprint from semanticFormKey');
+
+console.log('\n=== Serialization ===');
+// Verify JSON.stringify works (no circular refs, no DOM objects)
+const serialized = JSON.stringify(result);
+assert(typeof serialized === 'string', 'PageModel is JSON-serializable');
+const deserialized = JSON.parse(serialized);
+assert(deserialized.version === '1.0.0', 'round-trip: version preserved');
+assert(deserialized.forms[0].fields.length === 3, 'round-trip: fields preserved');
+assert(deserialized.forms[0].fields[0].ariaLabel === 'Full Name', 'round-trip: ariaLabel survives serialization');
+assert(deserialized.forms[0].fields[0].required === true, 'round-trip: required survives serialization');
+
+console.log('\n=== Stable ID Generation ===');
+// Field with no id/name should get hash-based ID
+const noIdField = context.ccModels.FieldModel({ label: 'Father Name', type: 'text', index: 5 });
+// createPageModel would use generateStableId — test via bridge
+const noIdOutput = {
+  formFields: [
+    { selector: null, id: '', name: '', value: '', placeholder: '', label: 'Unknown Field', type: 'text', index: 0, options: null, _el: null },
+  ],
+  formKey: 'x', semanticFormKey: 's_x',
+};
+const noIdResult = context.ccModels.createPageModel(noIdOutput, pageCtx);
+assert(noIdResult.forms[0].fields[0].fieldId.startsWith('f_'), 'hash-based fieldId for field without id/name');
 
 console.log('\n=== Determinism ===');
 const result2 = context.ccModels.createPageModel(legacyOutput, pageCtx);
