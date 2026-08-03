@@ -30,12 +30,20 @@
    * Determine if a label text is "good" (meaningful, not just whitespace or generic).
    */
   function isGoodLabel(text) {
-    if (!text || text.length < 2) return false;
-    var t = text.toLowerCase().trim();
-    // Reject generic/placeholder labels
-    if (/^(select|choose|enter|type|input|field|\*|\.|-|_)$/i.test(t)) return false;
-    // Reject if just numbers/symbols
-    if (/^[\d\s\-_.*/]+$/.test(t)) return false;
+    if (!text) return false;
+    var t = text.replace(/[*:\s]/g, '');
+    if (t.length < 2) return false;
+    // Reject obvious placeholder-only text (when option text gets captured as label)
+    var lower = text.toLowerCase().trim();
+    if (/^(please\s+select|select\s+(an?|one)|--\s*select|choose|select\.{2,}|enter|type|input|field)$/i.test(lower)) return false;
+    if (/^[\d\s\-_.*/]+$/.test(text)) return false;
+    // Reject if mostly years/numbers separated by whitespace (option list of years got captured)
+    var nonDigits = text.replace(/[\d\s\n\r,]/g, '').trim();
+    if (text.length > 30 && nonDigits.length < text.length * 0.3) return false;
+    // Reject if too long (>250 chars likely a paragraph or option list dump)
+    if (text.length > 250) return false;
+    // Reject if has too many newlines (option list captured)
+    if ((text.match(/\n/g) || []).length > 3) return false;
     return true;
   }
 
