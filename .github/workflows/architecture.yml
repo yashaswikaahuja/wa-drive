@@ -1,0 +1,198 @@
+name: Architecture Verification
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  architecture-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for diff analysis
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── CHECK-003: Run tests ─────────────────────────────────────────
+      - name: "CHECK-003: Run test suites"
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          node extension/test/test-shared-modules.js && echo "✅ Unit tests passed" >> $GITHUB_STEP_SUMMARY
+          node extension/test/test-integration.js && echo "✅ Integration tests passed" >> $GITHUB_STEP_SUMMARY
+          node extension/test/test-mapping-guards.js && echo "✅ Mapping guard tests passed" >> $GITHUB_STEP_SUMMARY
+
+      # ── CHECK-001 + CHECK-002: Forbidden patterns in diff ────────────
+      - name: "CHECK-001/002: No new forbidden patterns"
+        run: |
+          echo "## Forbidden Pattern Check" >> $GITHUB_STEP_SUMMARY
+
+          # Get diff (against base for PRs, against parent for pushes)
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+          else
+            DIFF=$(git diff HEAD~1...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+          fi
+
+          VIOLATIONS=0
+
+          # FB-001: No new inline LLM fetch calls (except allowed files)
+          MATCHES=$(echo "$DIFF" | grep -iE "fetch\(.*(openrouter|groq|chat/completions)" || true)
+          if [ -n "$MATCHES" ]; then
+            # Check if in allowed files
+            FORBIDDEN=$(git diff HEAD~1...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.js" | grep -v "background.js" || true)
+            if [ -n "$FORBIDDEN" ]; then
+              echo "❌ FB-001: New inline LLM fetch detected" >> $GITHUB_STEP_SUMMARY
+              echo "$MATCHES" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          fi
+
+          # FB-002: No new isVisible implementations
+          MATCHES=$(echo "$DIFF" | grep -E "function isVisible|isVisible\s*[:=]\s*function" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "❌ FB-002: New isVisible implementation detected" >> $GITHUB_STEP_SUMMARY
+            echo "$MATCHES" >> $GITHUB_STEP_SUMMARY
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          # FB-003: No new getLabel implementations
+          MATCHES=$(echo "$DIFF" | grep -E "function getLabel|function getLabelFor" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "❌ FB-003: New getLabel implementation detected" >> $GITHUB_STEP_SUMMARY
+            echo "$MATCHES" >> $GITHUB_STEP_SUMMARY
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          # FB-004: No new option matching implementations
+          MATCHES=$(echo "$DIFF" | grep -E "function.*matchOption|function.*findOpt|function.*pickOption" || true)
+          if [ -n "$MATCHES" ]; then
+            echo "❌ FB-004: New option matching implementation detected" >> $GITHUB_STEP_SUMMARY
+            echo "$MATCHES" >> $GITHUB_STEP_SUMMARY
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          if [ $VIOLATIONS -gt 0 ]; then
+            echo "❌ $VIOLATIONS forbidden pattern violation(s) found" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "✅ No forbidden patterns in new code" >> $GITHUB_STEP_SUMMARY
+
+      # ── CHECK-004: Frozen file warnings ──────────────────────────────
+      - name: "CHECK-004: Frozen file modification check"
+        if: always()
+        run: |
+          echo "## Frozen Files" >> $GITHUB_STEP_SUMMARY
+
+          FROZEN_FILES=(
+            "extension/shared/option-match.js"
+            "extension/shared/dom-utils.js"
+            "extension/shared/network-idle.js"
+            "extension/shared/select-apply.js"
+            "extension/shared/label-utils.js"
+            "extension/ARCHITECTURE_AUDIT.md"
+          )
+
+          WARNINGS=0
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            CHANGED=$(git diff --name-only HEAD~1...HEAD)
+          fi
+
+          for f in "${FROZEN_FILES[@]}"; do
+            if echo "$CHANGED" | grep -q "$f"; then
+              echo "⚠️ Frozen file modified: \`$f\`" >> $GITHUB_STEP_SUMMARY
+              WARNINGS=$((WARNINGS + 1))
+            fi
+          done
+
+          if [ $WARNINGS -eq 0 ]; then
+            echo "✅ No frozen files modified" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ $WARNINGS frozen file(s) modified — reviewer should verify changes are permitted" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── CHECK-005: Service-owned code warnings ───────────────────────
+      - name: "CHECK-005: Service-owned code check"
+        if: always()
+        run: |
+          echo "## Ownership Check" >> $GITHUB_STEP_SUMMARY
+
+          SERVICE_OWNED=(
+            "extension/autofill/mapper.js"
+            "extension/autofill/rule-engine.js"
+            "extension/autofill/ai-resolve.js"
+            "extension/autofill/derive.js"
+            "extension/shared/label-utils.js"
+          )
+
+          WARNINGS=0
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            CHANGED=$(git diff --name-only HEAD~1...HEAD)
+          fi
+
+          for f in "${SERVICE_OWNED[@]}"; do
+            if echo "$CHANGED" | grep -q "$f"; then
+              echo "⚠️ Service-owned file modified (temp exception): \`$f\`" >> $GITHUB_STEP_SUMMARY
+              WARNINGS=$((WARNINGS + 1))
+            fi
+          done
+
+          if [ $WARNINGS -eq 0 ]; then
+            echo "✅ No service-owned files modified" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ $WARNINGS service-owned file(s) modified — acceptable during transition" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── CHECK-006: Dependency direction ──────────────────────────────
+      - name: "CHECK-006: Dependency direction check"
+        if: always()
+        run: |
+          echo "## Dependency Direction" >> $GITHUB_STEP_SUMMARY
+
+          VIOLATIONS=0
+
+          # shared/ must not reference autofill/ or drivers/ or popup.js
+          for f in extension/shared/*.js; do
+            if grep -qE "autofill/|drivers/|popup\.js" "$f" 2>/dev/null; then
+              echo "⚠️ \`$f\` references upper layer" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+
+          # drivers/ must not reference autofill/ or popup.js
+          for f in extension/drivers/*.js; do
+            if grep -qE "autofill/|popup\.js" "$f" 2>/dev/null; then
+              echo "⚠️ \`$f\` references upper layer" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+
+          if [ $VIOLATIONS -eq 0 ]; then
+            echo "✅ Dependency directions correct" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ $VIOLATIONS potential upward dependency(ies)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── CHECK-007: Architecture health report ────────────────────────
+      - name: "CHECK-007: Generate architecture report"
+        if: always()
+        run: |
+          echo "## Architecture Health" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Temporary exceptions | 5 (EXC-001..005) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Shared modules | 5 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test files | $(ls extension/test/test-*.js 2>/dev/null | wc -l) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frozen files | 6 |" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase 0 | ✅ Frozen |" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase 1 | 🔲 Planned |" >> $GITHUB_STEP_SUMMARY

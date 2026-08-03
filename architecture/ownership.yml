@@ -1,0 +1,132 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Subsystem Ownership
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Maps every code directory/file to its owning runtime and subsystem.
+# Used by CI to detect ownership violations in PRs.
+#
+# owner: which runtime SHOULD own this code
+# status: correct | temporary_violation | migrating
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.0"
+
+subsystems:
+  # ── EXTENSION: Perception ──────────────────────────────────────────
+  perception:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/autofill/extractor.js"
+      - "extension/shared/dom-utils.js"
+      - "extension/autofill/plugins/interface.js"
+    description: "DOM scanning, label resolution, component detection"
+
+  # ── EXTENSION: Execution ───────────────────────────────────────────
+  execution:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/autofill/executor.js"
+      - "extension/shared/option-match.js"
+      - "extension/shared/network-idle.js"
+      - "extension/shared/select-apply.js"
+      - "extension/autofill/plugins/cascade-select.js"
+      - "extension/autofill/plugins/ng-dropdown.js"
+      - "extension/autofill/plugins/keystroke-input.js"
+      - "extension/drivers/"
+    description: "Fill inputs, click buttons, dispatch events, wait for DOM"
+
+  # ── EXTENSION: Observation ─────────────────────────────────────────
+  observation:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/autofill/executor.js"  # post-fill observer section
+    description: "Correction capture, enrichment detection, session reporting"
+
+  # ── EXTENSION: Orchestration ───────────────────────────────────────
+  orchestration:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/popup.js"
+      - "extension/background.js"
+      - "extension/manifest.json"
+    description: "Script injection, auth, tab management, UI"
+
+  # ── EXTENSION: Shared Infrastructure ───────────────────────────────
+  shared_infra:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/shared/llm-client.js"
+    description: "LLM API wrapper (used by both layers during transition)"
+
+  # ── SERVICE: Strategic Mapping (TEMPORARY in extension) ────────────
+  strategic_mapping:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-002
+    paths:
+      - "extension/autofill/mapper.js"
+      - "extension/autofill/rule-engine.js"
+    description: "Field→profile key assignment, alias tables, fuzzy matching rules"
+    migration_target: "extension-service/services/mapping/"
+
+  # ── SERVICE: AI Reasoning (TEMPORARY in extension) ─────────────────
+  ai_reasoning:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-001
+    paths:
+      - "extension/autofill/ai-resolve.js"
+    description: "LLM-powered value resolution"
+    migration_target: "extension-service/services/ai/"
+
+  # ── SERVICE: Knowledge ─────────────────────────────────────────────
+  knowledge:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-002
+    paths:
+      - "extension/shared/label-utils.js"
+      - "extension/autofill/derive.js"
+    description: "Semantic aliases, confidence scoring, derived values"
+    migration_target: "extension-service/services/knowledge/"
+
+  # ── SERVICE: Planning (TEMPORARY in extension) ─────────────────────
+  planning:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-003
+    paths:
+      - "extension/popup.js"  # inline fill-plan construction
+    description: "Fill order, cascade dependency resolution"
+    migration_target: "extension-service/services/planner/"
+
+  # ── SERVICE: Teaching (TEMPORARY in extension) ─────────────────────
+  teaching:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-004
+    paths:
+      - "extension/background.js"  # groqAutoTeach, teachOneField
+    description: "Auto-teach sessions, adapter learning"
+    migration_target: "extension-service/services/learning/"
+
+  # ── SERVICE: Profiles & Sessions (already in backend) ──────────────
+  profiles_sessions:
+    owner: extension_service
+    status: correct
+    paths:
+      - "backend/"
+    description: "Profile CRUD, session records, correction storage"
+
+  # ── TESTING ────────────────────────────────────────────────────────
+  testing:
+    owner: shared
+    status: correct
+    paths:
+      - "extension/test/"
+    description: "Unit, integration, and mapping guard tests"
