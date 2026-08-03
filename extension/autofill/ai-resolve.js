@@ -57,26 +57,18 @@ Return ONLY a JSON object mapping field index to the value string. Omit fields y
 Example: {"0": "Intermediate", "2": "1234567", "3": "No"}`;
 
   try {
-    const apiUrl = baseUrl || 'https://openrouter.ai/api/v1/chat/completions';
-    const mdl = model || 'meta-llama/llama-3.3-70b-instruct';
-    const res = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: mdl,
-        messages: [
-          { role: 'system', content: 'You are a JSON-only API that fills government forms accurately. Return ONLY a valid JSON object. Never fabricate identifiers or numbers that are not derivable from the given data.' },
-          { role: 'user', content: prompt },
-        ],
-        max_tokens: 500,
-        temperature: 0,
-      }),
+    const result = await window.ccLLM.call({
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      model: model,
+      systemPrompt: 'You are a JSON-only API that fills government forms accurately. Return ONLY a valid JSON object. Never fabricate identifiers or numbers that are not derivable from the given data.',
+      userPrompt: prompt,
+      maxTokens: 500,
+      temperature: 0,
     });
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content ?? '';
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return {};
-    const idxMap = JSON.parse(m[0]);
+    if (result.error) { console.warn('[CC] ai-resolve LLM error:', result.error); return {}; }
+    const idxMap = window.ccLLM.parseJSON(result.text);
+    if (!idxMap) return {};
 
     const out = {};
     for (const [idx, rawVal] of Object.entries(idxMap)) {

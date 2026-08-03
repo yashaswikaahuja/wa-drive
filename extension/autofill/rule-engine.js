@@ -35,28 +35,7 @@ function ccRuleMet(rule, profile) {
 }
 
 // Match a profile value to one of the field's option texts.
-// Delegates to the shared ccMatchOption (shared/option-match.js).
-// If shared not loaded (standalone usage), falls back to inline logic.
-function ccMatchOption(value, options, translations) {
-  if (value == null || !options || !options.length) return null;
-  // Use shared implementation if available
-  if (typeof window !== 'undefined' && window.ccMatchOption && window.ccMatchOption !== ccMatchOption) {
-    return window.ccMatchOption(value, options, { translations: translations, excludePlaceholders: false });
-  }
-  // Inline fallback (for contexts where shared/option-match.js isn't loaded)
-  var v = String(value).trim();
-  var vn = ccNormVal(v);
-  if (!vn) return null;
-  var tr = translations && (translations[v] || translations[vn]);
-  if (tr) { var hit = options.find(function(o) { return ccNormVal(o) === ccNormVal(tr); }); if (hit) return hit; }
-  var hit = options.find(function(o) { return ccNormVal(o) === vn; });
-  if (hit) return hit;
-  hit = options.find(function(o) { var on = ccNormVal(o); return on && (on.includes(vn) || vn.includes(on)); });
-  if (hit) return hit;
-  var vtok = vn.split(/\s+/).filter(function(t) { return t.length > 2; });
-  hit = options.find(function(o) { var on = ccNormVal(o); return vtok.some(function(t) { return on.includes(t); }); });
-  return hit || null;
-}
+// Uses shared/option-match.js (window.ccMatchOption) injected before rule-engine runs.
 
 // Format a date string to a target format inferred from a placeholder/pattern.
 // Handles DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD (+ the same with / or -).
@@ -114,7 +93,7 @@ function ccEvaluateField(entry, field, profile, translations) {
     if (grp === 'radio' || grp === 'dropdown') {
       const val = entry.profileKey ? profile[entry.profileKey] : null;
       if (val == null || val === '') return { kind: 'skip' };
-      const opt = ccMatchOption(val, options, translations);
+      const opt = window.ccMatchOption(val, options, { translations: translations, excludePlaceholders: false });
       return opt ? { kind: 'option', option: opt } : { kind: 'option', option: String(val) };
     }
     // text / date

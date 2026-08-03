@@ -192,41 +192,10 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
   /**
    * Resolve when the page network has been idle for `quietMs` consecutive
-   * milliseconds. Delegates to shared/network-idle.js if available.
+   * milliseconds. Delegates to shared/network-idle.js.
    */
   function waitForNetworkIdle(quietMs, maxMs) {
-    // Delegate to shared implementation if available
-    if (typeof window.ccWaitForNetworkIdle === 'function') {
-      return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
-    }
-    // Inline fallback
-    quietMs = quietMs || 200;
-    maxMs = maxMs || 8000;
-    return new Promise(function (resolve) {
-      var start = Date.now();
-      var deadline = start + maxMs;
-      function tick() {
-        var ds = document.body.dataset || {};
-        var active = parseInt(ds.ccAjaxActive || 'NaN', 10);
-        var lastActivity = parseInt(ds.ccAjaxLastActivity || '0', 10);
-        if (Number.isNaN(active)) {
-          setTimeout(function () {
-            resolve({ idle: true, waitedMs: Date.now() - start, monitorMissing: true });
-          }, quietMs);
-          return;
-        }
-        if (Date.now() >= deadline) {
-          resolve({ idle: false, waitedMs: Date.now() - start, monitorMissing: false });
-          return;
-        }
-        if (active === 0 && lastActivity && Date.now() - lastActivity >= quietMs) {
-          resolve({ idle: true, waitedMs: Date.now() - start });
-          return;
-        }
-        setTimeout(tick, 50);
-      }
-      tick();
-    });
+    return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
   }
 
   // Sort by DOM order (sequential top-to-bottom filling)
@@ -317,10 +286,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           console.log('[CC][session-start] id='+session.id+' label='+_label);
 
           function isVisible(node) {
-            const r = node.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) return false;
-            const s = getComputedStyle(node);
-            return s.display !== 'none' && s.visibility !== 'hidden';
+            return window.ccDomUtils.isVisible(node);
           }
 
           function cleanupSession(result) {
@@ -569,27 +535,8 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         if (mapping[selector]?.monthNum) { extraValues.push(mapping[selector].monthNum.toString()); if (mapping[selector].monthShort) extraValues.push(mapping[selector].monthShort.toLowerCase()); }
 
         function findOpt(options) {
-          // Delegate to shared option matcher if available
-          if (typeof window.ccMatchOption === 'function') {
-            return window.ccMatchOption(value, options, { extraValues: extraValues });
-          }
-          // Inline fallback (preserves original behavior)
-          const overlapScore = o => { const ot = norm(o.text); return vWords.filter(w => ot.includes(w)).length; };
-          const opts = options.filter(o => {
-            if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
-            const txt = o.text.toLowerCase();
-            if (txt.includes('select') || txt.includes('choose') || txt.includes('loading') || txt === '--') return false;
-            return true;
-          });
-          return opts.find(o => o.value.toLowerCase() === value.toLowerCase().trim()) ||
-                 opts.find(o => norm(o.text) === v) ||
-                 opts.find(o => norm(o.value) === v) ||
-                 (extraValues.length && opts.find(o => extraValues.includes(o.value.toLowerCase()) || extraValues.includes(norm(o.text)))) ||
-                 opts.find(o => norm(o.text).startsWith(v) && v.length > 2) ||
-                 opts.find(o => v.startsWith(norm(o.text)) && norm(o.text).length > 2) ||
-                 opts.find(o => norm(o.text).includes(v) && v.length > 3) ||
-                 opts.find(o => v.includes(norm(o.text)) && norm(o.text).length > 3) ||
-                 (() => { const best = opts.filter(o => overlapScore(o) === vWords.length && vWords.length > 0); return best.length === 1 ? best[0] : null; })();
+          // shared/option-match.js is injected before executor.js runs
+          return window.ccMatchOption(value, options, { extraValues: extraValues });
         }
 
         function applySelect(el, opt) {
@@ -672,20 +619,16 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             clearInterval(interval);
             // AI fallback — ask LLM to pick the best option
             const groqKey = window._cc_groq_key || (document.body.getAttribute('data-cc-llm-key') || '');
-            const llmUrl = document.body.getAttribute('data-cc-llm-url') || 'https://openrouter.ai/api/v1/chat/completions';
-            const llmModel = document.body.getAttribute('data-cc-llm-model') || 'meta-llama/llama-3.3-70b-instruct';
             if (groqKey && realOpts.length > 0) {
               const optTexts = realOpts.map(o => o.text.trim()).join('\n');
-              fetch(llmUrl, {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  model: llmModel,
-                  messages: [{ role: 'user', content: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts }],
-                  max_tokens: 50,
-                })
-              }).then(r => r.json()).then(res => {
-                const aiText = res?.choices?.[0]?.message?.content?.trim();
+              window.ccLLM.call({
+                apiKey: groqKey,
+                baseUrl: document.body.getAttribute('data-cc-llm-url') || undefined,
+                model: document.body.getAttribute('data-cc-llm-model') || undefined,
+                userPrompt: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts,
+                maxTokens: 50,
+              }).then(result => {
+                const aiText = (result.text || '').trim();
                 if (aiText) {
                   const aiOpt = realOpts.find(o => o.text.trim() === aiText) || realOpts.find(o => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
                   if (aiOpt) { console.debug('[CC] AI matched:', aiText, '->', aiOpt.text); applySelect(el, aiOpt); }

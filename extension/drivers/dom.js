@@ -12,39 +12,13 @@
   if (!window.cc || !window.cc.registerDriver) return;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  // Delegate to shared/dom-utils.js if available, else inline fallback
+  // Delegate to shared/dom-utils.js (injected before drivers run)
   function isVisible(el) {
-    if (window.ccDomUtils && window.ccDomUtils.isVisible) return window.ccDomUtils.isVisible(el);
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) return false;
-    const cs = getComputedStyle(el);
-    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') return false;
-    return true;
+    return window.ccDomUtils.isVisible(el);
   }
 
   function getLabelFor(el) {
-    if (window.ccDomUtils && window.ccDomUtils.getLabel) return window.ccDomUtils.getLabel(el);
-    if (!el) return '';
-    if (el.id) {
-      const lbl = document.querySelector('label[for="' + CSS.escape(el.id) + '"]');
-      if (lbl) return (lbl.textContent || '').trim();
-    }
-    const wrap = el.closest('label');
-    if (wrap) {
-      const clone = wrap.cloneNode(true);
-      clone.querySelectorAll('input,select,textarea,button').forEach(x => x.remove());
-      return (clone.textContent || '').trim();
-    }
-    // Look for nearby label-like containers
-    let p = el.parentElement;
-    let hop = 0;
-    while (p && hop < 4) {
-      const lbl = p.querySelector(':scope > label, :scope > .label, :scope > .field-label, :scope > .control-label, :scope > .form-label, :scope > mat-label');
-      if (lbl) return (lbl.textContent || '').trim();
-      p = p.parentElement; hop++;
-    }
-    return '';
+    return window.ccDomUtils.getLabel(el);
   }
 
   function selectorFor(el) {

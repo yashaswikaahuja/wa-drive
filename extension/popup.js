@@ -463,10 +463,16 @@ fillBtn.addEventListener('click', async () => {
       console.warn('[CC] network monitor injection failed (will use fallback delays):', e.message);
     }
     // Inject all autofill scripts in ONE call — they must share the same scope (ISOLATED world)
+    // Shared modules are listed FIRST so they're available when callers run.
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: [
+          'shared/option-match.js',
+          'shared/dom-utils.js',
+          'shared/network-idle.js',
+          'shared/llm-client.js',
+          'shared/select-apply.js',
           'autofill/plugins/interface.js',
           'autofill/plugins/cascade-select.js',
           'autofill/plugins/ng-dropdown.js',

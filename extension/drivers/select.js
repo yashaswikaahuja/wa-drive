@@ -14,18 +14,9 @@
     return document.querySelector(target);
   }
 
-  // Native <select>: find option using shared matcher, with inline fallback
+  // Native <select>: find option using shared/option-match.js
   function pickNativeOption(sel, value) {
-    if (typeof window.ccMatchOption === 'function') {
-      return window.ccMatchOption(value, Array.from(sel.options), { excludePlaceholders: false });
-    }
-    // Inline fallback
-    const v = String(value).trim();
-    const vLower = v.toLowerCase();
-    let opt = Array.from(sel.options).find(o => o.text.trim() === v || o.value === v);
-    if (!opt) opt = Array.from(sel.options).find(o => o.text.trim().toLowerCase() === vLower);
-    if (!opt) opt = Array.from(sel.options).find(o => o.text.toLowerCase().includes(vLower) || vLower.includes(o.text.toLowerCase().trim()));
-    return opt;
+    return window.ccMatchOption(value, Array.from(sel.options), { excludePlaceholders: false });
   }
 
   function fillNativeSelect(sel, value) {
