@@ -31,32 +31,17 @@
   var _resolutionLog = [];   // Audit trail of resolution attempts
 
   // ══════════════════════════════════════════════════════════════════════
-  // Semantic aliases: common semantic keys → label patterns
+  // Semantic aliases: loaded from shared/semantic-aliases.js
   // ══════════════════════════════════════════════════════════════════════
 
-  var SEMANTIC_ALIASES = {
-    'full_name':       ['full name', 'name', 'applicant name', 'candidate name'],
-    'father_name':     ['father', 'father\'s name', 'father name'],
-    'mother_name':     ['mother', 'mother\'s name', 'mother name'],
-    'dob':             ['date of birth', 'dob', 'birth date', 'जन्म तिथि'],
-    'gender':          ['gender', 'sex', 'लिंग'],
-    'email':           ['email', 'e-mail', 'email id', 'email address'],
-    'mobile':          ['mobile', 'phone', 'mobile number', 'contact', 'phone number'],
-    'aadhaar':         ['aadhaar', 'aadhar', 'uidai', 'aadhaar number'],
-    'pan':             ['pan', 'pan number', 'pan card'],
-    'address':         ['address', 'permanent address', 'residential address'],
-    'state':           ['state', 'राज्य'],
-    'district':        ['district', 'जिला'],
-    'block':           ['block', 'tehsil', 'taluka'],
-    'pincode':         ['pin', 'pincode', 'zip', 'postal code'],
-    'category':        ['category', 'caste', 'reservation category', 'वर्ग'],
-    'qualification':   ['qualification', 'education', 'degree'],
-    'occupation':      ['occupation', 'profession', 'job'],
-    'income':          ['income', 'annual income', 'salary'],
-    'photo':           ['photo', 'photograph', 'upload photo'],
-    'signature':       ['signature', 'upload signature'],
-    'agree':           ['agree', 'declaration', 'i agree', 'i declare'],
-  };
+  function _getAliases() {
+    // Prefer external config (loadable from service)
+    if (window.ccSemanticAliases && window.ccSemanticAliases.aliases) {
+      return window.ccSemanticAliases.aliases;
+    }
+    // Fallback: empty (resolver still works via label/field_id/index/hint)
+    return {};
+  }
 
   // ══════════════════════════════════════════════════════════════════════
   // Core: Set page context (called after extraction)
@@ -175,7 +160,8 @@
 
   function _resolveBySemanticKey(semanticKey) {
     var key = semanticKey.toLowerCase().replace(/[-_\s]+/g, '_');
-    var aliases = SEMANTIC_ALIASES[key] || [key.replace(/_/g, ' ')];
+    var aliasDict = _getAliases();
+    var aliases = aliasDict[key] || [key.replace(/_/g, ' ')];
 
     for (var i = 0; i < _fieldElements.length; i++) {
       var f = _fieldElements[i].field;
@@ -328,6 +314,6 @@
     setPageContext: setPageContext,
     getResolutionLog: getResolutionLog,
     reset: reset,
-    SEMANTIC_ALIASES: SEMANTIC_ALIASES,
+    getAliases: _getAliases,
   };
 })();

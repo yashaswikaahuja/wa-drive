@@ -50,6 +50,7 @@ const SHARED_SCRIPTS = [
   'shared/network-idle.js',
   'shared/llm-client.js',
   'shared/select-apply.js',
+  'shared/semantic-aliases.js',
   'models/ir.js',
   'capabilities/registry.js',
   'runtime/resolver.js',

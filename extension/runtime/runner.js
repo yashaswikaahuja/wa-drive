@@ -110,6 +110,14 @@
     var observation = _createObservation(plan);
     var currentNode = plan.entry_node;
     var visited = 0;
+    var _navigated = false;
+    var _formSubmitted = false;
+
+    // Track navigation
+    var _startUrl = window.location.href;
+    function _checkNavigation() {
+      if (window.location.href !== _startUrl) _navigated = true;
+    }
 
     while (currentNode && visited < maxNodes) {
       visited++;
@@ -152,6 +160,10 @@
       observation.execution_path.push(result.pathEntry);
       if (onNodeEnd) onNodeEnd(currentNode, result.pathEntry);
 
+      // Collect tracking flags from action nodes
+      if (result.didNavigate) _navigated = true;
+      if (result.didSubmit) _formSubmitted = true;
+
       // Follow edge based on outcome
       var outcome = result.outcome; // 'success', 'failure', 'timeout', 'skip'
       currentNode = _followEdge(edgeIndex, currentNode, outcome);
@@ -169,7 +181,8 @@
     }
 
     // Finalize observation
-    observation.page_state = _capturePageState();
+    _checkNavigation();
+    observation.page_state = _capturePageState(_navigated, _formSubmitted);
     return observation;
   }
 
@@ -237,6 +250,20 @@
       if (lastResult.status === 'success') break;
     }
 
+    // Track navigate and form_submitted from successful actions
+    var _didSubmit = false;
+    if (lastResult.status === 'success') {
+      if (actionDef.action === 'click' && element) {
+        var tag = (element.tagName || '').toLowerCase();
+        var elType = (element.type || '').toLowerCase();
+        if ((tag === 'button' && elType === 'submit') ||
+            (tag === 'input' && elType === 'submit') ||
+            (element.getAttribute && element.getAttribute('type') === 'submit')) {
+          _didSubmit = true;
+        }
+      }
+    }
+
     var duration = Date.now() - t0;
     var outcome = lastResult.status === 'success' ? 'success' :
                   lastResult.status === 'timeout' ? 'timeout' : 'failure';
@@ -250,6 +277,8 @@
         duration_ms: duration,
       },
       outcome: outcome,
+      didNavigate: lastResult.status === 'success' && actionDef.action === 'navigate',
+      didSubmit: _didSubmit,
     };
   }
 
@@ -405,11 +434,11 @@
     };
   }
 
-  function _capturePageState() {
+  function _capturePageState(navigated, formSubmitted) {
     return {
       url: window.location.href,
-      navigated: false,
-      form_submitted: false,
+      navigated: !!navigated,
+      form_submitted: !!formSubmitted,
       fields_snapshot: null,
     };
   }

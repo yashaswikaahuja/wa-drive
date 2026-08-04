@@ -473,8 +473,11 @@ fillBtn.addEventListener('click', async () => {
           'shared/network-idle.js',
           'shared/llm-client.js',
           'shared/select-apply.js',
+          'shared/semantic-aliases.js',
           'models/ir.js',
           'capabilities/registry.js',
+          'runtime/resolver.js',
+          'runtime/runner.js',
           'autofill/plugins/interface.js',
           'autofill/plugins/cascade-select.js',
           'autofill/plugins/ng-dropdown.js',
@@ -697,6 +700,45 @@ fillBtn.addEventListener('click', async () => {
           } catch (e) { console.warn('[CC] ai-resolve skipped:', e.message); }
         }
         const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
+
+        // ── NEW: Also execute through ActionPlan Runner (Phase 1.6) ────────
+        // This produces an Observation alongside the legacy executor fill.
+        // Once stable, the executor path will be removed.
+        let runnerObservation = null;
+        try {
+          if (window.ccRunner && window.ccResolver) {
+            // Initialize resolver with current extraction
+            const { pageModel } = extractFormFieldsWithFingerprint();
+            const elements = formFields.map(f => document.querySelector(f.selector));
+            window.ccResolver.setPageContext(pageModel, elements);
+
+            // Convert mapping → ActionPlan actions
+            const actions = [];
+            for (const [selector, entry] of Object.entries(mapping)) {
+              const field = formFields.find(f => f.selector === selector);
+              if (!field) continue;
+              const target = { field_id: field.id ? 'id:' + field.id : null, label: field.label };
+              if (!target.field_id && field.name) target.field_id = 'name:' + field.name;
+
+              const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(field.type) : 'text';
+              if (grp === 'dropdown') {
+                actions.push({ action: 'select_option', target: target, value: entry.value, timeout_ms: 5000 });
+              } else {
+                actions.push({ action: 'fill_text', target: target, value: entry.value, timeout_ms: 3000 });
+              }
+            }
+
+            if (actions.length > 0) {
+              runnerObservation = await window.ccRunner.executeLinear({
+                plan_id: 'popup_fill_' + Date.now(),
+                session_id: semanticFormKey || 'unknown',
+                actions: actions,
+              });
+              console.log('[CC] Runner observation:', runnerObservation.execution_path.length, 'actions,',
+                runnerObservation.execution_path.filter(e => e.status === 'success').length, 'succeeded');
+            }
+          }
+        } catch (e) { console.warn('[CC] Runner path error (non-fatal):', e.message); }
 
         // Apply radio/checkbox selections directly — the executor's value strategies
         // don't toggle .checked. Guarded by current state so we never toggle back off.

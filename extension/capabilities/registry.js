@@ -317,13 +317,31 @@
     description: 'Wait for an element to appear in DOM',
     widgetTypes: ['*'],
     handler: async function (action) {
-      var selector = action.target && action.target.css_selector;
-      if (!selector) return { status: 'failed', error: 'selector required for wait_element' };
-
       var timeoutMs = (action.options && action.options.timeout_ms) || 5000;
       var checkVisible = action.options && action.options.visible;
       var deadline = Date.now() + timeoutMs;
 
+      // Try semantic resolution first (protocol v2)
+      var target = action.target;
+      if (target && window.ccResolver) {
+        while (Date.now() < deadline) {
+          var resolution = window.ccResolver.resolve(target);
+          if (resolution.element) {
+            if (!checkVisible) return { status: 'success' };
+            if (window.ccDomUtils && window.ccDomUtils.isVisible(resolution.element)) return { status: 'success' };
+            var rect = resolution.element.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) return { status: 'success' };
+          }
+          await new Promise(function (r) { setTimeout(r, 100); });
+        }
+        return { status: 'timeout', error: 'element not found within timeout (semantic resolution)' };
+      }
+
+      // Deprecated fallback: css_selector (v1 compatibility)
+      var selector = target && target.css_selector;
+      if (!selector) return { status: 'failed', error: 'no target provided for wait_element' };
+
+      console.warn('[ccCapabilities] wait_element using deprecated css_selector:', selector);
       while (Date.now() < deadline) {
         var el = document.querySelector(selector);
         if (el) {
@@ -426,6 +444,118 @@
       }
 
       return { status: 'success' };
+    },
+  });
+
+  // ── request_human ─────────────────────────────────────────────────
+  register({
+    name: 'request_human',
+    description: 'Pause for operator action (OTP, CAPTCHA, payment)',
+    widgetTypes: ['*'],
+    handler: async function (action) {
+      var reason = action.reason || action.options && action.options.reason || 'unknown';
+      var prompt = action.prompt || action.value || 'Operator action required';
+      var timeoutMs = (action.options && action.options.timeout_ms) || 0; // 0 = indefinite
+
+      // Emit event for UI layer to display prompt
+      console.log('[ccCapabilities] request_human: ' + reason + ' — ' + prompt);
+      try {
+        document.dispatchEvent(new CustomEvent('cc:human_required', {
+          detail: { reason: reason, prompt: prompt, timeout_ms: timeoutMs }
+        }));
+      } catch (e) {}
+
+      // In production, this would pause and wait for operator signal.
+      // For now, return waiting_human status — the runner should handle this.
+      return { status: 'waiting_human', actual_value: reason, prompt: prompt };
+    },
+    validates: function (action) {
+      if (!action.reason && !(action.options && action.options.reason)) {
+        return { valid: false, error: 'reason required for request_human' };
+      }
+      return { valid: true };
+    },
+  });
+
+  // ── confirm_submission ────────────────────────────────────────────
+  register({
+    name: 'confirm_submission',
+    description: 'Ask operator to approve irreversible action',
+    widgetTypes: ['*'],
+    handler: async function (action) {
+      var prompt = action.prompt || action.value || 'Confirm submission?';
+      var destructive = action.options && action.options.destructive;
+
+      console.log('[ccCapabilities] confirm_submission: ' + prompt + (destructive ? ' [DESTRUCTIVE]' : ''));
+      try {
+        document.dispatchEvent(new CustomEvent('cc:confirm_required', {
+          detail: { prompt: prompt, destructive: !!destructive }
+        }));
+      } catch (e) {}
+
+      // SAFETY: Never auto-confirm. Always return waiting_human.
+      return { status: 'waiting_human', actual_value: 'awaiting_confirmation', prompt: prompt };
+    },
+    validates: function (action) {
+      if (!action.prompt && !action.value) {
+        return { valid: false, error: 'prompt required for confirm_submission' };
+      }
+      return { valid: true };
+    },
+  });
+
+  // ── wait_external ─────────────────────────────────────────────────
+  register({
+    name: 'wait_external',
+    description: 'Wait for external event (redirect, email, processing)',
+    widgetTypes: ['*'],
+    handler: async function (action) {
+      var reason = action.reason || action.options && action.options.reason || 'external';
+      var timeoutMs = (action.options && action.options.timeout_ms) || 30000;
+      var detectType = action.detect || (action.options && action.options.detect) || null;
+
+      console.log('[ccCapabilities] wait_external: ' + reason);
+
+      // Basic detection implementations
+      if (detectType) {
+        var type = typeof detectType === 'string' ? detectType : detectType.type;
+        var pattern = typeof detectType === 'object' ? detectType.pattern : null;
+        var deadline = Date.now() + timeoutMs;
+
+        switch (type) {
+          case 'url_change':
+            var startUrl = window.location.href;
+            while (Date.now() < deadline) {
+              if (window.location.href !== startUrl) {
+                if (!pattern || new RegExp(pattern).test(window.location.href)) {
+                  return { status: 'success', actual_value: window.location.href };
+                }
+              }
+              await new Promise(function (r) { setTimeout(r, 200); });
+            }
+            return { status: 'timeout', error: 'url did not change within timeout' };
+
+          case 'network_idle':
+            if (window.ccWaitForNetworkIdle) {
+              var res = await window.ccWaitForNetworkIdle(500, timeoutMs);
+              return { status: res.idle ? 'success' : 'timeout' };
+            }
+            await new Promise(function (r) { setTimeout(r, Math.min(timeoutMs, 3000)); });
+            return { status: 'success' };
+
+          case 'timeout':
+            await new Promise(function (r) { setTimeout(r, timeoutMs); });
+            return { status: 'success' };
+
+          default:
+            // Unknown detect type — just wait
+            await new Promise(function (r) { setTimeout(r, Math.min(timeoutMs, 5000)); });
+            return { status: 'success' };
+        }
+      }
+
+      // No detection specified — return waiting_human for manual signal
+      return { status: 'waiting_human', actual_value: reason };
     },
   });
 
