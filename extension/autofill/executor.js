@@ -605,9 +605,8 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         if (opt) return applySelect(el, opt);
 
         // Options not ready yet (dependent dropdown) — schedule retry
-        // For cascade parents (state/district) that already applied, don't retry (would reset children)
-        const isCascadeParent = /state|district|17391|17297/.test(selector);
-        if (isCascadeParent) { console.debug('[CC] cascade parent already set, skip retry:', selector); return 1; }
+        // The sequential loop already handles cascade timing via waitForNetworkIdle + waitForOptions.
+        // This retry is a fallback for when fillOne is called directly (not through the cascade path).
         let attempts = 0;
         const interval = setInterval(() => {
           const allOpts = Array.from(el.options);
