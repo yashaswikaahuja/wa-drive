@@ -72,6 +72,18 @@ async function injectExtension(page) {
     if (!existsSync(path)) { console.warn(`  SKIP: ${script} not found`); continue; }
     await page.addScriptTag({ content: readFileSync(path, 'utf8') });
   }
+  // Inject test aliases (simulates service-provided aliases)
+  await page.evaluate(() => {
+    if (window.ccSemanticAliases && window.ccSemanticAliases.merge) {
+      window.ccSemanticAliases.merge({
+        'full_name': ['full name', 'name', 'applicant name'],
+        'dob': ['date of birth', 'dob'],
+        'state': ['state'],
+        'district': ['district'],
+        'category': ['category', 'caste'],
+      });
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════

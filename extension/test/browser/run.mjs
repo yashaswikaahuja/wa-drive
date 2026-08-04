@@ -63,6 +63,24 @@ async function injectExtension(page) {
     if (!existsSync(path)) { console.warn(`  SKIP: ${script} not found`); continue; }
     await page.addScriptTag({ content: readFileSync(path, 'utf8') });
   }
+  // Inject test aliases (simulates service-provided aliases for test environment)
+  await page.evaluate(() => {
+    if (window.ccSemanticAliases && window.ccSemanticAliases.merge) {
+      window.ccSemanticAliases.merge({
+        'full_name': ['full name', 'name', 'applicant name', 'candidate name'],
+        'father_name': ['father', "father's name", 'father name'],
+        'dob': ['date of birth', 'dob', 'birth date'],
+        'gender': ['gender', 'sex'],
+        'email': ['email', 'e-mail', 'email id', 'email address'],
+        'mobile': ['mobile', 'phone', 'mobile number', 'contact'],
+        'aadhaar': ['aadhaar', 'aadhar', 'uidai'],
+        'category': ['category', 'caste', 'reservation category'],
+        'state': ['state'],
+        'district': ['district'],
+        'agree': ['agree', 'declaration', 'i agree', 'i declare'],
+      });
+    }
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════

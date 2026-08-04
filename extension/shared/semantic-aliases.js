@@ -1,14 +1,24 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// CyberControl Semantic Aliases (Configuration)
+// CyberControl Semantic Aliases (Service-Provided)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
-// Maps semantic_key values (from ActionPlan targets) to label patterns.
-// Used by runtime/resolver.js for semantic target resolution.
+// Maps semantic_key values to label patterns for target resolution.
+// Used by runtime/resolver.js.
 //
-// This is a CONFIGURATION source, not business logic.
-// In production, aliases can be updated from the service without
-// requiring an extension update:
-//   window.ccSemanticAliases.merge(serviceProvidedAliases)
+// THE EXTENSION DOES NOT OWN THIS DATA.
+// Aliases are loaded from the service at runtime via:
+//   window.ccSemanticAliases.load(backendUrl, token)
+//
+// The extension starts with an EMPTY dictionary.
+// If the service is unreachable, the resolver still works via:
+//   - field_id (exact match)
+//   - label (fuzzy match)
+//   - field_index (positional)
+//   - hint (disambiguation)
+//   - css_selector (deprecated fallback)
+//
+// semantic_key resolution is the ONLY method that needs aliases.
+// All other resolution methods work without any alias data.
 //
 // Exposes: window.ccSemanticAliases
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -16,32 +26,50 @@
 ;(function () {
   'use strict';
 
-  var aliases = {
-    'full_name':       ['full name', 'name', 'applicant name', 'candidate name'],
-    'father_name':     ['father', 'father\'s name', 'father name'],
-    'mother_name':     ['mother', 'mother\'s name', 'mother name'],
-    'dob':             ['date of birth', 'dob', 'birth date', '\u091C\u0928\u094D\u092E \u0924\u093F\u0925\u093F'],
-    'gender':          ['gender', 'sex', '\u0932\u093F\u0902\u0917'],
-    'email':           ['email', 'e-mail', 'email id', 'email address'],
-    'mobile':          ['mobile', 'phone', 'mobile number', 'contact', 'phone number'],
-    'aadhaar':         ['aadhaar', 'aadhar', 'uidai', 'aadhaar number'],
-    'pan':             ['pan', 'pan number', 'pan card'],
-    'address':         ['address', 'permanent address', 'residential address'],
-    'state':           ['state', '\u0930\u093E\u091C\u094D\u092F'],
-    'district':        ['district', '\u091C\u093F\u0932\u093E'],
-    'block':           ['block', 'tehsil', 'taluka'],
-    'pincode':         ['pin', 'pincode', 'zip', 'postal code'],
-    'category':        ['category', 'caste', 'reservation category', '\u0935\u0930\u094D\u0917'],
-    'qualification':   ['qualification', 'education', 'degree'],
-    'occupation':      ['occupation', 'profession', 'job'],
-    'income':          ['income', 'annual income', 'salary'],
-    'photo':           ['photo', 'photograph', 'upload photo'],
-    'signature':       ['signature', 'upload signature'],
-    'agree':           ['agree', 'declaration', 'i agree', 'i declare'],
-  };
+  // Starts EMPTY. Populated by service at runtime.
+  var aliases = {};
+  var _loaded = false;
+  var _source = 'none'; // 'none' | 'service' | 'cache' | 'fallback'
 
   /**
-   * Merge additional aliases (additive, from service).
+   * Load aliases from the service.
+   * @param {string} backendUrl
+   * @param {string} token — Bearer token
+   * @returns {Promise<boolean>} true if loaded successfully
+   */
+  async function load(backendUrl, token) {
+    if (!backendUrl) return false;
+    try {
+      var headers = { 'Authorization': 'Bearer ' + token };
+      var res = await fetch(backendUrl + '/settings/semantic-aliases', { headers: headers });
+      if (res.ok) {
+        var data = await res.json();
+        if (data && typeof data === 'object') {
+          // Service returns { aliases: { key: [patterns...] } }
+          var serviceAliases = data.aliases || data;
+          replace(serviceAliases);
+          _loaded = true;
+          _source = 'service';
+          return true;
+        }
+      }
+    } catch (e) {
+      // Service unreachable — try localStorage cache
+      try {
+        var cached = localStorage.getItem('cc_semantic_aliases');
+        if (cached) {
+          replace(JSON.parse(cached));
+          _loaded = true;
+          _source = 'cache';
+          return true;
+        }
+      } catch (e2) { /* no cache available */ }
+    }
+    return false;
+  }
+
+  /**
+   * Merge additional aliases (additive).
    * @param {object} newAliases — { semantic_key: [label_patterns...] }
    */
   function merge(newAliases) {
@@ -56,6 +84,7 @@
         });
       }
     }
+    _cacheAliases();
   }
 
   /**
@@ -66,6 +95,18 @@
     if (!newAliases || typeof newAliases !== 'object') return;
     for (var k in aliases) delete aliases[k];
     for (var key in newAliases) aliases[key] = newAliases[key];
+    _cacheAliases();
+  }
+
+  /**
+   * Cache to localStorage for offline/degraded mode.
+   */
+  function _cacheAliases() {
+    try {
+      if (Object.keys(aliases).length > 0) {
+        localStorage.setItem('cc_semantic_aliases', JSON.stringify(aliases));
+      }
+    } catch (e) { /* localStorage unavailable */ }
   }
 
   /**
@@ -76,10 +117,20 @@
     return aliases;
   }
 
+  /**
+   * Get load status.
+   * @returns {{ loaded: boolean, source: string, count: number }}
+   */
+  function status() {
+    return { loaded: _loaded, source: _source, count: Object.keys(aliases).length };
+  }
+
   window.ccSemanticAliases = {
     aliases: aliases,
+    load: load,
     merge: merge,
     replace: replace,
     getAll: getAll,
+    status: status,
   };
 })();

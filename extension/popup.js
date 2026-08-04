@@ -535,6 +535,15 @@ fillBtn.addEventListener('click', async () => {
             console.log('[CC] derived keys:', (profile._derived || []).join(', ') || 'none', `(${before}→${Object.keys(profile).length})`);
           }
         } catch (e) { console.warn('[CC] derive failed:', e.message); }
+        // ── Load semantic aliases from service (for runner target resolution) ──
+        try {
+          if (window.ccSemanticAliases && window.ccSemanticAliases.load) {
+            await window.ccSemanticAliases.load(backendUrl, accessToken);
+            const st = window.ccSemanticAliases.status();
+            console.log('[CC] Semantic aliases:', st.source, '(' + st.count + ' keys)');
+          }
+        } catch (e) { console.warn('[CC] Alias load skipped:', e.message); }
+
         const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
         // Stash backend URL + token + formkey + profileId on document.body so executor's
         // post-fill correction observer can authenticate its POSTs and link to profile

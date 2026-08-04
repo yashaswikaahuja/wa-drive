@@ -165,6 +165,18 @@ var fakePageModel = {
   }]
 };
 
+// Inject test aliases (simulates service-provided aliases)
+if (context.ccSemanticAliases && context.ccSemanticAliases.merge) {
+  context.ccSemanticAliases.merge({
+    'full_name': ['full name', 'name', 'applicant name'],
+    'father_name': ['father', "father's name", 'father name'],
+    'dob': ['date of birth', 'dob', 'birth date'],
+    'email': ['email', 'e-mail', 'email id'],
+    'mobile': ['mobile', 'phone', 'mobile number'],
+    'category': ['category', 'caste'],
+  });
+}
+
 context.ccResolver.setPageContext(fakePageModel, elements);
 
 // field_id
