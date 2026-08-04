@@ -949,6 +949,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         await waitForNetworkIdle(100, 1500); // was setTimeout(500) � now exits early when AJAX done
       } else if (isDependent && filled > 0) {
         // Cascade: wait for parent's AJAX to actually complete (vs hardcoded delay).
+        // DWR initiates XHR asynchronously after the change event — wait 500ms first
+        // to give it time to start, THEN check for network idle.
+        await new Promise(r => setTimeout(r, 500));
         console.log('[CC] cascade-wait:', selector, 'label:', fieldLabel, 'waiting for network+options...');
         const _netRes = await waitForNetworkIdle(150, 6000);
         console.log('[CC] cascade-net:', selector, _netRes.idle ? 'idle' : 'timeout', 'waited:', _netRes.waitedMs + 'ms', _netRes.monitorMissing ? '(NO MONITOR)' : '');
@@ -975,7 +978,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           filled += _r;
           _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'no-option', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
         }
-        await new Promise(r => setTimeout(r, 200));
+        // Wait for DWR/AJAX to initiate BEFORE next field starts its idle check.
+        // DWR queues XHR asynchronously after the change event — needs 500ms+ to start.
+        await new Promise(r => setTimeout(r, 600));
       } else if (el && el.type === 'file' && value && (value.startsWith('http://') || value.startsWith('https://'))) {
         // ── File input with URL — async fetch and assign ─────────────────────
         try {
