@@ -1,6 +1,6 @@
 /**
  * Regression test for issue-56 consolidated shared modules.
- * Run: node extension/test/test-shared-modules.js
+ * Run: node extension-dev/tests/test-shared-modules.js
  *
  * Tests:
  * 1. shared/option-match.js — ccMatchOption
@@ -21,7 +21,7 @@ function assert(condition, msg) {
 }
 
 // ── Load shared/option-match.js ──
-eval(require('fs').readFileSync(__dirname + '/../shared/option-match.js', 'utf8'));
+eval(require('fs').readFileSync(__dirname + '/../../extension/shared/option-match.js', 'utf8'));
 
 console.log('\n=== shared/option-match.js ===');
 
@@ -77,7 +77,7 @@ assert(extraResult && extraResult.value === '01', 'ExtraValues fallback');
 console.log('\n=== shared/label-utils.js ===');
 
 // Load label-utils
-eval(require('fs').readFileSync(__dirname + '/../shared/label-utils.js', 'utf8'));
+eval(require('fs').readFileSync(__dirname + '/../../extension/shared/label-utils.js', 'utf8'));
 
 // calcConfidence — canonical formula
 assert(calcConfidence(0, 0) === 0.5, 'New mapping confidence = 0.5');
@@ -99,7 +99,7 @@ assert(normalizeFieldLabel('Normal Label') === 'Normal Label', 'No-op on clean l
 console.log('\n=== rule-engine.js ccMatchOption delegation ===');
 
 // Load rule-engine (it references window.ccMatchOption)
-eval(require('fs').readFileSync(__dirname + '/../autofill/rule-engine.js', 'utf8'));
+eval(require('fs').readFileSync(__dirname + '/../../extension/autofill/rule-engine.js', 'utf8'));
 
 // ccMatchOption in rule-engine should delegate to shared when window.ccMatchOption exists
 // Test with string options (rule-engine's original interface)

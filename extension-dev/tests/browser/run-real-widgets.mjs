@@ -17,7 +17,7 @@
  * - Real mat-datepicker (requires Angular CDK)
  * - Service worker / extension lifecycle behavior
  *
- * Run: node extension/test/browser/run-real-widgets.mjs
+ * Run: node extension-dev/tests/browser/run-real-widgets.mjs
  */
 
 import { chromium } from 'playwright-core';
@@ -26,7 +26,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const EXT_DIR = resolve(__dirname, '../..');
+const EXT_DIR = resolve(__dirname, '../../../extension');
 const FIXTURES = resolve(__dirname, '../fixtures');
 
 let pass = 0, fail = 0;

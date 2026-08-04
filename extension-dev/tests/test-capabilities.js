@@ -1,13 +1,13 @@
 /**
  * Tests for Phase 1.2: Capability Registry + Browser Action Primitives.
- * Run: node extension/test/test-capabilities.js
+ * Run: node extension-dev/tests/test-capabilities.js
  */
 
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const EXT = path.join(__dirname, '..');
+const EXT = path.join(__dirname, '../../extension');
 
 // Simulated browser context
 const context = vm.createContext({

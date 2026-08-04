@@ -1,6 +1,6 @@
 /**
  * CyberControl Test Runner — runs all test suites.
- * Usage: node extension/test/run-all.mjs
+ * Usage: node extension-dev/tests/run-all.mjs
  */
 
 import { execSync } from 'node:child_process';
@@ -11,14 +11,14 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../..');
 
 const suites = [
-  { name: 'Unit Tests', cmd: 'node extension/test/test-shared-modules.js' },
-  { name: 'Integration Tests', cmd: 'node extension/test/test-integration.js' },
-  { name: 'Mapping Guard Tests', cmd: 'node extension/test/test-mapping-guards.js' },
-  { name: 'Model IR Tests', cmd: 'node extension/test/test-models.js' },
-  { name: 'Capability Tests', cmd: 'node extension/test/test-capabilities.js' },
-  { name: 'Runner Tests', cmd: 'node extension/test/test-runner.js' },
-  { name: 'Browser Tests', cmd: 'node extension/test/browser/run.mjs' },
-  { name: 'Real Widget Tests', cmd: 'node extension/test/browser/run-real-widgets.mjs' },
+  { name: 'Unit Tests', cmd: 'node extension-dev/tests/test-shared-modules.js' },
+  { name: 'Integration Tests', cmd: 'node extension-dev/tests/test-integration.js' },
+  { name: 'Mapping Guard Tests', cmd: 'node extension-dev/tests/test-mapping-guards.js' },
+  { name: 'Model IR Tests', cmd: 'node extension-dev/tests/test-models.js' },
+  { name: 'Capability Tests', cmd: 'node extension-dev/tests/test-capabilities.js' },
+  { name: 'Runner Tests', cmd: 'node extension-dev/tests/test-runner.js' },
+  { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.mjs' },
+  { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs' },
 ];
 
 let allPass = true;

@@ -2,14 +2,14 @@
  * Regression test for issue-54: field mapping guards.
  * Verifies that profile.name does NOT get mapped to relative/spouse fields.
  *
- * Run: node extension/test/test-mapping-guards.js
+ * Run: node extension-dev/tests/test-mapping-guards.js
  */
 
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const EXT = path.join(__dirname, '..');
+const EXT = path.join(__dirname, '../../extension');
 
 // Create a simulated browser context
 const context = vm.createContext({

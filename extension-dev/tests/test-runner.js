@@ -1,6 +1,6 @@
 /**
  * Tests for Phase 1.5: ActionPlan Runner, Resolver, Observation.
- * Run: node extension/test/test-runner.js
+ * Run: node extension-dev/tests/test-runner.js
  *
  * Uses vm.createContext like other test suites in this project.
  * The runner and resolver need:
@@ -15,7 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const EXT = path.join(__dirname, '..');
+const EXT = path.join(__dirname, '../../extension');
 
 let pass = 0, fail = 0;
 function ok(name, cond, extra) {

@@ -2,7 +2,7 @@
  * Integration test — verifies shared modules load in browser context
  * and are callable by the extension's callers.
  *
- * Run: node extension/test/test-integration.js
+ * Run: node extension-dev/tests/test-integration.js
  *
  * Uses JSDOM to simulate browser environment with all scripts loaded in order.
  * This mirrors the exact injection order from popup.js.
@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const EXT = path.join(__dirname, '..');
+const EXT = path.join(__dirname, '../../extension');
 
 // Create a simulated browser context
 const context = vm.createContext({
