@@ -17,6 +17,7 @@
 
 import { pool } from './db.js';
 import { randomUUID } from 'node:crypto';
+import { validate as fullValidate } from './validation-engine.js';
 
 // ── Schema bootstrap ────────────────────────────────────────────────
 
@@ -100,8 +101,12 @@ export function validateRecord(record) {
 
 export async function create(record) {
   await ensureKnowledgeSchema();
-  const errors = validateRecord(record);
-  if (errors.length) throw new Error('Validation failed: ' + errors.join('; '));
+  // Full validation via validation engine (Phase 2.4)
+  const validation = fullValidate(record);
+  if (!validation.valid) {
+    const msgs = validation.errors.map(e => `[${e.severity}] ${e.field}: ${e.message}`);
+    throw new Error('Validation failed: ' + msgs.join('; '));
+  }
 
   const id = record.id || randomUUID();
   const lineageId = record.lineage_id || randomUUID();
