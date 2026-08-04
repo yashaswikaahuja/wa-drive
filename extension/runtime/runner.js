@@ -256,6 +256,11 @@
         widgetType = window.ccCapabilities.resolveWidgetType(element);
       }
 
+      // Scroll element into view before interacting (mimics human behavior)
+      if (element && element.scrollIntoView) {
+        element.scrollIntoView({ block: 'center', behavior: 'instant' });
+      }
+
       // Dispatch through capability registry
       // Forward all action properties to the capability handler
       var dispatchAction = Object.assign({}, actionDef, {

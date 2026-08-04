@@ -244,8 +244,23 @@
       if (!el) return { status: 'failed', error: 'element_not_found' };
 
       var value = action.value || '';
-      var options = Array.from(el.options);
-      var opt = window.ccMatchOption ? window.ccMatchOption(value, options) : null;
+      var timeoutMs = action.timeout_ms || 5000;
+      var deadline = Date.now() + timeoutMs;
+
+      // Poll for matching option (handles cascade selects where options load async)
+      var opt = null;
+      while (Date.now() < deadline) {
+        var options = Array.from(el.options);
+        opt = window.ccMatchOption ? window.ccMatchOption(value, options) : null;
+        if (opt) break;
+        // If select has only 1 option (placeholder), wait for more to load
+        if (options.length <= 1) {
+          await new Promise(function (r) { setTimeout(r, 300); });
+          continue;
+        }
+        // Has multiple options but none match — fail immediately
+        break;
+      }
 
       if (!opt) return { status: 'failed', error: 'no_matching_option', actual_value: null };
 

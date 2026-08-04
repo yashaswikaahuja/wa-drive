@@ -710,7 +710,8 @@ fillBtn.addEventListener('click', async () => {
           } catch (e) { console.warn('[CC] ai-resolve skipped:', e.message); }
         }
         // ── Phase 1.7: ccRunner is the PRIMARY execution path ───────────
-        // Runner executes first. Executor only handles fields runner failed on.
+        // Actions built in DOM order (same order as formFields from extractor)
+        // so forms that require sequential filling work correctly.
         let runnerObservation = null;
         const runnerSucceeded = new Set();
 
@@ -720,25 +721,47 @@ fillBtn.addEventListener('click', async () => {
             const elements = formFields.map(f => document.querySelector(f.selector));
             window.ccResolver.setPageContext(extractResult.pageModel, elements);
 
-            // Convert mapping + directChecks → ActionPlan
+            // Build ActionPlan in DOM order: iterate formFields, emit action for each
             const actions = [];
             const actionFieldMap = [];
-            for (const [selector, entry] of Object.entries(mapping)) {
-              const field = formFields.find(f => f.selector === selector);
-              if (!field) continue;
-              const target = { field_id: field.id ? 'id:' + field.id : null, label: field.label };
-              if (!target.field_id && field.name) target.field_id = 'name:' + field.name;
-              const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(field.type) : 'text';
-              if (grp === 'dropdown') {
-                actions.push({ action: 'select_option', target, value: entry.value, timeout_ms: 5000 });
-              } else {
-                actions.push({ action: 'fill_text', target, value: entry.value, timeout_ms: 3000 });
+            const dcBySelector = {};
+            for (const dc of directChecks) { dcBySelector[dc.selector] = dc; }
+
+            for (const field of formFields) {
+              const sel = field.selector;
+              // Check if this field has a mapping (text/dropdown fill)
+              if (mapping[sel]) {
+                const target = { field_id: field.id ? 'id:' + field.id : null, label: field.label };
+                if (!target.field_id && field.name) target.field_id = 'name:' + field.name;
+                const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(field.type) : 'text';
+                if (grp === 'dropdown') {
+                  actions.push({ action: 'select_option', target, value: mapping[sel].value, timeout_ms: 8000 });
+                } else {
+                  actions.push({ action: 'fill_text', target, value: mapping[sel].value, timeout_ms: 5000 });
+                }
+                actionFieldMap.push(sel);
               }
-              actionFieldMap.push(selector);
+              // Check if this field has directChecks (radio/checkbox)
+              if (dcBySelector[sel]) {
+                actions.push({ action: 'check', target: { css_selector: sel }, value: dcBySelector[sel].check ? 'true' : 'false', timeout_ms: 3000 });
+                actionFieldMap.push(sel);
+                delete dcBySelector[sel]; // mark as handled
+              }
+              // Check optionSelectors for radio groups
+              if (field.optionSelectors) {
+                for (const optSel of field.optionSelectors) {
+                  if (dcBySelector[optSel]) {
+                    actions.push({ action: 'check', target: { css_selector: optSel }, value: 'true', timeout_ms: 3000 });
+                    actionFieldMap.push(optSel);
+                    delete dcBySelector[optSel];
+                  }
+                }
+              }
             }
-            for (const dc of directChecks) {
-              actions.push({ action: 'check', target: { css_selector: dc.selector }, value: dc.check ? 'true' : 'false', timeout_ms: 3000 });
-              actionFieldMap.push(dc.selector);
+            // Any remaining directChecks not matched to formFields
+            for (const [sel, dc] of Object.entries(dcBySelector)) {
+              actions.push({ action: 'check', target: { css_selector: sel }, value: dc.check ? 'true' : 'false', timeout_ms: 3000 });
+              actionFieldMap.push(sel);
             }
 
             if (actions.length > 0) {
@@ -746,7 +769,7 @@ fillBtn.addEventListener('click', async () => {
                 plan_id: 'popup_fill_' + Date.now(),
                 session_id: semanticFormKey || 'unknown',
                 actions,
-              });
+              }, { interActionDelay: 150 });
               const path = runnerObservation.execution_path.filter(e => e.node_id.startsWith('n'));
               for (let i = 0; i < path.length && i < actionFieldMap.length; i++) {
                 if (path[i].status === 'success') runnerSucceeded.add(actionFieldMap[i]);
