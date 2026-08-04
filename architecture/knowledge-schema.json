@@ -1,0 +1,403 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cybercontrol.io/schemas/knowledge-record.json",
+  "title": "CyberControl Knowledge Record",
+  "description": "Validates a single knowledge record against the Universal Knowledge Schema v1.0.0",
+  "type": "object",
+  "required": ["id", "kind", "version", "lineage_id", "status", "scope", "confidence", "source", "payload"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "field_mapping",
+        "synonym",
+        "option_translation",
+        "component_adapter",
+        "fill_rule",
+        "derivation_rule",
+        "validation_rule",
+        "portal_definition",
+        "experience",
+        "correction",
+        "capability_reference"
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "lineage_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "validated", "deprecated", "superseded"]
+    },
+    "scope": {
+      "type": "object",
+      "required": ["level"],
+      "properties": {
+        "portal_id": { "type": ["string", "null"] },
+        "form_key": { "type": ["string", "null"] },
+        "organization_id": { "type": ["string", "null"], "format": "uuid" },
+        "country": { "type": ["string", "null"], "pattern": "^[A-Z]{2}$" },
+        "level": {
+          "type": "string",
+          "enum": ["portal_form", "portal", "organization", "country", "global"]
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "level": { "const": "portal_form" } } },
+          "then": { "required": ["portal_id", "form_key"] }
+        },
+        {
+          "if": { "properties": { "level": { "const": "portal" } } },
+          "then": { "required": ["portal_id"] }
+        },
+        {
+          "if": { "properties": { "level": { "const": "organization" } } },
+          "then": { "required": ["organization_id"] }
+        },
+        {
+          "if": { "properties": { "level": { "const": "country" } } },
+          "then": { "required": ["country"] }
+        }
+      ]
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "source": {
+      "type": "object",
+      "required": ["origin", "created_at", "updated_at"],
+      "properties": {
+        "origin": {
+          "type": "string",
+          "enum": ["manual", "learned", "derived", "imported", "ai_generated", "correction"]
+        },
+        "actor": { "type": ["string", "null"] },
+        "evidence_ref": { "type": ["string", "null"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "supersedes": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "expires_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Payload shape depends on `kind` — see $defs for each entity type"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "const": "field_mapping" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/field_mapping_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "synonym" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/synonym_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "option_translation" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/option_translation_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "component_adapter" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/component_adapter_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "fill_rule" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/fill_rule_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "derivation_rule" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/derivation_rule_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "validation_rule" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/validation_rule_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "portal_definition" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/portal_definition_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "experience" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/experience_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "correction" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/correction_payload" } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "capability_reference" } } },
+      "then": { "properties": { "payload": { "$ref": "#/$defs/capability_reference_payload" } } }
+    }
+  ],
+  "$defs": {
+    "field_mapping_payload": {
+      "type": "object",
+      "required": ["field_label", "semantic_key", "profile_key"],
+      "properties": {
+        "field_label": { "type": "string" },
+        "semantic_key": { "type": "string" },
+        "profile_key": { "type": "string" },
+        "field_type": { "type": "string", "enum": ["text", "select", "radio", "checkbox", "date", "file", "textarea", "number"] },
+        "match_patterns": { "type": "array", "items": { "type": "string" } },
+        "priority": { "type": "integer", "default": 0 }
+      }
+    },
+    "synonym_payload": {
+      "type": "object",
+      "required": ["canonical", "variants"],
+      "properties": {
+        "canonical": { "type": "string" },
+        "variants": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "language": { "type": ["string", "null"] },
+        "domain": { "type": ["string", "null"] }
+      }
+    },
+    "option_translation_payload": {
+      "type": "object",
+      "required": ["profile_value", "option_text", "field_semantic_key"],
+      "properties": {
+        "profile_value": { "type": "string" },
+        "option_text": { "type": "string" },
+        "field_semantic_key": { "type": "string" },
+        "bidirectional": { "type": "boolean", "default": true }
+      }
+    },
+    "component_adapter_payload": {
+      "type": "object",
+      "required": ["component_class", "detection", "interaction"],
+      "properties": {
+        "component_class": { "type": "string" },
+        "detection": {
+          "type": "object",
+          "properties": {
+            "selectors": { "type": "array", "items": { "type": "string" } },
+            "attributes": { "type": "object" },
+            "class_patterns": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "interaction": {
+          "type": "object",
+          "required": ["trigger_selector", "option_selector"],
+          "properties": {
+            "trigger_selector": { "type": "string" },
+            "options_container": { "type": "string" },
+            "option_selector": { "type": "string" },
+            "verify_selector": { "type": "string" },
+            "value_read_method": { "type": "string", "enum": ["attribute", "text_content", "inner_html", "computed"] },
+            "close_method": { "type": "string", "enum": ["click_outside", "escape", "click_trigger", "auto"] }
+          }
+        },
+        "events": {
+          "type": "object",
+          "properties": {
+            "after_select": { "type": "array", "items": { "type": "string" } },
+            "bubble": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    },
+    "fill_rule_payload": {
+      "type": "object",
+      "required": ["target_semantic_key", "condition", "action"],
+      "properties": {
+        "target_semantic_key": { "type": "string" },
+        "condition": {
+          "type": "object",
+          "required": ["operator", "field"],
+          "properties": {
+            "operator": { "type": "string", "enum": ["equals", "not_equals", "contains", "greater_than", "less_than", "matches", "exists", "not_exists", "in_set"] },
+            "field": { "type": "string" },
+            "value": {}
+          }
+        },
+        "action": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["fill", "skip", "transform", "use_alternative"] },
+            "value": { "type": ["string", "null"] },
+            "source_key": { "type": ["string", "null"] },
+            "transform": { "type": ["string", "null"] }
+          }
+        }
+      }
+    },
+    "derivation_rule_payload": {
+      "type": "object",
+      "required": ["output_key", "inputs", "logic"],
+      "properties": {
+        "output_key": { "type": "string" },
+        "inputs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "logic": { "type": "string", "enum": ["highest_education", "age_from_dob", "name_split", "address_compose", "date_format", "lookup", "concatenate", "conditional"] },
+        "parameters": { "type": "object" },
+        "overridable": { "type": "boolean", "default": true }
+      }
+    },
+    "validation_rule_payload": {
+      "type": "object",
+      "required": ["target_semantic_key", "rule_type", "constraint"],
+      "properties": {
+        "target_semantic_key": { "type": "string" },
+        "rule_type": { "type": "string", "enum": ["regex", "length", "range", "format", "dependency", "custom"] },
+        "constraint": {
+          "type": "object",
+          "properties": {
+            "pattern": { "type": ["string", "null"] },
+            "min": { "type": ["number", "null"] },
+            "max": { "type": ["number", "null"] },
+            "format": { "type": ["string", "null"] },
+            "depends_on": { "type": ["string", "null"] }
+          }
+        },
+        "error_message": { "type": "string" },
+        "severity": { "type": "string", "enum": ["error", "warning", "info"], "default": "error" }
+      }
+    },
+    "portal_definition_payload": {
+      "type": "object",
+      "required": ["hostname", "display_name"],
+      "properties": {
+        "hostname": { "type": "string" },
+        "display_name": { "type": "string" },
+        "platform": { "type": "string", "enum": ["serviceplus", "asp_net", "php", "angular", "react", "static", "unknown"] },
+        "forms": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["form_key"],
+            "properties": {
+              "form_key": { "type": "string" },
+              "title": { "type": "string" },
+              "url_pattern": { "type": "string" },
+              "field_count": { "type": "integer" },
+              "has_cascade": { "type": "boolean", "default": false },
+              "cascade_dependencies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "parent_key": { "type": "string" },
+                    "child_key": { "type": "string" },
+                    "mechanism": { "type": "string", "enum": ["dwr", "ajax", "native_change", "jquery_trigger"] }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "behaviors": {
+          "type": "object",
+          "properties": {
+            "uses_jquery": { "type": "boolean", "default": false },
+            "uses_dwr": { "type": "boolean", "default": false },
+            "requires_tab_events": { "type": "boolean", "default": false },
+            "transliterates_on_tab": { "type": "boolean", "default": false },
+            "multi_hierarchy": { "type": "boolean", "default": false },
+            "cascade_delay_ms": { "type": "integer", "default": 2000 }
+          }
+        }
+      }
+    },
+    "experience_payload": {
+      "type": "object",
+      "required": ["session_id", "portal_id", "form_key", "profile_id", "outcome"],
+      "properties": {
+        "session_id": { "type": "string" },
+        "portal_id": { "type": "string" },
+        "form_key": { "type": "string" },
+        "profile_id": { "type": "string", "format": "uuid" },
+        "outcome": { "type": "string", "enum": ["success", "partial", "failure", "abandoned"] },
+        "fields_attempted": { "type": "integer" },
+        "fields_succeeded": { "type": "integer" },
+        "fields_corrected": { "type": "integer" },
+        "duration_ms": { "type": "integer" },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field_key": { "type": "string" },
+              "error_type": { "type": "string", "enum": ["wrong_value", "wrong_field", "not_found", "timeout", "component_error"] },
+              "details": { "type": "string" }
+            }
+          }
+        },
+        "corrections": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field_key": { "type": "string" },
+              "attempted_value": { "type": "string" },
+              "corrected_value": { "type": "string" },
+              "corrected_by": { "type": "string", "enum": ["operator", "user", "system"] }
+            }
+          }
+        }
+      }
+    },
+    "correction_payload": {
+      "type": "object",
+      "required": ["target_record_id", "target_kind", "after"],
+      "properties": {
+        "target_record_id": { "type": "string", "format": "uuid" },
+        "target_kind": { "type": "string" },
+        "experience_id": { "type": ["string", "null"], "format": "uuid" },
+        "before": { "type": "object" },
+        "after": { "type": "object" },
+        "reason": { "type": "string" },
+        "promoted": { "type": "boolean", "default": false }
+      }
+    },
+    "capability_reference_payload": {
+      "type": "object",
+      "required": ["capability_name", "description"],
+      "properties": {
+        "capability_name": { "type": "string" },
+        "description": { "type": "string" },
+        "parameters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" },
+              "required": { "type": "boolean" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "preconditions": { "type": "array", "items": { "type": "string" } },
+        "postconditions": { "type": "array", "items": { "type": "string" } },
+        "failure_modes": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

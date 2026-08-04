@@ -1,0 +1,831 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Universal Knowledge Schema
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Phase 2.1 — Issue #85
+#
+# This is the canonical schema for all CyberControl knowledge.
+# Perception, Learning, Reasoning, and Planning share this model.
+# The extension remains slim — it perceives and executes.
+# All durable business knowledge lives in the service layer.
+#
+# Design principles:
+#   1. No hardcoded portal logic in the extension
+#   2. Every knowledge record has scope, version, confidence, source
+#   3. Records are immutable once validated — corrections create new versions
+#   4. Scope resolution follows: portal > organization > country > global
+#   5. Schema evolution via additive changes only (backward-compatible)
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+schema_version: "1.0.0"
+schema_date: "2026-08-04"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 1: COMMON ENVELOPE
+# ══════════════════════════════════════════════════════════════════════
+#
+# Every knowledge record is wrapped in this envelope.
+# The envelope provides identity, lifecycle, provenance, and scope.
+
+envelope:
+  description: >
+    The universal wrapper for all knowledge records. Provides identity,
+    versioning, scope resolution, confidence, and provenance metadata.
+
+  fields:
+    id:
+      type: uuid
+      required: true
+      description: "Globally unique record identifier"
+
+    kind:
+      type: string
+      required: true
+      enum:
+        - field_mapping
+        - synonym
+        - option_translation
+        - component_adapter
+        - fill_rule
+        - derivation_rule
+        - validation_rule
+        - portal_definition
+        - experience
+        - correction
+        - capability_reference
+      description: "Discriminator for the record payload type"
+
+    version:
+      type: integer
+      required: true
+      minimum: 1
+      description: "Monotonically increasing version within this record's lineage"
+
+    lineage_id:
+      type: uuid
+      required: true
+      description: "Groups all versions of the same logical record"
+
+    status:
+      type: string
+      required: true
+      enum: [draft, active, validated, deprecated, superseded]
+      default: draft
+      description: >
+        Lifecycle state:
+          draft      — proposed, not yet used in production
+          active     — in use, may still be refined
+          validated  — confirmed correct by operator or high confidence
+          deprecated — replaced by newer version, kept for history
+          superseded — explicitly replaced by a correction
+
+    scope:
+      type: object
+      required: true
+      description: "Where this knowledge applies (resolution hierarchy)"
+      fields:
+        portal_id:
+          type: string | null
+          description: "Specific portal hostname (e.g. serviceonline.bihar.gov.in)"
+        form_key:
+          type: string | null
+          description: "Specific form within a portal (semantic form fingerprint)"
+        organization_id:
+          type: uuid | null
+          description: "Specific workspace/organization"
+        country:
+          type: string | null
+          description: "ISO 3166-1 alpha-2 country code (e.g. IN, US)"
+        level:
+          type: string
+          required: true
+          enum: [portal_form, portal, organization, country, global]
+          description: >
+            Resolution level. When multiple records match, narrower scope wins:
+            portal_form > portal > organization > country > global
+
+    confidence:
+      type: number
+      required: true
+      minimum: 0.0
+      maximum: 1.0
+      description: "How certain we are this knowledge is correct (0.0–1.0)"
+
+    source:
+      type: object
+      required: true
+      fields:
+        origin:
+          type: string
+          required: true
+          enum: [manual, learned, derived, imported, ai_generated, correction]
+          description: "How this knowledge was created"
+        actor:
+          type: string | null
+          description: "User/system that created it (user_id, 'system', 'ai')"
+        evidence_ref:
+          type: string | null
+          description: "Reference to supporting evidence (session_id, trace_id, etc.)"
+        created_at:
+          type: datetime
+          required: true
+        updated_at:
+          type: datetime
+          required: true
+
+    tags:
+      type: array
+      items: string
+      description: "Freeform tags for filtering/grouping (e.g. ['hindi', 'education'])"
+
+    supersedes:
+      type: uuid | null
+      description: "ID of the record this one replaces (for corrections)"
+
+    expires_at:
+      type: datetime | null
+      description: "Optional TTL — record becomes stale after this time"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 2: KNOWLEDGE ENTITY PAYLOADS
+# ══════════════════════════════════════════════════════════════════════
+#
+# Each `kind` has a specific payload shape defined here.
+# The envelope wraps the payload — the payload is the knowledge content.
+
+entities:
+
+  # ── 2.1 Field Mapping ──────────────────────────────────────────────
+  field_mapping:
+    description: >
+      Maps a form field (identified by label/semantic_key) to a profile key.
+      Replaces the hardcoded FIELD_ALIASES in mapper.js.
+    payload:
+      field_label:
+        type: string
+        required: true
+        description: "Normalized field label as perceived by extraction"
+      semantic_key:
+        type: string
+        required: true
+        description: "Canonical semantic meaning (e.g. 'father_name', 'dob')"
+      profile_key:
+        type: string
+        required: true
+        description: "Profile field to source the value from"
+      field_type:
+        type: string
+        enum: [text, select, radio, checkbox, date, file, textarea, number]
+        description: "Expected field type for validation"
+      match_patterns:
+        type: array
+        items: string
+        description: "Alternative label patterns that should resolve to this mapping"
+      priority:
+        type: integer
+        default: 0
+        description: "Higher priority wins when multiple mappings match"
+
+  # ── 2.2 Synonym ────────────────────────────────────────────────────
+  synonym:
+    description: >
+      Defines that two labels/terms mean the same thing.
+      Powers semantic alias resolution and multilingual matching.
+    payload:
+      canonical:
+        type: string
+        required: true
+        description: "The canonical term (e.g. 'father_name')"
+      variants:
+        type: array
+        items: string
+        required: true
+        description: "Equivalent terms (e.g. ['pita_ka_naam', 'पिता का नाम', 'father\\'s name'])"
+      language:
+        type: string | null
+        description: "ISO 639-1 language code if language-specific (e.g. 'hi', 'en')"
+      domain:
+        type: string | null
+        description: "Domain context (e.g. 'education', 'identity', 'address')"
+
+  # ── 2.3 Option Translation ─────────────────────────────────────────
+  option_translation:
+    description: >
+      Maps a profile value to the option text used by a specific form.
+      Handles cases like profile='Female' but form shows 'महिला' or 'F'.
+    payload:
+      profile_value:
+        type: string
+        required: true
+        description: "Value as stored in the profile"
+      option_text:
+        type: string
+        required: true
+        description: "Option text as it appears in the form dropdown/radio"
+      field_semantic_key:
+        type: string
+        required: true
+        description: "Which field this translation applies to"
+      bidirectional:
+        type: boolean
+        default: true
+        description: "Whether the reverse mapping also holds"
+
+  # ── 2.4 Component Adapter ──────────────────────────────────────────
+  component_adapter:
+    description: >
+      Teaches the execution engine how to interact with a non-standard
+      UI component (custom dropdown, datepicker, file uploader, etc.).
+      Replaces hardcoded plugin logic.
+    payload:
+      component_class:
+        type: string
+        required: true
+        description: "Identifier for the component type (e.g. 'ng-select', 'flatpickr', 'select2')"
+      detection:
+        type: object
+        required: true
+        description: "How to detect this component on a page"
+        fields:
+          selectors:
+            type: array
+            items: string
+            description: "CSS selectors that identify this component"
+          attributes:
+            type: object
+            description: "Attribute patterns to match (key: regex)"
+          class_patterns:
+            type: array
+            items: string
+            description: "Class name patterns"
+      interaction:
+        type: object
+        required: true
+        description: "How to interact with this component"
+        fields:
+          trigger_selector:
+            type: string
+            required: true
+            description: "Element to click/focus to open the component"
+          options_container:
+            type: string
+            description: "Selector for the dropdown/options panel"
+          option_selector:
+            type: string
+            required: true
+            description: "Selector for individual options within the container"
+          verify_selector:
+            type: string
+            description: "Selector to verify selection was applied"
+          value_read_method:
+            type: string
+            enum: [attribute, text_content, inner_html, computed]
+            default: text_content
+          close_method:
+            type: string
+            enum: [click_outside, escape, click_trigger, auto]
+            default: auto
+      events:
+        type: object
+        description: "Events to dispatch after interaction"
+        fields:
+          after_select:
+            type: array
+            items: string
+            description: "Event names to dispatch (e.g. ['change', 'input'])"
+          bubble:
+            type: boolean
+            default: true
+
+
+  # ── 2.5 Fill Rule ──────────────────────────────────────────────────
+  fill_rule:
+    description: >
+      Defines a conditional rule for filling a field. Handles cases like
+      "if gender=Female, skip husband_name" or "if age<18, set guardian field".
+    payload:
+      target_semantic_key:
+        type: string
+        required: true
+        description: "Field this rule applies to"
+      condition:
+        type: object
+        required: true
+        description: "When this rule fires"
+        fields:
+          operator:
+            type: string
+            required: true
+            enum: [equals, not_equals, contains, greater_than, less_than, matches, exists, not_exists, in_set]
+          field:
+            type: string
+            required: true
+            description: "Profile key or derived field to evaluate"
+          value:
+            type: string | array | null
+            description: "Comparison value(s)"
+      action:
+        type: object
+        required: true
+        description: "What to do when condition is met"
+        fields:
+          type:
+            type: string
+            required: true
+            enum: [fill, skip, transform, use_alternative]
+          value:
+            type: string | null
+            description: "Static value to fill (for type=fill)"
+          source_key:
+            type: string | null
+            description: "Alternative profile key (for type=use_alternative)"
+          transform:
+            type: string | null
+            description: "Transform expression (for type=transform, e.g. 'uppercase', 'dd/mm/yyyy')"
+
+  # ── 2.6 Derivation Rule ───────────────────────────────────────────
+  derivation_rule:
+    description: >
+      Computes a value from other profile fields. Replaces hardcoded
+      ccDeriveProfile logic with data-driven rules.
+    payload:
+      output_key:
+        type: string
+        required: true
+        description: "Profile key to derive"
+      inputs:
+        type: array
+        items: string
+        required: true
+        description: "Profile keys needed as inputs"
+      logic:
+        type: string
+        required: true
+        enum: [highest_education, age_from_dob, name_split, address_compose, date_format, lookup, concatenate, conditional]
+        description: "Named derivation strategy"
+      parameters:
+        type: object
+        description: "Strategy-specific parameters"
+      overridable:
+        type: boolean
+        default: true
+        description: "Whether an explicit profile value takes precedence"
+
+  # ── 2.7 Validation Rule ───────────────────────────────────────────
+  validation_rule:
+    description: >
+      Defines validation constraints for a field value before submission.
+      Used for pre-fill verification and post-fill assertion.
+    payload:
+      target_semantic_key:
+        type: string
+        required: true
+        description: "Field this validation applies to"
+      rule_type:
+        type: string
+        required: true
+        enum: [regex, length, range, format, dependency, custom]
+      constraint:
+        type: object
+        required: true
+        description: "Rule-type-specific constraint"
+        fields:
+          pattern:
+            type: string | null
+            description: "Regex pattern (for rule_type=regex)"
+          min:
+            type: number | null
+          max:
+            type: number | null
+          format:
+            type: string | null
+            description: "Named format (e.g. 'dd/mm/yyyy', 'email', 'phone_in')"
+          depends_on:
+            type: string | null
+            description: "Another field this depends on (for rule_type=dependency)"
+      error_message:
+        type: string
+        description: "Human-readable error when validation fails"
+      severity:
+        type: string
+        enum: [error, warning, info]
+        default: error
+
+
+  # ── 2.8 Portal Definition ──────────────────────────────────────────
+  portal_definition:
+    description: >
+      Describes a government portal's structure, forms, and behaviors.
+      The service uses this to generate fill plans without probing the DOM.
+    payload:
+      hostname:
+        type: string
+        required: true
+        description: "Portal hostname (e.g. 'serviceonline.bihar.gov.in')"
+      display_name:
+        type: string
+        required: true
+      platform:
+        type: string
+        enum: [serviceplus, asp_net, php, angular, react, static, unknown]
+        description: "Underlying platform for behavior prediction"
+      forms:
+        type: array
+        items:
+          type: object
+          fields:
+            form_key:
+              type: string
+              required: true
+            title:
+              type: string
+            url_pattern:
+              type: string
+              description: "URL regex for form detection"
+            field_count:
+              type: integer
+            has_cascade:
+              type: boolean
+              default: false
+            cascade_dependencies:
+              type: array
+              items:
+                type: object
+                fields:
+                  parent_key: string
+                  child_key: string
+                  mechanism:
+                    type: string
+                    enum: [dwr, ajax, native_change, jquery_trigger]
+      behaviors:
+        type: object
+        description: "Portal-specific behaviors the executor must know"
+        fields:
+          uses_jquery:
+            type: boolean
+            default: false
+          uses_dwr:
+            type: boolean
+            default: false
+          requires_tab_events:
+            type: boolean
+            default: false
+          transliterates_on_tab:
+            type: boolean
+            default: false
+          multi_hierarchy:
+            type: boolean
+            default: false
+          cascade_delay_ms:
+            type: integer
+            default: 2000
+
+  # ── 2.9 Experience ─────────────────────────────────────────────────
+  experience:
+    description: >
+      A recorded fill session outcome. The raw material for learning.
+      Experiences are never edited — they are ground truth observations.
+    payload:
+      session_id:
+        type: string
+        required: true
+      portal_id:
+        type: string
+        required: true
+      form_key:
+        type: string
+        required: true
+      profile_id:
+        type: uuid
+        required: true
+      outcome:
+        type: string
+        required: true
+        enum: [success, partial, failure, abandoned]
+      fields_attempted:
+        type: integer
+      fields_succeeded:
+        type: integer
+      fields_corrected:
+        type: integer
+      duration_ms:
+        type: integer
+      errors:
+        type: array
+        items:
+          type: object
+          fields:
+            field_key: string
+            error_type:
+              type: string
+              enum: [wrong_value, wrong_field, not_found, timeout, component_error]
+            details: string
+      corrections:
+        type: array
+        items:
+          type: object
+          fields:
+            field_key: string
+            attempted_value: string
+            corrected_value: string
+            corrected_by:
+              type: string
+              enum: [operator, user, system]
+
+  # ── 2.10 Correction ───────────────────────────────────────────────
+  correction:
+    description: >
+      An explicit correction to existing knowledge. Created when an
+      operator fixes a fill error. Links to the experience that triggered it.
+    payload:
+      target_record_id:
+        type: uuid
+        required: true
+        description: "The knowledge record being corrected"
+      target_kind:
+        type: string
+        required: true
+        description: "Kind of the record being corrected"
+      experience_id:
+        type: uuid | null
+        description: "Experience that revealed the error"
+      before:
+        type: object
+        description: "Previous state (relevant fields only)"
+      after:
+        type: object
+        required: true
+        description: "Corrected state"
+      reason:
+        type: string
+        description: "Why the correction was made"
+      promoted:
+        type: boolean
+        default: false
+        description: "Whether this correction has been promoted to update the target"
+
+  # ── 2.11 Capability Reference ──────────────────────────────────────
+  capability_reference:
+    description: >
+      Documents a browser capability's contract so the planner can
+      reference it without knowing implementation details.
+    payload:
+      capability_name:
+        type: string
+        required: true
+        description: "Action name as registered (e.g. 'fill_text', 'select_option')"
+      description:
+        type: string
+        required: true
+      parameters:
+        type: array
+        items:
+          type: object
+          fields:
+            name: string
+            type: string
+            required: boolean
+            description: string
+      preconditions:
+        type: array
+        items: string
+        description: "What must be true before this capability can execute"
+      postconditions:
+        type: array
+        items: string
+        description: "What will be true after successful execution"
+      failure_modes:
+        type: array
+        items: string
+        description: "Known ways this capability can fail"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 3: SCOPE RESOLUTION
+# ══════════════════════════════════════════════════════════════════════
+#
+# When multiple knowledge records match a query, scope determines
+# which one wins. Narrower scope always beats broader scope.
+
+scope_resolution:
+  description: >
+    The scope model determines which knowledge record applies in a given
+    context. A fill request always has a known portal + form + organization.
+    The resolver finds all matching records and picks the narrowest.
+
+  hierarchy:
+    - level: portal_form
+      description: "Knowledge specific to a form on a specific portal"
+      example: "On serviceonline.bihar.gov.in form 'caste_certificate', district maps to #17297"
+      priority: 5
+
+    - level: portal
+      description: "Knowledge specific to a portal (all forms)"
+      example: "serviceonline.bihar.gov.in uses DWR cascades with 3500ms delay"
+      priority: 4
+
+    - level: organization
+      description: "Knowledge specific to a workspace/cybercafe"
+      example: "CyberCafe X always fills 'domicile_state' as 'Bihar'"
+      priority: 3
+
+    - level: country
+      description: "Knowledge applicable to all portals in a country"
+      example: "In India, 'पिता का नाम' means 'father_name'"
+      priority: 2
+
+    - level: global
+      description: "Universal knowledge applicable everywhere"
+      example: "'dob' means date of birth"
+      priority: 1
+
+  conflict_resolution:
+    - "Higher priority (narrower scope) wins"
+    - "Within same scope, higher confidence wins"
+    - "Within same confidence, newer version wins"
+    - "If still tied, validated > active > draft"
+    - "Deprecated and superseded records are excluded from resolution"
+
+  inheritance:
+    description: >
+      Broader records provide defaults. Narrower records can override
+      specific fields without replacing the entire record.
+    example: >
+      Global says gender options are [Male, Female, Other].
+      Portal-level says gender options are [पुरुष, महिला, अन्य].
+      The portal-level option_translation overrides the global one.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 4: VERSIONING AND EVOLUTION
+# ══════════════════════════════════════════════════════════════════════
+
+versioning:
+  description: >
+    Rules for schema evolution and record versioning. The schema
+    MUST remain backward-compatible across minor versions.
+
+  schema_versioning:
+    format: "semver (major.minor.patch)"
+    rules:
+      major: "Breaking changes to envelope or entity shapes (migration required)"
+      minor: "New entity kinds or optional fields added (backward-compatible)"
+      patch: "Documentation fixes, clarifications (no structural change)"
+    migration:
+      strategy: "additive-only for minor versions"
+      notes:
+        - "New optional fields get default values — old records remain valid"
+        - "New entity kinds are ignored by old consumers"
+        - "Removed fields are deprecated first (1 major version grace period)"
+        - "Consumers MUST ignore unknown fields (forward-compatible parsing)"
+
+  record_versioning:
+    description: >
+      Individual records are versioned by their `version` field within
+      a `lineage_id`. This tracks how a piece of knowledge evolves.
+    rules:
+      - "Creating a new record: version=1, lineage_id=new uuid"
+      - "Updating a record: version++ , same lineage_id, old record status→superseded"
+      - "Correcting a record: new lineage_id, supersedes=old_id, source.origin=correction"
+      - "Records are immutable once written — updates create new versions"
+      - "Only the latest active/validated version in a lineage is used for resolution"
+
+  retention:
+    - "Active/validated records: retained indefinitely"
+    - "Deprecated records: retained 90 days after deprecation, then archived"
+    - "Draft records: retained 30 days if unused, then deleted"
+    - "Experiences: retained indefinitely (ground truth)"
+    - "Corrections: retained indefinitely (audit trail)"
+
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 5: RUNTIME vs KNOWLEDGE SEPARATION
+# ══════════════════════════════════════════════════════════════════════
+#
+# Clear boundary between what the extension does (runtime) and
+# what the service owns (knowledge).
+
+separation:
+  extension_owns:
+    - "DOM perception (extraction, field detection)"
+    - "Capability execution (filling, clicking, waiting)"
+    - "Observation reporting (what happened)"
+    - "Semantic target resolution (using aliases FROM the service)"
+    - "Component interaction (using adapters FROM the service)"
+
+  service_owns:
+    - "All knowledge records defined in this schema"
+    - "Scope resolution (which record applies)"
+    - "Plan generation (what to fill, in what order)"
+    - "Learning (promoting experiences into knowledge)"
+    - "Correction processing (updating knowledge from failures)"
+    - "AI reasoning (ambiguity resolution, confidence scoring)"
+    - "Alias/adapter/rule distribution to the extension"
+
+  data_flow:
+    - step: "Service sends ActionPlan (references knowledge internally)"
+    - step: "Extension resolves targets using service-provided aliases"
+    - step: "Extension executes using service-provided adapters"
+    - step: "Extension reports Observation"
+    - step: "Service records Experience from Observation"
+    - step: "Service updates knowledge (Learning) from Experience patterns"
+    - step: "Operator corrections flow back as Correction records"
+
+  extension_receives:
+    description: >
+      The extension does NOT receive raw knowledge records. It receives
+      pre-resolved artifacts derived from knowledge:
+    artifacts:
+      - name: "semantic_aliases"
+        from: "synonym records (resolved for current portal/country)"
+        format: "{ key: [patterns...] }"
+      - name: "component_adapters"
+        from: "component_adapter records (resolved for current portal)"
+        format: "{ componentClass: { trigger, options, ... } }"
+      - name: "option_translations"
+        from: "option_translation records (resolved for current form)"
+        format: "{ fieldKey: { profileValue: optionText } }"
+      - name: "action_plan"
+        from: "planner using field_mapping + fill_rule + derivation_rule + portal_definition"
+        format: "ActionPlan per protocol.yml Section 2"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 6: MIGRATION FROM CURRENT STATE
+# ══════════════════════════════════════════════════════════════════════
+
+migration:
+  description: >
+    Maps current hardcoded knowledge to the new schema. This guides
+    the Phase 2/3 implementation work.
+
+  current_state:
+    - location: "extension/autofill/mapper.js:FIELD_ALIASES"
+      migrates_to: "field_mapping + synonym records (scope: global/country=IN)"
+      notes: "~50 profile keys × ~5-10 aliases each = ~300-500 records"
+
+    - location: "extension/autofill/mapper.js:PRIORITY_KEYS"
+      migrates_to: "fill_rule records with cascade ordering logic"
+      notes: "State/District/Block priority becomes data-driven"
+
+    - location: "extension/autofill/derive.js:ccDeriveProfile"
+      migrates_to: "derivation_rule records"
+      notes: "~15 derivation rules (age, highest_ed, name_split, etc.)"
+
+    - location: "extension/autofill/plugins/cascade-select.js:CASCADE_FIELDS"
+      migrates_to: "portal_definition.forms[].cascade_dependencies"
+      notes: "Hardcoded dependency chain becomes portal-specific knowledge"
+
+    - location: "extension/autofill/plugins/keystroke-input.js (Bihar transliteration)"
+      migrates_to: "portal_definition.behaviors.transliterates_on_tab + component_adapter"
+      notes: "Portal-specific behavior becomes knowledge, not code"
+
+    - location: "extension/shared/semantic-aliases.js (empty, loaded from service)"
+      migrates_to: "synonym records resolved and served via /settings/semantic-aliases"
+      notes: "Already designed for service-ownership; schema formalizes the shape"
+
+    - location: "extension-service/routes/adapters.js (adapter store)"
+      migrates_to: "component_adapter records"
+      notes: "Current shape is close; add envelope metadata"
+
+    - location: "extension-service/routes/mappings.js (form_mappings)"
+      migrates_to: "field_mapping records with proper scope"
+      notes: "Current flat JSONB → structured records with lineage"
+
+    - location: "extension-service/routes/corrections.js"
+      migrates_to: "correction + experience records"
+      notes: "Current correction→promotion logic maps to correction.promoted flag"
+
+  migration_strategy:
+    - "Phase 2.2: Implement knowledge store (Postgres tables per this schema)"
+    - "Phase 2.3: Write migration script to import FIELD_ALIASES as seed records"
+    - "Phase 2.4: Write migration for existing form_mappings and adapters"
+    - "Phase 3: Service resolves knowledge at plan-time instead of extension hardcoding"
+    - "Phase 5: Learning engine creates/updates records from experiences"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 7: VALIDATION
+# ══════════════════════════════════════════════════════════════════════
+
+validation:
+  description: >
+    Every knowledge record MUST pass validation before being stored.
+    Validation is defined as JSON Schema (see knowledge-schema.json).
+
+  rules:
+    - "All envelope fields present and correctly typed"
+    - "Payload matches the schema for its `kind`"
+    - "Scope level is consistent with scope fields (portal_form requires portal_id + form_key)"
+    - "Confidence is between 0.0 and 1.0"
+    - "Version is positive integer"
+    - "lineage_id is valid UUID"
+    - "Status transitions follow: draft→active→validated→deprecated; or any→superseded"
+    - "supersedes field references an existing record (if non-null)"
+    - "source.created_at <= source.updated_at"
+
+  automated_checks:
+    - "JSON Schema validation on write"
+    - "Scope consistency check"
+    - "Duplicate detection (same lineage_id + version = error)"
+    - "Circular supersedes chain detection"
+    - "Orphan check (superseded record must exist)"
