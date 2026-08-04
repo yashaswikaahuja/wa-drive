@@ -22,6 +22,7 @@ import correctionsRouter from './routes/corrections.js';
 import trainingRouter from './routes/training.js';
 import agentRouter from './routes/agent.js';
 import knowledgeRouter from './routes/knowledge.js';
+import resolveRouter from './routes/resolve.js';
 import { ensureSchema } from './store.js';
 import { ensureKnowledgeSchema } from './knowledge-store.js';
 
@@ -56,6 +57,7 @@ app.use('/api/corrections', correctionsRouter);
 app.use('/api/training', trainingRouter);
 app.use('/api/agent', agentRouter);
 app.use('/api/knowledge', knowledgeRouter);
+app.use('/api/resolve', resolveRouter);
 
 // 404 fallthrough
 app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
