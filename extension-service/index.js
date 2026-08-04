@@ -24,6 +24,7 @@ import agentRouter from './routes/agent.js';
 import knowledgeRouter from './routes/knowledge.js';
 import resolveRouter from './routes/resolve.js';
 import validateRouter from './routes/validate.js';
+import versionsRouter from './routes/versions.js';
 import { ensureSchema } from './store.js';
 import { ensureKnowledgeSchema } from './knowledge-store.js';
 
@@ -60,6 +61,7 @@ app.use('/api/agent', agentRouter);
 app.use('/api/knowledge', knowledgeRouter);
 app.use('/api/resolve', resolveRouter);
 app.use('/api/validate', validateRouter);
+app.use('/api/versions', versionsRouter);
 
 // 404 fallthrough
 app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
