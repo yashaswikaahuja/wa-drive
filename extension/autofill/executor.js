@@ -906,6 +906,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
       const _t0 = Date.now();
       const _fieldCtx = { type, label: filledBySource[selector]?.label || selector, profileKey: filledBySource[selector]?.profileKey || '', selector };
+      // Diagnostic: which path will this field take?
+      const _selectLike2 = /^(select|dropdown|ng-dropdown|mat-select)$/.test(type || '');
+      if (_selectLike2) console.log('[CC] route:', selector, 'type:', type, 'isNgDropdown:', isNgDropdown, 'isDependent:', isDependent, 'filled:', filled, 'elTag:', el?.tagName, 'elType:', el?.type);
 
       if (fieldData.type === 'button') {
         // Phase boundary: button-click plugin
@@ -946,15 +949,20 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         await waitForNetworkIdle(100, 1500); // was setTimeout(500) � now exits early when AJAX done
       } else if (isDependent && filled > 0) {
         // Cascade: wait for parent's AJAX to actually complete (vs hardcoded delay).
-        // Network monitor counts in-flight fetch + XHR — we proceed the moment
-        // active=0 AND has been idle for 150ms, OR after maxWait.
+        console.log('[CC] cascade-wait:', selector, 'label:', fieldLabel, 'waiting for network+options...');
         const _netRes = await waitForNetworkIdle(150, 6000);
+        console.log('[CC] cascade-net:', selector, _netRes.idle ? 'idle' : 'timeout', 'waited:', _netRes.waitedMs + 'ms', _netRes.monitorMissing ? '(NO MONITOR)' : '');
         // After network idle, options should be populated; double-check with poll
         const waitedEl = await waitForOptions(selector, 1, 4000);
         if (!waitedEl) {
-          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', waitedMs: _netRes.waitedMs, networkIdle: _netRes.idle, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          const _el3 = document.querySelector(selector);
+          const _optCount = _el3 ? Array.from(_el3.options || []).length : 0;
+          const _optSample = _el3 ? Array.from(_el3.options || []).slice(0,3).map(o => o.value + '=' + o.text.trim()) : [];
+          console.log('[CC] cascade-TIMEOUT:', selector, 'opts:', _optCount, 'disabled:', _el3?.disabled, 'sample:', _optSample);
+          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', waitedMs: _netRes.waitedMs, networkIdle: _netRes.idle, optionCount: _optCount, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
           continue;
         }
+        console.log('[CC] cascade-ready:', selector, 'opts:', waitedEl.options.length, 'filling:', value);
         const _plugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(waitedEl, _fieldCtx) : null;
         if (_plugin) {
           const _pResult = _plugin.fill(waitedEl, value, { profileKey: _fieldCtx.profileKey, parentValues: {}, attempt: 1 });
