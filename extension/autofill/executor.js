@@ -956,7 +956,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         const _netRes = await waitForNetworkIdle(150, 6000);
         console.log('[CC] cascade-net:', selector, _netRes.idle ? 'idle' : 'timeout', 'waited:', _netRes.waitedMs + 'ms', _netRes.monitorMissing ? '(NO MONITOR)' : '');
         // After network idle, options should be populated; double-check with poll
-        const waitedEl = await waitForOptions(selector, 1, 4000);
+        const waitedEl = await waitForOptions(selector, 1, 8000);
         if (!waitedEl) {
           const _el3 = document.querySelector(selector);
           const _optCount = _el3 ? Array.from(_el3.options || []).length : 0;
