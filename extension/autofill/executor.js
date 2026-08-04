@@ -807,6 +807,8 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         console.debug('[CC] date fill:', selector, 'original:', value, 'iso:', isoValue, 'result:', el.value);
         return el.value ? 1 : 0;
       } else {
+        // Angular/React compatible input filling
+        const isTextarea = el.tagName === 'TEXTAREA';
         const niv = isTextarea
           ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')
           : Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
