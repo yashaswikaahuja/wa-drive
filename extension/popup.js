@@ -584,20 +584,20 @@ fillBtn.addEventListener('click', async () => {
                 if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
                   const idx = (f.options || []).indexOf(act.option);
                   const optSel = idx >= 0 ? f.optionSelectors[idx] : null;
-                  if (optSel) directChecks.push({ selector: optSel, check: true, label: f.label, profileKey: s.profileKey });
+                  if (optSel) { mapping[optSel] = { value: act.option, type: 'radio-click' }; fbs[optSel] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); }
                 } else {
                   mapping[f.selector] = { value: act.option, type: f.type };  // dropdown: executor selects by option text
                 }
                 setFbs();
               } else if (act.kind === 'check') {
-                if (act.check) directChecks.push({ selector: f.selector, check: true, label: f.label, profileKey: s.profileKey });
+                if (act.check) { mapping[f.selector] = { value: 'true', type: 'checkbox' }; }
                 setFbs();
               } else if (act.kind === 'checkOptions') {
                 const sels = f.optionSelectors || [];
                 for (const optText of act.options) {
                   const idx = (f.options || []).indexOf(optText);
                   const optSel = idx >= 0 ? sels[idx] : null;
-                  if (optSel) directChecks.push({ selector: optSel, check: true, label: f.label, profileKey: s.profileKey });
+                  if (optSel) { mapping[optSel] = { value: optText, type: 'radio-click' }; fbs[optSel] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); }
                 }
                 setFbs();
               }
@@ -697,7 +697,8 @@ fillBtn.addEventListener('click', async () => {
               if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
                 const oi = (f.options || []).indexOf(info.value);
                 if (oi >= 0 && f.optionSelectors[oi]) {
-                  directChecks.push({ selector: f.optionSelectors[oi], check: true, label: f.label, profileKey: null });
+                  mapping[f.optionSelectors[oi]] = { value: info.value, type: 'radio-click' };
+                  fbs[f.optionSelectors[oi]] = { label: f.label, source: 'ai-resolve' };
                   handled.add(f.selector); n++;
                 }
               } else {
