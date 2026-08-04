@@ -53,6 +53,14 @@
   <div class="field ng-dropdown" data-cc-x="state">
     <div class="label">State</div>
     <div class="value-area"><span class="value">Select state</span></div>
+    <ul class="options-list" style="display:none; border:1px solid #ccc; list-style:none; padding:0; margin:4px 0; max-height:150px; overflow:auto;">
+      <li data-value="bihar">Bihar</li>
+      <li data-value="up">Uttar Pradesh</li>
+      <li data-value="jharkhand">Jharkhand</li>
+      <li data-value="mp">Madhya Pradesh</li>
+      <li data-value="mh">Maharashtra</li>
+      <li data-value="dl">Delhi</li>
+    </ul>
   </div>
 
   <!-- Two-column address row: geometry must order left→right within the row -->
@@ -95,5 +103,33 @@
 
   <button type="submit">Submit</button>
 </form>
+
+<script>
+// ng-dropdown behavior: click value-area to toggle options, click option to select
+(function() {
+  var dd = document.querySelector('.ng-dropdown');
+  var valueArea = dd.querySelector('.value-area');
+  var optionsList = dd.querySelector('.options-list');
+  var valueSpan = dd.querySelector('.value');
+
+  valueArea.addEventListener('click', function() {
+    optionsList.style.display = optionsList.style.display === 'none' ? 'block' : 'none';
+  });
+
+  optionsList.querySelectorAll('li').forEach(function(li) {
+    li.style.padding = '6px 10px';
+    li.style.cursor = 'pointer';
+    li.addEventListener('mouseenter', function() { li.style.background = '#eef'; });
+    li.addEventListener('mouseleave', function() { li.style.background = ''; });
+    li.addEventListener('click', function(e) {
+      e.stopPropagation();
+      valueSpan.textContent = li.textContent;
+      dd.setAttribute('data-value', li.getAttribute('data-value'));
+      optionsList.style.display = 'none';
+      dd.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+})();
+</script>
 </body>
 </html>

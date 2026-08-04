@@ -231,12 +231,24 @@ function fuzzyMatch(formFields, profile) {
 
         // For radio-group: iterate options to find the matching one
         if (field.type === 'radio-group' && field.options && field.optionSelectors) {
+          // First pass: exact match
+          var matchedIdx = -1;
           for (var oi = 0; oi < field.options.length; oi++) {
             var optText = field.options[oi].toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (optText.includes(profileVal) || profileVal.includes(optText)) {
-              mapping[field.optionSelectors[oi]] = { value: field.options[oi], type: 'radio-click' };
-              break;
+            if (optText === profileVal) { matchedIdx = oi; break; }
+          }
+          // Second pass: substring (only if no exact match, and require word boundary or 3+ char overlap)
+          if (matchedIdx < 0) {
+            for (var oi2 = 0; oi2 < field.options.length; oi2++) {
+              var optText2 = field.options[oi2].toLowerCase().replace(/[^a-z0-9]/g, '');
+              // Avoid "female".includes("male") — require the shorter string to be at least 70% of the longer
+              var shorter = optText2.length < profileVal.length ? optText2 : profileVal;
+              var longer = optText2.length < profileVal.length ? profileVal : optText2;
+              if (longer.includes(shorter) && shorter.length >= longer.length * 0.7) { matchedIdx = oi2; break; }
             }
+          }
+          if (matchedIdx >= 0) {
+            mapping[field.optionSelectors[matchedIdx]] = { value: field.options[matchedIdx], type: 'radio-click' };
           }
         } else {
           // Single radio field (type === 'radio')
