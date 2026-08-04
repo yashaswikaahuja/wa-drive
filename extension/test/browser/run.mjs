@@ -43,6 +43,8 @@ const SHARED_SCRIPTS = [
   'shared/select-apply.js',
   'models/ir.js',
   'capabilities/registry.js',
+  'runtime/resolver.js',
+  'runtime/runner.js',
   'autofill/plugins/interface.js',
   'autofill/plugins/cascade-select.js',
   'autofill/plugins/ng-dropdown.js',
@@ -421,6 +423,89 @@ async function testPageModel(browser) {
   await page.close();
 }
 
+async function testActionPlanRunner(browser) {
+  console.log('\n═══ Suite: ActionPlan Runner (govt-form.html) ═══');
+  const page = await browser.newPage();
+  await page.goto(`file://${FIXTURES}/govt-form.html`);
+  await injectExtension(page);
+
+  // First, extract to set up resolver context
+  await page.evaluate(() => {
+    const r = extractFormFieldsWithFingerprint();
+    // Set up the resolver with the extraction results
+    const allFields = r.pageModel.forms[0].fields;
+    const elements = r.formFields.map(f => document.querySelector(f.selector));
+    window.ccResolver.setPageContext(r.pageModel, elements);
+  });
+
+  // Execute a linear plan against the real form
+  const observation = await page.evaluate(async () => {
+    const plan = {
+      plan_id: 'browser_test_plan',
+      session_id: 'browser_session',
+      actions: [
+        { action: 'fill_text', target: { semantic_key: 'full_name' }, value: 'Kamaljeet Singh', timeout_ms: 3000 },
+        { action: 'select_option', target: { label: 'Category' }, value: 'OBC', timeout_ms: 3000 },
+        { action: 'click', target: { label: 'Gender', hint: { name: 'gender' } }, timeout_ms: 3000 },
+        { action: 'check', target: { label: 'I agree' }, value: 'true', timeout_ms: 3000 },
+      ]
+    };
+    return await window.ccRunner.executeLinear(plan);
+  });
+
+  ok('ActionPlan: observation produced', observation !== null);
+  ok('ActionPlan: plan_id preserved', observation.plan_id === 'browser_test_plan');
+  ok('ActionPlan: protocol_version = 2', observation.protocol_version === 2);
+  ok('ActionPlan: execution_path populated', observation.execution_path.length > 0);
+  ok('ActionPlan: fill_text succeeded', observation.execution_path[0].status === 'success');
+  ok('ActionPlan: page_state captured', observation.page_state !== null);
+
+  // Verify DOM was actually modified
+  const fullname = await page.$eval('#fullname', el => el.value);
+  ok('ActionPlan DOM: name filled', fullname === 'Kamaljeet Singh');
+
+  const category = await page.$eval('#category', el => el.value);
+  ok('ActionPlan DOM: category selected', category !== '');
+
+  // Execute a graph plan with checkpoint
+  const obs2 = await page.evaluate(async () => {
+    const graphPlan = {
+      plan_id: 'graph_test',
+      session_id: 'gs1',
+      version: 2,
+      entry_node: 'fill_dob',
+      nodes: {
+        fill_dob: { type: 'action', action: { action: 'fill_text', target: { semantic_key: 'dob' }, value: '15-03-1990', timeout_ms: 3000 } },
+        cp: { type: 'checkpoint', checkpoint: { checkpoint_id: 'personal_done', label: 'Personal details complete', save_state: false } },
+        done: { type: 'terminal', terminal: { status: 'complete', reason: null } },
+      },
+      edges: [
+        { from: 'fill_dob', to: 'cp', condition: 'success' },
+        { from: 'cp', to: 'done', condition: 'success' },
+        { from: 'fill_dob', to: 'fail', condition: 'failure' },
+      ]
+    };
+    return await window.ccRunner.execute(graphPlan);
+  });
+
+  ok('Graph plan: completed', obs2.execution_path.some(e => e.node_id === 'done'));
+  ok('Graph plan: checkpoint recorded', obs2.checkpoints_reached.includes('personal_done'));
+
+  // Test: failed target reports error properly
+  const obs3 = await page.evaluate(async () => {
+    return await window.ccRunner.executeLinear({
+      plan_id: 'fail_test',
+      actions: [
+        { action: 'fill_text', target: { field_id: 'nonexistent_field_xyz' }, value: 'X', timeout_ms: 1000 },
+      ]
+    });
+  });
+  ok('Failed plan: error reported', obs3.execution_path[0].status === 'failed');
+  ok('Failed plan: target_not_resolved error', obs3.execution_path[0].error && obs3.execution_path[0].error.includes('target_not_resolved'));
+
+  await page.close();
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // RUNNER
 // ═══════════════════════════════════════════════════════════════════════
@@ -445,6 +530,7 @@ try {
   await testMultiStep(browser);
   await testAngularWidgets(browser);
   await testPageModel(browser);
+  await testActionPlanRunner(browser);
 
 } catch (e) {
   console.error('\n🔴 Browser launch failed:', e.message);

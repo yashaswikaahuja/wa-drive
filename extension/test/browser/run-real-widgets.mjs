@@ -52,6 +52,8 @@ const SHARED_SCRIPTS = [
   'shared/select-apply.js',
   'models/ir.js',
   'capabilities/registry.js',
+  'runtime/resolver.js',
+  'runtime/runner.js',
   'autofill/plugins/interface.js',
   'autofill/plugins/cascade-select.js',
   'autofill/plugins/ng-dropdown.js',

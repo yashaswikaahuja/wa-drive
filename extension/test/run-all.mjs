@@ -16,6 +16,7 @@ const suites = [
   { name: 'Mapping Guard Tests', cmd: 'node extension/test/test-mapping-guards.js' },
   { name: 'Model IR Tests', cmd: 'node extension/test/test-models.js' },
   { name: 'Capability Tests', cmd: 'node extension/test/test-capabilities.js' },
+  { name: 'Runner Tests', cmd: 'node extension/test/test-runner.js' },
   { name: 'Browser Tests', cmd: 'node extension/test/browser/run.mjs' },
   { name: 'Real Widget Tests', cmd: 'node extension/test/browser/run-real-widgets.mjs' },
 ];
