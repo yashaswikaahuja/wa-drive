@@ -107,6 +107,33 @@ function fuzzyMatch(formFields, profile) {
       // Skip OTHER checkboxes — non-agreement boxes need explicit profile data which we don't have
       continue;
     }
+
+    // ── File input matching ──────────────────────────────────────────────
+    if (field.type === 'file') {
+      // Match file inputs to profile file keys by label
+      var fileAliases = {
+        photo: ['photo','photograph','passport photo','applicant photo','image','profile photo','customer photograph'],
+        signature: ['signature','sign','applicant signature','digital signature'],
+        aadhaar_doc: ['aadhaar','aadhar','aadhaar document','aadhaar card','uid'],
+        pan_doc: ['pan','pan card','pan document'],
+        certificate: ['certificate','marksheet','mark sheet','passing certificate','degree certificate'],
+        resume: ['resume','cv','curriculum vitae','bio data'],
+        passport_doc: ['passport','passport document'],
+        license_doc: ['driving license','licence','dl'],
+        utility_bill: ['utility bill','electricity bill','address proof'],
+      };
+      var fileLabelLower = (field.label || '').toLowerCase();
+      var fileIdentLower = ident.toLowerCase();
+      for (var [fileKey, fileLabels] of Object.entries(fileAliases)) {
+        if (!profile[fileKey]) continue;
+        if (fileLabels.some(function(a) { return fileLabelLower.includes(a) || fileIdentLower.includes(a.replace(/\s+/g, '_')); })) {
+          mapping[field.selector] = { value: profile[fileKey], type: 'file' };
+          break;
+        }
+      }
+      continue; // Don't fall through to text matching for file inputs
+    }
+
     var isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     var isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
@@ -364,7 +391,7 @@ RULES:
 - For address parts: use "village", "post_office", "police_station", "block", "sub_division", "district", "state", "pincode" as available
 - Only use "address" for full address text fields
 - Confirm/retype fields → same key as primary field
-- Skip: captcha, OTP, verification code, password, file upload
+- Skip: captcha, OTP, verification code, password
 - Use EXACT profile key names from the list below
 
 Form fields:

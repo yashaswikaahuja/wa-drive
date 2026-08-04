@@ -38,7 +38,7 @@ function extractFormFieldsWithFingerprint() {
   // ── Scan standard inputs ──
   const inputs = document.querySelectorAll(
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
-    'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
+    'input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
   );
 
   // ── Group radios and checkboxes by name ──
@@ -48,7 +48,7 @@ function extractFormFieldsWithFingerprint() {
   let idx = 0;
   inputs.forEach((el) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' ||
-        el.type === 'search' || el.type === 'password' || el.type === 'file' ||
+        el.type === 'search' || el.type === 'password' ||
         el.type === 'image' || el.type === 'reset') return;
     if (isInSkipContext(el)) return;
     // Skip inputs that are clearly search/filter (by name/id/class)

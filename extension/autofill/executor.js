@@ -667,6 +667,47 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         if (!booleanLike.includes(value.toLowerCase())) { console.debug('[CC] skipped checkbox with non-boolean value:', value); return 0; }
         const truthy = ['yes','true','1','checked','on'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
+      } else if (el.type === 'file') {
+        // ── File input handling (sync path) ──────────────────────────────────
+        // URL-based file fetch is handled in the async sequential loop.
+        // This path handles: base64 data URIs, empty values, filename hints.
+        if (!value) {
+          el.click();
+          console.debug('[CC] file: no value, clicked to open dialog:', selector);
+          return 1;
+        }
+        if (value.startsWith('data:')) {
+          // Base64 data URI
+          try {
+            const [meta, b64] = value.split(',');
+            const mime = meta.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
+            const ext = mime.split('/')[1] || 'bin';
+            const fileName = (filledBySource[selector]?.label || 'file').replace(/[^a-z0-9]/gi, '_') + '.' + ext;
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const file = new File([bytes], fileName, { type: mime, lastModified: Date.now() });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            el.files = dt.files;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            console.debug('[CC] file assigned (base64):', selector, fileName, file.size, 'bytes');
+            return 1;
+          } catch (e) {
+            el.click();
+            console.debug('[CC] file base64 error:', e.message, '— opened dialog');
+            return 1;
+          }
+        }
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          // URL fetch handled in sequential loop — should not reach here
+          console.debug('[CC] file URL should be handled in sequential loop:', selector);
+          return 0; // Signal to sequential loop to handle async
+        }
+        // Filename hint — click to open dialog
+        el.click();
+        console.debug('[CC] file: filename hint, clicked dialog:', selector, value);
+        return 1;
       } else if (el._flatpickr || el.classList.contains('flatpickr-input')) {
         // ── flatpickr datepicker ─────────────────────────────────────────────
         // flatpickr attaches _flatpickr instance to the input. Use its API.
@@ -924,6 +965,31 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           const _r = fillOne(selector, value, type) || 0;
           filled += _r;
           _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'no-option', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+        }
+        await new Promise(r => setTimeout(r, 200));
+      } else if (el && el.type === 'file' && value && (value.startsWith('http://') || value.startsWith('https://'))) {
+        // ── File input with URL — async fetch and assign ─────────────────────
+        try {
+          const resp = await fetch(value);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const fileName = value.split('/').pop().split('?')[0] || 'document';
+            const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream', lastModified: Date.now() });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            el.files = dt.files;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            filled += 1;
+            console.debug('[CC] file URL assigned:', selector, fileName, file.size, 'bytes');
+            _ccRecords.push({ selector, value, type: 'file', result: 'filled', strategy: 'file-url-fetch', fileName, fileSize: file.size, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          } else {
+            // Fetch failed — click to open dialog
+            el.click();
+            _ccRecords.push({ selector, value, type: 'file', result: 'waiting_human', failReason: 'fetch-' + resp.status, strategy: 'file-click', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          }
+        } catch (e) {
+          el.click();
+          _ccRecords.push({ selector, value, type: 'file', result: 'waiting_human', failReason: e.message, strategy: 'file-click', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
         }
         await new Promise(r => setTimeout(r, 200));
       } else {
