@@ -252,6 +252,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         : tagName === 'mat-checkbox' ? 'mat-checkbox'
         : tagName === 'mat-radio-button' ? 'mat-radio'
         : (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select'))) ? 'ng-dropdown'
+        : (tagName !== 'input' && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) ? 'ng-dropdown'
         : el.type || 'text';
 
       // Portal adapter replay for ng-dropdown and similar custom components
@@ -769,6 +770,11 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         const _tag = el.tagName.toLowerCase();
         if (_tag === 'ng-select' || (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown')))) {
           isNgDropdown = true;
+        }
+        // Any non-native element with role=combobox/listbox is a custom dropdown → use plugin
+        if (!isNgDropdown && _tag !== 'select' && _tag !== 'input' && _tag !== 'mat-select') {
+          const _role = el.getAttribute('role');
+          if (_role === 'combobox' || _role === 'listbox') isNgDropdown = true;
         }
       }
 

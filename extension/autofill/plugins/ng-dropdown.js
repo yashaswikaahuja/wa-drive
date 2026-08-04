@@ -10,8 +10,8 @@
  */
 
 var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '[tabindex]'];
-var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.dropdown-item'];
-var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', 'ul', 'cdk-overlay-container'];
+var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.dropdown-item', '.option', '[role="option"]'];
+var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', 'ul', 'cdk-overlay-container'];
 
 // Search for option items using multiple selectors (fallback when no adapter)
 function findOptionsInContainer(container, optSel, isVisible) {
@@ -33,8 +33,12 @@ var NgDropdownPlugin = {
   supports(el, fieldContext) {
     if (!el) return false;
     if (fieldContext.type === 'ng-dropdown') return true;
-    if (el.classList && el.classList.contains('ng-dropdown')) return true;
+    if (fieldContext.type === 'mat-select') return true;  // Custom comboboxes are typed mat-select by extractor
+    if (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select'))) return true;
     if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select'))) return true;
+    // Any non-native element with role=combobox/listbox
+    const _tag = el.tagName.toLowerCase();
+    if (_tag !== 'select' && _tag !== 'input' && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) return true;
     return false;
   },
 
@@ -81,16 +85,44 @@ var NgDropdownPlugin = {
           var container = document.querySelector(adapter.optionsContainer);
           if (container) opts = findOptionsInContainer(container, optSel, isVisible);
         }
-        // Try overlay selectors
+        // Try sibling/nearby containers first (most likely to be the related panel)
         if (opts.length === 0) {
+          // Check data-owner attribute (common pattern: panel has data-owner="elementId")
+          var ownedPanel = el.id ? document.querySelector('[data-owner="' + el.id + '"]') : null;
+          if (ownedPanel) opts = findOptionsInContainer(ownedPanel, optSel, isVisible);
+          // Check next sibling
+          if (opts.length === 0 && el.nextElementSibling) {
+            opts = findOptionsInContainer(el.nextElementSibling, optSel, isVisible);
+          }
+          // Check parent's next sibling (widget wrapper pattern)
+          if (opts.length === 0 && el.parentElement && el.parentElement.nextElementSibling) {
+            opts = findOptionsInContainer(el.parentElement.nextElementSibling, optSel, isVisible);
+          }
+          // Check inside parent (panel might be a sibling child)
+          if (opts.length === 0 && el.parentElement) {
+            var siblings = Array.from(el.parentElement.children).filter(function(c) { return c !== el; });
+            for (var si = 0; si < siblings.length; si++) {
+              opts = findOptionsInContainer(siblings[si], optSel, isVisible);
+              if (opts.length > 0) break;
+            }
+          }
+        }
+        // Fallback: try overlay selectors globally (with proximity ranking)
+        if (opts.length === 0) {
+          var elRect = el.getBoundingClientRect();
+          var bestOpts = [], bestDist = Infinity;
           for (const oSel of OVERLAY_SELECTORS) {
             var containers = document.querySelectorAll(oSel);
             for (const c of containers) {
               var items = findOptionsInContainer(c, optSel, isVisible);
-              if (items.length > 0) { opts = items; break; }
+              if (items.length > 0) {
+                var cRect = c.getBoundingClientRect();
+                var dist = Math.abs(cRect.left - elRect.left) + Math.abs(cRect.top - elRect.bottom);
+                if (dist < bestDist) { bestDist = dist; bestOpts = items; }
+              }
             }
-            if (opts.length > 0) break;
           }
+          opts = bestOpts;
         }
         // Try inside the element itself
         if (opts.length === 0) {
