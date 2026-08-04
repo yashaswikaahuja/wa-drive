@@ -17,6 +17,7 @@ const suites = [
   { name: 'Model IR Tests', cmd: 'node extension-dev/tests/test-models.js' },
   { name: 'Capability Tests', cmd: 'node extension-dev/tests/test-capabilities.js' },
   { name: 'Runner Tests', cmd: 'node extension-dev/tests/test-runner.js' },
+  { name: 'Knowledge Store Tests', cmd: 'node extension-dev/tests/test-knowledge-store.js' },
   { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.mjs' },
   { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs' },
 ];

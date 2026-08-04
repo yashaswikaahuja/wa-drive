@@ -21,7 +21,9 @@ import sessionsRouter from './routes/sessions.js';
 import correctionsRouter from './routes/corrections.js';
 import trainingRouter from './routes/training.js';
 import agentRouter from './routes/agent.js';
+import knowledgeRouter from './routes/knowledge.js';
 import { ensureSchema } from './store.js';
+import { ensureKnowledgeSchema } from './knowledge-store.js';
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();
@@ -53,6 +55,7 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/corrections', correctionsRouter);
 app.use('/api/training', trainingRouter);
 app.use('/api/agent', agentRouter);
+app.use('/api/knowledge', knowledgeRouter);
 
 // 404 fallthrough
 app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
@@ -76,4 +79,5 @@ app.listen(PORT, () => {
   // Ensure the shared document store table exists (mappings/adapters now live in Postgres,
   // so multiple replicas share one source of truth). Non-fatal: routes also ensure on first use.
   ensureSchema().catch((e) => console.error('[extension-service] ensureSchema on boot failed:', e.message));
+  ensureKnowledgeSchema().catch((e) => console.error('[extension-service] knowledge schema on boot failed:', e.message));
 });
