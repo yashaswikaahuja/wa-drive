@@ -735,7 +735,7 @@ fillBtn.addEventListener('click', async () => {
                 if (!target.field_id && field.name) target.field_id = 'name:' + field.name;
                 const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(field.type) : 'text';
                 if (grp === 'dropdown') {
-                  actions.push({ action: 'select_option', target, value: mapping[sel].value, timeout_ms: 8000 });
+                  actions.push({ action: 'select_option', target, value: mapping[sel].value, timeout_ms: 12000 });
                 } else {
                   actions.push({ action: 'fill_text', target, value: mapping[sel].value, timeout_ms: 5000 });
                 }
@@ -769,7 +769,7 @@ fillBtn.addEventListener('click', async () => {
                 plan_id: 'popup_fill_' + Date.now(),
                 session_id: semanticFormKey || 'unknown',
                 actions,
-              }, { interActionDelay: 150 });
+              }, { interActionDelay: 200 });
               const path = runnerObservation.execution_path.filter(e => e.node_id.startsWith('n'));
               for (let i = 0; i < path.length && i < actionFieldMap.length; i++) {
                 if (path[i].status === 'success') runnerSucceeded.add(actionFieldMap[i]);

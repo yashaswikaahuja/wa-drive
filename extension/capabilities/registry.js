@@ -244,7 +244,7 @@
       if (!el) return { status: 'failed', error: 'element_not_found' };
 
       var value = action.value || '';
-      var timeoutMs = action.timeout_ms || 5000;
+      var timeoutMs = action.timeout_ms || 10000;
       var deadline = Date.now() + timeoutMs;
 
       // Poll for matching option (handles cascade selects where options load async)
@@ -258,7 +258,14 @@
           await new Promise(function (r) { setTimeout(r, 300); });
           continue;
         }
-        // Has multiple options but none match — fail immediately
+        // Has multiple options but none match — wait a bit more (DWR can be slow)
+        await new Promise(function (r) { setTimeout(r, 500); });
+        // Re-check after wait
+        options = Array.from(el.options);
+        opt = window.ccMatchOption ? window.ccMatchOption(value, options) : null;
+        if (opt) break;
+        // Still no match — keep polling if we have time
+        if (options.length <= 1) continue;
         break;
       }
 
