@@ -89,7 +89,7 @@ function fuzzyMatch(formFields, profile) {
     if (isTwin) continue;
 
     // Skip yes/no question radio buttons (not data fields)
-    if (field.type === 'radio' && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
+    if ((field.type === 'radio' || field.type === 'radio-group') && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
 
     // Auto-check agreement / declaration / consent checkboxes (also mat-checkbox)
     if (field.type === 'checkbox' || field.type === 'mat-checkbox') {
@@ -222,17 +222,28 @@ function fuzzyMatch(formFields, profile) {
       if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
       // For radio buttons: match by checking if this option's label contains the profile value
-      if (field.type === 'radio') {
+      if (field.type === 'radio' || field.type === 'radio-group') {
         var profileVal = profile[profileKey].toLowerCase().replace(/[^a-z0-9]/g, '');
-        var optLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
         // Check if this radio group name/ident matches the profileKey aliases
-        var groupIdent = [field.name, field.id].filter(Boolean).join(' ').toLowerCase().replace(/[-_\s]/g, '');
+        var groupIdent = [field.name, field.id, field.label].filter(Boolean).join(' ').toLowerCase().replace(/[-_\s]/g, '');
         var groupMatches = aliases.some(a => groupIdent.includes(a.replace(/[^a-z0-9]/g, '')));
-        // Also check if the option label directly contains the profile value
-        var labelMatches = optLabel.includes(profileVal) || profileVal.includes(optLabel);
-        if ((groupMatches || labelMatches) && optLabel.includes(profileVal)) {
-          mapping[field.selector] = { value: 'true', type: 'radio-click' };
-          break;
+        if (!groupMatches) { continue; }
+
+        // For radio-group: iterate options to find the matching one
+        if (field.type === 'radio-group' && field.options && field.optionSelectors) {
+          for (var oi = 0; oi < field.options.length; oi++) {
+            var optText = field.options[oi].toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (optText.includes(profileVal) || profileVal.includes(optText)) {
+              mapping[field.optionSelectors[oi]] = { value: field.options[oi], type: 'radio-click' };
+              break;
+            }
+          }
+        } else {
+          // Single radio field (type === 'radio')
+          var optLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (optLabel.includes(profileVal) || profileVal.includes(optLabel)) {
+            mapping[field.selector] = { value: 'true', type: 'radio-click' };
+          }
         }
         continue; // don't fall through to text matching for radio buttons
       }
