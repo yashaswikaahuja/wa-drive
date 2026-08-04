@@ -17,6 +17,7 @@ const suites = [
   { name: 'Model IR Tests', cmd: 'node extension/test/test-models.js' },
   { name: 'Capability Tests', cmd: 'node extension/test/test-capabilities.js' },
   { name: 'Browser Tests', cmd: 'node extension/test/browser/run.mjs' },
+  { name: 'Real Widget Tests', cmd: 'node extension/test/browser/run-real-widgets.mjs' },
 ];
 
 let allPass = true;

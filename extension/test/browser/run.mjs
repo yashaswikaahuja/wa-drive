@@ -273,9 +273,9 @@ async function testMultiStep(browser) {
 }
 
 async function testAngularWidgets(browser) {
-  console.log('\n═══ Suite: Angular Widgets (angular-form.html) ═══');
+  console.log('\n═══ Suite: Simulated Angular Widgets (CSS mockup — NOT real Angular) ═══');
   const page = await browser.newPage();
-  await page.goto(`file://${FIXTURES}/angular-form.html`);
+  await page.goto(`file://${FIXTURES}/simulated-angular-form.html`);
   await injectExtension(page);
 
   // ── Extraction ──────────────────────────────────────────────────

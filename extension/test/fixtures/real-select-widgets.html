@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Real Select Widgets — Select2, Choices.js, jQuery UI</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 20px auto; padding: 20px; }
+  .field { margin: 20px 0; }
+  label { display: block; font-weight: bold; margin-bottom: 6px; }
+  select, input { font-size: 14px; }
+  h1 { color: #333; }
+  h2 { color: #555; margin-top: 30px; }
+  .info { font-size: 12px; color: #888; margin-top: 4px; }
+  .select2-container { width: 300px !important; }
+  #output { margin-top: 30px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Real Select Widget Fixture</h1>
+<p>These use <strong>real libraries</strong> loaded from CDN — not div-based simulations.</p>
+
+<!-- ═══ SECTION 1: Select2 ═════════════════════════════════════════ -->
+<h2>Select2 (jQuery plugin)</h2>
+
+<div class="field">
+  <label for="state-select2">State (Select2 single)</label>
+  <select id="state-select2" style="width: 300px;">
+    <option value="">Select State</option>
+    <option value="bihar">Bihar</option>
+    <option value="up">Uttar Pradesh</option>
+    <option value="mp">Madhya Pradesh</option>
+    <option value="mh">Maharashtra</option>
+    <option value="ka">Karnataka</option>
+    <option value="tn">Tamil Nadu</option>
+    <option value="gj">Gujarat</option>
+    <option value="rj">Rajasthan</option>
+  </select>
+  <div class="info">Real Select2 with search. Type to filter. Uses portal overlay.</div>
+</div>
+
+<div class="field">
+  <label for="skills-select2">Skills (Select2 multiple)</label>
+  <select id="skills-select2" multiple style="width: 300px;">
+    <option value="html">HTML</option>
+    <option value="css">CSS</option>
+    <option value="js">JavaScript</option>
+    <option value="python">Python</option>
+    <option value="java">Java</option>
+    <option value="sql">SQL</option>
+    <option value="react">React</option>
+    <option value="angular">Angular</option>
+  </select>
+  <div class="info">Real Select2 multi-select with tags.</div>
+</div>
+
+<div class="field">
+  <label for="district-select2">District (Select2 — cascading)</label>
+  <select id="district-select2" style="width: 300px;" disabled>
+    <option value="">Select State first</option>
+  </select>
+  <div class="info">Populated when state changes. Real AJAX-style cascade.</div>
+</div>
+
+<!-- ═══ SECTION 2: Choices.js ══════════════════════════════════════ -->
+<h2>Choices.js</h2>
+
+<div class="field">
+  <label for="category-choices">Category (Choices.js single)</label>
+  <select id="category-choices">
+    <option value="">Select Category</option>
+    <option value="general">General</option>
+    <option value="obc">OBC</option>
+    <option value="sc">SC</option>
+    <option value="st">ST</option>
+    <option value="ews">EWS</option>
+  </select>
+  <div class="info">Real Choices.js with search and custom rendering.</div>
+</div>
+
+<div class="field">
+  <label for="languages-choices">Languages Known (Choices.js multiple)</label>
+  <select id="languages-choices" multiple>
+    <option value="hindi">Hindi</option>
+    <option value="english">English</option>
+    <option value="bengali">Bengali</option>
+    <option value="tamil">Tamil</option>
+    <option value="telugu">Telugu</option>
+    <option value="marathi">Marathi</option>
+    <option value="gujarati">Gujarati</option>
+  </select>
+  <div class="info">Real Choices.js multi-select.</div>
+</div>
+
+<!-- ═══ SECTION 3: Native select (control) ═════════════════════════ -->
+<h2>Native &lt;select&gt; (baseline)</h2>
+
+<div class="field">
+  <label for="gender-native">Gender (plain native)</label>
+  <select id="gender-native">
+    <option value="">Select Gender</option>
+    <option value="male">Male</option>
+    <option value="female">Female</option>
+    <option value="other">Other</option>
+  </select>
+  <div class="info">Plain native select for comparison.</div>
+</div>
+
+<!-- ═══ Value output ═══════════════════════════════════════════════ -->
+<div id="output">
+  <strong>Values:</strong><br>
+  <span id="out-state">state: (empty)</span><br>
+  <span id="out-skills">skills: (empty)</span><br>
+  <span id="out-district">district: (empty)</span><br>
+  <span id="out-category">category: (empty)</span><br>
+  <span id="out-languages">languages: (empty)</span><br>
+  <span id="out-gender">gender: (empty)</span><br>
+</div>
+
+<!-- ═══ Scripts ═════════════════════════════════════════════════════ -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+
+<script>
+// ── Select2 initialization ───────────────────────────────────────────
+$('#state-select2').select2({ placeholder: 'Search state...' });
+$('#skills-select2').select2({ placeholder: 'Search skills...', closeOnSelect: false });
+$('#district-select2').select2({ placeholder: 'Select State first' });
+
+// Cascade: state → district
+var districtsByState = {
+  bihar: ['Patna', 'Gaya', 'Nalanda', 'Bhagalpur', 'Muzaffarpur'],
+  up: ['Lucknow', 'Varanasi', 'Agra', 'Allahabad', 'Kanpur'],
+  mp: ['Bhopal', 'Indore', 'Jabalpur', 'Gwalior'],
+  mh: ['Mumbai', 'Pune', 'Nagpur', 'Nashik', 'Aurangabad'],
+  ka: ['Bangalore', 'Mysore', 'Hubli', 'Mangalore'],
+  tn: ['Chennai', 'Coimbatore', 'Madurai', 'Salem'],
+  gj: ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot'],
+  rj: ['Jaipur', 'Jodhpur', 'Udaipur', 'Kota'],
+};
+
+$('#state-select2').on('select2:select', function(e) {
+  var state = e.params.data.id;
+  document.getElementById('out-state').textContent = 'state: ' + state;
+
+  var $dist = $('#district-select2');
+  $dist.prop('disabled', false).empty();
+  $dist.append(new Option('Select District', '', true, true));
+  (districtsByState[state] || []).forEach(function(d) {
+    $dist.append(new Option(d, d.toLowerCase().replace(/\s/g, '_')));
+  });
+  $dist.trigger('change');
+});
+
+$('#district-select2').on('select2:select', function(e) {
+  document.getElementById('out-district').textContent = 'district: ' + e.params.data.id;
+});
+
+$('#skills-select2').on('change', function() {
+  document.getElementById('out-skills').textContent = 'skills: ' + ($(this).val() || []).join(', ');
+});
+
+// ── Choices.js initialization ────────────────────────────────────────
+var categoryChoices = new Choices('#category-choices', {
+  searchEnabled: true,
+  placeholder: true,
+  placeholderValue: 'Search category...',
+  itemSelectText: '',
+});
+
+var languageChoices = new Choices('#languages-choices', {
+  removeItemButton: true,
+  placeholder: true,
+  placeholderValue: 'Search languages...',
+});
+
+document.getElementById('category-choices').addEventListener('change', function() {
+  document.getElementById('out-category').textContent = 'category: ' + this.value;
+});
+
+document.getElementById('languages-choices').addEventListener('change', function() {
+  var opts = Array.from(this.selectedOptions || this.options).filter(o => o.selected).map(o => o.value);
+  document.getElementById('out-languages').textContent = 'languages: ' + opts.join(', ');
+});
+
+// ── Native select ────────────────────────────────────────────────────
+document.getElementById('gender-native').addEventListener('change', function() {
+  document.getElementById('out-gender').textContent = 'gender: ' + this.value;
+});
+</script>
+</body>
+</html>
