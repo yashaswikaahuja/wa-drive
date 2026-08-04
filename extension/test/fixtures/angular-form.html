@@ -1,0 +1,219 @@
+<html>
+<head>
+<meta charset="utf-8">
+<title>Widget Test Form | Angular-style</title>
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 20px auto; }
+  .field { margin: 12px 0; }
+  label, mat-label, .label { display: block; font-size: 13px; margin-bottom: 3px; }
+  /* mat-form-field simulation */
+  mat-form-field { display: block; margin: 12px 0; border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
+  mat-form-field mat-label { color: #666; font-size: 12px; }
+  mat-form-field input, mat-form-field mat-select { border: none; outline: none; width: 100%; padding: 4px 0; font-size: 14px; }
+  /* mat-select simulation */
+  mat-select { display: block; cursor: pointer; position: relative; }
+  mat-select .mat-select-value { padding: 4px 0; }
+  mat-select .mat-select-panel { display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #ccc; width: 100%; z-index: 100; }
+  mat-select.open .mat-select-panel { display: block; }
+  mat-option { display: block; padding: 8px; cursor: pointer; }
+  mat-option:hover { background: #eee; }
+  mat-option.selected { background: #e3f2fd; }
+  /* ng-select simulation */
+  .ng-select { border: 1px solid #ccc; border-radius: 4px; padding: 6px 10px; cursor: pointer; position: relative; }
+  .ng-select .ng-select-container { display: flex; align-items: center; }
+  .ng-select .ng-value-container { flex: 1; }
+  .ng-select .ng-placeholder { color: #999; }
+  .ng-select .ng-dropdown-panel { display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; z-index: 100; }
+  .ng-select.ng-select-opened .ng-dropdown-panel { display: block; }
+  .ng-option { padding: 8px 10px; cursor: pointer; }
+  .ng-option:hover { background: #f5f5f5; }
+  .ng-option.ng-option-selected { background: #e8f5e9; }
+  /* mat-datepicker simulation */
+  .mat-datepicker-input { border: 1px solid #ccc; padding: 8px; border-radius: 4px; }
+  .mat-datepicker-toggle { cursor: pointer; margin-left: 4px; }
+  /* mat-checkbox simulation */
+  mat-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 8px 0; }
+  mat-checkbox .mat-checkbox-inner-container { width: 18px; height: 18px; border: 2px solid #666; border-radius: 2px; }
+  mat-checkbox.mat-checkbox-checked .mat-checkbox-inner-container { background: #4caf50; border-color: #4caf50; }
+  /* Angular button */
+  button[mat-raised-button] { background: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+  button[mat-raised-button]:disabled { background: #bbb; cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<h1>Angular Material Form (Simulated)</h1>
+<form id="angularForm">
+
+  <!-- mat-form-field with text input -->
+  <mat-form-field>
+    <mat-label>Applicant Name</mat-label>
+    <input matInput id="applicantName" name="applicantName" type="text" placeholder="Enter full name">
+  </mat-form-field>
+
+  <!-- mat-form-field with date input (mat-datepicker) -->
+  <mat-form-field>
+    <mat-label>Date of Birth</mat-label>
+    <input matInput id="dob" name="dob" type="text" placeholder="dd-mm-yyyy" class="mat-datepicker-input" matdatepicker>
+    <span class="mat-datepicker-toggle">📅</span>
+  </mat-form-field>
+
+  <!-- mat-select (Angular Material dropdown) -->
+  <mat-form-field>
+    <mat-label>Gender</mat-label>
+    <mat-select id="genderSelect" formcontrolname="gender" role="combobox" aria-label="Gender">
+      <div class="mat-select-value">Select Gender</div>
+      <div class="mat-select-panel">
+        <mat-option value="male">Male</mat-option>
+        <mat-option value="female">Female</mat-option>
+        <mat-option value="other">Other</mat-option>
+      </div>
+    </mat-select>
+  </mat-form-field>
+
+  <!-- ng-select (Angular ng-select dropdown) -->
+  <div class="field">
+    <label>State</label>
+    <div class="ng-select" id="stateNgSelect" role="combobox" aria-label="State">
+      <div class="ng-select-container">
+        <div class="ng-value-container">
+          <div class="ng-placeholder">Select State</div>
+        </div>
+      </div>
+      <div class="ng-dropdown-panel">
+        <div class="ng-option" data-value="bihar">Bihar</div>
+        <div class="ng-option" data-value="up">Uttar Pradesh</div>
+        <div class="ng-option" data-value="mp">Madhya Pradesh</div>
+        <div class="ng-option" data-value="mh">Maharashtra</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Another ng-select for District (cascade-style) -->
+  <div class="field">
+    <label>District</label>
+    <div class="ng-select" id="districtNgSelect" role="combobox" aria-label="District">
+      <div class="ng-select-container">
+        <div class="ng-value-container">
+          <div class="ng-placeholder">Select District</div>
+        </div>
+      </div>
+      <div class="ng-dropdown-panel">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- mat-checkbox -->
+  <mat-checkbox id="declarationCheck" formcontrolname="declaration">
+    <div class="mat-checkbox-inner-container"></div>
+    <span>I declare all information is true and correct</span>
+  </mat-checkbox>
+
+  <!-- Native input types for coverage -->
+  <mat-form-field>
+    <mat-label>Mobile Number</mat-label>
+    <input matInput id="mobile" name="mobile" type="tel" placeholder="10-digit mobile" maxlength="10">
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Email ID</mat-label>
+    <input matInput id="email" name="email" type="email" placeholder="email@example.com">
+  </mat-form-field>
+
+  <mat-form-field>
+    <mat-label>Aadhaar Number</mat-label>
+    <input matInput id="aadhaar" name="aadhaar" type="text" placeholder="12-digit Aadhaar" maxlength="12" aria-describedby="aadhaar-help">
+    <span id="aadhaar-help" style="font-size:11px; color:#999;">Enter without spaces</span>
+  </mat-form-field>
+
+  <!-- File upload -->
+  <div class="field">
+    <label for="photo">Upload Photo</label>
+    <input type="file" id="photo" name="photo" accept="image/*">
+  </div>
+
+  <!-- Angular-style buttons -->
+  <div style="margin-top: 20px; display: flex; gap: 12px;">
+    <button type="button" mat-raised-button id="saveDraft">Save Draft</button>
+    <button type="submit" mat-raised-button id="submitBtn">Submit Application</button>
+  </div>
+</form>
+
+<script>
+// ── mat-select behavior ──────────────────────────────────────────────
+document.querySelectorAll('mat-select').forEach(function(sel) {
+  sel.addEventListener('click', function() {
+    sel.classList.toggle('open');
+  });
+  sel.querySelectorAll('mat-option').forEach(function(opt) {
+    opt.addEventListener('click', function(e) {
+      e.stopPropagation();
+      sel.querySelectorAll('mat-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      sel.querySelector('.mat-select-value').textContent = opt.textContent;
+      sel.classList.remove('open');
+      sel.setAttribute('data-value', opt.getAttribute('value'));
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+});
+
+// ── ng-select behavior ───────────────────────────────────────────────
+document.querySelectorAll('.ng-select').forEach(function(sel) {
+  sel.querySelector('.ng-select-container').addEventListener('click', function() {
+    sel.classList.toggle('ng-select-opened');
+  });
+  sel.querySelectorAll('.ng-option').forEach(function(opt) {
+    opt.addEventListener('click', function(e) {
+      e.stopPropagation();
+      sel.querySelectorAll('.ng-option').forEach(o => o.classList.remove('ng-option-selected'));
+      opt.classList.add('ng-option-selected');
+      sel.querySelector('.ng-placeholder').textContent = opt.textContent;
+      sel.classList.remove('ng-select-opened');
+      sel.setAttribute('data-value', opt.getAttribute('data-value'));
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+});
+
+// ── ng-select cascade: state → district ──────────────────────────────
+var districtsByState = {
+  bihar: ['Patna', 'Gaya', 'Nalanda'],
+  up: ['Lucknow', 'Varanasi', 'Agra'],
+  mp: ['Bhopal', 'Indore', 'Jabalpur'],
+  mh: ['Mumbai', 'Pune', 'Nagpur'],
+};
+document.getElementById('stateNgSelect').addEventListener('change', function() {
+  var state = this.getAttribute('data-value');
+  var distPanel = document.querySelector('#districtNgSelect .ng-dropdown-panel');
+  distPanel.innerHTML = '';
+  (districtsByState[state] || []).forEach(function(d) {
+    var opt = document.createElement('div');
+    opt.className = 'ng-option';
+    opt.setAttribute('data-value', d.toLowerCase().replace(/\s/g, '_'));
+    opt.textContent = d;
+    opt.addEventListener('click', function(e) {
+      e.stopPropagation();
+      distPanel.querySelectorAll('.ng-option').forEach(o => o.classList.remove('ng-option-selected'));
+      opt.classList.add('ng-option-selected');
+      document.querySelector('#districtNgSelect .ng-placeholder').textContent = d;
+      document.getElementById('districtNgSelect').classList.remove('ng-select-opened');
+      document.getElementById('districtNgSelect').setAttribute('data-value', opt.getAttribute('data-value'));
+    });
+    distPanel.appendChild(opt);
+  });
+});
+
+// ── mat-checkbox behavior ────────────────────────────────────────────
+document.querySelectorAll('mat-checkbox').forEach(function(cb) {
+  cb.addEventListener('click', function() {
+    cb.classList.toggle('mat-checkbox-checked');
+    var checked = cb.classList.contains('mat-checkbox-checked');
+    cb.setAttribute('aria-checked', String(checked));
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+});
+</script>
+</body>
+</html>
