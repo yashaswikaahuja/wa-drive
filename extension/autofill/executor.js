@@ -247,9 +247,11 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       // Detect type from DOM directly (more reliable than passed type)
       const tagName = el.tagName.toLowerCase();
       const elType = tagName === 'select' ? 'select'
+        : tagName === 'ng-select' ? 'ng-dropdown'
         : tagName === 'mat-select' ? 'mat-select'
         : tagName === 'mat-checkbox' ? 'mat-checkbox'
         : tagName === 'mat-radio-button' ? 'mat-radio'
+        : (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select'))) ? 'ng-dropdown'
         : el.type || 'text';
 
       // Portal adapter replay for ng-dropdown and similar custom components
@@ -349,7 +351,8 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             // Priority 1: newly added node with visible options
             for (const node of addedNodes) {
               if (!isVisible(node)) continue;
-              const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              const _optQ = adapter.optionSelector || 'li,.ng-option,mat-option,.dropdown-item';
+              const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
               if (lis.length > 0) { activeOverlayRoot = node; break; }
             }
             // Priority 2: existing overlay nearest trigger with visible options
@@ -358,7 +361,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
               OVERLAY_TAGS.forEach(sel => {
                 try {
                   document.querySelectorAll(sel).forEach(node => {
-                    const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+                    const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
                     if (lis.length === 0) return;
                     const r = node.getBoundingClientRect();
                     const dist = Math.abs(r.left - trigRect.left) + Math.abs(r.top - trigRect.bottom);
@@ -373,7 +376,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             }
             // Priority 4: options already in DOM inside the root component
             if (!activeOverlayRoot) {
-              const rootLis = Array.from(root.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              const rootLis = Array.from(root.querySelectorAll(_optQ)).filter(o => isVisible(o));
               if (rootLis.length > 0) activeOverlayRoot = root;
             }
 
@@ -388,10 +391,10 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
               attempts++;
               // Search in overlay root, then root component, then document
               const searchRoot = activeOverlayRoot || root;
-              let opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              let opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter(o => isVisible(o));
               // Fallback: if root has no visible options, try document
               if (opts.length === 0 && searchRoot !== document) {
-                opts = Array.from(document.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
+                opts = Array.from(document.querySelectorAll(_optQ)).filter(o => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
@@ -742,7 +745,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   async function fillSequential() {
     for (const [selector, fieldData] of entries) {
       const { value, type } = fieldData;
-      const isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
+      let isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
       const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
       // Cascade treatment only applies to actual dropdowns (state→district→block
       // selects that load options via AJAX). A TEXT field labeled "district"
@@ -759,6 +762,14 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
       } else {
         el = document.querySelector(selector);
+      }
+
+      // Detect ng-dropdown from DOM (mapping type may be wrong, e.g. 'mat-select' for ng-select)
+      if (!isNgDropdown && el) {
+        const _tag = el.tagName.toLowerCase();
+        if (_tag === 'ng-select' || (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown')))) {
+          isNgDropdown = true;
+        }
       }
 
       // Scroll into view

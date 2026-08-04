@@ -205,10 +205,13 @@ function extractFormFieldsWithFingerprint() {
     if (/search|query|filter/i.test(meta)) return;
     const label = getLabel(el) || el.getAttribute('aria-label') || '';
     if (!isGoodLabel(label)) return;
+    // Detect ng-select vs true mat-select: ng-select uses class, mat-select uses custom tag
+    const _isNgSelect = el.tagName.toLowerCase() === 'ng-select' || el.classList.contains('ng-select') || el.classList.contains('ng-dropdown');
+    const _type = _isNgSelect ? 'ng-dropdown' : 'mat-select';
     const id = el.id || `combobox-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++, _el: el });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: _type, index: matIdx++, _el: el });
   });
 
   // ── Angular ng-select / ng-dropdown custom widgets ──
@@ -231,8 +234,14 @@ function extractFormFieldsWithFingerprint() {
   ngCandidates.forEach(el => {
     if (isInSkipContext(el)) return;
     // Skip if already captured (mat-select / select / ng-select case)
+    // Check: is this element itself already captured, OR is it inside an already-captured element?
     const skip = formFields.some(f => {
-      try { return el.matches(f.selector) || el.querySelector(f.selector); } catch { return false; }
+      try {
+        if (el.matches(f.selector)) return true;          // Same element
+        if (el.querySelector(f.selector)) return true;    // Contains captured element
+        if (el.closest(f.selector)) return true;          // Is inside a captured element
+        return false;
+      } catch { return false; }
     });
     if (skip) return;
     // Label resolution: ng-dropdown container often has its label as a CHILD

@@ -13,6 +13,19 @@ var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '
 var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.dropdown-item'];
 var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', 'ul', 'cdk-overlay-container'];
 
+// Search for option items using multiple selectors (fallback when no adapter)
+function findOptionsInContainer(container, optSel, isVisible) {
+  if (optSel) {
+    return Array.from(container.querySelectorAll(optSel)).filter(isVisible);
+  }
+  // Try each known option selector until we find visible options
+  for (var sel of OPTION_SELECTORS) {
+    var items = Array.from(container.querySelectorAll(sel)).filter(isVisible);
+    if (items.length > 0) return items;
+  }
+  return [];
+}
+
 var NgDropdownPlugin = {
   id: 'ng-dropdown',
   description: 'Angular custom ng-dropdown: auto-detect trigger/options, click to select',
@@ -66,14 +79,14 @@ var NgDropdownPlugin = {
         // Try adapter-specified container first
         if (adapter.optionsContainer) {
           var container = document.querySelector(adapter.optionsContainer);
-          if (container) opts = Array.from(container.querySelectorAll(optSel || 'li')).filter(isVisible);
+          if (container) opts = findOptionsInContainer(container, optSel, isVisible);
         }
         // Try overlay selectors
         if (opts.length === 0) {
           for (const oSel of OVERLAY_SELECTORS) {
             var containers = document.querySelectorAll(oSel);
             for (const c of containers) {
-              var items = Array.from(c.querySelectorAll(optSel || 'li')).filter(isVisible);
+              var items = findOptionsInContainer(c, optSel, isVisible);
               if (items.length > 0) { opts = items; break; }
             }
             if (opts.length > 0) break;
@@ -81,7 +94,7 @@ var NgDropdownPlugin = {
         }
         // Try inside the element itself
         if (opts.length === 0) {
-          opts = Array.from(el.querySelectorAll(optSel || 'li')).filter(isVisible);
+          opts = findOptionsInContainer(el, optSel, isVisible);
         }
 
         if (opts.length === 0 && attempts < 15) return; // keep waiting
