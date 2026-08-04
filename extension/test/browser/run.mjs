@@ -621,6 +621,72 @@ async function testRunnerPrimary(browser) {
   await page.close();
 }
 
+// ═══ Issue #81 Regression: Dropdowns must SELECT options, not just click ═══
+async function testDropdownSelection(browser) {
+  console.log('\n═══ Suite: Dropdown Selection (Issue #81 regression) ═══');
+
+  // Test 1: ng-select on simulated-angular-form.html
+  const page1 = await browser.newPage();
+  await page1.goto(`file://${FIXTURES}/simulated-angular-form.html`);
+  await injectExtension(page1);
+
+  const ngResult = await page1.evaluate(async () => {
+    const { formFields } = extractFormFieldsWithFingerprint();
+    const profile = { name: 'Test User', gender: 'Female', state: 'Bihar', district: 'Patna', mobile: '9876543210', email: 'test@test.com' };
+    const mapping = fuzzyMatch(formFields, profile);
+    const fbs = {};
+    for (const [sel, v] of Object.entries(mapping)) { const f = formFields.find(ff => ff.selector === sel); fbs[sel] = { label: f?.label || sel, profileKey: '' }; }
+    await fillFormFieldsSequential(mapping, fbs, {});
+    await new Promise(r => setTimeout(r, 6000));
+    return {
+      gender: document.querySelector('mat-select#genderSelect')?.getAttribute('data-value'),
+      state: document.querySelector('#stateNgSelect')?.getAttribute('data-value'),
+      district: document.querySelector('#districtNgSelect')?.getAttribute('data-value'),
+      // Check extractor doesn't produce duplicates for ng-select
+      ngFields: formFields.filter(f => /state/i.test(f.label)).length,
+    };
+  });
+
+  ok('mat-select selects option (Gender=female)', ngResult.gender === 'female', `got: ${ngResult.gender}`);
+  ok('ng-select selects option (State=bihar)', ngResult.state === 'bihar', `got: ${ngResult.state}`);
+  ok('ng-select cascade selects option (District=patna)', ngResult.district === 'patna', `got: ${ngResult.district}`);
+  ok('Extractor: no duplicate ng-select entries for State', ngResult.ngFields <= 2, `got: ${ngResult.ngFields} entries`);
+  await page1.close();
+
+  // Test 2: Native cascade select on cascade-select.html
+  const page2 = await browser.newPage();
+  await page2.goto(`file://${FIXTURES}/cascade-select.html`);
+  await injectExtension(page2);
+  // Add block/pincode aliases for this test
+  await page2.evaluate(() => {
+    window.ccSemanticAliases.merge({ block: ['block','tehsil'], pincode: ['pincode','pin'] });
+  });
+
+  const cascadeResult = await page2.evaluate(async () => {
+    const { formFields } = extractFormFieldsWithFingerprint();
+    const profile = { name: 'Test User', state: 'Bihar', district: 'Muzaffarpur', block: 'Kanti', pincode: '842001' };
+    const mapping = fuzzyMatch(formFields, profile);
+    const fbs = {};
+    for (const [sel, v] of Object.entries(mapping)) { const f = formFields.find(ff => ff.selector === sel); fbs[sel] = { label: f?.label || sel, profileKey: '' }; }
+    await fillFormFieldsSequential(mapping, fbs, {});
+    await new Promise(r => setTimeout(r, 8000));
+    return {
+      state: document.querySelector('#state')?.value,
+      district: document.querySelector('#district')?.value,
+      block: document.querySelector('#block')?.value,
+      districtOpts: document.querySelector('#district')?.options?.length || 0,
+      blockOpts: document.querySelector('#block')?.options?.length || 0,
+    };
+  });
+
+  ok('Native cascade: State selected (BR)', cascadeResult.state === 'BR', `got: ${cascadeResult.state}`);
+  ok('Native cascade: District options loaded', cascadeResult.districtOpts > 1, `opts: ${cascadeResult.districtOpts}`);
+  ok('Native cascade: District selected (Muzaffarpur)', cascadeResult.district === 'Muzaffarpur', `got: ${cascadeResult.district}`);
+  ok('Native cascade: Block options loaded', cascadeResult.blockOpts > 1, `opts: ${cascadeResult.blockOpts}`);
+  ok('Native cascade: Block selected (Kanti)', cascadeResult.block === 'Kanti', `got: ${cascadeResult.block}`);
+  await page2.close();
+}
+
 async function testPhase1Completeness(browser) {
   console.log('\n═══ Suite: Phase 1 Completeness (ng-select, mat-select, upload, human) ═══');
 
@@ -729,6 +795,7 @@ try {
   await testPageModel(browser);
   await testActionPlanRunner(browser);
   await testRunnerPrimary(browser);
+  await testDropdownSelection(browser);
   await testPhase1Completeness(browser);
 
 } catch (e) {
