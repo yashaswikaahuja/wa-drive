@@ -50,6 +50,7 @@ const SHARED_SCRIPTS = [
   'autofill/plugins/cascade-select.js',
   'autofill/plugins/ng-dropdown.js',
   'autofill/plugins/keystroke-input.js',
+  'runtime/plugin-bridge.js',
   'autofill/rule-engine.js',
   'autofill/extractor.js',
   'autofill/mapper.js',
@@ -507,6 +508,101 @@ async function testActionPlanRunner(browser) {
   await page.close();
 }
 
+async function testRunnerPrimary(browser) {
+  console.log('\n═══ Suite: Runner as Primary Execution Path ═══');
+  const page = await browser.newPage();
+  await page.goto(`file://${FIXTURES}/govt-form.html`);
+  await injectExtension(page);
+
+  // Simulate the production flow: extract → build ActionPlan → run → check fallback
+  const result = await page.evaluate(async () => {
+    // Extract fields (mimics popup.js production flow)
+    const { formFields, pageModel } = extractFormFieldsWithFingerprint();
+    const elements = formFields.map(f => document.querySelector(f.selector));
+    window.ccResolver.setPageContext(pageModel, elements);
+
+    // Build ActionPlan from a mock mapping (same as popup.js would)
+    const mapping = {};
+    const directChecks = [];
+    for (const f of formFields) {
+      if (f.label && f.label.includes('Full Name')) {
+        mapping[f.selector] = { value: 'Runner Primary Test', type: f.type };
+      }
+      if (f.type === 'dropdown' && f.label === 'Category') {
+        mapping[f.selector] = { value: 'OBC', type: f.type };
+      }
+      if (f.type === 'radio-group') {
+        const idx = (f.options || []).indexOf('Male');
+        if (idx >= 0 && f.optionSelectors && f.optionSelectors[idx]) {
+          directChecks.push({ selector: f.optionSelectors[idx], check: true });
+        }
+      }
+      if (f.type === 'checkbox-agreement') {
+        directChecks.push({ selector: f.selector, check: true });
+      }
+    }
+
+    // Convert to ActionPlan (same logic as popup.js Phase 1.7)
+    const actions = [];
+    const actionFieldMap = [];
+    for (const [selector, entry] of Object.entries(mapping)) {
+      const field = formFields.find(f => f.selector === selector);
+      if (!field) continue;
+      const target = { field_id: field.id ? 'id:' + field.id : null, label: field.label };
+      if (!target.field_id && field.name) target.field_id = 'name:' + field.name;
+      if (field.type === 'dropdown') {
+        actions.push({ action: 'select_option', target, value: entry.value, timeout_ms: 5000 });
+      } else {
+        actions.push({ action: 'fill_text', target, value: entry.value, timeout_ms: 3000 });
+      }
+      actionFieldMap.push(selector);
+    }
+    for (const dc of directChecks) {
+      actions.push({ action: 'check', target: { css_selector: dc.selector }, value: 'true', timeout_ms: 3000 });
+      actionFieldMap.push(dc.selector);
+    }
+
+    // Execute through runner (PRIMARY path)
+    const obs = await window.ccRunner.executeLinear({
+      plan_id: 'primary_test',
+      session_id: 'test_session',
+      actions,
+    });
+
+    // Determine what runner succeeded on
+    const runnerSucceeded = new Set();
+    const path = obs.execution_path.filter(e => e.node_id.startsWith('n'));
+    for (let i = 0; i < path.length && i < actionFieldMap.length; i++) {
+      if (path[i].status === 'success') runnerSucceeded.add(actionFieldMap[i]);
+    }
+
+    // What would need executor fallback?
+    const fallbackNeeded = Object.keys(mapping).filter(s => !runnerSucceeded.has(s));
+    const dcFallback = directChecks.filter(dc => !runnerSucceeded.has(dc.selector));
+
+    return {
+      totalActions: actions.length,
+      runnerSucceededCount: runnerSucceeded.size,
+      fallbackNeeded: fallbackNeeded.length,
+      dcFallback: dcFallback.length,
+      fullname: document.getElementById('fullname').value,
+      category: document.getElementById('category').value,
+      radioChecked: document.querySelector('input[name="gender"][value="M"]')?.checked || false,
+      agreeChecked: document.getElementById('agree')?.checked || false,
+    };
+  });
+
+  ok('Runner executes all actions', result.totalActions >= 4);
+  ok('Runner succeeds on majority', result.runnerSucceededCount >= 3);
+  ok('Runner fills text (name)', result.fullname === 'Runner Primary Test');
+  ok('Runner selects dropdown (category)', result.category !== '');
+  ok('Runner checks radio', result.radioChecked === true);
+  ok('Runner checks checkbox (agreement)', result.agreeChecked === true);
+  ok('No fallback needed (runner handled all)', result.fallbackNeeded === 0 && result.dcFallback === 0);
+
+  await page.close();
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // RUNNER
 // ═══════════════════════════════════════════════════════════════════════
@@ -532,6 +628,7 @@ try {
   await testAngularWidgets(browser);
   await testPageModel(browser);
   await testActionPlanRunner(browser);
+  await testRunnerPrimary(browser);
 
 } catch (e) {
   console.error('\n🔴 Browser launch failed:', e.message);

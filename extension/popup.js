@@ -483,6 +483,7 @@ fillBtn.addEventListener('click', async () => {
           'autofill/plugins/ng-dropdown.js',
           'autofill/plugins/button-click.js',
           'autofill/plugins/keystroke-input.js',
+          'runtime/plugin-bridge.js',
           'drivers/dispatch.js',
           'drivers/dom.js',
           'drivers/input.js',
@@ -699,56 +700,79 @@ fillBtn.addEventListener('click', async () => {
             if (n) console.log('[CC] ai-resolve filled', n, 'residual field(s)');
           } catch (e) { console.warn('[CC] ai-resolve skipped:', e.message); }
         }
-        const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
-
-        // ── NEW: Also execute through ActionPlan Runner (Phase 1.6) ────────
-        // This produces an Observation alongside the legacy executor fill.
-        // Once stable, the executor path will be removed.
+        // ── Phase 1.7: ccRunner is the PRIMARY execution path ───────────
+        // Runner executes first. Executor only handles fields runner failed on.
         let runnerObservation = null;
+        const runnerSucceeded = new Set();
+
         try {
           if (window.ccRunner && window.ccResolver) {
-            // Initialize resolver with current extraction
-            const { pageModel } = extractFormFieldsWithFingerprint();
+            const extractResult = extractFormFieldsWithFingerprint();
             const elements = formFields.map(f => document.querySelector(f.selector));
-            window.ccResolver.setPageContext(pageModel, elements);
+            window.ccResolver.setPageContext(extractResult.pageModel, elements);
 
-            // Convert mapping → ActionPlan actions
+            // Convert mapping + directChecks → ActionPlan
             const actions = [];
+            const actionFieldMap = [];
             for (const [selector, entry] of Object.entries(mapping)) {
               const field = formFields.find(f => f.selector === selector);
               if (!field) continue;
               const target = { field_id: field.id ? 'id:' + field.id : null, label: field.label };
               if (!target.field_id && field.name) target.field_id = 'name:' + field.name;
-
               const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(field.type) : 'text';
               if (grp === 'dropdown') {
-                actions.push({ action: 'select_option', target: target, value: entry.value, timeout_ms: 5000 });
+                actions.push({ action: 'select_option', target, value: entry.value, timeout_ms: 5000 });
               } else {
-                actions.push({ action: 'fill_text', target: target, value: entry.value, timeout_ms: 3000 });
+                actions.push({ action: 'fill_text', target, value: entry.value, timeout_ms: 3000 });
               }
+              actionFieldMap.push(selector);
+            }
+            for (const dc of directChecks) {
+              actions.push({ action: 'check', target: { css_selector: dc.selector }, value: dc.check ? 'true' : 'false', timeout_ms: 3000 });
+              actionFieldMap.push(dc.selector);
             }
 
             if (actions.length > 0) {
               runnerObservation = await window.ccRunner.executeLinear({
                 plan_id: 'popup_fill_' + Date.now(),
                 session_id: semanticFormKey || 'unknown',
-                actions: actions,
+                actions,
               });
-              console.log('[CC] Runner observation:', runnerObservation.execution_path.length, 'actions,',
-                runnerObservation.execution_path.filter(e => e.status === 'success').length, 'succeeded');
+              const path = runnerObservation.execution_path.filter(e => e.node_id.startsWith('n'));
+              for (let i = 0; i < path.length && i < actionFieldMap.length; i++) {
+                if (path[i].status === 'success') runnerSucceeded.add(actionFieldMap[i]);
+              }
+              console.log('[CC] Runner PRIMARY:', runnerSucceeded.size, '/', actionFieldMap.length, 'succeeded');
             }
           }
-        } catch (e) { console.warn('[CC] Runner path error (non-fatal):', e.message); }
+        } catch (e) {
+          console.warn('[CC] Runner error, full executor fallback:', e.message);
+        }
 
-        // Apply radio/checkbox selections directly — the executor's value strategies
-        // don't toggle .checked. Guarded by current state so we never toggle back off.
+        // ── Executor FALLBACK: only fields runner couldn't handle ──────────
+        const fallbackMapping = {};
+        for (const [s, v] of Object.entries(mapping)) { if (!runnerSucceeded.has(s)) fallbackMapping[s] = v; }
+        const fallbackFbs = {};
+        for (const s of Object.keys(fallbackMapping)) { if (fbs[s]) fallbackFbs[s] = fbs[s]; }
+
+        let filled;
+        if (Object.keys(fallbackMapping).length > 0) {
+          filled = await fillFormFieldsSequential(fallbackMapping, fallbackFbs, adp, formFields);
+        } else {
+          filled = {};
+        }
+
+        // Apply directChecks not handled by runner as legacy fallback
         const directRecords = [];
         for (const dc of directChecks) {
+          if (runnerSucceeded.has(dc.selector)) {
+            directRecords.push({ selector: dc.selector, value: 'checked', type: 'toggle', result: 'filled', source: 'runner', label: dc.label });
+            continue;
+          }
           try {
             const el = document.querySelector(dc.selector);
             if (!el) { directRecords.push({ selector: dc.selector, value: dc.check ? 'checked' : 'unchecked', type: 'toggle', result: 'skipped', failReason: 'not-found', source: 'mapping', label: dc.label }); continue; }
-            const want = !!dc.check;
-            if (el.checked !== want) el.click();
+            if (el.checked !== !!dc.check) el.click();
             el.dispatchEvent(new Event('change', { bubbles: true }));
             fbs[dc.selector] = { label: dc.label, profileKey: dc.profileKey, source: 'mapping' };
             directRecords.push({ selector: dc.selector, value: 'checked', type: 'toggle', result: 'filled', source: 'mapping', label: dc.label });

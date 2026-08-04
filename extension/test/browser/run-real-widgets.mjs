@@ -59,6 +59,7 @@ const SHARED_SCRIPTS = [
   'autofill/plugins/cascade-select.js',
   'autofill/plugins/ng-dropdown.js',
   'autofill/plugins/keystroke-input.js',
+  'runtime/plugin-bridge.js',
   'autofill/rule-engine.js',
   'autofill/extractor.js',
   'autofill/mapper.js',
