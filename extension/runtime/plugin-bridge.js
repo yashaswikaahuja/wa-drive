@@ -25,33 +25,55 @@
       if (!el) return { status: 'failed', error: 'element_not_found' };
       var value = action.value || '';
 
-      // Try to find the plugin
+      // Try to find the plugin — check multiple field context types
       if (typeof findPlugin === 'function') {
-        var plugin = findPlugin(el, { type: 'ng-dropdown', label: '' });
+        var plugin = findPlugin(el, { type: 'ng-dropdown', label: '' }) ||
+                     findPlugin(el, { type: 'ng-select', label: '' });
         if (plugin) {
           try {
             var result = await plugin.fill(el, value, { portalAdapters: {}, attempt: 1 });
             if (result && result.success) {
               return { status: 'success', actual_value: result.matchedText || value };
             }
-            return { status: 'failed', error: result.reason || 'plugin_fill_failed' };
+            // If plugin found options but couldn't match, that's a real failure
+            if (result && result.optionCount > 0) {
+              return { status: 'failed', error: result.reason || 'plugin_fill_failed' };
+            }
+            // Plugin found 0 options — fall through to bridge's own logic
           } catch (e) {
-            return { status: 'failed', error: 'plugin_error: ' + e.message };
+            // Plugin threw — fall through to bridge's own logic
           }
         }
       }
 
-      // Fallback: try click-based interaction
-      // Click the element to open dropdown
-      el.click();
-      await new Promise(function (r) { setTimeout(r, 300); });
+      // Fallback: click-based interaction with wait for DOM update
+      // Find trigger element (ng-select has .ng-select-container as click target)
+      var trigger = el.querySelector('.ng-select-container, .ng-value-container, .value-area, .select-type') || el;
+      trigger.click();
+      // Also toggle the opened class (some implementations need it)
+      if (el.classList && !el.classList.contains('ng-select-opened')) {
+        el.classList.add('ng-select-opened');
+      }
 
-      // Look for visible options
-      var opts = el.querySelectorAll('li, .ng-option, .dropdown-item');
-      if (!opts.length) {
-        // Try overlay
-        var panel = document.querySelector('.ng-dropdown-panel, ng-dropdown-panel, .cdk-overlay-container');
-        if (panel) opts = panel.querySelectorAll('li, .ng-option, .dropdown-item');
+      // Wait for dropdown panel to appear
+      var deadline = Date.now() + 3000;
+      var opts = [];
+      while (Date.now() < deadline) {
+        await new Promise(function (r) { setTimeout(r, 150); });
+
+        // Check inside element first (most common for ng-select)
+        var panel = el.querySelector('.ng-dropdown-panel, .dropdown-options');
+        if (panel) {
+          var items = panel.querySelectorAll('.ng-option, li, .dropdown-item');
+          if (items.length > 0) { opts = Array.from(items); break; }
+        }
+        // Check document-level overlays
+        var overlays = document.querySelectorAll('.ng-dropdown-panel, ng-dropdown-panel, .cdk-overlay-container');
+        for (var p = 0; p < overlays.length; p++) {
+          var oItems = overlays[p].querySelectorAll('.ng-option, li, .dropdown-item');
+          if (oItems.length > 0) { opts = Array.from(oItems); break; }
+        }
+        if (opts.length > 0) break;
       }
 
       if (!opts.length) {
@@ -71,10 +93,10 @@
       }
 
       if (!matched && window.ccMatchOption) {
-        var optTexts = Array.from(opts).map(function (o) { return o.textContent.trim(); });
+        var optTexts = opts.map(function (o) { return o.textContent.trim(); });
         var matchedText = window.ccMatchOption(value, optTexts);
         if (matchedText) {
-          matched = Array.from(opts).find(function (o) { return o.textContent.trim() === matchedText; });
+          matched = opts.find(function (o) { return o.textContent.trim() === matchedText; });
         }
       }
 
@@ -83,7 +105,11 @@
         return { status: 'failed', error: 'no_matching_option', actual_value: null };
       }
 
+      // Click with full event sequence
+      matched.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      matched.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
       matched.click();
+      await new Promise(function (r) { setTimeout(r, 300); });
       return { status: 'success', actual_value: matched.textContent.trim() };
     },
     validates: function (action) {

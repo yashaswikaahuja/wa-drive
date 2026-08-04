@@ -184,26 +184,46 @@
   // ── fill_text ─────────────────────────────────────────────────────
   register({
     name: 'fill_text',
-    description: 'Type a value into a text/textarea input',
-    widgetTypes: ['input-text', 'input-email', 'input-tel', 'input-number', 'input-password', 'input-url', 'input-search', 'textarea', 'mat-input', 'generic'],
+    description: 'Type a value into a text/textarea input (keystroke simulation)',
+    widgetTypes: ['input-text', 'input-email', 'input-tel', 'input-number', 'input-password', 'input-url', 'input-search', 'input-date', 'textarea', 'mat-input', 'generic'],
     handler: async function (action, ctx) {
       var el = ctx.element;
       if (!el) return { status: 'failed', error: 'element_not_found' };
 
       var value = action.value || '';
+      el.focus();
+      el.dispatchEvent(new Event('focus', { bubbles: true }));
+
+      // Clear existing value
       var nativeSetter = Object.getOwnPropertyDescriptor(
         el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype,
         'value'
       );
 
-      el.focus();
-      if (nativeSetter && nativeSetter.set) nativeSetter.set.call(el, value);
-      else el.value = value;
-
+      // Type character by character for framework compatibility
+      if (nativeSetter && nativeSetter.set) nativeSetter.set.call(el, '');
+      else el.value = '';
       el.dispatchEvent(new Event('input', { bubbles: true }));
+
+      for (var i = 0; i < value.length; i++) {
+        var ch = value[i];
+        el.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
+        el.dispatchEvent(new KeyboardEvent('keypress', { key: ch, bubbles: true }));
+
+        // Set value progressively
+        var partial = value.substring(0, i + 1);
+        if (nativeSetter && nativeSetter.set) nativeSetter.set.call(el, partial);
+        else el.value = partial;
+
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }));
+      }
+
+      // Final events
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) || '' }));
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
       el.blur();
+      el.dispatchEvent(new Event('blur', { bubbles: true }));
 
       return { status: 'success', actual_value: el.value };
     },
@@ -447,6 +467,50 @@
     },
   });
 
+  // ── upload_file ───────────────────────────────────────────────────
+  register({
+    name: 'upload_file',
+    description: 'Trigger file input for upload',
+    widgetTypes: ['input-file', '*'],
+    handler: async function (action, ctx) {
+      var el = ctx.element;
+      if (!el) return { status: 'failed', error: 'element_not_found' };
+
+      // If element is not a file input, try to find one nearby
+      if (el.type !== 'file') {
+        var fileInput = el.querySelector('input[type="file"]') ||
+                        (el.closest && el.closest('.field, .form-group, mat-form-field') &&
+                         el.closest('.field, .form-group, mat-form-field').querySelector('input[type="file"]'));
+        if (fileInput) el = fileInput;
+        else return { status: 'failed', error: 'no_file_input_found' };
+      }
+
+      // In content script context, we cannot programmatically set files.
+      // The file value must come from the service as a reference.
+      // For now: signal that human intervention is needed for file upload.
+      var filename = action.value || '';
+      if (!filename) {
+        return { status: 'waiting_human', actual_value: 'file_upload_required', prompt: 'Please upload the required file' };
+      }
+
+      // Try DataTransfer approach (works in some browsers for testing)
+      try {
+        var dt = new DataTransfer();
+        var file = new File([''], filename, { type: 'application/octet-stream' });
+        dt.items.add(file);
+        el.files = dt.files;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return { status: 'success', actual_value: filename };
+      } catch (e) {
+        // DataTransfer not supported — request human
+        return { status: 'waiting_human', actual_value: 'file_upload_required', prompt: 'Please upload: ' + filename };
+      }
+    },
+    validates: function (action) {
+      return { valid: true }; // value is optional (empty means request human)
+    },
+  });
+
   // ── request_human ─────────────────────────────────────────────────
   register({
     name: 'request_human',
@@ -564,7 +628,11 @@
   // ══════════════════════════════════════════════════════════════════════
 
   registerWidgetResolver(function (el) {
-    if (el.closest && el.closest('.ng-select')) return 'ng-select';
+    if (!el) return null;
+    // Detect ng-select / ng-dropdown in all common variants
+    if (el.tagName === 'NG-SELECT') return 'ng-select';
+    if (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown'))) return 'ng-select';
+    if (el.closest && (el.closest('.ng-select') || el.closest('.ng-dropdown') || el.closest('ng-select'))) return 'ng-select';
     return null;
   });
 

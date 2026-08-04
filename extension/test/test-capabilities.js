@@ -78,11 +78,11 @@ assert(caps.includes('scroll_to'), 'scroll_to registered');
 assert(caps.includes('navigate'), 'navigate registered');
 assert(caps.includes('extract'), 'extract registered');
 assert(caps.includes('assert'), 'assert registered');
-assert(caps.length === 14, 'exactly 14 core capabilities');
+assert(caps.length === 15, 'exactly 15 core capabilities');
 
 console.log('\n=== Manifest ===');
 const manifest = context.ccCapabilities.manifest();
-assert(manifest.length === 14, 'manifest has 14 entries');
+assert(manifest.length === 15, 'manifest has 15 entries');
 const fillText = manifest.find(m => m.name === 'fill_text');
 assert(fillText && fillText.description.length > 0, 'fill_text has description');
 assert(fillText && fillText.widgetTypes.length > 0, 'fill_text has widget types');

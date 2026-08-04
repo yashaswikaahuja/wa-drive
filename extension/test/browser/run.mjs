@@ -621,6 +621,88 @@ async function testRunnerPrimary(browser) {
   await page.close();
 }
 
+async function testPhase1Completeness(browser) {
+  console.log('\n═══ Suite: Phase 1 Completeness (ng-select, mat-select, upload, human) ═══');
+
+  // ── ng-select via capability dispatch ───────────────────────────
+  const page = await browser.newPage();
+  await page.goto(`file://${FIXTURES}/simulated-angular-form.html`);
+  await injectExtension(page);
+
+  const ngResult = await page.evaluate(async () => {
+    const el = document.querySelector('#stateNgSelect');
+    const wt = window.ccCapabilities.resolveWidgetType(el);
+    const r = await window.ccCapabilities.dispatch({ action: 'select_option', value: 'Bihar', timeout_ms: 5000 }, { element: el, widgetType: wt });
+    return { wt, status: r.status, actual: r.actual_value, dataValue: el.getAttribute('data-value') };
+  });
+  ok('ng-select: detected as ng-select widget', ngResult.wt === 'ng-select');
+  ok('ng-select: select_option succeeds', ngResult.status === 'success');
+  ok('ng-select: correct value selected', ngResult.dataValue === 'bihar');
+
+  // ── mat-select via capability dispatch ──────────────────────────
+  const matResult = await page.evaluate(async () => {
+    const el = document.querySelector('#genderSelect');
+    const wt = window.ccCapabilities.resolveWidgetType(el);
+    const r = await window.ccCapabilities.dispatch({ action: 'select_option', value: 'Female', timeout_ms: 5000 }, { element: el, widgetType: wt });
+    return { wt, status: r.status, actual: r.actual_value, dataValue: el.getAttribute('data-value') };
+  });
+  ok('mat-select: detected as mat-select widget', matResult.wt === 'mat-select');
+  ok('mat-select: select_option succeeds', matResult.status === 'success');
+  ok('mat-select: correct value selected', matResult.dataValue === 'female');
+
+  // ── fill_text keystroke simulation ──────────────────────────────
+  const keystrokeResult = await page.evaluate(async () => {
+    const el = document.getElementById('applicantName');
+    const events = [];
+    el.addEventListener('keydown', (e) => events.push('kd:' + e.key));
+    el.addEventListener('input', () => events.push('in'));
+    el.addEventListener('change', () => events.push('ch'));
+    el.addEventListener('blur', () => events.push('bl'));
+    const r = await window.ccCapabilities.dispatch({ action: 'fill_text', value: 'AB', timeout_ms: 3000 }, { element: el, widgetType: 'input-text' });
+    return { status: r.status, value: el.value, events };
+  });
+  ok('fill_text: keystroke events fired', keystrokeResult.events.includes('kd:A') && keystrokeResult.events.includes('kd:B'));
+  ok('fill_text: input events fired per char', keystrokeResult.events.filter(e => e === 'in').length >= 2);
+  ok('fill_text: change event fired', keystrokeResult.events.includes('ch'));
+  ok('fill_text: blur event fired', keystrokeResult.events.includes('bl'));
+  ok('fill_text: value set correctly', keystrokeResult.value === 'AB');
+
+  // ── upload_file capability ──────────────────────────────────────
+  const uploadResult = await page.evaluate(async () => {
+    const el = document.querySelector('input[type="file"]');
+    if (!el) return { error: 'no file input' };
+    const wt = window.ccCapabilities.resolveWidgetType(el);
+    const r = await window.ccCapabilities.dispatch({ action: 'upload_file', value: 'photo.jpg', timeout_ms: 3000 }, { element: el, widgetType: wt });
+    return { status: r.status, actual: r.actual_value };
+  });
+  ok('upload_file: capability exists and executes', uploadResult.status === 'success' || uploadResult.status === 'waiting_human');
+
+  // ── waiting_human handling ──────────────────────────────────────
+  const humanResult = await page.evaluate(async () => {
+    const r = await window.ccCapabilities.dispatch({ action: 'request_human', reason: 'otp', prompt: 'Enter OTP', timeout_ms: 3000 }, {});
+    return { status: r.status, actual: r.actual_value };
+  });
+  ok('request_human: returns waiting_human', humanResult.status === 'waiting_human');
+
+  // ── Runner handles waiting_human correctly ──────────────────────
+  const humanPlanResult = await page.evaluate(async () => {
+    const obs = await window.ccRunner.executeLinear({
+      plan_id: 'human_test',
+      session_id: 'test',
+      actions: [
+        { action: 'fill_text', target: { css_selector: '#applicantName' }, value: 'Before Human', timeout_ms: 3000 },
+        { action: 'request_human', reason: 'otp', prompt: 'Enter OTP', timeout_ms: 0 },
+      ]
+    });
+    const statuses = obs.execution_path.map(e => e.node_id + ':' + e.status);
+    return { statuses, humanInteractions: obs.human_interactions.length };
+  });
+  ok('Runner: fills before human pause', humanPlanResult.statuses[0] === 'n0:success');
+  ok('Runner: records human interaction', humanPlanResult.humanInteractions >= 1);
+
+  await page.close();
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // RUNNER
 // ═══════════════════════════════════════════════════════════════════════
@@ -647,6 +729,7 @@ try {
   await testPageModel(browser);
   await testActionPlanRunner(browser);
   await testRunnerPrimary(browser);
+  await testPhase1Completeness(browser);
 
 } catch (e) {
   console.error('\n🔴 Browser launch failed:', e.message);

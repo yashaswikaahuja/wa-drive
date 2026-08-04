@@ -164,6 +164,31 @@
       if (result.didNavigate) _navigated = true;
       if (result.didSubmit) _formSubmitted = true;
 
+      // Inter-action delay: let frameworks settle between fills
+      if (nodeDef.type === 'action' && result.outcome === 'success') {
+        var settleMs = (options && options.interActionDelay) || 120;
+        await new Promise(function (r) { setTimeout(r, settleMs); });
+      }
+
+      // Handle waiting_human: pause execution, record in observation
+      if (result.outcome === 'waiting_human') {
+        observation.human_interactions.push({
+          node_id: currentNode,
+          checkpoint_type: (nodeDef.action && nodeDef.action.reason) || 'unknown',
+          outcome: 'waiting',
+          duration_ms: result.pathEntry.duration_ms,
+        });
+        // Try human_complete edge, fall back to success edge (plan should define the path)
+        var nextNode = _followEdge(edgeIndex, currentNode, 'human_complete') ||
+                       _followEdge(edgeIndex, currentNode, 'success');
+        if (!nextNode) {
+          // No edge defined — execution pauses here (observation is partial)
+          break;
+        }
+        currentNode = nextNode;
+        continue;
+      }
+
       // Follow edge based on outcome
       var outcome = result.outcome; // 'success', 'failure', 'timeout', 'skip'
       currentNode = _followEdge(edgeIndex, currentNode, outcome);
@@ -232,13 +257,10 @@
       }
 
       // Dispatch through capability registry
-      var dispatchAction = {
-        action: actionDef.action,
-        value: actionDef.value,
-        options: actionDef.options,
+      // Forward all action properties to the capability handler
+      var dispatchAction = Object.assign({}, actionDef, {
         timeout_ms: actionDef.timeout_ms || 10000,
-        target: actionDef.target,
-      };
+      });
 
       var context = {
         element: element,
@@ -266,7 +288,8 @@
 
     var duration = Date.now() - t0;
     var outcome = lastResult.status === 'success' ? 'success' :
-                  lastResult.status === 'timeout' ? 'timeout' : 'failure';
+                  lastResult.status === 'timeout' ? 'timeout' :
+                  lastResult.status === 'waiting_human' ? 'waiting_human' : 'failure';
 
     return {
       pathEntry: {
