@@ -709,98 +709,15 @@ fillBtn.addEventListener('click', async () => {
             if (n) console.log('[CC] ai-resolve filled', n, 'residual field(s)');
           } catch (e) { console.warn('[CC] ai-resolve skipped:', e.message); }
         }
-        // ── Phase 1.7: ccRunner is the PRIMARY execution path ───────────
-        // Actions built in DOM order (same order as formFields from extractor)
-        // so forms that require sequential filling work correctly.
-        let runnerObservation = null;
-        const runnerSucceeded = new Set();
+        // ── Executor is the PRIMARY fill engine (proven sequential logic) ──
+        // It handles: DOM-order fill, scroll-into-view, keystroke simulation,
+        // waitForOptions (cascade), waitForNetworkIdle, DWR re-apply,
+        // ng-dropdown plugin, verifyValue, and 200ms inter-field delay.
+        const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
 
-        try {
-          if (window.ccRunner && window.ccResolver) {
-            const extractResult = extractFormFieldsWithFingerprint();
-            const elements = formFields.map(f => document.querySelector(f.selector));
-            window.ccResolver.setPageContext(extractResult.pageModel, elements);
-
-            // Build ActionPlan in DOM order: iterate formFields, emit action for each
-            const actions = [];
-            const actionFieldMap = [];
-            const dcBySelector = {};
-            for (const dc of directChecks) { dcBySelector[dc.selector] = dc; }
-
-            for (const field of formFields) {
-              const sel = field.selector;
-              // Check if this field has a mapping (text/dropdown fill)
-              if (mapping[sel]) {
-                const target = { field_id: field.id ? 'id:' + field.id : null, label: field.label };
-                if (!target.field_id && field.name) target.field_id = 'name:' + field.name;
-                const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(field.type) : 'text';
-                if (grp === 'dropdown') {
-                  actions.push({ action: 'select_option', target, value: mapping[sel].value, timeout_ms: 12000 });
-                } else {
-                  actions.push({ action: 'fill_text', target, value: mapping[sel].value, timeout_ms: 5000 });
-                }
-                actionFieldMap.push(sel);
-              }
-              // Check if this field has directChecks (radio/checkbox)
-              if (dcBySelector[sel]) {
-                actions.push({ action: 'check', target: { css_selector: sel }, value: dcBySelector[sel].check ? 'true' : 'false', timeout_ms: 3000 });
-                actionFieldMap.push(sel);
-                delete dcBySelector[sel]; // mark as handled
-              }
-              // Check optionSelectors for radio groups
-              if (field.optionSelectors) {
-                for (const optSel of field.optionSelectors) {
-                  if (dcBySelector[optSel]) {
-                    actions.push({ action: 'check', target: { css_selector: optSel }, value: 'true', timeout_ms: 3000 });
-                    actionFieldMap.push(optSel);
-                    delete dcBySelector[optSel];
-                  }
-                }
-              }
-            }
-            // Any remaining directChecks not matched to formFields
-            for (const [sel, dc] of Object.entries(dcBySelector)) {
-              actions.push({ action: 'check', target: { css_selector: sel }, value: dc.check ? 'true' : 'false', timeout_ms: 3000 });
-              actionFieldMap.push(sel);
-            }
-
-            if (actions.length > 0) {
-              runnerObservation = await window.ccRunner.executeLinear({
-                plan_id: 'popup_fill_' + Date.now(),
-                session_id: semanticFormKey || 'unknown',
-                actions,
-              }, { interActionDelay: 200 });
-              const path = runnerObservation.execution_path.filter(e => e.node_id.startsWith('n'));
-              for (let i = 0; i < path.length && i < actionFieldMap.length; i++) {
-                if (path[i].status === 'success') runnerSucceeded.add(actionFieldMap[i]);
-              }
-              console.log('[CC] Runner PRIMARY:', runnerSucceeded.size, '/', actionFieldMap.length, 'succeeded');
-            }
-          }
-        } catch (e) {
-          console.warn('[CC] Runner error, full executor fallback:', e.message);
-        }
-
-        // ── Executor FALLBACK: only fields runner couldn't handle ──────────
-        const fallbackMapping = {};
-        for (const [s, v] of Object.entries(mapping)) { if (!runnerSucceeded.has(s)) fallbackMapping[s] = v; }
-        const fallbackFbs = {};
-        for (const s of Object.keys(fallbackMapping)) { if (fbs[s]) fallbackFbs[s] = fbs[s]; }
-
-        let filled;
-        if (Object.keys(fallbackMapping).length > 0) {
-          filled = await fillFormFieldsSequential(fallbackMapping, fallbackFbs, adp, formFields);
-        } else {
-          filled = {};
-        }
-
-        // Apply directChecks not handled by runner as legacy fallback
+        // Apply radio/checkbox selections directly
         const directRecords = [];
         for (const dc of directChecks) {
-          if (runnerSucceeded.has(dc.selector)) {
-            directRecords.push({ selector: dc.selector, value: 'checked', type: 'toggle', result: 'filled', source: 'runner', label: dc.label });
-            continue;
-          }
           try {
             const el = document.querySelector(dc.selector);
             if (!el) { directRecords.push({ selector: dc.selector, value: dc.check ? 'checked' : 'unchecked', type: 'toggle', result: 'skipped', failReason: 'not-found', source: 'mapping', label: dc.label }); continue; }
@@ -810,6 +727,46 @@ fillBtn.addEventListener('click', async () => {
             directRecords.push({ selector: dc.selector, value: 'checked', type: 'toggle', result: 'filled', source: 'mapping', label: dc.label });
           } catch { /* skip */ }
         }
+
+        // ── Runner produces Observation from executor's records (Phase 1.7) ──
+        // This gives protocol-compliant output without replacing the executor's
+        // proven fill logic.
+        let runnerObservation = null;
+        try {
+          if (window.ccRunner && window.ccResolver) {
+            const extractResult = extractFormFieldsWithFingerprint();
+            const elements = formFields.map(f => document.querySelector(f.selector));
+            window.ccResolver.setPageContext(extractResult.pageModel, elements);
+
+            // Build Observation from executor's _ccRecords
+            let executorRecords = [];
+            try { executorRecords = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
+
+            runnerObservation = {
+              plan_id: 'executor_fill_' + Date.now(),
+              session_id: semanticFormKey || 'unknown',
+              protocol_version: 2,
+              execution_path: executorRecords.map((r, i) => ({
+                node_id: 'field_' + i,
+                status: r.result === 'filled' ? 'success' : 'failed',
+                actual_value: r.actualValue || r.value || null,
+                error: r.failReason || null,
+                duration_ms: r.durationMs || 0,
+              })),
+              checkpoints_reached: [],
+              corrections: [],
+              human_interactions: [],
+              page_state: {
+                url: window.location.href,
+                navigated: false,
+                form_submitted: false,
+                fields_snapshot: null,
+              },
+            };
+            const succeeded = runnerObservation.execution_path.filter(e => e.status === 'success').length;
+            console.log('[CC] Observation:', succeeded, '/', runnerObservation.execution_path.length, 'fields filled');
+          }
+        } catch (e) { console.warn('[CC] Observation build error:', e.message); }
 
         // Read structured records the executor flushed to document.body
         let records = [];
