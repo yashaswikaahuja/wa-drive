@@ -93,11 +93,12 @@ phases:
       - "ActionPlan schema defined by code, not formal spec document"
       - "No true unpacked-extension E2E test"
 
-# ── Active phases ───────────────────────────────────────────────────
+# ── Frozen phases ────────────────────────────────────────────────────
 
   phase_2:
     name: "Knowledge Model"
-    status: active
+    status: frozen
+    frozen_date: "2026-08-05"
     issues: ["#85", "#86", "#87", "#88", "#89", "#90", "#91", "#92"]
     description: >
       Server-side knowledge model: universal schema, knowledge store,
@@ -113,6 +114,43 @@ phases:
       - "2.6: Versioning and Migration Safety (#90) ✓"
       - "2.7: Sync Protocol (#91) ✓"
       - "2.8: Extension Sync Client and Final Migration (#92) ✓"
+
+    frozen_files:
+      - path: "architecture/knowledge-schema.yml"
+        reason: "Universal knowledge schema — all service modules depend on this contract"
+      - path: "architecture/knowledge-schema.json"
+        reason: "JSON Schema validation — used by validation engine"
+      - path: "architecture/sync-protocol.yml"
+        reason: "Sync protocol contract — extension and service both implement this"
+      - path: "extension-service/knowledge-store.js"
+        reason: "Knowledge store core — routes, validation, and versioning depend on its API"
+      - path: "extension-service/validation-engine.js"
+        reason: "Validation rules — knowledge-store.js integrates this on create"
+      - path: "extension-service/scope-resolver.js"
+        reason: "Scope resolution algorithm — sync and resolution routes depend on this"
+      - path: "extension/knowledge-sync.js"
+        reason: "Extension sync client — mapper.js and derive.js consume its cache"
+
+    allowed_changes:
+      - "Bug fixes with test coverage"
+      - "Performance improvements that don't change behavior"
+      - "Adding new knowledge kinds to the schema (non-breaking)"
+      - "Adding new sync artifacts"
+
+    forbidden_changes:
+      - "Changing the scope resolution algorithm"
+      - "Changing the knowledge record envelope structure"
+      - "Removing sync endpoints"
+      - "Changing the cache key structure"
+      - "Breaking the validation engine's export API"
+
+    temporary_exceptions:
+      - id: EXC-002
+        description: "Strategic mapping still in extension (mapper.js, rule-engine.js)"
+        removal_condition: "Phase 4 Planner provides field→value mapping in fill plan"
+      - id: EXC-005
+        description: "Derived values still computed in extension (derive.js)"
+        removal_condition: "Service computes derived values and includes them in profile"
 
 # ── Future phases ───────────────────────────────────────────────────
 
