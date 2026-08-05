@@ -208,6 +208,10 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Install schema validation dependencies
+        working-directory: extension-dev/tests/ratification
+        run: npm ci
+
       - name: "CHECK-005: Unit and knowledge tests"
         run: node extension-dev/tests/ci-unit.mjs
 
