@@ -24,6 +24,7 @@ const suites = [
   { name: 'Knowledge Sync Tests', cmd: 'node extension-dev/tests/test-knowledge-sync.mjs' },
   { name: 'Phase 3 Governance Tests', cmd: 'node extension-dev/tests/test-phase3-governance.mjs' },
   { name: 'Extension & Browser Boundary Security', cmd: 'node extension-dev/tests/security/run.mjs' },
+  { name: 'Perception Unit Tests', cmd: 'node extension-dev/tests/perception/run-perception-unit.mjs' },
   { name: 'Phase 3 Schema Conformance', cmd: 'node extension-dev/tests/ratification/run-conformance.mjs', optional: true },
   { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.mjs', optional: true },
   { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs', optional: true },

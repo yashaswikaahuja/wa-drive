@@ -24,6 +24,7 @@ const suites = [
   { name: 'Versioning Tests', cmd: 'node extension-dev/tests/test-knowledge-versioning.mjs' },
   { name: 'Knowledge Sync Tests', cmd: 'node extension-dev/tests/test-knowledge-sync.mjs' },
   { name: 'Phase 3 Governance Tests', cmd: 'node extension-dev/tests/test-phase3-governance.mjs' },
+  { name: 'Perception Unit Tests', cmd: 'node extension-dev/tests/perception/run-perception-unit.mjs' },
 ];
 
 let allPass = true;
