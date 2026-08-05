@@ -1,3 +1,6 @@
+// Load knowledge sync client (must be first — other code references ccKnowledgeSync)
+try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.js load failed:', e.message); }
+
 // Helper functions — use shared/label-utils.js as canonical source.
 // These are thin wrappers because background.js (service worker) cannot import
 // page-context scripts directly. Kept in sync with shared/label-utils.js.

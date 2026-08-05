@@ -147,4 +147,16 @@ subsystems:
       - "extension-service/routes/versions.js"
       - "extension-service/routes/sync.js"
       - "extension-service/migrations/003_knowledge_store.sql"
+      - "architecture/knowledge-schema.yml"
+      - "architecture/knowledge-schema.json"
+      - "architecture/knowledge-audit.md"
+      - "architecture/sync-protocol.yml"
     description: "Knowledge model: store, resolution, validation, versioning, sync"
+
+  # ── EXTENSION: Knowledge Sync Client (Phase 2.8) ──────────────────
+  knowledge_sync_client:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/knowledge-sync.js"
+    description: "Extension-side sync client — fetches and caches server knowledge"

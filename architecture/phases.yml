@@ -98,11 +98,12 @@ phases:
   phase_2:
     name: "Knowledge Model"
     status: active
-    issues: ["#85", "#86", "#87", "#88", "#89", "#90", "#91"]
+    issues: ["#85", "#86", "#87", "#88", "#89", "#90", "#91", "#92"]
     description: >
       Server-side knowledge model: universal schema, knowledge store,
       scope resolution engine, validation engine, hardcoded knowledge
-      migration, versioning/migration safety, sync protocol.
+      migration, versioning/migration safety, sync protocol, and
+      extension sync client.
     sub_phases:
       - "2.1: Universal Knowledge Schema (#85) ✓"
       - "2.2: Knowledge Store (#86) ✓"
@@ -111,6 +112,7 @@ phases:
       - "2.5: Audit and Migrate Hardcoded Knowledge (#89) ✓"
       - "2.6: Versioning and Migration Safety (#90) ✓"
       - "2.7: Sync Protocol (#91) ✓"
+      - "2.8: Extension Sync Client and Final Migration (#92) ✓"
 
 # ── Future phases ───────────────────────────────────────────────────
 
