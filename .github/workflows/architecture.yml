@@ -22,9 +22,7 @@ jobs:
       - name: "CHECK-003: Run test suites"
         run: |
           echo "## Test Results" >> $GITHUB_STEP_SUMMARY
-          node extension/test/test-shared-modules.js && echo "✅ Unit tests passed" >> $GITHUB_STEP_SUMMARY
-          node extension/test/test-integration.js && echo "✅ Integration tests passed" >> $GITHUB_STEP_SUMMARY
-          node extension/test/test-mapping-guards.js && echo "✅ Mapping guard tests passed" >> $GITHUB_STEP_SUMMARY
+          node extension-dev/tests/run-all.mjs && echo "✅ All test suites passed" >> $GITHUB_STEP_SUMMARY
 
       # ── CHECK-001 + CHECK-002: Forbidden patterns in diff ────────────
       - name: "CHECK-001/002: No new forbidden patterns"
@@ -95,7 +93,7 @@ jobs:
             "extension/shared/network-idle.js"
             "extension/shared/select-apply.js"
             "extension/shared/label-utils.js"
-            "extension/ARCHITECTURE_AUDIT.md"
+            "extension-dev/docs/ARCHITECTURE_AUDIT.md"
           )
 
           WARNINGS=0
@@ -192,7 +190,7 @@ jobs:
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Temporary exceptions | 5 (EXC-001..005) |" >> $GITHUB_STEP_SUMMARY
           echo "| Shared modules | 5 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Test files | $(ls extension/test/test-*.js 2>/dev/null | wc -l) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test files | $(ls extension-dev/tests/test-*.{js,mjs} 2>/dev/null | wc -l) |" >> $GITHUB_STEP_SUMMARY
           echo "| Frozen files | 6 |" >> $GITHUB_STEP_SUMMARY
           echo "| Phase 0 | ✅ Frozen |" >> $GITHUB_STEP_SUMMARY
-          echo "| Phase 1 | 🔲 Planned |" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase 1 | ✅ Complete |" >> $GITHUB_STEP_SUMMARY
