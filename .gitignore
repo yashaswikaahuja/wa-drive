@@ -33,7 +33,7 @@ inbox/
 data/
 tools/*
 !tools/forbidden-deps-check.mjs
-tests/
+/tests/
 worker/
 
 # Old scripts/configs
