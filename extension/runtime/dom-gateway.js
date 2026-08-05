@@ -343,6 +343,11 @@ function performAction(element, action) {
 // ═══════════════════════════════════════════════════════════════════════
 
 function isElementVisible(element) {
+  // File inputs are considered visible even when they have zero visual dimensions
+  // (browsers may render them as zero-rect clickable areas or as native buttons)
+  if (element.tagName === 'INPUT' && (element.type === 'file' || element.type === 'hidden')) {
+    return element.type !== 'hidden';
+  }
   if (!element.offsetParent && element.tagName !== 'BODY' && element.tagName !== 'HTML') {
     // Check for position:fixed/sticky which have null offsetParent
     const style = getComputedStyle(element);

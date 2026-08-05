@@ -23,10 +23,15 @@ let _initialized = false;
 async function initValidator(options = {}) {
   if (_initialized) return;
   let schema = options.schema;
-  if (!schema) {
-    if (!options.schemaPath) throw new Error('initValidator requires schema or schemaPath');
+  if (!schema && options.schemaPath) {
     const fs = await import('node:fs');
     schema = JSON.parse(fs.readFileSync(options.schemaPath, 'utf8'));
+  }
+  if (!schema) {
+    // No schema available — use structural fallback
+    _validateFn = _structuralFallback;
+    _initialized = true;
+    return;
   }
 
   // Try AJV (full Draft 2020-12 validation)

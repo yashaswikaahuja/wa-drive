@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Perception Test — Angular Material (Simulated)</title>
+  <style>
+    .mat-form-field { display: block; margin: 10px 0; }
+    mat-select { display: block; padding: 8px; border: 1px solid #ccc; cursor: pointer; }
+    mat-option { display: block; padding: 4px 8px; }
+    .mat-select-trigger { display: flex; align-items: center; }
+    .mat-datepicker-toggle { cursor: pointer; }
+    .mat-checkbox { display: flex; align-items: center; gap: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Application Form (Angular Material)</h1>
+  <form>
+    <!-- mat-input (simulated) -->
+    <div class="mat-form-field">
+      <label class="mat-label" for="mat-name">Applicant Name</label>
+      <input type="text" id="mat-name" class="mat-input" placeholder="Full Name" aria-label="Applicant Name">
+    </div>
+
+    <div class="mat-form-field">
+      <label class="mat-label" for="mat-email">Email</label>
+      <input type="email" id="mat-email" class="mat-input" placeholder="email@gov.in" aria-label="Email">
+    </div>
+
+    <!-- mat-select (simulated as custom element) -->
+    <div class="mat-form-field">
+      <mat-select id="mat-category" role="combobox" aria-label="Category" aria-expanded="false">
+        <div class="mat-select-trigger">
+          <span class="mat-select-value-text">Select Category</span>
+        </div>
+      </mat-select>
+    </div>
+
+    <!-- mat-datepicker (simulated) -->
+    <div class="mat-form-field">
+      <label class="mat-label" for="mat-dob">Date of Birth</label>
+      <input type="text" id="mat-dob" class="mat-input" matInput aria-label="Date of Birth" placeholder="DD/MM/YYYY">
+      <span class="mat-datepicker-toggle" role="button" aria-label="Open calendar">📅</span>
+    </div>
+
+    <!-- mat-checkbox (simulated) -->
+    <div class="mat-checkbox">
+      <input type="checkbox" id="mat-terms" aria-label="I agree to terms and conditions">
+      <label for="mat-terms">I agree to terms and conditions</label>
+    </div>
+
+    <!-- mat-radio (simulated) -->
+    <div role="radiogroup" aria-label="Gender">
+      <label><input type="radio" name="mat-gender" value="M" aria-label="Male"> Male</label>
+      <label><input type="radio" name="mat-gender" value="F" aria-label="Female"> Female</label>
+    </div>
+
+    <!-- OTP field (should be secret) -->
+    <div class="mat-form-field">
+      <label class="mat-label" for="mat-otp">OTP Verification Code</label>
+      <input type="text" id="mat-otp" class="mat-input" autocomplete="one-time-code" aria-label="OTP Verification Code" maxlength="6">
+    </div>
+
+    <button type="submit">Submit</button>
+  </form>
+</body>
+</html>
