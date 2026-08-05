@@ -14,6 +14,7 @@ const ROOT = resolve(__dirname, '../..');
 const suites = [
   { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.mjs' },
   { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs' },
+  { name: 'Comprehensive Portal Tests', cmd: 'node extension-dev/tests/browser/run-comprehensive.mjs' },
 ];
 
 let allPass = true;

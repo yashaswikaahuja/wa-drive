@@ -24,6 +24,7 @@ const suites = [
   { name: 'Knowledge Sync Tests', cmd: 'node extension-dev/tests/test-knowledge-sync.mjs' },
   { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.mjs', optional: true },
   { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs', optional: true },
+  { name: 'Comprehensive Portal Tests', cmd: 'node extension-dev/tests/browser/run-comprehensive.mjs', optional: true },
 ];
 
 let allPass = true;
