@@ -89,6 +89,22 @@ checks:
     method: "run_conformance"
     command: "node extension-dev/tests/ratification/run-conformance.mjs"
 
+  - id: CHECK-011
+    name: "Extension and browser boundary security"
+    severity: fail
+    description: >
+      Permanently preserves SEC-001 through SEC-004 and the browser-private
+      boundary. Executes hostile postMessage and real background CONNECT
+      overwrite attempts; rejects token/DOM-attribute exfiltration channels and
+      broad host permissions; and prevents selectors, DOM handles, or private
+      bindings from entering public Page IR, ActionPlan, or ExecutionObservation
+      schemas. Every future extension/browser security fix adds exploit-shaped
+      regression coverage here before its issue is closed.
+    method: "run_security_regressions"
+    command: "node extension-dev/tests/security/run.mjs"
+    ci_job: "extension-security"
+    scope: "full_tree"
+
   # ── WARNINGS ───────────────────────────────────────────────────────
 
   - id: CHECK-002
@@ -128,7 +144,7 @@ report:
   output: "architecture-report.md"
   sections:
     - title: "Verification Results"
-      content: "Table of CHECK-001..009 with PASS/WARN/FAIL"
+      content: "Table of CHECK-001..011 with PASS/WARN/FAIL"
     - title: "Temporary Exceptions"
       content: "List from constitution.yml with file count"
     - title: "Phase Status"

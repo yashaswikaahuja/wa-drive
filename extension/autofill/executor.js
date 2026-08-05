@@ -3,7 +3,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   console.log('[CC] fillFormFieldsSequential started v' + ((typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj') + ', fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
-  function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
+  function _flushRecords() { try { window.__ccFillRecords = _ccRecords; } catch {} }
 
   // ── Runtime version constants ─────────────────────────────────────────────
   const RUNTIME_VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj';
@@ -1210,7 +1210,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     });
   }, 3000);
 
-  // Final flush via DOM attribute (shared between all worlds and executeScript calls)
-  try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {}
+  // Final flush to extension-isolated memory (shared across isolated-world injections)
+  try { window.__ccFillRecords = _ccRecords; } catch {}
   return filled;
 }

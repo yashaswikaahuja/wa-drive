@@ -57,7 +57,7 @@ subsystems:
     security_remediation:
       reference: "architecture/gateway-security.yml message_bridge"
       defects: ["SEC-001", "SEC-002", "SEC-003", "SEC-004"]
-      note: "Injected page functions and the page-to-extension bridge have live security defects (token in DOM attributes, unauthenticated postMessage, CONNECT overwrite). Fixed by a scoped runtime task, not Phase 3.0.1 architecture."
+      note: "SEC-001..SEC-004 are resolved by issue #98 and permanently enforced by CHECK-011 (extension-dev/tests/security/run.mjs). Every future extension/browser security fix requires regression-test consideration before issue closure."
     paths:
       - "extension/popup.js"
       - "extension/background.js"

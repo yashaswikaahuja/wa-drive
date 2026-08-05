@@ -431,7 +431,7 @@ fillBtn.addEventListener('click', async () => {
           const key = el.id || el.name || el.getAttribute('formcontrolname');
           if (key) snapshot[key] = { selector: el.id ? '#'+el.id : `[name="${el.name}"]`, value: el.value, type: el.type };
         });
-        document.body.setAttribute('data-cc-undo', JSON.stringify(snapshot));
+        window.__ccUndoSnapshot = snapshot;
       }
     });
 
@@ -762,7 +762,7 @@ fillBtn.addEventListener('click', async () => {
 
             // Build Observation from executor's _ccRecords
             let executorRecords = [];
-            try { executorRecords = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
+            try { executorRecords = (Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : []); } catch {}
 
             runnerObservation = {
               plan_id: 'executor_fill_' + Date.now(),
@@ -790,9 +790,9 @@ fillBtn.addEventListener('click', async () => {
           }
         } catch (e) { console.warn('[CC] Observation build error:', e.message); }
 
-        // Read structured records the executor flushed to document.body
+        // Read structured records the executor kept in isolated-world memory
         let records = [];
-        try { records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
+        try { records = (Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : []); } catch {}
         records = records.concat(directRecords);
 
         // Index formFields by selector for label lookup
@@ -915,7 +915,7 @@ undoBtn.addEventListener('click', async () => {
     await chrome.scripting.executeScript({
       target: { tabId: _lastFillTabId },
       func: () => {
-        const snapshot = JSON.parse(document.body.getAttribute('data-cc-undo') || '{}');
+        const snapshot = (window.__ccUndoSnapshot || {});
         for (const [key, info] of Object.entries(snapshot)) {
           const el = document.querySelector(info.selector);
           if (el) { el.value = info.value; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }

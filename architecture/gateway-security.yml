@@ -122,9 +122,26 @@ enforcement:
     were removed from page-readable DOM attributes and moved to an isolated-world
     context object; CONNECT and other auth/state-mutating messages are gated on a
     trusted frontend origin; and host_permissions was narrowed from <all_urls> to
-    the explicit portal allowlist. Regression coverage lives in
-    extension-dev/tests/test-security-bridge.mjs.
+    the explicit portal allowlist.
+  security_regression_policy:
+    check_id: CHECK-011
+    suite: "extension-dev/tests/security/run.mjs"
+    ci_job: extension-security
+    permanence: "This is a required long-lived CI pillar, not a one-time verification step."
+    issue_closure_rule: >
+      Every future extension or browser-boundary security bug MUST be evaluated
+      as a regression-test candidate. An exploit-shaped regression test MUST be
+      added to this suite (or a child suite it invokes) before the fix issue is closed,
+      unless the issue records an explicit security-review justification for why
+      automated reproduction is impractical.
+    protected_invariants:
+      - "SEC-001: hostile page messages fail closed."
+      - "SEC-002: credentials and sensitive runtime records never use page-readable DOM/storage channels."
+      - "SEC-003: untrusted CONNECT paths cannot replace extension auth/backend state or read it back."
+      - "SEC-004: host permissions remain an explicit reviewed allowlist."
+      - "Selectors, DOM handles, live node references, and private bindings never cross public wire schemas."
   references:
+    regression_suite: "extension-dev/tests/security/README.md"
     dom_policy: "architecture/dom-access-policy.yml"
     lifecycle: "architecture/perception-lifecycle.yml"
     privacy: "architecture/perception-privacy.yml"

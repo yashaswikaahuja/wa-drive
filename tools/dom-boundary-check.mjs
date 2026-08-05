@@ -13,12 +13,13 @@ const baseIndex = args.indexOf('--base');
 const workingTree = args.includes('--working-tree');
 
 let gitArgs;
+const diffArgs = ['diff', '--ignore-space-at-eol', '--unified=0', '--no-ext-diff'];
 if (workingTree) {
-  gitArgs = ['diff', '--unified=0', '--no-ext-diff', 'HEAD', '--', 'extension'];
+  gitArgs = [...diffArgs, 'HEAD', '--', 'extension'];
 } else if (baseIndex >= 0 && args[baseIndex + 1]) {
-  gitArgs = ['diff', '--unified=0', '--no-ext-diff', `${args[baseIndex + 1]}...HEAD`, '--', 'extension'];
+  gitArgs = [...diffArgs, `${args[baseIndex + 1]}...HEAD`, '--', 'extension'];
 } else {
-  gitArgs = ['diff', '--unified=0', '--no-ext-diff', 'HEAD~1...HEAD', '--', 'extension'];
+  gitArgs = [...diffArgs, 'HEAD~1...HEAD', '--', 'extension'];
 }
 
 let diff = '';

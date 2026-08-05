@@ -10,10 +10,12 @@ on:
 # Job Matrix:
 #   1. architecture — governance checks (forbidden patterns, frozen files, ownership, deps)
 #   2. unit-and-knowledge — Phase 0/1/2 tests (no external deps)
-#   3. browser — Playwright-based capability tests (needs Chromium)
+#   3. extension-security — permanent SEC-001..004 and browser-private boundary regressions
+#   4. schema-conformance — adversarial public-wire schema validation
+#   5. browser — Playwright-based capability tests (needs Chromium)
 #
 # Jobs run in parallel. Frozen-file findings remain advisory; contract,
-# dependency, DOM-boundary, unit, and browser failures block the build.
+# dependency, DOM-boundary, security, unit, schema, and browser failures block the build.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 jobs:
@@ -206,6 +208,22 @@ jobs:
 
       - name: "CHECK-005: Unit and knowledge tests"
         run: node extension-dev/tests/ci-unit.mjs
+
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 3: Extension & Browser Boundary Security (permanent pillar)
+  # ════════════════════════════════════════════════════════════════════
+  extension-security:
+    name: Extension & Browser Boundary Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: "CHECK-011: Extension & browser boundary security"
+        run: node extension-dev/tests/security/run.mjs
 
   # ════════════════════════════════════════════════════════════════════
   # JOB: Phase 3 Schema Conformance (adversarial ratification)

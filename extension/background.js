@@ -249,7 +249,7 @@ async function runJobDispatch(envelope, tabId) {
         try { const r = await fetch(bUrl + '/adapters/' + location.hostname, { headers }); adp = await r.json(); } catch {}
         // Run executor (returns total filled)
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
-        const records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]');
+        const records = Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : [];
         const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
         // Sync mappings — labels, types, order, options (same as popup path)
         try {
