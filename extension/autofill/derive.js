@@ -42,6 +42,10 @@ function ccAgeFromDob(dob) {
  * Returns a NEW profile object with derived keys added.
  * Existing (real) values always win — derivation only fills gaps.
  * Also returns `_derived` listing which keys were inferred (for transparency).
+ *
+ * If window._ccServerDerivationRules is set (injected by background/popup from
+ * knowledge cache), simple 'lookup' rules are applied first, allowing the server
+ * to define new alias/default derivations without a code update.
  */
 function ccDeriveProfile(profile) {
   const p = Object.assign({}, profile || {});
@@ -52,6 +56,26 @@ function ccDeriveProfile(profile) {
     p[key] = String(val);
     derived.push(key);
   };
+
+  // ── Server-defined derivation rules (simple lookups/defaults) ────────────
+  // These run first so they can fill gaps that hardcoded rules might also cover.
+  // Only 'lookup' and 'conditional' logic types are safe to run here.
+  var serverRules = (typeof window !== 'undefined' && window._ccServerDerivationRules) || [];
+  for (var i = 0; i < serverRules.length; i++) {
+    var rule = serverRules[i];
+    if (!rule || !rule.output_key) continue;
+    var params = rule.parameters || {};
+    if (rule.logic === 'lookup') {
+      // Simple: copy source_key or use default_value
+      if (params.source_key && ccHasVal(p[params.source_key])) {
+        set(rule.output_key, p[params.source_key]);
+      } else if (params.default_value) {
+        set(rule.output_key, params.default_value);
+      }
+    }
+    // Other logic types (age_from_dob, name_split, highest_education, conditional)
+    // are handled by the hardcoded section below — server declarations just document them.
+  }
 
   const edu = ccEducationLevels(p);
 

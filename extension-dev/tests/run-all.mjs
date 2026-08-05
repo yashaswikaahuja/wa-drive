@@ -21,6 +21,7 @@ const suites = [
   { name: 'Scope Resolver Tests', cmd: 'node extension-dev/tests/test-scope-resolver.js' },
   { name: 'Validation Engine Tests', cmd: 'node extension-dev/tests/test-validation-engine.mjs' },
   { name: 'Versioning Tests', cmd: 'node extension-dev/tests/test-knowledge-versioning.mjs' },
+  { name: 'Knowledge Sync Tests', cmd: 'node extension-dev/tests/test-knowledge-sync.mjs' },
   { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.mjs' },
   { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs' },
 ];

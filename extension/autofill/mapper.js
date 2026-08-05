@@ -1,4 +1,31 @@
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
+// Server-resolved field mappings (injected by background.js/popup.js from cache)
+// take precedence over hardcoded FIELD_ALIASES. Merge server mappings on top.
+function _getFieldAliases() {
+  var merged = Object.assign({}, FIELD_ALIASES);
+  var server = (typeof window !== 'undefined' && window._ccServerFieldMappings) || null;
+  if (server && Array.isArray(server)) {
+    for (var i = 0; i < server.length; i++) {
+      var m = server[i];
+      if (m.semantic_key && m.match_patterns) {
+        // Server patterns augment (or create) the alias entry
+        if (!merged[m.semantic_key]) {
+          merged[m.semantic_key] = m.match_patterns.slice();
+        } else {
+          // Merge: add patterns not already present
+          var existing = new Set(merged[m.semantic_key]);
+          for (var j = 0; j < m.match_patterns.length; j++) {
+            if (!existing.has(m.match_patterns[j])) {
+              merged[m.semantic_key].push(m.match_patterns[j]);
+            }
+          }
+        }
+      }
+    }
+  }
+  return merged;
+}
+
 var FIELD_ALIASES = {
   name:           ['candidate_name', 'candidates_name', 'applicant_name', 'applicants_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname', 'pratyashi_ka_naam', 'your_name', 'enter_name'],
   first_name:     ['first_name', 'firstname', 'fname', 'given_name', 'givenname', 'txt_firstname', 'txt_first_name'],
@@ -56,6 +83,8 @@ var FIELD_ALIASES = {
 
 function fuzzyMatch(formFields, profile) {
   var mapping = {};
+  // Resolve field aliases (server-synced + local hardcoded, merged)
+  var fieldAliases = _getFieldAliases();
   // Use granular name fields if available, else split full name
   var firstName = profile.first_name || '';
   var middleName = profile.middle_name || '';
@@ -232,7 +261,7 @@ function fuzzyMatch(formFields, profile) {
       }
     }
 
-    for (const [profileKey, aliases] of Object.entries(FIELD_ALIASES)) {
+    for (const [profileKey, aliases] of Object.entries(fieldAliases)) {
       if (!profile[profileKey]) continue;
       // Strict separation: name must not match father/mother/state/district fields
       if (profileKey === 'name' && (isFatherMother || isStateDistrict)) continue;

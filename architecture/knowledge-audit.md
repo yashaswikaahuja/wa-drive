@@ -141,9 +141,82 @@ These are fill-time execution guards, not domain knowledge. Retained.
 The script generates records that can be POSTed to `/api/knowledge` to populate
 the knowledge store with the current hardcoded knowledge as seed data.
 
-## Next Steps (Not in scope for this issue)
+## Phase 2.8 Update — Runtime Knowledge Migration (Issue #92)
 
-1. **Phase 3:** Replace mapper.js `FIELD_ALIASES` lookup with knowledge-store query
-2. **Phase 3:** Replace cascade-select.js dependency list with knowledge-store query
-3. **Phase 4:** Replace PRIORITY_KEYS with planner-generated fill ordering
-4. **Phase 5:** Learning engine creates new field_mapping records from fill experiences
+**Date:** 2026-08-05
+**Status:** Complete
+
+### Additional Records Migrated (Phase 2.8)
+
+| Category | Items Found | Migrated | Notes |
+|----------|:-----------:|:--------:|-------|
+| English Semantic Aliases (background.js) | 12 canonical groups, ~25 variants | ✅ 12 records | `synonym` kind, lang=en |
+| File Upload Mappings (mapper.js fileAliases) | 9 file categories | ✅ 9 records | `field_mapping` kind, field_type=file |
+| Education Field Aliases (mapper.js eduAliases) | 16 edu field groups | ✅ 16 records | `field_mapping` kind, field_type=education |
+| **Phase 2.8 Total** | | **37 records** | |
+| **Grand Total (Phase 2.5 + 2.8)** | | **124 records** | |
+
+### Extension Sync Client
+
+**Location:** `extension/knowledge-sync.js`
+
+The extension now fetches knowledge from the server via the sync protocol:
+- `ccKnowledgeSync.bootstrap()` — full knowledge download on first run
+- `ccKnowledgeSync.delta()` — incremental updates every 30 minutes
+- Cached in `chrome.storage.local` under `_cc_knowledge_cache`
+
+### Code Paths Updated to Consume Server Knowledge
+
+| Module | Change | Fallback |
+|--------|--------|----------|
+| `mapper.js` | `_getFieldAliases()` merges server `field_mappings` with inline `FIELD_ALIASES` | Uses `FIELD_ALIASES` if cache is empty |
+| `derive.js` | Applies server `derivation_rules` with `logic: 'lookup'` before hardcoded rules | Skips if no server rules cached |
+| `background.js` | `getSemanticKeyResolved()` checks cached `semantic_aliases` first | Falls back to inline `SEMANTIC_ALIASES` |
+| `popup.js` | Injects cached field_mappings and derivation_rules into page context | Proceeds without injection if cache empty |
+
+### Intentionally Retained Runtime Logic (Final Classification)
+
+The following remain in the extension as **execution/perception logic**, not business knowledge.
+Per `architecture/constitution.yml`, perception, execution, and observation belong in the extension.
+
+| Item | Location | Classification | Reason to Retain |
+|------|----------|---------------|------------------|
+| Skip rules (retype/verify/confirm detection) | mapper.js:77-107 | **Perception** | Detects duplicate fields by form structure — requires DOM context |
+| Agreement checkbox detection | mapper.js:90-100 | **Perception** | Detects consent checkboxes by label — pattern matching on live DOM |
+| Yes/no radio skip | mapper.js:86 | **Perception** | Detects question-type radios vs data radios |
+| Hindi auto-transliteration skip | mapper.js:115 | **Execution guard** | Avoids filling fields that transform on Tab |
+| Fallback derivation chains (roll_number, board_name, year_of_passing) | derive.js:71-75 | **Execution logic** | Priority ordering depends on profile data presence at fill time |
+| Boolean flag derivations (is_pwd, ex_serviceman, is_reserved_category) | derive.js:85-95 | **Execution logic** | Runtime conditional evaluation requiring full profile context |
+| Age calculation from DOB | derive.js:38-50 | **Execution logic** | Must run at fill time with current date |
+| Name splitting (first/middle/last) | derive.js:97-102 | **Execution logic** | Splits profile.name into parts at fill time |
+| Highest education level detection | derive.js:61-63 | **Execution logic** | Evaluates which education fields are populated |
+| PRIORITY_KEYS ordering | executor.js:202 | **Execution sequencing** | Determines fill order (Phase 4 planner will replace) |
+| DOM event dispatch sequences | executor.js, select-apply.js | **Execution** | Browser interaction mechanics |
+| Plugin detection (supports()) | All plugins | **Perception** | Runtime component detection |
+| Option matching algorithm | option-match.js | **Execution** | Runtime fuzzy matching of dropdown options |
+| AI prompt construction | ai-resolve.js | **Execution** | Runtime LLM integration |
+| waitForNetworkIdle logic | network-idle.js | **Execution timing** | Browser event handling |
+
+### Design Decisions
+
+1. **Hardcoded knowledge is retained as fallback** — Even after server migration, inline constants
+   remain so the extension works offline or when the server is unreachable. Server knowledge
+   augments but does not replace inline constants.
+
+2. **Server knowledge wins on conflict** — When both server and local define the same semantic_key,
+   `_getFieldAliases()` merges server patterns into the local set. For derivation rules, server
+   `lookup` rules run first and `set()` respects the "never overwrite" rule.
+
+3. **Only simple logic types are executed from server rules** — Complex computation
+   (age_from_dob, name_split, highest_education, conditional) stays hardcoded because it
+   requires profile data analysis that can't be expressed as a simple key→value lookup.
+
+4. **Skip rules are perception, not knowledge** — Detecting retype fields, agreement checkboxes,
+   and Hindi auto-transliteration fields requires DOM context and form structure analysis.
+   These are not domain facts; they are runtime pattern detection.
+
+## Next Steps
+
+1. **Phase 4:** Replace PRIORITY_KEYS with planner-generated fill ordering
+2. **Phase 5:** Learning engine creates new field_mapping records from fill experiences
+3. **Future:** Remove inline fallback constants once sync protocol is proven reliable in production

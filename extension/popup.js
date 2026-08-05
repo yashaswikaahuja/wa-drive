@@ -464,6 +464,22 @@ fillBtn.addEventListener('click', async () => {
     }
     // Inject all autofill scripts in ONE call — they must share the same scope (ISOLATED world)
     // Shared modules are listed FIRST so they're available when callers run.
+    // First: inject cached server field mappings for mapper.js to pick up
+    try {
+      const _cachedMappings = await chrome.storage.local.get('_cc_knowledge_cache');
+      const _fm = _cachedMappings?._cc_knowledge_cache?.artifacts?.field_mappings || [];
+      const _dr = _cachedMappings?._cc_knowledge_cache?.artifacts?.derivation_rules || [];
+      if (_fm.length > 0 || _dr.length > 0) {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (mappings, derivRules) => {
+            if (mappings.length) window._ccServerFieldMappings = mappings;
+            if (derivRules.length) window._ccServerDerivationRules = derivRules;
+          },
+          args: [_fm, _dr],
+        });
+      }
+    } catch (e) { console.warn('[CC] Server knowledge injection skipped:', e.message); }
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },

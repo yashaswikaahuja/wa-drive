@@ -267,6 +267,96 @@ for (const cap of CAPABILITIES) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+// 7. SEMANTIC ALIASES (from background.js SEMANTIC_ALIASES)
+//    Phase 2.8 addition — English label→semantic_key mappings
+// ══════════════════════════════════════════════════════════════════════
+
+const BACKGROUND_SEMANTIC_ALIASES = {
+  name: ['full name', 'candidate name', 'applicant name', 'student name', 'name of candidate', 'name of applicant', 'candidates name', 'applicants name'],
+  dob: ['date of birth', 'birth date', 'dob', 'date of birth ddmmyyyy'],
+  father_name: ['fathers name', 'father name', 'fathers husbands name'],
+  mother_name: ['mothers name', 'mother name'],
+  aadhaar_number: ['aadhaar no', 'aadhaar number', 'aadhar no'],
+  pan_number: ['pan no', 'pan number', 'pan card'],
+  mobile: ['mobile no', 'mobile number', 'phone no', 'contact no'],
+  email: ['email id', 'email address'],
+  address: ['permanent address', 'residential address', 'correspondence address'],
+  pincode: ['pin code', 'postal code', 'pincode'],
+  state: ['state name'],
+  district: ['district name'],
+};
+
+for (const [canonical, variants] of Object.entries(BACKGROUND_SEMANTIC_ALIASES)) {
+  records.push(makeRecord('synonym', GLOBAL, {
+    canonical,
+    variants,
+    language: 'en',
+    domain: 'government_forms',
+  }, { tags: ['seed', 'english', 'synonym', 'phase_2_8'], confidence: 0.95 }));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 8. FILE UPLOAD MAPPINGS (from mapper.js fileAliases)
+//    Phase 2.8 addition — file input label→profile file key
+// ══════════════════════════════════════════════════════════════════════
+
+const FILE_ALIASES = {
+  photo: ['photo', 'photograph', 'passport photo', 'applicant photo', 'image', 'profile photo', 'customer photograph'],
+  signature: ['signature', 'sign', 'applicant signature', 'digital signature'],
+  aadhaar_doc: ['aadhaar', 'aadhar', 'aadhaar document', 'aadhaar card', 'uid'],
+  pan_doc: ['pan', 'pan card', 'pan document'],
+  certificate: ['certificate', 'marksheet', 'mark sheet', 'passing certificate', 'degree certificate'],
+  resume: ['resume', 'cv', 'curriculum vitae', 'bio data'],
+  passport_doc: ['passport', 'passport document'],
+  license_doc: ['driving license', 'licence', 'dl'],
+  utility_bill: ['utility bill', 'electricity bill', 'address proof'],
+};
+
+for (const [fileKey, labels] of Object.entries(FILE_ALIASES)) {
+  records.push(makeRecord('field_mapping', GLOBAL, {
+    field_label: fileKey,
+    semantic_key: fileKey,
+    profile_key: fileKey,
+    match_patterns: labels,
+    field_type: 'file',
+  }, { tags: ['seed', 'file_upload', 'phase_2_8'] }));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 9. EDUCATION FIELD ALIASES (from mapper.js eduAliases)
+//    Phase 2.8 addition — education-context field matching patterns
+// ══════════════════════════════════════════════════════════════════════
+
+const EDU_ALIASES = {
+  board_10th: ['board_10th','board_matric','board_class10','10th_board','matric_board','boardname_hs','ddl_boardname_hs','matriculation_10th_class_education_board','matriculation_class_education_board','class_10th_education_board','10th_class_education_board','matriculation_education_board','tenth_class_education_board','class_x_education_board','sslc_education_board'],
+  board_12th: ['board_12th','board_inter','board_class12','12th_board','inter_board','intermediate_education_board','class_12th_education_board','12th_class_education_board','twelfth_education_board','class_xii_education_board','plus_two_education_board','hsc_education_board'],
+  roll_number_10th: ['roll_number_10th','roll_no_10th','roll_10th','roll_matric','matric_roll','10th_roll','matriculation_roll_number','matriculation_10th_class_roll_number','class_10_roll_number','tenth_roll_number','sslc_roll_number'],
+  roll_number_12th: ['roll_number_12th','roll_no_12th','roll_12th','roll_inter','inter_roll','12th_roll','intermediate_roll_number','class_12_roll_number','twelfth_roll_number','hsc_roll_number','plus_two_roll_number'],
+  passing_year_10th: ['passing_year_10th','year_10th','year_matric','matric_year','10th_year','year_of_passing_10','yearofpassing_hs','ddl_yearofpassing_hs','matriculation_year_of_passing','matriculation_10th_class_year_of_passing','class_10_year_of_passing','tenth_year_of_passing'],
+  passing_year_12th: ['passing_year_12th','year_12th','year_inter','inter_year','12th_year','year_of_passing_12','intermediate_year_of_passing','class_12_year_of_passing','twelfth_year_of_passing'],
+  marks_10th: ['marks_10th','percentage_10th','10th_marks','matric_marks','10th_percentage'],
+  marks_12th: ['marks_12th','percentage_12th','12th_marks','inter_marks','12th_percentage'],
+  school_name: ['school_name','school','institution_10','matric_school'],
+  college_name: ['college_name','college','institution_12','inter_college'],
+  university_name: ['university_name','university','institution_grad','college_grad','institution_name'],
+  roll_no_graduation: ['roll_no_graduation','roll_grad','graduation_roll','degree_roll'],
+  year_of_passing: ['year_of_passing','passing_year','year_pass','year_graduation','grad_year'],
+  grade: ['grade','grade_system','grading','cgpa','gpa','division','class_obtained'],
+  degree_name: ['degree_name','degree','qualification','course_name','programme'],
+  marks_graduation: ['marks_graduation','percentage_grad','grad_marks','grad_percentage'],
+};
+
+for (const [eduKey, aliases] of Object.entries(EDU_ALIASES)) {
+  records.push(makeRecord('field_mapping', GLOBAL, {
+    field_label: eduKey,
+    semantic_key: eduKey,
+    profile_key: eduKey,
+    match_patterns: aliases,
+    field_type: 'education',
+  }, { tags: ['seed', 'education', 'phase_2_8'] }));
+}
+
+// ══════════════════════════════════════════════════════════════════════
 // OUTPUT
 // ══════════════════════════════════════════════════════════════════════
 

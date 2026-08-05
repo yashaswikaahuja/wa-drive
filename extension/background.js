@@ -17,10 +17,30 @@ const SEMANTIC_ALIASES = {
   'state name': 'state', 'district name': 'district',
 };
 function getSemanticKey(label) { const n = normalizeLabel(label); return SEMANTIC_ALIASES[n] || n; }
+// Async version — checks server-synced aliases first, falls back to inline SEMANTIC_ALIASES
+async function getSemanticKeyResolved(label) {
+  const n = normalizeLabel(label);
+  if (SEMANTIC_ALIASES[n]) return SEMANTIC_ALIASES[n];
+  // Check cached server aliases (variant→canonical lookup)
+  if (typeof ccKnowledgeSync !== 'undefined') {
+    const aliases = await ccKnowledgeSync.getCachedAliases();
+    for (const [canonical, variants] of Object.entries(aliases)) {
+      if (variants.includes(n) || variants.includes(label)) return canonical;
+    }
+  }
+  return n;
+}
 function calcConfidence(fills, corrections) { if (fills + corrections === 0) return 0.5; return fills / (fills + corrections * 3); }
 function normalizeLabel(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 
 console.log("[CC] background.js loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
+
+// ── Knowledge Sync ─────────────────────────────────────────────────────────
+// Start periodic knowledge sync (bootstrap on first run, delta after that).
+// ccKnowledgeSync is defined in knowledge-sync.js (imported via manifest).
+if (typeof ccKnowledgeSync !== 'undefined') {
+  ccKnowledgeSync.startPeriodicSync();
+}
 
 // Side panel (ChatGPT-style right sidebar): toolbar icon opens the panel, not a dropdown popup.
 // Requires sidePanel permission + side_panel.default_path in manifest; no action.default_popup.
@@ -153,6 +173,21 @@ async function runJobDispatch(envelope, tabId) {
 
   // Inject runtime + run autofill pipeline (reuse existing executor)
   try {
+    // Inject cached server field mappings into page for mapper.js to pick up
+    if (typeof ccKnowledgeSync !== 'undefined') {
+      const cachedMappings = await ccKnowledgeSync.getCachedFieldMappings();
+      const cachedDerivRules = await ccKnowledgeSync.getCachedDerivationRules();
+      if (cachedMappings.length > 0 || cachedDerivRules.length > 0) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (mappings, derivRules) => {
+            if (mappings.length) window._ccServerFieldMappings = mappings;
+            if (derivRules.length) window._ccServerDerivationRules = derivRules;
+          },
+          args: [cachedMappings, cachedDerivRules],
+        });
+      }
+    }
     await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
 
     const result = await chrome.scripting.executeScript({
