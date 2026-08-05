@@ -39,12 +39,14 @@ jobs:
         run: |
           echo "## Forbidden Pattern Check" >> $GITHUB_STEP_SUMMARY
 
+          # --ignore-space-at-eol: a line-ending (CRLF/LF) change must not make
+          # pre-existing code look newly added and trip a forbidden pattern.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+            DIFF=$(git diff --ignore-space-at-eol origin/${{ github.base_ref }}...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
           else
             BASE="${{ github.event.before }}"
             if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
-            DIFF=$(git diff "$BASE"...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+            DIFF=$(git diff --ignore-space-at-eol "$BASE"...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
           fi
 
           VIOLATIONS=0
