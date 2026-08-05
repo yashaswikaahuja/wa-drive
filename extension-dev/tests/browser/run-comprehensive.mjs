@@ -397,6 +397,78 @@ async function run() {
   ok('table: sortable column headers', await page.$('#tbl th[data-c]') !== null);
 
   // ═══════════════════════════════════════════════════════════════════
+  // SECTION 10: Real Portal Datepickers
+  // ═══════════════════════════════════════════════════════════════════
+  console.log('\n═══ Suite: Real Portal Datepickers ═══');
+
+  const DATEPICKER_FIXTURE = resolve(FIXTURES, 'real-portal-datepickers.html');
+  await page.goto(`file://${DATEPICKER_FIXTURE}`);
+  await page.waitForTimeout(1500); // let CDN libraries load
+
+  // 1. ServicePlus split dropdowns (DD/MM/YYYY)
+  await page.selectOption('#sp-day', '15');
+  await page.selectOption('#sp-month', '05');
+  await page.selectOption('#sp-year', '2000');
+  await page.waitForTimeout(100);
+  ok('datepicker: ServicePlus day select', await page.$eval('#sp-day', el => el.value) === '15');
+  ok('datepicker: ServicePlus month select', await page.$eval('#sp-month', el => el.value) === '05');
+  ok('datepicker: ServicePlus year select', await page.$eval('#sp-year', el => el.value) === '2000');
+  ok('datepicker: ServicePlus combined value', await page.$eval('#sp-dob-combined', el => el.value) === '15/05/2000');
+
+  // 2. Split text inputs (DD / MM / YYYY)
+  await page.fill('#txt-day', '20');
+  await page.fill('#txt-month', '03');
+  await page.fill('#txt-year', '1995');
+  await page.waitForTimeout(100);
+  ok('datepicker: split text day', await page.$eval('#txt-day', el => el.value) === '20');
+  ok('datepicker: split text month', await page.$eval('#txt-month', el => el.value) === '03');
+  ok('datepicker: split text year', await page.$eval('#txt-year', el => el.value) === '1995');
+  ok('datepicker: split text combined', await page.$eval('#txt-dob-combined', el => el.value) === '20/03/1995');
+
+  // 3. flatpickr (set value via input — allowInput:true)
+  await page.evaluate(() => {
+    const el = document.querySelector('#fp-dob');
+    el._flatpickr.setDate('15-08-2000', true);
+  });
+  ok('datepicker: flatpickr value set', (await page.$eval('#fp-dob', el => el.value)).includes('15'));
+
+  // 4. jQuery UI (trigger via setDate)
+  await page.evaluate(() => {
+    $('#jq-dob').datepicker('setDate', new Date(2000, 4, 15));
+  });
+  ok('datepicker: jQuery UI value set', (await page.$eval('#jq-dob', el => el.value)).includes('15'));
+
+  // 5. Bootstrap Datepicker
+  await page.evaluate(() => {
+    $('#bs-dob').datepicker('setDate', new Date(2000, 4, 15));
+  });
+  const bsVal = await page.$eval('#bs-dob', el => el.value);
+  ok('datepicker: Bootstrap value set', bsVal.includes('15'));
+
+  // 6. Material-style calendar (open, click a day)
+  await page.click('#mat-cal-btn');
+  await page.waitForTimeout(200);
+  ok('datepicker: Material calendar opens', await page.$eval('#mat-cal', el => el.classList.contains('open')));
+
+  // Click day 10
+  await page.click('#mat-grid .day:nth-child(17)'); // 10th day (after 7 headers)
+  await page.waitForTimeout(100);
+  const matVal = await page.$eval('#mat-dob', el => el.value);
+  ok('datepicker: Material date selected', matVal.length > 0);
+
+  // 7. Native HTML5 date
+  await page.fill('#native-dob', '2000-05-15');
+  ok('datepicker: native date fill', await page.$eval('#native-dob', el => el.value) === '2000-05-15');
+
+  // Native time
+  await page.fill('#native-time', '14:30');
+  ok('datepicker: native time fill', await page.$eval('#native-time', el => el.value) === '14:30');
+
+  // Native datetime-local
+  await page.fill('#native-dtl', '2000-05-15T14:30');
+  ok('datepicker: native datetime-local', await page.$eval('#native-dtl', el => el.value) === '2000-05-15T14:30');
+
+  // ═══════════════════════════════════════════════════════════════════
 
   await browser.close();
 
