@@ -121,16 +121,17 @@ jobs:
           echo "## Dependency Direction" >> $GITHUB_STEP_SUMMARY
           VIOLATIONS=0
 
+          # Check for actual code references (exclude comments)
           for f in extension/shared/*.js; do
-            if grep -qE "autofill/|drivers/|popup\.js" "$f" 2>/dev/null; then
-              echo "❌ \`$f\` references upper layer" >> $GITHUB_STEP_SUMMARY
+            if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|drivers|popup)|import .*(autofill|drivers|popup)"; then
+              echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
             fi
           done
 
           for f in extension/drivers/*.js; do
-            if grep -qE "autofill/|popup\.js" "$f" 2>/dev/null; then
-              echo "❌ \`$f\` references upper layer" >> $GITHUB_STEP_SUMMARY
+            if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|popup)|import .*(autofill|popup)"; then
+              echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
             fi
           done
