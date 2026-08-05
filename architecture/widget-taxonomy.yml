@@ -1,0 +1,152 @@
+# CyberControl Widget Taxonomy
+# Behavior first; framework names are advisory implementation hints.
+
+taxonomy_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: extension.browser_perception
+
+classification_dimensions:
+  behavior_kind:
+    values:
+      text_entry: "accepts free-form or constrained text"
+      selection: "selects one or more members of an option set"
+      toggle: "changes binary or tri-state state"
+      date_time: "captures date, time, month, week, or composed date parts"
+      file_upload: "accepts files or opens an upload workflow"
+      action: "activates a command or navigation affordance"
+      challenge: "requires human/security interaction such as OTP or CAPTCHA"
+      container: "groups or reveals other interactive content"
+      unknown: "behavior cannot be classified safely"
+  cardinality: [none, one, many, unknown]
+  interaction_mode: [native, inline, overlay, composite, delegated, unknown]
+  status: [recognized, partially_recognized, opaque, inaccessible, unsupported]
+
+implementation_hints:
+  authority: advisory
+  examples:
+    - native
+    - select2
+    - choices
+    - angular_dropdown
+    - angular_material
+    - ng_select
+    - react_select
+    - bootstrap
+    - flatpickr
+    - jquery_ui
+    - material_datepicker
+  rules:
+    - "A hint MUST NOT replace behavior_kind."
+    - "Unknown library/version MUST degrade to observed behavior, not failure."
+    - "The service MUST NOT branch on implementation hints to choose browser mechanics."
+
+standard_profiles:
+  native_text:
+    behavior_kind: text_entry
+    cardinality: one
+    interaction_mode: native
+    affordances: [focus, type_text, clear]
+  native_select_one:
+    behavior_kind: selection
+    cardinality: one
+    interaction_mode: native
+    affordances: [focus, select_one]
+  native_select_many:
+    behavior_kind: selection
+    cardinality: many
+    interaction_mode: native
+    affordances: [focus, select_many]
+  composite_combobox:
+    behavior_kind: selection
+    cardinality: one
+    interaction_mode: overlay
+    affordances: [focus, activate, type_text, select_one]
+  checkbox:
+    behavior_kind: toggle
+    cardinality: one
+    interaction_mode: native
+    affordances: [focus, toggle]
+  radio_group:
+    behavior_kind: selection
+    cardinality: one
+    interaction_mode: composite
+    affordances: [focus, select_one]
+  otp_group:
+    behavior_kind: challenge
+    cardinality: many
+    interaction_mode: composite
+    affordances: [focus]
+    privacy: secret
+  captcha:
+    behavior_kind: challenge
+    cardinality: unknown
+    interaction_mode: delegated
+    affordances: []
+    status: unsupported
+  datepicker:
+    behavior_kind: date_time
+    cardinality: one
+    interaction_mode: overlay
+    affordances: [focus, activate, select_one, type_text]
+  split_date:
+    behavior_kind: date_time
+    cardinality: many
+    interaction_mode: composite
+    affordances: [focus, type_text, select_one]
+  file_input:
+    behavior_kind: file_upload
+    cardinality: one
+    interaction_mode: native
+    affordances: [focus, upload]
+  navigation_control:
+    behavior_kind: action
+    cardinality: none
+    interaction_mode: native
+    affordances: [focus, activate]
+  tab_or_accordion:
+    behavior_kind: container
+    cardinality: one
+    interaction_mode: composite
+    affordances: [focus, activate, expand, collapse]
+
+classification_output:
+  required:
+    - behavior_kind
+    - cardinality
+    - interaction_mode
+    - status
+    - confidence
+    - evidence
+    - affordances
+  optional: [implementation_hint, adapter_id]
+
+adapter_contract:
+  adapter_id: "stable browser capability identifier; contains no selector or executable code"
+  selected_by: extension.browser_perception
+  used_by: extension.execution_via_interaction_gateway
+  service_role: "request semantic action only, such as select_one"
+  mismatch: "Execution returns adapter_mismatch and requests re-perception."
+
+unknown_and_inaccessible:
+  unknown:
+    status: partially_recognized
+    behavior_kind: unknown
+    affordances: "only mechanically proven operations"
+  opaque:
+    status: opaque
+    affordances: []
+  inaccessible:
+    status: inaccessible
+    affordances: []
+  unsupported:
+    status: unsupported
+    affordances: []
+  rule: "Never assign an adapter solely to avoid returning unknown."
+
+validation:
+  - "confidence is between 0 and 1"
+  - "challenge widgets never expose secret values"
+  - "adapter affordances are a subset of perceived affordances"
+  - "unsupported/inaccessible widgets have no mutating affordances"
+  - "framework hints are never required"

@@ -1,0 +1,180 @@
+# CyberControl Perception Lifecycle
+
+lifecycle_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: extension.browser_perception
+
+identities:
+  snapshot_scope:
+    unit: "one top-level browsing context (page)"
+    rule: >
+      Exactly one PageSnapshot represents a top-level page. A snapshot MAY
+      contain multiple contexts (top-level, accessible frames, open shadow
+      roots). Each frame Document is a distinct context with its own
+      document_id; it is not a separate snapshot.
+    top_level_document_id: >
+      PageSnapshot.document_id is the document_id of the top-level context and
+      identifies the primary Document lifetime of the page.
+  document_id:
+    generated: "when a Document becomes the active document of a browsing context"
+    scope: "one active Document lifetime"
+    per_context: >
+      Every top_level and frame context carries its own Context.document_id.
+      A shadow_root context has document_id null because it shares its host
+      node's Document. A node's owning Document is Context(node.context_id).document_id.
+    changes_on:
+      - "top-level full navigation"
+      - "frame navigation that replaces its Document"
+      - "document.open replacement"
+    unchanged_on:
+      - "ordinary DOM mutation"
+      - "same-document history or SPA route change"
+    portability: "never portable across reloads"
+  node_id:
+    scope: "unique within the snapshot; owning Document is Context(context_id).document_id"
+    stability: "best effort across revisions of the same document"
+    cross_document_use: prohibited
+    uniqueness: >
+      node_id keys are globally unique within a single PageSnapshot across all
+      contexts. Perception MUST namespace per-context node identity so IDs from
+      different frame Documents can never collide within one snapshot.
+    rule: "A node ID is structural identity, not semantic identity."
+  binding_key:
+    fields: [context_id, node_id]
+    resolves_to: "Context(context_id).document_id + node_id"
+    rule: >
+      A private binding is keyed by (context_id, node_id). Because context_id
+      resolves to a specific document_id, a binding is implicitly document-scoped
+      and cannot be reused after that context's document_id changes.
+  snapshot_id:
+    generated: "for each complete immutable PageSnapshot"
+    uniqueness: global
+    reuse: prohibited
+  revision:
+    initial: 0
+    rule: "strictly increases for every published snapshot or delta within document_id"
+  binding_generation:
+    visibility: browser_private
+    rule: "increments whenever node_id is rebound to a different live node"
+
+states:
+  - uninitialized
+  - observing
+  - settling
+  - snapshot_ready
+  - delta_ready
+  - invalidated
+  - failed
+
+initial_snapshot:
+  triggers:
+    - "explicit perceivePage(snapshot)"
+    - "document becomes eligible after document_idle"
+  settling:
+    strategy: "bounded quiet window plus hard deadline"
+    rule: "Deadline expiry produces a snapshot with unstable_page diagnostic; it does not wait forever."
+  result: "immutable PageSnapshot at revision 0 or explicit PerceptionError"
+
+mutation_processing:
+  source: "observation gateway mutation stream"
+  rules:
+    - "Coalesce records by dirty subtree."
+    - "Ignore mutations made only to CyberControl-private state."
+    - "Do not emit a revision when canonical public IR is unchanged."
+    - "Batch geometry reads separately from DOM traversal."
+    - "Abort work immediately when document_id is invalidated."
+  outputs:
+    delta: "PageDelta when the consumer has the exact base revision"
+    snapshot: "new PageSnapshot when delta is unsafe, too large, or explicitly requested"
+
+page_delta:
+  requirements:
+    - "base_snapshot_id identifies a known complete snapshot"
+    - "base_revision exactly equals the consumer revision"
+    - "revision is greater than base_revision"
+    - "operations are ordered and deterministic"
+  rejection:
+    codes: [unknown_base_snapshot, revision_mismatch, document_mismatch, invalid_operation]
+    recovery: "request a complete PageSnapshot"
+  compaction: "A delta larger than 50 percent of a full snapshot SHOULD be replaced by a snapshot."
+
+execution_handshake:
+  action_target_required: [document_id, context_id, snapshot_id, node_id, expected_revision]
+  checks:
+    - "active document_id equals target document_id"
+    - "target context_id exists and its document_id is unchanged"
+    - "expected_revision exactly equals the current perception revision for the target document"
+    - "private binding exists and binding_generation is current"
+    - "perceived adapter and affordance still satisfy the action"
+  revision_rule: >
+    expected_revision MUST equal the active revision. Older and newer plans are
+    both rejected. There is no "not newer" tolerance: a plan authored against a
+    superseded revision is stale by definition because perception cannot prove
+    the target survived intervening mutations.
+  rebinding_continuity:
+    problem: >
+      SPA rerenders (React/Vue/Svelte) can replace a live element while keeping
+      the same structural node_id. Revision equality alone is necessary but not
+      sufficient; the binding could point at a detached node.
+    rule: >
+      A binding is valid for execution only if binding_generation recorded at
+      plan authorship equals the current binding_generation for (context_id,
+      node_id). Any rebind between authorship and execution increments
+      binding_generation and forces stale_target. binding_generation is
+      browser-private and never leaves the extension; the service never sees or
+      carries it. The extension captures it at the moment perception publishes
+      the revision the plan targets and compares it immediately before acting.
+    compatibility_proof_required: >
+      A future relaxation that accepts a rebind without re-perception MUST ship a
+      formal, tested target-preserving proof (same accessible role, same adapter,
+      same owning context, same affordance set). Until such a proof exists,
+      exact revision plus exact binding_generation equality is mandatory.
+  failures:
+    stale_target: "node binding missing, removed, replaced, or binding_generation advanced"
+    stale_snapshot: "expected_revision does not exactly equal the active revision"
+    adapter_mismatch: "current mechanical widget contract changed"
+    document_replaced: "navigation invalidated the target document or context"
+  recovery: "stop action, re-perceive, and let the service re-plan; never use selector fallback"
+
+navigation:
+  full_navigation:
+    - "invalidate every binding owned by the old document"
+    - "cancel pending perception work"
+    - "create new document_id and revision 0"
+  same_document_navigation:
+    - "retain document_id"
+    - "increment revision when public page metadata or structure changes"
+    - "emit route-change evidence"
+  frame_navigation:
+    - "replace only the affected context document identity and descendant bindings"
+
+context_lifecycle:
+  accessible_frame: "independent context with its own Context.document_id and root_node_id; frame navigation replaces only this context's document_id"
+  cross_origin_frame: "opaque context with document_id null; retained until navigation or removal"
+  open_shadow_root: "observable child context tied to host node; document_id null (shares host Document)"
+  closed_shadow_root: "opaque context; no fabricated children"
+  frame_navigation_invalidation: >
+    When a frame navigates, only bindings whose context_id resolves to the
+    replaced Document are invalidated. Sibling and parent context bindings are
+    unaffected. A new Context.document_id and per-context revision baseline are
+    established for the navigated frame.
+
+failure_model:
+  fatal:
+    - invalid_public_ir
+    - privacy_policy_failure
+    - canonicalization_failure
+  non_fatal_diagnostics:
+    - unstable_page
+    - inaccessible_context
+    - unknown_widget
+    - content_truncated
+    - mutation_overflow
+  rule: "A failed perception is never serialized as a successful empty page."
+
+retention:
+  public_snapshot_browser_cache: "latest complete snapshot plus bounded recent deltas"
+  private_bindings: "current document only"
+  raw_source_facts: "discard after validated IR unless required for active diagnostics"
+  service_retention: "controlled by service privacy policy, not this browser lifecycle"

@@ -22,6 +22,7 @@ const suites = [
   { name: 'Validation Engine Tests', cmd: 'node extension-dev/tests/test-validation-engine.mjs' },
   { name: 'Versioning Tests', cmd: 'node extension-dev/tests/test-knowledge-versioning.mjs' },
   { name: 'Knowledge Sync Tests', cmd: 'node extension-dev/tests/test-knowledge-sync.mjs' },
+  { name: 'Phase 3 Governance Tests', cmd: 'node extension-dev/tests/test-phase3-governance.mjs' },
   { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.mjs', optional: true },
   { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs', optional: true },
   { name: 'Comprehensive Portal Tests', cmd: 'node extension-dev/tests/browser/run-comprehensive.mjs', optional: true },

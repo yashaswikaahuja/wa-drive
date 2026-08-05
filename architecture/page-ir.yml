@@ -1,0 +1,228 @@
+# CyberControl Page Intermediate Representation (IR)
+# Human-readable normative companion to page-ir.schema.json
+
+schema_version: "2.0.0"
+status: frozen_contract
+frozen_date: "2026-08-05"
+canonical_schema: "architecture/page-ir.schema.json"
+replaces_runtime_model: "extension/models/ir.js v1.0.0 after Phase 3 migration"
+
+purpose: >
+  Page IR is the public, service-safe language between browser perception and
+  service intelligence. It represents observable page structure without raw
+  DOM, HTML, selectors, XPath, browser objects, or private interaction bindings.
+
+normative_words:
+  MUST: "mandatory for conformance"
+  MUST_NOT: "prohibited for conformance"
+  SHOULD: "recommended unless a documented reason exists"
+
+public_private_split:
+  public_ir:
+    persisted_or_transmitted: true
+    contains:
+      - "document and snapshot identity"
+      - "browsing contexts and access status"
+      - "typed semantic-free page nodes"
+      - "typed evidence-bearing relationships"
+      - "runtime state signals, diagnostics, and privacy metadata"
+    forbidden_fields:
+      - selector
+      - css_selector
+      - xpath
+      - outer_html
+      - inner_html
+      - dom_handle
+      - element_reference
+      - binding_id
+  private_binding_table:
+    persisted_or_transmitted: false
+    owner: extension.browser_dom_gateway
+    key: [context_id, node_id]
+    resolves_to: "Context(context_id).document_id + node_id"
+    value: "ephemeral live node reference, adapter id, binding generation"
+    lifetime: "current document only"
+    rule: "Private bindings never appear in PageSnapshot, PageDelta, logs, or service messages."
+
+wire_types:
+  PageSnapshot:
+    description: "Immutable complete perception result for one document revision."
+    required_envelope:
+      - kind
+      - schema_version
+      - producer
+      - snapshot_id
+      - document_id
+      - revision
+      - observed_at
+      - canonical_hash
+      - page
+      - contexts
+      - nodes
+      - edges
+      - state
+      - diagnostics
+      - privacy
+  PageDelta:
+    description: "Ordered, typed changes from one known revision to the next."
+    required_envelope:
+      - kind
+      - schema_version
+      - producer
+      - document_id
+      - base_snapshot_id
+      - base_revision
+      - revision
+      - observed_at
+      - result_snapshot_id
+      - result_canonical_hash
+      - operations
+      - diagnostics
+      - privacy
+    operation_model:
+      rule: >
+        Each operation is a typed discriminated union member keyed by (op, entity).
+        add and replace MUST carry a value that validates against the target entity
+        schema (Node, Edge, Context, or PageState). remove MUST NOT carry a value.
+        Arbitrary or untyped operation payloads are rejected.
+
+identity:
+  document_id:
+    scope: "one active Document lifetime"
+    changes_on: ["full navigation", "frame document replacement"]
+    not_portable_across_reload: true
+  snapshot_id:
+    scope: "one immutable PageSnapshot"
+    uniqueness: global
+  revision:
+    type: non_negative_integer
+    rule: "Monotonically increases within document_id."
+  node_id:
+    scope: "document_id"
+    rule: >
+      Stable on a best-effort basis across revisions of the same document. It
+      is not a semantic identity and MUST NOT be assumed stable across reloads.
+  semantic_fingerprint:
+    authority: none
+    rule: "A service-side correspondence hint, never an execution identity."
+
+node_kinds:
+  - page
+  - region
+  - form
+  - section
+  - control
+  - widget
+  - option
+  - content
+  - navigation
+  - validation_message
+
+node_model:
+  required: [node_id, kind, context_id, parent_id, order, observed, state, privacy, evidence]
+  observed:
+    allowed:
+      - accessible_name
+      - role
+      - sanitized_text
+      - language
+      - description
+      - value_state
+    value_state: [empty, nonempty, selected, masked, unavailable, not_applicable]
+    rule: "Raw control values are absent by default."
+  state:
+    fields: [visible, enabled, readonly, required, focused, expanded, selected, checked]
+    unknown_values: "null, not guessed"
+  geometry:
+    coordinate_space: "document CSS pixels plus viewport metadata"
+    optional: true
+    fields: [x, y, width, height, viewport_intersection, z_index_hint]
+  affordances:
+    values: [focus, activate, type_text, clear, select_one, select_many, toggle, upload, expand, collapse, scroll]
+    rule: "Affordances describe mechanics, not whether an action is desirable."
+
+widget_model:
+  behavior_kind:
+    values: [text_entry, selection, toggle, date_time, file_upload, action, challenge, container, unknown]
+  cardinality: [none, one, many, unknown]
+  interaction_mode: [native, inline, overlay, composite, delegated, unknown]
+  implementation_hint:
+    examples: [native, select2, choices, angular_material, ng_select, react_select, bootstrap, flatpickr, jquery_ui]
+    authority: advisory
+  adapter_id:
+    visibility: public
+    content: "stable capability identifier only; no selectors or code"
+  status: [recognized, partially_recognized, opaque, inaccessible, unsupported]
+
+edge_types:
+  structural: [contains, belongs_to_context]
+  descriptive: [labels, describes, error_for]
+  behavioral: [controls, depends_on, validates, confirms, repeats]
+  navigation: [activates, transitions_to]
+  visual: [overlays, visually_groups_with]
+  rule: "Every non-observed relationship includes evidence and confidence."
+
+page_state:
+  signals:
+    examples: [dom_loading, network_busy, spinner_visible, blocking_overlay, validation_errors_present, user_challenge_present]
+    owner: browser_perception
+  candidates:
+    values: [loading, ready, waiting, validation_error, otp_waiting, captcha_waiting, success, session_expired, unknown]
+    rule: >
+      Candidates describe observable state with evidence. The service decides
+      planning consequences; perception does not declare a business outcome.
+
+browsing_contexts:
+  kinds: [top_level, frame, shadow_root]
+  access: [accessible, cross_origin, closed_shadow, permission_denied, unsupported]
+  rules:
+    - "Inaccessible contexts remain represented as opaque context records."
+    - "Perception MUST NOT bypass browser origin or permission controls."
+    - "Closed shadow roots are never claimed as observed."
+
+validation:
+  schema: "architecture/page-ir.schema.json"
+  graph_invariants:
+    - "node IDs and edge IDs are unique"
+    - "all references resolve"
+    - "containment is acyclic"
+    - "context ownership is consistent"
+    - "delta base revision matches its receiver"
+    - "geometry contains finite numbers and non-negative dimensions"
+    - "inferred facts include detector evidence"
+  diagnostics_not_fatal:
+    - duplicate_dom_id
+    - orphan_label
+    - inaccessible_context
+    - unknown_widget
+    - truncated_content
+    - ambiguous_relationship
+
+canonicalization:
+  standard: "RFC 8785 JSON Canonicalization Scheme (JCS)"
+  rules:
+    - "Serialize the hashed subset using RFC 8785 JCS: lexicographic object member ordering at every depth, minimal number formatting, and UTF-8."
+    - "Apply NFC Unicode normalization to all string values before hashing."
+    - "Object members are ordered by JCS at all depths, not only at the top level."
+  excluded_from_hash: [observed_at, diagnostic_timing]
+  array_ordering:
+    contexts: context_id
+    nodes: node_id
+    edges: edge_id
+    diagnostics: [code, node_id]
+    evidence: [source, detector, detector_version]
+    facts: lexicographic
+    alternatives: lexicographic
+    affordances: lexicographic
+    signals: lexicographic
+    candidates: state
+  delta_hash_semantics: >
+    A PageDelta result_canonical_hash equals the canonical_hash of the complete
+    PageSnapshot obtained by applying the delta operations to the base snapshot.
+    Producers and consumers MUST arrive at the same hash for the same resulting
+    state.
+  hash: "sha256 of the RFC 8785 canonical UTF-8 JSON of the hashed subset"
+
+migration:
+  policy: "architecture/ir-migrations/README.md"
+  compatibility: "major versions require explicit negotiation; minor additions are backward compatible"

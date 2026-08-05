@@ -1,0 +1,75 @@
+# CyberControl Perception Confidence and Evidence
+
+model_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: extension.browser_perception.validation
+
+principles:
+  - "Confidence describes quality of perception, not business truth."
+  - "Observed facts, deterministic derivations, and candidates are distinct."
+  - "Confidence is attached to individual facts, nodes, widgets, and edges."
+  - "An overall score is diagnostic only and never authorizes an action."
+
+sources:
+  observed:
+    default_confidence: 1.0
+    description: "Direct browser-observable fact after successful read."
+    examples: ["role", "visible state", "option count", "bounding box"]
+  derived:
+    range: [0.0, 1.0]
+    description: "Versioned deterministic detector output."
+    requires: [detector, detector_version, facts]
+  candidate:
+    range: [0.0, 1.0]
+    description: "Ambiguous relationship or interpretation offered to the service."
+    requires: [detector, detector_version, facts, alternatives_when_known]
+
+confidence_bands:
+  confirmed:
+    minimum: 0.90
+    use: "May be exposed as the primary technical classification."
+  probable:
+    minimum: 0.70
+    use: "Expose with evidence; service may use with policy checks."
+  candidate:
+    minimum: 0.40
+    use: "Never silently select for irreversible or sensitive action."
+  unknown:
+    minimum: 0.00
+    use: "Degrade widget/relationship to unknown and restrict affordances."
+
+required_evidence_fields:
+  - source
+  - detector
+  - detector_version
+  - confidence
+  - facts
+
+aggregation:
+  node_confidence: "minimum confidence of facts required for the node's kind and affordances"
+  widget_confidence: "minimum of behavior, interaction mode, and adapter compatibility confidence"
+  edge_confidence: "detector confidence for that exact relationship"
+  overall_perception_confidence:
+    method: "coverage-weighted diagnostic with fatal validation as zero"
+    allowed_use: "telemetry, quality monitoring, operator warning"
+    forbidden_use: "automatic submission, payment, CAPTCHA, identity verification, or plan authorization"
+
+conflicts:
+  rules:
+    - "Preserve conflicting candidates and evidence when neither dominates."
+    - "Do not average contradictory relationship types into false certainty."
+    - "Prefer direct accessibility association over visual proximity when both are valid and conflict."
+    - "The service resolves semantic conflicts using knowledge and policy."
+
+calibration:
+  corpus: "versioned sanitized portal fixture corpus"
+  metrics: [precision, recall, false_positive_rate, unknown_rate, calibration_error]
+  dimensions: [node_kind, widget_behavior, relationship_type, language, portal_family]
+  requirement: "Detector threshold changes require corpus results and version increment."
+
+safety:
+  - "Unknown is a valid result."
+  - "Missing evidence invalidates a derived or candidate fact."
+  - "Low confidence removes unsupported affordances rather than inventing an adapter."
+  - "Perception confidence never overrides human-confirmation requirements in protocol.yml."

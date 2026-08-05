@@ -1,0 +1,127 @@
+# CyberControl Gateway & Bridge Security Model
+# Phase 3.0.1 — threat model and trust boundaries for issue #97 / CYB-68
+#
+# This contract defines the security architecture for the Browser DOM Gateway
+# and the page-to-extension message bridge. It is normative architecture; the
+# runtime hardening it mandates is tracked as a separate implementation task.
+
+security_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: shared.security_privacy
+
+# ─────────────────────────────────────────────────────────────────────
+# Trust domains
+# ─────────────────────────────────────────────────────────────────────
+trust_domains:
+  page_main_world:
+    trust: untrusted
+    description: "The page's own scripts. Always treated as hostile."
+  content_isolated_world:
+    trust: semi_trusted
+    description: "Extension content script in Chrome's isolated world. Shares the DOM but not the page's JS scope."
+  extension_background:
+    trust: trusted
+    description: "Service worker / background. Holds credentials and backend configuration."
+  extension_service:
+    trust: trusted_remote
+    description: "The CyberControl service. Authenticated over TLS. Trusted for planning but never sent browser-private data."
+
+# ─────────────────────────────────────────────────────────────────────
+# DOM Gateway placement and trust model
+# ─────────────────────────────────────────────────────────────────────
+dom_gateway:
+  placement:
+    world: content_isolated_world
+    page_reachable: false
+    rule: >
+      The DOM Gateway and the private binding table MUST live in the extension's
+      isolated world. They MUST NOT be installed on the page's window (no
+      page-reachable window.ccDomGateway). Page scripts cannot call, read, or
+      replace the gateway or its bindings.
+  supersedes: >
+    The earlier planned public_object 'window.ccDomGateway' is rejected. A
+    page-callable gateway is a privileged generic DOM remote and is forbidden.
+  caller_authentication:
+    rule: >
+      Gateway operations are invoked only via extension-internal message
+      channels (chrome.runtime messaging within the extension), never via page
+      postMessage. Every interaction command carries the plan_id and
+      correlation_id and is validated against an active, unexpired ActionPlan.
+  capability_scoping:
+    rule: >
+      Interaction commands are capability-scoped to the specific (context_id,
+      node_id) target plus affordance in the authorizing plan. The gateway
+      refuses any command whose target is not present in the current plan.
+  toctou_revalidation:
+    rule: >
+      Immediately before performing a mechanical action, the gateway MUST
+      revalidate exact revision equality and binding_generation equality (see
+      perception-lifecycle.yml rebinding_continuity). Any mismatch fails
+      stale_target with no action taken. Validation and action are performed
+      without yielding to page script between the check and the act.
+  navigation_and_file_policy:
+    navigation_urls: "Navigation is allowed only when the plan authorization allow_navigation is true; destinations are constrained to the current origin unless an explicit operator-confirmed allowlist entry exists."
+    file_references: "upload actions accept only an opaque extension-validated file_reference; raw filesystem paths from the service are rejected."
+  compromised_service:
+    rule: >
+      Even a compromised or malicious plan cannot exceed the authorization
+      envelope: irreversible actions require operator_confirmed, submission
+      requires allow_submit, and no plan can request selectors, raw values, or
+      DOM handles because the wire schema cannot express them.
+
+# ─────────────────────────────────────────────────────────────────────
+# Page-to-extension message bridge hardening
+# ─────────────────────────────────────────────────────────────────────
+message_bridge:
+  current_defects:
+    - id: SEC-001
+      severity: critical
+      location: "extension/content.js"
+      description: "Content script forwards page postMessage payloads to the background without verifying event.source === window, origin, message type, or an authentication token."
+    - id: SEC-002
+      severity: critical
+      location: "extension/popup.js (data-cc-token / data-cc-backend body attributes)"
+      description: "Bearer access token and backend URL are written into page DOM attributes, readable by any page script."
+    - id: SEC-003
+      severity: critical
+      location: "extension/background.js CONNECT handler"
+      description: "CONNECT can overwrite stored access token, refresh token, user, and backend URL from a message that originates through the unauthenticated bridge."
+    - id: SEC-004
+      severity: high
+      location: "extension/manifest.json host_permissions <all_urls>"
+      description: "Broad host permission means any matched page can attempt to drive the bridge."
+  required_controls:
+    inbound_messages:
+      - "Verify event.source === window for any window.postMessage listener."
+      - "Verify the message origin against an explicit allowlist."
+      - "Accept only an explicit message-type allowlist; reject unknown types."
+      - "Require a per-session capability nonce that page scripts cannot read."
+      - "Validate every inbound payload against a strict schema before dispatch."
+    credential_handling:
+      - "Access, refresh, and session tokens MUST NOT be written to DOM attributes, page-readable storage, or the page's JS scope."
+      - "Tokens live only in extension background/isolated-world storage."
+      - "Injected page functions receive only the minimum data required and never the bearer token."
+    backend_configuration:
+      - "backendUrl MUST be pinned or constrained to an allowlist."
+      - "A page-originating message MUST NOT be able to overwrite backendUrl, tokens, or user identity."
+      - "CONNECT-style state changes are accepted only from trusted extension UI, not from the page bridge."
+    host_permissions:
+      - "Prefer activeTab or a portal-origin allowlist over <all_urls> where feasible; document any remaining broad permission with justification."
+  fail_closed: "If any inbound check cannot be satisfied, the message is dropped and a security diagnostic is recorded without the payload."
+
+# ─────────────────────────────────────────────────────────────────────
+# Enforcement / follow-up
+# ─────────────────────────────────────────────────────────────────────
+enforcement:
+  architecture_status: "This threat model is frozen as of Phase 3.0.1."
+  runtime_status: >
+    SEC-001..SEC-004 describe live runtime defects. Their code fixes are a
+    separate, scoped runtime task and are NOT implemented by this architecture
+    change. Phase 3.x implementation MUST NOT ship a page-reachable gateway and
+    MUST remove DOM-attribute token exposure before any perception transmission.
+  references:
+    dom_policy: "architecture/dom-access-policy.yml"
+    lifecycle: "architecture/perception-lifecycle.yml"
+    privacy: "architecture/perception-privacy.yml"
+    action_plan: "architecture/action-plan.schema.json"

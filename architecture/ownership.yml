@@ -15,17 +15,21 @@ subsystems:
   # ── EXTENSION: Perception ──────────────────────────────────────────
   perception:
     owner: extension
-    status: correct
+    status: migrating
+    migration_target: "extension/perception/ via the Browser DOM Gateway"
+    legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
     paths:
       - "extension/autofill/extractor.js"
       - "extension/shared/dom-utils.js"
       - "extension/autofill/plugins/interface.js"
-    description: "DOM scanning, label resolution, component detection"
+    description: "DOM scanning, label resolution, component detection. Grandfathered structural DOM access; not the frozen Phase 3 perception implementation."
 
   # ── EXTENSION: Execution ───────────────────────────────────────────
   execution:
     owner: extension
-    status: correct
+    status: migrating
+    migration_target: "extension/execution/ behind the interaction gateway"
+    legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
     paths:
       - "extension/autofill/executor.js"
       - "extension/shared/option-match.js"
@@ -35,20 +39,25 @@ subsystems:
       - "extension/autofill/plugins/ng-dropdown.js"
       - "extension/autofill/plugins/keystroke-input.js"
       - "extension/drivers/"
-    description: "Fill inputs, click buttons, dispatch events, wait for DOM"
+    description: "Fill inputs, click buttons, dispatch events, wait for DOM. Currently performs semantic discovery and fuzzy matching that the Phase 3 execution contract forbids; grandfathered until migrated."
 
   # ── EXTENSION: Observation ─────────────────────────────────────────
   observation:
     owner: extension
-    status: correct
+    status: migrating
+    migration_target: "ExecutionObservation via the interaction gateway"
     paths:
       - "extension/autofill/executor.js"  # post-fill observer section
-    description: "Correction capture, enrichment detection, session reporting"
+    description: "Correction capture, enrichment detection, session reporting. Emits raw values today; must migrate to redacted ExecutionObservation."
 
   # ── EXTENSION: Orchestration ───────────────────────────────────────
   orchestration:
     owner: extension
     status: correct
+    security_remediation:
+      reference: "architecture/gateway-security.yml message_bridge"
+      defects: ["SEC-001", "SEC-002", "SEC-003", "SEC-004"]
+      note: "Injected page functions and the page-to-extension bridge have live security defects (token in DOM attributes, unauthenticated postMessage, CONNECT overwrite). Fixed by a scoped runtime task, not Phase 3.0.1 architecture."
     paths:
       - "extension/popup.js"
       - "extension/background.js"
@@ -115,6 +124,21 @@ subsystems:
     description: "Auto-teach sessions, adapter learning"
     migration_target: "extension-service/services/learning/"
 
+  # ── SERVICE: Legacy Selector-Bearing AI Planning (TEMPORARY) ───────
+  service_selector_ai:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-006
+    adr: "architecture/adrs/0007-service-adapter-no-selector.md"
+    paths:
+      - "extension-service/routes/agent.js"
+    description: >
+      Legacy Groq-backed planning that receives selector-rich DOM snapshots and
+      returns selector-bearing driver actions. This is the real violation of the
+      Phase 3 no-selector doctrine (distinct from adapter recipes, which are
+      browser-private per ADR-0007).
+    migration_target: "Page-IR-aware ActionPlan v3 (architecture/action-plan.schema.json); selectors removed from planning I/O"
+
   # ── SERVICE: Profiles & Sessions (already in backend) ──────────────
   profiles_sessions:
     owner: extension_service
@@ -160,3 +184,49 @@ subsystems:
     paths:
       - "extension/knowledge-sync.js"
     description: "Extension-side sync client — fetches and caches server knowledge"
+
+  # ── SHARED CONTRACT: Browser Perception Architecture (Phase 3.0) ──
+  browser_perception_contract:
+    owner: shared
+    status: correct
+    paths:
+      - "architecture/perception-contract.yml"
+      - "architecture/page-ir.yml"
+      - "architecture/page-ir.schema.json"
+      - "architecture/action-plan.schema.json"
+      - "architecture/execution-observation.schema.json"
+      - "architecture/dom-access-policy.yml"
+      - "architecture/gateway-security.yml"
+      - "architecture/widget-taxonomy.yml"
+      - "architecture/perception-lifecycle.yml"
+      - "architecture/perception-privacy.yml"
+      - "architecture/perception-confidence.yml"
+      - "architecture/perception-performance.yml"
+      - "architecture/ir-migrations/"
+      - "architecture/adrs/"
+    description: "Frozen public IR, action/observation schemas, DOM boundary, gateway security, lifecycle, privacy, confidence, performance, and migration contracts"
+
+  # ── EXTENSION: Browser DOM Gateway (planned Phase 3.1) ─────────────
+  browser_dom_gateway:
+    owner: extension
+    status: planned
+    paths:
+      - "extension/runtime/dom-gateway.js"
+    description: "Restricted observation and interaction ports; sole new structural DOM access boundary"
+
+  # ── EXTENSION: Browser Perception Runtime (planned Phase 3.1+) ─────
+  browser_perception_runtime:
+    owner: extension
+    status: planned
+    paths:
+      - "extension/perception/"
+    description: "Produces validated PageSnapshot/PageDelta through the observation gateway; owns no service intelligence"
+
+  # ── SERVICE: Page IR Consumers (planned Phase 4+) ─────────────────
+  page_ir_consumers:
+    owner: extension_service
+    status: planned
+    paths:
+      - "extension-service/services/perception/"
+      - "extension-service/services/planner/"
+    description: "Consume public IR for semantic interpretation and planning; never receive browser-private bindings"

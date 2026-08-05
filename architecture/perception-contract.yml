@@ -1,0 +1,132 @@
+# CyberControl Browser Perception Contract
+# Phase 3.0 — architecture freeze for issue #96
+
+contract_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: extension.browser_perception
+
+principle: >
+  The extension is the eyes and hands. It observes browser facts, maintains
+  ephemeral browser bindings, performs mechanical actions, and reports
+  outcomes. The service owns knowledge, semantic interpretation, reasoning,
+  planning, learning, profiles, and business decisions.
+
+dom_interpretation_rule: "Browser Perception may interpret DOM structure; no other subsystem may perform semantic DOM discovery."
+execution_dom_rule: "Execution may access live elements solely through a constrained browser DOM gateway for mechanical action and postcondition verification."
+
+public_api:
+  name: perceivePage
+  input:
+    mode: "snapshot | delta"
+    since_revision: "integer | null"
+    include_geometry: boolean
+  output: "PageSnapshot | PageDelta"
+  constraints:
+    - "The public result MUST validate against architecture/page-ir.schema.json."
+    - "The public result MUST NOT contain selectors, XPath, DOM handles, HTML, or private binding identifiers."
+    - "The public result MUST be deterministic after volatile envelope fields are removed."
+    - "The public result MUST be safe to serialize and language independent."
+
+pipeline:
+  - stage: source_capture
+    owner: extension.browser_dom_gateway.observation
+    output: "bounded DOM, ARIA, geometry, context, and runtime facts"
+  - stage: structural_perception
+    owner: extension.browser_perception
+    output: "typed nodes, regions, controls, widgets, and observable state"
+  - stage: relationship_derivation
+    owner: extension.browser_perception
+    output: "evidence-bearing deterministic relationships and candidates"
+  - stage: validation
+    owner: extension.browser_perception.validation
+    output: "valid PageSnapshot or explicit perception failure"
+  - stage: interpretation
+    owner: extension_service
+    output: "semantic meaning, mapping, reasoning, and plans"
+
+observation_layers:
+  observed:
+    description: "Facts read directly from browser-observable state."
+    examples: ["accessible name", "role", "disabled state", "bounding box", "option count"]
+    confidence: 1.0
+  derived:
+    description: "Deterministic output of a versioned local detector."
+    examples: ["visual region membership", "widget behavior kind", "label relationship"]
+    requirements: ["detector id", "detector version", "evidence"]
+  candidate:
+    description: "Ambiguous interpretation that the service may accept or reject."
+    examples: ["confirmation relationship", "navigation intent", "cascade relationship"]
+    requirements: ["confidence", "alternatives where known", "evidence"]
+
+browser_perception_owns:
+  - "DOM and ARIA fact collection through the observation gateway"
+  - "Browsing-context and open-shadow-root discovery"
+  - "Page structure, regions, forms, sections, controls, and content nodes"
+  - "Deterministic widget behavior classification"
+  - "Observable relationships and evidence"
+  - "Runtime readiness signals and immutable snapshot production"
+  - "Perception validation, diagnostics, and technical confidence"
+
+browser_perception_must_not_own:
+  - "Profile-field mapping"
+  - "Business meaning or business validation"
+  - "Persistent portal knowledge"
+  - "AI or LLM calls"
+  - "Learning from users or sessions"
+  - "Action ordering or goal selection"
+  - "Choosing values to enter"
+  - "Authorization of irreversible actions"
+
+execution_contract:
+  allowed:
+    - "Receive an ActionPlan that references public IR node IDs and a snapshot revision"
+    - "Use the restricted interaction gateway with a browser-private binding"
+    - "Read mechanical postconditions required to verify an action"
+    - "Return stale_target when a binding or revision is stale"
+  forbidden:
+    - "Traverse the page to discover alternative targets"
+    - "Reclassify widgets or infer labels"
+    - "Infer field semantics or choose profile values"
+    - "Inspect page structure outside the interaction gateway"
+    - "Send selectors or private bindings to the service"
+
+service_contract:
+  consumes: ["PageSnapshot", "PageDelta", "ExecutionObservation"]
+  produces: ["ActionPlan"]
+  owns:
+    - "Knowledge resolution"
+    - "Semantic interpretation"
+    - "Reasoning and confidence policy"
+    - "Planning and navigation-goal selection"
+    - "Learning and persistent memory"
+  forbidden:
+    - "Request raw DOM or HTML"
+    - "Send CSS selectors or XPath"
+    - "Depend on framework-specific browser APIs"
+
+unsupported_content:
+  statuses: [recognized, partially_recognized, opaque, inaccessible, unsupported]
+  rule: >
+    Unknown or inaccessible content is valid IR with diagnostics and reduced
+    affordances. Perception MUST NOT invent structure to satisfy consumers.
+
+safety_invariants:
+  - "CAPTCHA solving, OTP disclosure, payments, and final submission are never authorized by perception."
+  - "No low-confidence candidate may silently become an execution target."
+  - "Every action is scoped to document_id, context_id, snapshot_id, node_id, and an exactly-matching expected revision."
+  - "A navigation invalidates all private bindings from the previous document."
+  - "Perception failure is explicit; legacy extraction is not silently represented as IR v2."
+
+references:
+  page_ir: "architecture/page-ir.yml"
+  json_schema: "architecture/page-ir.schema.json"
+  action_plan_schema: "architecture/action-plan.schema.json"
+  execution_observation_schema: "architecture/execution-observation.schema.json"
+  dom_policy: "architecture/dom-access-policy.yml"
+  gateway_security: "architecture/gateway-security.yml"
+  widget_taxonomy: "architecture/widget-taxonomy.yml"
+  lifecycle: "architecture/perception-lifecycle.yml"
+  privacy: "architecture/perception-privacy.yml"
+  confidence: "architecture/perception-confidence.yml"
+  performance: "architecture/perception-performance.yml"

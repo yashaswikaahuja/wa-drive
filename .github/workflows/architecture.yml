@@ -12,8 +12,8 @@ on:
 #   2. unit-and-knowledge — Phase 0/1/2 tests (no external deps)
 #   3. browser — Playwright-based capability tests (needs Chromium)
 #
-# Jobs run in parallel. Architecture is advisory (warn on frozen/ownership).
-# Unit and browser tests are hard-fail.
+# Jobs run in parallel. Frozen-file findings remain advisory; contract,
+# dependency, DOM-boundary, unit, and browser failures block the build.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 jobs:
@@ -40,7 +40,9 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             DIFF=$(git diff origin/${{ github.base_ref }}...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
           else
-            DIFF=$(git diff HEAD~1...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
+            DIFF=$(git diff "$BASE"...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
           fi
 
           VIOLATIONS=0
@@ -48,7 +50,7 @@ jobs:
           # FB-001: No new inline LLM fetch
           MATCHES=$(echo "$DIFF" | grep -iE "fetch\(.*(openrouter|groq|chat/completions)" || true)
           if [ -n "$MATCHES" ]; then
-            FORBIDDEN=$(git diff HEAD~1...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.js" | grep -v "background.js" || true)
+            FORBIDDEN=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.js" | grep -v "background.js" || true)
             if [ -n "$FORBIDDEN" ]; then
               echo "❌ FB-001: New inline LLM fetch" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -85,19 +87,21 @@ jobs:
         run: |
           echo "## Frozen Files" >> $GITHUB_STEP_SUMMARY
 
-          FROZEN_FILES=(
-            "extension/shared/option-match.js"
-            "extension/shared/dom-utils.js"
-            "extension/shared/network-idle.js"
-            "extension/shared/select-apply.js"
-            "extension/shared/label-utils.js"
-            "extension-dev/docs/ARCHITECTURE_AUDIT.md"
+          mapfile -t FROZEN_FILES < <(
+            sed -n 's/^[[:space:]]*- path: "\([^"]*\)".*/\1/p' architecture/phases.yml
           )
+
+          if [ ${#FROZEN_FILES[@]} -eq 0 ]; then
+            echo "❌ No frozen files found in architecture/phases.yml" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           else
-            CHANGED=$(git diff --name-only HEAD~1...HEAD)
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
+            CHANGED=$(git diff --name-only "$BASE"...HEAD)
           fi
 
           WARNINGS=0
@@ -143,6 +147,23 @@ jobs:
             exit 1
           fi
 
+      # ── Phase 3.0 architecture contracts ──────────────────────────
+      - name: "CHECK-008: Phase 3 architecture contracts"
+        if: always()
+        run: node extension-dev/tests/test-phase3-governance.mjs
+
+      # ── New structural DOM access boundary ────────────────────────
+      - name: "CHECK-009: DOM access boundary"
+        if: always()
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node tools/dom-boundary-check.mjs --base "origin/${{ github.base_ref }}"
+          else
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
+            node tools/dom-boundary-check.mjs --base "$BASE"
+          fi
+
       # ── Architecture health report ─────────────────────────────────
       - name: "CHECK-004: Architecture report"
         if: always()
@@ -151,13 +172,24 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Temporary exceptions | 5 (EXC-001..005) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Shared modules | 5 |" >> $GITHUB_STEP_SUMMARY
+          TEMP_EXCEPTIONS=$(grep -Ec '^[[:space:]]+- id: EXC-' architecture/constitution.yml || true)
+          FROZEN_COUNT=$(sed -n 's/^[[:space:]]*- path: "[^"]*".*/x/p' architecture/phases.yml | wc -l)
+          echo "| Temporary exceptions | $TEMP_EXCEPTIONS |" >> $GITHUB_STEP_SUMMARY
           echo "| Test files | $(find extension-dev/tests -name 'test-*' -type f 2>/dev/null | wc -l) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Frozen files | 6 |" >> $GITHUB_STEP_SUMMARY
-          echo "| Phase 0 | ✅ Frozen |" >> $GITHUB_STEP_SUMMARY
-          echo "| Phase 1 | ✅ Complete |" >> $GITHUB_STEP_SUMMARY
-          echo "| Phase 2 | 🔄 Active |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frozen files | $FROZEN_COUNT |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Phase Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase | Name | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------|--------|" >> $GITHUB_STEP_SUMMARY
+          awk '
+            /^  phase_[A-Za-z0-9_]+:/ { phase=$1; sub(":", "", phase); name=""; status="" }
+            /^    name:/ && phase != "" { name=$0; sub(/^[[:space:]]*name:[[:space:]]*/, "", name); gsub(/"/, "", name) }
+            /^    status:/ && phase != "" {
+              status=$0; sub(/^[[:space:]]*status:[[:space:]]*/, "", status); gsub(/"/, "", status)
+              printf "| %s | %s | %s |\n", phase, name, status
+              phase=""
+            }
+          ' architecture/phases.yml >> $GITHUB_STEP_SUMMARY
 
   # ════════════════════════════════════════════════════════════════════
   # JOB 2: Unit & Knowledge Tests
@@ -172,7 +204,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run unit and knowledge tests
+      - name: "CHECK-005: Unit and knowledge tests"
         run: node extension-dev/tests/ci-unit.mjs
 
   # ════════════════════════════════════════════════════════════════════
@@ -194,7 +226,7 @@ jobs:
           npm ci
           npx playwright install chromium --with-deps
 
-      - name: Run browser tests
+      - name: "CHECK-005: Browser tests"
         run: node extension-dev/tests/ci-browser.mjs
         env:
           # Use Playwright's bundled Chromium (no system Chrome needed)

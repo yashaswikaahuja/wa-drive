@@ -16,40 +16,69 @@ checks:
   # ── HARD FAILURES ──────────────────────────────────────────────────
 
   - id: CHECK-001
-    name: "No new duplicate implementations"
+    name: "Forbidden patterns"
     severity: fail
     description: >
-      Detects new function definitions that duplicate shared modules.
-      Uses forbidden_patterns from boundaries.yml (FB-002 through FB-007).
+      Rejects new code that reintroduces consolidated logic or inline LLM
+      calls. The workflow enforces FB-001 (inline LLM fetch), FB-002
+      (isVisible), FB-003 (getLabel), and FB-004 (option matching) on added
+      lines. FB-005 through FB-007 are declared in boundaries.yml but are not
+      yet grep-enforced; FB-008 (public-IR locators) is enforced by the Phase 3
+      governance test, and FB-009 (DOM access) is enforced by CHECK-009.
     method: "grep_diff"
     scope: "added_lines_only"
+    enforced_forbidden_patterns: ["FB-001", "FB-002", "FB-003", "FB-004"]
+    declared_not_grep_enforced: ["FB-005", "FB-006", "FB-007"]
     note: "Only checks NEW code in the diff, not existing violations"
 
-  - id: CHECK-002
-    name: "No new inline LLM fetch calls"
+  - id: CHECK-003
+    name: "Dependency direction"
     severity: fail
     description: >
-      New fetch() calls to LLM endpoints must use shared/llm-client.js.
-      Enforces FB-001 from boundaries.yml.
-    method: "grep_diff"
-    scope: "added_lines_only"
-    allowed_exceptions:
-      - "extension/shared/llm-client.js"
-      - "extension/background.js"
+      Rejects shared/ modules that import from autofill/, drivers/, or popup,
+      and drivers/ that import from autofill/ or popup. Uses
+      allowed_dependencies from boundaries.yml.
+    method: "grep_imports"
+    scope: "full_file"
 
-  - id: CHECK-003
+  - id: CHECK-005
     name: "Tests pass"
     severity: fail
-    description: "All test suites must pass (unit + integration + mapping guards)"
+    description: >
+      All unit, integration, model, capability, runner, knowledge, governance,
+      and browser suites pass. Runs in the unit-and-knowledge and browser CI
+      jobs plus the Phase 3 governance test.
     method: "run_tests"
     commands:
-      - "node extension/test/test-shared-modules.js"
-      - "node extension/test/test-integration.js"
-      - "node extension/test/test-mapping-guards.js"
+      - "node extension-dev/tests/ci-unit.mjs"
+      - "node extension-dev/tests/ci-browser.mjs"
+      - "node extension-dev/tests/test-phase3-governance.mjs"
+
+  - id: CHECK-008
+    name: "Phase 3 architecture contracts"
+    severity: fail
+    description: >
+      Verifies every frozen Phase 3.0/3.0.1 contract and ADR exists, the
+      canonical Page IR, ActionPlan, and ExecutionObservation schemas parse,
+      public schema fields contain no browser-private locator/binding keys,
+      Phase 2 remains frozen, and Phase 3.0 is frozen.
+    method: "run_governance_test"
+    command: "node extension-dev/tests/test-phase3-governance.mjs"
+
+  - id: CHECK-009
+    name: "No new DOM access outside gateway"
+    severity: fail
+    description: >
+      Rejects structural DOM APIs added outside extension/runtime/dom-gateway.js
+      and extension/perception/. Existing DOM access is grandfathered for
+      migration but may not expand. Enforces FB-009.
+    method: "grep_diff"
+    scope: "added_lines_only"
+    source: "architecture/dom-access-policy.yml"
 
   # ── WARNINGS ───────────────────────────────────────────────────────
 
-  - id: CHECK-004
+  - id: CHECK-002
     name: "Frozen file modification"
     severity: warn
     description: >
@@ -59,40 +88,25 @@ checks:
     method: "check_frozen_files"
     source: "architecture/phases.yml"
 
-  - id: CHECK-005
-    name: "Service-owned code modified"
-    severity: warn
-    description: >
-      Code owned by extension-service (per ownership.yml) is being
-      modified in the extension. This is expected during transition
-      but reviewer should verify it's not expanding the violation.
-    method: "check_ownership"
-    source: "architecture/ownership.yml"
-    filter: "status == temporary_violation"
-
-  - id: CHECK-006
-    name: "Dependency direction"
-    severity: warn
-    description: >
-      Checks that shared/ modules don't reference autofill/ or drivers/.
-      Checks that drivers/ don't reference autofill/ or popup.js.
-      Uses allowed_dependencies from boundaries.yml.
-    method: "grep_imports"
-    scope: "full_file"
-    note: "Warning only — some patterns are hard to detect statically"
-
   # ── INFO (always passes, generates report) ─────────────────────────
 
-  - id: CHECK-007
+  - id: CHECK-004
     name: "Architecture health report"
     severity: info
-    description: "Generates a summary of current architecture state"
+    description: "Generates a summary of current architecture state and phase status"
     method: "generate_report"
     outputs:
       - "Total temporary exceptions remaining"
-      - "Lines of code per subsystem"
-      - "Test count and coverage areas"
-      - "Files modified in this PR by subsystem"
+      - "Frozen file count"
+      - "Test file count"
+      - "Phase status table"
+
+removed_checks:
+  note: >
+    Earlier drafts declared a service-owned-code ownership check and a separate
+    dependency-direction warning that the workflow never implemented. They are
+    removed to keep this registry aligned with the executed CI steps. Ownership
+    drift is tracked in ownership.yml and reviewed manually.
 
 # ── Report format ────────────────────────────────────────────────────
 
@@ -101,7 +115,7 @@ report:
   output: "architecture-report.md"
   sections:
     - title: "Verification Results"
-      content: "Table of CHECK-001..007 with PASS/WARN/FAIL"
+      content: "Table of CHECK-001..009 with PASS/WARN/FAIL"
     - title: "Temporary Exceptions"
       content: "List from constitution.yml with file count"
     - title: "Phase Status"

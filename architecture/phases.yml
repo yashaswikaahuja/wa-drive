@@ -70,12 +70,34 @@ phases:
 
   phase_0_5:
     name: "Architecture Governance"
-    status: active
+    status: frozen
+    frozen_date: "2026-08-05"
     issues: ["#60"]
     description: "This governance framework itself."
 
-    frozen_files: []
-    note: "Will freeze once deployed to GitHub and CI is green"
+    frozen_files:
+      - path: "architecture/verification.yml"
+        reason: "CI check registry — must match the executed workflow steps"
+      - path: "architecture/boundaries.yml"
+        reason: "Dependency and forbidden-pattern definitions used by CI"
+      - path: "architecture/ownership.yml"
+        reason: "Subsystem ownership map used by review"
+      - path: ".github/workflows/architecture.yml"
+        reason: "Executed governance workflow"
+    note: >
+      Frozen now that the governance workflow is deployed and CI is green. A
+      later phase (e.g. Phase 3.0) may not claim its governance is frozen while
+      this framework is unfrozen, so this phase is frozen together with the
+      contracts that depend on it.
+
+    allowed_changes:
+      - "Aligning check IDs/labels with the executed workflow"
+      - "Adding new checks or forbidden patterns"
+      - "Correcting factual drift between registry and workflow"
+
+    forbidden_changes:
+      - "Silently diverging verification IDs from workflow steps"
+      - "Removing a check without recording it in removed_checks"
 
 # ── Completed phases ─────────────────────────────────────────────────
 
@@ -152,14 +174,101 @@ phases:
         description: "Derived values still computed in extension (derive.js)"
         removal_condition: "Service computes derived values and includes them in profile"
 
-# ── Future phases ───────────────────────────────────────────────────
+# ── Phase 3 architecture gate ───────────────────────────────────────
+
+  phase_3_0:
+    name: "Browser Perception Architecture & Governance"
+    status: frozen
+    frozen_date: "2026-08-05"
+    issues: ["#96"]
+    remediation:
+      issue: "#97"
+      tracker: "CYB-68"
+      title: "Phase 3.0.1 — Fix Browser Perception Contract Blockers Before Freeze"
+      status: in_progress
+      note: >
+        The Phase 3.0 freeze was rejected by principal architecture review. The
+        frozen contracts below have been amended by Phase 3.0.1 to resolve P0
+        blockers (typed deltas, document/context identity, exact stale-target
+        semantics, ActionPlan v3 and ExecutionObservation schemas, in-schema
+        privacy, canonicalization standard, gateway threat model, bridge/token
+        hardening, governance reconciliation, and the selector-adapter conflict).
+        Ratification of the freeze remains pending a follow-up adversarial review;
+        issue #97 stays OPEN until that review passes.
+    description: >
+      Architecture-only gate defining Page IR v2, public/private binding
+      separation, DOM gateway boundaries, snapshot lifecycle, privacy,
+      confidence, widget taxonomy, performance, and migration. No perception
+      runtime behavior is implemented by this phase.
+    frozen_files:
+      - path: "architecture/perception-contract.yml"
+        reason: "Normative eyes/hands versus brain contract"
+      - path: "architecture/page-ir.yml"
+        reason: "Human-readable public Page IR v2 contract"
+      - path: "architecture/page-ir.schema.json"
+        reason: "Canonical language-independent PageSnapshot/PageDelta schema"
+      - path: "architecture/action-plan.schema.json"
+        reason: "Canonical ActionPlan v3 service→extension contract (Phase 3.0.1)"
+      - path: "architecture/execution-observation.schema.json"
+        reason: "Canonical ExecutionObservation v3 extension→service contract (Phase 3.0.1)"
+      - path: "architecture/dom-access-policy.yml"
+        reason: "Observation and interaction gateway boundary"
+      - path: "architecture/gateway-security.yml"
+        reason: "DOM gateway threat model and bridge/token hardening (Phase 3.0.1)"
+      - path: "architecture/widget-taxonomy.yml"
+        reason: "Behavior-based widget classification contract"
+      - path: "architecture/perception-lifecycle.yml"
+        reason: "Document, snapshot, revision, delta, and stale-target lifecycle"
+      - path: "architecture/perception-privacy.yml"
+        reason: "Data minimization, redaction, and screenshot policy"
+      - path: "architecture/perception-confidence.yml"
+        reason: "Evidence and technical confidence model"
+      - path: "architecture/perception-performance.yml"
+        reason: "Perception payload and latency budgets"
+      - path: "architecture/ir-migrations/README.md"
+        reason: "IR v1 to v2 compatibility and rollout policy"
+      - path: "architecture/adrs/0001-public-ir-private-bindings.md"
+        reason: "Accepted public/private binding decision"
+      - path: "architecture/adrs/0002-snapshot-revision-lifecycle.md"
+        reason: "Accepted immutable snapshot decision"
+      - path: "architecture/adrs/0003-dom-gateway-boundaries.md"
+        reason: "Accepted DOM gateway decision"
+      - path: "architecture/adrs/0004-perception-identity.md"
+        reason: "Accepted document-scoped identity decision"
+      - path: "architecture/adrs/0005-cross-origin-contexts.md"
+        reason: "Accepted inaccessible-context decision"
+      - path: "architecture/adrs/0006-screenshot-privacy.md"
+        reason: "Accepted screenshot privacy decision"
+      - path: "architecture/adrs/0007-service-adapter-no-selector.md"
+        reason: "Accepted selector-adapter reconciliation decision (Phase 3.0.1)"
+    allowed_changes:
+      - "Clarifications that do not weaken a MUST or MUST NOT rule"
+      - "Additive optional IR fields with schema and migration tests"
+      - "Measured budget tightening with benchmark evidence"
+      - "Privacy restrictions that reduce collected data"
+    forbidden_changes:
+      - "Adding selectors, XPath, DOM handles, HTML, or private bindings to public IR"
+      - "Allowing service-side DOM access or browser-specific planning"
+      - "Allowing execution to perform semantic discovery"
+      - "Weakening secret, screenshot, or cross-origin protections without a new ADR"
+      - "Changing IR major-version semantics without a migration plan"
+
+# ── Future implementation phases ────────────────────────────────────
 
   phase_3:
     name: "Browser Perception"
-    status: planned
-    description: "Page understanding beyond DOM extraction. Component detection, cascade graph."
+    status: architecture_approved_not_started
+    issues: []
+    description: "Implement Page IR v2 behind a feature flag without changing autofill behavior until gated."
     prerequisites:
-      - "Phase 2 knowledge model available"
+      - "Phase 2 frozen at tag phase-2-frozen"
+      - "Phase 3.0 architecture frozen (#96)"
+      - "Canonical Page IR schema validation in CI"
+    implementation_gates:
+      - "No runtime code before a scoped Phase 3.x issue"
+      - "Shadow mode before negotiated publication"
+      - "Privacy and schema validation before transmission"
+      - "Corpus, performance, and unpacked-extension tests before primary rollout"
 
   phase_4:
     name: "Planner"

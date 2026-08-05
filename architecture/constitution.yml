@@ -8,16 +8,31 @@
 # Enforcement: .github/workflows/architecture.yml
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-version: "1.0"
-date: "2026-08-03"
+version: "1.1"
+date: "2026-08-05"
 status: active
+
+phase_3_0_boundary:
+  status: frozen
+  issue: "#96"
+  doctrine: >
+    The browser observes facts, maintains ephemeral bindings, performs
+    mechanical actions, and reports outcomes. The service interprets facts,
+    applies knowledge, reasons, plans, and learns.
+  public_ir:
+    schema: "architecture/page-ir.schema.json"
+    forbidden: [selectors, xpath, html, dom_handles, private_bindings, raw_secret_values]
+  dom_gateway:
+    observation_port: "read-only facts for Browser Perception"
+    interaction_port: "binding-scoped mechanical actions and verification for Execution"
+  interpretation_rule: "Only Browser Perception interprets page structure; Execution cannot perform semantic discovery."
 
 runtimes:
   extension:
-    name: "Extension (Execution Engine)"
+    name: "Extension (Browser Perception and Execution Runtime)"
     environment: "Chrome browser, Manifest V3"
     context: "Content scripts (ISOLATED world) + Service Worker"
-    principle: "Stateless execution. Same plan → same result."
+    principle: "Deterministic eyes and hands. Same valid snapshot-bound plan → same mechanical behavior."
 
     allowed_responsibilities:
       - perception:

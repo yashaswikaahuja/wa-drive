@@ -9,7 +9,27 @@
 # Existing violations are tracked in constitution.yml temporary_exceptions.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-version: "1.0"
+version: "1.1"
+
+phase_3_boundaries:
+  public_ir:
+    canonical_schema: "architecture/page-ir.schema.json"
+    must_not_contain: [selector, css_selector, xpath, html, dom_handle, element_reference, binding_id]
+  dom_access:
+    policy: "architecture/dom-access-policy.yml"
+    new_structural_access_allowed_in:
+      - "extension/runtime/dom-gateway.js"
+      - "extension/perception/"
+    all_other_extension_paths: "must use observation or interaction gateway"
+  dependency_direction:
+    description: "service intelligence → public IR contract ← browser perception; service never depends on browser bindings"
+    rules:
+      - "extension/perception/ may depend on the DOM gateway and IR validator"
+      - "extension/execution/ may depend on the interaction gateway and capability adapters"
+      - "execution must not depend on perception detectors"
+      - "service consumers may depend on Page IR schema, never extension runtime code"
+  legacy_dom_access:
+    status: "grandfathered; no expansion; remove through scoped Phase 3.x issues"
 
 # ── Allowed dependency directions ────────────────────────────────────
 #
@@ -162,3 +182,25 @@ forbidden_patterns:
       - "extension/shared/label-utils.js"
       - "extension/background.js"  # service worker copy
     message: "Use calcConfidence from shared/label-utils.js"
+
+
+  - id: FB-008
+    description: "No browser-private locators in public Page IR schema"
+    pattern: "selector|css_selector|xpath|outer_html|inner_html|dom_handle|element_reference|binding_id"
+    allowed_in:
+      - "architecture/dom-access-policy.yml"
+      - "architecture/gateway-security.yml"
+      - "architecture/action-plan.schema.json"
+      - "architecture/execution-observation.schema.json"
+      - "architecture/ir-migrations/"
+      - "architecture/adrs/"
+    message: "Public Page IR must use document-scoped node IDs; private bindings remain browser-only"
+
+  - id: FB-009
+    description: "No new structural DOM access outside the Phase 3 gateway/perception boundary"
+    pattern: "document\\.querySelector(All)?|\\.closest\\(|\\.matches\\(|getBoundingClientRect\\(|getComputedStyle\\(|new MutationObserver"
+    allowed_in:
+      - "extension/runtime/dom-gateway.js"
+      - "extension/perception/"
+    scope: added_lines_only
+    message: "Use the Browser DOM Gateway; legacy DOM paths are grandfathered but may not expand"

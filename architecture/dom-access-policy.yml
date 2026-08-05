@@ -1,0 +1,127 @@
+# CyberControl DOM Access Policy
+# Phase 3.0 — accepted boundary for browser eyes and hands
+
+policy_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: extension.browser_runtime
+
+core_rule: >
+  Only the Browser DOM Gateway may call structural DOM discovery APIs in new
+  Phase 3 code. Perception consumes the observation port. Execution consumes
+  the interaction port. Neither service code nor higher browser subsystems
+  receive raw Element objects, selectors, XPath, or HTML.
+
+planned_gateway:
+  path: "extension/runtime/dom-gateway.js"
+  world: "content_isolated_world"
+  page_reachable: false
+  note: >
+    The gateway and private binding table live in the extension isolated world.
+    They are NOT installed on the page window; there is no page-callable
+    window.ccDomGateway. See architecture/gateway-security.yml for the full
+    threat model, caller authentication, capability scoping, and TOCTOU
+    revalidation requirements.
+  ports:
+    observation:
+      consumers: ["extension/perception/"]
+      side_effect: none
+      allowed_operations:
+        - "capture bounded structural facts"
+        - "read ARIA and mechanical state"
+        - "read geometry in batched layout passes"
+        - "enumerate accessible child contexts and open shadow roots"
+      forbidden_operations:
+        - "mutate controls"
+        - "choose semantic meanings"
+        - "return live nodes to service-facing code"
+    interaction:
+      consumers: ["extension/execution/", "extension/runtime/runner.js during migration"]
+      side_effect: mechanical
+      allowed_operations:
+        - "focus, scroll, type, clear, activate, toggle, select, upload"
+        - "read only the postcondition needed to verify the requested action"
+        - "resolve a private binding scoped to document_id and node_id"
+      forbidden_operations:
+        - "page-wide traversal"
+        - "label discovery"
+        - "widget reclassification"
+        - "alternative-target search"
+        - "semantic or business decisions"
+
+private_binding_table:
+  owner: planned_gateway
+  keys: [context_id, node_id]
+  resolves_to: "Context(context_id).document_id + node_id"
+  fields: [live_node_reference, binding_generation, adapter_id, created_revision]
+  storage: memory_only
+  world: content_isolated_world
+  serialization: prohibited
+  persistence: prohibited
+  invalidation:
+    - "full navigation or context destruction"
+    - "node removal"
+    - "binding generation mismatch"
+    - "explicit perception reset"
+
+structural_dom_apis:
+  patterns:
+    - "document.querySelector"
+    - "document.querySelectorAll"
+    - ".closest("
+    - ".matches("
+    - "getBoundingClientRect("
+    - "getComputedStyle("
+    - "MutationObserver"
+  new_code_allowed_in:
+    - "extension/runtime/dom-gateway.js"
+    - "extension/perception/"
+  note: >
+    Perception may use read-only local node traversal supplied by the gateway.
+    CI initially applies this rule to added lines so legacy runtime remains
+    functional during migration.
+
+forbidden_consumers:
+  - extension_service
+  - knowledge
+  - reasoning
+  - planning
+  - learning
+  - profiles
+  - business_logic
+
+legacy_exceptions:
+  status: grandfathered_not_approved_for_expansion
+  removal_target: "Phase 3.9 migration completion"
+  paths:
+    - "extension/autofill/extractor.js"
+    - "extension/models/ir.js"
+    - "extension/autofill/executor.js"
+    - "extension/autofill/plugins/"
+    - "extension/runtime/resolver.js"
+    - "extension/runtime/runner.js"
+    - "extension/runtime/plugin-bridge.js"
+    - "extension/capabilities/registry.js"
+    - "extension/drivers/"
+    - "extension/shared/dom-utils.js"
+    - "extension/popup.js injected page functions"
+    - "extension/background.js injected page functions"
+  rules:
+    - "Existing access may remain until its migration issue is completed."
+    - "New structural discovery logic MUST NOT be added to a legacy exception path."
+    - "Bug fixes must not expand the DOM surface and require regression tests."
+
+execution_targeting:
+  required: [document_id, snapshot_id, node_id, expected_revision]
+  stale_behavior: "Return stale_target; request a new perception snapshot; never fall back to a selector."
+  adapter_behavior: "Use the adapter_id chosen by perception; fail adapter_mismatch instead of reclassifying."
+
+cross_origin:
+  rule: "Never bypass same-origin policy or extension permission controls."
+  output: "Opaque context with access status and diagnostic."
+
+ci_enforcement:
+  check_id: CHECK-009
+  scope: added_lines_in_extension_javascript
+  behavior: fail
+  policy: "Reject new structural DOM API use outside new_code_allowed_in."

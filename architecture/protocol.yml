@@ -466,3 +466,37 @@ migration:
       Extension declares protocol_version in CapabilityResult.
       Service sends plans compatible with the declared version.
       Extension supporting v2 also accepts v1 (backward compatible).
+
+
+# ══════════════════════════════════════════════════════════════════════
+# PHASE 3.0 COMPATIBILITY RESERVATION (Issue #96)
+# ══════════════════════════════════════════════════════════════════════
+#
+# This section freezes future compatibility rules only. Protocol v2 remains
+# the active runtime protocol until a scoped Phase 3.x implementation issue
+# introduces negotiated Page IR messages.
+
+phase_3_compatibility:
+  status: architecture_frozen_runtime_inactive
+  page_ir_version: "2.0.0"
+  schema: "architecture/page-ir.schema.json"
+  negotiation:
+    extension_advertises: "page_ir_versions: string[]"
+    service_selects: "highest mutually supported compatible version"
+    no_common_version: "unsupported_page_ir_version"
+    no_negotiation: "remain on complete legacy protocol-v2 flow"
+  future_messages:
+    - name: Perceive
+      direction: "service → extension"
+      payload: "mode: snapshot|delta, since_revision: integer|null"
+    - name: PagePerceived
+      direction: "extension → service"
+      payload: "PageSnapshot|PageDelta"
+  future_targeting:
+    required: [document_id, snapshot_id, node_id, expected_revision]
+    selector_fallback: prohibited
+  compatibility:
+    old_extension_new_service: "accept tagged legacy_page_model through a quarantined compatibility adapter"
+    new_extension_old_service: "keep legacy end-to-end path; do not down-convert v2 into selector-bearing public IR"
+    new_extension_new_service: "use negotiated Page IR v2 after feature and privacy gates"
+  migration: "architecture/ir-migrations/README.md"

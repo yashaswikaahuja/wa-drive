@@ -33,6 +33,7 @@ inbox/
 data/
 tools/*
 !tools/forbidden-deps-check.mjs
+!tools/dom-boundary-check.mjs
 /tests/
 worker/
 
