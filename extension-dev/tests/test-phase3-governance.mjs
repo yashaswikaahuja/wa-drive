@@ -154,6 +154,11 @@ ok(gatewaySecurity.includes('page_reachable: false'), 'gateway is not page-reach
 ok(gatewaySecurity.includes('SEC-002'), 'gateway-security records the token-leak defect');
 ok(gatewaySecurity.includes('toctou_revalidation'), 'gateway defines TOCTOU revalidation');
 
+ok(existsSync(resolve(ROOT, 'extension-dev/tests/ratification/run-conformance.mjs')),
+  'adversarial schema conformance harness exists');
+ok(existsSync(resolve(ROOT, 'architecture/action-plan.schema.json')), 'ActionPlan v3 schema present');
+ok(existsSync(resolve(ROOT, 'architecture/execution-observation.schema.json')), 'ExecutionObservation v3 schema present');
+
 const lifecycleText = read('architecture/perception-lifecycle.yml');
 ok(lifecycleText.includes('expected_revision exactly equals'), 'lifecycle requires exact revision equality');
 ok(lifecycleText.includes('rebinding_continuity'), 'lifecycle defines rerender rebinding continuity');
@@ -200,6 +205,8 @@ ok(ownership.includes('browser_dom_gateway:'), 'ownership reserves the DOM gatew
 ok(boundaries.includes('FB-008') && boundaries.includes('FB-009'), 'boundaries define public-IR and DOM-access checks');
 ok(constitution.includes('phase_3_0_boundary:'), 'constitution contains the frozen Phase 3 boundary');
 ok(verification.includes('CHECK-008') && verification.includes('CHECK-009'), 'verification registers Phase 3 contract and DOM checks');
+ok(verification.includes('CHECK-010'), 'verification registers adversarial schema conformance');
+ok(workflow.includes('run-conformance.mjs'), 'CI runs adversarial schema conformance');
 ok(protocol.includes('phase_3_compatibility:'), 'protocol reserves negotiated Page IR compatibility');
 ok(!workflow.includes('| Phase 2 | 🔄 Active |'), 'CI no longer reports Phase 2 as active');
 ok(workflow.includes('test-phase3-governance.mjs'), 'CI runs Phase 3 governance tests');

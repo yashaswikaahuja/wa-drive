@@ -76,6 +76,19 @@ checks:
     scope: "added_lines_only"
     source: "architecture/dom-access-policy.yml"
 
+  - id: CHECK-010
+    name: "Adversarial schema conformance"
+    severity: fail
+    description: >
+      Validates positive and malicious fixtures against the canonical Page IR,
+      ActionPlan v3, and ExecutionObservation v3 schemas using a real Draft
+      2020-12 validator (AJV). Positive fixtures MUST validate; malicious
+      fixtures (selector smuggling, untyped deltas, secret-without-redaction,
+      fuzzy/selector plan targets, raw value leaks) MUST be rejected. This is
+      the enforceability proof required to ratify the Phase 3.0 freeze.
+    method: "run_conformance"
+    command: "node extension-dev/tests/ratification/run-conformance.mjs"
+
   # ── WARNINGS ───────────────────────────────────────────────────────
 
   - id: CHECK-002

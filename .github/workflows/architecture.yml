@@ -208,6 +208,26 @@ jobs:
         run: node extension-dev/tests/ci-unit.mjs
 
   # ════════════════════════════════════════════════════════════════════
+  # JOB: Phase 3 Schema Conformance (adversarial ratification)
+  # ════════════════════════════════════════════════════════════════════
+  schema-conformance:
+    name: Phase 3 Schema Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install conformance dependencies
+        working-directory: extension-dev/tests/ratification
+        run: npm ci
+
+      - name: "CHECK-010: Adversarial schema conformance"
+        run: node extension-dev/tests/ratification/run-conformance.mjs
+
+  # ════════════════════════════════════════════════════════════════════
   # JOB 3: Browser Capability Tests
   # ════════════════════════════════════════════════════════════════════
   browser:

@@ -130,7 +130,9 @@
         {
           "description": "Secret-classified nodes MUST be redacted and MUST NOT carry raw text or an unmasked value state.",
           "if": {
-            "properties": { "privacy": { "properties": { "classification": { "const": "secret" } } }, "required": ["privacy"] }
+            "type": "object",
+            "required": ["privacy"],
+            "properties": { "privacy": { "properties": { "classification": { "const": "secret" } } } }
           },
           "then": {
             "properties": {

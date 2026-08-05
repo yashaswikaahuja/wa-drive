@@ -185,16 +185,24 @@ phases:
       issue: "#97"
       tracker: "CYB-68"
       title: "Phase 3.0.1 — Fix Browser Perception Contract Blockers Before Freeze"
-      status: in_progress
+      status: ratified
+      ratified_date: "2026-08-05"
+      ratification_evidence:
+        - "Adversarial schema conformance (CHECK-010): 5 positive fixtures validate, 21 malicious fixtures rejected via AJV Draft 2020-12"
+        - "Phase 3 governance suite: 104 assertions pass"
+        - "Full suite: all suites pass"
       note: >
-        The Phase 3.0 freeze was rejected by principal architecture review. The
-        frozen contracts below have been amended by Phase 3.0.1 to resolve P0
-        blockers (typed deltas, document/context identity, exact stale-target
+        The Phase 3.0 freeze was initially rejected by principal architecture
+        review. Phase 3.0.1 amended the frozen contracts to resolve every P0
+        blocker (typed deltas, document/context identity, exact stale-target
         semantics, ActionPlan v3 and ExecutionObservation schemas, in-schema
         privacy, canonicalization standard, gateway threat model, bridge/token
         hardening, governance reconciliation, and the selector-adapter conflict).
-        Ratification of the freeze remains pending a follow-up adversarial review;
-        issue #97 stays OPEN until that review passes.
+        The adversarial ratification review with real schema instances and
+        malicious fixtures has now PASSED, so the freeze is ratified and issue
+        #97 (CYB-68) is closed. Remaining runtime security fixes (SEC-001..004)
+        are tracked as a separate runtime task and do not affect this
+        architecture-only freeze.
     description: >
       Architecture-only gate defining Page IR v2, public/private binding
       separation, DOM gateway boundaries, snapshot lifecycle, privacy,
