@@ -52,6 +52,7 @@ recover-resolver.sh
 update-tunnel-url.sh
 package.json.bak
 package-lock.json
+!extension-dev/tests/browser/package-lock.json
 
 # Old docs (kept in docs/ if needed)
 VERCEL_GCP_GUIDE.md
