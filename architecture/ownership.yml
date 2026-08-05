@@ -128,5 +128,23 @@ subsystems:
     owner: shared
     status: correct
     paths:
-      - "extension/test/"
-    description: "Unit, integration, and mapping guard tests"
+      - "extension-dev/tests/"
+    description: "Unit, integration, mapping guard, browser, and knowledge model tests"
+
+  # ── SERVICE: Knowledge Store (Phase 2) ─────────────────────────────
+  knowledge_store:
+    owner: extension_service
+    status: correct
+    paths:
+      - "extension-service/knowledge-store.js"
+      - "extension-service/scope-resolver.js"
+      - "extension-service/validation-engine.js"
+      - "extension-service/knowledge-versioning.js"
+      - "extension-service/seed-knowledge.js"
+      - "extension-service/routes/knowledge.js"
+      - "extension-service/routes/resolve.js"
+      - "extension-service/routes/validate.js"
+      - "extension-service/routes/versions.js"
+      - "extension-service/routes/sync.js"
+      - "extension-service/migrations/003_knowledge_store.sql"
+    description: "Knowledge model: store, resolution, validation, versioning, sync"

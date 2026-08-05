@@ -55,7 +55,7 @@ phases:
       Service = planning/knowledge/memory/judgment/AI.
 
     frozen_files:
-      - path: "extension/ARCHITECTURE_AUDIT.md"
+      - path: "extension-dev/docs/ARCHITECTURE_AUDIT.md"
         reason: "Architecture contract — changes require architectural review"
 
     allowed_changes:
@@ -77,27 +77,49 @@ phases:
     frozen_files: []
     note: "Will freeze once deployed to GitHub and CI is green"
 
-# ── Future phases (not yet started) ─────────────────────────────────
+# ── Completed phases ─────────────────────────────────────────────────
 
   phase_1:
     name: "Execution Engine"
-    status: planned
-    description: "Build every browser capability. Define action plan schema."
-    prerequisites:
-      - "Action Plan schema specification"
-      - "Extension↔Service protocol definition"
+    status: complete_with_exceptions
+    frozen_date: "2026-08-04"
+    issues: ["#61", "#62", "#63", "#64", "#79", "#80", "#81", "#82", "#84"]
+    description: >
+      All 15 browser capabilities built and tested. Runner, resolver,
+      capability registry, IR models implemented. Executor remains primary
+      engine (runner is observer-only). 384→537 tests.
+    exceptions:
+      - "Runner is not primary execution engine (executor remains primary)"
+      - "ActionPlan schema defined by code, not formal spec document"
+      - "No true unpacked-extension E2E test"
+
+# ── Active phases ───────────────────────────────────────────────────
 
   phase_2:
-    name: "Browser Perception"
-    status: planned
-    description: "Page understanding beyond DOM extraction."
-    prerequisites:
-      - "Phase 1 action vocabulary defined"
+    name: "Knowledge Model"
+    status: active
+    issues: ["#85", "#86", "#87", "#88", "#89", "#90", "#91"]
+    description: >
+      Server-side knowledge model: universal schema, knowledge store,
+      scope resolution engine, validation engine, hardcoded knowledge
+      migration, versioning/migration safety, sync protocol.
+    sub_phases:
+      - "2.1: Universal Knowledge Schema (#85) ✓"
+      - "2.2: Knowledge Store (#86) ✓"
+      - "2.3: Scope Resolution Engine (#87) ✓"
+      - "2.4: Validation Engine (#88) ✓"
+      - "2.5: Audit and Migrate Hardcoded Knowledge (#89) ✓"
+      - "2.6: Versioning and Migration Safety (#90) ✓"
+      - "2.7: Sync Protocol (#91) ✓"
+
+# ── Future phases ───────────────────────────────────────────────────
 
   phase_3:
-    name: "Knowledge Model"
+    name: "Browser Perception"
     status: planned
-    description: "Service-owned field mappings, portal catalog, semantic graph."
+    description: "Page understanding beyond DOM extraction. Component detection, cascade graph."
+    prerequisites:
+      - "Phase 2 knowledge model available"
 
   phase_4:
     name: "Planner"
