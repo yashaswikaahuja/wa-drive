@@ -116,10 +116,14 @@ message_bridge:
 enforcement:
   architecture_status: "This threat model is frozen as of Phase 3.0.1."
   runtime_status: >
-    SEC-001..SEC-004 describe live runtime defects. Their code fixes are a
-    separate, scoped runtime task and are NOT implemented by this architecture
-    change. Phase 3.x implementation MUST NOT ship a page-reachable gateway and
-    MUST remove DOM-attribute token exposure before any perception transmission.
+    SEC-001..SEC-004 were live runtime defects. They are RESOLVED in the runtime
+    by issue #98 (Phase 3 Runtime Security Hardening): the content-script bridge
+    now authenticates sender/origin/type; bearer token, backend URL, and LLM key
+    were removed from page-readable DOM attributes and moved to an isolated-world
+    context object; CONNECT and other auth/state-mutating messages are gated on a
+    trusted frontend origin; and host_permissions was narrowed from <all_urls> to
+    the explicit portal allowlist. Regression coverage lives in
+    extension-dev/tests/test-security-bridge.mjs.
   references:
     dom_policy: "architecture/dom-access-policy.yml"
     lifecycle: "architecture/perception-lifecycle.yml"

@@ -621,13 +621,13 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           if (++attempts >= 15) {
             clearInterval(interval);
             // AI fallback — ask LLM to pick the best option
-            const groqKey = window._cc_groq_key || (document.body.getAttribute('data-cc-llm-key') || '');
+            const groqKey = (window.__ccFillCtx && window.__ccFillCtx.llmKey) || window._cc_groq_key || '';
             if (groqKey && realOpts.length > 0) {
               const optTexts = realOpts.map(o => o.text.trim()).join('\n');
               window.ccLLM.call({
                 apiKey: groqKey,
-                baseUrl: document.body.getAttribute('data-cc-llm-url') || undefined,
-                model: document.body.getAttribute('data-cc-llm-model') || undefined,
+                baseUrl: (window.__ccFillCtx && window.__ccFillCtx.llmBaseUrl) || undefined,
+                model: (window.__ccFillCtx && window.__ccFillCtx.llmModel) || undefined,
                 userPrompt: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts,
                 maxTokens: 50,
               }).then(result => {
@@ -1041,8 +1041,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   // After runtime settles, snapshot filled values.
   // On form submit or page unload, capture final state and POST corrections.
   setTimeout(() => {
-    const _ccBackendUrl = document.body.getAttribute('data-cc-backend') || '';
-    const _ccFormKey = document.body.getAttribute('data-cc-formkey') || '';
+    const _ccCtx = window.__ccFillCtx || {};
+    const _ccBackendUrl = _ccCtx.backendUrl || '';
+    const _ccFormKey = _ccCtx.formKey || '';
     const snapshot = {};
     const fieldMeta = {};
     for (const [selector, fieldData] of entries) {
@@ -1113,10 +1114,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     function postCorrections(trigger) {
       const corrections = captureCorrections(trigger);
       if (corrections.length === 0) return;
-      document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections));
       if (_ccBackendUrl) {
-        const _ccToken = document.body.getAttribute('data-cc-token') || '';
-        const _ccProfileId = document.body.getAttribute('data-cc-profile-id') || '';
+        const _ccToken = _ccCtx.accessToken || '';
+        const _ccProfileId = _ccCtx.profileId || '';
         const headers = { 'Content-Type': 'application/json' };
         if (_ccToken) headers['Authorization'] = 'Bearer ' + _ccToken;
         fetch(_ccBackendUrl + '/corrections', {

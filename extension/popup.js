@@ -561,16 +561,21 @@ fillBtn.addEventListener('click', async () => {
         } catch (e) { console.warn('[CC] Alias load skipped:', e.message); }
 
         const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
-        // Stash backend URL + token + formkey + profileId on document.body so executor's
-        // post-fill correction observer can authenticate its POSTs and link to profile
+        // SEC-002: keep backend URL, bearer token, and LLM key in the extension's
+        // ISOLATED-world scope, NOT on page-readable DOM attributes. These autofill
+        // scripts run in the isolated world, so window.__ccFillCtx is invisible to
+        // page (MAIN-world) scripts. The post-fill correction observer in
+        // executor.js reads this same object.
         try {
-          document.body.setAttribute('data-cc-backend', backendUrl);
-          document.body.setAttribute('data-cc-token', accessToken);
-          document.body.setAttribute('data-cc-formkey', semanticFormKey || '');
-          document.body.setAttribute('data-cc-profile-id', profileId || '');
-          document.body.setAttribute('data-cc-llm-url', llmBaseUrl || '');
-          document.body.setAttribute('data-cc-llm-model', llmModel || '');
-          document.body.setAttribute('data-cc-llm-key', groqKey || '');
+          window.__ccFillCtx = {
+            backendUrl: backendUrl,
+            accessToken: accessToken,
+            formKey: semanticFormKey || '',
+            profileId: profileId || '',
+            llmBaseUrl: llmBaseUrl || '',
+            llmModel: llmModel || '',
+            llmKey: groqKey || '',
+          };
         } catch {}
         if (!formFields.length) return { ok: false, error: 'No form fields detected' };
 
