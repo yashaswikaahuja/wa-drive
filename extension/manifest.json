@@ -28,7 +28,8 @@
     "*://*.passportindia.gov.in/*",
     "*://*.digilocker.gov.in/*",
     "*://*.umang.gov.in/*",
-    "*://*.services.india.gov.in/*"
+    "*://*.services.india.gov.in/*",
+    "*://*.serviceonline.bihar.gov.in/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -59,7 +60,8 @@
         "*://*.passportindia.gov.in/*",
         "*://*.digilocker.gov.in/*",
         "*://*.umang.gov.in/*",
-        "*://*.services.india.gov.in/*"
+        "*://*.services.india.gov.in/*",
+    "*://*.serviceonline.bihar.gov.in/*"
       ],
       "js": [
         "content.js"

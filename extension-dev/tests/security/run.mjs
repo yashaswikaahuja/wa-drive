@@ -319,6 +319,7 @@ console.log('\n=== SEC-004: host permissions remain narrow and explicit ===');
     '*://*.digilocker.gov.in/*',
     '*://*.umang.gov.in/*',
     '*://*.services.india.gov.in/*',
+    '*://*.serviceonline.bihar.gov.in/*',
   ];
   const permissions = manifest.host_permissions || [];
   equal([...permissions].sort(), [...approved].sort(), 'host_permissions equals the reviewed portal allowlist');
