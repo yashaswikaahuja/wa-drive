@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Perception Test — Date Picker Families</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .field { margin: 20px 0; }
+    label { display: block; margin-bottom: 4px; font-weight: bold; }
+    .split-date-group { display: flex; gap: 8px; }
+    .split-date-group input { width: 70px; padding: 6px; text-align: center; }
+    .split-date-group label { font-size: 0.8em; color: #666; }
+  </style>
+</head>
+<body>
+  <h1>Date Picker Widget Families</h1>
+
+  <!-- Native date input -->
+  <div class="field">
+    <label for="native-dob">Date of Birth (Native date)</label>
+    <input type="date" id="native-dob" name="dob">
+  </div>
+
+  <!-- Native datetime-local -->
+  <div class="field">
+    <label for="native-dt">Appointment (Native datetime-local)</label>
+    <input type="datetime-local" id="native-dt" name="appointment">
+  </div>
+
+  <!-- Flatpickr -->
+  <div class="field">
+    <label for="fp-dob">Date of Birth (Flatpickr)</label>
+    <input type="text" id="fp-dob" name="fp_dob" class="flatpickr-input" placeholder="DD/MM/YYYY" autocomplete="off">
+  </div>
+
+  <!-- jQuery UI Datepicker -->
+  <div class="field">
+    <label for="jq-dob">Date of Birth (jQuery UI)</label>
+    <input type="text" id="jq-dob" name="jq_dob" placeholder="DD/MM/YYYY" autocomplete="off">
+  </div>
+
+  <!-- Split date (DD / MM / YYYY) -->
+  <div class="field">
+    <label>Date of Birth (Split: day / month / year)</label>
+    <div class="split-date-group">
+      <div>
+        <label for="dob-dd">Day</label>
+        <input type="number" id="dob-dd" name="date_day" min="1" max="31" placeholder="DD">
+      </div>
+      <div>
+        <label for="dob-mm">Month</label>
+        <input type="number" id="dob-mm" name="date_month" min="1" max="12" placeholder="MM">
+      </div>
+      <div>
+        <label for="dob-yyyy">Year</label>
+        <input type="number" id="dob-yyyy" name="date_year" min="1900" max="2100" placeholder="YYYY">
+      </div>
+    </div>
+  </div>
+
+  <!-- Split date alternative naming -->
+  <div class="field">
+    <label>Exam Date (Split: text fields)</label>
+    <div class="split-date-group">
+      <div>
+        <label for="exam-day">Day</label>
+        <input type="text" id="exam-day" name="exam_day" maxlength="2" placeholder="DD">
+      </div>
+      <div>
+        <label for="exam-month">Month</label>
+        <input type="text" id="exam-month" name="exam_month" maxlength="2" placeholder="MM">
+      </div>
+      <div>
+        <label for="exam-year">Year</label>
+        <input type="text" id="exam-year" name="exam_year" maxlength="4" placeholder="YYYY">
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+  <script>
+    flatpickr('#fp-dob', { dateFormat: 'd/m/Y', allowInput: true });
+    $(function() { $('#jq-dob').datepicker({ dateFormat: 'dd/mm/yy' }); });
+  </script>
+</body>
+</html>

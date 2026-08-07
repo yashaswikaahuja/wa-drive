@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Perception Test — Custom Select Widgets (Select2, Choices.js, ng-select)</title>
+  <!-- Select2 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+  <!-- Choices.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .field { margin: 20px 0; }
+    label { display: block; margin-bottom: 4px; font-weight: bold; }
+    /* Minimal ng-select simulation */
+    .ng-select-container { border: 1px solid #ccc; padding: 8px; cursor: pointer; background: white; }
+    .ng-dropdown-panel { border: 1px solid #ccc; background: white; }
+    .ng-option { padding: 6px 8px; cursor: pointer; }
+    .ng-option:hover { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>Custom Select Widget Families</h1>
+
+  <!-- Select2 single -->
+  <div class="field">
+    <label for="s2-category">Category (Select2)</label>
+    <select id="s2-category" name="category" class="select2" style="width:300px">
+      <option value="">-- Select Category --</option>
+      <option value="gen">General</option>
+      <option value="obc">OBC</option>
+      <option value="sc">SC/ST</option>
+    </select>
+  </div>
+
+  <!-- Select2 multi -->
+  <div class="field">
+    <label for="s2-languages">Languages (Select2 Multi)</label>
+    <select id="s2-languages" name="languages" class="select2-multi" multiple style="width:300px">
+      <option value="en">English</option>
+      <option value="hi">Hindi</option>
+      <option value="ur">Urdu</option>
+      <option value="bn">Bengali</option>
+    </select>
+  </div>
+
+  <!-- Choices.js single -->
+  <div class="field">
+    <label for="ch-state">State (Choices.js)</label>
+    <select id="ch-state" name="state">
+      <option value="">-- Select State --</option>
+      <option value="br">Bihar</option>
+      <option value="up">Uttar Pradesh</option>
+      <option value="mh">Maharashtra</option>
+    </select>
+  </div>
+
+  <!-- Simulated ng-select -->
+  <div class="field">
+    <label id="ng-sel-label">Board (ng-select)</label>
+    <ng-select id="ng-board" role="combobox" aria-label="Board" aria-labelledby="ng-sel-label" aria-expanded="false">
+      <div class="ng-select-container">
+        <span class="ng-value-label ng-star-inserted">Select Board</span>
+      </div>
+      <div class="ng-dropdown-panel" style="display:none">
+        <div class="ng-option">CBSE</div>
+        <div class="ng-option">ICSE</div>
+        <div class="ng-option">State Board</div>
+      </div>
+    </ng-select>
+  </div>
+
+  <!-- Simulated ng-dropdown -->
+  <div class="field">
+    <label id="ng-dd-label">District (ng-dropdown)</label>
+    <div id="ng-district" class="ng-dropdown" role="combobox" aria-label="District" aria-labelledby="ng-dd-label">
+      <div class="value-area select-type">Select District</div>
+    </div>
+  </div>
+
+  <!-- Bootstrap-Select simulation -->
+  <div class="field">
+    <label for="bs-course">Course (Bootstrap-Select)</label>
+    <div class="bootstrap-select" role="combobox">
+      <button class="btn dropdown-toggle bs-placeholder" aria-label="Course">
+        Nothing selected
+      </button>
+      <select id="bs-course" class="selectpicker" style="display:none">
+        <option value="">Select</option>
+        <option value="btech">B.Tech</option>
+        <option value="mba">MBA</option>
+      </select>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+  <script>
+    $(document).ready(function() {
+      $('#s2-category').select2({ placeholder: '-- Select Category --' });
+      $('#s2-languages').select2({ placeholder: 'Select languages' });
+      new Choices('#ch-state', { searchEnabled: false, itemSelectText: '' });
+    });
+  </script>
+</body>
+</html>

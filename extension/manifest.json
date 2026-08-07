@@ -61,7 +61,7 @@
         "*://*.digilocker.gov.in/*",
         "*://*.umang.gov.in/*",
         "*://*.services.india.gov.in/*",
-    "*://*.serviceonline.bihar.gov.in/*"
+        "*://*.serviceonline.bihar.gov.in/*"
       ],
       "js": [
         "content.js"

@@ -16,6 +16,7 @@ const suites = [
   { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.mjs' },
   { name: 'Comprehensive Portal Tests', cmd: 'node extension-dev/tests/browser/run-comprehensive.mjs' },
   { name: 'Perception Browser Tests', cmd: 'node extension-dev/tests/browser/run-perception-browser.mjs' },
+  { name: 'Widget Classification Tests', cmd: 'node extension-dev/tests/browser/run-widget-classification.mjs' },
 ];
 
 let allPass = true;

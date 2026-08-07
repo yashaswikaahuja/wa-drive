@@ -98,6 +98,11 @@ function extractElementFacts(element, includeGeometry) {
     id: element.id || null,
     name: element.getAttribute('name') || null,
     placeholder: element.getAttribute('placeholder') || null,
+    // Class list — used by classifier for library-specific detection (Select2, Choices, ng-select, etc.)
+    className: element.className || '',
+    // Extra attributes used by classifier
+    maxlength: element.getAttribute('maxlength') || null,
+    matdatepicker: element.hasAttribute('matDatepicker') ? '' : null,
     // Mechanical state (never raw values)
     state: readMechanicalState(element),
     // Bounded text content (never the full innerHTML)
@@ -343,10 +348,12 @@ function performAction(element, action) {
 // ═══════════════════════════════════════════════════════════════════════
 
 function isElementVisible(element) {
-  // File inputs are considered visible even when they have zero visual dimensions
-  // (browsers may render them as zero-rect clickable areas or as native buttons)
-  if (element.tagName === 'INPUT' && (element.type === 'file' || element.type === 'hidden')) {
-    return element.type !== 'hidden';
+  // File and date inputs are considered visible even when they have zero visual dimensions
+  // (browsers may render them as zero-rect clickable areas in headless mode)
+  if (element.tagName === 'INPUT') {
+    const t = (element.type || '').toLowerCase();
+    if (t === 'hidden') return false;
+    if (t === 'file' || t === 'date' || t === 'datetime-local' || t === 'month' || t === 'week' || t === 'time') return true;
   }
   if (!element.offsetParent && element.tagName !== 'BODY' && element.tagName !== 'HTML') {
     // Check for position:fixed/sticky which have null offsetParent
