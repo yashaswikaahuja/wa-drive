@@ -120,15 +120,13 @@
     return { ok: true }; // unknown type — let it through
   }
 
-  // ── Trace recorder — flushes to document.body.dataset.ccTraces ──────────
-  // Hub-side recorder will read these. Capped at 100 most recent entries.
+  // ── Trace recorder — extension-isolated memory only ─────────────────────
+  // Traces may contain action selectors and values, so they must never be
+  // serialized into page-readable DOM attributes or storage.
   if (!window._ccTraces) window._ccTraces = [];
   function recordTrace(entry) {
     window._ccTraces.push(entry);
     if (window._ccTraces.length > 100) window._ccTraces.shift();
-    try {
-      document.body.dataset.ccTraces = JSON.stringify(window._ccTraces.slice(-25));
-    } catch (e) {}
   }
 
   function makeTraceId() {

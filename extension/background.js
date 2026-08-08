@@ -1,8 +1,65 @@
-// Helper functions for AUTOFILL_TRIGGER handler
-function getSemanticKey(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
-function calcConfidence(fills, corrections) { return Math.max(0, Math.min(1, (fills - corrections * 2) / Math.max(1, fills + corrections))); }
+// Load knowledge sync client (must be first — other code references ccKnowledgeSync)
+try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.js load failed:', e.message); }
+
+// Helper functions — use shared/label-utils.js as canonical source.
+// These are thin wrappers because background.js (service worker) cannot import
+// page-context scripts directly. Kept in sync with shared/label-utils.js.
+const SEMANTIC_ALIASES = {
+  'full name': 'name', 'candidate name': 'name', 'applicant name': 'name',
+  'student name': 'name', 'name of candidate': 'name', 'name of applicant': 'name',
+  'candidates name': 'name', 'applicants name': 'name',
+  'date of birth': 'dob', 'birth date': 'dob', 'dob': 'dob', 'date of birth ddmmyyyy': 'dob',
+  "fathers name": 'father_name', 'father name': 'father_name', "fathers husbands name": 'father_name',
+  "mothers name": 'mother_name', 'mother name': 'mother_name',
+  'aadhaar no': 'aadhaar_number', 'aadhaar number': 'aadhaar_number', 'aadhar no': 'aadhaar_number',
+  'pan no': 'pan_number', 'pan number': 'pan_number', 'pan card': 'pan_number',
+  'mobile no': 'mobile', 'mobile number': 'mobile', 'phone no': 'mobile', 'contact no': 'mobile',
+  'email id': 'email', 'email address': 'email',
+  'permanent address': 'address', 'residential address': 'address', 'correspondence address': 'address',
+  'pin code': 'pincode', 'postal code': 'pincode', 'pincode': 'pincode',
+  'state name': 'state', 'district name': 'district',
+};
+function getSemanticKey(label) { const n = normalizeLabel(label); return SEMANTIC_ALIASES[n] || n; }
+// Async version — checks server-synced aliases first, falls back to inline SEMANTIC_ALIASES
+async function getSemanticKeyResolved(label) {
+  const n = normalizeLabel(label);
+  if (SEMANTIC_ALIASES[n]) return SEMANTIC_ALIASES[n];
+  // Check cached server aliases (variant→canonical lookup)
+  if (typeof ccKnowledgeSync !== 'undefined') {
+    const aliases = await ccKnowledgeSync.getCachedAliases();
+    for (const [canonical, variants] of Object.entries(aliases)) {
+      if (variants.includes(n) || variants.includes(label)) return canonical;
+    }
+  }
+  return n;
+}
+function calcConfidence(fills, corrections) { if (fills + corrections === 0) return 0.5; return fills / (fills + corrections * 3); }
+function normalizeLabel(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 
 console.log("[CC] background.js loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
+
+// ── SEC-003: trusted frontend origin for auth/state-mutating bridge messages ──
+// Only the CyberControl frontend may CONNECT (set tokens/backend) or open+dispatch
+// jobs. A content script on any other matched origin (e.g. a government portal)
+// must not be able to overwrite stored auth state through the bridge.
+const CC_TRUSTED_FRONTEND_ORIGINS = ['https://app.cybercontrol.fun'];
+function ccSenderOrigin(sender) {
+  if (!sender) return '';
+  if (sender.origin) return sender.origin;
+  try { return sender.url ? new URL(sender.url).origin : ''; } catch (e) { return ''; }
+}
+function ccIsTrustedFrontend(sender) {
+  return CC_TRUSTED_FRONTEND_ORIGINS.indexOf(ccSenderOrigin(sender)) !== -1;
+}
+// Bridge message types that mutate auth/backend state or spawn privileged actions.
+const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
+
+// ── Knowledge Sync ─────────────────────────────────────────────────────────
+// Start periodic knowledge sync (bootstrap on first run, delta after that).
+// ccKnowledgeSync is defined in knowledge-sync.js (imported via manifest).
+if (typeof ccKnowledgeSync !== 'undefined') {
+  ccKnowledgeSync.startPeriodicSync();
+}
 
 // Side panel (ChatGPT-style right sidebar): toolbar icon opens the panel, not a dropdown popup.
 // Requires sidePanel permission + side_panel.default_path in manifest; no action.default_popup.
@@ -71,9 +128,16 @@ setTimeout(validateAuth, 5000);
 setInterval(validateAuth, 10 * 60 * 1000);
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  // SEC-003: reject auth/state-mutating bridge messages from untrusted senders.
+  const trusted = ccIsTrustedFrontend(sender);
+  if (CC_TRUSTED_ONLY_TYPES[msg.type] && !trusted) {
+    console.warn('[CC] rejected ' + msg.type + ' from untrusted sender:', ccSenderOrigin(sender));
+    sendResponse({ ok: false, error: 'untrusted sender' });
+    return true;
+  }
   // Bridge messages from content script (CONNECT, PING, OPEN_AND_DISPATCH)
   if (msg.type === 'CONNECT' || msg.type === 'PING' || msg.type === 'OPEN_AND_DISPATCH') {
-    handleBridgeMessage(msg, sendResponse);
+    handleBridgeMessage(msg, sendResponse, trusted);
     return true;
   }
   if (msg.type === 'TEACH_JOB') {
@@ -135,6 +199,21 @@ async function runJobDispatch(envelope, tabId) {
 
   // Inject runtime + run autofill pipeline (reuse existing executor)
   try {
+    // Inject cached server field mappings into page for mapper.js to pick up
+    if (typeof ccKnowledgeSync !== 'undefined') {
+      const cachedMappings = await ccKnowledgeSync.getCachedFieldMappings();
+      const cachedDerivRules = await ccKnowledgeSync.getCachedDerivationRules();
+      if (cachedMappings.length > 0 || cachedDerivRules.length > 0) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (mappings, derivRules) => {
+            if (mappings.length) window._ccServerFieldMappings = mappings;
+            if (derivRules.length) window._ccServerDerivationRules = derivRules;
+          },
+          args: [cachedMappings, cachedDerivRules],
+        });
+      }
+    }
     await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
 
     const result = await chrome.scripting.executeScript({
@@ -170,7 +249,7 @@ async function runJobDispatch(envelope, tabId) {
         try { const r = await fetch(bUrl + '/adapters/' + location.hostname, { headers }); adp = await r.json(); } catch {}
         // Run executor (returns total filled)
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
-        const records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]');
+        const records = Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : [];
         const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
         // Sync mappings — labels, types, order, options (same as popup path)
         try {
@@ -226,6 +305,7 @@ const _pendingPortMessages = new Map(); // reqId -> resolve
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'cc_bridge') return;
   let connected = true;
+  const portTrusted = ccIsTrustedFrontend(port.sender);
   port.onDisconnect.addListener(() => { connected = false; });
   port.onMessage.addListener((msg) => {
     const { _reqId, ...payload } = msg;
@@ -234,11 +314,16 @@ chrome.runtime.onConnect.addListener((port) => {
         try { port.postMessage({ _cc_reply: true, _reqId, response }); }
         catch (e) { /* port already disconnected */ }
       }
-    });
+    }, portTrusted);
   });
 });
 
-function handleBridgeMessage(msg, sendResponse) {
+function handleBridgeMessage(msg, sendResponse, trusted) {
+  // SEC-003: defense-in-depth — auth/state-mutating messages require a trusted sender.
+  if (CC_TRUSTED_ONLY_TYPES[msg.type] && !trusted) {
+    sendResponse({ ok: false, error: 'untrusted sender' });
+    return;
+  }
   if (msg.type === 'CONNECT') {
     const { token, refreshToken, user, backendUrl } = msg;
     if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
@@ -268,6 +353,11 @@ function handleBridgeMessage(msg, sendResponse) {
 // Frontend sends { type: 'CONNECT', token, refreshToken, user, backendUrl }
 // Extension stores credentials so it can act on behalf of the operator without popup config.
 chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  // SEC-003: auth/state-mutating external messages require a trusted origin.
+  if (CC_TRUSTED_ONLY_TYPES[msg.type] && !ccIsTrustedFrontend(sender)) {
+    sendResponse({ ok: false, error: 'untrusted sender' });
+    return true;
+  }
   if (msg.type === 'CONNECT') {
     const { token, refreshToken, user, backendUrl } = msg;
     if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }

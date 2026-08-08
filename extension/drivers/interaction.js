@@ -11,11 +11,7 @@
   if (!window.cc || !window.cc.registerDriver) return;
 
   function isVisible(el) {
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    if (r.width === 0 || r.height === 0) return false;
-    const cs = getComputedStyle(el);
-    return cs.visibility !== 'hidden' && cs.display !== 'none';
+    return window.ccDomUtils.isVisible(el);
   }
 
   // ── click ────────────────────────────────────────────────────────────────
@@ -91,7 +87,7 @@
   // ── wait.networkIdle ─────────────────────────────────────────────────────
   window.cc.registerDriver({
     name: 'wait.networkIdle',
-    description: 'Wait until in-flight fetch + XHR count reaches 0 and stays quiet for `quietMs`. Reads counters published by network-monitor.js (which must run in MAIN world). Falls back to fixed delay if monitor not installed.',
+    description: 'Wait until in-flight fetch + XHR count reaches 0 and stays quiet for `quietMs`. Delegates to shared/network-idle.js.',
     sideEffect: 'observe',
     input: {
       type: 'object',
@@ -102,28 +98,7 @@
     },
     output: { type: 'object' },
     handler: async function (args) {
-      const quietMs = args.quietMs || 200;
-      const maxMs = args.maxMs || 5000;
-      const t0 = Date.now();
-      const deadline = t0 + maxMs;
-
-      // Detect monitor presence
-      const lastActivityRaw = document.body.dataset.ccAjaxLastActivity;
-      if (!lastActivityRaw) {
-        // Monitor not installed — fall back to plain delay
-        await new Promise(r => setTimeout(r, quietMs));
-        return { idle: true, waitedMs: Date.now() - t0, monitorMissing: true };
-      }
-
-      while (Date.now() < deadline) {
-        const active = parseInt(document.body.dataset.ccAjaxActive || '0', 10);
-        const lastActivity = parseInt(document.body.dataset.ccAjaxLastActivity || '0', 10);
-        if (active === 0 && (Date.now() - lastActivity) >= quietMs) {
-          return { idle: true, waitedMs: Date.now() - t0, active };
-        }
-        await new Promise(r => setTimeout(r, 50));
-      }
-      return { idle: false, waitedMs: maxMs, reason: 'max-elapsed' };
+      return window.ccWaitForNetworkIdle(args.quietMs || 200, args.maxMs || 5000);
     },
   });
 

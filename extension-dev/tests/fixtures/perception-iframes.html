@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Perception Test — Iframes</title>
+</head>
+<body>
+  <h1>Multi-Frame Page</h1>
+  <p>This page contains same-origin and cross-origin iframes.</p>
+
+  <!-- Same-origin iframe (accessible) -->
+  <iframe id="same-origin-frame" srcdoc='
+    <!DOCTYPE html>
+    <html lang="en">
+    <head><title>Same-Origin Frame</title></head>
+    <body>
+      <form>
+        <label for="frame-input">Frame Input</label>
+        <input type="text" id="frame-input" name="frame_field" placeholder="Inside iframe">
+        <select id="frame-select" name="frame_option">
+          <option value="">Pick one</option>
+          <option value="a">Alpha</option>
+          <option value="b">Beta</option>
+        </select>
+      </form>
+    </body>
+    </html>
+  ' style="width:400px;height:200px;border:1px solid #ccc;"></iframe>
+
+  <!-- Cross-origin iframe (should be opaque) -->
+  <iframe id="cross-origin-frame" src="https://example.com" style="width:400px;height:200px;border:1px solid red;"></iframe>
+
+  <!-- Hidden iframe -->
+  <iframe id="hidden-frame" srcdoc='<html><body><input type="text"></body></html>' style="display:none;"></iframe>
+</body>
+</html>

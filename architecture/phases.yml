@@ -1,0 +1,567 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Phase Freeze Rules
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Frozen phases have stabilized code that must not be casually modified.
+# Changes to frozen files require explicit justification in the PR.
+#
+# This is NOT a hard block — it's a review gate.
+# CI will WARN (not fail) when frozen files are touched.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.0"
+
+phases:
+  phase_0:
+    name: "Foundation"
+    status: frozen
+    frozen_date: "2026-08-03"
+    issues: ["#55", "#56", "#57", "#58"]
+    description: >
+      Shared modules created, duplicates consolidated, runtime integration
+      verified. 59 tests validate the foundation.
+
+    frozen_files:
+      - path: "extension/shared/option-match.js"
+        reason: "Canonical option matching — 5 callers depend on this API"
+      - path: "extension/shared/dom-utils.js"
+        reason: "Canonical label resolution + isVisible — 6 callers"
+      - path: "extension/shared/network-idle.js"
+        reason: "Canonical network idle — 2 callers"
+      - path: "extension/shared/select-apply.js"
+        reason: "Canonical select event dispatch — 1 caller + executor variant"
+      - path: "extension/shared/label-utils.js"
+        reason: "Canonical semantic keys + confidence — background.js mirrors this"
+
+    allowed_changes:
+      - "Bug fixes with test coverage"
+      - "Adding new exports (non-breaking)"
+      - "Performance improvements that don't change behavior"
+
+    forbidden_changes:
+      - "Changing function signatures"
+      - "Removing exports"
+      - "Changing matching algorithm behavior without updating all callers"
+      - "Adding external dependencies"
+
+  phase_0_4:
+    name: "Slim Extension Architecture"
+    status: frozen
+    frozen_date: "2026-08-03"
+    issues: ["#59"]
+    description: >
+      Architecture audit documents the two-layer split.
+      Extension = perception/execution/observation.
+      Service = planning/knowledge/memory/judgment/AI.
+
+    frozen_files:
+      - path: "extension-dev/docs/ARCHITECTURE_AUDIT.md"
+        reason: "Architecture contract — changes require architectural review"
+
+    allowed_changes:
+      - "Updating metrics/status as phases complete"
+      - "Adding new sections"
+      - "Correcting factual errors"
+
+    forbidden_changes:
+      - "Changing the runtime boundary definition"
+      - "Moving responsibilities between runtimes without new issue"
+      - "Removing the migration plan"
+
+  phase_0_5:
+    name: "Architecture Governance"
+    status: frozen
+    frozen_date: "2026-08-05"
+    issues: ["#60"]
+    description: "This governance framework itself."
+
+    frozen_files:
+      - path: "architecture/verification.yml"
+        reason: "CI check registry — must match the executed workflow steps"
+      - path: "architecture/boundaries.yml"
+        reason: "Dependency and forbidden-pattern definitions used by CI"
+      - path: "architecture/ownership.yml"
+        reason: "Subsystem ownership map used by review"
+      - path: ".github/workflows/architecture.yml"
+        reason: "Executed governance workflow"
+    note: >
+      Frozen now that the governance workflow is deployed and CI is green. A
+      later phase (e.g. Phase 3.0) may not claim its governance is frozen while
+      this framework is unfrozen, so this phase is frozen together with the
+      contracts that depend on it.
+
+    allowed_changes:
+      - "Aligning check IDs/labels with the executed workflow"
+      - "Adding new checks or forbidden patterns"
+      - "Correcting factual drift between registry and workflow"
+
+    forbidden_changes:
+      - "Silently diverging verification IDs from workflow steps"
+      - "Removing a check without recording it in removed_checks"
+
+# ── Completed phases ─────────────────────────────────────────────────
+
+  phase_1:
+    name: "Execution Engine"
+    status: complete_with_exceptions
+    frozen_date: "2026-08-04"
+    issues: ["#61", "#62", "#63", "#64", "#79", "#80", "#81", "#82", "#84"]
+    description: >
+      All 15 browser capabilities built and tested. Runner, resolver,
+      capability registry, IR models implemented. Executor remains primary
+      engine (runner is observer-only). 384→537 tests.
+    exceptions:
+      - "Runner is not primary execution engine (executor remains primary)"
+      - "ActionPlan schema defined by code, not formal spec document"
+      - "No true unpacked-extension E2E test"
+
+# ── Frozen phases ────────────────────────────────────────────────────
+
+  phase_2:
+    name: "Knowledge Model"
+    status: frozen
+    frozen_date: "2026-08-05"
+    issues: ["#85", "#86", "#87", "#88", "#89", "#90", "#91", "#92"]
+    description: >
+      Server-side knowledge model: universal schema, knowledge store,
+      scope resolution engine, validation engine, hardcoded knowledge
+      migration, versioning/migration safety, sync protocol, and
+      extension sync client.
+    sub_phases:
+      - "2.1: Universal Knowledge Schema (#85) ✓"
+      - "2.2: Knowledge Store (#86) ✓"
+      - "2.3: Scope Resolution Engine (#87) ✓"
+      - "2.4: Validation Engine (#88) ✓"
+      - "2.5: Audit and Migrate Hardcoded Knowledge (#89) ✓"
+      - "2.6: Versioning and Migration Safety (#90) ✓"
+      - "2.7: Sync Protocol (#91) ✓"
+      - "2.8: Extension Sync Client and Final Migration (#92) ✓"
+
+    frozen_files:
+      - path: "architecture/knowledge-schema.yml"
+        reason: "Universal knowledge schema — all service modules depend on this contract"
+      - path: "architecture/knowledge-schema.json"
+        reason: "JSON Schema validation — used by validation engine"
+      - path: "architecture/sync-protocol.yml"
+        reason: "Sync protocol contract — extension and service both implement this"
+      - path: "extension-service/knowledge-store.js"
+        reason: "Knowledge store core — routes, validation, and versioning depend on its API"
+      - path: "extension-service/validation-engine.js"
+        reason: "Validation rules — knowledge-store.js integrates this on create"
+      - path: "extension-service/scope-resolver.js"
+        reason: "Scope resolution algorithm — sync and resolution routes depend on this"
+      - path: "extension/knowledge-sync.js"
+        reason: "Extension sync client — mapper.js and derive.js consume its cache"
+
+    allowed_changes:
+      - "Bug fixes with test coverage"
+      - "Performance improvements that don't change behavior"
+      - "Adding new knowledge kinds to the schema (non-breaking)"
+      - "Adding new sync artifacts"
+
+    forbidden_changes:
+      - "Changing the scope resolution algorithm"
+      - "Changing the knowledge record envelope structure"
+      - "Removing sync endpoints"
+      - "Changing the cache key structure"
+      - "Breaking the validation engine's export API"
+
+    temporary_exceptions:
+      - id: EXC-002
+        description: "Strategic mapping still in extension (mapper.js, rule-engine.js)"
+        removal_condition: "Phase 4 Planner provides field→value mapping in fill plan"
+      - id: EXC-005
+        description: "Derived values still computed in extension (derive.js)"
+        removal_condition: "Service computes derived values and includes them in profile"
+
+# ── Phase 3 architecture gate ───────────────────────────────────────
+
+  phase_3_0:
+    name: "Browser Perception Architecture & Governance"
+    status: frozen
+    frozen_date: "2026-08-05"
+    issues: ["#96"]
+    remediation:
+      issue: "#97"
+      tracker: "CYB-68"
+      title: "Phase 3.0.1 — Fix Browser Perception Contract Blockers Before Freeze"
+      status: ratified
+      ratified_date: "2026-08-05"
+      ratification_evidence:
+        - "Adversarial schema conformance (CHECK-010): 5 positive fixtures validate, 21 malicious fixtures rejected via AJV Draft 2020-12"
+        - "Phase 3 governance suite: 104 assertions pass"
+        - "Full suite: all suites pass"
+      note: >
+        The Phase 3.0 freeze was initially rejected by principal architecture
+        review. Phase 3.0.1 amended the frozen contracts to resolve every P0
+        blocker (typed deltas, document/context identity, exact stale-target
+        semantics, ActionPlan v3 and ExecutionObservation schemas, in-schema
+        privacy, canonicalization standard, gateway threat model, bridge/token
+        hardening, governance reconciliation, and the selector-adapter conflict).
+        The adversarial ratification review with real schema instances and
+        malicious fixtures has now PASSED, so the freeze is ratified and issue
+        #97 (CYB-68) is closed. Remaining runtime security fixes (SEC-001..004)
+        are tracked as a separate runtime task and do not affect this
+        architecture-only freeze.
+    description: >
+      Architecture-only gate defining Page IR v2, public/private binding
+      separation, DOM gateway boundaries, snapshot lifecycle, privacy,
+      confidence, widget taxonomy, performance, and migration. No perception
+      runtime behavior is implemented by this phase.
+    frozen_files:
+      - path: "architecture/perception-contract.yml"
+        reason: "Normative eyes/hands versus brain contract"
+      - path: "architecture/page-ir.yml"
+        reason: "Human-readable public Page IR v2 contract"
+      - path: "architecture/page-ir.schema.json"
+        reason: "Canonical language-independent PageSnapshot/PageDelta schema"
+      - path: "architecture/action-plan.schema.json"
+        reason: "Canonical ActionPlan v3 service→extension contract (Phase 3.0.1)"
+      - path: "architecture/execution-observation.schema.json"
+        reason: "Canonical ExecutionObservation v3 extension→service contract (Phase 3.0.1)"
+      - path: "architecture/dom-access-policy.yml"
+        reason: "Observation and interaction gateway boundary"
+      - path: "architecture/gateway-security.yml"
+        reason: "DOM gateway threat model and bridge/token hardening (Phase 3.0.1)"
+      - path: "architecture/widget-taxonomy.yml"
+        reason: "Behavior-based widget classification contract"
+      - path: "architecture/perception-lifecycle.yml"
+        reason: "Document, snapshot, revision, delta, and stale-target lifecycle"
+      - path: "architecture/perception-privacy.yml"
+        reason: "Data minimization, redaction, and screenshot policy"
+      - path: "architecture/perception-confidence.yml"
+        reason: "Evidence and technical confidence model"
+      - path: "architecture/perception-performance.yml"
+        reason: "Perception payload and latency budgets"
+      - path: "architecture/ir-migrations/README.md"
+        reason: "IR v1 to v2 compatibility and rollout policy"
+      - path: "architecture/adrs/0001-public-ir-private-bindings.md"
+        reason: "Accepted public/private binding decision"
+      - path: "architecture/adrs/0002-snapshot-revision-lifecycle.md"
+        reason: "Accepted immutable snapshot decision"
+      - path: "architecture/adrs/0003-dom-gateway-boundaries.md"
+        reason: "Accepted DOM gateway decision"
+      - path: "architecture/adrs/0004-perception-identity.md"
+        reason: "Accepted document-scoped identity decision"
+      - path: "architecture/adrs/0005-cross-origin-contexts.md"
+        reason: "Accepted inaccessible-context decision"
+      - path: "architecture/adrs/0006-screenshot-privacy.md"
+        reason: "Accepted screenshot privacy decision"
+      - path: "architecture/adrs/0007-service-adapter-no-selector.md"
+        reason: "Accepted selector-adapter reconciliation decision (Phase 3.0.1)"
+    allowed_changes:
+      - "Clarifications that do not weaken a MUST or MUST NOT rule"
+      - "Additive optional IR fields with schema and migration tests"
+      - "Measured budget tightening with benchmark evidence"
+      - "Privacy restrictions that reduce collected data"
+    forbidden_changes:
+      - "Adding selectors, XPath, DOM handles, HTML, or private bindings to public IR"
+      - "Allowing service-side DOM access or browser-specific planning"
+      - "Allowing execution to perform semantic discovery"
+      - "Weakening secret, screenshot, or cross-origin protections without a new ADR"
+      - "Changing IR major-version semantics without a migration plan"
+
+# ── Phase 3 implementation (active) ────────────────────────────────
+
+  phase_3_2:
+    name: "Widget Classification & Adapter Contracts"
+    status: complete
+    frozen_date: "2026-08-08"
+    issues: ["#100"]
+    description: >
+      Behavior-first widget classification, versioned adapter contracts,
+      browser fixtures, and 53 widget-classification assertions.
+
+    frozen_files:
+      - path: "extension/perception/widget-classifier.js"
+        reason: "Canonical widget classifier — perception depends on this"
+      - path: "architecture/widget-taxonomy.yml"
+        reason: "Widget taxonomy contract — classifier implements this"
+
+    allowed_changes:
+      - "Bug fixes with test coverage"
+      - "Adding new widget families (non-breaking)"
+      - "Performance improvements that don't change classification behavior"
+
+    forbidden_changes:
+      - "Changing classification output schema"
+      - "Removing widget families"
+      - "Changing confidence calculation"
+
+  phase_3_3:
+    name: "Perception Completion"
+    status: complete
+    frozen_date: "2026-08-08"
+    issues: []
+    depends_on: ["phase_3_0", "phase_3_2"]
+    description: >
+      Complete PageSnapshot v2 pipeline. Phase 3.1 implemented the core engine;
+      remaining work is delta-emitter, integration testing, and performance validation.
+    discovery_reference: "Discussion 11 — Phase 3.3"
+
+    frozen_files:
+      - path: "extension/perception/delta-emitter.js"
+        reason: "Delta emission pipeline — Phase 3.4 depends on this"
+      - path: "extension/perception/index.js"
+        reason: "Perception public API — all consumers depend on this contract"
+
+    modules_to_build:
+      - path: "extension/perception/delta-emitter.js"
+        purpose: "Emit PageDelta on relevant DOM mutations"
+        status: complete
+
+    done_criteria:
+      - "PageDelta emitted on relevant DOM mutations ✓"
+      - "Integration tests with real portal fixtures produce valid PageSnapshot v2 ✓"
+      - "Performance budget confirmed: < 200ms for snapshot generation ✓"
+
+    validation_evidence:
+      - "31 delta-emitter unit tests passing"
+      - "112 browser integration tests passing"
+      - "Performance benchmark: real fixtures p95 ≤ 72ms, synthetic 2000-node p95 = 122ms"
+      - "685 total CI tests, 108 governance, 92 D11 invariants all green"
+
+  phase_3_4:
+    name: "WSS Protocol"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_3_3"]
+    description: >
+      Live bidirectional WebSocket communication between extension and server.
+      Enables real-time fill orchestration, teach sessions, and delta streaming.
+    discovery_reference: "Discussion 11 — Phase 3.4"
+
+    frozen_files:
+      - path: "extension-service/ws-server.js"
+        reason: "WebSocket server — extension clients depend on this interface"
+      - path: "extension-service/ws-handlers.js"
+        reason: "Message routing contract — defines all WSS message types"
+      - path: "extension/runtime/ws-client.js"
+        reason: "Extension WSS client — Suspended Mode compliance"
+      - path: "extension/runtime/reconnect-manager.js"
+        reason: "Reconnection policy — backoff and jitter constants"
+
+    modules_to_build:
+      - path: "extension-service/ws-server.js"
+        purpose: "WebSocket server (upgrade from Express HTTP)"
+        status: complete
+      - path: "extension-service/ws-handlers.js"
+        purpose: "Message routing: snapshot, instruction, observation"
+        status: complete
+      - path: "extension/runtime/ws-client.js"
+        purpose: "Extension WSS client (from service worker)"
+        status: complete
+      - path: "extension/runtime/reconnect-manager.js"
+        purpose: "Reconnection with exponential backoff"
+        status: complete
+
+    done_criteria:
+      - "WSS connection establishes with auth token ✓"
+      - "PageSnapshot transmitted over WSS ✓"
+      - "Instructions received and forwarded to runner ✓"
+      - "Reconnection handles disconnect + resume ✓"
+      - "HTTPS fallback for every WSS operation ✓ (existing HTTP routes preserved)"
+
+    validation_evidence:
+      - "41 WSS protocol tests passing (auth, messaging, resume, errors)"
+      - "726 total CI tests across 14 suites"
+      - "98 D11 invariants passing"
+      - "Heartbeat with configurable interval"
+      - "Message envelope validated on both sides"
+
+# ── Phase 4: Fill Planner ──────────────────────────────────────────
+
+  phase_4_1:
+    name: "Server Fill Planner (Known Forms)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_3_4"]
+    resolves_exceptions: ["EXC-002", "EXC-003"]
+    description: >
+      Server builds ActionPlans from knowledge + profile + PageSnapshot.
+      Replaces popup.js inline planning and extension-side strategic mapping.
+    discovery_reference: "Discussion 11 — Phase 4.1"
+
+    modules_to_build:
+      - path: "extension-service/fill-planner.js"
+        purpose: "Builds ActionPlan from knowledge + profile + snapshot"
+      - path: "extension-service/mapping-engine.js"
+        purpose: "Resolves field→profileKey using knowledge store"
+      - path: "extension-service/plan-builder.js"
+        purpose: "Constructs ordered instruction sequence"
+      - path: "extension-service/dependency-resolver.js"
+        purpose: "Handles cascade field ordering"
+      - path: "extension-service/routes/fill-plan.js"
+        purpose: "HTTPS endpoint for plan request"
+      - path: "extension-service/ws-handlers/fill.js"
+        purpose: "WSS handler for real-time plan + execute cycle"
+      - path: "extension-service/fill-session.js"
+        purpose: "Tracks fill progress, stores session evidence"
+
+    migration_strategy:
+      - "Week 1: Shadow mode — server generates plan, extension fills old way, compare"
+      - "Week 2: Server-primary — extension executes server plan"
+      - "Week 3: Remove extension mapping/planning code"
+
+    done_criteria:
+      - "Server generates ActionPlan from knowledge + profile + snapshot"
+      - "Shadow mode shows ≥95% agreement with existing pipeline"
+      - "Extension popup.js no longer calls mapper.js / rule-engine.js"
+      - "Fill sessions recorded with server plan ID"
+      - "Corrections still captured and routed to /api/corrections"
+      - "Cascade fields filled in correct dependency order"
+      - "EXC-002 and EXC-003 can be removed from constitution.yml"
+
+  phase_4_2:
+    name: "Server-Side Derived Values"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1"]
+    resolves_exceptions: ["EXC-005"]
+    description: >
+      Server computes derived values (age, formatted dates, name concatenation)
+      and includes them in fill plans. Extension derive.js removed.
+    discovery_reference: "Discussion 11 — Phase 4.2"
+
+    modules_to_build:
+      - path: "extension-service/derivation-engine.js"
+        purpose: "Computes derived values from profile + derivation_rule knowledge"
+
+    done_criteria:
+      - "All derivation rules from derive.js ported to server module"
+      - "Derivation rules stored as derivation_rule knowledge records"
+      - "Fill plan includes pre-computed derived values"
+      - "Extension derive.js removed"
+      - "EXC-005 can be removed from constitution.yml"
+
+  phase_4_3:
+    name: "Cold-Start Semantic Mapping"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1"]
+    resolves_exceptions: ["EXC-001"]
+    description: >
+      Complete pipeline for unknown-form first encounters. Server-side AI
+      maps page fields to profile keys. Confidence evaluation decides whether
+      human confirmation is needed. No-AI-key path learns from operator
+      observation. Extension never performs semantic mapping.
+    discovery_reference: "Discussion 11 — Phase 4.3"
+
+    modules_to_build:
+      - path: "extension-service/semantic-mapper.js"
+        purpose: "Orchestrates AI semantic mapping for unknown fields"
+      - path: "extension-service/ai-key-manager.js"
+        purpose: "Centralized AI key access from owner-panel config"
+      - path: "extension-service/prompt-builder.js"
+        purpose: "Builds mapping prompts from snapshot fields + profile schema"
+      - path: "extension-service/confidence-evaluator.js"
+        purpose: "Evaluates AI confidence, decides if human confirmation needed"
+
+    done_criteria:
+      - "Server maps unknown forms using AI (extension never calls AI)"
+      - "API key stored server-side only, never sent to extension"
+      - "AI results stored as candidate field_mapping knowledge"
+      - "Confidence evaluation decides human confirmation need"
+      - "No-AI-key path produces mappings from operator observation"
+      - "Rate limiting active"
+      - "EXC-001 fully resolved"
+
+# ── Phase 5: Learning ─────────────────────────────────────────────
+
+  phase_5_1:
+    name: "Server Behavioral Teach (Unknown Widgets)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_3_4"]
+    resolves_exceptions: ["EXC-004"]
+    description: >
+      Server orchestrates teach sessions via WSS. Extension observes operator
+      interaction and reports evidence. Server extracts Interaction Knowledge
+      using affordances and behavioral probing (per D03). No framework
+      identification. Knowledge schema follows D06.
+    discovery_reference: "Discussion 11 — Phase 5.1"
+
+    modules_to_build:
+      - path: "extension-service/teach-orchestrator.js"
+        purpose: "Server-side teach session state machine"
+      - path: "extension-service/ws-handlers/teach.js"
+        purpose: "WSS handlers for teach messages"
+      - path: "extension/runtime/teach-client.js"
+        purpose: "Lightweight teach executor (observe + report)"
+      - path: "extension-service/pattern-extractor.js"
+        purpose: "Extracts Interaction Knowledge from observations"
+
+    done_criteria:
+      - "Server orchestrates behavioral teach via WSS"
+      - "Operator demonstration → stored Interaction Knowledge"
+      - "Behavioral probing works for widgets with clear affordances"
+      - "No framework names in knowledge records or probe logic"
+      - "background.js teach functions removed"
+      - "No AI/LLM calls from extension during teach"
+      - "EXC-004 can be removed from constitution.yml"
+
+  phase_5_2:
+    name: "Learning Engine (Corrections → Knowledge)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1", "phase_4_3", "phase_5_1"]
+    description: >
+      Corrections automatically update confidence per knowledge type independently.
+      Cross-user generalization promotes knowledge to broader scopes. Semantic
+      mapping, Interaction Knowledge, and derivation rules have separate lifecycles.
+    discovery_reference: "Discussion 11 — Phase 5.2"
+
+    modules_to_build:
+      - path: "extension-service/learning-engine.js"
+        purpose: "Processes corrections → knowledge updates"
+      - path: "extension-service/confidence-manager.js"
+        purpose: "Manages confidence scores across fills"
+      - path: "extension-service/generalization-engine.js"
+        purpose: "Cross-user knowledge promotion"
+
+    done_criteria:
+      - "Corrections automatically update mapping confidence"
+      - "Consistent corrections promote to higher scope"
+      - "AI-generated mappings promoted after N successful fills"
+      - "Degraded mappings trigger re-mapping"
+      - "Observation Journal receives all session evidence"
+
+# ── Phase 7: Autonomous Runtime ─────────────────────────────────────
+
+  phase_7:
+    name: "Autonomous Runtime"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1", "phase_4_2", "phase_4_3", "phase_5_1", "phase_5_2"]
+    description: >
+      Integration phase. All architecture exceptions resolved. Legacy code
+      removed. Extension is thin eyes+hands. End-to-end fill validated.
+    discovery_reference: "Discussion 11 — Phase 7"
+
+    done_criteria:
+      - "All 5 architecture exceptions (EXC-001..005) resolved"
+      - "Legacy mapping/AI/derive code removed from extension"
+      - "constitution.yml has no temporary_exceptions"
+      - "popup.js fill pipeline is: perceive → send snapshot → receive instructions → execute → report"
+      - "End-to-end fill time < 3s for known forms"
+      - "Extension manifest.json reduced (no mapper, derive, ai-resolve)"
+
+  phase_7_1:
+    name: "Weak Semantic Key (ServicePlus-like Portals)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_7"]
+    description: >
+      Multi-signal form identity for portals where semantic labels are
+      non-unique or unreadable. Form/workflow identity problem requiring
+      the complete architecture to be operational.
+    discovery_reference: "Discussion 11 — Phase 7.1"
+
+    modules_to_build:
+      - path: "extension-service/form-identity.js"
+        purpose: "Multi-signal form recognition (URL path + title + hidden fields + field signature)"
+
+    done_criteria:
+      - "ServicePlus-like portals get distinct form keys"
+      - "Multi-signal form identity: URL path + page title + hidden fields + field signature"
+      - "portal_definition knowledge records define per-portal identity strategies"

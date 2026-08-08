@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>CyberControl Test Portal</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#f3f4f6;color:#111;line-height:1.45;padding-bottom:90px;font-size:15px}
+header{background:#1e3a8a;color:#fff;padding:12px 14px;position:sticky;top:0;z-index:50}
+header h1{font-size:1.05rem}
+header p{font-size:.75rem;opacity:.85;margin-top:2px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.tabs button{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:5px 10px;border-radius:20px;font-size:.72rem;cursor:pointer}
+.tabs button.active{background:#fff;color:#1e3a8a}
+main{max-width:720px;margin:0 auto;padding:12px}
+.sec{display:none;background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;border:1px solid #ddd}
+.sec.active{display:block}
+.sec h2{font-size:1.05rem;color:#1e3a8a;border-bottom:2px solid #1a56db;padding-bottom:6px;margin-bottom:12px}
+.sec h3{font-size:.9rem;margin:14px 0 8px;color:#374151}
+.grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:520px){.grid{grid-template-columns:1fr 1fr}}
+.fg{display:flex;flex-direction:column;gap:3px}
+.fg.full{grid-column:1/-1}
+label{font-size:.78rem;font-weight:600;color:#374151}
+label .r{color:#c81e1e}
+input,select,textarea,button{font:inherit;font-size:.88rem}
+input[type=text],input[type=password],input[type=email],input[type=number],input[type=tel],
+input[type=url],input[type=search],input[type=date],input[type=datetime-local],input[type=time],
+input[type=month],input[type=week],input[type=file],select,textarea{
+  width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:6px;background:#fff
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#1a56db;box-shadow:0 0 0 2px rgba(26,86,219,.2)}
+.hint{font-size:.68rem;color:#6b7280}
+.err{font-size:.68rem;color:#c81e1e;display:none}.err.show{display:block}
+.btn{display:inline-flex;align-items:center;padding:8px 14px;border:none;border-radius:6px;font-weight:600;font-size:.82rem;cursor:pointer}
+.btn-p{background:#1a56db;color:#fff}.btn-s{background:#057a55;color:#fff}
+.btn-d{background:#c81e1e;color:#fff}.btn-o{background:#fff;border:1px solid #ccc;color:#111}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+fieldset{border:1px solid #ddd;border-radius:6px;padding:10px;margin-bottom:10px}
+legend{font-weight:700;font-size:.82rem;padding:0 6px;color:#1e3a8a}
+.cg,.rg{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:4px}
+.cg label,.rg label{display:flex;align-items:center;gap:4px;font-weight:400;cursor:pointer}
+.cond{display:none}.cond.show{display:block}
+.chips{display:flex;flex-wrap:wrap;gap:4px;min-height:36px;padding:4px;border:1px solid #ccc;border-radius:6px;background:#fff}
+.chip{background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:12px;font-size:.72rem;display:flex;align-items:center;gap:3px}
+.chip button{background:none;border:none;cursor:pointer;color:#1e40af;font-size:.9rem}
+.sw{position:relative;width:40px;height:22px;display:inline-block}
+.sw input{opacity:0;width:0;height:0}
+.sw .sl{position:absolute;inset:0;background:#ccc;border-radius:22px;cursor:pointer;transition:.2s}
+.sw .sl:before{content:"";position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.sw input:checked+.sl{background:#1a56db}
+.sw input:checked+.sl:before{transform:translateX(18px)}
+.otp{display:flex;gap:6px}
+.otp input{width:38px;height:44px;text-align:center;font-size:1.2rem;font-weight:700}
+.pin{display:flex;gap:5px}
+.pin input{width:34px;height:38px;text-align:center;font-size:1.05rem}
+canvas.sig{border:2px dashed #ccc;border-radius:6px;background:#fafafa;touch-action:none;width:100%;max-width:360px;height:120px}
+.preview{margin-top:6px;max-width:120px;max-height:90px;border-radius:4px;border:1px solid #ddd;display:none}
+.drop{border:2px dashed #ccc;border-radius:8px;padding:16px;text-align:center;color:#6b7280;cursor:pointer}
+.drop.over{border-color:#1a56db;background:#eff6ff}
+.drop input{display:none}
+.wiz-bar{display:flex;gap:3px;margin-bottom:12px}
+.wiz-ind{flex:1;text-align:center;font-size:.65rem;padding:5px 2px;background:#e5e7eb;color:#6b7280;border-radius:3px}
+.wiz-ind.on{background:#1a56db;color:#fff;font-weight:600}
+.wiz-ind.done{background:#057a55;color:#fff}
+.wiz-p{display:none}.wiz-p.on{display:block}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+th,td{border:1px solid #ddd;padding:5px 6px;text-align:left}
+th{background:#f3f4f6;cursor:pointer}
+tr:nth-child(even){background:#f9fafb}
+.ed input{width:100%;border:1px solid transparent;background:transparent;padding:2px}
+.ed input:focus{border-color:#1a56db;background:#fff}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:#fff;border-radius:10px;padding:16px;max-width:360px;width:92%;box-shadow:0 12px 30px rgba(0,0,0,.2)}
+.modal h3{margin-bottom:8px}
+.modal p{font-size:.85rem;color:#6b7280;margin-bottom:12px}
+.rep{border:1px solid #ddd;border-radius:6px;padding:10px;margin-bottom:8px;background:#fafafa;position:relative}
+.rep .rm{position:absolute;top:6px;right:6px}
+.ok-page{text-align:center;padding:28px 10px}
+.ok-page .ref{font-size:1.3rem;font-weight:700;color:#057a55;margin:10px 0;letter-spacing:1px}
+#dbg{position:fixed;bottom:0;right:0;width:min(300px,100%);max-height:180px;background:#111827;color:#e5e7eb;font-family:monospace;font-size:.65rem;border-radius:8px 0 0 0;z-index:200;overflow:hidden}
+#dbg .hd{background:#1f2937;padding:5px 10px;display:flex;justify-content:space-between;cursor:pointer}
+#dbg .bd{padding:6px 10px;overflow-y:auto;max-height:140px;line-height:1.35}
+#dbg .ln{margin-bottom:2px;border-bottom:1px solid #1f2937;padding-bottom:1px}
+.str{height:5px;border-radius:3px;background:#e5e7eb;margin-top:3px;overflow:hidden}
+.str div{height:100%;width:0;transition:width .25s,background .25s}
+.cs-wrap{position:relative}
+.cs-trig{width:100%;padding:8px 10px;border:1px solid #ccc;border-radius:6px;background:#fff;cursor:pointer;display:flex;justify-content:space-between}
+.cs-drop{display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;border-radius:6px;max-height:180px;overflow-y:auto;z-index:40;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.cs-drop.open{display:block}
+.cs-search{width:100%;padding:7px;border:none;border-bottom:1px solid #ddd}
+.cs-opt{padding:6px 10px;cursor:pointer}.cs-opt:hover{background:#eff6ff}
+progress,meter{width:100%;height:16px}
+.delay{opacity:0;transition:opacity .3s}.delay.vis{opacity:1}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+</style>
+</head>
+<body>
+<header>
+  <h1>CyberControl Test Portal</h1>
+  <p>Mobile-optimized · extraction · mapping · DOM · ActionPlan · stress</p>
+  <nav class="tabs" id="nav">
+    <button type="button" class="active" data-s="s-gov">Gov Form</button>
+    <button type="button" data-s="s-bank">Bank</button>
+    <button type="button" data-s="s-univ">University</button>
+    <button type="button" data-s="s-job">Job</button>
+    <button type="button" data-s="s-wiz">Wizard</button>
+    <button type="button" data-s="s-wid">Widgets</button>
+    <button type="button" data-s="s-all">All Inputs</button>
+    <button type="button" data-s="s-dyn">Cascades</button>
+    <button type="button" data-s="s-rep">Repeating</button>
+    <button type="button" data-s="s-tbl">Tables</button>
+    <button type="button" data-s="s-up">Uploads</button>
+    <button type="button" data-s="s-str">Stress</button>
+    <button type="button" data-s="s-ok">Success</button>
+  </nav>
+</header>
+<main>
+<p style="padding:20px;text-align:center;color:#6b7280">Loading optimized portal… If this stays, open the file again.</p>
+</main>
+<div id="dbg"><div class="hd" id="dbg-hd"><span>Debug Panel</span><span id="dbg-n">0</span></div><div class="bd" id="dbg-bd"></div></div>
+<script>
+document.querySelector('main').innerHTML = '<section id="s-gov" class="sec active"><h2>Government Application</h2><form id="f-gov" novalidate><fieldset><legend>Personal Details</legend><div class="grid"><div class="fg"><label for="g-name">Applicant Name <span class="r">*</span></label><input type="text" id="g-name" name="applicant_name" placeholder="Full name as per Aadhaar" aria-label="Applicant Name" autocomplete="name" required></div><div class="fg"><label for="g-father">Father Name <span class="r">*</span></label><input type="text" id="g-father" name="father_name" placeholder="Father full name" aria-label="Father Name" required></div><div class="fg"><label for="g-mother">Mother Name <span class="r">*</span></label><input type="text" id="g-mother" name="mother_name" placeholder="Mother full name" aria-label="Mother Name" required></div><div class="fg"><label for="g-dob">Date of Birth <span class="r">*</span></label><input type="date" id="g-dob" name="date_of_birth" aria-label="Date of Birth" required></div><div class="fg"><label for="g-gender">Gender <span class="r">*</span></label><select id="g-gender" name="gender" aria-label="Gender" required><option value="">-- Select --</option><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div><div class="fg"><label for="g-cat">Category</label><select id="g-cat" name="category" aria-label="Category"><option value="">--</option><option>General</option><option>OBC</option><option>SC</option><option>ST</option><option>EWS</option></select></div><div class="fg"><label for="g-mar">Marital Status</label><select id="g-mar" name="marital_status" aria-label="Marital Status"><option value="">--</option><option value="single">Single</option><option value="married">Married</option><option value="divorced">Divorced</option><option value="widowed">Widowed</option></select></div><div class="fg"><label for="g-nat">Nationality</label><input type="text" id="g-nat" name="nationality" value="Indian" aria-label="Nationality"></div></div></fieldset><div id="g-spouse" class="cond"><fieldset><legend>Spouse Details</legend><div class="grid"><div class="fg"><label for="g-sp-name">Spouse Name</label><input type="text" id="g-sp-name" name="spouse_name" aria-label="Spouse Name"></div><div class="fg"><label for="g-sp-aad">Spouse Aadhaar</label><input type="text" id="g-sp-aad" name="spouse_aadhaar" maxlength="14" aria-label="Spouse Aadhaar"></div></div></fieldset></div><div id="g-preg" class="cond"><fieldset><legend>Pregnancy (Female)</legend><div class="rg"><label><input type="radio" name="pregnant" value="yes" aria-label="Pregnant Yes"> Yes</label><label><input type="radio" name="pregnant" value="no" aria-label="Pregnant No"> No</label></div></fieldset></div><div id="g-guard" class="cond"><fieldset><legend>Guardian (Minor)</legend><div class="grid"><div class="fg"><label for="g-gu-name">Guardian Name</label><input type="text" id="g-gu-name" name="guardian_name" aria-label="Guardian Name"></div><div class="fg"><label for="g-gu-ph">Guardian Mobile</label><input type="tel" id="g-gu-ph" name="guardian_phone" pattern="[6-9][0-9]{9}" aria-label="Guardian Mobile"></div></div></fieldset></div><fieldset><legend>Address</legend><div class="grid"><div class="fg full"><label for="g-addr">Full Address <span class="r">*</span></label><textarea id="g-addr" name="address" rows="2" aria-label="Full Address" required></textarea></div><div class="fg"><label for="g-country">Country</label><select id="g-country" name="country" aria-label="Country"><option value="IN" selected>India</option><option value="US">United States</option></select></div><div class="fg"><label for="g-state">State <span class="r">*</span></label><select id="g-state" name="state" aria-label="State" required><option value="">-- State --</option></select></div><div class="fg"><label for="g-dist">District</label><select id="g-dist" name="district" aria-label="District" disabled><option value="">-- District --</option></select></div><div class="fg"><label for="g-block">Block</label><select id="g-block" name="block" aria-label="Block" disabled><option value="">-- Block --</option></select></div><div class="fg"><label for="g-vill">Village</label><select id="g-vill" name="village" aria-label="Village" disabled><option value="">-- Village --</option></select></div><div class="fg"><label for="g-pin">PIN Code <span class="r">*</span></label><input type="text" id="g-pin" name="pin_code" maxlength="6" pattern="[1-9][0-9]{5}" aria-label="PIN Code" required autocomplete="postal-code"></div></div></fieldset><fieldset><legend>Contact</legend><div class="grid"><div class="fg"><label for="g-mob">Mobile <span class="r">*</span></label><input type="tel" id="g-mob" name="mobile" pattern="[6-9][0-9]{9}" aria-label="Mobile" required autocomplete="tel"></div><div class="fg"><label for="g-email">Email <span class="r">*</span></label><input type="email" id="g-email" name="email" aria-label="Email" required autocomplete="email"></div><div class="fg"><label for="g-alt">Alternate Mobile</label><input type="tel" id="g-alt" name="alt_mobile" aria-label="Alternate Mobile"></div></div></fieldset><fieldset><legend>Occupation</legend><div class="grid"><div class="fg"><label for="g-occ">Occupation</label><select id="g-occ" name="occupation" aria-label="Occupation"><option value="">--</option><option value="student">Student</option><option value="govt">Government Employee</option><option value="private">Private</option><option value="business">Business</option><option value="farmer">Farmer</option><option value="unemployed">Unemployed</option></select></div><div class="fg"><label for="g-qual">Qualification</label><select id="g-qual" name="qualification" aria-label="Qualification"><option value="">--</option><option>10th</option><option>12th</option><option>Graduate</option><option>PG</option></select></div><div class="fg"><label for="g-inc">Annual Income</label><input type="number" id="g-inc" name="income" min="0" aria-label="Income"></div></div></fieldset><div id="g-dept" class="cond"><fieldset><legend>Department</legend><div class="grid"><div class="fg"><label for="g-dep">Department</label><input type="text" id="g-dep" name="department" aria-label="Department"></div><div class="fg"><label for="g-eid">Employee ID</label><input type="text" id="g-eid" name="employee_id" aria-label="Employee ID"></div></div></fieldset></div><div id="g-edu" class="cond"><fieldset><legend>Education</legend><div class="grid"><div class="fg"><label for="g-uni">University</label><input type="text" id="g-uni" name="university" aria-label="University"></div><div class="fg"><label for="g-crs">Course</label><input type="text" id="g-crs" name="course" aria-label="Course"></div></div></fieldset></div><div id="g-gst" class="cond"><fieldset><legend>GST</legend><div class="grid"><div class="fg"><label for="g-gstin">GSTIN</label><input type="text" id="g-gstin" name="gstin" maxlength="15" aria-label="GSTIN"></div><div class="fg"><label for="g-bname">Business Name</label><input type="text" id="g-bname" name="business_name" aria-label="Business Name"></div></div></fieldset></div><fieldset><legend>Identity</legend><div class="grid"><div class="fg"><label for="g-aad">Aadhaar <span class="r">*</span></label><input type="text" id="g-aad" name="aadhaar" maxlength="14" aria-label="Aadhaar" required></div><div class="fg"><label for="g-pan">PAN</label><input type="text" id="g-pan" name="pan" maxlength="10" aria-label="PAN" style="text-transform:uppercase"></div><div class="fg"><label for="g-pass">Passport</label><input type="text" id="g-pass" name="passport" aria-label="Passport"></div><div class="fg"><label for="g-dl">Driving License</label><input type="text" id="g-dl" name="driving_license" aria-label="DL"></div></div></fieldset><fieldset><legend>Bank</legend><div class="grid"><div class="fg"><label for="g-bn">Bank Name</label><input type="text" id="g-bn" name="bank_name" list="blist" aria-label="Bank"><datalist id="blist"><option value="SBI"><option value="HDFC"><option value="ICICI"><option value="Axis"></datalist></div><div class="fg"><label for="g-ifsc">IFSC</label><input type="text" id="g-ifsc" name="ifsc" maxlength="11" aria-label="IFSC" style="text-transform:uppercase"></div><div class="fg"><label for="g-acc">Account No</label><input type="text" id="g-acc" name="account_number" aria-label="Account" autocomplete="off"></div><div class="fg"><label for="g-nom">Nominee</label><input type="text" id="g-nom" name="nominee" aria-label="Nominee"></div></div></fieldset><fieldset><legend>Photo</legend><div class="grid"><div class="fg"><label for="g-photo">Photo</label><input type="file" id="g-photo" name="photo" accept="image/*" aria-label="Photo"><img class="preview" id="g-photo-p" alt=""></div><div class="fg"><label for="g-signf">Signature</label><input type="file" id="g-signf" name="signature_file" accept="image/*" aria-label="Signature"><img class="preview" id="g-signf-p" alt=""></div></div></fieldset><fieldset><legend>Declaration</legend><div class="cg"><label><input type="checkbox" id="g-dec" name="declaration" value="yes" required aria-label="Declaration"> I declare information is true.</label><label><input type="checkbox" id="g-con" name="consent" value="yes" required aria-label="Consent"> I consent to data processing.</label></div></fieldset><div class="btns"><button type="submit" class="btn btn-p">Submit</button><button type="reset" class="btn btn-o">Reset</button></div></form></section>' +
+'<section id="s-bank" class="sec"><h2>Savings Account</h2><form id="f-bank" novalidate><fieldset><legend>Holder</legend><div class="grid"><div class="fg"><label for="b-name">Full Name <span class="r">*</span></label><input type="text" id="b-name" name="full_name" aria-label="Full Name" required autocomplete="name"></div><div class="fg"><label for="b-dob">DOB <span class="r">*</span></label><input type="date" id="b-dob" name="dob" aria-label="DOB" required></div><div class="fg"><label for="b-pan">PAN <span class="r">*</span></label><input type="text" id="b-pan" name="pan" maxlength="10" aria-label="PAN" required style="text-transform:uppercase"></div><div class="fg"><label for="b-aad">Aadhaar <span class="r">*</span></label><input type="text" id="b-aad" name="aadhaar" maxlength="14" aria-label="Aadhaar" required></div><div class="fg"><label for="b-mob">Mobile <span class="r">*</span></label><input type="tel" id="b-mob" name="mobile" pattern="[6-9][0-9]{9}" aria-label="Mobile" required></div><div class="fg"><label for="b-email">Email</label><input type="email" id="b-email" name="email" aria-label="Email"></div></div></fieldset><fieldset><legend>Preferences</legend><div class="grid"><div class="fg"><label for="b-type">Account Type</label><select id="b-type" name="account_type" aria-label="Type"><option>Savings</option><option>Salary</option><option>Senior</option></select></div><div class="fg"><label for="b-dep">Initial Deposit</label><input type="number" id="b-dep" name="initial_deposit" value="1000" aria-label="Deposit"></div><div class="fg"><label for="b-nb">Net Banking</label><label class="sw"><input type="checkbox" id="b-nb" name="netbanking" checked aria-label="Net Banking"><span class="sl"></span></label></div><div class="fg"><label for="b-nom">Nominee</label><input type="text" id="b-nom" name="nominee" aria-label="Nominee"></div></div></fieldset><div class="btns"><button type="submit" class="btn btn-p">Open Account</button><button type="button" class="btn btn-o" id="b-otp">Verify OTP</button></div></form></section>' +
+'<section id="s-univ" class="sec"><h2>University Admission</h2><form id="f-univ" novalidate><fieldset><legend>Candidate</legend><div class="grid"><div class="fg"><label for="u-name">Candidate Name <span class="r">*</span></label><input type="text" id="u-name" name="candidate_name" aria-label="Candidate Name" required></div><div class="fg"><label for="u-dob">Birth Date <span class="r">*</span></label><input type="date" id="u-dob" name="dob" aria-label="Birth Date" required></div><div class="fg"><label for="u-email">E-mail <span class="r">*</span></label><input type="email" id="u-email" name="email" aria-label="Email" required></div><div class="fg"><label for="u-ph">Phone <span class="r">*</span></label><input type="tel" id="u-ph" name="phone" pattern="[6-9][0-9]{9}" aria-label="Phone" required></div></div></fieldset><fieldset><legend>Program</legend><div class="grid"><div class="fg"><label for="u-uni">University <span class="r">*</span></label><select id="u-uni" name="university" aria-label="University" required><option value="">--</option><option value="du">Delhi University</option><option value="iitd">IIT Delhi</option><option value="jnu">JNU</option></select></div><div class="fg"><label for="u-crs">Course <span class="r">*</span></label><select id="u-crs" name="course" aria-label="Course" required disabled><option value="">--</option></select></div><div class="fg"><label for="u-sem">Semester</label><select id="u-sem" name="semester" aria-label="Semester" disabled><option value="">--</option></select></div></div></fieldset><div class="btns"><button type="submit" class="btn btn-p">Submit</button></div></form></section>' +
+'<section id="s-job" class="sec"><h2>Job Application</h2><form id="f-job" novalidate><fieldset><legend>Applicant</legend><div class="grid"><div class="fg"><label for="j-first">First Name <span class="r">*</span></label><input type="text" id="j-first" name="first_name" aria-label="First Name" required autocomplete="given-name"></div><div class="fg"><label for="j-last">Last Name <span class="r">*</span></label><input type="text" id="j-last" name="last_name" aria-label="Last Name" required autocomplete="family-name"></div><div class="fg"><label for="j-email">Email <span class="r">*</span></label><input type="email" id="j-email" name="email" aria-label="Email" required></div><div class="fg"><label for="j-ph">Phone <span class="r">*</span></label><input type="tel" id="j-ph" name="phone" aria-label="Phone" required></div><div class="fg"><label for="j-pos">Position <span class="r">*</span></label><select id="j-pos" name="position" aria-label="Position" required><option value="">--</option><option>Software Engineer</option><option>Product Manager</option><option>Data Scientist</option><option>UX Designer</option></select></div><div class="fg"><label for="j-exp">Experience (years)</label><input type="number" id="j-exp" name="experience" min="0" max="40" aria-label="Experience"></div></div></fieldset><fieldset><legend>Skills</legend><div class="fg full"><div class="chips" id="j-sk-chips"><input type="text" id="j-sk-in" placeholder="Type + Enter" aria-label="Skill" style="border:none;outline:none;flex:1;min-width:100px;padding:4px"></div><input type="hidden" id="j-skills" name="skills"></div></fieldset><div class="btns"><button type="submit" class="btn btn-p">Submit</button></div></form></section>' +
+'<section id="s-wiz" class="sec"><h2>6-Step Wizard</h2><div class="wiz-bar" id="wiz-bar"><div class="wiz-ind on" data-st="1">1.ID</div><div class="wiz-ind" data-st="2">2.Contact</div><div class="wiz-ind" data-st="3">3.Address</div><div class="wiz-ind" data-st="4">4.Docs</div><div class="wiz-ind" data-st="5">5.Prefs</div><div class="wiz-ind" data-st="6">6.Review</div></div><form id="f-wiz" novalidate><div class="wiz-p on" data-st="1"><h3>Identity</h3><div class="grid"><div class="fg"><label for="w-name">Name <span class="r">*</span></label><input type="text" id="w-name" name="wiz_name" required aria-label="Name"></div><div class="fg"><label for="w-dob">DOB <span class="r">*</span></label><input type="date" id="w-dob" name="wiz_dob" required aria-label="DOB"></div></div></div><div class="wiz-p" data-st="2"><h3>Contact</h3><div class="grid"><div class="fg"><label for="w-mob">Mobile <span class="r">*</span></label><input type="tel" id="w-mob" name="wiz_mobile" required pattern="[6-9][0-9]{9}" aria-label="Mobile"></div><div class="fg"><label for="w-email">Email <span class="r">*</span></label><input type="email" id="w-email" name="wiz_email" required aria-label="Email"></div></div></div><div class="wiz-p" data-st="3"><h3>Address</h3><div class="grid"><div class="fg full"><label for="w-addr">Address <span class="r">*</span></label><textarea id="w-addr" name="wiz_addr" rows="2" required aria-label="Address"></textarea></div><div class="fg"><label for="w-city">City <span class="r">*</span></label><input type="text" id="w-city" name="wiz_city" required aria-label="City"></div><div class="fg"><label for="w-pin">PIN <span class="r">*</span></label><input type="text" id="w-pin" name="wiz_pin" required maxlength="6" aria-label="PIN"></div></div></div><div class="wiz-p" data-st="4"><h3>Documents</h3><div class="grid"><div class="fg"><label for="w-aad">Aadhaar</label><input type="text" id="w-aad" name="wiz_aadhaar" maxlength="14" aria-label="Aadhaar"></div><div class="fg"><label for="w-pan">PAN</label><input type="text" id="w-pan" name="wiz_pan" maxlength="10" aria-label="PAN" style="text-transform:uppercase"></div></div></div><div class="wiz-p" data-st="5"><h3>Preferences</h3><div class="grid"><div class="fg"><label for="w-lang">Language</label><select id="w-lang" name="wiz_lang" aria-label="Language"><option value="en">English</option><option value="hi">Hindi</option></select></div></div></div><div class="wiz-p" data-st="6"><h3>Review</h3><div id="w-rev" style="background:#f9fafb;padding:10px;border-radius:6px;font-size:.85rem"></div><div class="cg" style="margin-top:8px"><label><input type="checkbox" id="w-agree" name="wiz_agree" required aria-label="Agree"> I confirm details are correct.</label></div></div><div class="btns"><button type="button" class="btn btn-o" id="w-prev" disabled>Previous</button><button type="button" class="btn btn-p" id="w-next">Next</button><button type="submit" class="btn btn-s" id="w-sub" style="display:none">Submit</button></div></form></section>' +
+'<section id="s-wid" class="sec"><h2>Custom Widgets</h2><h3>Searchable Dropdown</h3><div class="fg" style="max-width:300px"><label>Country</label><div class="cs-wrap" id="cs-c"><div class="cs-trig" tabindex="0" role="combobox" aria-label="Country"><span class="cs-lab">-- Select --</span><span>▾</span></div><div class="cs-drop"><input type="text" class="cs-search" placeholder="Search…" aria-label="Search"><div class="cs-opt" data-v="IN">India</div><div class="cs-opt" data-v="US">United States</div><div class="cs-opt" data-v="GB">UK</div><div class="cs-opt" data-v="AE">UAE</div></div><input type="hidden" id="cs-c-v" name="cs_country"></div></div><h3>OTP</h3><div class="fg"><label>OTP</label><div class="otp" id="otp-g" role="group" aria-label="OTP"><input type="text" maxlength="1" inputmode="numeric" aria-label="O1" class="ob"><input type="text" maxlength="1" inputmode="numeric" aria-label="O2" class="ob"><input type="text" maxlength="1" inputmode="numeric" aria-label="O3" class="ob"><input type="text" maxlength="1" inputmode="numeric" aria-label="O4" class="ob"><input type="text" maxlength="1" inputmode="numeric" aria-label="O5" class="ob"><input type="text" maxlength="1" inputmode="numeric" aria-label="O6" class="ob"></div><input type="hidden" id="otp-v" name="otp"></div><h3>PIN</h3><div class="fg"><label>PIN</label><div class="pin" id="pin-g" role="group" aria-label="PIN"><input type="password" maxlength="1" inputmode="numeric" aria-label="P1" class="pb"><input type="password" maxlength="1" inputmode="numeric" aria-label="P2" class="pb"><input type="password" maxlength="1" inputmode="numeric" aria-label="P3" class="pb"><input type="password" maxlength="1" inputmode="numeric" aria-label="P4" class="pb"></div><input type="hidden" id="pin-v" name="pin"></div><h3>Switch / Radio / Checkbox</h3><div class="grid"><div class="fg"><label for="cc-sw">2FA</label><label class="sw"><input type="checkbox" id="cc-sw" name="enable_2fa" aria-label="2FA"><span class="sl"></span></label></div><div class="fg"><label>Plan</label><div class="rg"><label><input type="radio" name="cc_plan" value="basic" aria-label="Basic"> Basic</label><label><input type="radio" name="cc_plan" value="pro" checked aria-label="Pro"> Pro</label></div></div></div><h3>Signature</h3><div class="fg"><canvas id="sig" class="sig" width="320" height="100" aria-label="Signature"></canvas><div class="btns"><button type="button" class="btn btn-o" id="sig-clr" style="padding:4px 8px;font-size:.72rem">Clear</button><button type="button" class="btn btn-p" id="sig-sv" style="padding:4px 8px;font-size:.72rem">Save</button></div><input type="hidden" id="sig-d" name="signature_data"></div></section>' +
+'<section id="s-all" class="sec"><h2>All Input Types</h2><form id="f-all"><div class="grid"><div class="fg"><label for="i-text">Text</label><input type="text" id="i-text" name="i_text" aria-label="Text"></div><div class="fg"><label for="i-pw">Password</label><input type="password" id="i-pw" name="i_pw" aria-label="Password"><div class="str"><div id="i-pw-bar"></div></div></div><div class="fg"><label for="i-email">Email</label><input type="email" id="i-email" name="i_email" aria-label="Email"></div><div class="fg"><label for="i-num">Number</label><input type="number" id="i-num" name="i_num" aria-label="Number"></div><div class="fg"><label for="i-tel">Tel</label><input type="tel" id="i-tel" name="i_tel" aria-label="Tel"></div><div class="fg"><label for="i-url">URL</label><input type="url" id="i-url" name="i_url" aria-label="URL"></div><div class="fg"><label for="i-search">Search</label><input type="search" id="i-search" name="i_search" aria-label="Search"></div><div class="fg"><label for="i-date">Date</label><input type="date" id="i-date" name="i_date" aria-label="Date"></div><div class="fg"><label for="i-dt">Datetime</label><input type="datetime-local" id="i-dt" name="i_dt" aria-label="Datetime"></div><div class="fg"><label for="i-time">Time</label><input type="time" id="i-time" name="i_time" aria-label="Time"></div><div class="fg"><label for="i-month">Month</label><input type="month" id="i-month" name="i_month" aria-label="Month"></div><div class="fg"><label for="i-week">Week</label><input type="week" id="i-week" name="i_week" aria-label="Week"></div><div class="fg"><label for="i-color">Color</label><input type="color" id="i-color" name="i_color" value="#1a56db" aria-label="Color"></div><div class="fg"><label for="i-range">Range <span id="i-rv">50</span></label><input type="range" id="i-range" name="i_range" min="0" max="100" value="50" aria-label="Range"></div><div class="fg"><label for="i-file">File</label><input type="file" id="i-file" name="i_file" aria-label="File"></div><div class="fg"><label>Hidden</label><input type="hidden" id="i-hid" name="i_hid" value="secret"><span class="hint">in DOM</span></div><div class="fg"><label for="i-cb">Checkbox</label><div class="cg"><label><input type="checkbox" id="i-cb" name="i_cb" aria-label="CB"> Agree</label></div></div><div class="fg"><label>Radio</label><div class="rg"><label><input type="radio" name="i_rad" value="a" aria-label="A"> A</label><label><input type="radio" name="i_rad" value="b" aria-label="B"> B</label></div></div><div class="fg"><label for="i-sel">Select</label><select id="i-sel" name="i_sel" aria-label="Select"><option value="">--</option><option>One</option><option>Two</option></select></div><div class="fg"><label for="i-msel">Multi</label><select id="i-msel" name="i_msel" multiple size="2" aria-label="Multi"><option>Red</option><option>Blue</option></select></div><div class="fg"><label for="i-ta">Textarea</label><textarea id="i-ta" name="i_ta" rows="2" aria-label="Textarea"></textarea></div><div class="fg"><label for="i-out">Output</label><output id="i-out" name="i_out">50</output></div><div class="fg"><label for="i-prog">Progress</label><progress id="i-prog" value="65" max="100" aria-label="Progress"></progress></div><div class="fg"><label for="i-met">Meter</label><meter id="i-met" min="0" max="100" value="55" aria-label="Meter"></meter></div><div class="fg"><label>Disabled</label><input type="text" id="i-dis" value="Locked" disabled aria-label="Disabled"></div><div class="fg"><label>Readonly</label><input type="text" id="i-ro" value="Read only" readonly aria-label="Readonly"></div></div><div class="btns"><button type="submit" class="btn btn-p">Submit</button><button type="reset" class="btn btn-o">Reset</button><button type="button" class="btn btn-o" id="i-btn">Button</button></div></form></section>' +
+'<section id="s-dyn" class="sec"><h2>Cascades</h2><div class="grid"><div class="fg"><label for="d-c">Country</label><select id="d-c" name="d_country" aria-label="Country"><option value="">--</option><option value="IN">India</option><option value="US">US</option></select></div><div class="fg"><label for="d-s">State</label><select id="d-s" name="d_state" aria-label="State" disabled><option value="">--</option></select></div><div class="fg"><label for="d-d">District</label><select id="d-d" name="d_district" aria-label="District" disabled><option value="">--</option></select></div><div class="fg"><label for="d-b">Block</label><select id="d-b" name="d_block" aria-label="Block" disabled><option value="">--</option></select></div><div class="fg"><label for="d-v">Village</label><select id="d-v" name="d_village" aria-label="Village" disabled><option value="">--</option></select></div></div></section>' +
+'<section id="s-rep" class="sec"><h2>Repeating</h2><h3>Family</h3><div id="fam-box"></div><button type="button" class="btn btn-p" id="add-fam" style="margin-top:6px;padding:5px 10px;font-size:.75rem">+ Family</button><h3>Education</h3><div id="edu-box"></div><button type="button" class="btn btn-p" id="add-edu" style="margin-top:6px;padding:5px 10px;font-size:.75rem">+ Education</button></section>' +
+'<section id="s-tbl" class="sec"><h2>Tables</h2><div class="fg" style="max-width:220px;margin-bottom:8px"><label for="t-q">Search</label><input type="search" id="t-q" placeholder="Filter…" aria-label="Search"></div><div style="overflow-x:auto"><table id="tbl" aria-label="Table"><thead><tr><th data-c="0">Name</th><th data-c="1">Dept</th><th data-c="2">Role</th><th data-c="3">Salary</th></tr></thead><tbody><tr><td class="ed"><input value="Aarav Sharma" aria-label="Name"></td><td>Eng</td><td>SDE-2</td><td>18 LPA</td></tr><tr><td class="ed"><input value="Priya Patel" aria-label="Name"></td><td>Product</td><td>PM</td><td>22 LPA</td></tr><tr><td class="ed"><input value="Rahul Verma" aria-label="Name"></td><td>Design</td><td>UX</td><td>20 LPA</td></tr><tr><td class="ed"><input value="Sneha Reddy" aria-label="Name"></td><td>Eng</td><td>SDE-1</td><td>12 LPA</td></tr></tbody></table></div></section>' +
+'<section id="s-up" class="sec"><h2>Uploads</h2><div class="grid"><div class="fg"><label for="up-ph">Photo</label><input type="file" id="up-ph" accept="image/*" aria-label="Photo"><img class="preview" id="up-ph-p" alt=""></div><div class="fg"><label for="up-sg">Signature</label><input type="file" id="up-sg" accept="image/*" aria-label="Signature"><img class="preview" id="up-sg-p" alt=""></div><div class="fg"><label for="up-ad">Aadhaar</label><input type="file" id="up-ad" accept="image/*,.pdf" aria-label="Aadhaar"></div><div class="fg"><label for="up-pn">PAN</label><input type="file" id="up-pn" accept="image/*,.pdf" aria-label="PAN"></div><div class="fg"><label for="up-rs">Resume</label><input type="file" id="up-rs" accept=".pdf,.doc,.docx" aria-label="Resume"></div></div><h3>Drag Drop</h3><div class="drop" id="dz" role="button" tabindex="0" aria-label="Drop"><p>Tap or drop files</p><input type="file" id="dz-in" multiple accept="image/*,.pdf"><div id="dz-list" style="margin-top:6px;font-size:.72rem;text-align:left"></div></div></section>' +
+'<section id="s-str" class="sec"><h2>DOM Stress</h2><div id="str-box"><div class="fg delay" id="dl-500" data-ms="500"><label for="s500">After 500ms</label><input type="text" id="s500" name="s500" aria-label="500ms"></div><div class="fg delay" id="dl-1000" data-ms="1000"><label for="s1000">After 1s</label><input type="text" id="s1000" name="s1000" aria-label="1s"></div><div class="fg delay" id="dl-3000" data-ms="3000"><label for="s3000">After 3s</label><input type="text" id="s3000" name="s3000" aria-label="3s"></div></div><div class="btns" style="margin-top:8px"><button type="button" class="btn btn-p" id="str-add">Add field</button><button type="button" class="btn btn-o" id="str-rm">Remove</button></div><div id="str-dyn" style="margin-top:8px"></div><div class="fg" style="margin-top:12px"><label for="str-sel">Select to reveal</label><select id="str-sel" aria-label="Reveal"><option value="">--</option><option value="show">Show extra</option><option value="hide">Hide</option></select></div><div id="str-extra" class="cond"><div class="grid"><div class="fg"><label for="sx1">Extra 1</label><input type="text" id="sx1" name="sx1" aria-label="Extra1"></div><div class="fg"><label for="sx2">Extra 2</label><input type="text" id="sx2" name="sx2" aria-label="Extra2"></div></div></div></section>' +
+'<section id="s-ok" class="sec"><div class="ok-page"><h2>Application Submitted</h2><p>Received successfully.</p><div class="ref" id="ref-n">REF-2026-000000</div><div class="btns" style="justify-content:center;margin-top:12px"><button type="button" class="btn btn-p" id="btn-print">Print</button><button type="button" class="btn btn-o" id="btn-pdf">Download PDF</button></div></div></section>';
+
+/* JS logic - lightweight */
+(function(){
+'use strict';
+var $=function(s,c){return(c||document).querySelector(s)};
+var $$=function(s,c){return Array.prototype.slice.call((c||document).querySelectorAll(s))};
+var logN=0;
+function dbg(ev,det){
+  logN++;var n=$('#dbg-n');if(n)n.textContent=logN;
+  var bd=$('#dbg-bd');if(!bd)return;
+  var d=document.createElement('div');d.className='ln';
+  d.textContent=(new Date().toLocaleTimeString('en-IN',{hour12:false}))+' '+ev+' '+(det||'');
+  bd.insertBefore(d,bd.firstChild);
+  while(bd.children.length>30)bd.removeChild(bd.lastChild);
+}
+$$('#nav button').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    $$('#nav button').forEach(function(b){b.classList.remove('active')});
+    btn.classList.add('active');
+    $$('.sec').forEach(function(s){s.classList.remove('active')});
+    var sec=$('#'+btn.getAttribute('data-s'));if(sec)sec.classList.add('active');
+    dbg('nav',btn.getAttribute('data-s'));
+  });
+});
+var GEO={IN:{Maharashtra:{Pune:{Haveli:['Koregaon','Hinjewadi'],Maval:['Lonavala']},Mumbai:{Andheri:['Versova'],Bandra:['Bandra West']}},Karnataka:{'Bengaluru Urban':{South:['Jayanagar'],North:['Yelahanka']}},Delhi:{'New Delhi':{Central:['CP'],South:['Saket']}},Bihar:{'Nalanda':{Rajgir:['Visthapit'],Nonhi:['Mahadeva']}}},US:{California:{'Los Angeles':{Central:['Downtown']}},'New York':{'New York City':{Manhattan:['Midtown']}}}};
+var UCRS={du:{'B.A. English':['S1','S2'],'B.Com':['S1','S2']},iitd:{'B.Tech CSE':['S1','S2','S3','S4'],'B.Tech EE':['S1','S2']},jnu:{'M.A. Econ':['Y1','Y2']}};
+function delay(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function rdelay(){return 250+Math.floor(Math.random()*350)}
+function fillSel(sel,items,ph){
+  sel.innerHTML='';var o0=document.createElement('option');o0.value='';o0.textContent=ph||'--';sel.appendChild(o0);
+  if(!items){sel.disabled=true;return}
+  (Array.isArray(items)?items:Object.keys(items)).forEach(function(k){var o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o)});
+  sel.disabled=false;
+}
+function govCas(lvl,val){
+  var st=$('#g-state'),di=$('#g-dist'),bl=$('#g-block'),vi=$('#g-vill');
+  if(lvl==='c'){delay(rdelay()).then(function(){fillSel(st,GEO[val]?Object.keys(GEO[val]):null,'-- State --');fillSel(di,null);fillSel(bl,null);fillSel(vi,null)})}
+  else if(lvl==='s'){delay(rdelay()).then(function(){var c=$('#g-country').value;fillSel(di,GEO[c]&&GEO[c][val]?Object.keys(GEO[c][val]):null,'-- Dist --');fillSel(bl,null);fillSel(vi,null)})}
+  else if(lvl==='d'){delay(rdelay()).then(function(){var c=$('#g-country').value,s=$('#g-state').value;fillSel(bl,GEO[c]&&GEO[c][s]&&GEO[c][s][val]?Object.keys(GEO[c][s][val]):null,'-- Block --');fillSel(vi,null)})}
+  else if(lvl==='b'){delay(rdelay()).then(function(){var c=$('#g-country').value,s=$('#g-state').value,d=$('#g-dist').value;fillSel(vi,GEO[c]&&GEO[c][s]&&GEO[c][s][d]&&GEO[c][s][d][val])})}
+}
+$('#g-country').addEventListener('change',function(e){govCas('c',e.target.value)});
+$('#g-state').addEventListener('change',function(e){govCas('s',e.target.value)});
+$('#g-dist').addEventListener('change',function(e){govCas('d',e.target.value)});
+$('#g-block').addEventListener('change',function(e){govCas('b',e.target.value)});
+govCas('c','IN');
+function dCas(lvl,val){
+  if(lvl==='c')delay(rdelay()).then(function(){fillSel($('#d-s'),GEO[val]?Object.keys(GEO[val]):null);fillSel($('#d-d'),null);fillSel($('#d-b'),null);fillSel($('#d-v'),null)});
+  else if(lvl==='s')delay(rdelay()).then(function(){var c=$('#d-c').value;fillSel($('#d-d'),GEO[c]&&GEO[c][val]?Object.keys(GEO[c][val]):null);fillSel($('#d-b'),null);fillSel($('#d-v'),null)});
+  else if(lvl==='d')delay(rdelay()).then(function(){var c=$('#d-c').value,s=$('#d-s').value;fillSel($('#d-b'),GEO[c]&&GEO[c][s]&&GEO[c][s][val]?Object.keys(GEO[c][s][val]):null);fillSel($('#d-v'),null)});
+  else if(lvl==='b')delay(rdelay()).then(function(){var c=$('#d-c').value,s=$('#d-s').value,d=$('#d-d').value;fillSel($('#d-v'),GEO[c]&&GEO[c][s]&&GEO[c][s][d]&&GEO[c][s][d][val])});
+}
+$('#d-c').addEventListener('change',function(e){dCas('c',e.target.value)});
+$('#d-s').addEventListener('change',function(e){dCas('s',e.target.value)});
+$('#d-d').addEventListener('change',function(e){dCas('d',e.target.value)});
+$('#d-b').addEventListener('change',function(e){dCas('b',e.target.value)});
+$('#u-uni').addEventListener('change',function(){delay(rdelay()).then(function(){fillSel($('#u-crs'),UCRS[$('#u-uni').value]?Object.keys(UCRS[$('#u-uni').value]):null);fillSel($('#u-sem'),null)})});
+$('#u-crs').addEventListener('change',function(){delay(rdelay()).then(function(){var cs=UCRS[$('#u-uni').value];fillSel($('#u-sem'),cs&&cs[$('#u-crs').value])})});
+function show(id,on){var el=$(id);if(el)el.classList.toggle('show',!!on)}
+$('#g-mar').addEventListener('change',function(e){show('#g-spouse',e.target.value==='married')});
+$('#g-gender').addEventListener('change',function(e){show('#g-preg',e.target.value==='female')});
+$('#g-occ').addEventListener('change',function(e){show('#g-dept',e.target.value==='govt');show('#g-edu',e.target.value==='student');show('#g-gst',e.target.value==='business')});
+$('#g-dob').addEventListener('change',function(e){var age=(Date.now()-new Date(e.target.value).getTime())/(365.25*864e5);show('#g-guard',age<18)});
+var today=new Date().toISOString().slice(0,10);
+['#g-dob','#b-dob','#u-dob','#w-dob'].forEach(function(s){var el=$(s);if(el)el.max=today});
+function bindPrev(a,b){var i=$(a),m=$(b);if(!i||!m)return;i.addEventListener('change',function(){var f=i.files[0];if(f&&f.type.indexOf('image/')===0){m.src=URL.createObjectURL(f);m.style.display='block'}else m.style.display='none'})}
+bindPrev('#g-photo','#g-photo-p');bindPrev('#g-signf','#g-signf-p');bindPrev('#up-ph','#up-ph-p');bindPrev('#up-sg','#up-sg-p');
+var dz=$('#dz'),di=$('#dz-in');
+if(dz){dz.addEventListener('click',function(){di.click()});
+dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('over')});
+dz.addEventListener('dragleave',function(){dz.classList.remove('over')});
+dz.addEventListener('drop',function(e){e.preventDefault();dz.classList.remove('over');var l=$('#dz-list');l.innerHTML='';Array.prototype.forEach.call(e.dataTransfer.files,function(f){var d=document.createElement('div');d.textContent=f.name;l.appendChild(d)})});
+di.addEventListener('change',function(){var l=$('#dz-list');l.innerHTML='';Array.prototype.forEach.call(di.files,function(f){var d=document.createElement('div');d.textContent=f.name;l.appendChild(d)})})}
+(function(){var w=$('#cs-c');if(!w)return;var t=w.querySelector('.cs-trig'),d=w.querySelector('.cs-drop'),s=w.querySelector('.cs-search'),h=$('#cs-c-v'),lab=w.querySelector('.cs-lab');
+t.addEventListener('click',function(){d.classList.toggle('open')});
+s.addEventListener('input',function(){var q=s.value.toLowerCase();$$('.cs-opt',w).forEach(function(o){o.style.display=o.textContent.toLowerCase().indexOf(q)>=0?'':'none'})});
+$$('.cs-opt',w).forEach(function(o){o.addEventListener('click',function(){lab.textContent=o.textContent;h.value=o.getAttribute('data-v');d.classList.remove('open')})});
+document.addEventListener('click',function(e){if(!w.contains(e.target))d.classList.remove('open')})})();
+function chips(cid,iid,hid){var box=$(cid),inp=$(iid),h=$(hid),tags=[];
+function ren(){$$('.chip',box).forEach(function(c){c.parentNode.removeChild(c)});tags.forEach(function(t,i){var c=document.createElement('span');c.className='chip';c.innerHTML=t+' <button type="button">×</button>';c.querySelector('button').addEventListener('click',function(){tags.splice(i,1);ren()});box.insertBefore(c,inp)});if(h)h.value=tags.join(',')}
+inp.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===','){e.preventDefault();var v=inp.value.trim().replace(/,/g,'');if(v&&tags.indexOf(v)<0){tags.push(v);ren()}inp.value=''}if(e.key==='Backspace'&&!inp.value&&tags.length){tags.pop();ren()}})}
+if($('#j-sk-in'))chips('#j-sk-chips','#j-sk-in','#j-skills');
+function digits(sel,hid){var boxes=$$(sel),h=$(hid);boxes.forEach(function(b,i){b.addEventListener('input',function(){b.value=b.value.replace(/\D/g,'').slice(0,1);if(b.value&&i<boxes.length-1)boxes[i+1].focus();if(h)h.value=boxes.map(function(x){return x.value}).join('')});b.addEventListener('keydown',function(e){if(e.key==='Backspace'&&!b.value&&i>0)boxes[i-1].focus()})})}
+digits('#otp-g .ob','#otp-v');digits('#pin-g .pb','#pin-v');
+(function(){var c=$('#sig');if(!c)return;var ctx=c.getContext('2d'),dr=false;ctx.strokeStyle='#111';ctx.lineWidth=2;ctx.lineCap='round';
+function pos(e){var r=c.getBoundingClientRect();var t=e.touches?e.touches[0]:e;return{x:t.clientX-r.left,y:t.clientY-r.top}}
+function st(e){e.preventDefault();dr=true;var p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)}
+function mv(e){if(!dr)return;e.preventDefault();var p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke()}
+function en(){dr=false}
+c.addEventListener('mousedown',st);c.addEventListener('mousemove',mv);c.addEventListener('mouseup',en);c.addEventListener('mouseleave',en);
+c.addEventListener('touchstart',st,{passive:false});c.addEventListener('touchmove',mv,{passive:false});c.addEventListener('touchend',en);
+$('#sig-clr').addEventListener('click',function(){ctx.clearRect(0,0,c.width,c.height);$('#sig-d').value=''});
+$('#sig-sv').addEventListener('click',function(){$('#sig-d').value=c.toDataURL()});
+})();
+var ws=1,WT=6;
+function updWiz(){
+  $$('.wiz-p').forEach(function(p){p.classList.toggle('on',+p.getAttribute('data-st')===ws)});
+  $$('.wiz-ind').forEach(function(ind){var s=+ind.getAttribute('data-st');ind.classList.toggle('on',s===ws);ind.classList.toggle('done',s<ws)});
+  $('#w-prev').disabled=ws===1;$('#w-next').style.display=ws===WT?'none':'';$('#w-sub').style.display=ws===WT?'':'none';
+  if(ws===6)$('#w-rev').innerHTML='<b>Name:</b> '+($('#w-name').value||'—')+'<br><b>Mobile:</b> '+($('#w-mob').value||'—')+'<br><b>Email:</b> '+($('#w-email').value||'—')+'<br><b>City:</b> '+($('#w-city').value||'—');
+}
+function valWiz(){var panel=$('.wiz-p[data-st="'+ws+'"]'),req=$$('[required]',panel),ok=true;req.forEach(function(f){if(!f.value||(f.type==='checkbox'&&!f.checked)){f.style.borderColor='#c81e1e';ok=false}else f.style.borderColor=''});return ok}
+$('#w-next').addEventListener('click',function(){if(!valWiz())return;if(ws<WT){ws++;updWiz()}});
+$('#w-prev').addEventListener('click',function(){if(ws>1){ws--;updWiz()}});
+var fi=0,ei=0;
+function addFam(){fi++;var id='fm'+fi;var d=document.createElement('div');d.className='rep';d.id=id;
+d.innerHTML='<button type="button" class="btn btn-d rm" data-rm="'+id+'" style="padding:3px 8px;font-size:.7rem">×</button><div class="grid"><div class="fg"><label>Name</label><input type="text" name="fn'+fi+'" aria-label="Member"></div><div class="fg"><label>Relation</label><select name="fr'+fi+'" aria-label="Rel"><option>--</option><option>Spouse</option><option>Son</option><option>Daughter</option></select></div></div>';
+$('#fam-box').appendChild(d)}
+function addEdu(){ei++;var id='ed'+ei;var d=document.createElement('div');d.className='rep';d.id=id;
+d.innerHTML='<button type="button" class="btn btn-d rm" data-rm="'+id+'" style="padding:3px 8px;font-size:.7rem">×</button><div class="grid"><div class="fg"><label>Institution</label><input type="text" name="ei'+ei+'" aria-label="Inst"></div><div class="fg"><label>Degree</label><input type="text" name="ed'+ei+'" aria-label="Deg"></div></div>';
+$('#edu-box').appendChild(d)}
+$('#add-fam').addEventListener('click',addFam);$('#add-edu').addEventListener('click',addEdu);
+document.addEventListener('click',function(e){if(e.target.getAttribute&&e.target.getAttribute('data-rm')){var el=$('#'+e.target.getAttribute('data-rm'));if(el)el.parentNode.removeChild(el)}});
+addFam();addEdu();
+var sDir=1,sCol=-1;
+$$('#tbl th').forEach(function(th){th.addEventListener('click',function(){var col=+th.getAttribute('data-c');sDir=sCol===col?-sDir:1;sCol=col;var tb=$('#tbl tbody'),rows=$$('#tbl tbody tr');
+rows.sort(function(a,b){var va=a.cells[col].querySelector('input')?a.cells[col].querySelector('input').value:a.cells[col].textContent;var vb=b.cells[col].querySelector('input')?b.cells[col].querySelector('input').value:b.cells[col].textContent;return va.localeCompare(vb,undefined,{numeric:true})*sDir});
+rows.forEach(function(r){tb.appendChild(r)})})});
+$('#t-q').addEventListener('input',function(e){var q=e.target.value.toLowerCase();$$('#tbl tbody tr').forEach(function(tr){tr.style.display=tr.textContent.toLowerCase().indexOf(q)>=0?'':'none'})});
+function showOk(){$('#ref-n').textContent='REF-2026-'+String(Math.floor(Math.random()*900000)+100000);$$('.sec').forEach(function(s){s.classList.remove('active')});$('#s-ok').classList.add('active');$$('#nav button').forEach(function(b){b.classList.remove('active')});var nb=$$('#nav button[data-s="s-ok"]')[0];if(nb)nb.classList.add('active')}
+['f-gov','f-bank','f-univ','f-job','f-wiz','f-all'].forEach(function(fid){var f=$('#'+fid);if(f)f.addEventListener('submit',function(e){e.preventDefault();showOk()})});
+$('#btn-print').addEventListener('click',function(){window.print()});
+$('#btn-pdf').addEventListener('click',function(){alert('PDF: '+$('#ref-n').textContent)});
+$$('.delay').forEach(function(el){setTimeout(function(){el.classList.add('vis')},+el.getAttribute('data-ms'))});
+var sc=0;
+$('#str-add').addEventListener('click',function(){sc++;var d=document.createElement('div');d.className='fg';d.id='sd'+sc;d.innerHTML='<label>Dynamic #'+sc+'</label><input type="text" name="sd'+sc+'" aria-label="Dyn '+sc+'">';$('#str-dyn').appendChild(d)});
+$('#str-rm').addEventListener('click',function(){var box=$('#str-dyn');if(box.lastChild)box.removeChild(box.lastChild)});
+$('#str-sel').addEventListener('change',function(e){show('#str-extra',e.target.value==='show')});
+$('#i-pw').addEventListener('input',function(e){var v=e.target.value,s=0;if(v.length>=8)s++;if(/[A-Z]/.test(v))s++;if(/[0-9]/.test(v))s++;if(/[^A-Za-z0-9]/.test(v))s++;var bar=$('#i-pw-bar');bar.style.width=(s*25)+'%';bar.style.background=['','#c81e1e','#c27803','#1a56db','#057a55'][s]});
+$('#i-range').addEventListener('input',function(e){$('#i-rv').textContent=e.target.value;$('#i-out').value=e.target.value});
+document.addEventListener('change',function(e){var t=e.target;if(t&&t.matches&&t.matches('input,select,textarea'))dbg('change',(t.id||t.name||'').slice(0,20))},true);
+document.addEventListener('focusin',function(e){var t=e.target;if(t&&t.matches&&t.matches('input,select,textarea,button'))dbg('focus',t.id||t.name||t.tagName)},true);
+$('#dbg-hd').addEventListener('click',function(){var bd=$('#dbg-bd');bd.style.display=bd.style.display==='none'?'block':'none'});
+if($('#b-otp'))$('#b-otp').addEventListener('click',function(){alert('OTP dialog (simplified for mobile)')});
+dbg('init','mobile-ready');
+})();
+</script>
+</body>
+</html>

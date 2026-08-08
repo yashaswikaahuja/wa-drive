@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Real Portal Datepickers — CyberControl Test Fixture</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-datepicker@1.10.0/dist/css/bootstrap-datepicker3.min.css">
+<style>
+body{font-family:system-ui,sans-serif;max-width:740px;margin:0 auto;padding:20px;background:#f8f9fa}
+h1{color:#1e3a8a;border-bottom:2px solid #1e3a8a;padding-bottom:8px}
+h2{color:#374151;margin-top:28px;font-size:1.1rem}
+.field{margin:14px 0}
+label{display:block;font-weight:600;font-size:.85rem;margin-bottom:4px;color:#374151}
+input,select{padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:.9rem}
+input[type=text],input[type=date]{width:220px}
+.info{font-size:.72rem;color:#6b7280;margin-top:3px}
+.split-date{display:flex;gap:8px;align-items:center}
+.split-date select,.split-date input{width:auto}
+.split-date select{min-width:80px}
+.split-date input[type=text]{width:60px;text-align:center}
+.mat-date-wrap{position:relative;display:inline-block}
+.mat-date-wrap input{padding-right:36px}
+.mat-date-wrap .cal-icon{position:absolute;right:8px;top:50%;transform:translateY(-50%);cursor:pointer;font-size:1.2rem;color:#555}
+.mat-cal{display:none;position:absolute;top:100%;left:0;z-index:100;background:#fff;border:1px solid #ddd;border-radius:8px;padding:12px;box-shadow:0 4px 12px rgba(0,0,0,.15);width:280px}
+.mat-cal.open{display:block}
+.mat-cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.mat-cal-head button{background:none;border:none;font-size:1.1rem;cursor:pointer;padding:4px 8px;border-radius:4px}
+.mat-cal-head button:hover{background:#e5e7eb}
+.mat-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center}
+.mat-cal-grid .hdr{font-size:.65rem;font-weight:700;color:#6b7280;padding:4px}
+.mat-cal-grid .day{padding:6px;border-radius:50%;cursor:pointer;font-size:.8rem}
+.mat-cal-grid .day:hover{background:#dbeafe}
+.mat-cal-grid .day.sel{background:#1a56db;color:#fff}
+.mat-cal-grid .day.other{color:#ccc}
+.portal-header{background:#2d5f2d;color:#fff;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.85rem}
+.serviceplus-row{display:flex;gap:8px;align-items:end}
+.serviceplus-row .fg{display:flex;flex-direction:column;gap:2px}
+.serviceplus-row label{font-size:.75rem}
+.serviceplus-row select,.serviceplus-row input{font-size:.82rem;padding:6px}
+#values{margin-top:24px;padding:12px;background:#f0f0f0;border-radius:6px;font-family:monospace;font-size:.75rem}
+#values div{margin:3px 0}
+</style>
+</head>
+<body>
+
+<h1>Real Portal Datepickers</h1>
+<p style="font-size:.85rem;color:#555">Tests datepicker patterns found on Indian government portals, banking forms, and modern SPAs.</p>
+
+<!-- ═══ 1. ServicePlus-style Split Dropdowns (DD/MM/YYYY) ═══════════ -->
+<div class="portal-header">ServicePlus / Bihar Government Portal Style</div>
+<h2>1. Split Day-Month-Year Dropdowns</h2>
+<p class="info">Common on serviceonline.bihar.gov.in — three separate &lt;select&gt; elements for DD, MM, YYYY.</p>
+
+<div class="field">
+  <label>Date of Birth</label>
+  <div class="split-date">
+    <select id="sp-day" aria-label="Day">
+      <option value="">DD</option>
+    </select>
+    <select id="sp-month" aria-label="Month">
+      <option value="">MM</option>
+      <option value="01">January</option><option value="02">February</option><option value="03">March</option>
+      <option value="04">April</option><option value="05">May</option><option value="06">June</option>
+      <option value="07">July</option><option value="08">August</option><option value="09">September</option>
+      <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+    </select>
+    <select id="sp-year" aria-label="Year">
+      <option value="">YYYY</option>
+    </select>
+    <input type="hidden" id="sp-dob-combined" name="dob">
+  </div>
+</div>
+
+<!-- ═══ 2. Split Text Inputs (DD / MM / YYYY) ═══════════════════════ -->
+<h2>2. Split Text Inputs (RRB/SSC Style)</h2>
+<p class="info">Three text inputs side-by-side — pattern on railway recruitment, SSC portals.</p>
+
+<div class="field">
+  <label>Date of Birth</label>
+  <div class="split-date">
+    <input type="text" id="txt-day" maxlength="2" placeholder="DD" aria-label="Day" style="width:50px">
+    <span>/</span>
+    <input type="text" id="txt-month" maxlength="2" placeholder="MM" aria-label="Month" style="width:50px">
+    <span>/</span>
+    <input type="text" id="txt-year" maxlength="4" placeholder="YYYY" aria-label="Year" style="width:70px">
+    <input type="hidden" id="txt-dob-combined" name="dob_text">
+  </div>
+</div>
+
+<!-- ═══ 3. flatpickr (Modern Portals) ══════════════════════════════ -->
+<h2>3. flatpickr (Modern SPA Portals)</h2>
+<div class="field">
+  <label for="fp-dob">Date of Birth</label>
+  <input type="text" id="fp-dob" placeholder="DD-MM-YYYY" aria-label="DOB flatpickr">
+</div>
+<div class="field">
+  <label for="fp-exam">Exam Date &amp; Time</label>
+  <input type="text" id="fp-exam" placeholder="Select exam date..." aria-label="Exam Date">
+</div>
+
+<!-- ═══ 4. jQuery UI Datepicker (Legacy Portals) ═══════════════════ -->
+<h2>4. jQuery UI (Legacy Government Portals)</h2>
+<div class="field">
+  <label for="jq-dob">Date of Birth</label>
+  <input type="text" id="jq-dob" placeholder="dd/mm/yyyy" aria-label="DOB jQuery">
+</div>
+<div class="field">
+  <label for="jq-issue">Issue Date</label>
+  <input type="text" id="jq-issue" placeholder="dd/mm/yyyy" aria-label="Issue Date">
+  <div class="info">Restricted to past 5 years only.</div>
+</div>
+
+<!-- ═══ 5. Bootstrap Datepicker ════════════════════════════════════ -->
+<h2>5. Bootstrap Datepicker (Bank/Insurance Portals)</h2>
+<div class="field">
+  <label for="bs-dob">Date of Birth</label>
+  <input type="text" id="bs-dob" placeholder="dd/mm/yyyy" aria-label="DOB Bootstrap" autocomplete="off">
+</div>
+
+<!-- ═══ 6. Material-style Custom Calendar ═════════════════════════ -->
+<h2>6. Material-Style Calendar (Angular Portals)</h2>
+<div class="field">
+  <label for="mat-dob">Date of Birth</label>
+  <div class="mat-date-wrap">
+    <input type="text" id="mat-dob" placeholder="dd-mm-yyyy" aria-label="DOB Material" readonly>
+    <span class="cal-icon" id="mat-cal-btn">📅</span>
+    <div class="mat-cal" id="mat-cal">
+      <div class="mat-cal-head">
+        <button id="mat-prev" type="button">‹</button>
+        <span id="mat-title">August 2000</span>
+        <button id="mat-next" type="button">›</button>
+      </div>
+      <div class="mat-cal-grid" id="mat-grid">
+        <div class="hdr">Su</div><div class="hdr">Mo</div><div class="hdr">Tu</div>
+        <div class="hdr">We</div><div class="hdr">Th</div><div class="hdr">Fr</div><div class="hdr">Sa</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 7. Native HTML5 date ═══════════════════════════════════════ -->
+<h2>7. Native HTML5 Date Input</h2>
+<div class="field">
+  <label for="native-dob">Date of Birth</label>
+  <input type="date" id="native-dob" aria-label="DOB Native">
+</div>
+<div class="field">
+  <label for="native-time">Preferred Time</label>
+  <input type="time" id="native-time" aria-label="Time">
+</div>
+<div class="field">
+  <label for="native-dtl">Appointment</label>
+  <input type="datetime-local" id="native-dtl" aria-label="Datetime">
+</div>
+
+<!-- ═══ Value Readout ═════════════════════════════════════════════ -->
+<div id="values">
+  <strong>Filled Values:</strong>
+  <div id="v-sp">ServicePlus: —</div>
+  <div id="v-txt">Split Text: —</div>
+  <div id="v-fp">flatpickr: —</div>
+  <div id="v-jq">jQuery UI: —</div>
+  <div id="v-bs">Bootstrap: —</div>
+  <div id="v-mat">Material: —</div>
+  <div id="v-native">Native: —</div>
+</div>
+
+<!-- ═══ Scripts ═══════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap-datepicker@1.10.0/dist/js/bootstrap-datepicker.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+// ── 1. ServicePlus split dropdowns ──────────────────────────────────
+var dayEl=document.getElementById('sp-day'),monthEl=document.getElementById('sp-month'),yearEl=document.getElementById('sp-year');
+for(var d=1;d<=31;d++){var o=document.createElement('option');o.value=String(d).padStart(2,'0');o.textContent=String(d).padStart(2,'0');dayEl.appendChild(o)}
+for(var y=1950;y<=2010;y++){var o2=document.createElement('option');o2.value=String(y);o2.textContent=String(y);yearEl.appendChild(o2)}
+function updateSP(){
+  var d=dayEl.value,m=monthEl.value,y=yearEl.value;
+  if(d&&m&&y){document.getElementById('sp-dob-combined').value=d+'/'+m+'/'+y;document.getElementById('v-sp').textContent='ServicePlus: '+d+'/'+m+'/'+y}
+}
+dayEl.addEventListener('change',updateSP);monthEl.addEventListener('change',updateSP);yearEl.addEventListener('change',updateSP);
+
+// ── 2. Split text inputs ────────────────────────────────────────────
+['txt-day','txt-month','txt-year'].forEach(function(id){
+  document.getElementById(id).addEventListener('input',function(){
+    var dd=document.getElementById('txt-day').value,mm=document.getElementById('txt-month').value,yy=document.getElementById('txt-year').value;
+    if(dd&&mm&&yy){document.getElementById('txt-dob-combined').value=dd+'/'+mm+'/'+yy;document.getElementById('v-txt').textContent='Split Text: '+dd+'/'+mm+'/'+yy}
+  });
+});
+
+// ── 3. flatpickr ────────────────────────────────────────────────────
+flatpickr('#fp-dob',{dateFormat:'d-m-Y',allowInput:true,onChange:function(d,s){document.getElementById('v-fp').textContent='flatpickr: '+s}});
+flatpickr('#fp-exam',{dateFormat:'d-m-Y H:i',enableTime:true,allowInput:true,onChange:function(d,s){document.getElementById('v-fp').textContent='flatpickr: '+s}});
+
+// ── 4. jQuery UI ────────────────────────────────────────────────────
+$('#jq-dob').datepicker({dateFormat:'dd/mm/yy',changeMonth:true,changeYear:true,yearRange:'1950:2010',onSelect:function(t){document.getElementById('v-jq').textContent='jQuery UI: '+t}});
+$('#jq-issue').datepicker({dateFormat:'dd/mm/yy',maxDate:0,minDate:'-5y',onSelect:function(t){document.getElementById('v-jq').textContent='jQuery UI: '+t}});
+
+// ── 5. Bootstrap Datepicker ─────────────────────────────────────────
+$('#bs-dob').datepicker({format:'dd/mm/yyyy',autoclose:true,startView:2,endDate:new Date()}).on('changeDate',function(e){document.getElementById('v-bs').textContent='Bootstrap: '+e.format('dd/mm/yyyy')});
+
+// ── 6. Material-style custom calendar ───────────────────────────────
+var matCal=document.getElementById('mat-cal'),matInput=document.getElementById('mat-dob'),matGrid=document.getElementById('mat-grid'),matTitle=document.getElementById('mat-title');
+var curMonth=7,curYear=2000; // default Aug 2000
+function renderMat(){
+  var days=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  matGrid.innerHTML=days.map(function(d){return'<div class="hdr">'+d+'</div>'}).join('');
+  var first=new Date(curYear,curMonth,1).getDay();
+  var daysInMonth=new Date(curYear,curMonth+1,0).getDate();
+  var months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  matTitle.textContent=months[curMonth]+' '+curYear;
+  for(var i=0;i<first;i++)matGrid.innerHTML+='<div class="day other"></div>';
+  for(var d=1;d<=daysInMonth;d++){
+    var div=document.createElement('div');div.className='day';div.textContent=d;div.setAttribute('data-d',d);
+    div.addEventListener('click',function(){
+      var dd=this.getAttribute('data-d').padStart(2,'0');
+      var mm=String(curMonth+1).padStart(2,'0');
+      var val=dd+'-'+mm+'-'+curYear;
+      matInput.value=val;matCal.classList.remove('open');
+      document.getElementById('v-mat').textContent='Material: '+val;
+      matGrid.querySelectorAll('.day').forEach(function(x){x.classList.remove('sel')});
+      this.classList.add('sel');
+    });
+    matGrid.appendChild(div);
+  }
+}
+document.getElementById('mat-cal-btn').addEventListener('click',function(){matCal.classList.toggle('open');renderMat()});
+document.getElementById('mat-prev').addEventListener('click',function(){curMonth--;if(curMonth<0){curMonth=11;curYear--}renderMat()});
+document.getElementById('mat-next').addEventListener('click',function(){curMonth++;if(curMonth>11){curMonth=0;curYear++}renderMat()});
+document.addEventListener('click',function(e){if(!document.querySelector('.mat-date-wrap').contains(e.target))matCal.classList.remove('open')});
+
+// ── 7. Native ───────────────────────────────────────────────────────
+document.getElementById('native-dob').addEventListener('change',function(){document.getElementById('v-native').textContent='Native: '+this.value});
+
+})();
+</script>
+</body>
+</html>

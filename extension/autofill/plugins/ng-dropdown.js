@@ -10,8 +10,21 @@
  */
 
 var TRIGGER_SELECTORS = ['.value-area', '.select-type', '.ng-value-container', '.ng-select-container', '[tabindex]'];
-var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.dropdown-item'];
-var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', 'ul', 'cdk-overlay-container'];
+var OPTION_SELECTORS = ['li', '.ng-option', 'mat-option', '.dropdown-item', '.option', '[role="option"]'];
+var OVERLAY_SELECTORS = ['app-dropdown', 'ng-dropdown-panel', '.ng-dropdown-panel', '.dropdown-options', '.options-list', '.options', 'ul', 'cdk-overlay-container'];
+
+// Search for option items using multiple selectors (fallback when no adapter)
+function findOptionsInContainer(container, optSel, isVisible) {
+  if (optSel) {
+    return Array.from(container.querySelectorAll(optSel)).filter(isVisible);
+  }
+  // Try each known option selector until we find visible options
+  for (var sel of OPTION_SELECTORS) {
+    var items = Array.from(container.querySelectorAll(sel)).filter(isVisible);
+    if (items.length > 0) return items;
+  }
+  return [];
+}
 
 var NgDropdownPlugin = {
   id: 'ng-dropdown',
@@ -20,8 +33,12 @@ var NgDropdownPlugin = {
   supports(el, fieldContext) {
     if (!el) return false;
     if (fieldContext.type === 'ng-dropdown') return true;
-    if (el.classList && el.classList.contains('ng-dropdown')) return true;
+    if (fieldContext.type === 'mat-select') return true;  // Custom comboboxes are typed mat-select by extractor
+    if (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select'))) return true;
     if (el.tagName === 'NG-SELECT' || (el.closest && el.closest('ng-select'))) return true;
+    // Any non-native element with role=combobox/listbox
+    const _tag = el.tagName.toLowerCase();
+    if (_tag !== 'select' && _tag !== 'input' && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) return true;
     return false;
   },
 
@@ -29,11 +46,7 @@ var NgDropdownPlugin = {
     var adapter = context.portalAdapters || {};
 
     function isVisible(node) {
-      if (!node) return false;
-      var r = node.getBoundingClientRect();
-      if (r.width === 0 || r.height === 0) return false;
-      var s = getComputedStyle(node);
-      return s.display !== 'none' && s.visibility !== 'hidden';
+      return window.ccDomUtils.isVisible(node);
     }
 
     // Find trigger element
@@ -70,57 +83,61 @@ var NgDropdownPlugin = {
         // Try adapter-specified container first
         if (adapter.optionsContainer) {
           var container = document.querySelector(adapter.optionsContainer);
-          if (container) opts = Array.from(container.querySelectorAll(optSel || 'li')).filter(isVisible);
+          if (container) opts = findOptionsInContainer(container, optSel, isVisible);
         }
-        // Try overlay selectors
+        // Try sibling/nearby containers first (most likely to be the related panel)
         if (opts.length === 0) {
+          // Check data-owner attribute (common pattern: panel has data-owner="elementId")
+          var ownedPanel = el.id ? document.querySelector('[data-owner="' + el.id + '"]') : null;
+          if (ownedPanel) opts = findOptionsInContainer(ownedPanel, optSel, isVisible);
+          // Check next sibling
+          if (opts.length === 0 && el.nextElementSibling) {
+            opts = findOptionsInContainer(el.nextElementSibling, optSel, isVisible);
+          }
+          // Check parent's next sibling (widget wrapper pattern)
+          if (opts.length === 0 && el.parentElement && el.parentElement.nextElementSibling) {
+            opts = findOptionsInContainer(el.parentElement.nextElementSibling, optSel, isVisible);
+          }
+          // Check inside parent (panel might be a sibling child)
+          if (opts.length === 0 && el.parentElement) {
+            var siblings = Array.from(el.parentElement.children).filter(function(c) { return c !== el; });
+            for (var si = 0; si < siblings.length; si++) {
+              opts = findOptionsInContainer(siblings[si], optSel, isVisible);
+              if (opts.length > 0) break;
+            }
+          }
+        }
+        // Fallback: try overlay selectors globally (with proximity ranking)
+        if (opts.length === 0) {
+          var elRect = el.getBoundingClientRect();
+          var bestOpts = [], bestDist = Infinity;
           for (const oSel of OVERLAY_SELECTORS) {
             var containers = document.querySelectorAll(oSel);
             for (const c of containers) {
-              var items = Array.from(c.querySelectorAll(optSel || 'li')).filter(isVisible);
-              if (items.length > 0) { opts = items; break; }
+              var items = findOptionsInContainer(c, optSel, isVisible);
+              if (items.length > 0) {
+                var cRect = c.getBoundingClientRect();
+                var dist = Math.abs(cRect.left - elRect.left) + Math.abs(cRect.top - elRect.bottom);
+                if (dist < bestDist) { bestDist = dist; bestOpts = items; }
+              }
             }
-            if (opts.length > 0) break;
           }
+          opts = bestOpts;
         }
         // Try inside the element itself
         if (opts.length === 0) {
-          opts = Array.from(el.querySelectorAll(optSel || 'li')).filter(isVisible);
+          opts = findOptionsInContainer(el, optSel, isVisible);
         }
 
         if (opts.length === 0 && attempts < 15) return; // keep waiting
 
-        // Match option — scoring cascade: exact → contains → reverse → token overlap → synonyms
-        var v = value.toLowerCase().trim();
-        function _matchScore(optText) {
-          var ot = optText.toLowerCase().trim();
-          if (ot === v) return 100;
-          if (ot.includes(v)) return 80;
-          if (v.includes(ot) && ot.length > 3) return 70;
-          var vToks = v.split(/[\s()+,/\-]+/).filter(function(t){return t.length>2;});
-          var oToks = ot.split(/[\s()+,/\-]+/).filter(function(t){return t.length>2;});
-          var overlap = vToks.filter(function(t){return oToks.some(function(o){return o.includes(t)||t.includes(o);});}).length;
-          if (overlap >= 2) return 60;
-          if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
-          var eduSynonyms = [
-            ['intermediate','higher secondary','10+2','12th','hsc','senior secondary'],
-            ['matriculation','10th','sslc','secondary','high school','class 10','class x'],
-            ['graduation','graduate','degree','bachelor','ug'],
-            ['post graduation','post graduate','masters','pg'],
-          ];
-          for (var g = 0; g < eduSynonyms.length; g++) {
-            var vIn = eduSynonyms[g].some(function(s){return v.includes(s);});
-            var oIn = eduSynonyms[g].some(function(s){return ot.includes(s);});
-            if (vIn && oIn) return 55;
-          }
-          return 0;
+        // Match option using shared/option-match.js (injected before plugins)
+        var match = null;
+        var optTexts = opts.map(function(o) { return o.textContent.trim(); });
+        var matched = window.ccMatchOption(value, optTexts);
+        if (matched) {
+          match = opts.find(function(o) { return o.textContent.trim() === matched; });
         }
-        var bestOpt = null, bestScore = 0;
-        for (var oi = 0; oi < opts.length; oi++) {
-          var score = _matchScore(opts[oi].textContent.trim());
-          if (score > bestScore) { bestScore = score; bestOpt = opts[oi]; }
-        }
-        var match = bestScore >= 50 ? bestOpt : null;
 
         if (match) {
           clearInterval(poll);

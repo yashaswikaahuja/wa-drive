@@ -12,67 +12,13 @@ function extractFormFieldsWithFingerprint() {
 
   // ── Meaningful label: must be non-empty, not just symbols, min 2 chars ──
   function isGoodLabel(s) {
-    if (!s) return false;
-    const t = s.replace(/[*:\s]/g, '');
-    if (t.length < 2) return false;
-    // Reject obvious placeholder-only text (when option text gets captured as label)
-    const lower = s.toLowerCase().trim();
-    if (/^(please\s+select|select\s+(an?|one)|--\s*select|choose|select\.{2,})/i.test(lower)) return false;
-    // Reject if mostly years/numbers separated by whitespace (option list of years got captured)
-    const nonDigits = s.replace(/[\d\s\n\r,]/g, '').trim();
-    if (s.length > 30 && nonDigits.length < s.length * 0.3) return false;
-    // Reject if too long (>250 chars likely a paragraph or option list dump)
-    if (s.length > 250) return false;
-    // Reject if has too many newlines (option list captured)
-    if ((s.match(/\n/g) || []).length > 3) return false;
-    return true;
+    return window.ccDomUtils.isGoodLabel(s);
   }
 
   // ── Get label for an input element ──
   function getLabel(el) {
-    // 1. Explicit <label for="id">
-    if (el.id) {
-      const l = document.querySelector(`label[for="${el.id}"]`);
-      if (l && isGoodLabel(l.textContent.trim())) return l.textContent.trim();
-    }
-    // 2. aria-label / aria-labelledby
-    const ariaLabel = el.getAttribute('aria-label');
-    if (ariaLabel && isGoodLabel(ariaLabel)) return ariaLabel.trim();
-    const labelledBy = el.getAttribute('aria-labelledby');
-    if (labelledBy) {
-      const lEl = document.getElementById(labelledBy);
-      if (lEl && isGoodLabel(lEl.textContent.trim())) return lEl.textContent.trim();
-    }
-    // 3. Wrapping <label>
-    const wrappingLabel = el.closest('label');
-    if (wrappingLabel) {
-      const clone = wrappingLabel.cloneNode(true);
-      clone.querySelectorAll('input,select,textarea').forEach(e => e.remove());
-      const t = clone.textContent.trim();
-      if (isGoodLabel(t)) return t;
-    }
-    // 4. Preceding <td> in a table row
-    const td = el.closest('td');
-    if (td) {
-      const prev = td.previousElementSibling;
-      if (prev && isGoodLabel(prev.textContent.trim())) return prev.textContent.trim().slice(0, 60);
-    }
-    // 5. Sibling or parent label within a form-field container
-    const container = el.closest('.form-group,.form-field,.field-wrapper,.input-group,mat-form-field,[class*="form-row"],[class*="field-row"]');
-    if (container) {
-      const l = container.querySelector('label,mat-label,.label,.field-label,.control-label');
-      if (l && isGoodLabel(l.textContent.trim())) return l.textContent.trim();
-    }
-    // 6. Immediately preceding sibling element that looks like a label
-    let prev = el.previousElementSibling;
-    if (prev && ['LABEL','SPAN','DIV','P'].includes(prev.tagName)) {
-      const t = prev.textContent.trim();
-      // Must be short (label-like) and not contain other inputs
-      if (isGoodLabel(t) && t.length < 80 && !prev.querySelector('input,select,textarea')) return t;
-    }
-    // 7. placeholder as last resort (only if meaningful)
-    if (el.placeholder && isGoodLabel(el.placeholder) && el.placeholder.length < 60) return el.placeholder;
-    return '';
+    // Delegate to shared/dom-utils.js (injected before extractor runs)
+    return window.ccDomUtils.getLabel(el);
   }
 
   // ── Determine if a page has a real form worth scanning ──
@@ -92,7 +38,7 @@ function extractFormFieldsWithFingerprint() {
   // ── Scan standard inputs ──
   const inputs = document.querySelectorAll(
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
-    'input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
+    'input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
   );
 
   // ── Group radios and checkboxes by name ──
@@ -102,7 +48,7 @@ function extractFormFieldsWithFingerprint() {
   let idx = 0;
   inputs.forEach((el) => {
     if (el.type === 'hidden' || el.type === 'submit' || el.type === 'button' ||
-        el.type === 'search' || el.type === 'password' || el.type === 'file' ||
+        el.type === 'search' || el.type === 'password' ||
         el.type === 'image' || el.type === 'reset') return;
     if (isInSkipContext(el)) return;
     // Skip inputs that are clearly search/filter (by name/id/class)
@@ -259,10 +205,13 @@ function extractFormFieldsWithFingerprint() {
     if (/search|query|filter/i.test(meta)) return;
     const label = getLabel(el) || el.getAttribute('aria-label') || '';
     if (!isGoodLabel(label)) return;
+    // Detect ng-select vs true mat-select: ng-select uses class, mat-select uses custom tag
+    const _isNgSelect = el.tagName.toLowerCase() === 'ng-select' || el.classList.contains('ng-select') || el.classList.contains('ng-dropdown');
+    const _type = _isNgSelect ? 'ng-dropdown' : 'mat-select';
     const id = el.id || `combobox-${matIdx}`;
     if (!el.id) el.setAttribute('data-cc-id', id);
     labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
-    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: 'mat-select', index: matIdx++, _el: el });
+    formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: el.getAttribute('formcontrolname') || '', value: '', placeholder: '', label, type: _type, index: matIdx++, _el: el });
   });
 
   // ── Angular ng-select / ng-dropdown custom widgets ──
@@ -285,8 +234,14 @@ function extractFormFieldsWithFingerprint() {
   ngCandidates.forEach(el => {
     if (isInSkipContext(el)) return;
     // Skip if already captured (mat-select / select / ng-select case)
+    // Check: is this element itself already captured, OR is it inside an already-captured element?
     const skip = formFields.some(f => {
-      try { return el.matches(f.selector) || el.querySelector(f.selector); } catch { return false; }
+      try {
+        if (el.matches(f.selector)) return true;          // Same element
+        if (el.querySelector(f.selector)) return true;    // Contains captured element
+        if (el.closest(f.selector)) return true;          // Is inside a captured element
+        return false;
+      } catch { return false; }
     });
     if (skip) return;
     // Label resolution: ng-dropdown container often has its label as a CHILD
@@ -340,7 +295,7 @@ function extractFormFieldsWithFingerprint() {
   }
   formFields.forEach(f => { f._pos = _visualPos(f._el); });
   formFields.sort((a, b) => (a._pos.row - b._pos.row) || (a._pos.left - b._pos.left));
-  formFields.forEach((f, i) => { f.index = i; delete f._el; delete f._pos; });
+  formFields.forEach((f, i) => { f.index = i; delete f._pos; });
 
   // ── Fingerprint ──
   const labelSig = labelList.sort().slice(0, 10).join('|');
@@ -350,7 +305,6 @@ function extractFormFieldsWithFingerprint() {
   const formKey = Math.abs(hash).toString(36);
 
   // ── Semantic formKey — stable across DOM changes, based on normalized labels ──
-  // Uses hostname + sorted normalized field labels (labels rarely change, selectors do)
   const semanticLabels = formFields
     .map(f => (f.label || '').toLowerCase().replace(/[^a-z\s]/g, '').trim())
     .filter(l => l.length > 2)
@@ -361,7 +315,20 @@ function extractFormFieldsWithFingerprint() {
   for (let i = 0; i < semRaw.length; i++) { semHash = ((semHash << 5) - semHash) + semRaw.charCodeAt(i); semHash |= 0; }
   const semanticFormKey = 's_' + Math.abs(semHash).toString(36);
 
-  return { formFields, formKey, semanticFormKey };
+  // ── Build formal IR (PageModel) BEFORE stripping _el ──
+  // _el references are still available here for aria/state extraction
+  var pageModel = null;
+  if (typeof window.ccModels !== 'undefined' && window.ccModels.createPageModel) {
+    pageModel = window.ccModels.createPageModel(
+      { formFields: formFields, formKey: formKey, semanticFormKey: semanticFormKey },
+      { url: location.href, hostname: hostname, title: title }
+    );
+  }
+
+  // ── Strip DOM references (not serializable) ──
+  formFields.forEach(f => { delete f._el; });
+
+  return { formFields, formKey, semanticFormKey, pageModel };
 }
 
 // ── Correction observer (injected after autofill) ─────────────────────────────

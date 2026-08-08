@@ -1,0 +1,14 @@
+{
+  "name": "cybercontrol-phase3-ratification",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Adversarial conformance harness for the Phase 3.0 Browser Perception contracts. Validates positive and malicious fixtures against the canonical JSON schemas with a real Draft 2020-12 validator.",
+  "scripts": {
+    "test": "node run-conformance.mjs"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1"
+  }
+}

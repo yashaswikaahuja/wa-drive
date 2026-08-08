@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dynamic Rows / Repeating Sections</title>
+<style>
+  body { font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+  h1 { color: #333; }
+  h2 { color: #555; margin-top: 30px; }
+  .info { font-size: 12px; color: #888; margin-top: 4px; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+  th { background: #f5f5f5; }
+  input, select { padding: 4px 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 13px; width: 100%; box-sizing: border-box; }
+  button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-size: 13px; margin: 4px; }
+  button.add { background: #4caf50; color: white; border-color: #4caf50; }
+  button.remove { background: #f44336; color: white; border-color: #f44336; }
+  button.add:hover { background: #45a049; }
+  button.remove:hover { background: #d32f2f; }
+  .section { border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin: 20px 0; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<h1>Dynamic Rows / Repeating Sections</h1>
+<p>Tests form behavior where rows can be added and removed dynamically — common in education history, family details, and document upload sections on Indian government portals.</p>
+
+<!-- ═══ SECTION 1: Education History (table-based) ═════════════════ -->
+<h2>Education Qualifications</h2>
+<div class="info">Add multiple education entries. Fields are dynamically created with indexed names.</div>
+
+<table id="education-table">
+  <thead>
+    <tr>
+      <th>Qualification</th>
+      <th>Board/University</th>
+      <th>Year</th>
+      <th>Percentage</th>
+      <th>Action</th>
+    </tr>
+  </thead>
+  <tbody id="education-body">
+    <tr data-row="0">
+      <td><select name="edu[0].qualification">
+        <option value="">Select</option>
+        <option value="10th">10th</option>
+        <option value="12th">12th</option>
+        <option value="graduate">Graduation</option>
+        <option value="postgraduate">Post Graduation</option>
+      </select></td>
+      <td><input type="text" name="edu[0].board" placeholder="Board/University"></td>
+      <td><input type="text" name="edu[0].year" placeholder="Year" maxlength="4"></td>
+      <td><input type="text" name="edu[0].percentage" placeholder="%"></td>
+      <td><button class="remove" onclick="removeEduRow(this)" disabled>Remove</button></td>
+    </tr>
+  </tbody>
+</table>
+<button class="add" id="add-education" onclick="addEduRow()">+ Add Qualification</button>
+
+<!-- ═══ SECTION 2: Family Members (div-based repeating sections) ═══ -->
+<h2>Family Members</h2>
+<div class="info">Add family member details. Each section is a complete form block.</div>
+
+<div id="family-container">
+  <div class="section" data-member="0">
+    <div class="section-header">
+      <h3>Member 1</h3>
+      <button class="remove" onclick="removeFamilyMember(this)" disabled>Remove</button>
+    </div>
+    <div class="field" style="margin: 8px 0;">
+      <label>Name</label>
+      <input type="text" name="family[0].name" placeholder="Full name">
+    </div>
+    <div class="field" style="margin: 8px 0;">
+      <label>Relation</label>
+      <select name="family[0].relation">
+        <option value="">Select</option>
+        <option value="father">Father</option>
+        <option value="mother">Mother</option>
+        <option value="spouse">Spouse</option>
+        <option value="sibling">Sibling</option>
+        <option value="child">Child</option>
+      </select>
+    </div>
+    <div class="field" style="margin: 8px 0;">
+      <label>Age</label>
+      <input type="number" name="family[0].age" placeholder="Age" min="0" max="120">
+    </div>
+    <div class="field" style="margin: 8px 0;">
+      <label>Occupation</label>
+      <input type="text" name="family[0].occupation" placeholder="Occupation">
+    </div>
+  </div>
+</div>
+<button class="add" id="add-family" onclick="addFamilyMember()">+ Add Family Member</button>
+
+<!-- ═══ SECTION 3: Document Uploads (minimal repeater) ═════════════ -->
+<h2>Supporting Documents</h2>
+<div class="info">Add multiple document uploads.</div>
+
+<div id="docs-container">
+  <div class="field" data-doc="0" style="display: flex; gap: 8px; align-items: center; margin: 8px 0;">
+    <select name="doc[0].type" style="width: 200px;">
+      <option value="">Document Type</option>
+      <option value="aadhaar">Aadhaar Card</option>
+      <option value="pan">PAN Card</option>
+      <option value="photo">Passport Photo</option>
+      <option value="marksheet">Marksheet</option>
+      <option value="caste">Caste Certificate</option>
+      <option value="income">Income Certificate</option>
+    </select>
+    <input type="file" name="doc[0].file" style="width: auto;">
+    <button class="remove" onclick="removeDoc(this)" disabled>×</button>
+  </div>
+</div>
+<button class="add" id="add-doc" onclick="addDoc()">+ Add Document</button>
+
+<!-- ═══ Status / metadata ══════════════════════════════════════════ -->
+<div id="row-counts" style="margin-top: 30px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; font-size: 12px;">
+  <strong>Row counts:</strong><br>
+  <span id="count-edu">education: 1</span><br>
+  <span id="count-family">family: 1</span><br>
+  <span id="count-docs">docs: 1</span><br>
+</div>
+
+<script>
+// ── Education table rows ─────────────────────────────────────────────
+var eduIndex = 1;
+function addEduRow() {
+  var i = eduIndex++;
+  var tr = document.createElement('tr');
+  tr.setAttribute('data-row', i);
+  tr.innerHTML = '<td><select name="edu[' + i + '].qualification">' +
+    '<option value="">Select</option>' +
+    '<option value="10th">10th</option>' +
+    '<option value="12th">12th</option>' +
+    '<option value="graduate">Graduation</option>' +
+    '<option value="postgraduate">Post Graduation</option>' +
+    '</select></td>' +
+    '<td><input type="text" name="edu[' + i + '].board" placeholder="Board/University"></td>' +
+    '<td><input type="text" name="edu[' + i + '].year" placeholder="Year" maxlength="4"></td>' +
+    '<td><input type="text" name="edu[' + i + '].percentage" placeholder="%"></td>' +
+    '<td><button class="remove" onclick="removeEduRow(this)">Remove</button></td>';
+  document.getElementById('education-body').appendChild(tr);
+  updateCounts();
+  // Enable first row's remove button when >1 row
+  updateRemoveButtons();
+}
+
+function removeEduRow(btn) {
+  var tr = btn.closest('tr');
+  tr.parentNode.removeChild(tr);
+  updateCounts();
+  updateRemoveButtons();
+}
+
+function updateRemoveButtons() {
+  var rows = document.querySelectorAll('#education-body tr');
+  rows.forEach(function(tr) {
+    var btn = tr.querySelector('button.remove');
+    btn.disabled = rows.length <= 1;
+  });
+  var members = document.querySelectorAll('#family-container .section');
+  members.forEach(function(s) {
+    var btn = s.querySelector('button.remove');
+    btn.disabled = members.length <= 1;
+  });
+  var docs = document.querySelectorAll('#docs-container .field');
+  docs.forEach(function(d) {
+    var btn = d.querySelector('button.remove');
+    btn.disabled = docs.length <= 1;
+  });
+}
+
+// ── Family member sections ───────────────────────────────────────────
+var familyIndex = 1;
+function addFamilyMember() {
+  var i = familyIndex++;
+  var div = document.createElement('div');
+  div.className = 'section';
+  div.setAttribute('data-member', i);
+  div.innerHTML = '<div class="section-header"><h3>Member ' + (i + 1) + '</h3>' +
+    '<button class="remove" onclick="removeFamilyMember(this)">Remove</button></div>' +
+    '<div class="field" style="margin:8px 0;"><label>Name</label>' +
+    '<input type="text" name="family[' + i + '].name" placeholder="Full name"></div>' +
+    '<div class="field" style="margin:8px 0;"><label>Relation</label>' +
+    '<select name="family[' + i + '].relation"><option value="">Select</option>' +
+    '<option value="father">Father</option><option value="mother">Mother</option>' +
+    '<option value="spouse">Spouse</option><option value="sibling">Sibling</option>' +
+    '<option value="child">Child</option></select></div>' +
+    '<div class="field" style="margin:8px 0;"><label>Age</label>' +
+    '<input type="number" name="family[' + i + '].age" placeholder="Age" min="0" max="120"></div>' +
+    '<div class="field" style="margin:8px 0;"><label>Occupation</label>' +
+    '<input type="text" name="family[' + i + '].occupation" placeholder="Occupation"></div>';
+  document.getElementById('family-container').appendChild(div);
+  updateCounts();
+  updateRemoveButtons();
+}
+
+function removeFamilyMember(btn) {
+  var section = btn.closest('.section');
+  section.parentNode.removeChild(section);
+  updateCounts();
+  updateRemoveButtons();
+}
+
+// ── Document uploads ─────────────────────────────────────────────────
+var docIndex = 1;
+function addDoc() {
+  var i = docIndex++;
+  var div = document.createElement('div');
+  div.className = 'field';
+  div.setAttribute('data-doc', i);
+  div.style.cssText = 'display: flex; gap: 8px; align-items: center; margin: 8px 0;';
+  div.innerHTML = '<select name="doc[' + i + '].type" style="width:200px;">' +
+    '<option value="">Document Type</option>' +
+    '<option value="aadhaar">Aadhaar Card</option>' +
+    '<option value="pan">PAN Card</option>' +
+    '<option value="photo">Passport Photo</option>' +
+    '<option value="marksheet">Marksheet</option>' +
+    '<option value="caste">Caste Certificate</option>' +
+    '<option value="income">Income Certificate</option>' +
+    '</select>' +
+    '<input type="file" name="doc[' + i + '].file" style="width:auto;">' +
+    '<button class="remove" onclick="removeDoc(this)">×</button>';
+  document.getElementById('docs-container').appendChild(div);
+  updateCounts();
+  updateRemoveButtons();
+}
+
+function removeDoc(btn) {
+  var div = btn.closest('.field');
+  div.parentNode.removeChild(div);
+  updateCounts();
+  updateRemoveButtons();
+}
+
+// ── Count updates ────────────────────────────────────────────────────
+function updateCounts() {
+  document.getElementById('count-edu').textContent = 'education: ' + document.querySelectorAll('#education-body tr').length;
+  document.getElementById('count-family').textContent = 'family: ' + document.querySelectorAll('#family-container .section').length;
+  document.getElementById('count-docs').textContent = 'docs: ' + document.querySelectorAll('#docs-container .field').length;
+}
+</script>
+</body>
+</html>

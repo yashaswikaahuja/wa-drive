@@ -41,52 +41,14 @@ var CascadeSelectPlugin = {
   },
 
   fill(el, value, context) {
-    var norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-    var v = norm(value);
-    var vWords = v.split(' ').filter(w => w.length > 1);
-
     function findOpt(options) {
-      var opts = options.filter(o => {
-        if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
-        var txt = o.text.toLowerCase();
-        return !txt.includes('select') && !txt.includes('choose') && !txt.includes('loading') && txt !== '--';
-      });
-      var overlapScore = o => { const ot = norm(o.text); return vWords.filter(w => ot.includes(w)).length; };
-      return opts.find(o => o.value.toLowerCase() === value.toLowerCase().trim()) ||
-             opts.find(o => norm(o.text) === v) ||
-             opts.find(o => norm(o.value) === v) ||
-             opts.find(o => norm(o.text).startsWith(v) && v.length > 2) ||
-             opts.find(o => v.startsWith(norm(o.text)) && norm(o.text).length > 2) ||
-             opts.find(o => norm(o.text).includes(v) && v.length > 3) ||
-             opts.find(o => v.includes(norm(o.text)) && norm(o.text).length > 3) ||
-             (() => { const best = opts.filter(o => overlapScore(o) === vWords.length && vWords.length > 0); return best.length === 1 ? best[0] : null; })();
+      // shared/option-match.js is injected before plugins run
+      return window.ccMatchOption(value, options);
     }
 
     function applySelect(el, opt) {
-      el.focus();
-      el.dispatchEvent(new Event('focus', { bubbles: true }));
-      Array.from(el.options).forEach(o => { o.selected = false; });
-      opt.selected = true;
-      el.selectedIndex = opt.index;
-      var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value');
-      if (nativeSetter) nativeSetter.set.call(el, opt.value);
-      else el.value = opt.value;
-      ['mousedown','mouseup','click','input','change'].forEach(ev =>
-        el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }))
-      );
-      if (typeof el.onchange === 'function') { try { el.onchange.call(el, new Event('change')); } catch {} }
-      if (typeof $ !== 'undefined') { try { $(el).trigger('change'); } catch {} }
-      try { el.dispatchEvent(new Event('propertychange', { bubbles: true })); } catch {}
-      el.dispatchEvent(new Event('blur', { bubbles: true }));
-      // DWR re-apply after 3.5s
-      var _rv = opt.value, _ri = opt.index;
-      setTimeout(() => {
-        if (el.value !== _rv) {
-          el.selectedIndex = _ri; el.value = _rv;
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      }, 3500);
-      return true;
+      // Delegate to shared/select-apply.js
+      return window.ccApplySelect(el, opt);
     }
 
     // Try immediate match

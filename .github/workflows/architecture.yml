@@ -1,0 +1,328 @@
+name: Architecture Verification
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [master, main]
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Job Matrix:
+#   1. architecture — governance checks (forbidden patterns, frozen files, ownership, deps)
+#   2. unit-and-knowledge — Phase 0/1/2 tests (no external deps)
+#   3. extension-security — permanent SEC-001..004 and browser-private boundary regressions
+#   4. schema-conformance — adversarial public-wire schema validation
+#   5. browser — Playwright-based capability tests (needs Chromium)
+#
+# Jobs run in parallel. Frozen-file findings remain advisory; contract,
+# dependency, DOM-boundary, security, unit, schema, and browser failures block the build.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+jobs:
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 1: Architecture Governance
+  # ════════════════════════════════════════════════════════════════════
+  architecture:
+    name: Architecture Governance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ── Forbidden patterns in new code ─────────────────────────────
+      - name: "CHECK-001: Forbidden patterns"
+        run: |
+          echo "## Forbidden Pattern Check" >> $GITHUB_STEP_SUMMARY
+
+          # --ignore-space-at-eol: a line-ending (CRLF/LF) change must not make
+          # pre-existing code look newly added and trip a forbidden pattern.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DIFF=$(git diff --ignore-space-at-eol origin/${{ github.base_ref }}...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+          else
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
+            DIFF=$(git diff --ignore-space-at-eol "$BASE"...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+          fi
+
+          VIOLATIONS=0
+
+          # FB-001: No new inline LLM fetch
+          MATCHES=$(echo "$DIFF" | grep -iE "fetch\(.*(openrouter|groq|chat/completions)" || true)
+          if [ -n "$MATCHES" ]; then
+            FORBIDDEN=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.js" | grep -v "background.js" || true)
+            if [ -n "$FORBIDDEN" ]; then
+              echo "❌ FB-001: New inline LLM fetch" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          fi
+
+          # FB-002: No new isVisible
+          if echo "$DIFF" | grep -qE "function isVisible|isVisible\s*[:=]\s*function"; then
+            echo "❌ FB-002: New isVisible implementation" >> $GITHUB_STEP_SUMMARY
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          # FB-003: No new getLabel
+          if echo "$DIFF" | grep -qE "function getLabel|function getLabelFor"; then
+            echo "❌ FB-003: New getLabel implementation" >> $GITHUB_STEP_SUMMARY
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          # FB-004: No new option matching
+          if echo "$DIFF" | grep -qE "function.*matchOption|function.*findOpt|function.*pickOption"; then
+            echo "❌ FB-004: New option matching" >> $GITHUB_STEP_SUMMARY
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          # FB-010: No new AI/LLM calls from extension
+          MATCHES_010=$(echo "$DIFF" | grep -iE "fetch\(.*(openrouter|groq|chat/completions|anthropic)" || true)
+          if [ -n "$MATCHES_010" ]; then
+            # Check if the violation is in an allowed file
+            FORBIDDEN_010=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.js" | grep -v "background.js" | grep -v "extension-service/" || true)
+            if [ -n "$FORBIDDEN_010" ]; then
+              echo "❌ FB-010: New AI/LLM call outside server or grandfathered files" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          fi
+
+          # FB-011: No framework names as knowledge identity
+          if echo "$DIFF" | grep -iE "(react.?select|angular.?material|mat.?select|prime.?ng|ng.?dropdown|mui.?autocomplete|ant.?design|vuetify)" | grep -qvE "(plugins/|drivers/|tests/)"; then
+            # Only flag if NOT in plugins/drivers/tests (those are grandfathered)
+            FRAMEWORK_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(plugins/|drivers/|tests/)" || true)
+            if [ -n "$FRAMEWORK_FILES" ]; then
+              echo "❌ FB-011: Framework name used as knowledge identity (use behavioral patterns per D03)" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          fi
+
+          # FB-012: No fill planning in extension (new code)
+          if echo "$DIFF" | grep -qE "(buildFillPlan|generatePlan|planFill|interpretKnowledge|selectStrategy|chooseRecovery|autonomousFill)"; then
+            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.js|background.js|extension-service/|tests/)" || true)
+            if [ -n "$PLANNING_FILES" ]; then
+              echo "❌ FB-012: Fill planning/knowledge interpretation in extension (server-only per D11)" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          fi
+
+          # FB-013: No single-percentage promotion threshold
+          if echo "$DIFF" | grep -qE "(promotionThreshold|promotion_threshold)\s*[=:]\s*0\.\d+"; then
+            echo "❌ FB-013: Single-percentage promotion threshold (use multi-dimensional per D11)" >> $GITHUB_STEP_SUMMARY
+            VIOLATIONS=$((VIOLATIONS + 1))
+          fi
+
+          if [ $VIOLATIONS -gt 0 ]; then
+            echo "❌ $VIOLATIONS forbidden pattern violation(s)" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+          echo "✅ No forbidden patterns in new code" >> $GITHUB_STEP_SUMMARY
+
+      # ── Frozen file warnings ───────────────────────────────────────
+      - name: "CHECK-002: Frozen files"
+        if: always()
+        run: |
+          echo "## Frozen Files" >> $GITHUB_STEP_SUMMARY
+
+          mapfile -t FROZEN_FILES < <(
+            sed -n 's/^[[:space:]]*- path: "\([^"]*\)".*/\1/p' architecture/phases.yml
+          )
+
+          if [ ${#FROZEN_FILES[@]} -eq 0 ]; then
+            echo "❌ No frozen files found in architecture/phases.yml" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          else
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
+            CHANGED=$(git diff --name-only "$BASE"...HEAD)
+          fi
+
+          WARNINGS=0
+          for f in "${FROZEN_FILES[@]}"; do
+            if echo "$CHANGED" | grep -q "$f"; then
+              echo "⚠️ Frozen file modified: \`$f\`" >> $GITHUB_STEP_SUMMARY
+              WARNINGS=$((WARNINGS + 1))
+            fi
+          done
+
+          if [ $WARNINGS -eq 0 ]; then
+            echo "✅ No frozen files modified" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ $WARNINGS frozen file(s) modified — reviewer should verify" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── Dependency direction ───────────────────────────────────────
+      - name: "CHECK-003: Dependency direction"
+        if: always()
+        run: |
+          echo "## Dependency Direction" >> $GITHUB_STEP_SUMMARY
+          VIOLATIONS=0
+
+          # Check for actual code references (exclude comments)
+          for f in extension/shared/*.js; do
+            if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|drivers|popup)|import .*(autofill|drivers|popup)"; then
+              echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+
+          for f in extension/drivers/*.js; do
+            if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|popup)|import .*(autofill|popup)"; then
+              echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
+              VIOLATIONS=$((VIOLATIONS + 1))
+            fi
+          done
+
+          if [ $VIOLATIONS -eq 0 ]; then
+            echo "✅ Dependency directions correct" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ $VIOLATIONS upward dependency violation(s)" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+      # ── Phase 3.0 architecture contracts ──────────────────────────
+      - name: "CHECK-008: Phase 3 architecture contracts"
+        if: always()
+        run: node extension-dev/tests/test-phase3-governance.mjs
+
+      # ── New structural DOM access boundary ────────────────────────
+      - name: "CHECK-009: DOM access boundary"
+        if: always()
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node tools/dom-boundary-check.mjs --base "origin/${{ github.base_ref }}"
+          else
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
+            node tools/dom-boundary-check.mjs --base "$BASE"
+          fi
+
+      # ── Discussion 11 architecture invariants ─────────────────────
+      - name: "CHECK-012: D11 architecture invariants"
+        if: always()
+        run: node extension-dev/tests/test-d11-invariants.mjs
+
+      # ── Architecture health report ─────────────────────────────────
+      - name: "CHECK-004: Architecture report"
+        if: always()
+        run: |
+          echo "## Architecture Health" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          TEMP_EXCEPTIONS=$(grep -Ec '^[[:space:]]+- id: EXC-' architecture/constitution.yml || true)
+          FROZEN_COUNT=$(sed -n 's/^[[:space:]]*- path: "[^"]*".*/x/p' architecture/phases.yml | wc -l)
+          echo "| Temporary exceptions | $TEMP_EXCEPTIONS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test files | $(find extension-dev/tests -name 'test-*' -type f 2>/dev/null | wc -l) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frozen files | $FROZEN_COUNT |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Phase Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Phase | Name | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|------|--------|" >> $GITHUB_STEP_SUMMARY
+          awk '
+            /^  phase_[A-Za-z0-9_]+:/ { phase=$1; sub(":", "", phase); name=""; status="" }
+            /^    name:/ && phase != "" { name=$0; sub(/^[[:space:]]*name:[[:space:]]*/, "", name); gsub(/"/, "", name) }
+            /^    status:/ && phase != "" {
+              status=$0; sub(/^[[:space:]]*status:[[:space:]]*/, "", status); gsub(/"/, "", status)
+              printf "| %s | %s | %s |\n", phase, name, status
+              phase=""
+            }
+          ' architecture/phases.yml >> $GITHUB_STEP_SUMMARY
+
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 2: Unit & Knowledge Tests
+  # ════════════════════════════════════════════════════════════════════
+  unit-and-knowledge:
+    name: Unit & Knowledge Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install schema validation dependencies
+        working-directory: extension-dev/tests/ratification
+        run: npm ci
+
+      - name: "CHECK-005: Unit and knowledge tests"
+        run: node extension-dev/tests/ci-unit.mjs
+
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 3: Extension & Browser Boundary Security (permanent pillar)
+  # ════════════════════════════════════════════════════════════════════
+  extension-security:
+    name: Extension & Browser Boundary Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: "CHECK-011: Extension & browser boundary security"
+        run: node extension-dev/tests/security/run.mjs
+
+  # ════════════════════════════════════════════════════════════════════
+  # JOB: Phase 3 Schema Conformance (adversarial ratification)
+  # ════════════════════════════════════════════════════════════════════
+  schema-conformance:
+    name: Phase 3 Schema Conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install conformance dependencies
+        working-directory: extension-dev/tests/ratification
+        run: npm ci
+
+      - name: "CHECK-010: Adversarial schema conformance"
+        run: node extension-dev/tests/ratification/run-conformance.mjs
+
+  # ════════════════════════════════════════════════════════════════════
+  # JOB 3: Browser Capability Tests
+  # ════════════════════════════════════════════════════════════════════
+  browser:
+    name: Browser Capability Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright dependencies
+        working-directory: extension-dev/tests/browser
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+
+      - name: "CHECK-005: Browser tests"
+        run: node extension-dev/tests/ci-browser.mjs
+        env:
+          # Use Playwright's bundled Chromium (no system Chrome needed)
+          PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ""
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-traces
+          path: |
+            extension-dev/tests/browser/traces/
+            extension-dev/tests/browser/*.png
+          retention-days: 7

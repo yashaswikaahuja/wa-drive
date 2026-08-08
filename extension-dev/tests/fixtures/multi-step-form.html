@@ -1,0 +1,82 @@
+<html>
+<head>
+<meta charset="utf-8">
+<title>Multi-Step Application | Demo</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 20px auto; }
+  .field { margin: 12px 0; }
+  label { display: block; font-size: 13px; margin-bottom: 3px; }
+  .step { display: none; }
+  .step.active { display: block; }
+  .progress { display: flex; gap: 8px; margin-bottom: 20px; }
+  .progress .dot { width: 30px; height: 30px; border-radius: 50%; background: #ddd; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .progress .dot.current { background: #4caf50; color: white; }
+  .progress .dot.done { background: #8bc34a; color: white; }
+  button { margin: 10px 4px; padding: 8px 16px; }
+</style>
+</head>
+<body>
+<h1>Multi-Step Application</h1>
+<div class="progress">
+  <div class="dot current" id="dot1">1</div>
+  <div class="dot" id="dot2">2</div>
+  <div class="dot" id="dot3">3</div>
+</div>
+
+<form>
+  <div class="step active" id="step1">
+    <h3>Step 1: Personal Details</h3>
+    <div class="field">
+      <label for="name">Full Name</label>
+      <input type="text" id="name" name="name" required>
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email">
+    </div>
+    <button type="button" onclick="goStep(2)">Next</button>
+  </div>
+
+  <div class="step" id="step2">
+    <h3>Step 2: Education</h3>
+    <div class="field">
+      <label for="qualification">Highest Qualification</label>
+      <select id="qualification" name="qualification">
+        <option value="">-- Select --</option>
+        <option>Matriculation</option>
+        <option>Higher Secondary</option>
+        <option>Graduate</option>
+        <option>Post Graduate</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="university">University Name</label>
+      <input type="text" id="university" name="university">
+    </div>
+    <button type="button" onclick="goStep(1)">Back</button>
+    <button type="button" onclick="goStep(3)">Next</button>
+  </div>
+
+  <div class="step" id="step3">
+    <h3>Step 3: Declaration</h3>
+    <div class="field">
+      <label><input type="checkbox" id="declare" name="declare"> I declare all information is correct</label>
+    </div>
+    <button type="button" onclick="goStep(2)">Back</button>
+    <button type="submit">Submit Application</button>
+  </div>
+</form>
+
+<script>
+function goStep(n) {
+  document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById('step' + n).classList.add('active');
+  document.querySelectorAll('.dot').forEach(function(d, i) {
+    d.classList.remove('current', 'done');
+    if (i + 1 < n) d.classList.add('done');
+    else if (i + 1 === n) d.classList.add('current');
+  });
+}
+</script>
+</body>
+</html>

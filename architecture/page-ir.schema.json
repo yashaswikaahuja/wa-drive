@@ -1,0 +1,447 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cybercontrol.io/schemas/page-ir-2.0.0.json",
+  "title": "CyberControl Page IR v2",
+  "description": "Public service-safe Browser Perception output. Browser-private selectors and bindings are intentionally absent.",
+  "oneOf": [
+    { "$ref": "#/$defs/PageSnapshot" },
+    { "$ref": "#/$defs/PageDelta" }
+  ],
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"
+    },
+    "Producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "detectors"],
+      "properties": {
+        "name": { "const": "cybercontrol-browser-perception" },
+        "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$" },
+        "detectors": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 64 }
+        }
+      }
+    },
+    "Evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "detector", "detector_version", "confidence", "facts"],
+      "properties": {
+        "source": { "type": "string", "enum": ["observed", "derived", "candidate"] },
+        "detector": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "detector_version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "signals": {
+          "description": "Fact-addressable, machine-readable evidence codes. Each code is a stable detector fact identifier (e.g. 'aria.labelledby', 'role.combobox', 'geometry.overlaps'). Consumers can reason over signals without parsing free text.",
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*(\\.[a-z0-9_]+)+$" }
+        },
+        "facts": {
+          "description": "Optional human-readable elaboration. MUST NOT carry raw values or secrets. Machine reasoning should prefer signals.",
+          "type": "array",
+          "maxItems": 32,
+          "items": { "type": "string", "minLength": 1, "maxLength": 160 }
+        },
+        "alternatives": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+        }
+      }
+    },
+    "Privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "redacted"],
+      "properties": {
+        "classification": { "type": "string", "enum": ["public", "ordinary", "personal", "sensitive", "secret", "unknown"] },
+        "redacted": { "type": "boolean" },
+        "reason": { "type": ["string", "null"], "maxLength": 120 }
+      }
+    },
+    "Geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height", "viewport_intersection"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 },
+        "viewport_intersection": { "type": "number", "minimum": 0, "maximum": 1 },
+        "z_index_hint": { "type": ["integer", "null"] }
+      }
+    },
+    "ObservedFacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accessible_name", "role", "sanitized_text", "language", "description", "value_state"],
+      "properties": {
+        "accessible_name": { "type": ["string", "null"], "maxLength": 160 },
+        "role": { "type": ["string", "null"], "maxLength": 80 },
+        "sanitized_text": { "type": ["string", "null"], "maxLength": 320 },
+        "language": { "type": ["string", "null"], "maxLength": 35 },
+        "description": { "type": ["string", "null"], "maxLength": 320 },
+        "value_state": {
+          "type": "string",
+          "enum": ["empty", "nonempty", "selected", "masked", "unavailable", "not_applicable"]
+        }
+      }
+    },
+    "NodeState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["visible", "enabled", "readonly", "required", "focused", "expanded", "selected", "checked"],
+      "properties": {
+        "visible": { "type": ["boolean", "null"] },
+        "enabled": { "type": ["boolean", "null"] },
+        "readonly": { "type": ["boolean", "null"] },
+        "required": { "type": ["boolean", "null"] },
+        "focused": { "type": ["boolean", "null"] },
+        "expanded": { "type": ["boolean", "null"] },
+        "selected": { "type": ["boolean", "null"] },
+        "checked": { "type": ["boolean", "null"] }
+      }
+    },
+    "Widget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["behavior_kind", "cardinality", "interaction_mode", "implementation_hint", "adapter_id", "status", "confidence"],
+      "properties": {
+        "behavior_kind": { "type": "string", "enum": ["text_entry", "selection", "toggle", "date_time", "file_upload", "action", "challenge", "container", "unknown"] },
+        "cardinality": { "type": "string", "enum": ["none", "one", "many", "unknown"] },
+        "interaction_mode": { "type": "string", "enum": ["native", "inline", "overlay", "composite", "delegated", "unknown"] },
+        "implementation_hint": { "type": ["string", "null"], "maxLength": 80 },
+        "adapter_id": { "type": ["string", "null"], "maxLength": 80 },
+        "status": { "type": "string", "enum": ["recognized", "partially_recognized", "opaque", "inaccessible", "unsupported"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "Node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_id", "kind", "context_id", "parent_id", "order", "observed", "state", "privacy", "evidence", "affordances"],
+      "allOf": [
+        {
+          "description": "Secret-classified nodes MUST be redacted and MUST NOT carry raw text or an unmasked value state.",
+          "if": {
+            "type": "object",
+            "required": ["privacy"],
+            "properties": { "privacy": { "properties": { "classification": { "const": "secret" } } } }
+          },
+          "then": {
+            "properties": {
+              "privacy": { "properties": { "redacted": { "const": true } } },
+              "observed": {
+                "properties": {
+                  "sanitized_text": { "type": "null" },
+                  "value_state": { "enum": ["masked", "unavailable", "not_applicable"] }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "node_id": { "$ref": "#/$defs/Identifier" },
+        "kind": { "type": "string", "enum": ["page", "region", "form", "section", "control", "widget", "option", "content", "navigation", "validation_message"] },
+        "context_id": { "$ref": "#/$defs/Identifier" },
+        "parent_id": { "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }] },
+        "order": { "type": "integer", "minimum": 0 },
+        "observed": { "$ref": "#/$defs/ObservedFacts" },
+        "state": { "$ref": "#/$defs/NodeState" },
+        "geometry": { "oneOf": [{ "$ref": "#/$defs/Geometry" }, { "type": "null" }] },
+        "privacy": { "$ref": "#/$defs/Privacy" },
+        "evidence": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/Evidence" } },
+        "affordances": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["focus", "activate", "type_text", "clear", "select_one", "select_many", "toggle", "upload", "expand", "collapse", "scroll"] }
+        },
+        "widget": { "oneOf": [{ "$ref": "#/$defs/Widget" }, { "type": "null" }] }
+      }
+    },
+    "Edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edge_id", "type", "source_id", "target_id", "evidence"],
+      "properties": {
+        "edge_id": { "$ref": "#/$defs/Identifier" },
+        "type": { "type": "string", "enum": ["contains", "belongs_to_context", "labels", "describes", "error_for", "controls", "depends_on", "validates", "confirms", "repeats", "activates", "transitions_to", "overlays", "visually_groups_with"] },
+        "source_id": { "$ref": "#/$defs/Identifier" },
+        "target_id": { "$ref": "#/$defs/Identifier" },
+        "evidence": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "$ref": "#/$defs/Evidence" } }
+      }
+    },
+    "Context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_id", "parent_context_id", "kind", "document_id", "origin", "access", "root_node_id", "diagnostic_code"],
+      "properties": {
+        "context_id": { "$ref": "#/$defs/Identifier" },
+        "parent_context_id": { "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }] },
+        "kind": { "type": "string", "enum": ["top_level", "frame", "shadow_root"] },
+        "document_id": {
+          "description": "Identity of the Document currently loaded in this context. For top_level and frame contexts this is the browsing-context Document identity and changes on navigation. For shadow_root contexts this is null because a shadow root shares its host node's Document. Node identities in this context are scoped to this document_id; frame navigation replaces only this document_id and invalidates only bindings whose context resolves to it.",
+          "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }]
+        },
+        "origin": { "type": ["string", "null"], "maxLength": 255 },
+        "access": { "type": "string", "enum": ["accessible", "cross_origin", "closed_shadow", "permission_denied", "unsupported"] },
+        "root_node_id": { "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }] },
+        "diagnostic_code": { "type": ["string", "null"], "maxLength": 80 }
+      }
+    },
+    "Diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "node_id", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,79}$" },
+        "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+        "node_id": { "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 320 },
+        "diagnostic_timing": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "PageState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signals", "candidates"],
+      "properties": {
+        "signals": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["dom_loading", "network_busy", "spinner_visible", "blocking_overlay", "validation_errors_present", "user_challenge_present"] }
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["state", "evidence"],
+            "properties": {
+              "state": { "type": "string", "enum": ["loading", "ready", "waiting", "validation_error", "otp_waiting", "captcha_waiting", "success", "session_expired", "unknown"] },
+              "evidence": { "$ref": "#/$defs/Evidence" }
+            }
+          }
+        }
+      }
+    },
+    "PageMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["origin", "path", "route_key", "title", "language", "viewport"],
+      "properties": {
+        "origin": { "type": ["string", "null"], "maxLength": 255 },
+        "path": { "type": ["string", "null"], "maxLength": 512 },
+        "route_key": { "type": ["string", "null"], "maxLength": 160 },
+        "title": { "type": ["string", "null"], "maxLength": 160 },
+        "language": { "type": ["string", "null"], "maxLength": 35 },
+        "viewport": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["width", "height", "device_pixel_ratio", "scroll_x", "scroll_y"],
+          "properties": {
+            "width": { "type": "number", "minimum": 0 },
+            "height": { "type": "number", "minimum": 0 },
+            "device_pixel_ratio": { "type": "number", "exclusiveMinimum": 0 },
+            "scroll_x": { "type": "number" },
+            "scroll_y": { "type": "number" }
+          }
+        }
+      }
+    },
+    "PageSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schema_version", "producer", "snapshot_id", "document_id", "revision", "observed_at", "canonical_hash", "page", "contexts", "nodes", "edges", "state", "diagnostics", "privacy"],
+      "properties": {
+        "kind": { "const": "page_snapshot" },
+        "schema_version": { "const": "2.0.0" },
+        "producer": { "$ref": "#/$defs/Producer" },
+        "snapshot_id": { "$ref": "#/$defs/Identifier" },
+        "document_id": { "$ref": "#/$defs/Identifier" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "canonical_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "page": { "$ref": "#/$defs/PageMetadata" },
+        "contexts": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/Context" } },
+        "nodes": { "type": "object", "maxProperties": 2000, "propertyNames": { "$ref": "#/$defs/Identifier" }, "additionalProperties": { "$ref": "#/$defs/Node" } },
+        "edges": { "type": "array", "maxItems": 8000, "items": { "$ref": "#/$defs/Edge" } },
+        "state": { "$ref": "#/$defs/PageState" },
+        "diagnostics": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/Diagnostic" } },
+        "privacy": { "$ref": "#/$defs/Privacy" }
+      }
+    },
+
+    "AddNodeOp": {
+      "type": "object",
+      "description": "Add a new node to the page graph. value must be a complete Node.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id", "value"],
+      "properties": {
+        "op": { "const": "add" },
+        "entity": { "const": "node" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "value": { "$ref": "#/$defs/Node" }
+      }
+    },
+    "ReplaceNodeOp": {
+      "type": "object",
+      "description": "Replace an existing node entirely. value must be a complete Node with matching node_id.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id", "value"],
+      "properties": {
+        "op": { "const": "replace" },
+        "entity": { "const": "node" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "value": { "$ref": "#/$defs/Node" }
+      }
+    },
+    "RemoveNodeOp": {
+      "type": "object",
+      "description": "Remove a node from the page graph. No value permitted.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id"],
+      "properties": {
+        "op": { "const": "remove" },
+        "entity": { "const": "node" },
+        "id": { "$ref": "#/$defs/Identifier" }
+      }
+    },
+    "AddEdgeOp": {
+      "type": "object",
+      "description": "Add a new edge to the page graph. value must be a complete Edge.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id", "value"],
+      "properties": {
+        "op": { "const": "add" },
+        "entity": { "const": "edge" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "value": { "$ref": "#/$defs/Edge" }
+      }
+    },
+    "ReplaceEdgeOp": {
+      "type": "object",
+      "description": "Replace an existing edge entirely. value must be a complete Edge with matching edge_id.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id", "value"],
+      "properties": {
+        "op": { "const": "replace" },
+        "entity": { "const": "edge" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "value": { "$ref": "#/$defs/Edge" }
+      }
+    },
+    "RemoveEdgeOp": {
+      "type": "object",
+      "description": "Remove an edge from the page graph. No value permitted.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id"],
+      "properties": {
+        "op": { "const": "remove" },
+        "entity": { "const": "edge" },
+        "id": { "$ref": "#/$defs/Identifier" }
+      }
+    },
+    "AddContextOp": {
+      "type": "object",
+      "description": "Add a new browsing context. value must be a complete Context.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id", "value"],
+      "properties": {
+        "op": { "const": "add" },
+        "entity": { "const": "context" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "value": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "ReplaceContextOp": {
+      "type": "object",
+      "description": "Replace an existing context entirely. value must be a complete Context with matching context_id.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id", "value"],
+      "properties": {
+        "op": { "const": "replace" },
+        "entity": { "const": "context" },
+        "id": { "$ref": "#/$defs/Identifier" },
+        "value": { "$ref": "#/$defs/Context" }
+      }
+    },
+    "RemoveContextOp": {
+      "type": "object",
+      "description": "Remove a browsing context and all its contained nodes/edges. No value permitted.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id"],
+      "properties": {
+        "op": { "const": "remove" },
+        "entity": { "const": "context" },
+        "id": { "$ref": "#/$defs/Identifier" }
+      }
+    },
+    "ReplaceStateOp": {
+      "type": "object",
+      "description": "Replace the singleton page state. id must be null (state is a singleton). value must be a complete PageState.",
+      "additionalProperties": false,
+      "required": ["op", "entity", "id", "value"],
+      "properties": {
+        "op": { "const": "replace" },
+        "entity": { "const": "state" },
+        "id": { "type": "null" },
+        "value": { "$ref": "#/$defs/PageState" }
+      }
+    },
+
+    "DeltaOperation": {
+      "description": "Discriminated union of typed delta operations. Each op/entity combination has explicit value constraints: add and replace require a typed value matching the entity schema; remove forbids value entirely.",
+      "oneOf": [
+        { "$ref": "#/$defs/AddNodeOp" },
+        { "$ref": "#/$defs/ReplaceNodeOp" },
+        { "$ref": "#/$defs/RemoveNodeOp" },
+        { "$ref": "#/$defs/AddEdgeOp" },
+        { "$ref": "#/$defs/ReplaceEdgeOp" },
+        { "$ref": "#/$defs/RemoveEdgeOp" },
+        { "$ref": "#/$defs/AddContextOp" },
+        { "$ref": "#/$defs/ReplaceContextOp" },
+        { "$ref": "#/$defs/RemoveContextOp" },
+        { "$ref": "#/$defs/ReplaceStateOp" }
+      ]
+    },
+    "PageDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schema_version", "producer", "document_id", "base_snapshot_id", "base_revision", "revision", "observed_at", "result_snapshot_id", "result_canonical_hash", "operations", "diagnostics", "privacy"],
+      "properties": {
+        "kind": { "const": "page_delta" },
+        "schema_version": { "const": "2.0.0" },
+        "producer": { "$ref": "#/$defs/Producer" },
+        "document_id": { "$ref": "#/$defs/Identifier" },
+        "base_snapshot_id": { "$ref": "#/$defs/Identifier" },
+        "base_revision": { "type": "integer", "minimum": 0 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "result_snapshot_id": {
+          "description": "The snapshot identity of the state produced by applying this delta to the base snapshot. Consumers can use this as a base_snapshot_id for subsequent deltas.",
+          "$ref": "#/$defs/Identifier"
+        },
+        "result_canonical_hash": {
+          "description": "sha256 hash of the canonical serialization of the resulting complete snapshot after applying this delta.",
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "operations": { "type": "array", "minItems": 1, "maxItems": 5000, "items": { "$ref": "#/$defs/DeltaOperation" } },
+        "diagnostics": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/Diagnostic" } },
+        "privacy": {
+          "description": "Overall privacy classification of this delta. Must be at least as restrictive as the most restrictive operation value or affected node.",
+          "$ref": "#/$defs/Privacy"
+        }
+      }
+    }
+  }
+}

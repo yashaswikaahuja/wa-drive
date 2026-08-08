@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cascade Select Test — ServicePlus Style</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 20px auto; }
+  .field { margin: 12px 0; }
+  label { display: block; font-size: 13px; margin-bottom: 3px; font-weight: bold; }
+  select { width: 100%; padding: 6px; }
+</style>
+</head>
+<body>
+<h2>Cascade Select Test (DWR/AJAX simulation)</h2>
+<form>
+  <div class="field">
+    <label for="applicant_name">Applicant Name</label>
+    <input type="text" id="applicant_name" name="applicant_name">
+  </div>
+
+  <!-- Parent: State dropdown (pre-populated) -->
+  <div class="field">
+    <label for="state">State</label>
+    <select id="state" name="state">
+      <option value="">-- Select State --</option>
+      <option value="BR">Bihar</option>
+      <option value="UP">Uttar Pradesh</option>
+      <option value="JH">Jharkhand</option>
+      <option value="MP">Madhya Pradesh</option>
+    </select>
+  </div>
+
+  <!-- Dependent: District (populated after State changes via simulated AJAX) -->
+  <div class="field">
+    <label for="district">District</label>
+    <select id="district" name="district">
+      <option value="">-- Select District --</option>
+    </select>
+  </div>
+
+  <!-- Dependent: Block (populated after District changes) -->
+  <div class="field">
+    <label for="block">Block / Tehsil</label>
+    <select id="block" name="block">
+      <option value="">-- Select Block --</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="pincode">Pincode</label>
+    <input type="text" id="pincode" name="pincode">
+  </div>
+</form>
+
+<script>
+// Simulated DWR/AJAX cascade — adds delay like real portals
+const districtData = {
+  'BR': ['Patna','Muzaffarpur','Gaya','Bhagalpur','Darbhanga','Purnia','Nalanda'],
+  'UP': ['Lucknow','Varanasi','Agra','Prayagraj','Kanpur','Gorakhpur'],
+  'JH': ['Ranchi','Jamshedpur','Dhanbad','Bokaro','Deoghar','Hazaribagh'],
+  'MP': ['Bhopal','Indore','Jabalpur','Gwalior','Ujjain']
+};
+const blockData = {
+  'Muzaffarpur': ['Mushahari','Kanti','Kurhani','Gaighat','Minapur','Bochahan','Sahebganj'],
+  'Patna': ['Patna Sadar','Danapur','Phulwari Sharif','Sampatchak','Khusrupur'],
+  'Gaya': ['Gaya Town','Bodh Gaya','Sherghati','Tekari','Barachatti'],
+  'Lucknow': ['Lucknow','Mohanlalganj','Bakshi Ka Talab','Sarojini Nagar'],
+  'Ranchi': ['Ranchi','Kanke','Ratu','Namkum','Ormanjhi']
+};
+
+// Simulate AJAX delay (500-1500ms like real DWR calls)
+document.getElementById('state').addEventListener('change', function() {
+  const distSel = document.getElementById('district');
+  distSel.innerHTML = '<option value="">Loading...</option>';
+  distSel.disabled = true;
+  // Clear block too
+  const blockSel = document.getElementById('block');
+  blockSel.innerHTML = '<option value="">-- Select Block --</option>';
+
+  const stateVal = this.value;
+  if (!stateVal) { distSel.innerHTML = '<option value="">-- Select District --</option>'; distSel.disabled = false; return; }
+
+  // Simulate network delay (800ms)
+  setTimeout(() => {
+    const districts = districtData[stateVal] || [];
+    distSel.innerHTML = '<option value="">-- Select District --</option>';
+    districts.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d;
+      distSel.appendChild(opt);
+    });
+    distSel.disabled = false;
+    console.log('[DWR] Districts loaded for', stateVal, ':', districts.length, 'options');
+  }, 800);
+});
+
+document.getElementById('district').addEventListener('change', function() {
+  const blockSel = document.getElementById('block');
+  blockSel.innerHTML = '<option value="">Loading...</option>';
+  blockSel.disabled = true;
+
+  const distVal = this.value;
+  if (!distVal) { blockSel.innerHTML = '<option value="">-- Select Block --</option>'; blockSel.disabled = false; return; }
+
+  // Simulate network delay (600ms)
+  setTimeout(() => {
+    const blocks = blockData[distVal] || ['Block 1','Block 2','Block 3'];
+    blockSel.innerHTML = '<option value="">-- Select Block --</option>';
+    blocks.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b;
+      opt.textContent = b;
+      blockSel.appendChild(opt);
+    });
+    blockSel.disabled = false;
+    console.log('[DWR] Blocks loaded for', distVal, ':', blocks.length, 'options');
+  }, 600);
+});
+</script>
+</body>
+</html>

@@ -38,53 +38,6 @@
   }
 
   /**
-   * Type `value` into `el` using a full keystroke event sequence.
-   * Returns a Promise<boolean> resolving to true if final value matches.
-   */
-  window.keystrokeFill = async function keystrokeFill(el, value, opts) {
-    if (!el) return false;
-    const delay = (opts && opts.delay) || 12;
-    const str = String(value);
-    const isTextarea = el.tagName === 'TEXTAREA';
-    const proto = isTextarea ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
-    const setVal = desc ? (v) => desc.set.call(el, v) : (v) => { el.value = v; };
-
-    el.focus();
-    el.click();
-
-    // Clear existing
-    if (el.value) {
-      try { el.select(); } catch (e) {}
-      setVal('');
-      el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
-    }
-
-    let current = '';
-    for (const ch of str) {
-      const kc = keyCodeFor(ch);
-      const code = codeFor(ch);
-      el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ch, code, keyCode: kc, which: kc, charCode: 0 }));
-      try {
-        el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: ch }));
-      } catch (e) {}
-      current += ch;
-      setVal(current);
-      try {
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: ch }));
-      } catch (e) {
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      el.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, cancelable: true, key: ch, code, keyCode: kc, which: kc, charCode: kc }));
-      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ch, code, keyCode: kc, which: kc }));
-      if (delay > 0) await new Promise(r => setTimeout(r, delay));
-    }
-
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-    el.blur();
-    return el.value === str;
-  };
-
   /**
    * Synchronous version — no per-char delay. Use this from sync callers
    * (the executor's fillOne is sync). Events are still fired in proper
@@ -146,14 +99,4 @@
     return actual === expected || (actual.length > 0 && (actual.endsWith(expected.slice(-4)) || actual.startsWith(expected.slice(0, 4))));
   };
 
-  /**
-   * Heuristic: should this field need keystroke fill PRIMARILY (vs as fallback)?
-   * Yes for: aadhaar/UID fields, OTP, captcha, masked numeric fields with maxLength<=16.
-   */
-  window.shouldUseKeystroke = function shouldUseKeystroke(el, label) {
-    if (!el) return false;
-    const lower = ((label || '') + ' ' + (el.id || '') + ' ' + (el.name || '') + ' ' + (el.placeholder || '')).toLowerCase();
-    if (/aadhaar|aadhar|uid\b|आधार|otp|captcha|verification\s*code|enrolment|enrollment/i.test(lower)) return true;
-    return false;
-  };
 })();

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Real Datepicker — flatpickr + jQuery UI</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+<style>
+  body { font-family: sans-serif; max-width: 700px; margin: 20px auto; padding: 20px; }
+  .field { margin: 20px 0; }
+  label { display: block; font-weight: bold; margin-bottom: 6px; }
+  input { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; width: 250px; }
+  h1 { color: #333; }
+  h2 { color: #555; margin-top: 30px; }
+  .info { font-size: 12px; color: #888; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Real Datepicker Fixture</h1>
+<p>These use <strong>real libraries</strong> loaded from CDN — not simulations.</p>
+
+<!-- ═══ SECTION 1: flatpickr ═══════════════════════════════════════ -->
+<h2>flatpickr (Calendar Overlay)</h2>
+
+<div class="field">
+  <label for="dob-flatpickr">Date of Birth</label>
+  <input type="text" id="dob-flatpickr" placeholder="Select date...">
+  <div class="info">Opens a real calendar overlay. Selecting a date fires onChange.</div>
+</div>
+
+<div class="field">
+  <label for="appointment-flatpickr">Appointment Date &amp; Time</label>
+  <input type="text" id="appointment-flatpickr" placeholder="Select date and time...">
+  <div class="info">DateTime mode with time picker.</div>
+</div>
+
+<div class="field">
+  <label for="range-flatpickr">Travel Dates (Range)</label>
+  <input type="text" id="range-flatpickr" placeholder="Select date range...">
+  <div class="info">Range mode: start and end date in one input.</div>
+</div>
+
+<!-- ═══ SECTION 2: jQuery UI Datepicker ════════════════════════════ -->
+<h2>jQuery UI Datepicker</h2>
+
+<div class="field">
+  <label for="dob-jqueryui">Date of Birth (jQuery UI)</label>
+  <input type="text" id="dob-jqueryui" placeholder="dd/mm/yyyy">
+  <div class="info">Real jQuery UI datepicker with month/year dropdowns.</div>
+</div>
+
+<div class="field">
+  <label for="joining-jqueryui">Joining Date (jQuery UI, restricted)</label>
+  <input type="text" id="joining-jqueryui" placeholder="dd/mm/yyyy">
+  <div class="info">Min/max date restrictions applied.</div>
+</div>
+
+<!-- ═══ SECTION 3: Native HTML5 date input ═════════════════════════ -->
+<h2>Native HTML5 Date Input</h2>
+
+<div class="field">
+  <label for="dob-native">Date of Birth (native)</label>
+  <input type="date" id="dob-native">
+  <div class="info">Browser-native date picker (Chrome shows calendar).</div>
+</div>
+
+<!-- ═══ SECTION 4: Hidden value tracking ═══════════════════════════ -->
+<div id="output" style="margin-top: 30px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-family: monospace; font-size: 12px;">
+  <strong>Values:</strong><br>
+  <span id="out-flatpickr">flatpickr: (empty)</span><br>
+  <span id="out-appointment">appointment: (empty)</span><br>
+  <span id="out-range">range: (empty)</span><br>
+  <span id="out-jqueryui">jqueryui: (empty)</span><br>
+  <span id="out-joining">joining: (empty)</span><br>
+  <span id="out-native">native: (empty)</span><br>
+</div>
+
+<!-- ═══ Scripts ═════════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+
+<script>
+// ── flatpickr instances ──────────────────────────────────────────────
+const fp1 = flatpickr('#dob-flatpickr', {
+  dateFormat: 'd-m-Y',
+  allowInput: true,
+  onChange: function(selectedDates, dateStr) {
+    document.getElementById('out-flatpickr').textContent = 'flatpickr: ' + dateStr;
+  }
+});
+
+const fp2 = flatpickr('#appointment-flatpickr', {
+  dateFormat: 'd-m-Y H:i',
+  enableTime: true,
+  allowInput: true,
+  onChange: function(selectedDates, dateStr) {
+    document.getElementById('out-appointment').textContent = 'appointment: ' + dateStr;
+  }
+});
+
+const fp3 = flatpickr('#range-flatpickr', {
+  mode: 'range',
+  dateFormat: 'd-m-Y',
+  allowInput: true,
+  onChange: function(selectedDates, dateStr) {
+    document.getElementById('out-range').textContent = 'range: ' + dateStr;
+  }
+});
+
+// ── jQuery UI datepicker instances ───────────────────────────────────
+$('#dob-jqueryui').datepicker({
+  dateFormat: 'dd/mm/yy',
+  changeMonth: true,
+  changeYear: true,
+  yearRange: '1950:2010',
+  onSelect: function(dateText) {
+    document.getElementById('out-jqueryui').textContent = 'jqueryui: ' + dateText;
+  }
+});
+
+$('#joining-jqueryui').datepicker({
+  dateFormat: 'dd/mm/yy',
+  minDate: new Date(2020, 0, 1),
+  maxDate: new Date(2030, 11, 31),
+  onSelect: function(dateText) {
+    document.getElementById('out-joining').textContent = 'joining: ' + dateText;
+  }
+});
+
+// ── Native date change listener ──────────────────────────────────────
+document.getElementById('dob-native').addEventListener('change', function() {
+  document.getElementById('out-native').textContent = 'native: ' + this.value;
+});
+</script>
+</body>
+</html>

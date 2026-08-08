@@ -35,22 +35,7 @@ function ccRuleMet(rule, profile) {
 }
 
 // Match a profile value to one of the field's option texts.
-// Order: translation → exact → contains(either way) → token overlap.
-function ccMatchOption(value, options, translations) {
-  if (value == null || !options || !options.length) return null;
-  const v = String(value).trim();
-  const vn = ccNormVal(v);
-  if (!vn) return null;
-  const tr = translations && (translations[v] || translations[vn]);
-  if (tr) { const hit = options.find(o => ccNormVal(o) === ccNormVal(tr)); if (hit) return hit; }
-  let hit = options.find(o => ccNormVal(o) === vn);
-  if (hit) return hit;
-  hit = options.find(o => { const on = ccNormVal(o); return on && (on.includes(vn) || vn.includes(on)); });
-  if (hit) return hit;
-  const vtok = vn.split(/\s+/).filter(t => t.length > 2);
-  hit = options.find(o => { const on = ccNormVal(o); return vtok.some(t => on.includes(t)); });
-  return hit || null;
-}
+// Uses shared/option-match.js (window.ccMatchOption) injected before rule-engine runs.
 
 // Format a date string to a target format inferred from a placeholder/pattern.
 // Handles DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD (+ the same with / or -).
@@ -108,7 +93,7 @@ function ccEvaluateField(entry, field, profile, translations) {
     if (grp === 'radio' || grp === 'dropdown') {
       const val = entry.profileKey ? profile[entry.profileKey] : null;
       if (val == null || val === '') return { kind: 'skip' };
-      const opt = ccMatchOption(val, options, translations);
+      const opt = window.ccMatchOption(val, options, { translations: translations, excludePlaceholders: false });
       return opt ? { kind: 'option', option: opt } : { kind: 'option', option: String(val) };
     }
     // text / date

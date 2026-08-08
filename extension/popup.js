@@ -53,7 +53,7 @@ function showStatus(msg, color) {
   statusEl.style.color = color || CC.warning;
   statusEl.style.display = 'block';
   // Only auto-dismiss non-error messages
-  if (color !== CC.danger && color !== '#ef4444') {
+  if (color !== CC.danger) {
     setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
   }
 }
@@ -431,7 +431,7 @@ fillBtn.addEventListener('click', async () => {
           const key = el.id || el.name || el.getAttribute('formcontrolname');
           if (key) snapshot[key] = { selector: el.id ? '#'+el.id : `[name="${el.name}"]`, value: el.value, type: el.type };
         });
-        document.body.setAttribute('data-cc-undo', JSON.stringify(snapshot));
+        window.__ccUndoSnapshot = snapshot;
       }
     });
 
@@ -463,15 +463,43 @@ fillBtn.addEventListener('click', async () => {
       console.warn('[CC] network monitor injection failed (will use fallback delays):', e.message);
     }
     // Inject all autofill scripts in ONE call — they must share the same scope (ISOLATED world)
+    // Shared modules are listed FIRST so they're available when callers run.
+    // First: inject cached server field mappings for mapper.js to pick up
+    try {
+      const _cachedMappings = await chrome.storage.local.get('_cc_knowledge_cache');
+      const _fm = _cachedMappings?._cc_knowledge_cache?.artifacts?.field_mappings || [];
+      const _dr = _cachedMappings?._cc_knowledge_cache?.artifacts?.derivation_rules || [];
+      if (_fm.length > 0 || _dr.length > 0) {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (mappings, derivRules) => {
+            if (mappings.length) window._ccServerFieldMappings = mappings;
+            if (derivRules.length) window._ccServerDerivationRules = derivRules;
+          },
+          args: [_fm, _dr],
+        });
+      }
+    } catch (e) { console.warn('[CC] Server knowledge injection skipped:', e.message); }
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: [
+          'shared/option-match.js',
+          'shared/dom-utils.js',
+          'shared/network-idle.js',
+          'shared/llm-client.js',
+          'shared/select-apply.js',
+          'shared/semantic-aliases.js',
+          'models/ir.js',
+          'capabilities/registry.js',
+          'runtime/resolver.js',
+          'runtime/runner.js',
           'autofill/plugins/interface.js',
           'autofill/plugins/cascade-select.js',
           'autofill/plugins/ng-dropdown.js',
           'autofill/plugins/button-click.js',
           'autofill/plugins/keystroke-input.js',
+          'runtime/plugin-bridge.js',
           'drivers/dispatch.js',
           'drivers/dom.js',
           'drivers/input.js',
@@ -523,17 +551,31 @@ fillBtn.addEventListener('click', async () => {
             console.log('[CC] derived keys:', (profile._derived || []).join(', ') || 'none', `(${before}→${Object.keys(profile).length})`);
           }
         } catch (e) { console.warn('[CC] derive failed:', e.message); }
-        const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
-        // Stash backend URL + token + formkey + profileId on document.body so executor's
-        // post-fill correction observer can authenticate its POSTs and link to profile
+        // ── Load semantic aliases from service (for runner target resolution) ──
         try {
-          document.body.setAttribute('data-cc-backend', backendUrl);
-          document.body.setAttribute('data-cc-token', accessToken);
-          document.body.setAttribute('data-cc-formkey', semanticFormKey || '');
-          document.body.setAttribute('data-cc-profile-id', profileId || '');
-          document.body.setAttribute('data-cc-llm-url', llmBaseUrl || '');
-          document.body.setAttribute('data-cc-llm-model', llmModel || '');
-          document.body.setAttribute('data-cc-llm-key', groqKey || '');
+          if (window.ccSemanticAliases && window.ccSemanticAliases.load) {
+            await window.ccSemanticAliases.load(backendUrl, accessToken);
+            const st = window.ccSemanticAliases.status();
+            console.log('[CC] Semantic aliases:', st.source, '(' + st.count + ' keys)');
+          }
+        } catch (e) { console.warn('[CC] Alias load skipped:', e.message); }
+
+        const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
+        // SEC-002: keep backend URL, bearer token, and LLM key in the extension's
+        // ISOLATED-world scope, NOT on page-readable DOM attributes. These autofill
+        // scripts run in the isolated world, so window.__ccFillCtx is invisible to
+        // page (MAIN-world) scripts. The post-fill correction observer in
+        // executor.js reads this same object.
+        try {
+          window.__ccFillCtx = {
+            backendUrl: backendUrl,
+            accessToken: accessToken,
+            formKey: semanticFormKey || '',
+            profileId: profileId || '',
+            llmBaseUrl: llmBaseUrl || '',
+            llmModel: llmModel || '',
+            llmKey: groqKey || '',
+          };
         } catch {}
         if (!formFields.length) return { ok: false, error: 'No form fields detected' };
 
@@ -563,20 +605,20 @@ fillBtn.addEventListener('click', async () => {
                 if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
                   const idx = (f.options || []).indexOf(act.option);
                   const optSel = idx >= 0 ? f.optionSelectors[idx] : null;
-                  if (optSel) directChecks.push({ selector: optSel, check: true, label: f.label, profileKey: s.profileKey });
+                  if (optSel) { mapping[optSel] = { value: act.option, type: 'radio-click' }; fbs[optSel] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); }
                 } else {
                   mapping[f.selector] = { value: act.option, type: f.type };  // dropdown: executor selects by option text
                 }
                 setFbs();
               } else if (act.kind === 'check') {
-                if (act.check) directChecks.push({ selector: f.selector, check: true, label: f.label, profileKey: s.profileKey });
+                if (act.check) { mapping[f.selector] = { value: 'true', type: 'checkbox' }; }
                 setFbs();
               } else if (act.kind === 'checkOptions') {
                 const sels = f.optionSelectors || [];
                 for (const optText of act.options) {
                   const idx = (f.options || []).indexOf(optText);
                   const optSel = idx >= 0 ? sels[idx] : null;
-                  if (optSel) directChecks.push({ selector: optSel, check: true, label: f.label, profileKey: s.profileKey });
+                  if (optSel) { mapping[optSel] = { value: optText, type: 'radio-click' }; fbs[optSel] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); }
                 }
                 setFbs();
               }
@@ -676,7 +718,8 @@ fillBtn.addEventListener('click', async () => {
               if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
                 const oi = (f.options || []).indexOf(info.value);
                 if (oi >= 0 && f.optionSelectors[oi]) {
-                  directChecks.push({ selector: f.optionSelectors[oi], check: true, label: f.label, profileKey: null });
+                  mapping[f.optionSelectors[oi]] = { value: info.value, type: 'radio-click' };
+                  fbs[f.optionSelectors[oi]] = { label: f.label, source: 'ai-resolve' };
                   handled.add(f.selector); n++;
                 }
               } else {
@@ -688,26 +731,68 @@ fillBtn.addEventListener('click', async () => {
             if (n) console.log('[CC] ai-resolve filled', n, 'residual field(s)');
           } catch (e) { console.warn('[CC] ai-resolve skipped:', e.message); }
         }
+        // ── Executor is the PRIMARY fill engine (proven sequential logic) ──
+        // It handles: DOM-order fill, scroll-into-view, keystroke simulation,
+        // waitForOptions (cascade), waitForNetworkIdle, DWR re-apply,
+        // ng-dropdown plugin, verifyValue, and 200ms inter-field delay.
         const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
 
-        // Apply radio/checkbox selections directly — the executor's value strategies
-        // don't toggle .checked. Guarded by current state so we never toggle back off.
+        // Apply radio/checkbox selections directly
         const directRecords = [];
         for (const dc of directChecks) {
           try {
             const el = document.querySelector(dc.selector);
             if (!el) { directRecords.push({ selector: dc.selector, value: dc.check ? 'checked' : 'unchecked', type: 'toggle', result: 'skipped', failReason: 'not-found', source: 'mapping', label: dc.label }); continue; }
-            const want = !!dc.check;
-            if (el.checked !== want) el.click();
+            if (el.checked !== !!dc.check) el.click();
             el.dispatchEvent(new Event('change', { bubbles: true }));
             fbs[dc.selector] = { label: dc.label, profileKey: dc.profileKey, source: 'mapping' };
             directRecords.push({ selector: dc.selector, value: 'checked', type: 'toggle', result: 'filled', source: 'mapping', label: dc.label });
           } catch { /* skip */ }
         }
 
-        // Read structured records the executor flushed to document.body
+        // ── Runner produces Observation from executor's records (Phase 1.7) ──
+        // This gives protocol-compliant output without replacing the executor's
+        // proven fill logic.
+        let runnerObservation = null;
+        try {
+          if (window.ccRunner && window.ccResolver) {
+            const extractResult = extractFormFieldsWithFingerprint();
+            const elements = formFields.map(f => document.querySelector(f.selector));
+            window.ccResolver.setPageContext(extractResult.pageModel, elements);
+
+            // Build Observation from executor's _ccRecords
+            let executorRecords = [];
+            try { executorRecords = (Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : []); } catch {}
+
+            runnerObservation = {
+              plan_id: 'executor_fill_' + Date.now(),
+              session_id: semanticFormKey || 'unknown',
+              protocol_version: 2,
+              execution_path: executorRecords.map((r, i) => ({
+                node_id: 'field_' + i,
+                status: r.result === 'filled' ? 'success' : 'failed',
+                actual_value: r.actualValue || r.value || null,
+                error: r.failReason || null,
+                duration_ms: r.durationMs || 0,
+              })),
+              checkpoints_reached: [],
+              corrections: [],
+              human_interactions: [],
+              page_state: {
+                url: window.location.href,
+                navigated: false,
+                form_submitted: false,
+                fields_snapshot: null,
+              },
+            };
+            const succeeded = runnerObservation.execution_path.filter(e => e.status === 'success').length;
+            console.log('[CC] Observation:', succeeded, '/', runnerObservation.execution_path.length, 'fields filled');
+          }
+        } catch (e) { console.warn('[CC] Observation build error:', e.message); }
+
+        // Read structured records the executor kept in isolated-world memory
         let records = [];
-        try { records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]'); } catch {}
+        try { records = (Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : []); } catch {}
         records = records.concat(directRecords);
 
         // Index formFields by selector for label lookup
@@ -830,7 +915,7 @@ undoBtn.addEventListener('click', async () => {
     await chrome.scripting.executeScript({
       target: { tabId: _lastFillTabId },
       func: () => {
-        const snapshot = JSON.parse(document.body.getAttribute('data-cc-undo') || '{}');
+        const snapshot = (window.__ccUndoSnapshot || {});
         for (const [key, info] of Object.entries(snapshot)) {
           const el = document.querySelector(info.selector);
           if (el) { el.value = info.value; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }

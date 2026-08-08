@@ -3,7 +3,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   console.log('[CC] fillFormFieldsSequential started v' + ((typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj') + ', fields:', Object.keys(mapping).length);
   const _replayResults = {}; // label -> 'ok'|'no-option'|'no-adapter'|'verify-fail'
   const _ccRecords = []; // ReplayRecord[] — structured observability
-  function _flushRecords() { try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {} }
+  function _flushRecords() { try { window.__ccFillRecords = _ccRecords; } catch {} }
 
   // ── Runtime version constants ─────────────────────────────────────────────
   const RUNTIME_VERSION = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj';
@@ -192,50 +192,10 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
   /**
    * Resolve when the page network has been idle for `quietMs` consecutive
-   * milliseconds — i.e. the network monitor reports active=0 AND no new
-   * activity for at least `quietMs`. Falls back to a max wait if the monitor
-   * isn't loaded or the network never settles.
-   *
-   * Returns:
-   *   { idle: true, waitedMs }   on idle
-   *   { idle: false, waitedMs }  on timeout
+   * milliseconds. Delegates to shared/network-idle.js.
    */
   function waitForNetworkIdle(quietMs, maxMs) {
-    quietMs = quietMs || 200;
-    maxMs = maxMs || 8000;
-    return new Promise(function (resolve) {
-      var start = Date.now();
-      var deadline = start + maxMs;
-      var lastSeenActive = -1;
-      var monitorMissing = false;
-      function tick() {
-        var ds = document.body.dataset || {};
-        var active = parseInt(ds.ccAjaxActive || 'NaN', 10);
-        var lastActivity = parseInt(ds.ccAjaxLastActivity || '0', 10);
-        if (Number.isNaN(active)) {
-          // Monitor not installed — fall back to DOM-quiet only
-          monitorMissing = true;
-        }
-        if (Date.now() >= deadline) {
-          resolve({ idle: false, waitedMs: Date.now() - start, monitorMissing });
-          return;
-        }
-        if (monitorMissing) {
-          // No network monitor → wait quietMs unconditionally then resolve
-          setTimeout(function () {
-            resolve({ idle: true, waitedMs: Date.now() - start, monitorMissing: true });
-          }, quietMs);
-          return;
-        }
-        if (active === 0 && lastActivity && Date.now() - lastActivity >= quietMs) {
-          resolve({ idle: true, waitedMs: Date.now() - start });
-          return;
-        }
-        lastSeenActive = active;
-        setTimeout(tick, 50);
-      }
-      tick();
-    });
+    return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
   }
 
   // Sort by DOM order (sequential top-to-bottom filling)
@@ -287,9 +247,12 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       // Detect type from DOM directly (more reliable than passed type)
       const tagName = el.tagName.toLowerCase();
       const elType = tagName === 'select' ? 'select'
+        : tagName === 'ng-select' ? 'ng-dropdown'
         : tagName === 'mat-select' ? 'mat-select'
         : tagName === 'mat-checkbox' ? 'mat-checkbox'
         : tagName === 'mat-radio-button' ? 'mat-radio'
+        : (el.classList && (el.classList.contains('ng-dropdown') || el.classList.contains('ng-select'))) ? 'ng-dropdown'
+        : (tagName !== 'input' && (el.getAttribute('role') === 'combobox' || el.getAttribute('role') === 'listbox')) ? 'ng-dropdown'
         : el.type || 'text';
 
       // Portal adapter replay for ng-dropdown and similar custom components
@@ -326,10 +289,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           console.log('[CC][session-start] id='+session.id+' label='+_label);
 
           function isVisible(node) {
-            const r = node.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) return false;
-            const s = getComputedStyle(node);
-            return s.display !== 'none' && s.visibility !== 'hidden';
+            return window.ccDomUtils.isVisible(node);
           }
 
           function cleanupSession(result) {
@@ -392,7 +352,8 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             // Priority 1: newly added node with visible options
             for (const node of addedNodes) {
               if (!isVisible(node)) continue;
-              const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              const _optQ = adapter.optionSelector || 'li,.ng-option,mat-option,.dropdown-item';
+              const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
               if (lis.length > 0) { activeOverlayRoot = node; break; }
             }
             // Priority 2: existing overlay nearest trigger with visible options
@@ -401,7 +362,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
               OVERLAY_TAGS.forEach(sel => {
                 try {
                   document.querySelectorAll(sel).forEach(node => {
-                    const lis = Array.from(node.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+                    const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
                     if (lis.length === 0) return;
                     const r = node.getBoundingClientRect();
                     const dist = Math.abs(r.left - trigRect.left) + Math.abs(r.top - trigRect.bottom);
@@ -416,7 +377,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             }
             // Priority 4: options already in DOM inside the root component
             if (!activeOverlayRoot) {
-              const rootLis = Array.from(root.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              const rootLis = Array.from(root.querySelectorAll(_optQ)).filter(o => isVisible(o));
               if (rootLis.length > 0) activeOverlayRoot = root;
             }
 
@@ -431,10 +392,10 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
               attempts++;
               // Search in overlay root, then root component, then document
               const searchRoot = activeOverlayRoot || root;
-              let opts = Array.from(searchRoot.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o));
+              let opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter(o => isVisible(o));
               // Fallback: if root has no visible options, try document
               if (opts.length === 0 && searchRoot !== document) {
-                opts = Array.from(document.querySelectorAll(adapter.optionSelector || 'li')).filter(o => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
+                opts = Array.from(document.querySelectorAll(_optQ)).filter(o => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
@@ -576,25 +537,10 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         const vWords = v.split(' ').filter(w => w.length > 1);
         const extraValues = [];
         if (mapping[selector]?.monthNum) { extraValues.push(mapping[selector].monthNum.toString()); if (mapping[selector].monthShort) extraValues.push(mapping[selector].monthShort.toLowerCase()); }
-        const overlapScore = o => { const ot = norm(o.text); return vWords.filter(w => ot.includes(w)).length; };
 
         function findOpt(options) {
-          const opts = options.filter(o => {
-            if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
-            const txt = o.text.toLowerCase();
-            // Exclude placeholder/loading options
-            if (txt.includes('select') || txt.includes('choose') || txt.includes('loading') || txt === '--') return false;
-            return true;
-          });
-          return opts.find(o => o.value.toLowerCase() === value.toLowerCase().trim()) ||
-                 opts.find(o => norm(o.text) === v) ||
-                 opts.find(o => norm(o.value) === v) ||
-                 (extraValues.length && opts.find(o => extraValues.includes(o.value.toLowerCase()) || extraValues.includes(norm(o.text)))) ||
-                 opts.find(o => norm(o.text).startsWith(v) && v.length > 2) ||
-                 opts.find(o => v.startsWith(norm(o.text)) && norm(o.text).length > 2) ||
-                 opts.find(o => norm(o.text).includes(v) && v.length > 3) ||
-                 opts.find(o => v.includes(norm(o.text)) && norm(o.text).length > 3) ||
-                 (() => { const best = opts.filter(o => overlapScore(o) === vWords.length && vWords.length > 0); return best.length === 1 ? best[0] : null; })();
+          // shared/option-match.js is injected before executor.js runs
+          return window.ccMatchOption(value, options, { extraValues: extraValues });
         }
 
         function applySelect(el, opt) {
@@ -659,9 +605,8 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         if (opt) return applySelect(el, opt);
 
         // Options not ready yet (dependent dropdown) — schedule retry
-        // For cascade parents (state/district) that already applied, don't retry (would reset children)
-        const isCascadeParent = /state|district|17391|17297/.test(selector);
-        if (isCascadeParent) { console.debug('[CC] cascade parent already set, skip retry:', selector); return 1; }
+        // The sequential loop already handles cascade timing via waitForNetworkIdle + waitForOptions.
+        // This retry is a fallback for when fillOne is called directly (not through the cascade path).
         let attempts = 0;
         const interval = setInterval(() => {
           const allOpts = Array.from(el.options);
@@ -676,21 +621,17 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           if (++attempts >= 15) {
             clearInterval(interval);
             // AI fallback — ask LLM to pick the best option
-            const groqKey = window._cc_groq_key || (document.body.getAttribute('data-cc-llm-key') || '');
-            const llmUrl = document.body.getAttribute('data-cc-llm-url') || 'https://openrouter.ai/api/v1/chat/completions';
-            const llmModel = document.body.getAttribute('data-cc-llm-model') || 'meta-llama/llama-3.3-70b-instruct';
+            const groqKey = (window.__ccFillCtx && window.__ccFillCtx.llmKey) || window._cc_groq_key || '';
             if (groqKey && realOpts.length > 0) {
               const optTexts = realOpts.map(o => o.text.trim()).join('\n');
-              fetch(llmUrl, {
-                method: 'POST',
-                headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  model: llmModel,
-                  messages: [{ role: 'user', content: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts }],
-                  max_tokens: 50,
-                })
-              }).then(r => r.json()).then(res => {
-                const aiText = res?.choices?.[0]?.message?.content?.trim();
+              window.ccLLM.call({
+                apiKey: groqKey,
+                baseUrl: (window.__ccFillCtx && window.__ccFillCtx.llmBaseUrl) || undefined,
+                model: (window.__ccFillCtx && window.__ccFillCtx.llmModel) || undefined,
+                userPrompt: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts,
+                maxTokens: 50,
+              }).then(result => {
+                const aiText = (result.text || '').trim();
                 if (aiText) {
                   const aiOpt = realOpts.find(o => o.text.trim() === aiText) || realOpts.find(o => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
                   if (aiOpt) { console.debug('[CC] AI matched:', aiText, '->', aiOpt.text); applySelect(el, aiOpt); }
@@ -725,6 +666,92 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         if (!booleanLike.includes(value.toLowerCase())) { console.debug('[CC] skipped checkbox with non-boolean value:', value); return 0; }
         const truthy = ['yes','true','1','checked','on'].includes(value.toLowerCase());
         if (truthy !== el.checked) { el.checked = truthy; el.dispatchEvent(new Event('change', { bubbles: true })); return 1; }
+      } else if (el.type === 'file') {
+        // ── File input handling (sync path) ──────────────────────────────────
+        // URL-based file fetch is handled in the async sequential loop.
+        // This path handles: base64 data URIs, empty values, filename hints.
+        if (!value) {
+          el.click();
+          console.debug('[CC] file: no value, clicked to open dialog:', selector);
+          return 1;
+        }
+        if (value.startsWith('data:')) {
+          // Base64 data URI
+          try {
+            const [meta, b64] = value.split(',');
+            const mime = meta.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
+            const ext = mime.split('/')[1] || 'bin';
+            const fileName = (filledBySource[selector]?.label || 'file').replace(/[^a-z0-9]/gi, '_') + '.' + ext;
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const file = new File([bytes], fileName, { type: mime, lastModified: Date.now() });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            el.files = dt.files;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            console.debug('[CC] file assigned (base64):', selector, fileName, file.size, 'bytes');
+            return 1;
+          } catch (e) {
+            el.click();
+            console.debug('[CC] file base64 error:', e.message, '— opened dialog');
+            return 1;
+          }
+        }
+        if (value.startsWith('http://') || value.startsWith('https://')) {
+          // URL fetch handled in sequential loop — should not reach here
+          console.debug('[CC] file URL should be handled in sequential loop:', selector);
+          return 0; // Signal to sequential loop to handle async
+        }
+        // Filename hint — click to open dialog
+        el.click();
+        console.debug('[CC] file: filename hint, clicked dialog:', selector, value);
+        return 1;
+      } else if (el._flatpickr || el.classList.contains('flatpickr-input')) {
+        // ── flatpickr datepicker ─────────────────────────────────────────────
+        // flatpickr attaches _flatpickr instance to the input. Use its API.
+        const fp = el._flatpickr;
+        // Parse the date value: convert DD/MM/YYYY or DD-MM-YYYY to Date object
+        let dateObj = null;
+        const ddmmyyyy = value.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+        if (ddmmyyyy) { dateObj = new Date(+ddmmyyyy[3], +ddmmyyyy[2]-1, +ddmmyyyy[1]); }
+        const yyyymmdd = value.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+        if (!dateObj && yyyymmdd) { dateObj = new Date(+yyyymmdd[1], +yyyymmdd[2]-1, +yyyymmdd[3]); }
+        if (!dateObj) dateObj = new Date(value);
+
+        if (fp && !isNaN(dateObj)) {
+          fp.setDate(dateObj, true); // true = trigger onChange
+        } else {
+          // Fallback: set value directly + dispatch
+          const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          el.focus();
+          if (niv) niv.set.call(el, value); else el.value = value;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          el.blur();
+        }
+        console.debug('[CC] flatpickr fill:', selector, 'value:', value, 'result:', el.value);
+        return el.value ? 1 : 0;
+      } else if (el.classList.contains('hasDatepicker') || (typeof $ !== 'undefined' && typeof $.fn !== 'undefined' && typeof $.fn.datepicker !== 'undefined' && $(el).data('datepicker'))) {
+        // ── jQuery UI Datepicker ─────────────────────────────────────────────
+        let dateObj = null;
+        const ddmmyyyy = value.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+        if (ddmmyyyy) { dateObj = new Date(+ddmmyyyy[3], +ddmmyyyy[2]-1, +ddmmyyyy[1]); }
+        const yyyymmdd = value.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+        if (!dateObj && yyyymmdd) { dateObj = new Date(+yyyymmdd[1], +yyyymmdd[2]-1, +yyyymmdd[3]); }
+        if (!dateObj) dateObj = new Date(value);
+
+        if (!isNaN(dateObj)) {
+          $(el).datepicker('setDate', dateObj);
+        } else {
+          // Fallback: set value + trigger
+          const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+          el.focus();
+          if (niv) niv.set.call(el, value); else el.value = value;
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        console.debug('[CC] jQuery datepicker fill:', selector, 'value:', value, 'result:', el.value);
+        return el.value ? 1 : 0;
       } else if (el.getAttribute('matdatepicker') !== null || el.getAttribute('matInput') !== null && el.closest('mat-datepicker-toggle,mat-form-field') && (el.type === 'text' || el.type === 'date')) {
         // ── Angular Material mat-datepicker ──────────────────────────────────
         // mat-datepicker binds to a plain <input matInput [matDatepicker]="...">
@@ -743,6 +770,41 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: value.slice(-1) || 'Enter' }));
         el.blur();
         return 1;
+      } else if (el.type === 'date' || el.type === 'datetime-local' || el.type === 'month' || el.type === 'week') {
+        // ── Native date/time inputs ──────────────────────────────────────────
+        // These require ISO format: YYYY-MM-DD for date, YYYY-MM-DDTHH:MM for
+        // datetime-local, YYYY-MM for month. Profile data is usually in Indian
+        // format (DD/MM/YYYY or DD-MM-YYYY). Convert before setting.
+        let isoValue = value;
+        // Detect DD/MM/YYYY or DD-MM-YYYY and convert to YYYY-MM-DD
+        const ddmmyyyy = value.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+        if (ddmmyyyy) {
+          const [, day, month, year] = ddmmyyyy;
+          if (el.type === 'month') {
+            isoValue = `${year}-${month.padStart(2, '0')}`;
+          } else {
+            isoValue = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+        }
+        // Detect YYYY/MM/DD or YYYY-MM-DD (already ISO-ish)
+        const yyyymmdd = value.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+        if (yyyymmdd && !ddmmyyyy) {
+          const [, year, month, day] = yyyymmdd;
+          isoValue = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+        // For datetime-local: if only date provided, append T00:00
+        if (el.type === 'datetime-local' && !isoValue.includes('T')) {
+          isoValue += 'T00:00';
+        }
+        // Set via native setter (keystroke doesn't work on date inputs)
+        const niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        el.focus();
+        if (niv) niv.set.call(el, isoValue); else el.value = isoValue;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.blur();
+        console.debug('[CC] date fill:', selector, 'original:', value, 'iso:', isoValue, 'result:', el.value);
+        return el.value ? 1 : 0;
       } else {
         // Angular/React compatible input filling
         const isTextarea = el.tagName === 'TEXTAREA';
@@ -804,7 +866,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   async function fillSequential() {
     for (const [selector, fieldData] of entries) {
       const { value, type } = fieldData;
-      const isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
+      let isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
       const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
       // Cascade treatment only applies to actual dropdowns (state→district→block
       // selects that load options via AJAX). A TEXT field labeled "district"
@@ -823,6 +885,19 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         el = document.querySelector(selector);
       }
 
+      // Detect ng-dropdown from DOM (mapping type may be wrong, e.g. 'mat-select' for ng-select)
+      if (!isNgDropdown && el) {
+        const _tag = el.tagName.toLowerCase();
+        if (_tag === 'ng-select' || (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown')))) {
+          isNgDropdown = true;
+        }
+        // Any non-native element with role=combobox/listbox is a custom dropdown → use plugin
+        if (!isNgDropdown && _tag !== 'select' && _tag !== 'input' && _tag !== 'mat-select') {
+          const _role = el.getAttribute('role');
+          if (_role === 'combobox' || _role === 'listbox') isNgDropdown = true;
+        }
+      }
+
       // Scroll into view
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -831,6 +906,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
       const _t0 = Date.now();
       const _fieldCtx = { type, label: filledBySource[selector]?.label || selector, profileKey: filledBySource[selector]?.profileKey || '', selector };
+      // Diagnostic: which path will this field take?
+      const _selectLike2 = /^(select|dropdown|ng-dropdown|mat-select)$/.test(type || '');
+      if (_selectLike2) console.log('[CC] route:', selector, 'type:', type, 'isNgDropdown:', isNgDropdown, 'isDependent:', isDependent, 'filled:', filled, 'elTag:', el?.tagName, 'elType:', el?.type);
 
       if (fieldData.type === 'button') {
         // Phase boundary: button-click plugin
@@ -871,15 +949,23 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         await waitForNetworkIdle(100, 1500); // was setTimeout(500) � now exits early when AJAX done
       } else if (isDependent && filled > 0) {
         // Cascade: wait for parent's AJAX to actually complete (vs hardcoded delay).
-        // Network monitor counts in-flight fetch + XHR — we proceed the moment
-        // active=0 AND has been idle for 150ms, OR after maxWait.
+        // DWR initiates XHR asynchronously after the change event — wait 500ms first
+        // to give it time to start, THEN check for network idle.
+        await new Promise(r => setTimeout(r, 500));
+        console.log('[CC] cascade-wait:', selector, 'label:', fieldLabel, 'waiting for network+options...');
         const _netRes = await waitForNetworkIdle(150, 6000);
+        console.log('[CC] cascade-net:', selector, _netRes.idle ? 'idle' : 'timeout', 'waited:', _netRes.waitedMs + 'ms', _netRes.monitorMissing ? '(NO MONITOR)' : '');
         // After network idle, options should be populated; double-check with poll
-        const waitedEl = await waitForOptions(selector, 1, 4000);
+        const waitedEl = await waitForOptions(selector, 1, 8000);
         if (!waitedEl) {
-          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', waitedMs: _netRes.waitedMs, networkIdle: _netRes.idle, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          const _el3 = document.querySelector(selector);
+          const _optCount = _el3 ? Array.from(_el3.options || []).length : 0;
+          const _optSample = _el3 ? Array.from(_el3.options || []).slice(0,3).map(o => o.value + '=' + o.text.trim()) : [];
+          console.log('[CC] cascade-TIMEOUT:', selector, 'opts:', _optCount, 'disabled:', _el3?.disabled, 'sample:', _optSample);
+          _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'wait-timeout', strategy: 'wait-engine', waitedMs: _netRes.waitedMs, networkIdle: _netRes.idle, optionCount: _optCount, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
           continue;
         }
+        console.log('[CC] cascade-ready:', selector, 'opts:', waitedEl.options.length, 'filling:', value);
         const _plugin = (_CC_USE_PLUGINS && typeof findPlugin === 'function') ? findPlugin(waitedEl, _fieldCtx) : null;
         if (_plugin) {
           const _pResult = _plugin.fill(waitedEl, value, { profileKey: _fieldCtx.profileKey, parentValues: {}, attempt: 1 });
@@ -891,6 +977,33 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           const _r = fillOne(selector, value, type) || 0;
           filled += _r;
           _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : 'no-option', strategy: 'wait-engine', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+        }
+        // Wait for DWR/AJAX to initiate BEFORE next field starts its idle check.
+        // DWR queues XHR asynchronously after the change event — needs 500ms+ to start.
+        await new Promise(r => setTimeout(r, 600));
+      } else if (el && el.type === 'file' && value && (value.startsWith('http://') || value.startsWith('https://'))) {
+        // ── File input with URL — async fetch and assign ─────────────────────
+        try {
+          const resp = await fetch(value);
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const fileName = value.split('/').pop().split('?')[0] || 'document';
+            const file = new File([blob], fileName, { type: blob.type || 'application/octet-stream', lastModified: Date.now() });
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            el.files = dt.files;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            filled += 1;
+            console.debug('[CC] file URL assigned:', selector, fileName, file.size, 'bytes');
+            _ccRecords.push({ selector, value, type: 'file', result: 'filled', strategy: 'file-url-fetch', fileName, fileSize: file.size, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          } else {
+            // Fetch failed — click to open dialog
+            el.click();
+            _ccRecords.push({ selector, value, type: 'file', result: 'waiting_human', failReason: 'fetch-' + resp.status, strategy: 'file-click', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
+          }
+        } catch (e) {
+          el.click();
+          _ccRecords.push({ selector, value, type: 'file', result: 'waiting_human', failReason: e.message, strategy: 'file-click', durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords();
         }
         await new Promise(r => setTimeout(r, 200));
       } else {
@@ -928,8 +1041,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   // After runtime settles, snapshot filled values.
   // On form submit or page unload, capture final state and POST corrections.
   setTimeout(() => {
-    const _ccBackendUrl = document.body.getAttribute('data-cc-backend') || '';
-    const _ccFormKey = document.body.getAttribute('data-cc-formkey') || '';
+    const _ccCtx = window.__ccFillCtx || {};
+    const _ccBackendUrl = _ccCtx.backendUrl || '';
+    const _ccFormKey = _ccCtx.formKey || '';
     const snapshot = {};
     const fieldMeta = {};
     for (const [selector, fieldData] of entries) {
@@ -1000,10 +1114,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     function postCorrections(trigger) {
       const corrections = captureCorrections(trigger);
       if (corrections.length === 0) return;
-      document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections));
       if (_ccBackendUrl) {
-        const _ccToken = document.body.getAttribute('data-cc-token') || '';
-        const _ccProfileId = document.body.getAttribute('data-cc-profile-id') || '';
+        const _ccToken = _ccCtx.accessToken || '';
+        const _ccProfileId = _ccCtx.profileId || '';
         const headers = { 'Content-Type': 'application/json' };
         if (_ccToken) headers['Authorization'] = 'Bearer ' + _ccToken;
         fetch(_ccBackendUrl + '/corrections', {
@@ -1097,7 +1210,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     });
   }, 3000);
 
-  // Final flush via DOM attribute (shared between all worlds and executeScript calls)
-  try { document.body.setAttribute('data-cc-records', JSON.stringify(_ccRecords)); } catch {}
+  // Final flush to extension-isolated memory (shared across isolated-world injections)
+  try { window.__ccFillRecords = _ccRecords; } catch {}
   return filled;
 }

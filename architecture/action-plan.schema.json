@@ -1,0 +1,232 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cybercontrol.io/schemas/action-plan-3.0.0.json",
+  "title": "CyberControl ActionPlan v3",
+  "description": "Service-produced, Page-IR-aware execution plan. Targets are public node identities scoped to an exact document/context/snapshot/revision. Contains no selectors, XPath, DOM handles, HTML, or private bindings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "plan_id",
+    "correlation_id",
+    "issued_at",
+    "expires_at",
+    "target_binding",
+    "steps",
+    "authorization"
+  ],
+  "properties": {
+    "kind": { "const": "action_plan" },
+    "schema_version": { "const": "3.0.0" },
+    "plan_id": { "$ref": "#/$defs/Identifier" },
+    "correlation_id": {
+      "description": "Opaque request/response correlation token echoed in the ExecutionObservation. Enables idempotency and replay detection.",
+      "$ref": "#/$defs/Identifier"
+    },
+    "supersedes_plan_id": {
+      "description": "Optional plan_id this plan replaces after a stale_target/re-perception cycle.",
+      "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }]
+    },
+    "issued_at": { "type": "string", "format": "date-time" },
+    "expires_at": {
+      "description": "Absolute expiry. The extension MUST reject execution after this instant and return plan_expired.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "target_binding": {
+      "description": "Exact perception state this plan was authored against. Execution requires an exact match on all fields.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "snapshot_id", "expected_revision"],
+      "properties": {
+        "document_id": { "$ref": "#/$defs/Identifier" },
+        "snapshot_id": { "$ref": "#/$defs/Identifier" },
+        "expected_revision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/ActionStep" }
+    },
+    "authorization": {
+      "description": "Explicit authority envelope. Irreversible actions require operator_confirmed true and an authority scope that permits the risk class.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_risk", "operator_confirmed", "allow_navigation", "allow_submit"],
+      "properties": {
+        "max_risk": { "type": "string", "enum": ["safe", "reversible", "irreversible"] },
+        "operator_confirmed": { "type": "boolean" },
+        "allow_navigation": { "type": "boolean" },
+        "allow_submit": { "type": "boolean" }
+      }
+    }
+  },
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"
+    },
+    "ActionStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step_id", "target", "action", "risk", "postcondition"],
+      "properties": {
+        "step_id": { "$ref": "#/$defs/Identifier" },
+        "target": { "$ref": "#/$defs/Target" },
+        "action": { "$ref": "#/$defs/Action" },
+        "risk": {
+          "description": "Risk class of this step. Must not exceed plan authorization.max_risk.",
+          "type": "string",
+          "enum": ["safe", "reversible", "irreversible"]
+        },
+        "required_affordance": {
+          "description": "Affordance the target node MUST still expose at execution time, or the step fails affordance_mismatch.",
+          "type": ["string", "null"],
+          "enum": ["focus", "activate", "type_text", "clear", "select_one", "select_many", "toggle", "upload", "expand", "collapse", "scroll", null]
+        },
+        "required_adapter_id": {
+          "description": "Adapter the target must still resolve to, or the step fails adapter_mismatch. Adapter identity is public; recipes are browser-private.",
+          "type": ["string", "null"],
+          "maxLength": 80
+        },
+        "postcondition": { "$ref": "#/$defs/Postcondition" },
+        "on_failure": {
+          "type": "string",
+          "enum": ["abort_plan", "stop_and_report"],
+          "default": "stop_and_report"
+        }
+      }
+    },
+    "Target": {
+      "description": "Public node identity. Exactly the identity keys — no selector, XPath, or handle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_id", "node_id"],
+      "properties": {
+        "context_id": { "$ref": "#/$defs/Identifier" },
+        "node_id": { "$ref": "#/$defs/Identifier" }
+      }
+    },
+    "Action": {
+      "description": "Discriminated union of mechanical actions. Selection targets an option node identity, not fuzzy text, so execution stays mechanical.",
+      "oneOf": [
+        { "$ref": "#/$defs/FocusAction" },
+        { "$ref": "#/$defs/TypeTextAction" },
+        { "$ref": "#/$defs/ClearAction" },
+        { "$ref": "#/$defs/ToggleAction" },
+        { "$ref": "#/$defs/SelectOptionAction" },
+        { "$ref": "#/$defs/ActivateAction" },
+        { "$ref": "#/$defs/ExpandCollapseAction" },
+        { "$ref": "#/$defs/UploadAction" },
+        { "$ref": "#/$defs/ScrollAction" }
+      ]
+    },
+    "FocusAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op"],
+      "properties": { "op": { "const": "focus" } }
+    },
+    "TypeTextAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "value"],
+      "properties": {
+        "op": { "const": "type_text" },
+        "value": {
+          "description": "Literal text to type. Value provenance/classification is carried out-of-band; secret values follow perception-privacy.yml and MUST NOT be logged.",
+          "type": "string",
+          "maxLength": 4096
+        },
+        "clear_first": { "type": "boolean", "default": true }
+      }
+    },
+    "ClearAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op"],
+      "properties": { "op": { "const": "clear" } }
+    },
+    "ToggleAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "desired_state"],
+      "properties": {
+        "op": { "const": "toggle" },
+        "desired_state": { "type": "boolean" }
+      }
+    },
+    "SelectOptionAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "option_target"],
+      "properties": {
+        "op": { "const": "select_option" },
+        "option_target": {
+          "description": "Node identity of the option to select. The service resolves semantics; execution selects a concrete option node mechanically with no fuzzy matching.",
+          "$ref": "#/$defs/Target"
+        }
+      }
+    },
+    "ActivateAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op"],
+      "properties": { "op": { "const": "activate" } }
+    },
+    "ExpandCollapseAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "expanded"],
+      "properties": {
+        "op": { "const": "expand_collapse" },
+        "expanded": { "type": "boolean" }
+      }
+    },
+    "UploadAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op", "file_reference"],
+      "properties": {
+        "op": { "const": "upload" },
+        "file_reference": {
+          "description": "Opaque, extension-validated file reference token. Never a raw filesystem path from the service.",
+          "$ref": "#/$defs/Identifier"
+        }
+      }
+    },
+    "ScrollAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["op"],
+      "properties": {
+        "op": { "const": "scroll" },
+        "into_view": { "type": "boolean", "default": true }
+      }
+    },
+    "Postcondition": {
+      "description": "Mechanical outcome the extension verifies after the action. Verification reads only the postcondition; it does not re-perceive the page.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["value_state", "checked", "selected", "expanded", "focused", "node_present", "state_signal", "none"]
+        },
+        "expected_value_state": {
+          "type": ["string", "null"],
+          "enum": ["empty", "nonempty", "selected", "masked", "unavailable", "not_applicable", null]
+        },
+        "expected_boolean": { "type": ["boolean", "null"] },
+        "expected_signal": {
+          "type": ["string", "null"],
+          "enum": ["dom_loading", "network_busy", "spinner_visible", "blocking_overlay", "validation_errors_present", "user_challenge_present", null]
+        }
+      }
+    }
+  }
+}

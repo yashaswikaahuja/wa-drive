@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cybercontrol.io/schemas/execution-observation-3.0.0.json",
+  "title": "CyberControl ExecutionObservation v3",
+  "description": "Extension-produced mechanical outcome report for an executed ActionPlan. Carries only public node identities, mechanical outcomes, and diagnostics. Contains no selectors, XPath, DOM handles, HTML, private bindings, or raw secret values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "observation_id",
+    "plan_id",
+    "correlation_id",
+    "document_id",
+    "observed_at",
+    "outcome",
+    "steps",
+    "resulting_revision",
+    "diagnostics"
+  ],
+  "properties": {
+    "kind": { "const": "execution_observation" },
+    "schema_version": { "const": "3.0.0" },
+    "observation_id": { "$ref": "#/$defs/Identifier" },
+    "plan_id": { "$ref": "#/$defs/Identifier" },
+    "correlation_id": {
+      "description": "Echo of ActionPlan.correlation_id for request/response correlation, idempotency, and replay detection.",
+      "$ref": "#/$defs/Identifier"
+    },
+    "document_id": { "$ref": "#/$defs/Identifier" },
+    "observed_at": { "type": "string", "format": "date-time" },
+    "outcome": {
+      "description": "Aggregate plan outcome.",
+      "type": "string",
+      "enum": ["completed", "partial", "rejected", "aborted"]
+    },
+    "rejection_reason": {
+      "description": "Set when outcome is rejected/aborted and no step-level failure applies (e.g. plan-level precondition failure).",
+      "oneOf": [{ "$ref": "#/$defs/FailureCode" }, { "type": "null" }]
+    },
+    "resulting_revision": {
+      "description": "Perception revision observed after execution. The service should re-fetch a snapshot/delta at this revision before planning again.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "resulting_snapshot_id": {
+      "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }]
+    },
+    "steps": {
+      "type": "array",
+      "maxItems": 500,
+      "items": { "$ref": "#/$defs/StepObservation" }
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": { "$ref": "#/$defs/Diagnostic" }
+    }
+  },
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,127}$"
+    },
+    "FailureCode": {
+      "type": "string",
+      "enum": [
+        "plan_expired",
+        "stale_target",
+        "stale_snapshot",
+        "adapter_mismatch",
+        "affordance_mismatch",
+        "document_replaced",
+        "authorization_denied",
+        "correlation_replayed",
+        "file_reference_invalid",
+        "action_unsupported",
+        "postcondition_failed",
+        "gateway_error"
+      ]
+    },
+    "StepObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step_id", "status", "postcondition_met"],
+      "properties": {
+        "step_id": { "$ref": "#/$defs/Identifier" },
+        "status": {
+          "type": "string",
+          "enum": ["succeeded", "failed", "skipped"]
+        },
+        "failure_code": {
+          "oneOf": [{ "$ref": "#/$defs/FailureCode" }, { "type": "null" }]
+        },
+        "postcondition_met": { "type": ["boolean", "null"] },
+        "observed_value_state": {
+          "description": "Mechanical value state after the action. Never the raw value.",
+          "type": ["string", "null"],
+          "enum": ["empty", "nonempty", "selected", "masked", "unavailable", "not_applicable", null]
+        },
+        "duration_ms": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "Diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "step_id", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,79}$" },
+        "severity": { "type": "string", "enum": ["info", "warning", "error"] },
+        "step_id": { "oneOf": [{ "$ref": "#/$defs/Identifier" }, { "type": "null" }] },
+        "message": {
+          "description": "Bounded, redacted human-readable message. MUST NOT contain raw values, secrets, selectors, or HTML.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 320
+        }
+      }
+    }
+  }
+}

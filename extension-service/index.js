@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
+import http from 'http';
 import { createRequire } from 'module';
+import { attachWebSocket } from './ws-server.js';
+import { createHandlers } from './ws-handlers.js';
 
 // Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
 // Non-blocking, fail-silent. Logs a warning if forbidden deps are installed.
@@ -21,7 +24,13 @@ import sessionsRouter from './routes/sessions.js';
 import correctionsRouter from './routes/corrections.js';
 import trainingRouter from './routes/training.js';
 import agentRouter from './routes/agent.js';
+import knowledgeRouter from './routes/knowledge.js';
+import resolveRouter from './routes/resolve.js';
+import validateRouter from './routes/validate.js';
+import versionsRouter from './routes/versions.js';
+import syncRouter from './routes/sync.js';
 import { ensureSchema } from './store.js';
+import { ensureKnowledgeSchema } from './knowledge-store.js';
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();
@@ -53,6 +62,11 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/corrections', correctionsRouter);
 app.use('/api/training', trainingRouter);
 app.use('/api/agent', agentRouter);
+app.use('/api/knowledge', knowledgeRouter);
+app.use('/api/resolve', resolveRouter);
+app.use('/api/validate', validateRouter);
+app.use('/api/versions', versionsRouter);
+app.use('/api/sync', syncRouter);
 
 // 404 fallthrough
 app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
@@ -67,13 +81,23 @@ app.use((err, _req, res, _next) => {
 process.on('uncaughtException', (err) => console.error('[FATAL] Uncaught:', err.message));
 process.on('unhandledRejection', (err) => console.error('[FATAL] Unhandled:', err?.message || err));
 
-app.listen(PORT, () => {
+// ── HTTP + WebSocket server ──────────────────────────────────────────────
+const server = http.createServer(app);
+const wsHandlers = createHandlers();
+const wsServer = attachWebSocket(server, {
+  onConnection: wsHandlers.onConnection,
+  onMessage: wsHandlers.onMessage,
+  onClose: wsHandlers.onClose,
+});
+
+export { server, wsServer };
+
+server.listen(PORT, () => {
   const jwtPrefix = (process.env.JWT_SECRET || '').slice(0, 4);
-  console.log(`[extension-service] listening on :${PORT}`);
+  console.log(`[extension-service] listening on :${PORT} (HTTP + WSS)`);
   console.log(`[extension-service] JWT_SECRET starts with: ${jwtPrefix}***`);
   console.log(`[extension-service] DATABASE_URL present: ${!!process.env.DATABASE_URL}`);
   console.log(`[extension-service] DATA_DIR: ${process.env.DATA_DIR || 'default ./data'}`);
-  // Ensure the shared document store table exists (mappings/adapters now live in Postgres,
-  // so multiple replicas share one source of truth). Non-fatal: routes also ensure on first use.
   ensureSchema().catch((e) => console.error('[extension-service] ensureSchema on boot failed:', e.message));
+  ensureKnowledgeSchema().catch((e) => console.error('[extension-service] knowledge schema on boot failed:', e.message));
 });

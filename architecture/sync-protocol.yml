@@ -1,0 +1,300 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Sync Protocol
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Phase 2.7 — Issue #91
+#
+# Defines how the browser extension synchronizes knowledge from the
+# CyberControl service. The extension stays slim — it consumes
+# pre-resolved, pre-validated knowledge. It does NOT own knowledge.
+#
+# Principles:
+#   1. Server-driven: the service decides what to send
+#   2. Scope-aware: extension only receives what it needs
+#   3. Version-safe: older extensions handle newer schema gracefully
+#   4. Resumable: interrupted syncs recover without data loss
+#   5. Efficient: delta updates minimize bandwidth
+#   6. Offline-tolerant: stale cache is usable until refreshed
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+protocol_version: "1.0.0"
+protocol_date: "2026-08-05"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 1: SYNC FLOWS
+# ══════════════════════════════════════════════════════════════════════
+
+flows:
+  bootstrap:
+    description: >
+      First-time sync when extension has no cached knowledge.
+      Downloads the full resolved knowledge set for the current context.
+    trigger: "Extension starts with empty cache or cache is invalidated"
+    steps:
+      - "Extension sends POST /api/sync/bootstrap with context"
+      - "Service resolves all applicable knowledge for that context"
+      - "Service returns full manifest + resolved artifacts"
+      - "Extension caches response with manifest_version"
+
+  delta:
+    description: >
+      Incremental update — extension sends its last manifest_version,
+      service returns only changes since then.
+    trigger: "Extension starts with valid cache, or periodic refresh"
+    steps:
+      - "Extension sends POST /api/sync/delta with manifest_version"
+      - "Service compares current state to manifest_version"
+      - "Service returns additions, updates, and removals since that version"
+      - "Extension applies delta to local cache"
+
+  validate_cache:
+    description: >
+      Lightweight check — is the extension's cache still valid?
+      Does not transfer full data.
+    trigger: "Extension periodically checks freshness (e.g. every 5 minutes)"
+    steps:
+      - "Extension sends POST /api/sync/check with manifest_version"
+      - "Service returns { fresh: true/false, current_version: ... }"
+      - "If stale, extension triggers delta or bootstrap"
+
+  recovery:
+    description: >
+      Extension detects corrupted or partially-synced cache.
+      Falls back to full bootstrap.
+    trigger: "Cache validation fails or delta apply errors"
+    steps:
+      - "Extension clears local cache"
+      - "Extension triggers bootstrap flow"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 2: MESSAGE SHAPES
+# ══════════════════════════════════════════════════════════════════════
+
+messages:
+
+  # ── Bootstrap Request ────────────────────────────────────────────
+  bootstrap_request:
+    method: POST
+    path: /api/sync/bootstrap
+    headers:
+      Authorization: "Bearer <jwt>"
+      Content-Type: application/json
+    body:
+      context:
+        portal_id: string | null
+        form_key: string | null
+        organization_id: string (from JWT)
+        country: string | null
+      extension_version: string
+      schema_version: string
+      capabilities:
+        type: array
+        items: string
+        description: "Which knowledge kinds the extension can consume"
+        example: ["field_mapping", "synonym", "option_translation", "component_adapter"]
+
+  # ── Bootstrap Response ───────────────────────────────────────────
+  bootstrap_response:
+    status: 200
+    body:
+      manifest_version: string
+      generated_at: datetime
+      schema_version: string
+      artifacts:
+        semantic_aliases:
+          type: object
+          description: "Resolved synonym map: { key: [patterns...] }"
+        field_mappings:
+          type: array
+          items:
+            semantic_key: string
+            profile_key: string
+            match_patterns: array
+            field_type: string | null
+            confidence: number
+        option_translations:
+          type: array
+          items:
+            field_semantic_key: string
+            profile_value: string
+            option_text: string
+        component_adapters:
+          type: array
+          items:
+            component_class: string
+            detection: object
+            interaction: object
+            events: object | null
+      record_count: integer
+      scope_context:
+        resolved_portal: string | null
+        resolved_country: string | null
+
+  # ── Delta Request ────────────────────────────────────────────────
+  delta_request:
+    method: POST
+    path: /api/sync/delta
+    body:
+      manifest_version: string
+      context:
+        portal_id: string | null
+        form_key: string | null
+      extension_version: string
+
+  # ── Delta Response ───────────────────────────────────────────────
+  delta_response:
+    status: 200
+    body:
+      manifest_version: string
+      previous_version: string
+      changes:
+        added:
+          type: array
+          items:
+            kind: string
+            key: string
+            data: object
+        updated:
+          type: array
+          items:
+            kind: string
+            key: string
+            data: object
+        removed:
+          type: array
+          items:
+            kind: string
+            key: string
+      change_count: integer
+
+  # ── Cache Check Request ──────────────────────────────────────────
+  check_request:
+    method: POST
+    path: /api/sync/check
+    body:
+      manifest_version: string
+
+  # ── Cache Check Response ─────────────────────────────────────────
+  check_response:
+    status: 200
+    body:
+      fresh: boolean
+      current_version: string
+      age_seconds: integer
+      recommendation: string
+      # recommendation: "ok" | "delta" | "bootstrap"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 3: VERSION NEGOTIATION
+# ══════════════════════════════════════════════════════════════════════
+
+versioning:
+  manifest_version:
+    description: >
+      Opaque string identifying a point-in-time state of knowledge.
+      Generated by the server on each sync response.
+      The extension stores this and sends it back on next sync.
+    format: "<timestamp>.<hash>"
+    example: "1722816000.a3f2b1c"
+
+  schema_version:
+    description: >
+      The knowledge schema version the extension understands.
+      Server uses this to decide what to send.
+    rules:
+      - "Server always sends the latest schema"
+      - "If extension schema < server schema, server downgrades response"
+      - "If extension cannot parse a field, it ignores it (forward-compatible)"
+      - "Major version mismatch = force bootstrap with upgrade notice"
+
+  extension_version:
+    description: >
+      Sent by extension so server can track which versions are active.
+      Used for analytics only — does not affect sync behavior.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 4: CACHE STRATEGY
+# ══════════════════════════════════════════════════════════════════════
+
+cache:
+  storage: "chrome.storage.local"
+  keys:
+    manifest_version: "cc_sync_manifest_version"
+    artifacts: "cc_sync_artifacts"
+    last_synced: "cc_sync_last_synced"
+    context_hash: "cc_sync_context_hash"
+
+  invalidation:
+    - "manifest_version changes = cache stale"
+    - "Portal change = context_hash changes = bootstrap needed"
+    - "Manual clear from popup = bootstrap on next fill"
+    - "Extension update = bootstrap (safety)"
+
+  ttl:
+    max_age_seconds: 3600
+    stale_while_revalidate: 86400
+    description: >
+      Cache is fresh for 1 hour. After that, extension uses stale cache
+      while requesting a delta in the background. Cache is hard-invalid
+      after 24 hours — forces bootstrap.
+
+  offline:
+    description: >
+      If the service is unreachable, extension uses whatever is cached.
+      Fills proceed with stale knowledge. No error shown to user unless
+      cache is completely empty.
+    behavior:
+      - "Network timeout = use cached artifacts"
+      - "Empty cache + offline = show 'cannot load knowledge' warning"
+      - "Stale cache + offline = proceed normally with cached data"
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 5: ERROR HANDLING
+# ══════════════════════════════════════════════════════════════════════
+
+errors:
+  http_errors:
+    401: "Token expired → re-authenticate then retry"
+    403: "Workspace suspended → show message, do not retry"
+    404: "Endpoint not available → use cached or skip"
+    429: "Rate limited → backoff and retry after Retry-After header"
+    500: "Server error → use cached, retry after 60s"
+
+  sync_errors:
+    manifest_unknown:
+      description: "Server doesn't recognize the manifest_version"
+      response: '{ "error": "manifest_expired", "action": "bootstrap" }'
+      extension_behavior: "Trigger full bootstrap"
+
+    schema_incompatible:
+      description: "Major version mismatch"
+      response: '{ "error": "schema_incompatible", "min_version": "2.0.0" }'
+      extension_behavior: "Show upgrade notice, use cached if available"
+
+    partial_delta:
+      description: "Delta response was truncated (connection lost)"
+      extension_behavior: "Discard partial delta, retry. After 3 failures, bootstrap."
+
+  retry:
+    strategy: "exponential backoff"
+    initial_delay_ms: 1000
+    max_delay_ms: 60000
+    max_retries: 3
+    jitter: true
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 6: SECURITY
+# ══════════════════════════════════════════════════════════════════════
+
+security:
+  authentication: "Bearer JWT (same as all extension-service endpoints)"
+  authorization: "Workspace-scoped — extension only receives knowledge for its workspace"
+  transport: "HTTPS only"
+  data_sensitivity: >
+    Knowledge records are NOT personally identifiable. They contain field
+    mappings, synonyms, and portal definitions — not user data.
+    No PII is transmitted in sync responses.
+  cache_security: >
+    chrome.storage.local is per-extension, not accessible by web pages.
+    Knowledge cache contains no secrets or user data.

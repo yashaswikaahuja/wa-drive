@@ -1,0 +1,105 @@
+# CyberControl Perception Privacy and Redaction Policy
+
+policy_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: shared.security_privacy
+
+default: "collect the minimum public IR required for reasoning; deny raw values and visual capture"
+
+classifications:
+  public:
+    examples: ["generic portal heading", "public navigation label"]
+  ordinary:
+    examples: ["field label", "button text", "validation rule text without user data"]
+  personal:
+    examples: ["person name", "email", "phone", "address"]
+  sensitive:
+    examples: ["Aadhaar", "PAN", "health", "income", "caste/category", "document metadata"]
+  secret:
+    examples: ["password", "OTP", "CAPTCHA response", "payment credential", "session token"]
+  unknown:
+    rule: "treat as sensitive until classified"
+
+public_ir_rules:
+  field_values:
+    raw_value: prohibited_by_default
+    allowed_representation: [empty, nonempty, selected, masked, unavailable, not_applicable]
+  selected_options:
+    rule: "Option identity/text may be included only when it is not secret and is necessary for current page understanding."
+  labels_and_text:
+    max_length: 320
+    rules:
+      - "Normalize whitespace."
+      - "Remove embedded control values and obvious secrets."
+      - "Truncate with a diagnostic rather than collecting surrounding page text without bound."
+  location:
+    include: [origin, sanitized_path, route_key]
+    remove: [query_string, fragment, credentials]
+  attributes:
+    allowlist: [role, aria_state, input_type, autocomplete_category, language]
+    prohibited: [value, srcdoc, inline_event_code, data_blob, auth_token]
+  html:
+    inner_html: prohibited
+    outer_html: prohibited
+    serialized_dom: prohibited
+  browser_bindings:
+    selectors: prohibited
+    xpath: prohibited
+    node_handles: prohibited
+    binding_ids: prohibited
+
+secret_handling:
+  rules:
+    - "Never include secret values in PageSnapshot, PageDelta, diagnostics, traces, logs, corrections, or screenshots."
+    - "OTP and password controls expose only challenge/control state."
+    - "CAPTCHA content and response are not sent for automated solving."
+    - "Session cookies, CSRF tokens, local storage, and authorization headers are outside perception scope."
+    - "Uploaded file names, document names, and file paths are prohibited in public IR; file uploads are referenced only by an opaque extension-validated file_reference token."
+  schema_enforcement:
+    rule: >
+      A node whose privacy.classification is 'secret' MUST have privacy.redacted
+      true, observed.sanitized_text null, and observed.value_state in
+      {masked, unavailable, not_applicable}. This is enforced by conditional
+      constraints in architecture/page-ir.schema.json, not only by prose.
+
+screenshots:
+  default: disabled
+  part_of_page_ir: false
+  allowed_only_if:
+    - "service sends an explicit purpose-bound request"
+    - "operator gives informed confirmation for the current capture"
+    - "capture scope and retention are displayed"
+    - "secret and sensitive regions are redacted before transmission"
+  forbidden:
+    - "background continuous capture"
+    - "capture of OTP, password, CAPTCHA response, payment, or identity-number regions"
+    - "using screenshot data as hidden persistent browser memory"
+  failure: "If reliable redaction cannot be proven, refuse capture."
+
+cross_origin:
+  rule: "Represent inaccessible frames as opaque metadata; do not exfiltrate frame URLs containing query parameters or frame content."
+
+transmission:
+  requirements:
+    - "TLS"
+    - "authenticated service session"
+    - "schema validation before send"
+    - "privacy validation before send"
+    - "bounded payload"
+  third_parties: "Public IR or screenshots MUST NOT be sent to third-party AI endpoints directly from the extension."
+
+logging:
+  allowed: ["IDs", "counts", "classification", "diagnostic codes", "timings", "redaction decisions"]
+  forbidden: ["raw values", "full page text", "HTML", "secrets", "private bindings"]
+
+retention:
+  browser_raw_facts: "ephemeral; discard after validated snapshot"
+  browser_private_bindings: "current document only"
+  service_snapshots: "purpose-limited retention configured by service policy"
+  screenshots: "no retention unless explicitly declared and confirmed"
+
+validation_fail_closed:
+  - "Unknown sensitivity is treated as sensitive."
+  - "A redaction error blocks publication of the affected fact."
+  - "Privacy diagnostics contain no rejected value."

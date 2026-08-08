@@ -1,4 +1,31 @@
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
+// Server-resolved field mappings (injected by background.js/popup.js from cache)
+// take precedence over hardcoded FIELD_ALIASES. Merge server mappings on top.
+function _getFieldAliases() {
+  var merged = Object.assign({}, FIELD_ALIASES);
+  var server = (typeof window !== 'undefined' && window._ccServerFieldMappings) || null;
+  if (server && Array.isArray(server)) {
+    for (var i = 0; i < server.length; i++) {
+      var m = server[i];
+      if (m.semantic_key && m.match_patterns) {
+        // Server patterns augment (or create) the alias entry
+        if (!merged[m.semantic_key]) {
+          merged[m.semantic_key] = m.match_patterns.slice();
+        } else {
+          // Merge: add patterns not already present
+          var existing = new Set(merged[m.semantic_key]);
+          for (var j = 0; j < m.match_patterns.length; j++) {
+            if (!existing.has(m.match_patterns[j])) {
+              merged[m.semantic_key].push(m.match_patterns[j]);
+            }
+          }
+        }
+      }
+    }
+  }
+  return merged;
+}
+
 var FIELD_ALIASES = {
   name:           ['candidate_name', 'candidates_name', 'applicant_name', 'applicants_name', 'student_name', 'full_name', 'fullname', 'naam', 'name', 'applicant_name_english', 'name_english', 'name_in_english', 'txt_candidate_name', 'txt_name', 'txtcandidatename', 'txtname', 'pratyashi_ka_naam', 'your_name', 'enter_name'],
   first_name:     ['first_name', 'firstname', 'fname', 'given_name', 'givenname', 'txt_firstname', 'txt_first_name'],
@@ -56,6 +83,8 @@ var FIELD_ALIASES = {
 
 function fuzzyMatch(formFields, profile) {
   var mapping = {};
+  // Resolve field aliases (server-synced + local hardcoded, merged)
+  var fieldAliases = _getFieldAliases();
   // Use granular name fields if available, else split full name
   var firstName = profile.first_name || '';
   var middleName = profile.middle_name || '';
@@ -84,12 +113,12 @@ function fuzzyMatch(formFields, profile) {
     var rawLbl = (field.label || '').trim();
     var isTwin = /^(?:[a-z]\.|\d+\.|\(\w\)|[ixv]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b/i.test(rawLbl)
               || /retype|re_type|reenter|re_enter|^confirm/i.test(ident)
-              || (field.id && /^(c|re|retype|verify|confirm)/i.test(field.id))
-              || (field.name && /^(re|retype|verify|confirm)/i.test(field.name));
+              || (field.id && /^(conf|c_|re_|retype|verify|confirm)/i.test(field.id))
+              || (field.name && /^(re_|retype|verify|confirm)/i.test(field.name));
     if (isTwin) continue;
 
     // Skip yes/no question radio buttons (not data fields)
-    if (field.type === 'radio' && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
+    if ((field.type === 'radio' || field.type === 'radio-group') && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
 
     // Auto-check agreement / declaration / consent checkboxes (also mat-checkbox)
     if (field.type === 'checkbox' || field.type === 'mat-checkbox') {
@@ -107,6 +136,33 @@ function fuzzyMatch(formFields, profile) {
       // Skip OTHER checkboxes — non-agreement boxes need explicit profile data which we don't have
       continue;
     }
+
+    // ── File input matching ──────────────────────────────────────────────
+    if (field.type === 'file') {
+      // Match file inputs to profile file keys by label
+      var fileAliases = {
+        photo: ['photo','photograph','passport photo','applicant photo','image','profile photo','customer photograph'],
+        signature: ['signature','sign','applicant signature','digital signature'],
+        aadhaar_doc: ['aadhaar','aadhar','aadhaar document','aadhaar card','uid'],
+        pan_doc: ['pan','pan card','pan document'],
+        certificate: ['certificate','marksheet','mark sheet','passing certificate','degree certificate'],
+        resume: ['resume','cv','curriculum vitae','bio data'],
+        passport_doc: ['passport','passport document'],
+        license_doc: ['driving license','licence','dl'],
+        utility_bill: ['utility bill','electricity bill','address proof'],
+      };
+      var fileLabelLower = (field.label || '').toLowerCase();
+      var fileIdentLower = ident.toLowerCase();
+      for (var [fileKey, fileLabels] of Object.entries(fileAliases)) {
+        if (!profile[fileKey]) continue;
+        if (fileLabels.some(function(a) { return fileLabelLower.includes(a) || fileIdentLower.includes(a.replace(/\s+/g, '_')); })) {
+          mapping[field.selector] = { value: profile[fileKey], type: 'file' };
+          break;
+        }
+      }
+      continue; // Don't fall through to text matching for file inputs
+    }
+
     var isFatherMother = ident.includes('father') || ident.includes('mother') || ident.includes('pita') || ident.includes('mata');
     var isStateDistrict = ident.includes('state') || ident.includes('district') || ident.includes('rajya') || ident.includes('jila');
     // Skip education table roll numbers (they appear in rows with exam context)
@@ -205,7 +261,7 @@ function fuzzyMatch(formFields, profile) {
       }
     }
 
-    for (const [profileKey, aliases] of Object.entries(FIELD_ALIASES)) {
+    for (const [profileKey, aliases] of Object.entries(fieldAliases)) {
       if (!profile[profileKey]) continue;
       // Strict separation: name must not match father/mother/state/district fields
       if (profileKey === 'name' && (isFatherMother || isStateDistrict)) continue;
@@ -214,25 +270,48 @@ function fuzzyMatch(formFields, profile) {
       // father_name only if field is clearly a father field; mother_name only if clearly mother
       if (profileKey === 'father_name' && !isFatherMother) continue;
       if (profileKey === 'mother_name' && !(ident.includes('mother') || ident.includes('mata'))) continue;
-      // name must not fill husband/wife/spouse fields
-      if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
+      // name must not fill husband/wife/spouse/guardian fields
+      if (profileKey === 'name' && (ident.includes('husband') || ident.includes('wife') || ident.includes('spouse') || ident.includes('guardian') || ident.includes('pati') || ident.includes('pita_pati'))) continue;
       // post_office/village must not fill 'purpose' or 'office' fields
       if ((profileKey === 'post_office' || profileKey === 'village') && (ident.includes('purpose') || ident.includes('uddeshya') || (ident.includes('apply') && ident.includes('office')))) continue;
       // degree_name/course_name must not match 'highest level of education' fields
       if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
       // For radio buttons: match by checking if this option's label contains the profile value
-      if (field.type === 'radio') {
+      if (field.type === 'radio' || field.type === 'radio-group') {
         var profileVal = profile[profileKey].toLowerCase().replace(/[^a-z0-9]/g, '');
-        var optLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
         // Check if this radio group name/ident matches the profileKey aliases
-        var groupIdent = [field.name, field.id].filter(Boolean).join(' ').toLowerCase().replace(/[-_\s]/g, '');
+        var groupIdent = [field.name, field.id, field.label].filter(Boolean).join(' ').toLowerCase().replace(/[-_\s]/g, '');
         var groupMatches = aliases.some(a => groupIdent.includes(a.replace(/[^a-z0-9]/g, '')));
-        // Also check if the option label directly contains the profile value
-        var labelMatches = optLabel.includes(profileVal) || profileVal.includes(optLabel);
-        if ((groupMatches || labelMatches) && optLabel.includes(profileVal)) {
-          mapping[field.selector] = { value: 'true', type: 'radio-click' };
-          break;
+        if (!groupMatches) { continue; }
+
+        // For radio-group: iterate options to find the matching one
+        if (field.type === 'radio-group' && field.options && field.optionSelectors) {
+          // First pass: exact match
+          var matchedIdx = -1;
+          for (var oi = 0; oi < field.options.length; oi++) {
+            var optText = field.options[oi].toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (optText === profileVal) { matchedIdx = oi; break; }
+          }
+          // Second pass: substring (only if no exact match, and require word boundary or 3+ char overlap)
+          if (matchedIdx < 0) {
+            for (var oi2 = 0; oi2 < field.options.length; oi2++) {
+              var optText2 = field.options[oi2].toLowerCase().replace(/[^a-z0-9]/g, '');
+              // Avoid "female".includes("male") — require the shorter string to be at least 70% of the longer
+              var shorter = optText2.length < profileVal.length ? optText2 : profileVal;
+              var longer = optText2.length < profileVal.length ? profileVal : optText2;
+              if (longer.includes(shorter) && shorter.length >= longer.length * 0.7) { matchedIdx = oi2; break; }
+            }
+          }
+          if (matchedIdx >= 0) {
+            mapping[field.optionSelectors[matchedIdx]] = { value: field.options[matchedIdx], type: 'radio-click' };
+          }
+        } else {
+          // Single radio field (type === 'radio')
+          var optLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (optLabel.includes(profileVal) || profileVal.includes(optLabel)) {
+            mapping[field.selector] = { value: 'true', type: 'radio-click' };
+          }
         }
         continue; // don't fall through to text matching for radio buttons
       }
@@ -341,7 +420,7 @@ RULES:
 - For address parts: use "village", "post_office", "police_station", "block", "sub_division", "district", "state", "pincode" as available
 - Only use "address" for full address text fields
 - Confirm/retype fields → same key as primary field
-- Skip: captcha, OTP, verification code, password, file upload
+- Skip: captcha, OTP, verification code, password
 - Use EXACT profile key names from the list below
 
 Form fields:
@@ -353,22 +432,17 @@ ${profileKeys}
 Return JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}`;
 
   try {
-    var apiUrl = llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions';
-    var model = llmModel || 'meta-llama/llama-3.3-70b-instruct';
-    var res = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'system', content: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.' }, { role: 'user', content: prompt }],
-        max_tokens: 300,
-      }),
+    var result = await window.ccLLM.call({
+      apiKey: groqKey,
+      baseUrl: llmBaseUrl,
+      model: llmModel,
+      systemPrompt: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.',
+      userPrompt: prompt,
+      maxTokens: 300,
     });
-    var data = await res.json();
-    var text = data?.choices?.[0]?.message?.content ?? '';
-    var match = text.match(/\{[\s\S]*\}/);
-    if (!match) return {};
-    var indexMap = JSON.parse(match[0]);
+    if (result.error) return {};
+    var indexMap = window.ccLLM.parseJSON(result.text);
+    if (!indexMap) return {};
     var mapping = {};
     var nameParts = (profile.name || '').trim().split(/\s+/);
     var dobParts = (profile.dob || '').split('/'); // DD/MM/YYYY
@@ -389,6 +463,24 @@ Return JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}`
       else if (profileKey === 'dob__year') value = dobParts[2] || '';
       else if (profile[profileKey]) value = profile[profileKey];
       if (value !== null && value !== undefined) {
+        // ── Guard: apply the same semantic constraints as fuzzyMatch ──
+        // Prevents LLM from assigning profile.name to relative/spouse fields,
+        // or profile.father_name to non-father fields, etc.
+        var fieldIdent = [field.label, field.id, field.name, field.placeholder]
+          .filter(Boolean).join(' ').toLowerCase().replace(/[-\s:*()'./]/g, '_');
+        var isRelativeField = /husband|wife|spouse|guardian|pati(?!_pati_ka_naam)/i.test(fieldIdent);
+        var isFatherField = /father|pita/i.test(fieldIdent);
+        var isMotherField = /mother|mata/i.test(fieldIdent);
+
+        // name must not fill relative/father/mother fields
+        if (profileKey === 'name' && (isRelativeField || isFatherField || isMotherField)) continue;
+        if ((profileKey === 'name' || profileKey === 'first_name' || profileKey === 'last_name' || profileKey === 'middle_name')
+            && isRelativeField) continue;
+        // father_name must only fill father-related fields
+        if (profileKey === 'father_name' && !isFatherField) continue;
+        // mother_name must only fill mother-related fields
+        if (profileKey === 'mother_name' && !isMotherField) continue;
+
         mapping[field.selector] = { value, type: field.type };
       }
     }

@@ -12,7 +12,25 @@
     "sidePanel"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "*://app.cybercontrol.fun/*",
+    "*://*.ssc.nic.in/*",
+    "*://*.ssc.gov.in/*",
+    "*://*.rrbcdg.gov.in/*",
+    "*://*.indianrailways.gov.in/*",
+    "*://*.upsconline.nic.in/*",
+    "*://*.upsc.gov.in/*",
+    "*://*.nta.ac.in/*",
+    "*://*.jeemain.nta.nic.in/*",
+    "*://*.neet.nta.nic.in/*",
+    "*://*.bseb.inter.nic.in/*",
+    "*://*.cbse.nic.in/*",
+    "*://*.onlinesbi.sbi/*",
+    "*://*.passportindia.gov.in/*",
+    "*://*.digilocker.gov.in/*",
+    "*://*.umang.gov.in/*",
+    "*://*.services.india.gov.in/*",
+    "*://*.serviceonline.bihar.gov.in/*",
+    "*://*.127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -43,7 +61,8 @@
         "*://*.passportindia.gov.in/*",
         "*://*.digilocker.gov.in/*",
         "*://*.umang.gov.in/*",
-        "*://*.services.india.gov.in/*"
+        "*://*.services.india.gov.in/*",
+        "*://*.serviceonline.bihar.gov.in/*"
       ],
       "js": [
         "content.js"

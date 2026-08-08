@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Perception Test — Shadow DOM</title>
+</head>
+<body>
+  <h1>Shadow DOM Components</h1>
+
+  <!-- Open shadow root with form controls -->
+  <custom-input id="shadow-text"></custom-input>
+  <custom-select id="shadow-select"></custom-select>
+
+  <!-- Closed shadow root (should be opaque) -->
+  <sealed-widget id="sealed"></sealed-widget>
+
+  <!-- Nested shadow roots -->
+  <outer-shell id="nested"></outer-shell>
+
+  <script>
+    // Open shadow: text input
+    class CustomInput extends HTMLElement {
+      constructor() {
+        super();
+        const shadow = this.attachShadow({ mode: 'open' });
+        shadow.innerHTML = `
+          <label for="inner-name">Your Name</label>
+          <input type="text" id="inner-name" placeholder="Shadow input">
+        `;
+      }
+    }
+    customElements.define('custom-input', CustomInput);
+
+    // Open shadow: select
+    class CustomSelect extends HTMLElement {
+      constructor() {
+        super();
+        const shadow = this.attachShadow({ mode: 'open' });
+        shadow.innerHTML = `
+          <label>State</label>
+          <select>
+            <option value="">Choose</option>
+            <option value="delhi">Delhi</option>
+            <option value="bihar">Bihar</option>
+            <option value="up">Uttar Pradesh</option>
+          </select>
+        `;
+      }
+    }
+    customElements.define('custom-select', CustomSelect);
+
+    // Closed shadow: perception should detect but not enter
+    class SealedWidget extends HTMLElement {
+      constructor() {
+        super();
+        const shadow = this.attachShadow({ mode: 'closed' });
+        shadow.innerHTML = `<input type="text" value="secret data">`;
+      }
+    }
+    customElements.define('sealed-widget', SealedWidget);
+
+    // Nested: outer open → inner open
+    class OuterShell extends HTMLElement {
+      constructor() {
+        super();
+        const shadow = this.attachShadow({ mode: 'open' });
+        shadow.innerHTML = `<inner-widget></inner-widget>`;
+      }
+    }
+    class InnerWidget extends HTMLElement {
+      constructor() {
+        super();
+        const shadow = this.attachShadow({ mode: 'open' });
+        shadow.innerHTML = `<button>Nested Button</button>`;
+      }
+    }
+    customElements.define('outer-shell', OuterShell);
+    customElements.define('inner-widget', InnerWidget);
+  </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Perception Test — Challenge & File Upload Widgets</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .field { margin: 20px 0; }
+    label { display: block; margin-bottom: 4px; font-weight: bold; }
+    .otp-group { display: flex; gap: 8px; }
+    .otp-group input { width: 40px; height: 40px; text-align: center; font-size: 1.2em; border: 2px solid #ccc; }
+    .captcha-placeholder { border: 2px solid #ccc; padding: 20px; text-align: center; background: #f5f5f5; width: 300px; }
+    .file-upload-area { border: 2px dashed #ccc; padding: 20px; text-align: center; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>Challenge &amp; File Upload Widget Families</h1>
+
+  <!-- OTP: autocomplete="one-time-code" single field -->
+  <div class="field">
+    <label for="otp-single">OTP (single field)</label>
+    <input type="text" id="otp-single" name="otp" autocomplete="one-time-code"
+           maxlength="6" placeholder="Enter 6-digit OTP" aria-label="OTP Code">
+  </div>
+
+  <!-- OTP: 6 separate 1-char inputs -->
+  <div class="field">
+    <label>OTP Verification Code (6 separate inputs)</label>
+    <div class="otp-group" aria-label="OTP Verification Code">
+      <input type="text" id="otp-1" name="otp_1" maxlength="1" aria-label="OTP digit 1">
+      <input type="text" id="otp-2" name="otp_2" maxlength="1" aria-label="OTP digit 2">
+      <input type="text" id="otp-3" name="otp_3" maxlength="1" aria-label="OTP digit 3">
+      <input type="text" id="otp-4" name="otp_4" maxlength="1" aria-label="OTP digit 4">
+      <input type="text" id="otp-5" name="otp_5" maxlength="1" aria-label="OTP digit 5">
+      <input type="text" id="otp-6" name="otp_6" maxlength="1" aria-label="OTP digit 6">
+    </div>
+  </div>
+
+  <!-- OTP: class-based detection -->
+  <div class="field">
+    <label>Auth Code (class-based OTP)</label>
+    <input type="number" id="auth-code" class="otp-input" name="auth_code"
+           maxlength="6" placeholder="Auth code" aria-label="Authentication Code">
+  </div>
+
+  <!-- CAPTCHA: simulated reCAPTCHA iframe -->
+  <div class="field">
+    <label>CAPTCHA</label>
+    <div class="captcha-placeholder g-recaptcha" role="none"
+         aria-label="reCAPTCHA security challenge">
+      [reCAPTCHA placeholder]
+    </div>
+  </div>
+
+  <!-- hCaptcha simulation -->
+  <div class="field">
+    <label>Security Check (hCaptcha)</label>
+    <div class="h-captcha captcha-placeholder" aria-label="hCaptcha verification">
+      [hCaptcha placeholder]
+    </div>
+  </div>
+
+  <!-- Native file input -->
+  <div class="field">
+    <label for="file-photo">Upload Photo (native)</label>
+    <input type="file" id="file-photo" name="photo" accept="image/*">
+  </div>
+
+  <!-- Multiple file -->
+  <div class="field">
+    <label for="file-docs">Upload Documents (multiple)</label>
+    <input type="file" id="file-docs" name="documents" multiple accept=".pdf,.jpg,.png">
+  </div>
+
+  <!-- Custom file upload area -->
+  <div class="field">
+    <label>Upload Signature (custom)</label>
+    <div class="file-upload-area" role="button" aria-label="Upload Signature" tabindex="0">
+      Click or drag to upload signature
+    </div>
+    <input type="file" id="file-signature" name="signature" style="display:none" accept="image/*">
+  </div>
+</body>
+</html>

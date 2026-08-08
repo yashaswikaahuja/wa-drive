@@ -1,0 +1,248 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Subsystem Ownership
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Maps every code directory/file to its owning runtime and subsystem.
+# Used by CI to detect ownership violations in PRs.
+#
+# DOCTRINE (constitution.yml):
+#   Extension = Eyes + Hands (observe, execute, report)
+#   Server    = Brain + Memory + Knowledge (map, plan, learn, decide)
+#
+# owner: which runtime SHOULD own this code
+# status: correct | temporary_violation | migrating | in_progress | planned
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.1"
+
+subsystems:
+  # ── EXTENSION: Perception ──────────────────────────────────────────
+  perception:
+    owner: extension
+    status: migrating
+    migration_target: "extension/perception/ via the Browser DOM Gateway (Phase 3.3)"
+    migration_phase: "phase_3_3"
+    legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
+    paths:
+      - "extension/autofill/extractor.js"
+      - "extension/shared/dom-utils.js"
+      - "extension/autofill/plugins/interface.js"
+    description: "DOM scanning, label resolution, component detection. Grandfathered structural DOM access; not the frozen Phase 3 perception implementation."
+
+  # ── EXTENSION: Execution ───────────────────────────────────────────
+  execution:
+    owner: extension
+    status: migrating
+    migration_target: "extension/execution/ behind the interaction gateway (Phase 3.3)"
+    migration_phase: "phase_3_3"
+    legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
+    paths:
+      - "extension/autofill/executor.js"
+      - "extension/shared/option-match.js"
+      - "extension/shared/network-idle.js"
+      - "extension/shared/select-apply.js"
+      - "extension/autofill/plugins/cascade-select.js"
+      - "extension/autofill/plugins/ng-dropdown.js"
+      - "extension/autofill/plugins/keystroke-input.js"
+      - "extension/drivers/"
+    description: "Fill inputs, click buttons, dispatch events, wait for DOM. Currently performs semantic discovery and fuzzy matching that the Phase 3 execution contract forbids; grandfathered until migrated."
+
+  # ── EXTENSION: Observation ─────────────────────────────────────────
+  observation:
+    owner: extension
+    status: migrating
+    migration_target: "ExecutionObservation via the interaction gateway"
+    paths:
+      - "extension/autofill/executor.js"  # post-fill observer section
+    description: "Correction capture, enrichment detection, session reporting. Emits raw values today; must migrate to redacted ExecutionObservation."
+
+  # ── EXTENSION: Orchestration ───────────────────────────────────────
+  orchestration:
+    owner: extension
+    status: correct
+    security_remediation:
+      reference: "architecture/gateway-security.yml message_bridge"
+      defects: ["SEC-001", "SEC-002", "SEC-003", "SEC-004"]
+      note: "SEC-001..SEC-004 are resolved by issue #98 and permanently enforced by CHECK-011 (extension-dev/tests/security/run.mjs). Every future extension/browser security fix requires regression-test consideration before issue closure."
+    paths:
+      - "extension/popup.js"
+      - "extension/background.js"
+      - "extension/manifest.json"
+    description: "Script injection, auth, tab management, UI"
+
+  # ── EXTENSION: Shared Infrastructure ───────────────────────────────
+  shared_infra:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/shared/llm-client.js"
+    description: "LLM API wrapper (used by both layers during transition)"
+
+  # ── SERVICE: Strategic Mapping (TEMPORARY in extension) ────────────
+  strategic_mapping:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-002
+    paths:
+      - "extension/autofill/mapper.js"
+      - "extension/autofill/rule-engine.js"
+    description: "Field→profile key assignment, alias tables, fuzzy matching rules"
+    migration_target: "extension-service/mapping-engine.js (Phase 4.1)"
+    migration_phase: "phase_4_1"
+
+  # ── SERVICE: AI Reasoning (TEMPORARY in extension) ─────────────────
+  ai_reasoning:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-001
+    paths:
+      - "extension/autofill/ai-resolve.js"
+    description: "LLM-powered value resolution"
+    migration_target: "extension-service/semantic-mapper.js (Phase 4.3)"
+    migration_phase: "phase_4_3"
+
+  # ── SERVICE: Knowledge ─────────────────────────────────────────────
+  knowledge:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-002
+    paths:
+      - "extension/shared/label-utils.js"
+      - "extension/autofill/derive.js"
+    description: "Semantic aliases, confidence scoring, derived values"
+    migration_target: "extension-service/derivation-engine.js (Phase 4.2)"
+    migration_phase: "phase_4_2"
+
+  # ── SERVICE: Planning (TEMPORARY in extension) ─────────────────────
+  planning:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-003
+    paths:
+      - "extension/popup.js"  # inline fill-plan construction
+    description: "Fill order, cascade dependency resolution"
+    migration_target: "extension-service/fill-planner.js (Phase 4.1)"
+    migration_phase: "phase_4_1"
+
+  # ── SERVICE: Teaching (TEMPORARY in extension) ─────────────────────
+  teaching:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-004
+    paths:
+      - "extension/background.js"  # groqAutoTeach, teachOneField
+    description: "Auto-teach sessions, adapter learning"
+    migration_target: "extension-service/teach-orchestrator.js (Phase 5.1)"
+    migration_phase: "phase_5_1"
+
+  # ── SERVICE: Legacy Selector-Bearing AI Planning (TEMPORARY) ───────
+  service_selector_ai:
+    owner: extension_service
+    status: temporary_violation
+    exception: EXC-006
+    adr: "architecture/adrs/0007-service-adapter-no-selector.md"
+    paths:
+      - "extension-service/routes/agent.js"
+    description: >
+      Legacy Groq-backed planning that receives selector-rich DOM snapshots and
+      returns selector-bearing driver actions. This is the real violation of the
+      Phase 3 no-selector doctrine (distinct from adapter recipes, which are
+      browser-private per ADR-0007).
+    migration_target: "Page-IR-aware ActionPlan v3 (architecture/action-plan.schema.json); selectors removed from planning I/O"
+
+  # ── SERVICE: Profiles & Sessions (already in backend) ──────────────
+  profiles_sessions:
+    owner: extension_service
+    status: correct
+    paths:
+      - "backend/"
+    description: "Profile CRUD, session records, correction storage"
+
+  # ── TESTING ────────────────────────────────────────────────────────
+  testing:
+    owner: shared
+    status: correct
+    paths:
+      - "extension-dev/tests/"
+    description: "Unit, integration, mapping guard, browser, and knowledge model tests"
+
+  # ── SERVICE: Knowledge Store (Phase 2) ─────────────────────────────
+  knowledge_store:
+    owner: extension_service
+    status: correct
+    paths:
+      - "extension-service/knowledge-store.js"
+      - "extension-service/scope-resolver.js"
+      - "extension-service/validation-engine.js"
+      - "extension-service/knowledge-versioning.js"
+      - "extension-service/seed-knowledge.js"
+      - "extension-service/routes/knowledge.js"
+      - "extension-service/routes/resolve.js"
+      - "extension-service/routes/validate.js"
+      - "extension-service/routes/versions.js"
+      - "extension-service/routes/sync.js"
+      - "extension-service/migrations/003_knowledge_store.sql"
+      - "architecture/knowledge-schema.yml"
+      - "architecture/knowledge-schema.json"
+      - "architecture/knowledge-audit.md"
+      - "architecture/sync-protocol.yml"
+    description: "Knowledge model: store, resolution, validation, versioning, sync"
+
+  # ── EXTENSION: Knowledge Sync Client (Phase 2.8) ──────────────────
+  knowledge_sync_client:
+    owner: extension
+    status: correct
+    paths:
+      - "extension/knowledge-sync.js"
+    description: "Extension-side sync client — fetches and caches server knowledge"
+
+  # ── SHARED CONTRACT: Browser Perception Architecture (Phase 3.0) ──
+  browser_perception_contract:
+    owner: shared
+    status: correct
+    paths:
+      - "architecture/perception-contract.yml"
+      - "architecture/page-ir.yml"
+      - "architecture/page-ir.schema.json"
+      - "architecture/action-plan.schema.json"
+      - "architecture/execution-observation.schema.json"
+      - "architecture/dom-access-policy.yml"
+      - "architecture/gateway-security.yml"
+      - "architecture/widget-taxonomy.yml"
+      - "architecture/perception-lifecycle.yml"
+      - "architecture/perception-privacy.yml"
+      - "architecture/perception-confidence.yml"
+      - "architecture/perception-performance.yml"
+      - "architecture/ir-migrations/"
+      - "architecture/adrs/"
+    description: "Frozen public IR, action/observation schemas, DOM boundary, gateway security, lifecycle, privacy, confidence, performance, and migration contracts"
+
+  # ── EXTENSION: Browser DOM Gateway (Phase 3.3) ──────────────────
+  browser_dom_gateway:
+    owner: extension
+    status: correct
+    migration_phase: "phase_3_3"
+    paths:
+      - "extension/runtime/dom-gateway.js"
+    description: "Restricted observation and interaction ports; sole new structural DOM access boundary"
+
+  # ── EXTENSION: Browser Perception Runtime (Phase 3.3) ────────────
+  browser_perception_runtime:
+    owner: extension
+    status: correct
+    migration_phase: "phase_3_3"
+    paths:
+      - "extension/perception/"
+    description: "Produces validated PageSnapshot/PageDelta through the observation gateway; owns no service intelligence"
+
+  # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
+  page_ir_consumers:
+    owner: extension_service
+    status: planned
+    migration_phase: "phase_4_1"
+    paths:
+      - "extension-service/fill-planner.js"
+      - "extension-service/mapping-engine.js"
+      - "extension-service/plan-builder.js"
+      - "extension-service/dependency-resolver.js"
+    description: "Consume public IR for semantic interpretation and planning; never receive browser-private bindings"

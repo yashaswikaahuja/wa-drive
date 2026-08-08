@@ -1,0 +1,216 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Architecture Constitution
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# This file defines the fundamental responsibilities of each runtime.
+# It is the SOURCE OF TRUTH for what each runtime is allowed to do.
+#
+# Enforcement: .github/workflows/architecture.yml
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.1"
+date: "2026-08-08"
+status: active
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# FUNDAMENTAL DOCTRINE (Discussion 11 — Finalized)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+#   Extension = Eyes + Hands
+#     • Observe the browser (perceive pages, detect widgets, read state)
+#     • Execute concrete instructions (fill, click, select, verify)
+#     • Report evidence (observations, execution results, deltas)
+#     • NOTHING ELSE
+#
+#   Server (Extension-Service) = Brain + Memory + Knowledge
+#     • Semantic field mapping (what does this field mean?)
+#     • AI reasoning (LLM calls for unknown forms)
+#     • Knowledge storage and retrieval
+#     • Fill planning (what to fill, in what order)
+#     • Learning (corrections → improved knowledge)
+#     • Behavioral teach orchestration
+#     • Recovery decisions
+#     • Workflow identity and session management
+#     • Authorization and confidence evaluation
+#
+#   The extension MUST NOT:
+#     • Perform strategic mapping
+#     • Call AI/LLM
+#     • Plan fills
+#     • Interpret knowledge
+#     • Choose recovery strategies
+#     • Learn autonomously
+#     • Make decisions when server is unavailable (Suspended Mode)
+#
+#   Reference: Architecture Discovery Discussions 01–11
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+phase_3_0_boundary:
+  status: frozen
+  issue: "#96"
+  doctrine: >
+    The browser observes facts, maintains ephemeral bindings, performs
+    mechanical actions, and reports outcomes. The service interprets facts,
+    applies knowledge, reasons, plans, and learns.
+  public_ir:
+    schema: "architecture/page-ir.schema.json"
+    forbidden: [selectors, xpath, html, dom_handles, private_bindings, raw_secret_values]
+  dom_gateway:
+    observation_port: "read-only facts for Browser Perception"
+    interaction_port: "binding-scoped mechanical actions and verification for Execution"
+  interpretation_rule: "Only Browser Perception interprets page structure; Execution cannot perform semantic discovery."
+
+runtimes:
+  extension:
+    name: "Extension (Browser Perception and Execution Runtime)"
+    environment: "Chrome browser, Manifest V3"
+    context: "Content scripts (ISOLATED world) + Service Worker"
+    principle: "Deterministic eyes and hands. Same valid snapshot-bound plan → same mechanical behavior."
+
+    allowed_responsibilities:
+      - perception:
+          description: "Read page, extract structure, detect widgets"
+          examples:
+            - "DOM scanning for form fields"
+            - "Label resolution"
+            - "Component type detection (ng-select, mat-select)"
+            - "Option list extraction"
+
+      - execution:
+          description: "Execute action plans received from service"
+          examples:
+            - "Fill text inputs (keystroke simulation)"
+            - "Select dropdown options"
+            - "Click buttons/radios/checkboxes"
+            - "Wait for network idle / DOM mutations"
+            - "Handle date formatting"
+            - "File upload"
+
+      - observation:
+          description: "Watch for post-execution changes and report"
+          examples:
+            - "Capture operator corrections"
+            - "Capture manual enrichments"
+            - "Report fill success/failure per field"
+            - "Detect page navigation / form submission"
+
+      - tactical_intelligence:
+          description: "Real-time decisions that cannot tolerate round-trip latency"
+          examples:
+            - "Fuzzy option matching (map 'Bihar' to <option> text)"
+            - "Date format adaptation (DD/MM/YYYY vs YYYY-MM-DD)"
+            - "Basic value validation (reject pincode > 6 digits)"
+            - "Retry logic for framework-reset fields"
+          rationale: >
+            These require live DOM state and sub-100ms response.
+            Moving them to the service would require round-tripping
+            every dropdown's option list, adding unacceptable latency.
+
+      - session_state:
+          description: "Ephemeral state scoped to current fill session"
+          examples:
+            - "Which fields have been filled"
+            - "MutationObserver callbacks"
+            - "Cascade dependency tracking"
+            - "Retry counters"
+          rationale: >
+            This is not long-term memory. It's destroyed on page
+            navigation and never persisted.
+
+    forbidden_responsibilities:
+      - strategic_mapping:
+          description: "Deciding which profile field maps to which form field"
+      - ai_reasoning:
+          description: "LLM calls for planning or judgment"
+          note: "TEMPORARY EXCEPTION: mapper.js, ai-resolve.js, executor.js AI fallback remain until service provides /fill-plan endpoint"
+      - knowledge_storage:
+          description: "Storing or managing field mappings, adapters, semantic aliases long-term"
+      - learning:
+          description: "Updating rules based on corrections"
+      - customer_profiles:
+          description: "Owning or deriving profile data"
+      - planning:
+          description: "Deciding fill order or cascade dependencies"
+          note: "TEMPORARY EXCEPTION: popup.js inline planning remains until service provides ordered fill plans"
+
+  extension_service:
+    name: "Extension-Service (Brain)"
+    environment: "Server-side, Node.js / Python"
+    context: "HTTP API, persistent storage"
+    principle: "Owns ALL intelligence. Extension is replaceable; intelligence is not."
+
+    responsibilities:
+      - world_model:
+          description: "Understanding of portal structure, adapters, quirks"
+      - goal:
+          description: "What the operator wants to achieve (fill form X with profile Y)"
+      - memory:
+          description: "Session history, correction patterns, mapping cache"
+      - judgment:
+          description: "Confidence scoring, conflict resolution, validation"
+      - planner:
+          description: "Generate ordered fill plans with dependencies"
+      - knowledge_model:
+          description: "Field mappings, semantic aliases, synonyms, derivation rules"
+      - learning:
+          description: "Improve mappings from corrections, generalize across users"
+      - ai:
+          description: "LLM calls for field mapping, value resolution, document extraction"
+      - customer_profiles:
+          description: "Profile CRUD, derived values, document extraction results"
+      - sessions:
+          description: "Fill session records, progress tracking"
+      - corrections:
+          description: "Operator edit storage and interpretation"
+      - documents:
+          description: "Uploaded documents, Mistral extraction results"
+      - services:
+          description: "Available services (form types, portal catalog)"
+      - records:
+          description: "Completed application records"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# TEMPORARY EXCEPTIONS
+# These violations are acknowledged and will be removed when the
+# extension-service provides the corresponding capability.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+temporary_exceptions:
+  - id: EXC-001
+    description: "AI/LLM calls in page context"
+    files:
+      - "extension/autofill/mapper.js"
+      - "extension/autofill/ai-resolve.js"
+      - "extension/autofill/executor.js"
+    removal_condition: "Phase 4.3 (Cold-Start Semantic Mapping) provides server-side AI field mapping"
+    removal_phase: "phase_4_3"
+
+  - id: EXC-002
+    description: "Strategic mapping in extension"
+    files:
+      - "extension/autofill/mapper.js"
+      - "extension/autofill/rule-engine.js"
+      - "extension/shared/label-utils.js"
+    removal_condition: "Phase 4.1 (Server Fill Planner) provides field→value mapping in fill plan response"
+    removal_phase: "phase_4_1"
+
+  - id: EXC-003
+    description: "Fill planning in popup.js"
+    files:
+      - "extension/popup.js"
+    removal_condition: "Phase 4.1 (Server Fill Planner) returns ordered, dependency-aware fill plans"
+    removal_phase: "phase_4_1"
+
+  - id: EXC-004
+    description: "Teach/auto-teach in background.js"
+    files:
+      - "extension/background.js"
+    removal_condition: "Phase 5.1 (Server Teach) orchestrates teach sessions via WSS"
+    removal_phase: "phase_5_1"
+
+  - id: EXC-005
+    description: "Derived values in extension"
+    files:
+      - "extension/autofill/derive.js"
+    removal_condition: "Phase 4.2 (Server-Side Derived Values) computes and includes them in fill plan"
+    removal_phase: "phase_4_2"

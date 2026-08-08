@@ -1,0 +1,77 @@
+# CyberControl Perception Performance Contract
+
+contract_version: "1.0.0"
+status: frozen
+frozen_date: "2026-08-05"
+owner: extension.browser_perception
+
+reference_scenario:
+  hardware_profile: "CI Chromium with 4x CPU throttling and 1280x720 viewport"
+  document_elements: 5000
+  interactive_controls: 200
+  open_shadow_roots: 5
+  same_origin_frames: 3
+  note: "Budgets are initial gates and may be tightened only with benchmark evidence."
+
+budgets:
+  full_snapshot:
+    p95_duration_ms: 250
+    max_main_thread_slice_ms: 50
+  incremental_update:
+    dirty_nodes: 100
+    p95_duration_ms: 50
+    publish_debounce_ms: 100
+  serialization:
+    p95_bytes: 262144
+    hard_limit_bytes: 1048576
+  graph:
+    max_public_nodes: 2000
+    max_public_edges: 8000
+    max_contexts: 256
+  content:
+    max_node_text_chars: 320
+    max_inline_options_per_control: 200
+  memory:
+    max_recent_complete_snapshots: 1
+    max_recent_deltas: 20
+    private_binding_lifetime: "current document only"
+
+strategies:
+  - "Traverse each relevant subtree at most once per perception pass."
+  - "Batch layout reads; do not interleave geometry reads with mutations."
+  - "Use dirty-subtree incremental updates after the initial snapshot."
+  - "Coalesce mutation records and suppress self-originated mutations."
+  - "Lazy-load large option sets and nonessential content."
+  - "Abort stale work on navigation or document invalidation."
+  - "Reuse canonical hashes for unchanged subgraphs."
+
+truncation:
+  rule: "Exceeding a bound produces explicit truncation diagnostics and reduced confidence."
+  forbidden: "Silently dropping nodes needed by existing edges or action targets."
+  priority:
+    keep_first:
+      - "active and visible controls"
+      - "labels, validation messages, and navigation controls"
+      - "ancestors required for a valid hierarchy"
+    defer_first:
+      - "offscreen ordinary content"
+      - "large unexpanded option lists"
+      - "decorative regions"
+
+measurement:
+  required_metrics:
+    - duration_ms
+    - synchronous_slice_max_ms
+    - elements_visited
+    - geometry_reads
+    - contexts_visited
+    - public_nodes
+    - public_edges
+    - serialized_bytes
+    - truncations
+  privacy: "Metrics contain counts and timings only; no page text or values."
+
+ci:
+  phase_3_0: "Validate that budgets and benchmark protocol are defined."
+  phase_3_1_plus: "Run synthetic and representative-corpus benchmarks."
+  regression_rule: "Fail when p95 exceeds a frozen budget by more than 10 percent without an approved architecture change."

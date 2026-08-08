@@ -1,0 +1,288 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Dependency Boundaries
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# Defines which files/directories may depend on which.
+# "depend" means: call functions from, import, or reference globals from.
+#
+# DOCTRINE (constitution.yml):
+#   Extension = Eyes + Hands (observe, execute, report)
+#   Server    = Brain + Memory + Knowledge (map, plan, learn, decide)
+#
+# CI uses these rules to detect NEW violations in diffs.
+# Existing violations are tracked in constitution.yml temporary_exceptions.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+version: "1.1"
+
+phase_3_boundaries:
+  public_ir:
+    canonical_schema: "architecture/page-ir.schema.json"
+    must_not_contain: [selector, css_selector, xpath, html, dom_handle, element_reference, binding_id]
+  dom_access:
+    policy: "architecture/dom-access-policy.yml"
+    new_structural_access_allowed_in:
+      - "extension/runtime/dom-gateway.js"
+      - "extension/perception/"
+    all_other_extension_paths: "must use observation or interaction gateway"
+  dependency_direction:
+    description: "service intelligence → public IR contract ← browser perception; service never depends on browser bindings"
+    rules:
+      - "extension/perception/ may depend on the DOM gateway and IR validator"
+      - "extension/execution/ may depend on the interaction gateway and capability adapters"
+      - "execution must not depend on perception detectors"
+      - "service consumers may depend on Page IR schema, never extension runtime code"
+  legacy_dom_access:
+    status: "grandfathered; no expansion; remove through scoped Phase 3.x issues"
+
+# ── Allowed dependency directions ────────────────────────────────────
+#
+# Extension layering (top depends on bottom):
+#
+#   popup.js (orchestrator)
+#       ↓
+#   executor.js / extractor.js (domain)
+#       ↓
+#   plugins/ (component adapters)
+#       ↓
+#   shared/ (utilities)
+#       ↓
+#   drivers/ (low-level DOM ops)
+#
+# NO upward dependencies. NO circular dependencies.
+
+allowed_dependencies:
+  # Shared modules: NO dependencies on anything above them
+  "extension/shared/option-match.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/dom-utils.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/network-idle.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/llm-client.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/select-apply.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  "extension/shared/label-utils.js":
+    may_use: []
+    must_not_use: ["extension/autofill/", "extension/drivers/", "extension/popup.js"]
+
+  # Drivers: may use shared, must not use autofill or popup
+  "extension/drivers/":
+    may_use:
+      - "window.ccMatchOption"
+      - "window.ccDomUtils"
+      - "window.ccWaitForNetworkIdle"
+      - "window.ccApplySelect"
+    must_not_use: ["extension/autofill/", "extension/popup.js", "extension/background.js"]
+
+  # Plugins: may use shared, must not use executor or popup
+  "extension/autofill/plugins/":
+    may_use:
+      - "window.ccMatchOption"
+      - "window.ccDomUtils"
+      - "window.ccApplySelect"
+      - "window.ccWaitForNetworkIdle"
+    must_not_use: ["extension/autofill/executor.js", "extension/popup.js"]
+
+  # Executor: may use shared + plugins, must not use popup
+  "extension/autofill/executor.js":
+    may_use:
+      - "window.ccMatchOption"
+      - "window.ccDomUtils"
+      - "window.ccWaitForNetworkIdle"
+      - "window.ccLLM"
+      - "window.ccApplySelect"
+      - "window._ccPlugins"
+    must_not_use: ["extension/popup.js", "chrome.storage"]
+
+  # Extractor: may use shared/dom-utils only
+  "extension/autofill/extractor.js":
+    may_use:
+      - "window.ccDomUtils"
+    must_not_use: ["extension/autofill/executor.js", "extension/popup.js", "window.ccLLM"]
+
+  # Mapper: may use shared (temporary — will migrate to service)
+  "extension/autofill/mapper.js":
+    may_use:
+      - "window.ccLLM"
+      - "window.ccMatchOption"
+    must_not_use: ["extension/autofill/executor.js", "extension/drivers/", "chrome.tabs"]
+
+  # Background.js: isolated (service worker, no page-context access)
+  "extension/background.js":
+    may_use:
+      - "chrome.runtime"
+      - "chrome.tabs"
+      - "chrome.scripting"
+      - "chrome.storage"
+      - "fetch"
+    must_not_use: ["window.ccMatchOption", "window.ccDomUtils", "window.ccLLM", "document."]
+
+# ── Forbidden patterns (NEW code only) ───────────────────────────────
+# These patterns must NOT appear in new files or new lines added to
+# existing files. Existing violations are grandfathered.
+
+forbidden_patterns:
+  - id: FB-001
+    description: "No new inline LLM fetch calls"
+    pattern: "fetch\\(.*(openrouter|groq|chat/completions)"
+    allowed_in:
+      - "extension/shared/llm-client.js"
+      - "extension/background.js"  # service worker can't use shared
+    message: "Use window.ccLLM.call() instead of inline fetch to LLM endpoints"
+
+  - id: FB-002
+    description: "No new isVisible implementations"
+    pattern: "function isVisible|isVisible\\s*[:=]\\s*function"
+    allowed_in:
+      - "extension/shared/dom-utils.js"
+    message: "Use window.ccDomUtils.isVisible() from shared/dom-utils.js"
+
+  - id: FB-003
+    description: "No new getLabel implementations"
+    pattern: "function getLabel|function getLabelFor"
+    allowed_in:
+      - "extension/shared/dom-utils.js"
+    message: "Use window.ccDomUtils.getLabel() from shared/dom-utils.js"
+
+  - id: FB-004
+    description: "No new option matching implementations"
+    pattern: "function.*matchOption|function.*findOpt|function.*pickOption"
+    allowed_in:
+      - "extension/shared/option-match.js"
+    message: "Use window.ccMatchOption() from shared/option-match.js"
+
+  - id: FB-005
+    description: "No new applySelect implementations"
+    pattern: "function applySelect|function.*dispatchSelect"
+    allowed_in:
+      - "extension/shared/select-apply.js"
+      - "extension/autofill/executor.js"  # extended version with verify
+    message: "Use window.ccApplySelect() from shared/select-apply.js"
+
+  - id: FB-006
+    description: "No new normalizeFieldLabel implementations"
+    pattern: "function normalizeFieldLabel"
+    allowed_in:
+      - "extension/shared/label-utils.js"
+      - "extension/background.js"  # service worker copy
+    message: "Use normalizeFieldLabel from shared/label-utils.js"
+
+  - id: FB-007
+    description: "No new calcConfidence implementations"
+    pattern: "function calcConfidence"
+    allowed_in:
+      - "extension/shared/label-utils.js"
+      - "extension/background.js"  # service worker copy
+    message: "Use calcConfidence from shared/label-utils.js"
+
+
+  - id: FB-008
+    description: "No browser-private locators in public Page IR schema"
+    pattern: "selector|css_selector|xpath|outer_html|inner_html|dom_handle|element_reference|binding_id"
+    allowed_in:
+      - "architecture/dom-access-policy.yml"
+      - "architecture/gateway-security.yml"
+      - "architecture/action-plan.schema.json"
+      - "architecture/execution-observation.schema.json"
+      - "architecture/ir-migrations/"
+      - "architecture/adrs/"
+    message: "Public Page IR must use document-scoped node IDs; private bindings remain browser-only"
+
+  - id: FB-009
+    description: "No new structural DOM access outside the Phase 3 gateway/perception boundary"
+    pattern: "document\\.querySelector(All)?|\\.closest\\(|\\.matches\\(|getBoundingClientRect\\(|getComputedStyle\\(|new MutationObserver"
+    allowed_in:
+      - "extension/runtime/dom-gateway.js"
+      - "extension/perception/"
+    scope: added_lines_only
+    message: "Use the Browser DOM Gateway; legacy DOM paths are grandfathered but may not expand"
+
+  - id: FB-010
+    description: "No AI/LLM calls from extension (Phase 4.3+ enforcement)"
+    pattern: "fetch\\(.*(openrouter|groq|chat/completions|anthropic)"
+    allowed_in:
+      - "extension/shared/llm-client.js"
+      - "extension/background.js"
+      - "extension-service/"
+    scope: added_lines_only
+    enforcement: active
+    message: "AI calls belong on the server (extension-service/semantic-mapper.js). Extension exception is grandfathered until Phase 4.3."
+
+  - id: FB-011
+    description: "No framework names as knowledge identity in new code"
+    pattern: "(?i)(react.?select|angular.?material|mat.?select|prime.?ng|ng.?dropdown|mui.?autocomplete|ant.?design|vuetify)"
+    allowed_in:
+      - "extension/autofill/plugins/"
+      - "extension/drivers/"
+      - "extension-dev/tests/"
+    scope: added_lines_only
+    enforcement: active
+    message: "Knowledge must describe behavior (affordances, interaction patterns), not framework names. See Discussion 03."
+
+  - id: FB-012
+    description: "No fill planning or knowledge interpretation in extension (new code)"
+    pattern: "(buildFillPlan|generatePlan|planFill|interpretKnowledge|selectStrategy|chooseRecovery|autonomousFill)"
+    allowed_in:
+      - "extension/popup.js"
+      - "extension/background.js"
+      - "extension-service/"
+      - "extension-dev/tests/"
+    scope: added_lines_only
+    enforcement: active
+    message: "Fill planning and knowledge interpretation belong on the server. Extension = Eyes + Hands only."
+
+  - id: FB-013
+    description: "No single-percentage promotion threshold in knowledge code"
+    pattern: "(promotionThreshold|promotion_threshold)\\s*[=:]\\s*0\\.\\d+"
+    allowed_in:
+      - "extension-dev/tests/"
+    scope: added_lines_only
+    enforcement: active
+    message: "Knowledge promotion must be multi-dimensional (D11 ADR 9). Do not use a single aggregate percentage."
+
+# ── Phase 4+ server boundaries ───────────────────────────────────────
+# These define what server modules must NOT do.
+
+server_boundaries:
+  fill_planner:
+    description: "Server planner must not depend on browser-private bindings"
+    paths:
+      - "extension-service/fill-planner.js"
+      - "extension-service/mapping-engine.js"
+      - "extension-service/plan-builder.js"
+      - "extension-service/dependency-resolver.js"
+    must_not_use:
+      - "selector"
+      - "css_selector"
+      - "xpath"
+      - "innerHTML"
+      - "outerHTML"
+    may_use:
+      - "node_id (from Page IR)"
+      - "knowledge-store.js"
+      - "scope-resolver.js"
+
+  wss_protocol:
+    description: "WSS handlers must not leak AI keys or private bindings to extension"
+    paths:
+      - "extension-service/ws-server.js"
+      - "extension-service/ws-handlers.js"
+      - "extension-service/ws-handlers/"
+    must_not_send_to_extension:
+      - "api_key"
+      - "llm_key"
+      - "groq_key"
+      - "selector"
+      - "xpath"

@@ -1,0 +1,96 @@
+<html>
+<head>
+<meta charset="utf-8">
+<title>Cascade Select Test | Demo</title>
+<style>
+  body { font-family: sans-serif; max-width: 600px; margin: 20px auto; }
+  .field { margin: 12px 0; }
+  label { display: block; font-size: 13px; margin-bottom: 3px; }
+</style>
+</head>
+<body>
+<h1>Address Form (Cascade Selects)</h1>
+<form>
+  <div class="field">
+    <label for="state">State</label>
+    <select id="state" name="state">
+      <option value="">-- Select State --</option>
+      <option value="BR">Bihar</option>
+      <option value="UP">Uttar Pradesh</option>
+      <option value="MH">Maharashtra</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="district">District</label>
+    <select id="district" name="district">
+      <option value="">-- Select District --</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="block">Block</label>
+    <select id="block" name="block">
+      <option value="">-- Select Block --</option>
+    </select>
+  </div>
+
+  <div class="field">
+    <label for="village">Village</label>
+    <input type="text" id="village" name="village" placeholder="Enter village name">
+  </div>
+</form>
+
+<script>
+// Simulate cascade loading (like real govt portals)
+var districtData = {
+  BR: ['Patna', 'Gaya', 'Nalanda', 'Muzaffarpur'],
+  UP: ['Lucknow', 'Varanasi', 'Agra', 'Kanpur'],
+  MH: ['Mumbai', 'Pune', 'Nagpur', 'Nashik'],
+};
+var blockData = {
+  Patna: ['Danapur', 'Phulwari', 'Sampatchak'],
+  Gaya: ['Bodh Gaya', 'Manpur', 'Tekari'],
+  Lucknow: ['Malihabad', 'Bakshi Ka Talab', 'Chinhat'],
+};
+
+document.getElementById('state').addEventListener('change', function () {
+  var sel = this.value;
+  var distSel = document.getElementById('district');
+  distSel.innerHTML = '<option value="">-- Select District --</option>';
+  document.getElementById('block').innerHTML = '<option value="">-- Select Block --</option>';
+  if (districtData[sel]) {
+    // Simulate network delay (200ms)
+    document.body.dataset.ccAjaxActive = '1';
+    setTimeout(function () {
+      districtData[sel].forEach(function (d) {
+        var o = document.createElement('option');
+        o.value = d; o.textContent = d;
+        distSel.appendChild(o);
+      });
+      document.body.dataset.ccAjaxActive = '0';
+      document.body.dataset.ccAjaxLastActivity = String(Date.now());
+    }, 200);
+  }
+});
+
+document.getElementById('district').addEventListener('change', function () {
+  var sel = this.value;
+  var blockSel = document.getElementById('block');
+  blockSel.innerHTML = '<option value="">-- Select Block --</option>';
+  if (blockData[sel]) {
+    document.body.dataset.ccAjaxActive = '1';
+    setTimeout(function () {
+      blockData[sel].forEach(function (b) {
+        var o = document.createElement('option');
+        o.value = b; o.textContent = b;
+        blockSel.appendChild(o);
+      });
+      document.body.dataset.ccAjaxActive = '0';
+      document.body.dataset.ccAjaxLastActivity = String(Date.now());
+    }, 200);
+  }
+});
+</script>
+</body>
+</html>
