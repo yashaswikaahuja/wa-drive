@@ -18,6 +18,7 @@ const suites = [
   { name: 'Privacy Filter', cmd: 'node extension-dev/tests/perception/test-privacy-filter.mjs' },
   { name: 'Widget Classifier', cmd: 'node extension-dev/tests/perception/test-widget-classifier.mjs' },
   { name: 'Page IR Validator', cmd: 'node extension-dev/tests/perception/test-validator.mjs' },
+  { name: 'Delta Emitter', cmd: 'node extension-dev/tests/perception/test-delta-emitter.mjs' },
 ];
 
 let allPass = true;

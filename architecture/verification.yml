@@ -19,15 +19,16 @@ checks:
     name: "Forbidden patterns"
     severity: fail
     description: >
-      Rejects new code that reintroduces consolidated logic or inline LLM
-      calls. The workflow enforces FB-001 (inline LLM fetch), FB-002
-      (isVisible), FB-003 (getLabel), and FB-004 (option matching) on added
-      lines. FB-005 through FB-007 are declared in boundaries.yml but are not
-      yet grep-enforced; FB-008 (public-IR locators) is enforced by the Phase 3
-      governance test, and FB-009 (DOM access) is enforced by CHECK-009.
+      Rejects new code that reintroduces consolidated logic, inline LLM
+      calls, framework-specific knowledge, extension-side planning, or
+      single-percentage promotion thresholds. Enforces FB-001 through FB-004
+      and FB-010 through FB-013 on added lines. FB-005 through FB-007 are
+      declared in boundaries.yml but not yet grep-enforced; FB-008
+      (public-IR locators) is enforced by CHECK-008, and FB-009 (DOM access)
+      is enforced by CHECK-009.
     method: "grep_diff"
     scope: "added_lines_only"
-    enforced_forbidden_patterns: ["FB-001", "FB-002", "FB-003", "FB-004"]
+    enforced_forbidden_patterns: ["FB-001", "FB-002", "FB-003", "FB-004", "FB-010", "FB-011", "FB-012", "FB-013"]
     declared_not_grep_enforced: ["FB-005", "FB-006", "FB-007"]
     note: "Only checks NEW code in the diff, not existing violations"
 
@@ -103,6 +104,22 @@ checks:
     method: "run_security_regressions"
     command: "node extension-dev/tests/security/run.mjs"
     ci_job: "extension-security"
+    scope: "full_tree"
+
+  - id: CHECK-012
+    name: "Discussion 11 architecture invariants"
+    severity: fail
+    description: >
+      Enforces the finalized Discussion 11 fill architecture invariants:
+      (1) No framework names in knowledge-store records or perception output,
+      (2) AI/LLM credential references only in extension-service/ code,
+      (3) Extension runtime code must not contain planning/strategy functions,
+      (4) Server planner code must not reference browser-private bindings,
+      (5) Knowledge promotion code must use multi-dimensional criteria.
+      Implemented as a governance test suite.
+    method: "run_governance_test"
+    command: "node extension-dev/tests/test-d11-invariants.mjs"
+    ci_job: "architecture"
     scope: "full_tree"
 
   # ── WARNINGS ───────────────────────────────────────────────────────
