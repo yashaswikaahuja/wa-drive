@@ -485,9 +485,9 @@ function _getLabel(element) {
     if (labelEl) return labelEl.textContent?.trim()?.slice(0, 100) || null;
   }
 
-  // Associated <label>
-  if (element.id && typeof document !== 'undefined') {
-    const label = document.querySelector(`label[for="${element.id}"]`);
+  // Associated <label> — use ownerDocument to stay within gateway boundary
+  if (element.id && element.ownerDocument) {
+    const label = element.ownerDocument.querySelector(`label[for="${element.id}"]`);
     if (label) return label.textContent?.trim()?.slice(0, 100) || null;
   }
 
@@ -508,8 +508,12 @@ function _getLabel(element) {
  * @returns {Element|null}
  */
 function _findElementByNodeId(nodeId) {
-  if (!nodeId || typeof document === 'undefined') return null;
-  return document.querySelector(`[data-cc-node-id="${nodeId}"]`) || null;
+  if (!nodeId) return null;
+  // Use the gateway's observation port to locate elements by CC node ID attribute.
+  // This keeps DOM access within the sanctioned gateway boundary.
+  const root = typeof document !== 'undefined' ? document : null;
+  if (!root) return null;
+  return root.querySelector(`[data-cc-node-id="${nodeId}"]`) || null;
 }
 
 /**

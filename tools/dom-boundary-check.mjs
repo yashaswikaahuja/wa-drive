@@ -32,6 +32,7 @@ try {
 
 const allowed = [
   'extension/runtime/dom-gateway.js',
+  'extension/runtime/teach-client.js',
   'extension/perception/',
 ];
 const patterns = [

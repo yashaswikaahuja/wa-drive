@@ -91,8 +91,8 @@ jobs:
           fi
 
           # FB-011: No framework names as knowledge identity
-          if echo "$DIFF" | grep -iE "(react.?select|angular.?material|mat.?select|prime.?ng|ng.?dropdown|mui.?autocomplete|ant.?design|vuetify)" | grep -qvE "(plugins/|drivers/|tests/)"; then
-            # Only flag if NOT in plugins/drivers/tests (those are grandfathered)
+          MATCHES_011=$(echo "$DIFF" | grep -iE "(react.?select|angular.?material|mat.?select|prime.?ng|ng.?dropdown|mui.?autocomplete|ant.?design|vuetify)" | grep -vE "(plugins/|drivers/|tests/)" || true)
+          if [ -n "$MATCHES_011" ]; then
             FRAMEWORK_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(plugins/|drivers/|tests/)" || true)
             if [ -n "$FRAMEWORK_FILES" ]; then
               echo "❌ FB-011: Framework name used as knowledge identity (use behavioral patterns per D03)" >> $GITHUB_STEP_SUMMARY
@@ -251,6 +251,10 @@ jobs:
 
       - name: Install schema validation dependencies
         working-directory: extension-dev/tests/ratification
+        run: npm ci
+
+      - name: Install extension-service dependencies
+        working-directory: extension-service
         run: npm ci
 
       - name: "CHECK-005: Unit and knowledge tests"
