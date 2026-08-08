@@ -9,8 +9,41 @@
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 version: "1.1"
-date: "2026-08-05"
+date: "2026-08-08"
 status: active
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# FUNDAMENTAL DOCTRINE (Discussion 11 — Finalized)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+#   Extension = Eyes + Hands
+#     • Observe the browser (perceive pages, detect widgets, read state)
+#     • Execute concrete instructions (fill, click, select, verify)
+#     • Report evidence (observations, execution results, deltas)
+#     • NOTHING ELSE
+#
+#   Server (Extension-Service) = Brain + Memory + Knowledge
+#     • Semantic field mapping (what does this field mean?)
+#     • AI reasoning (LLM calls for unknown forms)
+#     • Knowledge storage and retrieval
+#     • Fill planning (what to fill, in what order)
+#     • Learning (corrections → improved knowledge)
+#     • Behavioral teach orchestration
+#     • Recovery decisions
+#     • Workflow identity and session management
+#     • Authorization and confidence evaluation
+#
+#   The extension MUST NOT:
+#     • Perform strategic mapping
+#     • Call AI/LLM
+#     • Plan fills
+#     • Interpret knowledge
+#     • Choose recovery strategies
+#     • Learn autonomously
+#     • Make decisions when server is unavailable (Suspended Mode)
+#
+#   Reference: Architecture Discovery Discussions 01–11
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 phase_3_0_boundary:
   status: frozen
@@ -149,7 +182,8 @@ temporary_exceptions:
       - "extension/autofill/mapper.js"
       - "extension/autofill/ai-resolve.js"
       - "extension/autofill/executor.js"
-    removal_condition: "Service provides POST /fill-plan with AI-resolved values"
+    removal_condition: "Phase 4.3 (Cold-Start Semantic Mapping) provides server-side AI field mapping"
+    removal_phase: "phase_4_3"
 
   - id: EXC-002
     description: "Strategic mapping in extension"
@@ -157,22 +191,26 @@ temporary_exceptions:
       - "extension/autofill/mapper.js"
       - "extension/autofill/rule-engine.js"
       - "extension/shared/label-utils.js"
-    removal_condition: "Service provides field→value mapping in fill plan response"
+    removal_condition: "Phase 4.1 (Server Fill Planner) provides field→value mapping in fill plan response"
+    removal_phase: "phase_4_1"
 
   - id: EXC-003
     description: "Fill planning in popup.js"
     files:
       - "extension/popup.js"
-    removal_condition: "Service returns ordered, dependency-aware fill plans"
+    removal_condition: "Phase 4.1 (Server Fill Planner) returns ordered, dependency-aware fill plans"
+    removal_phase: "phase_4_1"
 
   - id: EXC-004
     description: "Teach/auto-teach in background.js"
     files:
       - "extension/background.js"
-    removal_condition: "Service owns teach sessions via API"
+    removal_condition: "Phase 5.1 (Server Teach) orchestrates teach sessions via WSS"
+    removal_phase: "phase_5_1"
 
   - id: EXC-005
     description: "Derived values in extension"
     files:
       - "extension/autofill/derive.js"
-    removal_condition: "Service computes derived values and includes them in profile response"
+    removal_condition: "Phase 4.2 (Server-Side Derived Values) computes and includes them in fill plan"
+    removal_phase: "phase_4_2"

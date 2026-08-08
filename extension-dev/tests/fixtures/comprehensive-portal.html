@@ -159,7 +159,7 @@ $$('#nav button').forEach(function(btn){
     dbg('nav',btn.getAttribute('data-s'));
   });
 });
-var GEO={IN:{Maharashtra:{Pune:{Haveli:['Koregaon','Hinjewadi'],Maval:['Lonavala']},Mumbai:{Andheri:['Versova'],Bandra:['Bandra West']}},Karnataka:{'Bengaluru Urban':{South:['Jayanagar'],North:['Yelahanka']}},Delhi:{'New Delhi':{Central:['CP'],South:['Saket']}}},US:{California:{'Los Angeles':{Central:['Downtown']}},'New York':{'New York City':{Manhattan:['Midtown']}}}};
+var GEO={IN:{Maharashtra:{Pune:{Haveli:['Koregaon','Hinjewadi'],Maval:['Lonavala']},Mumbai:{Andheri:['Versova'],Bandra:['Bandra West']}},Karnataka:{'Bengaluru Urban':{South:['Jayanagar'],North:['Yelahanka']}},Delhi:{'New Delhi':{Central:['CP'],South:['Saket']}},Bihar:{'Nalanda':{Rajgir:['Visthapit'],Nonhi:['Mahadeva']}}},US:{California:{'Los Angeles':{Central:['Downtown']}},'New York':{'New York City':{Manhattan:['Midtown']}}}};
 var UCRS={du:{'B.A. English':['S1','S2'],'B.Com':['S1','S2']},iitd:{'B.Tech CSE':['S1','S2','S3','S4'],'B.Tech EE':['S1','S2']},jnu:{'M.A. Econ':['Y1','Y2']}};
 function delay(ms){return new Promise(function(r){setTimeout(r,ms)})}
 function rdelay(){return 250+Math.floor(Math.random()*350)}

@@ -5,6 +5,10 @@
 # Defines which files/directories may depend on which.
 # "depend" means: call functions from, import, or reference globals from.
 #
+# DOCTRINE (constitution.yml):
+#   Extension = Eyes + Hands (observe, execute, report)
+#   Server    = Brain + Memory + Knowledge (map, plan, learn, decide)
+#
 # CI uses these rules to detect NEW violations in diffs.
 # Existing violations are tracked in constitution.yml temporary_exceptions.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -204,3 +208,81 @@ forbidden_patterns:
       - "extension/perception/"
     scope: added_lines_only
     message: "Use the Browser DOM Gateway; legacy DOM paths are grandfathered but may not expand"
+
+  - id: FB-010
+    description: "No AI/LLM calls from extension (Phase 4.3+ enforcement)"
+    pattern: "fetch\\(.*(openrouter|groq|chat/completions|anthropic)"
+    allowed_in:
+      - "extension/shared/llm-client.js"
+      - "extension/background.js"
+      - "extension-service/"
+    scope: added_lines_only
+    enforcement: active
+    message: "AI calls belong on the server (extension-service/semantic-mapper.js). Extension exception is grandfathered until Phase 4.3."
+
+  - id: FB-011
+    description: "No framework names as knowledge identity in new code"
+    pattern: "(?i)(react.?select|angular.?material|mat.?select|prime.?ng|ng.?dropdown|mui.?autocomplete|ant.?design|vuetify)"
+    allowed_in:
+      - "extension/autofill/plugins/"
+      - "extension/drivers/"
+      - "extension-dev/tests/"
+    scope: added_lines_only
+    enforcement: active
+    message: "Knowledge must describe behavior (affordances, interaction patterns), not framework names. See Discussion 03."
+
+  - id: FB-012
+    description: "No fill planning or knowledge interpretation in extension (new code)"
+    pattern: "(buildFillPlan|generatePlan|planFill|interpretKnowledge|selectStrategy|chooseRecovery|autonomousFill)"
+    allowed_in:
+      - "extension/popup.js"
+      - "extension/background.js"
+      - "extension-service/"
+      - "extension-dev/tests/"
+    scope: added_lines_only
+    enforcement: active
+    message: "Fill planning and knowledge interpretation belong on the server. Extension = Eyes + Hands only."
+
+  - id: FB-013
+    description: "No single-percentage promotion threshold in knowledge code"
+    pattern: "(promotionThreshold|promotion_threshold)\\s*[=:]\\s*0\\.\\d+"
+    allowed_in:
+      - "extension-dev/tests/"
+    scope: added_lines_only
+    enforcement: active
+    message: "Knowledge promotion must be multi-dimensional (D11 ADR 9). Do not use a single aggregate percentage."
+
+# ── Phase 4+ server boundaries ───────────────────────────────────────
+# These define what server modules must NOT do.
+
+server_boundaries:
+  fill_planner:
+    description: "Server planner must not depend on browser-private bindings"
+    paths:
+      - "extension-service/fill-planner.js"
+      - "extension-service/mapping-engine.js"
+      - "extension-service/plan-builder.js"
+      - "extension-service/dependency-resolver.js"
+    must_not_use:
+      - "selector"
+      - "css_selector"
+      - "xpath"
+      - "innerHTML"
+      - "outerHTML"
+    may_use:
+      - "node_id (from Page IR)"
+      - "knowledge-store.js"
+      - "scope-resolver.js"
+
+  wss_protocol:
+    description: "WSS handlers must not leak AI keys or private bindings to extension"
+    paths:
+      - "extension-service/ws-server.js"
+      - "extension-service/ws-handlers.js"
+      - "extension-service/ws-handlers/"
+    must_not_send_to_extension:
+      - "api_key"
+      - "llm_key"
+      - "groq_key"
+      - "selector"
+      - "xpath"

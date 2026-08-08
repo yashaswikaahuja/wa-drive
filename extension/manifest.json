@@ -29,7 +29,8 @@
     "*://*.digilocker.gov.in/*",
     "*://*.umang.gov.in/*",
     "*://*.services.india.gov.in/*",
-    "*://*.serviceonline.bihar.gov.in/*"
+    "*://*.serviceonline.bihar.gov.in/*",
+    "*://*.127.0.0.1/*"
   ],
   "background": {
     "service_worker": "background.js"

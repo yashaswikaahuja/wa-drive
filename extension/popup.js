@@ -53,7 +53,7 @@ function showStatus(msg, color) {
   statusEl.style.color = color || CC.warning;
   statusEl.style.display = 'block';
   // Only auto-dismiss non-error messages
-  if (color !== CC.danger && color !== '#ef4444') {
+  if (color !== CC.danger) {
     setTimeout(() => { statusEl.style.display = 'none'; }, 4000);
   }
 }

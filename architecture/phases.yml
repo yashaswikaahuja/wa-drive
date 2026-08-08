@@ -261,39 +261,307 @@ phases:
       - "Weakening secret, screenshot, or cross-origin protections without a new ADR"
       - "Changing IR major-version semantics without a migration plan"
 
-# ── Future implementation phases ────────────────────────────────────
+# ── Phase 3 implementation (active) ────────────────────────────────
 
-  phase_3:
-    name: "Browser Perception"
-    status: architecture_approved_not_started
+  phase_3_2:
+    name: "Widget Classification & Adapter Contracts"
+    status: complete
+    frozen_date: "2026-08-08"
+    issues: ["#100"]
+    description: >
+      Behavior-first widget classification, versioned adapter contracts,
+      browser fixtures, and 53 widget-classification assertions.
+
+    frozen_files:
+      - path: "extension/perception/widget-classifier.js"
+        reason: "Canonical widget classifier — perception depends on this"
+      - path: "architecture/widget-taxonomy.yml"
+        reason: "Widget taxonomy contract — classifier implements this"
+
+    allowed_changes:
+      - "Bug fixes with test coverage"
+      - "Adding new widget families (non-breaking)"
+      - "Performance improvements that don't change classification behavior"
+
+    forbidden_changes:
+      - "Changing classification output schema"
+      - "Removing widget families"
+      - "Changing confidence calculation"
+
+  phase_3_3:
+    name: "Perception Completion"
+    status: complete
+    frozen_date: "2026-08-08"
     issues: []
-    description: "Implement Page IR v2 behind a feature flag without changing autofill behavior until gated."
-    prerequisites:
-      - "Phase 2 frozen at tag phase-2-frozen"
-      - "Phase 3.0 architecture frozen (#96)"
-      - "Canonical Page IR schema validation in CI"
-    implementation_gates:
-      - "No runtime code before a scoped Phase 3.x issue"
-      - "Shadow mode before negotiated publication"
-      - "Privacy and schema validation before transmission"
-      - "Corpus, performance, and unpacked-extension tests before primary rollout"
+    depends_on: ["phase_3_0", "phase_3_2"]
+    description: >
+      Complete PageSnapshot v2 pipeline. Phase 3.1 implemented the core engine;
+      remaining work is delta-emitter, integration testing, and performance validation.
+    discovery_reference: "Discussion 11 — Phase 3.3"
 
-  phase_4:
-    name: "Planner"
-    status: planned
-    description: "Service generates ordered, dependency-aware fill plans."
+    frozen_files:
+      - path: "extension/perception/delta-emitter.js"
+        reason: "Delta emission pipeline — Phase 3.4 depends on this"
+      - path: "extension/perception/index.js"
+        reason: "Perception public API — all consumers depend on this contract"
 
-  phase_5:
-    name: "Learning Engine"
-    status: planned
-    description: "Corrections → improved mappings. Cross-user generalization."
+    modules_to_build:
+      - path: "extension/perception/delta-emitter.js"
+        purpose: "Emit PageDelta on relevant DOM mutations"
+        status: complete
 
-  phase_6:
-    name: "AI Reasoning"
-    status: planned
-    description: "LLM-powered field mapping, document understanding, judgment."
+    done_criteria:
+      - "PageDelta emitted on relevant DOM mutations ✓"
+      - "Integration tests with real portal fixtures produce valid PageSnapshot v2 ✓"
+      - "Performance budget confirmed: < 200ms for snapshot generation ✓"
+
+    validation_evidence:
+      - "31 delta-emitter unit tests passing"
+      - "112 browser integration tests passing"
+      - "Performance benchmark: real fixtures p95 ≤ 72ms, synthetic 2000-node p95 = 122ms"
+      - "685 total CI tests, 108 governance, 92 D11 invariants all green"
+
+  phase_3_4:
+    name: "WSS Protocol"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_3_3"]
+    description: >
+      Live bidirectional WebSocket communication between extension and server.
+      Enables real-time fill orchestration, teach sessions, and delta streaming.
+    discovery_reference: "Discussion 11 — Phase 3.4"
+
+    frozen_files:
+      - path: "extension-service/ws-server.js"
+        reason: "WebSocket server — extension clients depend on this interface"
+      - path: "extension-service/ws-handlers.js"
+        reason: "Message routing contract — defines all WSS message types"
+      - path: "extension/runtime/ws-client.js"
+        reason: "Extension WSS client — Suspended Mode compliance"
+      - path: "extension/runtime/reconnect-manager.js"
+        reason: "Reconnection policy — backoff and jitter constants"
+
+    modules_to_build:
+      - path: "extension-service/ws-server.js"
+        purpose: "WebSocket server (upgrade from Express HTTP)"
+        status: complete
+      - path: "extension-service/ws-handlers.js"
+        purpose: "Message routing: snapshot, instruction, observation"
+        status: complete
+      - path: "extension/runtime/ws-client.js"
+        purpose: "Extension WSS client (from service worker)"
+        status: complete
+      - path: "extension/runtime/reconnect-manager.js"
+        purpose: "Reconnection with exponential backoff"
+        status: complete
+
+    done_criteria:
+      - "WSS connection establishes with auth token ✓"
+      - "PageSnapshot transmitted over WSS ✓"
+      - "Instructions received and forwarded to runner ✓"
+      - "Reconnection handles disconnect + resume ✓"
+      - "HTTPS fallback for every WSS operation ✓ (existing HTTP routes preserved)"
+
+    validation_evidence:
+      - "41 WSS protocol tests passing (auth, messaging, resume, errors)"
+      - "726 total CI tests across 14 suites"
+      - "98 D11 invariants passing"
+      - "Heartbeat with configurable interval"
+      - "Message envelope validated on both sides"
+
+# ── Phase 4: Fill Planner ──────────────────────────────────────────
+
+  phase_4_1:
+    name: "Server Fill Planner (Known Forms)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_3_4"]
+    resolves_exceptions: ["EXC-002", "EXC-003"]
+    description: >
+      Server builds ActionPlans from knowledge + profile + PageSnapshot.
+      Replaces popup.js inline planning and extension-side strategic mapping.
+    discovery_reference: "Discussion 11 — Phase 4.1"
+
+    modules_to_build:
+      - path: "extension-service/fill-planner.js"
+        purpose: "Builds ActionPlan from knowledge + profile + snapshot"
+      - path: "extension-service/mapping-engine.js"
+        purpose: "Resolves field→profileKey using knowledge store"
+      - path: "extension-service/plan-builder.js"
+        purpose: "Constructs ordered instruction sequence"
+      - path: "extension-service/dependency-resolver.js"
+        purpose: "Handles cascade field ordering"
+      - path: "extension-service/routes/fill-plan.js"
+        purpose: "HTTPS endpoint for plan request"
+      - path: "extension-service/ws-handlers/fill.js"
+        purpose: "WSS handler for real-time plan + execute cycle"
+      - path: "extension-service/fill-session.js"
+        purpose: "Tracks fill progress, stores session evidence"
+
+    migration_strategy:
+      - "Week 1: Shadow mode — server generates plan, extension fills old way, compare"
+      - "Week 2: Server-primary — extension executes server plan"
+      - "Week 3: Remove extension mapping/planning code"
+
+    done_criteria:
+      - "Server generates ActionPlan from knowledge + profile + snapshot"
+      - "Shadow mode shows ≥95% agreement with existing pipeline"
+      - "Extension popup.js no longer calls mapper.js / rule-engine.js"
+      - "Fill sessions recorded with server plan ID"
+      - "Corrections still captured and routed to /api/corrections"
+      - "Cascade fields filled in correct dependency order"
+      - "EXC-002 and EXC-003 can be removed from constitution.yml"
+
+  phase_4_2:
+    name: "Server-Side Derived Values"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1"]
+    resolves_exceptions: ["EXC-005"]
+    description: >
+      Server computes derived values (age, formatted dates, name concatenation)
+      and includes them in fill plans. Extension derive.js removed.
+    discovery_reference: "Discussion 11 — Phase 4.2"
+
+    modules_to_build:
+      - path: "extension-service/derivation-engine.js"
+        purpose: "Computes derived values from profile + derivation_rule knowledge"
+
+    done_criteria:
+      - "All derivation rules from derive.js ported to server module"
+      - "Derivation rules stored as derivation_rule knowledge records"
+      - "Fill plan includes pre-computed derived values"
+      - "Extension derive.js removed"
+      - "EXC-005 can be removed from constitution.yml"
+
+  phase_4_3:
+    name: "Cold-Start Semantic Mapping"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1"]
+    resolves_exceptions: ["EXC-001"]
+    description: >
+      Complete pipeline for unknown-form first encounters. Server-side AI
+      maps page fields to profile keys. Confidence evaluation decides whether
+      human confirmation is needed. No-AI-key path learns from operator
+      observation. Extension never performs semantic mapping.
+    discovery_reference: "Discussion 11 — Phase 4.3"
+
+    modules_to_build:
+      - path: "extension-service/semantic-mapper.js"
+        purpose: "Orchestrates AI semantic mapping for unknown fields"
+      - path: "extension-service/ai-key-manager.js"
+        purpose: "Centralized AI key access from owner-panel config"
+      - path: "extension-service/prompt-builder.js"
+        purpose: "Builds mapping prompts from snapshot fields + profile schema"
+      - path: "extension-service/confidence-evaluator.js"
+        purpose: "Evaluates AI confidence, decides if human confirmation needed"
+
+    done_criteria:
+      - "Server maps unknown forms using AI (extension never calls AI)"
+      - "API key stored server-side only, never sent to extension"
+      - "AI results stored as candidate field_mapping knowledge"
+      - "Confidence evaluation decides human confirmation need"
+      - "No-AI-key path produces mappings from operator observation"
+      - "Rate limiting active"
+      - "EXC-001 fully resolved"
+
+# ── Phase 5: Learning ─────────────────────────────────────────────
+
+  phase_5_1:
+    name: "Server Behavioral Teach (Unknown Widgets)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_3_4"]
+    resolves_exceptions: ["EXC-004"]
+    description: >
+      Server orchestrates teach sessions via WSS. Extension observes operator
+      interaction and reports evidence. Server extracts Interaction Knowledge
+      using affordances and behavioral probing (per D03). No framework
+      identification. Knowledge schema follows D06.
+    discovery_reference: "Discussion 11 — Phase 5.1"
+
+    modules_to_build:
+      - path: "extension-service/teach-orchestrator.js"
+        purpose: "Server-side teach session state machine"
+      - path: "extension-service/ws-handlers/teach.js"
+        purpose: "WSS handlers for teach messages"
+      - path: "extension/runtime/teach-client.js"
+        purpose: "Lightweight teach executor (observe + report)"
+      - path: "extension-service/pattern-extractor.js"
+        purpose: "Extracts Interaction Knowledge from observations"
+
+    done_criteria:
+      - "Server orchestrates behavioral teach via WSS"
+      - "Operator demonstration → stored Interaction Knowledge"
+      - "Behavioral probing works for widgets with clear affordances"
+      - "No framework names in knowledge records or probe logic"
+      - "background.js teach functions removed"
+      - "No AI/LLM calls from extension during teach"
+      - "EXC-004 can be removed from constitution.yml"
+
+  phase_5_2:
+    name: "Learning Engine (Corrections → Knowledge)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1", "phase_4_3", "phase_5_1"]
+    description: >
+      Corrections automatically update confidence per knowledge type independently.
+      Cross-user generalization promotes knowledge to broader scopes. Semantic
+      mapping, Interaction Knowledge, and derivation rules have separate lifecycles.
+    discovery_reference: "Discussion 11 — Phase 5.2"
+
+    modules_to_build:
+      - path: "extension-service/learning-engine.js"
+        purpose: "Processes corrections → knowledge updates"
+      - path: "extension-service/confidence-manager.js"
+        purpose: "Manages confidence scores across fills"
+      - path: "extension-service/generalization-engine.js"
+        purpose: "Cross-user knowledge promotion"
+
+    done_criteria:
+      - "Corrections automatically update mapping confidence"
+      - "Consistent corrections promote to higher scope"
+      - "AI-generated mappings promoted after N successful fills"
+      - "Degraded mappings trigger re-mapping"
+      - "Observation Journal receives all session evidence"
+
+# ── Phase 7: Autonomous Runtime ─────────────────────────────────────
 
   phase_7:
-    name: "Autonomous CyberCafe Agent"
-    status: planned
-    description: "End-to-end autonomous form filling with minimal operator input."
+    name: "Autonomous Runtime"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_4_1", "phase_4_2", "phase_4_3", "phase_5_1", "phase_5_2"]
+    description: >
+      Integration phase. All architecture exceptions resolved. Legacy code
+      removed. Extension is thin eyes+hands. End-to-end fill validated.
+    discovery_reference: "Discussion 11 — Phase 7"
+
+    done_criteria:
+      - "All 5 architecture exceptions (EXC-001..005) resolved"
+      - "Legacy mapping/AI/derive code removed from extension"
+      - "constitution.yml has no temporary_exceptions"
+      - "popup.js fill pipeline is: perceive → send snapshot → receive instructions → execute → report"
+      - "End-to-end fill time < 3s for known forms"
+      - "Extension manifest.json reduced (no mapper, derive, ai-resolve)"
+
+  phase_7_1:
+    name: "Weak Semantic Key (ServicePlus-like Portals)"
+    status: complete
+    frozen_date: "2026-08-08"
+    depends_on: ["phase_7"]
+    description: >
+      Multi-signal form identity for portals where semantic labels are
+      non-unique or unreadable. Form/workflow identity problem requiring
+      the complete architecture to be operational.
+    discovery_reference: "Discussion 11 — Phase 7.1"
+
+    modules_to_build:
+      - path: "extension-service/form-identity.js"
+        purpose: "Multi-signal form recognition (URL path + title + hidden fields + field signature)"
+
+    done_criteria:
+      - "ServicePlus-like portals get distinct form keys"
+      - "Multi-signal form identity: URL path + page title + hidden fields + field signature"
+      - "portal_definition knowledge records define per-portal identity strategies"

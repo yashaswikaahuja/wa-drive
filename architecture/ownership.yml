@@ -5,18 +5,23 @@
 # Maps every code directory/file to its owning runtime and subsystem.
 # Used by CI to detect ownership violations in PRs.
 #
+# DOCTRINE (constitution.yml):
+#   Extension = Eyes + Hands (observe, execute, report)
+#   Server    = Brain + Memory + Knowledge (map, plan, learn, decide)
+#
 # owner: which runtime SHOULD own this code
-# status: correct | temporary_violation | migrating
+# status: correct | temporary_violation | migrating | in_progress | planned
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-version: "1.0"
+version: "1.1"
 
 subsystems:
   # ── EXTENSION: Perception ──────────────────────────────────────────
   perception:
     owner: extension
     status: migrating
-    migration_target: "extension/perception/ via the Browser DOM Gateway"
+    migration_target: "extension/perception/ via the Browser DOM Gateway (Phase 3.3)"
+    migration_phase: "phase_3_3"
     legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
     paths:
       - "extension/autofill/extractor.js"
@@ -28,7 +33,8 @@ subsystems:
   execution:
     owner: extension
     status: migrating
-    migration_target: "extension/execution/ behind the interaction gateway"
+    migration_target: "extension/execution/ behind the interaction gateway (Phase 3.3)"
+    migration_phase: "phase_3_3"
     legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
     paths:
       - "extension/autofill/executor.js"
@@ -81,7 +87,8 @@ subsystems:
       - "extension/autofill/mapper.js"
       - "extension/autofill/rule-engine.js"
     description: "Field→profile key assignment, alias tables, fuzzy matching rules"
-    migration_target: "extension-service/services/mapping/"
+    migration_target: "extension-service/mapping-engine.js (Phase 4.1)"
+    migration_phase: "phase_4_1"
 
   # ── SERVICE: AI Reasoning (TEMPORARY in extension) ─────────────────
   ai_reasoning:
@@ -91,7 +98,8 @@ subsystems:
     paths:
       - "extension/autofill/ai-resolve.js"
     description: "LLM-powered value resolution"
-    migration_target: "extension-service/services/ai/"
+    migration_target: "extension-service/semantic-mapper.js (Phase 4.3)"
+    migration_phase: "phase_4_3"
 
   # ── SERVICE: Knowledge ─────────────────────────────────────────────
   knowledge:
@@ -102,7 +110,8 @@ subsystems:
       - "extension/shared/label-utils.js"
       - "extension/autofill/derive.js"
     description: "Semantic aliases, confidence scoring, derived values"
-    migration_target: "extension-service/services/knowledge/"
+    migration_target: "extension-service/derivation-engine.js (Phase 4.2)"
+    migration_phase: "phase_4_2"
 
   # ── SERVICE: Planning (TEMPORARY in extension) ─────────────────────
   planning:
@@ -112,7 +121,8 @@ subsystems:
     paths:
       - "extension/popup.js"  # inline fill-plan construction
     description: "Fill order, cascade dependency resolution"
-    migration_target: "extension-service/services/planner/"
+    migration_target: "extension-service/fill-planner.js (Phase 4.1)"
+    migration_phase: "phase_4_1"
 
   # ── SERVICE: Teaching (TEMPORARY in extension) ─────────────────────
   teaching:
@@ -122,7 +132,8 @@ subsystems:
     paths:
       - "extension/background.js"  # groqAutoTeach, teachOneField
     description: "Auto-teach sessions, adapter learning"
-    migration_target: "extension-service/services/learning/"
+    migration_target: "extension-service/teach-orchestrator.js (Phase 5.1)"
+    migration_phase: "phase_5_1"
 
   # ── SERVICE: Legacy Selector-Bearing AI Planning (TEMPORARY) ───────
   service_selector_ai:
@@ -206,27 +217,32 @@ subsystems:
       - "architecture/adrs/"
     description: "Frozen public IR, action/observation schemas, DOM boundary, gateway security, lifecycle, privacy, confidence, performance, and migration contracts"
 
-  # ── EXTENSION: Browser DOM Gateway (planned Phase 3.1) ─────────────
+  # ── EXTENSION: Browser DOM Gateway (Phase 3.3) ──────────────────
   browser_dom_gateway:
     owner: extension
-    status: planned
+    status: correct
+    migration_phase: "phase_3_3"
     paths:
       - "extension/runtime/dom-gateway.js"
     description: "Restricted observation and interaction ports; sole new structural DOM access boundary"
 
-  # ── EXTENSION: Browser Perception Runtime (planned Phase 3.1+) ─────
+  # ── EXTENSION: Browser Perception Runtime (Phase 3.3) ────────────
   browser_perception_runtime:
     owner: extension
-    status: planned
+    status: correct
+    migration_phase: "phase_3_3"
     paths:
       - "extension/perception/"
     description: "Produces validated PageSnapshot/PageDelta through the observation gateway; owns no service intelligence"
 
-  # ── SERVICE: Page IR Consumers (planned Phase 4+) ─────────────────
+  # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
   page_ir_consumers:
     owner: extension_service
     status: planned
+    migration_phase: "phase_4_1"
     paths:
-      - "extension-service/services/perception/"
-      - "extension-service/services/planner/"
+      - "extension-service/fill-planner.js"
+      - "extension-service/mapping-engine.js"
+      - "extension-service/plan-builder.js"
+      - "extension-service/dependency-resolver.js"
     description: "Consume public IR for semantic interpretation and planning; never receive browser-private bindings"

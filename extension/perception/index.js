@@ -11,8 +11,9 @@
 // Lazy module references — resolved at init time
 let _gateway, _revisionManager, _bindingRegistry, _privacyFilter;
 let _widgetClassifier, _contextDiscovery, _nodeFactory, _edgeFactory;
-let _canonicalHash, _validator, _snapshotBuilder;
+let _canonicalHash, _validator, _snapshotBuilder, _deltaEmitterClass;
 let _initialized = false;
+let _deltaEmitter = null;
 
 /**
  * Initialize the perception system. Call once after all modules are loaded.
@@ -32,6 +33,7 @@ async function initPerception(modules = {}) {
   _canonicalHash = modules.canonicalHash || (typeof CcCanonicalHash !== 'undefined' ? CcCanonicalHash : null);
   _snapshotBuilder = modules.snapshotBuilder || (typeof CcSnapshotBuilder !== 'undefined' ? CcSnapshotBuilder : null);
   _validator = modules.validator || (typeof CcValidator !== 'undefined' ? CcValidator : null);
+  _deltaEmitterClass = modules.deltaEmitterClass || (typeof CcDeltaEmitter !== 'undefined' ? CcDeltaEmitter : null);
 
   // RevisionManager is stateful — create or accept
   if (modules.revisionManager) {
@@ -83,8 +85,33 @@ async function perceivePage(options = {}) {
   }
 
   if (mode === 'delta') {
-    // Delta mode — future implementation
-    throw new Error('Delta mode not yet implemented');
+    // Delta mode requires an active delta emitter with a base snapshot.
+    if (!_deltaEmitter || !_deltaEmitter.getBaseSnapshot()) {
+      throw new Error('Delta mode requires an active delta observer. Call startDeltaObserver() first.');
+    }
+    // Return the current base snapshot — actual deltas are pushed via the
+    // onDelta callback registered during startDeltaObserver().
+    // For on-demand delta, re-perceive and diff.
+    const base = _deltaEmitter.getBaseSnapshot();
+    const newSnapshot = await _snapshotBuilder.buildSnapshot({
+      gateway: _gateway,
+      revisionManager: _revisionManager,
+      bindingRegistry: _bindingRegistry,
+      privacyFilter: _privacyFilter,
+      widgetClassifier: _widgetClassifier,
+      contextDiscovery: _contextDiscovery,
+      nodeFactory: _nodeFactory,
+      edgeFactory: _edgeFactory,
+      canonicalHash: _canonicalHash,
+      validator: _validator,
+      root: options.root,
+      includeGeometry: options.includeGeometry,
+    });
+    // If unchanged, return null (no delta needed).
+    if (newSnapshot.canonical_hash === base.canonical_hash) return null;
+    // Update the emitter's base.
+    _deltaEmitter.setBaseSnapshot(newSnapshot);
+    return newSnapshot;
   }
 
   throw new Error(`Unknown perception mode: ${mode}`);
@@ -94,8 +121,53 @@ async function perceivePage(options = {}) {
  * Reset perception state (e.g. on full navigation).
  */
 function resetPerception() {
+  if (_deltaEmitter) { _deltaEmitter.stop(); _deltaEmitter = null; }
   if (_bindingRegistry) _bindingRegistry.invalidateAll();
   if (_revisionManager) _revisionManager.onFullNavigation();
+}
+
+/**
+ * Start observing DOM mutations and emitting PageDelta on changes.
+ * @param {object} baseSnapshot — a valid PageSnapshot to diff against
+ * @param {object} [options]
+ * @param {function} [options.onDelta] — callback(PageDelta | PageSnapshot)
+ * @param {function} [options.onError] — callback(Error)
+ * @param {Element|Document} [options.root] — observation root
+ * @param {number} [options.coalesceMs]
+ * @param {number} [options.settleMs]
+ */
+function startDeltaObserver(baseSnapshot, options = {}) {
+  if (!_initialized) throw new Error('Perception not initialized.');
+  if (!_deltaEmitterClass) throw new Error('DeltaEmitter class not available.');
+  if (_deltaEmitter) _deltaEmitter.stop();
+
+  _deltaEmitter = new _deltaEmitterClass({
+    gateway: _gateway,
+    revisionManager: _revisionManager,
+    bindingRegistry: _bindingRegistry,
+    snapshotBuilder: _snapshotBuilder,
+    canonicalHash: _canonicalHash,
+    validator: _validator,
+    nodeFactory: _nodeFactory,
+    edgeFactory: _edgeFactory,
+    privacyFilter: _privacyFilter,
+    widgetClassifier: _widgetClassifier,
+    contextDiscovery: _contextDiscovery,
+  }, {
+    onDelta: options.onDelta || null,
+    onError: options.onError || null,
+    coalesceMs: options.coalesceMs,
+    settleMs: options.settleMs,
+  });
+
+  _deltaEmitter.start(baseSnapshot, options.root);
+}
+
+/**
+ * Stop the delta observer.
+ */
+function stopDeltaObserver() {
+  if (_deltaEmitter) { _deltaEmitter.stop(); _deltaEmitter = null; }
 }
 
 /**
@@ -107,11 +179,12 @@ function getPerceptionState() {
     documentId: _revisionManager?.currentDocumentId() || null,
     revision: _revisionManager?.currentRevision() ?? -1,
     bindingCount: _bindingRegistry?.size ?? 0,
+    deltaObserverActive: !!_deltaEmitter,
   };
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { initPerception, perceivePage, resetPerception, getPerceptionState };
+  module.exports = { initPerception, perceivePage, resetPerception, startDeltaObserver, stopDeltaObserver, getPerceptionState };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcPerception = { initPerception, perceivePage, resetPerception, getPerceptionState };
+  globalThis.CcPerception = { initPerception, perceivePage, resetPerception, startDeltaObserver, stopDeltaObserver, getPerceptionState };
 }
