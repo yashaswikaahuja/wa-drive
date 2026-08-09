@@ -329,7 +329,7 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
 function matchLabelScore(nodeName, nodeDesc, payload) {
   let best = 0;
   const consider = (raw) => {
-    const c = String(raw || '').toLowerCase().trim();
+    const c = String(raw || '').toLowerCase().trim().replace(/_/g, ' ');
     if (!c) return;
     if (nodeName.includes(c) || nodeDesc.includes(c)) {
       if (c.length > best) best = c.length;
