@@ -476,30 +476,37 @@ fillBtn.addEventListener('click', async () => {
     const [percResult] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: async () => {
-        await CcPerception.initPerception({
-          gateway: CcDomGateway,
-          bindingRegistry: new CcBindingRegistry(),
-          revisionManager: new CcRevisionManager(),
-          privacyFilter: CcPrivacyFilter,
-          widgetClassifier: CcWidgetClassifier,
-          contextDiscovery: CcContextDiscovery,
-          nodeFactory: CcNodeFactory,
-          edgeFactory: CcEdgeFactory,
-          canonicalHash: CcCanonicalHash,
-          snapshotBuilder: CcSnapshotBuilder,
-          validator: CcValidator,
-          validatorOptions: { schema: null },
-        });
-        if (CcValidator && !CcValidator.isInitialized()) {
-          await CcValidator.initValidator({ schema: null });
+        try {
+          if (typeof CcPerception === 'undefined') return { error: 'CcPerception not loaded' };
+          if (typeof CcDomGateway === 'undefined') return { error: 'CcDomGateway not loaded' };
+          await CcPerception.initPerception({
+            gateway: CcDomGateway,
+            bindingRegistry: new CcBindingRegistry(),
+            revisionManager: new CcRevisionManager(),
+            privacyFilter: CcPrivacyFilter,
+            widgetClassifier: CcWidgetClassifier,
+            contextDiscovery: CcContextDiscovery,
+            nodeFactory: CcNodeFactory,
+            edgeFactory: CcEdgeFactory,
+            canonicalHash: CcCanonicalHash,
+            snapshotBuilder: CcSnapshotBuilder,
+            validator: CcValidator,
+            validatorOptions: { schema: null },
+          });
+          if (CcValidator && !CcValidator.isInitialized()) {
+            await CcValidator.initValidator({ schema: null });
+          }
+          return await CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
+        } catch (err) {
+          return { error: err.message, stack: (err.stack || '').slice(0, 300) };
         }
-        return CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
       }
     });
 
     const pageSnapshot = percResult?.result;
     if (!pageSnapshot || pageSnapshot.kind !== 'page_snapshot') {
-      showStatus('Perception failed â€” no snapshot', CC.danger); hideProgress(); return;
+      const errDetail = pageSnapshot?.error || JSON.stringify(percResult).slice(0, 100);
+      showStatus('Perception failed: ' + errDetail, CC.danger); hideProgress(); return;
     }
 
     // Step 2: Send snapshot + profile to server, receive ActionPlan
