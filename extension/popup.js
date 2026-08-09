@@ -114,10 +114,11 @@ async function fetchConfidence(host) {
     if (!r.ok) return;
     const { fills, confidence } = await r.json();
     if (fills > 0) {
-      el.textContent = `âœ“ filled ${fills}Ã— by operators` + (confidence != null ? ` Â· ${confidence}% success` : '');
+      el.textContent = `✓ filled ${fills}× by operators` + (confidence != null ? ` · ${confidence}% success` : '');
+      el.style.color = 'hsl(158 60% 28%)';
       el.style.display = 'block';
     } else {
-      el.textContent = `First time on this form â€” I'll fill what I'm sure about`;
+      el.textContent = `First time on this form — I'll fill what I'm sure about`;
       el.style.color = 'hsl(30 10% 40%)';
       el.style.display = 'block';
     }
@@ -583,57 +584,86 @@ fillBtn.addEventListener('click', async () => {
       func: async (actionPlan, profileId, backendUrl, accessToken) => {
         // SEC-002: credentials stay in isolated-world context only (never page-readable)
         window.__ccFillCtx = { backendUrl, accessToken, profileId, planId: actionPlan.plan_id || '' };
-        // Execute each step using the runner's capability registry
+        // Execute each step using BindingRegistry for target resolution
         const results = [];
         for (const step of actionPlan.steps) {
           try {
-            // Resolve target element by node_id (look up via data attribute or structural match)
-            let el = document.querySelector(`[data-cc-node-id="${step.target.node_id}"]`);
-            if (!el) {
-              // Fallback: try by accessible name from the step metadata
+            // 1. Resolve via BindingRegistry (primary path — zero DOM queries)
+            let el = null;
+            if (typeof CcPerception !== 'undefined' && CcPerception.resolveTarget) {
+              el = CcPerception.resolveTarget(step.target.context_id || 'ctx_top_level', step.target.node_id);
+            }
+
+            // 2. Fallback: accessible-name matching (for when registry is unavailable)
+            if (!el && step.target.accessible_name) {
               const allInputs = document.querySelectorAll('input, select, textarea, [role="combobox"], [role="listbox"]');
+              const targetName = step.target.accessible_name.toLowerCase();
               for (const input of allInputs) {
-                const label = input.getAttribute('aria-label') || input.closest('label')?.textContent?.trim() || '';
-                if (label && step.target.accessible_name && label.toLowerCase().includes(step.target.accessible_name.toLowerCase().slice(0, 20))) {
+                const label = input.getAttribute('aria-label')
+                  || input.closest('label')?.textContent?.trim()
+                  || input.getAttribute('placeholder') || '';
+                if (label && label.toLowerCase().includes(targetName.slice(0, 20))) {
                   el = input; break;
                 }
               }
             }
+
             if (!el) {
               results.push({ step_id: step.step_id, status: 'failed', failure_code: 'stale_target', postcondition_met: false, duration_ms: 0 });
               continue;
             }
 
             const start = performance.now();
-            // Perform the action
-            if (step.action.op === 'type_text') {
-              if (step.action.clear_first) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); }
-              el.focus();
-              el.value = step.action.value || '';
-              el.dispatchEvent(new Event('input', { bubbles: true }));
-              el.dispatchEvent(new Event('change', { bubbles: true }));
-            } else if (step.action.op === 'select_option') {
-              if (el.tagName === 'SELECT') {
-                const opt = [...el.options].find(o => o.text.trim().toLowerCase() === (step.action.value || '').toLowerCase() || o.value === step.action.value);
-                if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
-              } else {
-                el.click(); // open dropdown
-                await new Promise(r => setTimeout(r, 300));
-                const options = document.querySelectorAll('[role="option"], .ng-option, li.option, mat-option');
-                for (const o of options) {
-                  if (o.textContent.trim().toLowerCase().includes((step.action.value || '').toLowerCase())) {
-                    o.click(); break;
+
+            // 3. Execute via DomGateway.performAction if available (native value setter)
+            if (typeof CcDomGateway !== 'undefined' && CcDomGateway.performAction) {
+              const actionResult = CcDomGateway.performAction(el, step.action);
+              const duration = performance.now() - start;
+              results.push({
+                step_id: step.step_id,
+                status: actionResult.success ? 'succeeded' : 'failed',
+                failure_code: actionResult.error || null,
+                postcondition_met: actionResult.success,
+                duration_ms: Math.round(duration),
+                observed_value_state: actionResult.success ? 'nonempty' : null,
+              });
+            } else {
+              // Inline fallback (no gateway loaded)
+              if (step.action.op === 'type_text') {
+                el.focus();
+                const niv = Object.getOwnPropertyDescriptor(
+                  el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value'
+                );
+                if (step.action.clear_first !== false) {
+                  if (niv) niv.set.call(el, ''); else el.value = '';
+                  el.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+                if (niv) niv.set.call(el, step.action.value || '');
+                else el.value = step.action.value || '';
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              } else if (step.action.op === 'select_option') {
+                if (el.tagName === 'SELECT') {
+                  const opt = [...el.options].find(o => o.text.trim().toLowerCase() === (step.action.value || '').toLowerCase() || o.value === step.action.value);
+                  if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
+                } else {
+                  el.click();
+                  await new Promise(r => setTimeout(r, 300));
+                  const options = document.querySelectorAll('[role="option"], .ng-option, li.option, mat-option');
+                  for (const o of options) {
+                    if (o.textContent.trim().toLowerCase().includes((step.action.value || '').toLowerCase())) {
+                      o.click(); break;
+                    }
                   }
                 }
+              } else if (step.action.op === 'click') {
+                el.click();
+              } else if (step.action.op === 'toggle') {
+                if (!el.checked) el.click();
               }
-            } else if (step.action.op === 'click') {
-              el.click();
-            } else if (step.action.op === 'toggle') {
-              if (!el.checked) el.click();
+              const duration = performance.now() - start;
+              results.push({ step_id: step.step_id, status: 'succeeded', failure_code: null, postcondition_met: true, duration_ms: Math.round(duration), observed_value_state: 'nonempty' });
             }
-
-            const duration = performance.now() - start;
-            results.push({ step_id: step.step_id, status: 'succeeded', failure_code: null, postcondition_met: true, duration_ms: Math.round(duration), observed_value_state: 'nonempty' });
 
             // Inter-field delay for cascade fields
             await new Promise(r => setTimeout(r, 150));
@@ -646,7 +676,6 @@ fillBtn.addEventListener('click', async () => {
         return results;
       }
     });
-
     const stepResults = execResult?.result || [];
     const filled = stepResults.filter(r => r.status === 'succeeded').length;
     const failed = stepResults.filter(r => r.status === 'failed').length;

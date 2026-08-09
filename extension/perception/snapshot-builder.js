@@ -57,7 +57,7 @@ async function buildSnapshot(options) {
   const topContext = contexts[0]; // top_level is always first
 
   // 3. Capture structural facts via gateway
-  const { nodes: rawFacts, truncated, nodeCount } = gateway.captureStructuralFacts(root, {
+  const { nodes: rawFacts, liveElements, truncated, nodeCount } = gateway.captureStructuralFacts(root, {
     includeGeometry,
     maxNodes: 2000,
   });
@@ -79,9 +79,11 @@ async function buildSnapshot(options) {
     nodesMap[node.node_id] = node;
     parentStack[i] = node.node_id;
 
-    // Register binding (the live element ref stays in-gateway; we simulate with fact index)
-    // In real browser context, we'd pass the actual live element from gateway internals
-    bindingRegistry.bind(topContext.context_id, node.node_id, { _factIndex: i }, node.widget?.adapter_id || null, revision);
+    // Register binding: real live Element when available (browser), fallback for headless/test
+    const liveRef = liveElements && liveElements[i] && liveElements[i].nodeType === 1
+      ? liveElements[i]
+      : { _factIndex: i };
+    bindingRegistry.bind(topContext.context_id, node.node_id, liveRef, node.widget?.adapter_id || null, revision);
   }
 
   // Set root_node_id on top context

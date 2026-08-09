@@ -172,6 +172,29 @@ function stopDeltaObserver() {
 }
 
 /**
+ * Resolve a target element by (contextId, nodeId) from the BindingRegistry.
+ * Used by execution path to find the live DOM element for an ActionPlan step.
+ * Returns the live Element or null if not found / disconnected.
+ *
+ * @param {string} contextId
+ * @param {string} nodeId
+ * @returns {Element|null}
+ */
+function resolveTarget(contextId, nodeId) {
+  if (!_initialized || !_bindingRegistry) return null;
+  const entry = _bindingRegistry.resolve(contextId, nodeId);
+  if (!entry) return null;
+  const ref = entry.liveNodeReference || entry;
+  // Check it's a real connected DOM element (not a test sentinel)
+  if (!ref || typeof ref.nodeType !== 'number' || ref.nodeType !== 1) return null;
+  if (!ref.isConnected) {
+    _bindingRegistry.invalidateNode(contextId, nodeId);
+    return null;
+  }
+  return ref;
+}
+
+/**
  * Get current perception state for diagnostics.
  */
 function getPerceptionState() {
@@ -185,9 +208,9 @@ function getPerceptionState() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { initPerception, perceivePage, resetPerception, startDeltaObserver, stopDeltaObserver, getPerceptionState };
+  module.exports = { initPerception, perceivePage, resetPerception, resolveTarget, startDeltaObserver, stopDeltaObserver, getPerceptionState };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcPerception = { initPerception, perceivePage, resetPerception, startDeltaObserver, stopDeltaObserver, getPerceptionState };
+  globalThis.CcPerception = { initPerception, perceivePage, resetPerception, resolveTarget, startDeltaObserver, stopDeltaObserver, getPerceptionState };
 }
 
 })();

@@ -47,6 +47,7 @@ function captureStructuralFacts(root, options = {}) {
   const maxNodes = options.maxNodes ?? MAX_NODES;
   const includeGeometry = options.includeGeometry !== false;
   const nodes = [];
+  const liveElements = [];  // Parallel array: liveElements[i] = live Element for nodes[i]
   let truncated = false;
 
   function walk(element, depth, parentIndex) {
@@ -63,6 +64,7 @@ function captureStructuralFacts(root, options = {}) {
     fact._depth = depth;
     const thisIndex = nodes.length;
     nodes.push(fact);
+    liveElements.push(element);  // Keep live ref at same index
 
     // Traverse children (including slotted content for open shadow roots)
     const children = element.shadowRoot?.mode === 'open'
@@ -75,7 +77,7 @@ function captureStructuralFacts(root, options = {}) {
 
   const startEl = root.nodeType === 9 ? root.documentElement : root;
   walk(startEl, 0, -1);
-  return { nodes, truncated, nodeCount: nodes.length };
+  return { nodes, liveElements, truncated, nodeCount: nodes.length };
 }
 
 /**
