@@ -1,4 +1,4 @@
-﻿const VERSION = chrome.runtime.getManifest().version;
+const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
 
@@ -530,8 +530,18 @@ fillBtn.addEventListener('click', async () => {
     });
 
     if (!planResponse.ok) {
-      const errText = await planResponse.text().catch(() => 'Unknown error');
-      showStatus(`Server plan failed: ${planResponse.status} â€” ${errText.slice(0, 80)}`, CC.danger);
+      let errMsg = `${planResponse.status}`;
+      try {
+        const errBody = await planResponse.text();
+        try {
+          const errJson = JSON.parse(errBody);
+          errMsg += ' - ' + (errJson.error || errJson.message || errBody.slice(0, 80));
+        } catch {
+          const titleMatch = errBody.match(/<title>(.*?)<\/title>/i);
+          errMsg += ' - ' + (titleMatch ? titleMatch[1] : planResponse.statusText || 'Server error');
+        }
+      } catch { errMsg += ' - Unknown error'; }
+      showStatus('Server plan failed: ' + errMsg, CC.danger);
       hideProgress(); return;
     }
 
