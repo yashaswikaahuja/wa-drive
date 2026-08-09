@@ -260,18 +260,25 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
   const nodeName = node.observed?.accessible_name?.toLowerCase()?.trim() || '';
   const nodeDesc = node.observed?.description?.toLowerCase()?.trim() || '';
 
-  // Find matching field_mapping record
+  // Find matching field_mapping record.
+  // Longest/most-specific matched pattern wins (so "father's name" matches
+  // the `father_name` mapping via 'father' rather than the generic `name`).
+  // Priority (if set) is a tiebreaker on top of match specificity.
   let bestMapping = null;
+  let bestScore = 0;
   let bestPriority = -1;
 
   for (const record of mappings) {
     const payload = record.payload;
     if (!payload) continue;
 
-    const labelMatch = matchesLabel(nodeName, nodeDesc, payload);
-    if (labelMatch && (payload.priority ?? 0) > bestPriority) {
+    const score = matchLabelScore(nodeName, nodeDesc, payload);
+    if (score === 0) continue;
+    const priority = payload.priority ?? 0;
+    if (score > bestScore || (score === bestScore && priority > bestPriority)) {
       bestMapping = record;
-      bestPriority = payload.priority ?? 0;
+      bestScore = score;
+      bestPriority = priority;
     }
   }
 
@@ -292,11 +299,9 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
     value = computeDerivedValue(derivation, profile);
     transformation = derivation.payload.logic || 'derived';
   } else {
-    // Direct profile lookup
-    const entry = profile[payload.profile_key];
-    if (entry) {
-      value = String(entry.value ?? entry ?? '').trim() || null;
-    }
+    // Direct profile lookup, with alias fallback for common key divergences
+    // (e.g. seed uses `email` but real profiles store `email_id`).
+    value = lookupProfileValue(profile, payload.profile_key);
   }
 
   return {
@@ -312,38 +317,94 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
 }
 
 /**
- * Check if a node label matches a mapping record.
+ * Score how specifically a node label matches a mapping record.
+ * Returns the length of the LONGEST matched pattern (0 = no match).
+ * Longer matches are more specific (e.g. 'father' beats generic 'name').
  *
  * @param {string} nodeName — Normalized accessible_name
  * @param {string} nodeDesc — Normalized description
  * @param {object} payload — field_mapping payload
+ * @returns {number}
+ */
+function matchLabelScore(nodeName, nodeDesc, payload) {
+  let best = 0;
+  const consider = (raw) => {
+    const c = String(raw || '').toLowerCase().trim();
+    if (!c) return;
+    if (nodeName.includes(c) || nodeDesc.includes(c)) {
+      if (c.length > best) best = c.length;
+    }
+  };
+
+  consider(payload.field_label);
+  if (Array.isArray(payload.match_patterns)) {
+    for (const pattern of payload.match_patterns) consider(pattern);
+  }
+  // Semantic key as a normalized fallback (underscores → spaces)
+  consider((payload.semantic_key || '').replace(/_/g, ' '));
+
+  return best;
+}
+
+/**
+ * Boolean label match (backward-compatible wrapper).
+ *
+ * @param {string} nodeName
+ * @param {string} nodeDesc
+ * @param {object} payload
  * @returns {boolean}
  */
 function matchesLabel(nodeName, nodeDesc, payload) {
-  // Direct match on field_label
-  const label = (payload.field_label || '').toLowerCase().trim();
-  if (label && (nodeName.includes(label) || nodeDesc.includes(label))) {
-    return true;
-  }
+  return matchLabelScore(nodeName, nodeDesc, payload) > 0;
+}
 
-  // Match patterns
-  if (Array.isArray(payload.match_patterns)) {
-    for (const pattern of payload.match_patterns) {
-      const p = pattern.toLowerCase().trim();
-      if (p && (nodeName.includes(p) || nodeDesc.includes(p))) {
-        return true;
-      }
+/**
+ * Resolve a profile value by key, with fallback to common key aliases.
+ * Handles divergence between seed profile_keys and real profile schemas
+ * (e.g. seed 'email' vs stored 'email_id').
+ *
+ * @param {object} profile — Flattened profile data
+ * @param {string} profileKey — Primary key to look up
+ * @returns {string|null}
+ */
+function lookupProfileValue(profile, profileKey) {
+  const read = (k) => {
+    const entry = profile[k];
+    if (entry == null) return null;
+    const v = String(entry.value ?? entry ?? '').trim();
+    return v || null;
+  };
+
+  const direct = read(profileKey);
+  if (direct) return direct;
+
+  const aliases = PROFILE_KEY_ALIASES[profileKey];
+  if (aliases) {
+    for (const alt of aliases) {
+      const v = read(alt);
+      if (v) return v;
     }
   }
-
-  // Semantic key as fallback
-  const semKey = (payload.semantic_key || '').toLowerCase().replace(/_/g, ' ');
-  if (semKey && nodeName.includes(semKey)) {
-    return true;
-  }
-
-  return false;
+  return null;
 }
+
+/**
+ * Fallback profile-key aliases for common schema divergences.
+ * Keyed by the mapping's profile_key → candidate real profile keys.
+ */
+const PROFILE_KEY_ALIASES = Object.freeze({
+  email: ['email_id', 'email_address', 'emailid'],
+  email_id: ['email', 'email_address'],
+  mobile: ['mobile_no', 'mobile_number', 'phone', 'phone_no', 'contact_no'],
+  phone: ['mobile', 'mobile_no', 'phone_no'],
+  name: ['full_name', 'candidate_name', 'applicant_name', 'fullname'],
+  father_name: ['fathers_name', 'father'],
+  mother_name: ['mothers_name', 'mother'],
+  aadhaar_number: ['aadhaar', 'aadhar', 'aadhaar_no', 'aadhar_no', 'uid'],
+  pan_number: ['pan', 'pan_no', 'pan_number'],
+  dob: ['date_of_birth', 'birth_date'],
+  pincode: ['pin_code', 'postal_code', 'pin'],
+});
 
 /**
  * Compute a derived value using a derivation rule and profile data.

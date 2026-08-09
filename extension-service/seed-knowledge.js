@@ -185,7 +185,7 @@ records.push(makeRecord('derivation_rule', GLOBAL, {
 
 records.push(makeRecord('derivation_rule', INDIA, {
   output_key: 'nationality',
-  inputs: [],
+  inputs: ['nationality'],
   logic: 'lookup',
   parameters: { default_value: 'Indian' },
 }, { tags: ['seed', 'derivation', 'default'] }));
@@ -352,7 +352,6 @@ for (const [eduKey, aliases] of Object.entries(EDU_ALIASES)) {
     semantic_key: eduKey,
     profile_key: eduKey,
     match_patterns: aliases,
-    field_type: 'education',
   }, { tags: ['seed', 'education', 'phase_2_8'] }));
 }
 
@@ -360,4 +359,10 @@ for (const [eduKey, aliases] of Object.entries(EDU_ALIASES)) {
 // OUTPUT
 // ══════════════════════════════════════════════════════════════════════
 
-console.log(JSON.stringify({ records, count: records.length, generated_at: now }, null, 2));
+export { records };
+
+// CLI mode: print JSON to stdout when run directly (node seed-knowledge.js)
+import { fileURLToPath } from 'node:url';
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
+  console.log(JSON.stringify({ records, count: records.length, generated_at: now }, null, 2));
+}
