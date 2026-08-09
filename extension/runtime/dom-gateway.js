@@ -55,8 +55,9 @@ function captureStructuralFacts(root, options = {}) {
     if (depth > maxDepth) { truncated = true; return; }
     if (!element || element.nodeType !== 1) return;
 
-    // Skip CyberControl-injected elements
-    if (element.hasAttribute && element.hasAttribute('data-cc-id')) return;
+    // Skip only CyberControl-owned UI roots. Legacy autofill may have placed a
+    // data-cc-id marker on real portal controls; that marker is never copied to
+    // public IR and must not hide the host control from perception.
     if (element.id && element.id.startsWith('_cc_')) return;
 
     const fact = extractElementFacts(element, includeGeometry);
@@ -92,6 +93,8 @@ function extractElementFacts(element, includeGeometry) {
   const type = element.getAttribute('type') || null;
   const autocomplete = element.getAttribute('autocomplete') || null;
 
+  const selectionSignals = readSelectionSignals(element);
+
   const fact = {
     tag,
     role,
@@ -103,6 +106,7 @@ function extractElementFacts(element, includeGeometry) {
     placeholder: element.getAttribute('placeholder') || null,
     // Class list — used by classifier for library-specific detection (Select2, Choices, ng-select, etc.)
     className: element.className || '',
+    selectionSignals,
     // Extra attributes used by classifier
     maxlength: element.getAttribute('maxlength') || null,
     matdatepicker: element.hasAttribute('matDatepicker') ? '' : null,
@@ -124,14 +128,35 @@ function extractElementFacts(element, includeGeometry) {
   return fact;
 }
 
+function readSelectionSignals(element) {
+  try {
+    const trigger = element.querySelector(
+      ':scope > .value-area, :scope > .select-type, :scope > .ng-value-container, :scope > .ng-select-container'
+    );
+    const options = element.querySelector(
+      ':scope > .options-list, :scope > .dropdown-options, :scope > .ng-dropdown-panel'
+    );
+    return { has_custom_trigger: !!trigger, has_option_container: !!options };
+  } catch {
+    return { has_custom_trigger: false, has_option_container: false };
+  }
+}
+
 /**
  * Read the mechanical/ARIA state of an element.
  * Returns only boolean/enum state — never actual field values.
  */
 function readMechanicalState(element) {
   const tag = element.tagName?.toLowerCase() || '';
+  const role = element.getAttribute('role') || '';
+  const classes = String(element.className || '').toLowerCase();
   const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
   const hasValue = isInput && element.value !== undefined;
+  const descendantChecked = element.querySelector?.('input[type="checkbox"]:checked,input[type="radio"]:checked');
+  const customChecked = tag === 'mat-checkbox' || classes.includes('mat-checkbox')
+    ? !!descendantChecked || /(^|\s)(mat-checkbox-checked|mat-mdc-checkbox-checked)(\s|$)/.test(classes)
+    : null;
+  const customValueState = readCustomSelectionValueState(element, tag, role, classes);
 
   return {
     visible: isElementVisible(element),
@@ -141,12 +166,28 @@ function readMechanicalState(element) {
     focused: element === element.ownerDocument?.activeElement,
     expanded: parseTristate(element.getAttribute('aria-expanded')),
     selected: element.selected != null ? element.selected : parseTristate(element.getAttribute('aria-selected')),
-    checked: element.checked != null ? element.checked : parseTristate(element.getAttribute('aria-checked')),
+    checked: element.checked != null
+      ? element.checked
+      : (customChecked ?? parseTristate(element.getAttribute('aria-checked'))),
     // Value state without the actual value (privacy-safe)
     valueState: hasValue
       ? (element.value === '' ? 'empty' : (element.type === 'password' ? 'masked' : 'nonempty'))
-      : 'not_applicable',
+      : (customValueState || 'not_applicable'),
   };
+}
+
+function readCustomSelectionValueState(element, tag, role, classes) {
+  const isSelection = role === 'combobox' || role === 'listbox' || role === 'radiogroup'
+    || tag === 'ng-select' || tag === 'mat-select' || tag === 'mat-radio-group'
+    || classes.includes('ng-dropdown') || classes.includes('ng-select');
+  if (!isSelection) return null;
+  if (element.querySelector?.('[aria-selected="true"],option:checked,input[type="radio"]:checked')) return 'nonempty';
+  const display = element.querySelector?.(
+    '.ng-value-label,.mat-select-value-text,.mat-mdc-select-value-text,.selected-value,.value-area .value,.select-type .value,.value-area'
+  );
+  const text = display?.textContent?.replace(/\s+/g, ' ').trim() || '';
+  if (!text || /^(--\s*)?(select|choose|please select|nothing selected)\b/i.test(text)) return 'empty';
+  return 'nonempty';
 }
 
 /**
@@ -242,7 +283,6 @@ function observeMutations(root, callback) {
     const filtered = records.filter((r) => {
       // Ignore our own injected elements
       if (r.target?.id?.startsWith('_cc_')) return false;
-      if (r.target?.hasAttribute?.('data-cc-id')) return false;
       for (const node of r.addedNodes) {
         if (node.nodeType === 1 && node.id?.startsWith('_cc_')) return false;
       }
@@ -347,6 +387,10 @@ function performAction(element, action, options = {}) {
         element.dispatchEvent(new Event('input', { bubbles: true }));
         element.dispatchEvent(new Event('change', { bubbles: true }));
       } else {
+        const trigger = element.querySelector?.(
+          '.value-area,.select-type,.ng-select-container,.ng-value-container,.mat-select-trigger'
+        );
+        if (trigger && trigger !== optionElement) trigger.click();
         optionElement.click();
       }
       return { success: true, error: null };

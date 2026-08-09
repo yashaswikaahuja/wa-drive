@@ -108,6 +108,39 @@ const noOptionPlan = buildPlan({
 });
 ok(noOptionPlan === null, 'select without a public option node is safely omitted');
 
+const radioNode = {
+  node_id: 'node:radio-group', context_id: 'ctx.top.1', kind: 'control', parent_id: null,
+  affordances: ['focus', 'select_one'], observed: { accessible_name: 'Gender' },
+  widget: { adapter_id: null },
+};
+const radioOptionNode = {
+  node_id: 'node:radio:male', context_id: 'ctx.top.1', kind: 'option', parent_id: radioNode.node_id,
+  affordances: ['activate'], observed: { accessible_name: 'Male' }, widget: { adapter_id: 'native-toggle' },
+};
+const checkboxNode = {
+  node_id: 'node:checkbox', context_id: 'ctx.top.1', kind: 'control', parent_id: null,
+  affordances: ['focus', 'toggle'], observed: { accessible_name: 'Declaration' },
+  widget: { adapter_id: 'native-toggle' },
+};
+const nonTextPlan = buildPlan({
+  snapshot: {
+    document_id: 'doc:controls', snapshot_id: 'snap:controls', revision: 1,
+    nodes: {
+      [radioNode.node_id]: radioNode,
+      [radioOptionNode.node_id]: radioOptionNode,
+      [checkboxNode.node_id]: checkboxNode,
+    },
+  },
+  mappings: [
+    { node_id: radioNode.node_id, context_id: radioNode.context_id, semantic_key: 'gender', profile_key: 'gender', value: 'Male' },
+    { node_id: checkboxNode.node_id, context_id: checkboxNode.context_id, semantic_key: 'declaration', profile_key: 'declaration', value: true },
+  ],
+  correlationId: 'corr:controls',
+  orderedNodeIds: [radioNode.node_id, checkboxNode.node_id],
+});
+ok(nonTextPlan?.steps[0]?.action?.op === 'select_option' && nonTextPlan.steps[0].action.option_target.node_id === radioOptionNode.node_id, 'server plans radio selection against an exact public option node');
+ok(nonTextPlan?.steps[1]?.action?.op === 'toggle' && nonTextPlan.steps[1].action.desired_state === true, 'server plans checkbox execution as an exact toggle action');
+
 const piiNode = { affordances: ['type_text'], privacy: { classification: 'sensitive' }, state: { enabled: true, readonly: false } };
 const secretNode = { affordances: ['type_text'], privacy: { classification: 'secret' }, state: { enabled: true, readonly: false } };
 ok(classifyField(piiNode) === FieldClassification.PROFILE_DATA, 'privacy-sensitive Aadhaar/PAN-like data remains fillable profile data');

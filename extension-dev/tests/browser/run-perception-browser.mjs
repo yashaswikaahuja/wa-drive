@@ -201,6 +201,118 @@ async function testAngularMaterial(browser) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// TEST: SSC-style custom controls after legacy marker use
+// ═══════════════════════════════════════════════════════════════════════
+async function testSscCustomControls(browser) {
+  console.log('\n=== Perception: SSC Custom Controls ===');
+  const page = await browser.newPage();
+  await page.goto(`file://${resolve(FIXTURES, 'govt-form.html').replaceAll('\\', '/')}`);
+  await page.evaluate(() => {
+    document.querySelector('.ng-dropdown')?.setAttribute('data-cc-id', 'ng-dd-10000');
+    document.querySelector('fieldset:has(input[type="radio"])')?.setAttribute('role', 'radiogroup');
+  });
+  await injectPerception(page);
+  const snapshot = await perceive(page);
+  const nodes = Object.values(snapshot.nodes);
+  const dropdown = nodes.find(node => node.widget?.adapter_id === 'ng-dropdown');
+  const descendants = dropdown ? nodes.filter(node => {
+    let current = node;
+    while (current?.parent_id) {
+      if (current.parent_id === dropdown.node_id) return true;
+      current = snapshot.nodes[current.parent_id];
+    }
+    return false;
+  }) : [];
+  const radioGroup = nodes.find(node => node.widget?.implementation_hint === 'radio-group');
+  const radioOptions = nodes.filter(node => node.kind === 'option' && node.widget?.implementation_hint === 'native-toggle');
+
+  ok('ssc: legacy-marked ng-dropdown remains perceptible', !!dropdown);
+  ok('ssc: hidden li choices become public option nodes', descendants.filter(node => node.kind === 'option').length >= 6);
+  ok('ssc: option labels remain bounded public facts', descendants.some(node => node.kind === 'option' && node.observed?.sanitized_text === 'Bihar'));
+  ok('ssc: radio group is a selection control', !!radioGroup && radioGroup.affordances.includes('select_one'));
+  ok('ssc: radio inputs become exact public option targets', radioOptions.length >= 2);
+  ok('ssc: legacy private marker is not serialized', !JSON.stringify(snapshot).includes('ng-dd-10000'));
+
+  const biharOption = descendants.find(node => node.kind === 'option' && node.observed?.sanitized_text === 'Bihar');
+  const radioOption = radioGroup ? nodes.find(node => {
+    if (node.kind !== 'option' || node.observed?.accessible_name !== 'Male') return false;
+    let current = node;
+    while (current?.parent_id) {
+      if (current.parent_id === radioGroup.node_id) return true;
+      current = snapshot.nodes[current.parent_id];
+    }
+    return false;
+  }) : null;
+  const checkbox = nodes.find(node => node.widget?.behavior_kind === 'toggle'
+    && node.observed?.accessible_name?.toLowerCase().includes('information provided'));
+  const targetsBound = !!dropdown && !!biharOption && !!radioGroup && !!radioOption && !!checkbox;
+  ok('ssc: exact dropdown, radio, and checkbox targets are bound', targetsBound,
+    JSON.stringify(nodes.filter(node => node.widget?.behavior_kind === 'toggle').map(node => node.observed?.accessible_name)));
+  if (!targetsBound) { await page.close(); return; }
+  await page.evaluate(readFileSync(resolve(EXT_DIR, 'runtime/action-plan-executor.js'), 'utf8'));
+  const observation = await page.evaluate(async ({ snapshot, dropdownId, optionId, radioGroupId, radioOptionId, checkboxId }) => {
+    const target = (nodeId) => ({ context_id: snapshot.nodes[nodeId].context_id, node_id: nodeId });
+    const steps = [
+      {
+        step_id: 'step:dropdown', target: target(dropdownId),
+        action: { op: 'select_option', option_target: target(optionId) },
+        risk: 'reversible', required_affordance: 'select_one', required_adapter_id: 'ng-dropdown',
+        postcondition: { type: 'value_state', expected_value_state: 'selected', expected_boolean: null, expected_signal: null },
+        on_failure: 'stop_and_report',
+      },
+      {
+        step_id: 'step:radio', target: target(radioGroupId),
+        action: { op: 'select_option', option_target: target(radioOptionId) },
+        risk: 'reversible', required_affordance: 'select_one', required_adapter_id: null,
+        postcondition: { type: 'value_state', expected_value_state: 'selected', expected_boolean: null, expected_signal: null },
+        on_failure: 'stop_and_report',
+      },
+      {
+        step_id: 'step:checkbox', target: target(checkboxId),
+        action: { op: 'toggle', desired_state: true },
+        risk: 'reversible', required_affordance: 'toggle', required_adapter_id: 'native-toggle',
+        postcondition: { type: 'checked', expected_value_state: null, expected_boolean: true, expected_signal: null },
+        on_failure: 'stop_and_report',
+      },
+    ];
+    return globalThis.CcActionPlanExecutor.execute({
+      kind: 'action_plan', schema_version: '3.0.0', plan_id: 'plan:ssc-controls', correlation_id: 'corr:ssc-controls',
+      supersedes_plan_id: null, issued_at: new Date().toISOString(), expires_at: new Date(Date.now() + 60_000).toISOString(),
+      target_binding: { document_id: snapshot.document_id, snapshot_id: snapshot.snapshot_id, expected_revision: snapshot.revision },
+      steps,
+      authorization: { max_risk: 'reversible', operator_confirmed: false, allow_navigation: false, allow_submit: false },
+    });
+  }, {
+    snapshot,
+    dropdownId: dropdown?.node_id,
+    optionId: biharOption?.node_id,
+    radioGroupId: radioGroup?.node_id,
+    radioOptionId: radioOption?.node_id,
+    checkboxId: checkbox?.node_id,
+  });
+  const gatewayStates = await page.evaluate(({ contextId, dropdownId }) => {
+    const exact = globalThis.CcPerception.resolveTarget(contextId, dropdownId);
+    const root = document.querySelector('.ng-dropdown');
+    return {
+      exactIdentity: exact ? { tag: exact.tagName, className: String(exact.className || ''), sameAsRoot: exact === root } : null,
+      exactDropdown: exact ? globalThis.CcDomGateway.readAriaState(exact) : null,
+      dropdown: globalThis.CcDomGateway.readAriaState(root),
+      checkbox: globalThis.CcDomGateway.readAriaState(document.querySelector('#agree')),
+    };
+  }, { contextId: dropdown?.context_id, dropdownId: dropdown?.node_id });
+  const executionSummary = JSON.stringify({
+    steps: observation.steps.map(step => ({
+      stepId: step.step_id, status: step.status, failure: step.failure_code,
+      postcondition: step.postcondition_met, valueState: step.observed_value_state,
+    })),
+    states: gatewayStates,
+  });
+  ok('ssc: exact dropdown, radio, and checkbox actions execute', observation.steps.length === 3 && observation.steps.every(step => step.status === 'succeeded'), executionSummary);
+  ok('ssc: non-text actions satisfy privacy-safe postconditions', observation.steps.every(step => step.postcondition_met === true), executionSummary);
+  await page.close();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // TEST: Shadow DOM
 // ═══════════════════════════════════════════════════════════════════════
 async function testShadowDom(browser) {
@@ -267,6 +379,7 @@ async function main() {
   try {
     await testNativeForm(browser);
     await testAngularMaterial(browser);
+    await testSscCustomControls(browser);
     await testShadowDom(browser);
     await testIframes(browser);
   } finally {

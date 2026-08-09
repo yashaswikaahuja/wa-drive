@@ -61,7 +61,7 @@ function validatePlan(plan, state) {
 
 function observedValueState(action, targetState, optionState) {
   if (action.op === 'select_option') {
-    if (optionState?.selected === true || targetState?.valueState === 'nonempty') return 'selected';
+    if (optionState?.selected === true || optionState?.checked === true || targetState?.valueState === 'nonempty') return 'selected';
     return targetState?.valueState === 'empty' ? 'empty' : 'unavailable';
   }
   const state = targetState?.valueState;
@@ -173,7 +173,8 @@ async function execute(plan) {
         if (!result.success) {
           failureCode = normalizeFailureCode(result.error);
         } else {
-          await new Promise(resolve => setTimeout(resolve, 120));
+          const settleMs = step.action.op === 'select_option' ? 500 : (step.action.op === 'toggle' ? 160 : 120);
+          await new Promise(resolve => setTimeout(resolve, settleMs));
           postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
           if (!postcondition.met) failureCode = 'postcondition_failed';
         }

@@ -53,6 +53,8 @@ function classifyWidget(facts) {
     'section', 'article', 'aside', 'main', 'nav', 'header', 'footer', 'figure',
     'figcaption', 'blockquote', 'pre', 'code', 'hr', 'br', 'img', 'picture',
     'video', 'audio', 'source', 'canvas', 'svg'];
+  const structuralSelection = facts.selectionSignals?.has_custom_trigger === true
+    && facts.selectionSignals?.has_option_container === true;
   const knownLibraryClass = cls && (
     cls.includes('select2') || cls.includes('choices') || cls.includes('ng-select') ||
     cls.includes('ng-dropdown') || cls.includes('v-select') || cls.includes('vs__') ||
@@ -61,7 +63,7 @@ function classifyWidget(facts) {
     cls.includes('recaptcha') || cls.includes('hcaptcha') || cls.includes('turnstile') ||
     cls.includes('virtual-scroll') || cls.includes('cdk-virtual-scroll')
   );
-  if (nonInteractive.includes(tag) && !role && !knownLibraryClass) return null;
+  if (nonInteractive.includes(tag) && !role && !knownLibraryClass && !structuralSelection) return null;
 
   // ── 1. OTP / Verification code group ─────────────────────────────
   // OTP inputs are secret by nature — classify before text_entry
@@ -108,6 +110,10 @@ function classifyWidget(facts) {
   // ── 5b. ng-dropdown (CyberControl-specific class, distinct from ng-select) ─
   if (tag === 'div' && cls.includes('ng-dropdown') && !cls.includes('ng-select')) {
     return widget('selection', 'one', 'overlay', 'ng-dropdown', 'ng-dropdown', 0.9,
+      ['focus', 'expand', 'select_one']);
+  }
+  if (structuralSelection) {
+    return widget('selection', 'one', 'overlay', 'ng-dropdown', 'ng-dropdown', 0.85,
       ['focus', 'expand', 'select_one']);
   }
 
@@ -205,13 +211,25 @@ function classifyWidget(facts) {
       0.95, multi ? ['focus', 'select_many'] : ['focus', 'select_one']);
   }
 
-  // ── 17. Generic combobox / listbox ────────────────────────────────
+  // ── 17. Generic combobox / listbox / radio group ──────────────────
+  if (role === 'radiogroup' || tag === 'mat-radio-group') {
+    return widget('selection', 'one', 'native', 'radio-group', null, 0.9,
+      ['focus', 'select_one']);
+  }
   if (role === 'combobox' || role === 'listbox') {
     return widget('selection', 'one', 'overlay', 'custom-combobox', null, 0.75,
       ['focus', 'expand', 'select_one']);
   }
 
   // ── 18. Toggle (checkbox / radio / switch) ────────────────────────
+  if (tag === 'mat-checkbox' || cls.includes('mat-checkbox')) {
+    return widget('toggle', 'none', 'native', 'mat-checkbox', 'native-toggle', 0.9,
+      ['focus', 'toggle']);
+  }
+  if (tag === 'mat-radio-button' || cls.includes('mat-radio-button')) {
+    return widget('toggle', 'one', 'native', 'mat-radio', 'native-toggle', 0.9,
+      ['focus', 'toggle']);
+  }
   if ((tag === 'input' && type === 'checkbox') || role === 'checkbox') {
     return widget('toggle', 'none', 'native', 'native-toggle', 'native-toggle', 0.95,
       ['focus', 'toggle']);

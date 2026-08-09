@@ -86,6 +86,19 @@ async function buildSnapshot(options) {
     bindingRegistry.bind(topContext.context_id, node.node_id, liveRef, node.widget?.adapter_id || null, revision);
   }
 
+  // Custom dropdowns commonly render bound <li> options without ARIA roles.
+  // Radio groups expose bound radio inputs. Promote only descendants of a
+  // recognized selection root; no selector or private binding crosses the IR.
+  const promotedOptions = promoteSelectionOptions(rawFacts, parentStack, nodesMap);
+  if (promotedOptions > 0) {
+    diagnostics.push({
+      code: 'selection_options_promoted',
+      severity: 'info',
+      node_id: null,
+      message: `${promotedOptions} bound selection options represented in public IR`,
+    });
+  }
+
   // Set root_node_id on top context
   if (parentStack.length > 0) {
     topContext.root_node_id = parentStack[0];
@@ -167,6 +180,42 @@ async function buildSnapshot(options) {
   }
 
   return snapshot;
+}
+
+function promoteSelectionOptions(rawFacts, nodeIdsByIndex, nodesMap) {
+  let promoted = 0;
+  for (let index = 0; index < rawFacts.length; index++) {
+    const fact = rawFacts[index];
+    const node = nodesMap[nodeIdsByIndex[index]];
+    if (!node || node.kind === 'option') continue;
+
+    let ancestorIndex = fact._parentIndex;
+    let selectionAncestor = null;
+    while (ancestorIndex >= 0) {
+      const ancestor = nodesMap[nodeIdsByIndex[ancestorIndex]];
+      if (ancestor?.widget?.behavior_kind === 'selection') {
+        selectionAncestor = ancestor;
+        break;
+      }
+      ancestorIndex = rawFacts[ancestorIndex]?._parentIndex ?? -1;
+    }
+    if (!selectionAncestor) continue;
+
+    const tag = String(fact.tag || '').toLowerCase();
+    const role = String(fact.role || '').toLowerCase();
+    const classes = String(fact.className || '').toLowerCase();
+    const isRadioOption = tag === 'input' && String(fact.type || '').toLowerCase() === 'radio';
+    const isLeafOption = fact.childElementCount === 0 && /(^|[\s_-])(option|item)([\s_-]|$)/.test(classes)
+      && !/(options-list|option-container|option-group)/.test(classes);
+    const optionLike = tag === 'li' || tag === 'option' || tag === 'mat-option'
+      || role === 'option' || isRadioOption || isLeafOption;
+    if (!optionLike || !(node.observed?.accessible_name || node.observed?.sanitized_text)) continue;
+
+    node.kind = 'option';
+    node.affordances = ['activate'];
+    promoted++;
+  }
+  return promoted;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
