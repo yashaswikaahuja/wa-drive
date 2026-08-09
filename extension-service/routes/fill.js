@@ -31,6 +31,17 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
 
     const scope = deriveScope(snapshot);
 
+    // DEBUG: log first 10 node accessible_names to understand what perception captures
+    const nodeEntries = Object.values(snapshot.nodes || {}).slice(0, 15);
+    const nodeNames = nodeEntries.map(n => ({
+      id: n.node_id,
+      name: n.observed?.accessible_name || n.semantic_label || '(none)',
+      aff: (n.affordances || []).join(','),
+    }));
+    console.log('[fill-plan DEBUG] scope:', JSON.stringify(scope));
+    console.log('[fill-plan DEBUG] nodes sample:', JSON.stringify(nodeNames));
+    console.log('[fill-plan DEBUG] profile keys:', Object.keys(profile).join(', '));
+
     // Generate the fill plan using server-side intelligence
     let planResult = await generateFillPlan({
       snapshot,
