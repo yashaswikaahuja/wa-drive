@@ -45,12 +45,11 @@ function classifyKind(facts) {
   if (role === 'alert' || role === 'status' || (tag === 'span' && facts.accessibleName?.match?.(/error|invalid|required/i))) return 'validation_message';
 
   // Option (in select/listbox)
-  if (tag === 'option' || tag === 'mat-option' || role === 'option' || role === 'menuitem' || role === 'treeitem') return 'option';
+  if (tag === 'option' || role === 'option' || role === 'menuitem' || role === 'treeitem') return 'option';
 
   // Widget/Control (interactive elements)
   if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' ||
-      tag === 'a' || tag === 'mat-select' || tag === 'ng-select' || tag === 'mat-checkbox' ||
-      tag === 'mat-radio-button' || tag === 'mat-radio-group' ||
+      tag === 'a' || tag === 'mat-select' || tag === 'ng-select' ||
       ['textbox', 'checkbox', 'radio', 'radiogroup', 'combobox', 'listbox', 'button', 'link',
        'slider', 'switch', 'spinbutton', 'searchbox', 'tab'].includes(role)) return 'control';
 

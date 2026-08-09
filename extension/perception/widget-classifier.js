@@ -113,7 +113,7 @@ function classifyWidget(facts) {
       ['focus', 'expand', 'select_one']);
   }
   if (structuralSelection) {
-    return widget('selection', 'one', 'overlay', 'ng-dropdown', 'ng-dropdown', 0.85,
+    return widget('selection', 'one', 'overlay', 'custom-select', 'custom-select', 0.85,
       ['focus', 'expand', 'select_one']);
   }
 
@@ -212,7 +212,7 @@ function classifyWidget(facts) {
   }
 
   // ── 17. Generic combobox / listbox / radio group ──────────────────
-  if (role === 'radiogroup' || tag === 'mat-radio-group') {
+  if (role === 'radiogroup') {
     return widget('selection', 'one', 'native', 'radio-group', null, 0.9,
       ['focus', 'select_one']);
   }
@@ -222,14 +222,6 @@ function classifyWidget(facts) {
   }
 
   // ── 18. Toggle (checkbox / radio / switch) ────────────────────────
-  if (tag === 'mat-checkbox' || cls.includes('mat-checkbox')) {
-    return widget('toggle', 'none', 'native', 'mat-checkbox', 'native-toggle', 0.9,
-      ['focus', 'toggle']);
-  }
-  if (tag === 'mat-radio-button' || cls.includes('mat-radio-button')) {
-    return widget('toggle', 'one', 'native', 'mat-radio', 'native-toggle', 0.9,
-      ['focus', 'toggle']);
-  }
   if ((tag === 'input' && type === 'checkbox') || role === 'checkbox') {
     return widget('toggle', 'none', 'native', 'native-toggle', 'native-toggle', 0.95,
       ['focus', 'toggle']);

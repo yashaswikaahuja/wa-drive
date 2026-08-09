@@ -131,10 +131,10 @@ function extractElementFacts(element, includeGeometry) {
 function readSelectionSignals(element) {
   try {
     const trigger = element.querySelector(
-      ':scope > .value-area, :scope > .select-type, :scope > .ng-value-container, :scope > .ng-select-container'
+      ':scope > .value-area, :scope > .select-type'
     );
     const options = element.querySelector(
-      ':scope > .options-list, :scope > .dropdown-options, :scope > .ng-dropdown-panel'
+      ':scope > .options-list, :scope > .dropdown-options'
     );
     return { has_custom_trigger: !!trigger, has_option_container: !!options };
   } catch {
@@ -149,14 +149,9 @@ function readSelectionSignals(element) {
 function readMechanicalState(element) {
   const tag = element.tagName?.toLowerCase() || '';
   const role = element.getAttribute('role') || '';
-  const classes = String(element.className || '').toLowerCase();
   const isInput = tag === 'input' || tag === 'textarea' || tag === 'select';
   const hasValue = isInput && element.value !== undefined;
-  const descendantChecked = element.querySelector?.('input[type="checkbox"]:checked,input[type="radio"]:checked');
-  const customChecked = tag === 'mat-checkbox' || classes.includes('mat-checkbox')
-    ? !!descendantChecked || /(^|\s)(mat-checkbox-checked|mat-mdc-checkbox-checked)(\s|$)/.test(classes)
-    : null;
-  const customValueState = readCustomSelectionValueState(element, tag, role, classes);
+  const customValueState = readCustomSelectionValueState(element, role);
 
   return {
     visible: isElementVisible(element),
@@ -168,7 +163,7 @@ function readMechanicalState(element) {
     selected: element.selected != null ? element.selected : parseTristate(element.getAttribute('aria-selected')),
     checked: element.checked != null
       ? element.checked
-      : (customChecked ?? parseTristate(element.getAttribute('aria-checked'))),
+      : parseTristate(element.getAttribute('aria-checked')),
     // Value state without the actual value (privacy-safe)
     valueState: hasValue
       ? (element.value === '' ? 'empty' : (element.type === 'password' ? 'masked' : 'nonempty'))
@@ -176,14 +171,14 @@ function readMechanicalState(element) {
   };
 }
 
-function readCustomSelectionValueState(element, tag, role, classes) {
+function readCustomSelectionValueState(element, role) {
+  const signals = readSelectionSignals(element);
   const isSelection = role === 'combobox' || role === 'listbox' || role === 'radiogroup'
-    || tag === 'ng-select' || tag === 'mat-select' || tag === 'mat-radio-group'
-    || classes.includes('ng-dropdown') || classes.includes('ng-select');
+    || (signals.has_custom_trigger && signals.has_option_container);
   if (!isSelection) return null;
   if (element.querySelector?.('[aria-selected="true"],option:checked,input[type="radio"]:checked')) return 'nonempty';
   const display = element.querySelector?.(
-    '.ng-value-label,.mat-select-value-text,.mat-mdc-select-value-text,.selected-value,.value-area .value,.select-type .value,.value-area'
+    '.selected-value,.value-area .value,.select-type .value,.value-area'
   );
   const text = display?.textContent?.replace(/\s+/g, ' ').trim() || '';
   if (!text || /^(--\s*)?(select|choose|please select|nothing selected)\b/i.test(text)) return 'empty';
@@ -388,7 +383,7 @@ function performAction(element, action, options = {}) {
         element.dispatchEvent(new Event('change', { bubbles: true }));
       } else {
         const trigger = element.querySelector?.(
-          '.value-area,.select-type,.ng-select-container,.ng-value-container,.mat-select-trigger'
+          '.value-area,.select-type'
         );
         if (trigger && trigger !== optionElement) trigger.click();
         optionElement.click();
