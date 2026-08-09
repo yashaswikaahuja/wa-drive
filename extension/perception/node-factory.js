@@ -48,9 +48,9 @@ function classifyKind(facts) {
   if (tag === 'option' || role === 'option' || role === 'menuitem' || role === 'treeitem') return 'option';
 
   // Widget/Control (interactive elements)
-  if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' ||
-      tag === 'a' || tag === 'mat-select' || tag === 'ng-select' ||
-      ['textbox', 'checkbox', 'radio', 'radiogroup', 'combobox', 'listbox', 'button', 'link',
+  if (role === 'radiogroup') return 'control';
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a' ||
+      ['textbox', 'checkbox', 'radio', 'combobox', 'listbox', 'button', 'link',
        'slider', 'switch', 'spinbutton', 'searchbox', 'tab'].includes(role)) return 'control';
 
   // Content (text, images, etc.)
