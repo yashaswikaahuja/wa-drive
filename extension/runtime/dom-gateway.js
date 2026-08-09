@@ -381,45 +381,82 @@ function computeAccessibleName(element, ariaLabel, ariaLabelledby) {
     const parts = ariaLabelledby.split(/\s+/).map((id) => doc.getElementById(id)?.textContent?.trim() || '').filter(Boolean);
     if (parts.length) return parts.join(' ').slice(0, 160);
   }
+
   // Label[for]
   if (element.id) {
-    const label = element.ownerDocument?.querySelector(`label[for="${CSS.escape(element.id)}"]`);
-    if (label) return label.textContent.trim().slice(0, 160);
+    try {
+      const label = element.ownerDocument?.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+      if (label && label.textContent.trim().length > 1) return label.textContent.trim().slice(0, 160);
+    } catch {}
   }
+
   // Wrapping label
   const wrapping = element.closest?.('label');
   if (wrapping) {
     const clone = wrapping.cloneNode(true);
-    clone.querySelectorAll('input,select,textarea').forEach((el) => el.remove());
+    clone.querySelectorAll('input,select,textarea,button').forEach((el) => el.remove());
     const text = clone.textContent.trim();
-    if (text) return text.slice(0, 160);
+    if (text && text.length > 1) return text.slice(0, 160);
   }
-  // Preceding sibling or parent text (common in Angular/gov forms where <p>Label</p><input>)
+
   const tag = element.tagName?.toLowerCase() || '';
-  if (tag === 'input' || tag === 'select' || tag === 'textarea') {
-    // Check previous element sibling
-    let prev = element.previousElementSibling;
-    if (prev) {
-      const prevText = prev.textContent?.trim();
-      if (prevText && prevText.length < 160 && prevText.length > 1) return prevText.slice(0, 160);
-    }
-    // Check parent's preceding text (e.g. <div><p>Label</p><div><input></div></div>)
-    const parent = element.parentElement;
-    if (parent) {
-      prev = parent.previousElementSibling;
-      if (prev) {
-        const prevText = prev.textContent?.trim();
-        if (prevText && prevText.length < 160 && prevText.length > 1) return prevText.slice(0, 160);
+  const isFormField = (tag === 'input' || tag === 'select' || tag === 'textarea');
+
+  if (isFormField) {
+    // Preceding <td> in a table row
+    const td = element.closest?.('td');
+    if (td) {
+      const prevTd = td.previousElementSibling;
+      if (prevTd && prevTd.textContent.trim().length > 1 && prevTd.textContent.trim().length < 80) {
+        return prevTd.textContent.trim().slice(0, 160);
       }
     }
+
+    // Container label (.form-group, mat-form-field, etc.)
+    const container = element.closest?.('.form-group,.form-field,.field-wrapper,.input-group,mat-form-field,[class*="form-row"],[class*="field-row"]');
+    if (container) {
+      const cLbl = container.querySelector('label,mat-label,.label,.field-label,.control-label,.form-label');
+      if (cLbl && cLbl.textContent.trim().length > 1) return cLbl.textContent.trim().slice(0, 160);
+    }
+
+    // Parent hierarchy label (up to 4 hops)
+    let p = element.parentElement;
+    let hop = 0;
+    while (p && hop < 4) {
+      const pLbl = p.querySelector(':scope > label, :scope > .label, :scope > .field-label, :scope > .control-label, :scope > .form-label, :scope > mat-label');
+      if (pLbl && pLbl !== element && pLbl.textContent.trim().length > 1) {
+        return pLbl.textContent.trim().slice(0, 160);
+      }
+      p = p.parentElement;
+      hop++;
+    }
+
+    // Preceding sibling element (LABEL, SPAN, DIV, P, H3, H4, STRONG)
+    let prev = element.previousElementSibling;
+    if (!prev && element.parentElement) {
+      // If input is first child, check parent's previous sibling
+      prev = element.parentElement.previousElementSibling;
+    }
+    if (prev && !prev.querySelector?.('input,select,textarea')) {
+      const pt = prev.textContent?.trim();
+      if (pt && pt.length > 1 && pt.length < 160) return pt.slice(0, 160);
+    }
+
     // formControlName attribute (Angular reactive forms)
     const fcn = element.getAttribute('formcontrolname') || element.getAttribute('formControlName');
     if (fcn) return fcn.replace(/([A-Z])/g, ' $1').trim().slice(0, 160);
-    // name attribute as last resort for inputs
+
+    // name attribute as fallback
     const nameAttr = element.getAttribute('name');
-    if (nameAttr && nameAttr.length > 2) return nameAttr.replace(/([A-Z_])/g, ' $1').replace(/_/g, ' ').trim().slice(0, 160);
+    if (nameAttr && nameAttr.length > 2) return nameAttr.replace(/[_-]/g, ' ').trim().slice(0, 160);
+
+    // Placeholder
+    if (element.placeholder && element.placeholder.trim().length > 1 && element.placeholder.length < 60) {
+      return element.placeholder.trim();
+    }
   }
-  // Title / placeholder fallback
+
+  // Non-form-field: title/placeholder/textContent snippet
   return (element.title || element.placeholder || '').trim().slice(0, 160) || null;
 }
 
