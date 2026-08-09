@@ -567,7 +567,6 @@ fillBtn.addEventListener('click', async () => {
       showStatus('Empty plan: ' + reason, CC.warning);
       hideProgress(); return;
     }
-    }
 
     // Step 3: Execute the ActionPlan via the runner
     updateProgress(`Filling ${plan.steps.length} fields...`, 70);
