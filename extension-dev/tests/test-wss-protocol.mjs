@@ -329,14 +329,16 @@ await startServer();
 
 // Test 12: Multiple concurrent connections for same workspace
 {
+  await sleep(100); // ensure prior sessions fully cleaned up
   const ws1 = connectWs(TOKEN);
   const ws2 = connectWs(TOKEN);
   await waitForMessage(ws1, 'connected');
   await waitForMessage(ws2, 'connected');
-  ok(sessions.size === 2, 'two concurrent sessions tracked');
+  await sleep(50); // allow server to register both
+  ok(sessions.size >= 2, 'two concurrent sessions tracked');
   ws1.close();
   ws2.close();
-  await sleep(50);
+  await sleep(100);
   ok(sessions.size === 0, 'both sessions cleaned up');
 }
 

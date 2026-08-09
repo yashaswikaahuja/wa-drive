@@ -1,4 +1,4 @@
-const VERSION = chrome.runtime.getManifest().version;
+﻿const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
 
@@ -21,7 +21,7 @@ const progressInner = document.getElementById('progress-inner');
 const resultsEl = document.getElementById('results');
 document.getElementById('ver').textContent = 'v' + VERSION;
 
-// Side panel stays open across tab switches — always resolve the active *page* tab
+// Side panel stays open across tab switches â€” always resolve the active *page* tab
 // (never chrome:// or the extension itself).
 async function getActivePageTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -60,20 +60,20 @@ function showStatus(msg, color) {
 statusEl?.addEventListener('click', () => { statusEl.style.display = 'none'; });
 
 const KNOWN_SITES = {
-  'ssc.nic.in': { icon: '🏛', name: 'SSC' },
-  'ssc.gov.in': { icon: '🏛', name: 'SSC' },
-  'rrbcdg.gov.in': { icon: '🚂', name: 'RRB' },
-  'nta.ac.in': { icon: '📝', name: 'NTA' },
-  'upsc.gov.in': { icon: '🏛', name: 'UPSC' },
-  'passportindia.gov.in': { icon: '🛂', name: 'Passport Seva' },
-  'digilocker.gov.in': { icon: '📁', name: 'DigiLocker' },
+  'ssc.nic.in': { icon: 'ðŸ›', name: 'SSC' },
+  'ssc.gov.in': { icon: 'ðŸ›', name: 'SSC' },
+  'rrbcdg.gov.in': { icon: 'ðŸš‚', name: 'RRB' },
+  'nta.ac.in': { icon: 'ðŸ“', name: 'NTA' },
+  'upsc.gov.in': { icon: 'ðŸ›', name: 'UPSC' },
+  'passportindia.gov.in': { icon: 'ðŸ›‚', name: 'Passport Seva' },
+  'digilocker.gov.in': { icon: 'ðŸ“', name: 'DigiLocker' },
 };
 
 async function detectSite() {
   try {
     const tab = await getActivePageTab();
     if (!tab?.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
-      siteIcon.textContent = '🌐';
+      siteIcon.textContent = 'ðŸŒ';
       siteName.textContent = 'No page detected';
       const conf = document.getElementById('site-confidence');
       if (conf) conf.style.display = 'none';
@@ -82,9 +82,9 @@ async function detectSite() {
     const url = new URL(tab.url);
     const host = url.hostname.replace('www.', '');
     const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
-    if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' — ' + host; }
-    else { siteIcon.textContent = '🌐'; siteName.textContent = host; }
-    // Network-effect confidence badge: "filled 29× by operators · 100%"
+    if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' â€” ' + host; }
+    else { siteIcon.textContent = 'ðŸŒ'; siteName.textContent = host; }
+    // Network-effect confidence badge: "filled 29Ã— by operators Â· 100%"
     fetchConfidence(host);
   } catch { siteName.textContent = 'Unknown page'; }
 }
@@ -114,10 +114,10 @@ async function fetchConfidence(host) {
     if (!r.ok) return;
     const { fills, confidence } = await r.json();
     if (fills > 0) {
-      el.textContent = `✓ filled ${fills}× by operators` + (confidence != null ? ` · ${confidence}% success` : '');
+      el.textContent = `âœ“ filled ${fills}Ã— by operators` + (confidence != null ? ` Â· ${confidence}% success` : '');
       el.style.display = 'block';
     } else {
-      el.textContent = `First time on this form — I'll fill what I'm sure about`;
+      el.textContent = `First time on this form â€” I'll fill what I'm sure about`;
       el.style.color = 'hsl(30 10% 40%)';
       el.style.display = 'block';
     }
@@ -158,24 +158,24 @@ function showResults(filled, skipped, failed, records) {
     detailEl.style.display = 'none';
   }
 
-  // "Show, don't just do": list exactly what was filled (label → value) so operator trusts it
+  // "Show, don't just do": list exactly what was filled (label â†’ value) so operator trusts it
   const filledEl = document.getElementById('results-filled');
   if (filledEl) {
     const fr = window._lastFilledRecords || [];
     if (fr.length) {
-      filledEl.innerHTML = `<div class="filled-toggle" id="filled-toggle">▸ See what was filled (${fr.length})</div>
+      filledEl.innerHTML = `<div class="filled-toggle" id="filled-toggle">â–¸ See what was filled (${fr.length})</div>
         <div id="filled-list" style="display:none"></div>`;
       const listEl = filledEl.querySelector('#filled-list');
       listEl.innerHTML = fr.map(r => {
         const label = (r.label || r.selector || '').toString().replace(/[#.\[\]]/g, '').slice(0, 28);
         const val = (r.value != null ? String(r.value) : '').slice(0, 30);
-        return `<div class="filled-row"><span class="fl-label">${label}</span><span class="fl-val">${val}</span><span class="fl-check">✓</span></div>`;
+        return `<div class="filled-row"><span class="fl-label">${label}</span><span class="fl-val">${val}</span><span class="fl-check">âœ“</span></div>`;
       }).join('');
       const toggle = filledEl.querySelector('#filled-toggle');
       toggle.onclick = () => {
         const open = listEl.style.display === 'block';
         listEl.style.display = open ? 'none' : 'block';
-        toggle.textContent = (open ? '▸' : '▾') + ` See what was filled (${fr.length})`;
+        toggle.textContent = (open ? 'â–¸' : 'â–¾') + ` See what was filled (${fr.length})`;
       };
       filledEl.style.display = 'block';
     } else {
@@ -257,7 +257,7 @@ function renderProfiles(query) {
       <div class="avatar">${initials}</div>
       <div>
         <div class="profile-name">${p.name || 'Unknown'}</div>
-        <div class="profile-phone">📱 ${phone}</div>
+        <div class="profile-phone">ðŸ“± ${phone}</div>
       </div>
     </div>`;
   }).join('');
@@ -304,7 +304,7 @@ searchEl.addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter') {
     e.preventDefault();
     if (selectedProfile && (focusIdx === -1 || filteredProfiles[focusIdx]?.id === selectedProfile.id)) {
-      // Profile already selected — trigger fill
+      // Profile already selected â€” trigger fill
       fillBtn.click();
     } else if (focusIdx >= 0 && filteredProfiles[focusIdx]) {
       // Select the focused profile
@@ -400,7 +400,7 @@ fillBtn.addEventListener('click', async () => {
   const { percent, missing } = getCompleteness(full);
   if (percent < 100 && missing.length > 0) {
     const warn = document.getElementById('completeness-warn');
-    warn.innerHTML = `<span>⚠️ ${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
+    warn.innerHTML = `<span>âš ï¸ ${percent}% complete â€” will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
     warn.style.display = 'flex';
     await new Promise(resolve => {
       document.getElementById('fill-anyway').onclick = () => { warn.style.display = 'none'; resolve(); };
@@ -411,7 +411,7 @@ fillBtn.addEventListener('click', async () => {
   fillBtn.innerHTML = '<span>Filling...</span>';
   resultsEl.style.display = 'none';
   undoBtn.style.display = 'none';
-  showProgress('Preparing autofill scripts...');
+  showProgress('Perceiving page...');
   saveRecent(selectedProfile.id);
 
   try {
@@ -435,7 +435,7 @@ fillBtn.addEventListener('click', async () => {
       }
     });
 
-    // Use pre-fetched profile (or fetch if not ready)
+    // Get full profile
     const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
     let fullProfile = _prefetchedProfile?.id === selectedProfile.id ? _prefetchedProfile : selectedProfile;
     if (fullProfile === selectedProfile) {
@@ -448,463 +448,222 @@ fillBtn.addEventListener('click', async () => {
     }
     selectedProfile = fullProfile;
 
-    // Inject the network monitor in PAGE world — wraps fetch + XMLHttpRequest
-    // so the autofill executor can wait for AJAX idle instead of hardcoded delays.
-    // Wrapped in try/catch — some pages (chrome://, sandboxed iframes, CSP-strict
-    // sites) reject MAIN world injection; in those cases the executor falls back
-    // to fixed delays via waitForNetworkIdle's 'monitor missing' path.
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        world: 'MAIN',
-        files: ['autofill/plugins/network-monitor.js'],
-      });
-    } catch (e) {
-      console.warn('[CC] network monitor injection failed (will use fallback delays):', e.message);
-    }
-    // Inject all autofill scripts in ONE call — they must share the same scope (ISOLATED world)
-    // Shared modules are listed FIRST so they're available when callers run.
-    // First: inject cached server field mappings for mapper.js to pick up
-    try {
-      const _cachedMappings = await chrome.storage.local.get('_cc_knowledge_cache');
-      const _fm = _cachedMappings?._cc_knowledge_cache?.artifacts?.field_mappings || [];
-      const _dr = _cachedMappings?._cc_knowledge_cache?.artifacts?.derivation_rules || [];
-      if (_fm.length > 0 || _dr.length > 0) {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: (mappings, derivRules) => {
-            if (mappings.length) window._ccServerFieldMappings = mappings;
-            if (derivRules.length) window._ccServerDerivationRules = derivRules;
-          },
-          args: [_fm, _dr],
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // NEW ARCHITECTURE: perceive â†’ send snapshot â†’ receive plan â†’ execute â†’ report
+    // Extension = Eyes + Hands only. Server = Brain + Memory + Knowledge.
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+    // Step 1: Inject perception pipeline and perceive the page
+    updateProgress('Perceiving page structure...', 30);
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: [
+        'perception/binding-registry.js',
+        'perception/revision-manager.js',
+        'perception/canonical-hash.js',
+        'perception/privacy-filter.js',
+        'perception/widget-classifier.js',
+        'perception/node-factory.js',
+        'perception/edge-factory.js',
+        'perception/context-discovery.js',
+        'perception/snapshot-builder.js',
+        'perception/validator.js',
+        'perception/index.js',
+        'runtime/dom-gateway.js',
+      ]
+    });
+
+    const [percResult] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: async () => {
+        await CcPerception.initPerception({
+          gateway: CcDomGateway,
+          bindingRegistry: new CcBindingRegistry(),
+          revisionManager: new CcRevisionManager(),
+          privacyFilter: CcPrivacyFilter,
+          widgetClassifier: CcWidgetClassifier,
+          contextDiscovery: CcContextDiscovery,
+          nodeFactory: CcNodeFactory,
+          edgeFactory: CcEdgeFactory,
+          canonicalHash: CcCanonicalHash,
+          snapshotBuilder: CcSnapshotBuilder,
+          validator: CcValidator,
+          validatorOptions: { schema: null },
         });
+        if (CcValidator && !CcValidator.isInitialized()) {
+          await CcValidator.initValidator({ schema: null });
+        }
+        return CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
       }
-    } catch (e) { console.warn('[CC] Server knowledge injection skipped:', e.message); }
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: [
-          'shared/option-match.js',
-          'shared/dom-utils.js',
-          'shared/network-idle.js',
-          'shared/llm-client.js',
-          'shared/select-apply.js',
-          'shared/semantic-aliases.js',
-          'models/ir.js',
-          'capabilities/registry.js',
-          'runtime/resolver.js',
-          'runtime/runner.js',
-          'autofill/plugins/interface.js',
-          'autofill/plugins/cascade-select.js',
-          'autofill/plugins/ng-dropdown.js',
-          'autofill/plugins/button-click.js',
-          'autofill/plugins/keystroke-input.js',
-          'runtime/plugin-bridge.js',
-          'drivers/dispatch.js',
-          'drivers/dom.js',
-          'drivers/input.js',
-          'drivers/select.js',
-          'drivers/interaction.js',
-          'autofill/extractor.js',
-          'autofill/rule-engine.js',
-          'autofill/derive.js',
-          'autofill/ai-resolve.js',
-          'autofill/mapper.js',
-          'autofill/executor.js'
-        ]
-      });
-    } catch (e) {
-      showStatus('Failed to load autofill scripts: ' + e.message, CC.danger);
-      hideProgress();
-      return;
+    });
+
+    const pageSnapshot = percResult?.result;
+    if (!pageSnapshot || pageSnapshot.kind !== 'page_snapshot') {
+      showStatus('Perception failed â€” no snapshot', CC.danger); hideProgress(); return;
     }
 
-    updateProgress('Mapping fields to profile...', 50);
-    // Get LLM key from backend settings (OpenRouter or Groq)
-    let groqKey = '', llmBaseUrl = 'https://api.groq.com/openai/v1/chat/completions', llmModel = 'llama-3.3-70b-versatile';
-    try {
-      const gRes = await fetch(data.backendUrl + '/settings/groq-key', { headers: { 'Authorization': 'Bearer ' + data.accessToken } });
-      if (gRes.ok) { const gd = await gRes.json(); groqKey = gd.key || ''; llmBaseUrl = gd.baseUrl || llmBaseUrl; llmModel = gd.model || llmModel; }
-    } catch {}
-    updateProgress('Filling form fields...', 70);
-    const result = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      args: [(() => {
-          // Flatten provenance structure: {field: {value, source, ...}} → {field: value}
+    // Step 2: Send snapshot + profile to server, receive ActionPlan
+    updateProgress('Server planning fill...', 55);
+    const planResponse = await fetch(data.backendUrl + '/fill-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.accessToken },
+      body: JSON.stringify({
+        snapshot: pageSnapshot,
+        profileId: selectedProfile.id,
+        profile: (() => {
           const flat = {};
           const raw = selectedProfile.data || selectedProfile;
           for (const [k, v] of Object.entries(raw)) {
             flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
           }
-          // Also include top-level fields
           if (selectedProfile.name) flat.name = flat.name || selectedProfile.name;
           return flat;
-        })(), selectedProfile.id || '', data.backendUrl, data.accessToken, groqKey, llmBaseUrl, llmModel],
-      func: async (profile, profileId, backendUrl, accessToken, groqKey, llmBaseUrl, llmModel) => {
-        const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken };
-        // ── Pass 0: derive implied values (highest qualification, aliases, age,
-        // eligibility flags). Deterministic, free; never overwrites real data.
-        try {
-          if (typeof ccDeriveProfile === 'function') {
-            const before = Object.keys(profile).length;
-            profile = ccDeriveProfile(profile);
-            console.log('[CC] derived keys:', (profile._derived || []).join(', ') || 'none', `(${before}→${Object.keys(profile).length})`);
-          }
-        } catch (e) { console.warn('[CC] derive failed:', e.message); }
-        // ── Load semantic aliases from service (for runner target resolution) ──
-        try {
-          if (window.ccSemanticAliases && window.ccSemanticAliases.load) {
-            await window.ccSemanticAliases.load(backendUrl, accessToken);
-            const st = window.ccSemanticAliases.status();
-            console.log('[CC] Semantic aliases:', st.source, '(' + st.count + ' keys)');
-          }
-        } catch (e) { console.warn('[CC] Alias load skipped:', e.message); }
+        })(),
+      }),
+    });
 
-        const { formFields, semanticFormKey } = extractFormFieldsWithFingerprint();
-        // SEC-002: keep backend URL, bearer token, and LLM key in the extension's
-        // ISOLATED-world scope, NOT on page-readable DOM attributes. These autofill
-        // scripts run in the isolated world, so window.__ccFillCtx is invisible to
-        // page (MAIN-world) scripts. The post-fill correction observer in
-        // executor.js reads this same object.
-        try {
-          window.__ccFillCtx = {
-            backendUrl: backendUrl,
-            accessToken: accessToken,
-            formKey: semanticFormKey || '',
-            profileId: profileId || '',
-            llmBaseUrl: llmBaseUrl || '',
-            llmModel: llmModel || '',
-            llmKey: groqKey || '',
-          };
-        } catch {}
-        if (!formFields.length) return { ok: false, error: 'No form fields detected' };
+    if (!planResponse.ok) {
+      const errText = await planResponse.text().catch(() => 'Unknown error');
+      showStatus(`Server plan failed: ${planResponse.status} â€” ${errText.slice(0, 80)}`, CC.danger);
+      hideProgress(); return;
+    }
 
-        // Try saved mappings (rule-aware: fillMode / rules / constant / conditions)
-        let mapping = {}, fbs = {};
-        const directChecks = [];    // radio/checkbox toggles (executor value-strategies don't set .checked)
-        const handled = new Set();  // formField selectors resolved via saved rules
-        let translations = {};
-        try { const tr = await fetch(backendUrl + '/mappings/translations', { headers }); translations = (await tr.json()) || {}; } catch {}
-        try {
-          const r = await fetch(backendUrl + '/mappings/' + semanticFormKey, { headers });
-          const saved = await r.json();
-          if (saved && typeof saved === 'object') {
-            const norm = l => (l||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
-            for (const f of formFields) {
-              const sk = norm(f.label); const s = saved[sk];
-              if (!s) continue;
-              const act = (typeof ccEvaluateField === 'function') ? ccEvaluateField(s, f, profile, translations)
-                : (s.profileKey && profile[s.profileKey] ? { kind: 'value', value: String(profile[s.profileKey]) } : { kind: 'skip' });
-              if (!act || act.kind === 'skip') continue;
-              const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
-              const setFbs = () => { fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); };
-              if (act.kind === 'value') {
-                mapping[f.selector] = { value: act.value, type: f.type };
-                setFbs();
-              } else if (act.kind === 'option') {
-                if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
-                  const idx = (f.options || []).indexOf(act.option);
-                  const optSel = idx >= 0 ? f.optionSelectors[idx] : null;
-                  if (optSel) { mapping[optSel] = { value: act.option, type: 'radio-click' }; fbs[optSel] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); }
-                } else {
-                  mapping[f.selector] = { value: act.option, type: f.type };  // dropdown: executor selects by option text
+    const { plan, session } = await planResponse.json();
+    if (!plan || !plan.steps || plan.steps.length === 0) {
+      showStatus('Server returned empty plan â€” no fields to fill', CC.warning);
+      hideProgress(); return;
+    }
+
+    // Step 3: Execute the ActionPlan via the runner
+    updateProgress(`Filling ${plan.steps.length} fields...`, 70);
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: [
+        'shared/dom-utils.js',
+        'shared/network-idle.js',
+        'shared/select-apply.js',
+        'shared/option-match.js',
+        'models/ir.js',
+        'capabilities/registry.js',
+        'runtime/resolver.js',
+        'runtime/runner.js',
+        'runtime/plugin-bridge.js',
+        'autofill/plugins/interface.js',
+        'autofill/plugins/cascade-select.js',
+        'autofill/plugins/ng-dropdown.js',
+        'autofill/plugins/button-click.js',
+        'drivers/dispatch.js',
+        'drivers/dom.js',
+        'drivers/input.js',
+        'drivers/select.js',
+        'drivers/interaction.js',
+      ]
+    });
+
+    const [execResult] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      args: [plan],
+      func: async (actionPlan) => {
+        // Execute each step using the runner's capability registry
+        const results = [];
+        for (const step of actionPlan.steps) {
+          try {
+            // Resolve target element by node_id (look up via data attribute or structural match)
+            let el = document.querySelector(`[data-cc-node-id="${step.target.node_id}"]`);
+            if (!el) {
+              // Fallback: try by accessible name from the step metadata
+              const allInputs = document.querySelectorAll('input, select, textarea, [role="combobox"], [role="listbox"]');
+              for (const input of allInputs) {
+                const label = input.getAttribute('aria-label') || input.closest('label')?.textContent?.trim() || '';
+                if (label && step.target.accessible_name && label.toLowerCase().includes(step.target.accessible_name.toLowerCase().slice(0, 20))) {
+                  el = input; break;
                 }
-                setFbs();
-              } else if (act.kind === 'check') {
-                if (act.check) { mapping[f.selector] = { value: 'true', type: 'checkbox' }; }
-                setFbs();
-              } else if (act.kind === 'checkOptions') {
-                const sels = f.optionSelectors || [];
-                for (const optText of act.options) {
-                  const idx = (f.options || []).indexOf(optText);
-                  const optSel = idx >= 0 ? sels[idx] : null;
-                  if (optSel) { mapping[optSel] = { value: optText, type: 'radio-click' }; fbs[optSel] = { label: f.label, profileKey: s.profileKey, source: 'mapping' }; handled.add(f.selector); }
-                }
-                setFbs();
               }
             }
-          }
-        } catch {}
-
-        // Fuzzy fill remaining (skip fields already resolved by rules)
-        const unmapped = formFields.filter(f => !mapping[f.selector] && !handled.has(f.selector));
-        if (unmapped.length) {
-          const fz = fuzzyMatch(unmapped, profile);
-          for (const [s,v] of Object.entries(fz)) {
-            mapping[s] = v;
-            const ff = formFields.find(x=>x.selector===s);
-            if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' };
-          }
-        }
-
-        let adp = {};
-        try { const r = await fetch(backendUrl+'/adapters/'+location.hostname,{headers}); adp=await r.json(); } catch {}
-
-        // AI mapping for fields fuzzyMatch couldn't handle (with 10s timeout)
-        // Exclude radio/checkbox — those are handled by the rule engine, not key-mapping.
-        const unmappedAI = formFields.filter(f => {
-          if (mapping[f.selector] || handled.has(f.selector)) return false;
-          const g = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
-          return g !== 'radio' && g !== 'checkbox';
-        });
-        if (unmappedAI.length > 0 && groqKey) {
-          try {
-            const aiPromise = aiMatch(unmappedAI, profile, groqKey, llmBaseUrl, llmModel);
-            const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('AI timeout')), 10000));
-            const aiMapping = await Promise.race([aiPromise, timeout]);
-            for (const [sel, val] of Object.entries(aiMapping)) {
-              if (!mapping[sel]) { mapping[sel] = val; fbs[sel] = { label: 'ai', source: 'ai' }; }
+            if (!el) {
+              results.push({ step_id: step.step_id, status: 'failed', failure_code: 'stale_target', postcondition_met: false, duration_ms: 0 });
+              continue;
             }
-          } catch(e) { console.warn('[CC] aiMatch skipped:', e.message); }
-        }
 
-        // ── Option validation: demote dropdown/radio fills whose value doesn't
-        // match any available option. Better to leave them for the AI resolver
-        // (which sees the OPTIONS list) than to send an unmatchable value to the
-        // executor where it will timeout with "no-matching-option". ──────────
-        for (const f of formFields) {
-          if (!mapping[f.selector]) continue;
-          const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
-          if (grp !== 'dropdown' && grp !== 'radio') continue;
-          const val = String(mapping[f.selector].value || '').toLowerCase().trim();
-          if (!val) continue;
-          const src = fbs[f.selector]?.source || '';
-          if (f.options && f.options.length) {
-            // Has pre-captured options: validate against them
-            const matched = f.options.some(o => {
-              const on = o.toLowerCase().trim();
-              return on === val || on.includes(val) || val.includes(on);
-            });
-            if (!matched) {
-              console.log('[CC] demoted unmatched dropdown:', f.label, '→', mapping[f.selector].value);
-              delete mapping[f.selector]; delete fbs[f.selector];
-            }
-          } else if (src !== 'mapping' && src !== 'manual') {
-            // Ng-dropdown without pre-captured options: ONLY trust saved mappings
-            // (they were verified by a previous successful fill). Fuzzy/AI-key
-            // guesses haven't been validated against real options and will likely
-            // timeout in the executor. Let the AI resolver handle with reasoning.
-            console.log('[CC] demoted unverified ng-dropdown:', f.label, '→', mapping[f.selector].value, '(source:', src, ')');
-            delete mapping[f.selector]; delete fbs[f.selector];
-          }
-        }
-
-        // ── Final pass: AI resolves VALUES for fields still blank ──────────────
-        // Direct + derived + fuzzy + aiMatch have run. Anything left is either a
-        // form-specific question or needs reasoning over the profile (e.g. which
-        // dropdown option fits). One batched call; option values are validated
-        // against the field's real options so nothing unusable gets filled.
-        const stillBlank = formFields.filter(f =>
-          !mapping[f.selector] && !handled.has(f.selector) &&
-          f.type !== 'checkbox-agreement' &&
-          !/captcha|otp|password|verification code/i.test(f.label || '')
-        );
-        if (stillBlank.length > 0 && groqKey && typeof ccAiResolveValues === 'function') {
-          try {
-            const pending = stillBlank.map(f => ({
-              selector: f.selector, label: f.label, type: f.type,
-              options: f.options || null, placeholder: f.placeholder || '',
-            }));
-            const rPromise = ccAiResolveValues(pending, profile, groqKey, llmBaseUrl, llmModel);
-            const rTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('ai-resolve timeout')), 15000));
-            const resolved = await Promise.race([rPromise, rTimeout]);
-            let n = 0;
-            for (const [sel, info] of Object.entries(resolved)) {
-              if (mapping[sel]) continue;
-              const f = formFields.find(x => x.selector === sel);
-              if (!f) continue;
-              const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
-              // Radio → click the matching option directly; others go through executor
-              if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
-                const oi = (f.options || []).indexOf(info.value);
-                if (oi >= 0 && f.optionSelectors[oi]) {
-                  mapping[f.optionSelectors[oi]] = { value: info.value, type: 'radio-click' };
-                  fbs[f.optionSelectors[oi]] = { label: f.label, source: 'ai-resolve' };
-                  handled.add(f.selector); n++;
-                }
+            const start = performance.now();
+            // Perform the action
+            if (step.action.op === 'type_text') {
+              if (step.action.clear_first) { el.value = ''; el.dispatchEvent(new Event('input', { bubbles: true })); }
+              el.focus();
+              el.value = step.action.value || '';
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            } else if (step.action.op === 'select_option') {
+              if (el.tagName === 'SELECT') {
+                const opt = [...el.options].find(o => o.text.trim().toLowerCase() === (step.action.value || '').toLowerCase() || o.value === step.action.value);
+                if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
               } else {
-                mapping[sel] = { value: info.value, type: f.type };
-                fbs[sel] = { label: f.label, source: 'ai-resolve' };
-                n++;
+                el.click(); // open dropdown
+                await new Promise(r => setTimeout(r, 300));
+                const options = document.querySelectorAll('[role="option"], .ng-option, li.option, mat-option');
+                for (const o of options) {
+                  if (o.textContent.trim().toLowerCase().includes((step.action.value || '').toLowerCase())) {
+                    o.click(); break;
+                  }
+                }
               }
+            } else if (step.action.op === 'click') {
+              el.click();
+            } else if (step.action.op === 'toggle') {
+              if (!el.checked) el.click();
             }
-            if (n) console.log('[CC] ai-resolve filled', n, 'residual field(s)');
-          } catch (e) { console.warn('[CC] ai-resolve skipped:', e.message); }
-        }
-        // ── Executor is the PRIMARY fill engine (proven sequential logic) ──
-        // It handles: DOM-order fill, scroll-into-view, keystroke simulation,
-        // waitForOptions (cascade), waitForNetworkIdle, DWR re-apply,
-        // ng-dropdown plugin, verifyValue, and 200ms inter-field delay.
-        const filled = await fillFormFieldsSequential(mapping, fbs, adp, formFields);
 
-        // Apply radio/checkbox selections directly
-        const directRecords = [];
-        for (const dc of directChecks) {
-          try {
-            const el = document.querySelector(dc.selector);
-            if (!el) { directRecords.push({ selector: dc.selector, value: dc.check ? 'checked' : 'unchecked', type: 'toggle', result: 'skipped', failReason: 'not-found', source: 'mapping', label: dc.label }); continue; }
-            if (el.checked !== !!dc.check) el.click();
-            el.dispatchEvent(new Event('change', { bubbles: true }));
-            fbs[dc.selector] = { label: dc.label, profileKey: dc.profileKey, source: 'mapping' };
-            directRecords.push({ selector: dc.selector, value: 'checked', type: 'toggle', result: 'filled', source: 'mapping', label: dc.label });
-          } catch { /* skip */ }
-        }
+            const duration = performance.now() - start;
+            results.push({ step_id: step.step_id, status: 'succeeded', failure_code: null, postcondition_met: true, duration_ms: Math.round(duration), observed_value_state: 'nonempty' });
 
-        // ── Runner produces Observation from executor's records (Phase 1.7) ──
-        // This gives protocol-compliant output without replacing the executor's
-        // proven fill logic.
-        let runnerObservation = null;
-        try {
-          if (window.ccRunner && window.ccResolver) {
-            const extractResult = extractFormFieldsWithFingerprint();
-            const elements = formFields.map(f => document.querySelector(f.selector));
-            window.ccResolver.setPageContext(extractResult.pageModel, elements);
-
-            // Build Observation from executor's _ccRecords
-            let executorRecords = [];
-            try { executorRecords = (Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : []); } catch {}
-
-            runnerObservation = {
-              plan_id: 'executor_fill_' + Date.now(),
-              session_id: semanticFormKey || 'unknown',
-              protocol_version: 2,
-              execution_path: executorRecords.map((r, i) => ({
-                node_id: 'field_' + i,
-                status: r.result === 'filled' ? 'success' : 'failed',
-                actual_value: r.actualValue || r.value || null,
-                error: r.failReason || null,
-                duration_ms: r.durationMs || 0,
-              })),
-              checkpoints_reached: [],
-              corrections: [],
-              human_interactions: [],
-              page_state: {
-                url: window.location.href,
-                navigated: false,
-                form_submitted: false,
-                fields_snapshot: null,
-              },
-            };
-            const succeeded = runnerObservation.execution_path.filter(e => e.status === 'success').length;
-            console.log('[CC] Observation:', succeeded, '/', runnerObservation.execution_path.length, 'fields filled');
+            // Inter-field delay for cascade fields
+            await new Promise(r => setTimeout(r, 150));
+          } catch (err) {
+            results.push({ step_id: step.step_id, status: 'failed', failure_code: 'execution_error', postcondition_met: false, duration_ms: 0 });
           }
-        } catch (e) { console.warn('[CC] Observation build error:', e.message); }
-
-        // Read structured records the executor kept in isolated-world memory
-        let records = [];
-        try { records = (Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : []); } catch {}
-        records = records.concat(directRecords);
-
-        // Index formFields by selector for label lookup
-        const fieldBySelector = {};
-        for (const f of formFields) fieldBySelector[f.selector] = f;
-        // Tag every record with its source (mapping / fuzzy / ai) AND the field's label
-        records = records.map(r => ({
-          ...r,
-          source: r.source || (fbs[r.selector] && fbs[r.selector].source) || 'unknown',
-          label: r.label || (fieldBySelector[r.selector] && fieldBySelector[r.selector].label) || (fbs[r.selector] && fbs[r.selector].label) || '',
-        }));
-
-        // Append "unmapped" records for fields the mapper couldn't find a value for —
-        // makes admin Sessions page show WHY a field wasn't filled.
-        const filledSelectors = new Set(records.map(r => r.selector));
-        for (const f of formFields) {
-          if (filledSelectors.has(f.selector)) continue;
-          if (mapping[f.selector]) continue; // mapped but executor didn't report — handled below
-          let reason = 'no-mapping';
-          if (f.type === 'ng-dropdown' || f.type === 'mat-select' || f.type === 'select') reason = 'no-mapping-for-dropdown';
-          if (f.type === 'radio' || f.type === 'checkbox' || f.type === 'mat-radio' || f.type === 'mat-checkbox') reason = 'no-mapping-for-' + f.type;
-          records.push({
-            selector: f.selector,
-            label: f.label,
-            type: f.type,
-            value: null,
-            result: 'unmapped',
-            failReason: reason,
-            strategy: 'planner',
-            source: 'none',
-            ts: Date.now(),
-          });
         }
-
-        const totalDetected = formFields.length;
-        const totalMapped = Object.keys(mapping).length;
-        const totalFilled = records.filter(r => r.result === 'filled').length;
-        const totalSkipped = records.filter(r => r.result === 'skipped').length;
-        const totalUnmapped = records.filter(r => r.result === 'unmapped').length;
-        const totalFailed = records.filter(r => r.result && r.result !== 'filled' && r.result !== 'skipped' && r.result !== 'unmapped').length;
-
-        // POST session record (workspace-scoped via the JWT)
-        try {
-          await fetch(backendUrl + '/sessions', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              hostname: location.hostname,
-              semanticFormKey,
-              runtimeVersion: (records[0] && records[0].rv) || null,
-              totalFilled,
-              totalFailed,
-              records,
-              // Diagnostics for admin UI
-              meta: { totalDetected, totalMapped, totalSkipped, totalUnmapped },
-            }),
-          });
-        } catch (e) { console.warn('[CC] session post failed:', e.message); }
-
-        // Build mapping sync data — POSTed from popup context (more reliable than in-page fetch)
-        let syncUpdates = {};
-        try {
-          const norm = l => (l||'').toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
-          for (let i = 0; i < formFields.length; i++) {
-            const f = formFields[i];
-            const sk = norm(f.label);
-            if (!sk || sk.length < 2) continue;
-            const fbsInfo = fbs[f.selector];
-            const profileKey = fbsInfo?.profileKey || (mapping[f.selector] ? Object.entries(profile).find(([,v]) => v === mapping[f.selector].value)?.[0] : null) || null;
-            const wasFilled = records.some(r => r.selector === f.selector && r.result === 'filled');
-            syncUpdates[sk] = {
-              profileKey,
-              label: f.label,
-              type: f.type,
-              order: i,
-              options: f.options || null,
-              delta: { fills: wasFilled ? 1 : 0, corrections: 0 },
-            };
-          }
-        } catch (e) { console.warn('[CC] mapping sync build failed:', e.message); }
-
-        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length, records: records.filter(r => r.result !== 'filled').slice(0, 10), filledRecords: records.filter(r => r.result === 'filled').slice(0, 25), syncUpdates, syncFormKey: semanticFormKey, syncTitle: document.title.slice(0, 80), syncHost: location.hostname };
+        return results;
       }
     });
 
-    const r = result?.[0]?.result;
-    // Sync mappings from popup context (reliable — not dependent on in-page fetch/CSP)
-    if (r?.ok && r.syncUpdates && Object.keys(r.syncUpdates).length > 0 && r.syncFormKey) {
-      try {
-        await fetch(data.backendUrl + '/mappings/' + r.syncFormKey, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + data.accessToken },
-          body: JSON.stringify({ updates: r.syncUpdates, meta: { hostname: r.syncHost, title: r.syncTitle, lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
-        });
-      } catch (e) { console.warn('[CC] mapping sync POST failed:', e.message); }
-    }
-    if (r?.ok) {
-      const skipped = r.totalUnmapped || 0;
-      const failed = r.totalFailed || 0;
-      window._lastFilledRecords = r.filledRecords || [];
-      showResults(r.totalFilled || 0, skipped, failed, r.records);
-      undoBtn.style.display = 'block';
-    } else {
-      hideProgress();
-      showStatus(r?.error || 'Fill failed', CC.danger);
-    }
+    const stepResults = execResult?.result || [];
+    const filled = stepResults.filter(r => r.status === 'succeeded').length;
+    const failed = stepResults.filter(r => r.status === 'failed').length;
+    const skipped = plan.steps.length - filled - failed;
+
+    // Step 4: Report observation back to server
+    updateProgress('Reporting results...', 90);
+    try {
+      await fetch(data.backendUrl + '/fill-observation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.accessToken },
+        body: JSON.stringify({
+          sessionId: session?.id || null,
+          planId: plan.plan_id,
+          snapshot_id: pageSnapshot.snapshot_id,
+          outcome: failed === 0 ? 'completed' : 'partial',
+          steps: stepResults,
+        }),
+      });
+    } catch (e) { console.warn('[CC] observation report failed:', e.message); }
+
+    // Show results
+    const records = plan.steps.map((step, i) => ({
+      label: step.target.accessible_name || step.step_id,
+      result: stepResults[i]?.status === 'succeeded' ? 'filled' : 'failed',
+      value: step.action.value || '',
+      source: 'server-plan',
+    }));
+    window._lastFilledRecords = records.filter(r => r.result === 'filled');
+    showResults(filled, skipped, failed, records.filter(r => r.result !== 'filled'));
+    undoBtn.style.display = 'block';
+
   } catch (e) {
     hideProgress();
     showStatus('Error: ' + e.message, CC.danger);
   } finally {
     fillBtn.disabled = false;
-    fillBtn.innerHTML = '⚡ Fill Form';
+    fillBtn.innerHTML = 'âš¡ Fill Form';
   }
 });
 
@@ -924,7 +683,7 @@ undoBtn.addEventListener('click', async () => {
     });
     undoBtn.style.display = 'none';
     resultsEl.style.display = 'none';
-    showStatus('↩ Fill undone', CC.success);
+    showStatus('â†© Fill undone', CC.success);
   } catch (e) { showStatus('Undo failed: ' + e.message, CC.danger); }
 });
 
@@ -938,10 +697,10 @@ document.getElementById('open-btn').addEventListener('click', async () => {
   const existing = tabs.find(t => t.url?.startsWith(frontendUrl));
   if (existing) { chrome.tabs.update(existing.id, {active:true}); chrome.windows.update(existing.windowId,{focused:true}); }
   else chrome.tabs.create({ url: frontendUrl || 'http://localhost:5173' });
-  // Side panel stays open (ChatGPT-style) — do not window.close()
+  // Side panel stays open (ChatGPT-style) â€” do not window.close()
 });
 
-// ── AI Agent flow ─────────────────────────────────────────────────────────
+// â”€â”€ AI Agent flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Plan-then-execute model: popup posts (goal + page snapshot + driver list)
 // to /api/agent/plan, hub returns proposed actions, operator approves,
 // popup runs cc.run(actions) in the active tab.
@@ -977,8 +736,8 @@ async function injectDriversInto(tabId) {
 agentBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
   agentBtn.disabled = true;
-  agentBtn.textContent = '🤖 ...';
-  showStatus('Snapshotting page + planning…', CC.info);
+  agentBtn.textContent = 'ðŸ¤– ...';
+  showStatus('Snapshotting page + planningâ€¦', CC.info);
 
   try {
     const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
@@ -1010,7 +769,7 @@ agentBtn.addEventListener('click', async () => {
       }
     } catch (e) {}
 
-    // Flatten data — strip metadata keys
+    // Flatten data â€” strip metadata keys
     const META_KEYS = new Set(['id', 'displayLabel', 'displayName', 'relationship', 'createdAt', 'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId', 'confirmedAt', 'confirmedBy', 'source', 'confidence']);
     const flatProfile = {};
     const raw = fullProfile.data || fullProfile;
@@ -1040,9 +799,9 @@ agentBtn.addEventListener('click', async () => {
       let pretty = '';
       try {
         const parsed = JSON.parse(errBody);
-        if (parsed.status === 413) pretty = 'Form too big for one prompt — try again on a shorter section';
-        else if (parsed.status === 429) pretty = 'AI rate-limited — wait 30s and retry';
-        else if (parsed.status === 400) pretty = 'AI rejected schema — extension version mismatch?';
+        if (parsed.status === 413) pretty = 'Form too big for one prompt â€” try again on a shorter section';
+        else if (parsed.status === 429) pretty = 'AI rate-limited â€” wait 30s and retry';
+        else if (parsed.status === 400) pretty = 'AI rejected schema â€” extension version mismatch?';
         else pretty = parsed.error || errBody.slice(0, 100);
       } catch (e) { pretty = errBody.slice(0, 120); }
       throw new Error('plan ' + planRes.status + ': ' + pretty);
@@ -1053,7 +812,7 @@ agentBtn.addEventListener('click', async () => {
       showStatus('Agent returned 0 actions. Check console for raw response.', CC.warning);
       console.log('[CC agent] empty plan, raw:', plan);
       agentBtn.disabled = false;
-      agentBtn.textContent = '🤖';
+      agentBtn.textContent = 'ðŸ¤–';
       return;
     }
 
@@ -1066,7 +825,7 @@ agentBtn.addEventListener('click', async () => {
     console.error('[CC agent]', e);
   } finally {
     agentBtn.disabled = false;
-    agentBtn.textContent = '🤖';
+    agentBtn.textContent = 'ðŸ¤–';
   }
 });
 
@@ -1091,7 +850,7 @@ agentExecuteBtn.addEventListener('click', async () => {
   const { plan, snapshot, tab } = _pendingPlan;
   agentExecuteBtn.disabled = true;
   agentExecuteBtn.textContent = '...';
-  showStatus('Executing ' + plan.actions.length + ' actions…', CC.info);
+  showStatus('Executing ' + plan.actions.length + ' actionsâ€¦', CC.info);
 
   try {
     const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
@@ -1118,7 +877,7 @@ agentExecuteBtn.addEventListener('click', async () => {
       const summary = r?.error || (r?.result ? JSON.stringify(r.result).slice(0, 80) : '?');
       const args = JSON.stringify(a.args).slice(0, 60);
       return `<div class="agent-step">
-        <span style="color:${color}">${ok ? '✓' : '✗'}</span>
+        <span style="color:${color}">${ok ? 'âœ“' : 'âœ—'}</span>
         <span class="name">${a.name}</span>
         <span class="args">${args}</span>
         <div class="n" style="padding-left:16px;font-size:10px;margin-top:2px">${summary}</div>
@@ -1131,7 +890,7 @@ agentExecuteBtn.addEventListener('click', async () => {
       func: async () => (await cc.do({ name: 'dom.snapshot', args: {} })).result,
     });
 
-    // Persist trace (best-effort) — also pass profile + formKey so server can
+    // Persist trace (best-effort) â€” also pass profile + formKey so server can
     // learn (formKey, label) -> profileKey mappings from successful fills.
     fetch(data.backendUrl + '/agent/trace', {
       method: 'POST',
@@ -1148,15 +907,15 @@ agentExecuteBtn.addEventListener('click', async () => {
       }),
     }).catch(e => console.warn('[CC agent] trace persist failed:', e));
 
-    agentExecuteBtn.textContent = '✓ Done';
-    setTimeout(() => { agentExecuteBtn.textContent = '▶ Execute'; }, 3000);
+    agentExecuteBtn.textContent = 'âœ“ Done';
+    setTimeout(() => { agentExecuteBtn.textContent = 'â–¶ Execute'; }, 3000);
     _pendingPlan = null;
   } catch (e) {
     showStatus('Execute error: ' + e.message, CC.danger);
     console.error('[CC agent execute]', e);
   } finally {
     agentExecuteBtn.disabled = false;
-    agentExecuteBtn.textContent = '▶ Execute';
+    agentExecuteBtn.textContent = 'â–¶ Execute';
   }
 });
 
