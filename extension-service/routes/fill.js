@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import { generateFillPlan, handleObservation, validateSnapshot } from '../fill-planner.js';
+import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '../fill-planner.js';
+import { mapUnknownFields } from '../semantic-mapper.js';
 
 const router = Router();
 
@@ -28,14 +29,84 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       });
     }
 
+    const scope = deriveScope(snapshot);
+
     // Generate the fill plan using server-side intelligence
-    const planResult = await generateFillPlan({
+    let planResult = await generateFillPlan({
       snapshot,
       workspace_id: req.user.workspaceId,
-      phone: null, // Not needed when profile_overrides is provided
+      phone: null,
       person_key: null,
       profile_overrides: profile,
     });
+
+    // ── Cold-start semantic mapping ─────────────────────────────────
+    // If the planner found no mappings (all fields unmapped), invoke AI
+    // semantic mapper to learn new field→profileKey associations.
+    const unmappedCount = planResult.diagnostics?.unmapped_count || 0;
+    const mappedCount = planResult.diagnostics?.mapped_count || 0;
+
+    if (mappedCount === 0 && unmappedCount > 0) {
+      // Extract unmapped nodes from snapshot for AI mapping
+      const nodes = snapshot.nodes || {};
+      const unmappedFields = Object.values(nodes).filter(n => {
+        const aff = n.affordances || [];
+        return aff.some(a => ['type_text', 'select_one', 'select_many', 'toggle'].includes(a));
+      });
+
+      if (unmappedFields.length > 0) {
+        const pageContext = {
+          page_title: snapshot.page?.title || '',
+          page_url: snapshot.page?.origin || '',
+          form_heading: snapshot.page?.route_key || '',
+          portal_id: scope.portal_id,
+          form_key: scope.form_key,
+          language: snapshot.page?.language || 'en',
+        };
+
+        const mapResult = await mapUnknownFields({
+          fields: unmappedFields,
+          pageContext,
+          scope: { ...scope, organization_id: req.user.workspaceId },
+          requesterId: req.user.userId,
+        });
+
+        // If AI produced mappings, retry the fill plan (new knowledge records exist)
+        if (mapResult.ok && mapResult.mappings.length > 0) {
+          planResult = await generateFillPlan({
+            snapshot,
+            workspace_id: req.user.workspaceId,
+            phone: null,
+            person_key: null,
+            profile_overrides: profile,
+          });
+          // Attach semantic mapping diagnostics
+          planResult.diagnostics = {
+            ...planResult.diagnostics,
+            semantic_mapping: {
+              strategy: mapResult.strategy,
+              mapped: mapResult.mappings.length,
+              excluded: mapResult.excluded.length,
+            },
+          };
+        } else {
+          // Attach why semantic mapping didn't produce results
+          planResult.diagnostics = {
+            ...planResult.diagnostics,
+            semantic_mapping: {
+              strategy: mapResult.strategy,
+              mapped: 0,
+              excluded: mapResult.excluded?.length || 0,
+              note: mapResult.strategy === 'no_ai_key' 
+                ? 'No AI key configured — cannot map unknown fields'
+                : mapResult.strategy === 'rate_limited'
+                ? 'AI rate limited — retry later'
+                : 'AI mapping produced no results',
+            },
+          };
+        }
+      }
+    }
 
     if (!planResult.success) {
       return res.status(200).json({
