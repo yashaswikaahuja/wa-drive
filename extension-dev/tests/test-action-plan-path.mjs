@@ -122,5 +122,33 @@ attachPlan(fillSession.session_id, 'plan:test', 1, ['step:text'], ['node:text'],
 const storedStep = getSession(fillSession.session_id).steps[0];
 ok(storedStep.label === 'Full Name' && storedStep.knowledge_record_id === 'record:test', 'fill session retains semantic and learning evidence links');
 
+const originalFetch = globalThis.fetch;
+const originalAIEnv = {
+  AI_API_KEY: process.env.AI_API_KEY,
+  AI_PROVIDER: process.env.AI_PROVIDER,
+  AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS,
+};
+try {
+  process.env.AI_API_KEY = 'test-timeout-key';
+  process.env.AI_PROVIDER = 'openai';
+  process.env.AI_TIMEOUT_MS = '25';
+  const aiKeyManager = await import('../../extension-service/ai-key-manager.js');
+  aiKeyManager._reset();
+  globalThis.fetch = (_url, options = {}) => new Promise((_resolve, reject) => {
+    options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+  });
+  const startedAt = Date.now();
+  const timedOut = await aiKeyManager.callAI({ systemPrompt: 'system', userPrompt: 'user' });
+  ok(timedOut?.ok === false && /timed out after 25ms/.test(timedOut.error || ''), 'AI provider calls fail with an explicit bounded-timeout diagnostic');
+  ok(Date.now() - startedAt < 1000, 'AI timeout returns well before the public gateway deadline');
+  aiKeyManager._reset();
+} finally {
+  globalThis.fetch = originalFetch;
+  for (const [key, value] of Object.entries(originalAIEnv)) {
+    if (value == null) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

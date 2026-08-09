@@ -93,6 +93,10 @@ export function loadConfig() {
   const endpoint = process.env.AI_ENDPOINT || (provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' : provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : DEFAULT_CONFIG.endpoint);
   const maxTokens = parseInt(process.env.AI_MAX_TOKENS, 10) || DEFAULT_CONFIG.maxTokens;
   const temperature = parseFloat(process.env.AI_TEMPERATURE) || DEFAULT_CONFIG.temperature;
+  const configuredTimeout = parseInt(process.env.AI_TIMEOUT_MS, 10);
+  const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : 15_000;
 
   if (process.env.AI_QUOTA_REQUESTS) {
     DEFAULT_CONFIG.quotaRequests = parseInt(process.env.AI_QUOTA_REQUESTS, 10);
@@ -101,7 +105,7 @@ export function loadConfig() {
     DEFAULT_CONFIG.quotaTokens = parseInt(process.env.AI_QUOTA_TOKENS, 10);
   }
 
-  config = { apiKey, provider, model, endpoint, maxTokens, temperature };
+  config = { apiKey, provider, model, endpoint, maxTokens, temperature, timeoutMs };
 
   if (!apiKey) {
     console.warn('[ai-key-manager] No AI_API_KEY configured — AI features disabled');
@@ -291,6 +295,27 @@ async function dispatchToProvider({ systemPrompt, userPrompt, maxTokens, tempera
 }
 
 /**
+ * Execute an AI HTTP request with a strict time budget. Fill planning must
+ * return before the public gateway timeout; a timed-out cold-start mapping
+ * degrades to the planner's existing partial/empty explained result.
+ */
+async function fetchWithTimeout(endpoint, options) {
+  const timeoutMs = config.timeoutMs || 15_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(endpoint, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`AI request timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Call OpenAI-compatible API (works for OpenAI, Azure OpenAI, OpenRouter, Groq).
  */
 async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature }) {
@@ -317,7 +342,7 @@ async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature }) 
     headers['X-Title'] = 'CyberControl';
   }
 
-  const res = await fetch(endpoint, {
+  const res = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -354,7 +379,7 @@ async function callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature 
     ],
   };
 
-  const res = await fetch(endpoint, {
+  const res = await fetchWithTimeout(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
