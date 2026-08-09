@@ -173,7 +173,7 @@ export async function mapUnknownFields(request) {
     } else {
       excluded.push({
         node_id: field.node_id,
-        label: field.label || field.semantic_label || '(no label)',
+        label: field.observed?.accessible_name || field.label || field.semantic_label || '(no label)',
         classification,
         reason: `Field classified as ${classification} — excluded from AI mapping`,
       });
@@ -243,10 +243,10 @@ export async function mapUnknownFields(request) {
   // ── Step 4: Build prompt ──────────────────────────────────────────
   const fieldDescriptors = eligible.map(f => ({
     node_id: f.node_id,
-    label: f.label || f.semantic_label || f.placeholder || '(unlabeled)',
+    label: f.observed?.accessible_name || f.label || f.semantic_label || f.placeholder || '(unlabeled)',
     field_type: resolveFieldType(f),
     options: f.options || f.allowed_values || null,
-    hint: f.hint || f.aria_description || null,
+    hint: f.observed?.description || f.hint || f.aria_description || null,
     group: f.group || f.section || null,
   }));
 
@@ -325,7 +325,8 @@ export async function mapUnknownFields(request) {
     // Only store non-rejected mappings with a profile_key as draft records
     if (confidence.disposition !== 'reject' && aiMapping.profile_key) {
       try {
-        const record = await storeDraftMapping(aiMapping, confidence, scope, requesterId);
+        const descriptor = fieldDescriptors.find(field => field.node_id === aiMapping.node_id);
+        const record = await storeDraftMapping({ ...aiMapping, label: descriptor?.label || null }, confidence, scope, requesterId);
         candidate.knowledgeRecordId = record.id;
       } catch (err) {
         console.error(`[semantic-mapper] Failed to store draft for ${aiMapping.node_id}:`, err.message);

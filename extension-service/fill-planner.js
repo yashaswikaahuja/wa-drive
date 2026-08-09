@@ -33,6 +33,7 @@ import {
   markStepStarted,
   markStepCompleted,
   markStepFailed,
+  markStepSkipped,
   abortRemaining,
 } from './fill-session.js';
 import { deriveProfile } from './deriveProfile.js';
@@ -139,7 +140,10 @@ export function validateSnapshot(snapshot) {
  * @returns {Promise<FillPlanResponse>}
  */
 export async function generateFillPlan(request) {
-  const { snapshot, workspace_id, phone, person_key, profile_overrides, supersedes_plan_id, session_id } = request;
+  const {
+    snapshot, workspace_id, phone, person_key, profile_overrides, profile_id,
+    candidate_mappings = [], supersedes_plan_id, session_id,
+  } = request;
 
   const correlationId = `corr:${randomUUID().replace(/-/g, '').slice(0, 24)}`;
   const startTime = Date.now();
@@ -207,7 +211,7 @@ export async function generateFillPlan(request) {
       form_key: scope.form_key,
       organization_id: workspace_id,
       country: scope.country,
-    });
+    }, { candidateMappings: candidate_mappings });
   } catch (err) {
     return {
       success: false,
@@ -234,6 +238,7 @@ export async function generateFillPlan(request) {
         errors: ['No fields could be mapped to profile data'],
         phase: 'mapping',
         unmapped_count: unmapped.length,
+        unmapped_node_ids: unmapped,
         excluded_count: excluded.length,
         duration_ms: Date.now() - startTime,
       },
@@ -277,7 +282,7 @@ export async function generateFillPlan(request) {
       session_id: session_id || null,
       diagnostics: {
         correlation_id: correlationId,
-        errors: ['Plan builder produced no steps (all mapped values were empty)'],
+        errors: ['No executable steps: mapped values were empty or concrete option targets were unavailable'],
         phase: 'plan_building',
         mapped_count: mappings.length,
         duration_ms: Date.now() - startTime,
@@ -296,7 +301,7 @@ export async function generateFillPlan(request) {
         document_id: snapshot.document_id,
         snapshot_id: snapshot.snapshot_id,
         correlation_id: correlationId,
-        metadata: { portal_id: scope.portal_id, form_key: scope.form_key },
+        metadata: { portal_id: scope.portal_id, form_key: scope.form_key, profile_id: profile_id || null },
       });
     }
   } else {
@@ -305,14 +310,28 @@ export async function generateFillPlan(request) {
       document_id: snapshot.document_id,
       snapshot_id: snapshot.snapshot_id,
       correlation_id: correlationId,
-      metadata: { portal_id: scope.portal_id, form_key: scope.form_key },
+      metadata: { portal_id: scope.portal_id, form_key: scope.form_key, profile_id: profile_id || null },
     });
   }
 
-  // Attach plan to session
+  // Attach plan to session, including server-private evidence links.
   const stepIds = plan.steps.map(s => s.step_id);
   const nodeIds = plan.steps.map(s => s.target.node_id);
-  attachPlan(fillSession.session_id, plan.plan_id, plan.steps.length, stepIds, nodeIds);
+  const mappingByNodeId = new Map(mappings.map(mapping => [mapping.node_id, mapping]));
+  const stepMetadata = plan.steps.map(step => {
+    const mapping = mappingByNodeId.get(step.target.node_id);
+    const node = snapshot.nodes?.[step.target.node_id];
+    return {
+      context_id: step.target.context_id,
+      label: node?.observed?.accessible_name || mapping?.semantic_key || step.target.node_id,
+      semantic_key: mapping?.semantic_key || null,
+      profile_key: mapping?.profile_key || null,
+      knowledge_record_id: mapping?.mapping_record?.id || null,
+      action_op: step.action.op,
+      risk: step.risk,
+    };
+  });
+  attachPlan(fillSession.session_id, plan.plan_id, plan.steps.length, stepIds, nodeIds, stepMetadata);
 
   return {
     success: true,
@@ -323,6 +342,7 @@ export async function generateFillPlan(request) {
       phase: 'complete',
       mapped_count: mappings.length,
       unmapped_count: unmapped.length,
+      unmapped_node_ids: unmapped,
       excluded_count: excluded.length,
       step_count: plan.steps.length,
       dependency_levels: fillOrder.levels.length,
@@ -360,6 +380,8 @@ export function handleObservation(session_id, observation) {
         abortRemaining(session_id);
         break;
       }
+    } else if (result.status === 'skipped') {
+      markStepSkipped(session_id, result.step_id);
     }
   }
 

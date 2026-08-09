@@ -33,6 +33,8 @@ jobs:
           mkdir -p landing/public
           rm -f landing/public/cybercontrol-extension.zip
           cd extension
+          # Stamp provenance into the packaged artifact without committing the generated file.
+          printf '{"commit":"%s","built_at":"%s"}\n' "$GITHUB_SHA" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > build-info.json
           # -r recurse, -X drop extra OS attributes; exclude the internal design doc
           zip -r -X ../landing/public/cybercontrol-extension.zip . -x 'EXTENSION_DESIGN.md'
 

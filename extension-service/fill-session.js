@@ -176,10 +176,11 @@ export function getWorkspaceSessions(workspace_id) {
  * @param {number} totalSteps — Number of steps in the plan
  * @param {string[]} stepIds — Step IDs from the plan
  * @param {string[]} nodeIds — Corresponding node IDs for each step
+ * @param {object[]} [stepMetadata] — Server-private semantic/evidence metadata per step
  * @returns {FillSession}
  * @throws {Error} If session not found or in invalid state
  */
-export function attachPlan(session_id, plan_id, totalSteps, stepIds, nodeIds) {
+export function attachPlan(session_id, plan_id, totalSteps, stepIds, nodeIds, stepMetadata = []) {
   const session = sessions.get(session_id);
   if (!session) throw new Error(`Session not found: ${session_id}`);
   if (session.status !== 'pending' && session.status !== 'planning') {
@@ -200,6 +201,7 @@ export function attachPlan(session_id, plan_id, totalSteps, stepIds, nodeIds) {
     started_at: null,
     completed_at: null,
     duration_ms: null,
+    ...(stepMetadata[i] || {}),
   }));
 
   return session;
@@ -280,9 +282,32 @@ export function markStepFailed(session_id, step_id, error_code) {
   }
 
   session.updated_at = Date.now();
+  const terminalCount = session.steps.filter(item => ['completed', 'failed', 'skipped'].includes(item.status)).length;
+  if (terminalCount >= session.total_steps) {
+    session.status = 'failed';
+    session.completed_at = Date.now();
+  }
 
   // If on_failure is abort_plan, mark remaining as skipped
   // (This is decided by the caller based on the plan step's on_failure field)
+  return session;
+}
+
+/** Record a step the executor intentionally did not attempt. */
+export function markStepSkipped(session_id, step_id) {
+  const session = sessions.get(session_id);
+  if (!session) throw new Error(`Session not found: ${session_id}`);
+  const step = session.steps.find(s => s.step_id === step_id);
+  if (step && step.status === 'pending') {
+    step.status = 'skipped';
+    step.completed_at = Date.now();
+  }
+  session.updated_at = Date.now();
+  const terminalCount = session.steps.filter(item => ['completed', 'failed', 'skipped'].includes(item.status)).length;
+  if (terminalCount >= session.total_steps) {
+    session.status = session.failed_steps > 0 ? 'failed' : 'completed';
+    session.completed_at = Date.now();
+  }
   return session;
 }
 

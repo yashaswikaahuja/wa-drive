@@ -140,7 +140,7 @@ function readMechanicalState(element) {
     required: element.required || element.hasAttribute('aria-required'),
     focused: element === element.ownerDocument?.activeElement,
     expanded: parseTristate(element.getAttribute('aria-expanded')),
-    selected: parseTristate(element.getAttribute('aria-selected')),
+    selected: element.selected != null ? element.selected : parseTristate(element.getAttribute('aria-selected')),
     checked: element.checked != null ? element.checked : parseTristate(element.getAttribute('aria-checked')),
     // Value state without the actual value (privacy-safe)
     valueState: hasValue
@@ -291,9 +291,10 @@ function resolveBinding(contextId, nodeId, registry, expectedGeneration) {
  * TOCTOU: checks element is still connected immediately before acting.
  * @param {Element} element
  * @param {object} action — { op: string, ... }
+ * @param {object} [options] — private mechanical inputs such as optionElement
  * @returns {{ success: boolean, error: string|null }}
  */
-function performAction(element, action) {
+function performAction(element, action, options = {}) {
   // Final TOCTOU check — no yield between check and act
   if (!element.isConnected) return { success: false, error: 'stale_target' };
 
@@ -331,6 +332,23 @@ function performAction(element, action) {
       else element.value = '';
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
+      return { success: true, error: null };
+    }
+    case 'select_option': {
+      const optionElement = options.optionElement;
+      if (!optionElement?.isConnected) return { success: false, error: 'stale_target' };
+      if (element.tagName === 'SELECT' && optionElement.tagName === 'OPTION') {
+        const owner = optionElement.closest('select');
+        if (owner !== element) return { success: false, error: 'stale_target' };
+        const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+        if (setter) setter.call(element, optionElement.value);
+        else element.value = optionElement.value;
+        optionElement.selected = true;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        optionElement.click();
+      }
       return { success: true, error: null };
     }
     case 'toggle': {

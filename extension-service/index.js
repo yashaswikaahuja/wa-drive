@@ -52,6 +52,7 @@ app.get('/health', (_req, res) => res.json({
   status: 'ok',
   service: 'extension-service',
   version: '1.0.0',
+  commit: process.env.BUILD_SHA || 'development',
 }));
 
 // Routes are mounted at the SAME paths the hub used to expose them at,

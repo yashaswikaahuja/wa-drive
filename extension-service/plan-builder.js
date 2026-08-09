@@ -141,14 +141,49 @@ export function buildPostcondition(mapping, node) {
   };
 }
 
+function normalizeOptionText(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function isDescendantOf(node, ancestorId, nodeMap) {
+  let current = node;
+  const seen = new Set();
+  while (current?.parent_id && !seen.has(current.parent_id)) {
+    if (current.parent_id === ancestorId) return true;
+    seen.add(current.parent_id);
+    current = nodeMap[current.parent_id];
+  }
+  return false;
+}
+
+function resolveOptionTarget(mapping, node, nodeMap) {
+  const expected = normalizeOptionText(mapping.value);
+  if (!expected) return null;
+  const candidates = Object.values(nodeMap).filter(candidate =>
+    candidate?.kind === 'option' && isDescendantOf(candidate, node.node_id, nodeMap)
+  );
+  let match = candidates.find(candidate => {
+    const label = candidate.observed?.accessible_name || candidate.observed?.sanitized_text || '';
+    return normalizeOptionText(label) === expected;
+  });
+  if (!match) {
+    match = candidates.find(candidate => {
+      const label = normalizeOptionText(candidate.observed?.accessible_name || candidate.observed?.sanitized_text || '');
+      return label && (label.includes(expected) || expected.includes(label));
+    });
+  }
+  return match ? { context_id: match.context_id, node_id: match.node_id } : null;
+}
+
 /**
  * Build the action object for a fill step.
  *
  * @param {MappingResult} mapping — The resolved mapping
  * @param {object} node — The snapshot node
- * @returns {object} — Action conforming to schema union
+ * @param {object} nodeMap — All public snapshot nodes
+ * @returns {object|null} — Action conforming to schema union, or null when no concrete action is safe
  */
-export function buildAction(mapping, node) {
+export function buildAction(mapping, node, nodeMap = {}) {
   const affordances = node?.affordances || [];
 
   if (affordances.includes('type_text')) {
@@ -160,15 +195,11 @@ export function buildAction(mapping, node) {
   }
 
   if (affordances.includes('select_one')) {
-    // For select fields, we need an option_target — this requires the option node.
-    // The fill planner must resolve the option node_id separately.
-    // For now, produce a placeholder that the planner populates.
+    const optionTarget = resolveOptionTarget(mapping, node, nodeMap);
+    if (!optionTarget) return null;
     return {
       op: 'select_option',
-      option_target: {
-        context_id: mapping.context_id,
-        node_id: `option:${mapping.node_id}:pending`,
-      },
+      option_target: optionTarget,
     };
   }
 
@@ -236,13 +267,16 @@ export function buildPlan(input) {
     const node = nodeMap[mapping.node_id];
     if (!node) continue;
 
+    const action = buildAction(mapping, node, nodeMap);
+    if (!action) continue;
+
     const step = {
       step_id: generateId('step'),
       target: {
         context_id: mapping.context_id,
         node_id: mapping.node_id,
       },
-      action: buildAction(mapping, node),
+      action,
       risk: assessRisk(mapping, node),
       required_affordance: requiredAffordance(node),
       required_adapter_id: node.widget?.adapter_id || null,

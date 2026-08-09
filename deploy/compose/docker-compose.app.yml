@@ -50,6 +50,8 @@ services:
       PORT: "3300"
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}                  # MUST match backend
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       DATA_DIR: /app/data
     volumes:
       - ext_data:/app/data

@@ -19,7 +19,17 @@ const progressEl = document.getElementById('progress');
 const progressText = document.getElementById('progress-text');
 const progressInner = document.getElementById('progress-inner');
 const resultsEl = document.getElementById('results');
-document.getElementById('ver').textContent = 'v' + VERSION;
+const versionEl = document.getElementById('ver');
+versionEl.textContent = 'v' + VERSION;
+fetch(chrome.runtime.getURL('build-info.json'))
+  .then(response => response.ok ? response.json() : null)
+  .then(info => {
+    if (!info?.commit) return;
+    const commit = String(info.commit).slice(0, 7);
+    versionEl.textContent = `v${VERSION} @ ${commit}`;
+    versionEl.title = `Extension ${VERSION}, build ${info.commit}${info.built_at ? `, ${info.built_at}` : ''}`;
+  })
+  .catch(() => {});
 
 // Side panel stays open across tab switches â€” always resolve the active *page* tab
 // (never chrome:// or the extension itself).
@@ -318,7 +328,6 @@ searchEl.addEventListener('keydown', (e) => {
 });
 
 async function init() {
-  document.getElementById('ver').textContent = 'v' + VERSION;
   detectSite();
   await loadRecents();
 
@@ -568,168 +577,79 @@ fillBtn.addEventListener('click', async () => {
       hideProgress(); return;
     }
 
-    // Step 3: Execute the ActionPlan via the runner
+    // Step 3: Execute the exact snapshot-bound ActionPlan mechanically.
     updateProgress(`Filling ${plan.steps.length} fields...`, 70);
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: [
-        'shared/dom-utils.js',
-        'shared/network-idle.js',
-        'shared/select-apply.js',
-        'shared/option-match.js',
-        'models/ir.js',
-        'capabilities/registry.js',
-        'runtime/resolver.js',
-        'runtime/runner.js',
-        'runtime/plugin-bridge.js',
-        'autofill/plugins/interface.js',
-        'autofill/plugins/cascade-select.js',
-        'autofill/plugins/ng-dropdown.js',
-        'autofill/plugins/button-click.js',
-        'drivers/dispatch.js',
-        'drivers/dom.js',
-        'drivers/input.js',
-        'drivers/select.js',
-        'drivers/interaction.js',
-      ]
+      files: ['runtime/action-plan-executor.js'],
     });
 
     const [execResult] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      args: [plan, selectedProfile.id || '', data.backendUrl, data.accessToken],
-      func: async (actionPlan, profileId, backendUrl, accessToken) => {
-        // SEC-002: credentials stay in isolated-world context only (never page-readable)
-        window.__ccFillCtx = { backendUrl, accessToken, profileId, planId: actionPlan.plan_id || '' };
-        // Execute each step using BindingRegistry for target resolution
-        const results = [];
-        for (const step of actionPlan.steps) {
-          try {
-            // 1. Resolve via BindingRegistry (primary path — zero DOM queries)
-            let el = null;
-            if (typeof CcPerception !== 'undefined' && CcPerception.resolveTarget) {
-              // context_id comes from plan step (set by plan-builder from mapping.context_id)
-              // Fallback to first context in the snapshot (ctx.top.N), never a hardcoded string
-              const ctxId = step.target.context_id
-                || (actionPlan.target_binding && actionPlan.target_binding.context_id)
-                || null;
-              if (ctxId) {
-                el = CcPerception.resolveTarget(ctxId, step.target.node_id);
-              }
-            }
-
-            // 2. Fallback: accessible-name matching (for when registry is unavailable)
-            if (!el && step.target.accessible_name) {
-              const allInputs = document.querySelectorAll('input, select, textarea, [role="combobox"], [role="listbox"]');
-              const targetName = step.target.accessible_name.toLowerCase();
-              for (const input of allInputs) {
-                const label = input.getAttribute('aria-label')
-                  || input.closest('label')?.textContent?.trim()
-                  || input.getAttribute('placeholder') || '';
-                if (label && label.toLowerCase().includes(targetName.slice(0, 20))) {
-                  el = input; break;
-                }
-              }
-            }
-
-            if (!el) {
-              results.push({ step_id: step.step_id, status: 'failed', failure_code: 'stale_target', postcondition_met: false, duration_ms: 0 });
-              continue;
-            }
-
-            const start = performance.now();
-
-            // 3. Execute via DomGateway.performAction if available (native value setter)
-            if (typeof CcDomGateway !== 'undefined' && CcDomGateway.performAction) {
-              const actionResult = CcDomGateway.performAction(el, step.action);
-              const duration = performance.now() - start;
-              results.push({
-                step_id: step.step_id,
-                status: actionResult.success ? 'succeeded' : 'failed',
-                failure_code: actionResult.error || null,
-                postcondition_met: actionResult.success,
-                duration_ms: Math.round(duration),
-                observed_value_state: actionResult.success ? 'nonempty' : null,
-              });
-            } else {
-              // Inline fallback (no gateway loaded)
-              if (step.action.op === 'type_text') {
-                el.focus();
-                const niv = Object.getOwnPropertyDescriptor(
-                  el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value'
-                );
-                if (step.action.clear_first !== false) {
-                  if (niv) niv.set.call(el, ''); else el.value = '';
-                  el.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-                if (niv) niv.set.call(el, step.action.value || '');
-                else el.value = step.action.value || '';
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-              } else if (step.action.op === 'select_option') {
-                if (el.tagName === 'SELECT') {
-                  const opt = [...el.options].find(o => o.text.trim().toLowerCase() === (step.action.value || '').toLowerCase() || o.value === step.action.value);
-                  if (opt) { el.value = opt.value; el.dispatchEvent(new Event('change', { bubbles: true })); }
-                } else {
-                  el.click();
-                  await new Promise(r => setTimeout(r, 300));
-                  const options = document.querySelectorAll('[role="option"], .ng-option, li.option, mat-option');
-                  for (const o of options) {
-                    if (o.textContent.trim().toLowerCase().includes((step.action.value || '').toLowerCase())) {
-                      o.click(); break;
-                    }
-                  }
-                }
-              } else if (step.action.op === 'click') {
-                el.click();
-              } else if (step.action.op === 'toggle') {
-                if (!el.checked) el.click();
-              }
-              const duration = performance.now() - start;
-              results.push({ step_id: step.step_id, status: 'succeeded', failure_code: null, postcondition_met: true, duration_ms: Math.round(duration), observed_value_state: 'nonempty' });
-            }
-
-            // Inter-field delay for cascade fields
-            await new Promise(r => setTimeout(r, 150));
-          } catch (err) {
-            results.push({ step_id: step.step_id, status: 'failed', failure_code: 'execution_error', postcondition_met: false, duration_ms: 0 });
-          }
+      args: [plan],
+      func: async (actionPlan) => {
+        if (!globalThis.CcActionPlanExecutor?.execute) {
+          throw new Error('ActionPlan executor not loaded');
         }
-        // Store records in isolated-world memory for correction observer and background.js
-        window.__ccFillRecords = results;
-        return results;
-      }
+        return globalThis.CcActionPlanExecutor.execute(actionPlan);
+      },
     });
-    const stepResults = execResult?.result || [];
+    const executionObservation = execResult?.result;
+    if (!executionObservation || executionObservation.kind !== 'execution_observation') {
+      throw new Error('Execution did not produce ExecutionObservation v3');
+    }
+    const stepResults = executionObservation.steps || [];
     const filled = stepResults.filter(r => r.status === 'succeeded').length;
     const failed = stepResults.filter(r => r.status === 'failed').length;
-    const skipped = plan.steps.length - filled - failed;
+    const skipped = stepResults.filter(r => r.status === 'skipped').length;
 
-    // Step 4: Report observation back to server
+    // Step 4: Report the canonical observation; session ID is transport metadata.
     updateProgress('Reporting results...', 90);
+    let observationError = null;
     try {
-      await fetch(data.backendUrl + '/fill-observation', {
+      const query = new URLSearchParams({
+        sessionId: session?.id || '',
+        runtimeVersion: VERSION,
+      });
+      const reportResponse = await fetch(data.backendUrl + '/fill-observation?' + query.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.accessToken },
-        body: JSON.stringify({
-          sessionId: session?.id || null,
-          planId: plan.plan_id,
-          snapshot_id: pageSnapshot.snapshot_id,
-          outcome: failed === 0 ? 'completed' : 'partial',
-          steps: stepResults,
-        }),
+        body: JSON.stringify(executionObservation),
       });
-    } catch (e) { console.warn('[CC] observation report failed:', e.message); }
+      const report = await reportResponse.json().catch(() => ({}));
+      if (!reportResponse.ok || !report.acknowledged || !report.persisted) {
+        throw new Error(report.error || 'server did not persist execution evidence');
+      }
+    } catch (e) {
+      observationError = e.message;
+      console.warn('[CC] observation report failed:', e.message);
+    }
 
-    // Show results
-    const records = plan.steps.map((step, i) => ({
-      label: step.target.accessible_name || step.step_id,
-      result: stepResults[i]?.status === 'succeeded' ? 'filled' : 'failed',
-      value: step.action.value || '',
-      source: 'server-plan',
-    }));
+    // Show exactly what filled, failed, or was skipped using public snapshot labels.
+    const resultByStep = new Map(stepResults.map(result => [result.step_id, result]));
+    const records = plan.steps.map(step => {
+      const result = resultByStep.get(step.step_id);
+      const node = pageSnapshot.nodes?.[step.target.node_id];
+      const optionNode = step.action.option_target
+        ? pageSnapshot.nodes?.[step.action.option_target.node_id]
+        : null;
+      return {
+        label: node?.observed?.accessible_name || step.step_id,
+        result: result?.status === 'succeeded' ? 'filled' : (result?.status || 'skipped'),
+        value: step.action.value || optionNode?.observed?.accessible_name || '',
+        source: 'server-plan',
+        failReason: result?.failure_code || null,
+        durationMs: result?.duration_ms || 0,
+      };
+    });
     window._lastFilledRecords = records.filter(r => r.result === 'filled');
     showResults(filled, skipped, failed, records.filter(r => r.result !== 'filled'));
-    undoBtn.style.display = 'block';
+    undoBtn.style.display = filled > 0 ? 'block' : 'none';
+    if (observationError) {
+      showStatus('Fields changed, but session evidence was not saved: ' + observationError, CC.danger);
+    } else if (executionObservation.outcome === 'rejected' || executionObservation.outcome === 'aborted') {
+      showStatus('Fill stopped: ' + (executionObservation.rejection_reason || 'plan rejected'), CC.danger);
+    }
 
   } catch (e) {
     hideProgress();

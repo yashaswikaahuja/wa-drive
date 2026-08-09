@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '../fill-planner.js';
 import { mapUnknownFields } from '../semantic-mapper.js';
+import { persistExecutionEvidence } from '../execution-evidence.js';
 
 const router = Router();
 
@@ -31,22 +32,6 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
 
     const scope = deriveScope(snapshot);
 
-    // DEBUG: log fillable nodes (those with type_text/select affordances)
-    const allNodes = Object.values(snapshot.nodes || {});
-    const fillable = allNodes.filter(n => {
-      const aff = (n.affordances || []);
-      return aff.some(a => ['type_text','select_one','select_many','toggle'].includes(a));
-    });
-    const nodeNames = fillable.slice(0, 20).map(n => ({
-      id: n.node_id,
-      name: n.observed?.accessible_name || '(none)',
-      aff: (n.affordances || []).join(','),
-    }));
-    console.log('[fill-plan DEBUG] scope:', JSON.stringify(scope));
-    console.log('[fill-plan DEBUG] total nodes:', allNodes.length, 'fillable:', fillable.length);
-    console.log('[fill-plan DEBUG] fillable sample:', JSON.stringify(nodeNames));
-    console.log('[fill-plan DEBUG] profile keys:', Object.keys(profile).slice(0, 20).join(', '));
-
     // Generate the fill plan using server-side intelligence
     let planResult = await generateFillPlan({
       snapshot,
@@ -54,21 +39,19 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       phone: null,
       person_key: null,
       profile_overrides: profile,
+      profile_id: profileId || null,
     });
 
     // ── Cold-start semantic mapping ─────────────────────────────────
     // If the planner found no mappings (all fields unmapped), invoke AI
     // semantic mapper to learn new field→profileKey associations.
     const unmappedCount = planResult.diagnostics?.unmapped_count || 0;
-    const mappedCount = planResult.diagnostics?.mapped_count || 0;
 
-    if (mappedCount === 0 && unmappedCount > 0) {
-      // Extract unmapped nodes from snapshot for AI mapping
+    if (unmappedCount > 0) {
+      // Extract only planner-confirmed unresolved nodes for AI mapping.
       const nodes = snapshot.nodes || {};
-      const unmappedFields = Object.values(nodes).filter(n => {
-        const aff = n.affordances || [];
-        return aff.some(a => ['type_text', 'select_one', 'select_many', 'toggle'].includes(a));
-      });
+      const unmappedNodeIds = new Set(planResult.diagnostics?.unmapped_node_ids || []);
+      const unmappedFields = Object.values(nodes).filter(node => unmappedNodeIds.has(node.node_id));
 
       if (unmappedFields.length > 0) {
         const pageContext = {
@@ -95,6 +78,8 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
             phone: null,
             person_key: null,
             profile_overrides: profile,
+            profile_id: profileId || null,
+            candidate_mappings: mapResult.mappings.filter(mapping => mapping.disposition === 'auto_accept'),
           });
           // Attach semantic mapping diagnostics
           planResult.diagnostics = {
@@ -144,30 +129,75 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
 });
 
 // ── POST /api/fill-observation ──────────────────────────────────────────
-// Extension reports execution results back to server for learning/tracking.
+// Extension reports an ExecutionObservation v3. The fill-session identifier
+// is transport metadata (query param), not part of the public observation IR.
 router.post('/fill-observation', authMiddleware, async (req, res) => {
   try {
-    const { sessionId, planId, snapshot_id, outcome, steps } = req.body;
-
+    const body = req.body || {};
+    const isV3 = body.kind === 'execution_observation';
+    const planId = isV3 ? body.plan_id : body.planId;
     if (!planId) {
-      return res.status(400).json({ error: 'planId is required' });
+      return res.status(400).json({ error: 'planId or plan_id is required' });
     }
 
-    // Record observation via fill-planner session tracking
-    const result = handleObservation(sessionId, {
+    const now = new Date().toISOString();
+    const observation = isV3 ? body : {
+      kind: 'execution_observation',
+      schema_version: '3.0.0',
+      observation_id: `obs:legacy${Date.now().toString(36)}`,
       plan_id: planId,
-      snapshot_id: snapshot_id || null,
-      outcome: outcome || 'unknown',
-      step_results: (steps || []).map(s => ({
-        step_id: s.step_id,
-        status: s.status === 'succeeded' ? 'completed' : s.status,
-        error_code: s.failure_code || null,
+      correlation_id: body.correlation_id || `corr:legacy${Date.now().toString(36)}`,
+      document_id: body.document_id || 'doc:legacy',
+      observed_at: now,
+      outcome: body.outcome === 'completed' ? 'completed' : (body.outcome || 'partial'),
+      rejection_reason: null,
+      resulting_revision: body.resulting_revision ?? 0,
+      resulting_snapshot_id: body.snapshot_id || null,
+      steps: (body.steps || []).map(step => ({
+        step_id: step.step_id,
+        status: step.status,
+        failure_code: step.failure_code || null,
+        postcondition_met: step.postcondition_met ?? null,
+        observed_value_state: step.observed_value_state || null,
+        duration_ms: step.duration_ms ?? null,
       })),
-    });
+      diagnostics: body.diagnostics || [],
+    };
+
+    const required = ['observation_id', 'correlation_id', 'document_id', 'observed_at', 'outcome', 'steps', 'resulting_revision', 'diagnostics'];
+    const missing = required.filter(key => observation[key] == null);
+    if (observation.schema_version !== '3.0.0' || missing.length > 0 || !Array.isArray(observation.steps)) {
+      return res.status(422).json({ error: 'Invalid ExecutionObservation v3', details: missing });
+    }
+
+    const sessionId = req.query.sessionId || body.sessionId || null;
+    const internalObservation = {
+      ...observation,
+      step_results: observation.steps.map(step => ({
+        step_id: step.step_id,
+        status: step.status === 'succeeded' ? 'completed' : step.status,
+        error_code: step.failure_code || null,
+      })),
+    };
+    const result = handleObservation(sessionId, internalObservation);
+
+    let evidence = { persisted: false, persistentSessionId: null, learning: { attempted: 0, succeeded: 0, failed: 0 } };
+    if (sessionId && result.acknowledged) {
+      evidence = await persistExecutionEvidence({
+        sessionId,
+        observation,
+        workspaceId: req.user.workspaceId,
+        userId: req.user.userId,
+        runtimeVersion: String(req.query.runtimeVersion || 'unknown').slice(0, 20),
+      });
+    }
 
     return res.json({
       acknowledged: result.acknowledged,
       session_status: result.session_status,
+      persisted: evidence.persisted,
+      persistent_session_id: evidence.persistentSessionId,
+      learning: evidence.learning,
     });
   } catch (err) {
     console.error('[fill-observation] error:', err.message);

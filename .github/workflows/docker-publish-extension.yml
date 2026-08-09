@@ -42,6 +42,8 @@ jobs:
         with:
           context: ./extension-service
           file: ./extension-service/Dockerfile
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
           platforms: linux/amd64
           load: true
           push: false
@@ -75,6 +77,8 @@ jobs:
         with:
           context: ./extension-service
           file: ./extension-service/Dockerfile
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
           platforms: linux/amd64
           push: true
           tags: |

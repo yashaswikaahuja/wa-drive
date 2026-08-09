@@ -87,10 +87,11 @@ export function classifyField(node) {
     if (widget.behavior_kind === 'action') return FieldClassification.SYSTEM_CONTROL;
   }
 
-  // Check privacy classification
-  if (node.privacy) {
-    if (node.privacy.classification === 'secret') return FieldClassification.SENSITIVE;
-    if (node.privacy.classification === 'sensitive') return FieldClassification.SENSITIVE;
+  // Privacy sensitivity controls redaction and logging, not fill eligibility.
+  // Only secrets (passwords, OTPs, CAPTCHA) are categorically non-fillable;
+  // sensitive profile data such as Aadhaar/PAN remains PROFILE_DATA.
+  if (node.privacy?.classification === 'secret') {
+    return FieldClassification.SENSITIVE;
   }
 
   // Check node kind
@@ -316,6 +317,29 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
   };
 }
 
+function resolveCandidateMapping(node, candidates, profile) {
+  const candidate = candidates.find(item =>
+    item.node_id === node.node_id && item.disposition === 'auto_accept' && item.profile_key
+  );
+  if (!candidate) return null;
+  const value = lookupProfileValue(profile, candidate.profile_key);
+  if (!value) return null;
+  return {
+    node_id: node.node_id,
+    context_id: node.context_id,
+    semantic_key: candidate.semantic_key || candidate.profile_key,
+    profile_key: candidate.profile_key,
+    value,
+    classification: candidate.transformation && candidate.transformation !== 'direct'
+      ? FieldClassification.DERIVED_DATA
+      : FieldClassification.PROFILE_DATA,
+    transformation: candidate.transformation || 'direct',
+    mapping_record: candidate.knowledgeRecordId
+      ? { id: candidate.knowledgeRecordId, status: 'draft', source: { origin: 'ai_generated' } }
+      : null,
+  };
+}
+
 /**
  * Score how specifically a node label matches a mapping record.
  * Returns the length of the LONGEST matched pattern (0 = no match).
@@ -497,11 +521,14 @@ function formatDate(date, format) {
  * @param {object} snapshot — Full PageSnapshot
  * @param {object} profile — User's profile data
  * @param {object} scope — { portal_id, form_key, organization_id, country }
+ * @param {object} [options]
+ * @param {object[]} [options.candidateMappings] — current-session high-confidence draft mappings
  * @returns {Promise<{ mappings: MappingResult[], unmapped: string[], excluded: string[] }>}
  */
-export async function resolveAllMappings(snapshot, profile, scope) {
+export async function resolveAllMappings(snapshot, profile, scope, options = {}) {
   const fieldMappings = await resolveFieldMappings(scope);
   const derivationRules = await resolveDerivationRules(scope);
+  const candidateMappings = options.candidateMappings || [];
 
   /** @type {MappingResult[]} */
   const mappings = [];
@@ -520,7 +547,8 @@ export async function resolveAllMappings(snapshot, profile, scope) {
       continue;
     }
 
-    const result = resolveNodeMapping(node, fieldMappings, derivationRules, profile);
+    const result = resolveNodeMapping(node, fieldMappings, derivationRules, profile)
+      || resolveCandidateMapping(node, candidateMappings, profile);
     if (result) {
       mappings.push(result);
     } else {

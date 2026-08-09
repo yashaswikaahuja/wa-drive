@@ -183,7 +183,7 @@ function extractUnmappedFields(planResult, snapshot) {
 
     unmapped.push({
       node_id: nodeId,
-      label: node.semantic_label || node.label || node.name || null,
+      label: node.observed?.accessible_name || node.semantic_label || node.label || node.name || null,
       affordances,
       attributes: node.attributes || {},
       context: node.context || {},
@@ -473,6 +473,7 @@ async function attemptSemanticMapping(originalPlanResult, snapshot, workspaceId,
         phone,
         person_key: personKey,
         profile_overrides: profileOverrides,
+        candidate_mappings: mapResult.mappings.filter(mapping => mapping.disposition === 'auto_accept'),
       });
 
       if (replanResult.success && replanResult.plan) {

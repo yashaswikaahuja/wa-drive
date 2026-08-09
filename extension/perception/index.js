@@ -15,6 +15,7 @@ let _widgetClassifier, _contextDiscovery, _nodeFactory, _edgeFactory;
 let _canonicalHash, _validator, _snapshotBuilder, _deltaEmitterClass;
 let _initialized = false;
 let _deltaEmitter = null;
+let _lastSnapshot = null;
 
 /**
  * Initialize the perception system. Call once after all modules are loaded.
@@ -69,7 +70,7 @@ async function perceivePage(options = {}) {
   const mode = options.mode || 'snapshot';
 
   if (mode === 'snapshot') {
-    return _snapshotBuilder.buildSnapshot({
+    _lastSnapshot = await _snapshotBuilder.buildSnapshot({
       gateway: _gateway,
       revisionManager: _revisionManager,
       bindingRegistry: _bindingRegistry,
@@ -83,6 +84,7 @@ async function perceivePage(options = {}) {
       root: options.root,
       includeGeometry: options.includeGeometry,
     });
+    return _lastSnapshot;
   }
 
   if (mode === 'delta') {
@@ -123,6 +125,7 @@ async function perceivePage(options = {}) {
  */
 function resetPerception() {
   if (_deltaEmitter) { _deltaEmitter.stop(); _deltaEmitter = null; }
+  _lastSnapshot = null;
   if (_bindingRegistry) _bindingRegistry.invalidateAll();
   if (_revisionManager) _revisionManager.onFullNavigation();
 }
@@ -195,12 +198,56 @@ function resolveTarget(contextId, nodeId) {
 }
 
 /**
+ * Resolve an ActionPlan target only when it is still bound to the exact
+ * published document/snapshot/revision. No selector or semantic fallback.
+ */
+function resolveExecutionTarget(targetBinding, target, requirements = {}) {
+  if (!_initialized || !_bindingRegistry || !_revisionManager || !_lastSnapshot) {
+    return { element: null, error: 'stale_snapshot' };
+  }
+  if (_revisionManager.currentDocumentId() !== targetBinding?.document_id) {
+    return { element: null, error: 'document_replaced' };
+  }
+  if (_lastSnapshot.snapshot_id !== targetBinding?.snapshot_id ||
+      _revisionManager.currentRevision() !== targetBinding?.expected_revision) {
+    return { element: null, error: 'stale_snapshot' };
+  }
+
+  const node = _lastSnapshot.nodes?.[target?.node_id];
+  if (!node || node.context_id !== target?.context_id) {
+    return { element: null, error: 'stale_target' };
+  }
+  if (requirements.requiredAffordance && !(node.affordances || []).includes(requirements.requiredAffordance)) {
+    return { element: null, error: 'affordance_mismatch' };
+  }
+  const perceivedAdapter = node.widget?.adapter_id || null;
+  if (requirements.requiredAdapterId && perceivedAdapter !== requirements.requiredAdapterId) {
+    return { element: null, error: 'adapter_mismatch' };
+  }
+
+  const entry = _bindingRegistry.resolve(target.context_id, target.node_id);
+  if (!entry || entry.createdRevision !== targetBinding.expected_revision || entry.bindingGeneration !== 1) {
+    return { element: null, error: 'stale_target' };
+  }
+  if (requirements.requiredAdapterId && entry.adapterId !== requirements.requiredAdapterId) {
+    return { element: null, error: 'adapter_mismatch' };
+  }
+  const element = entry.liveNodeReference;
+  if (!element || typeof element.nodeType !== 'number' || element.nodeType !== 1 || !element.isConnected) {
+    _bindingRegistry.invalidateNode(target.context_id, target.node_id);
+    return { element: null, error: 'stale_target' };
+  }
+  return { element, error: null };
+}
+
+/**
  * Get current perception state for diagnostics.
  */
 function getPerceptionState() {
   return {
     initialized: _initialized,
     documentId: _revisionManager?.currentDocumentId() || null,
+    snapshotId: _lastSnapshot?.snapshot_id || null,
     revision: _revisionManager?.currentRevision() ?? -1,
     bindingCount: _bindingRegistry?.size ?? 0,
     deltaObserverActive: !!_deltaEmitter,
@@ -208,9 +255,9 @@ function getPerceptionState() {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { initPerception, perceivePage, resetPerception, resolveTarget, startDeltaObserver, stopDeltaObserver, getPerceptionState };
+  module.exports = { initPerception, perceivePage, resetPerception, resolveTarget, resolveExecutionTarget, startDeltaObserver, stopDeltaObserver, getPerceptionState };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcPerception = { initPerception, perceivePage, resetPerception, resolveTarget, startDeltaObserver, stopDeltaObserver, getPerceptionState };
+  globalThis.CcPerception = { initPerception, perceivePage, resetPerception, resolveTarget, resolveExecutionTarget, startDeltaObserver, stopDeltaObserver, getPerceptionState };
 }
 
 })();

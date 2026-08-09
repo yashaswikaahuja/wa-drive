@@ -284,8 +284,8 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
   const popup = read('extension/popup.js');
   const executor = read('extension/autofill/executor.js');
   const background = read('extension/background.js');
-  ok(popup.includes('window.__ccFillCtx'), 'fill credentials enter only the isolated-world context');
-  ok(executor.includes('window.__ccFillCtx'), 'executor reads credentials from isolated-world context');
+  ok(!popup.includes('window.__ccFillCtx'), 'side-panel fill sends no credentials into the page execution context');
+  ok(executor.includes('window.__ccFillCtx'), 'legacy executor reads credentials only from isolated-world context');
   ok(executor.includes('window.__ccFillRecords'), 'fill records stay in isolated-world memory');
   ok(popup.includes('window.__ccUndoSnapshot'), 'undo values stay in isolated-world memory');
   ok(background.includes('window.__ccFillRecords'), 'background reads fill records from isolated-world memory');
