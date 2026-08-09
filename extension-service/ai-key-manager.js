@@ -87,10 +87,10 @@ let usage = {
  * @returns {AIKeyConfig}
  */
 export function loadConfig() {
-  const apiKey = process.env.AI_API_KEY || null;
-  const provider = process.env.AI_PROVIDER || DEFAULT_CONFIG.provider;
-  const model = process.env.AI_MODEL || DEFAULT_CONFIG.model;
-  const endpoint = process.env.AI_ENDPOINT || DEFAULT_CONFIG.endpoint;
+  const apiKey = process.env.AI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.GROQ_API_KEY || null;
+  const provider = process.env.AI_PROVIDER || (process.env.OPENROUTER_API_KEY ? 'openrouter' : process.env.GROQ_API_KEY ? 'groq' : DEFAULT_CONFIG.provider);
+  const model = process.env.AI_MODEL || (provider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct' : provider === 'groq' ? 'llama-3.3-70b-versatile' : DEFAULT_CONFIG.model);
+  const endpoint = process.env.AI_ENDPOINT || (provider === 'openrouter' ? 'https://openrouter.ai/api/v1/chat/completions' : provider === 'groq' ? 'https://api.groq.com/openai/v1/chat/completions' : DEFAULT_CONFIG.endpoint);
   const maxTokens = parseInt(process.env.AI_MAX_TOKENS, 10) || DEFAULT_CONFIG.maxTokens;
   const temperature = parseFloat(process.env.AI_TEMPERATURE) || DEFAULT_CONFIG.temperature;
 
