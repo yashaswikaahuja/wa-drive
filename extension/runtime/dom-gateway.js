@@ -400,7 +400,14 @@ function computeAccessibleName(element, ariaLabel, ariaLabelledby) {
   }
 
   const tag = element.tagName?.toLowerCase() || '';
-  const isFormField = (tag === 'input' || tag === 'select' || tag === 'textarea');
+  const role = element.getAttribute('role') || '';
+  const isFormField = (
+    tag === 'input' || tag === 'select' || tag === 'textarea' ||
+    tag === 'ng-select' || tag === 'mat-select' || tag === 'p-dropdown' ||
+    role === 'combobox' || role === 'listbox' || role === 'spinbutton' ||
+    element.hasAttribute('formcontrolname') || element.hasAttribute('formControlName') ||
+    (element.classList && (element.classList.contains('ng-select') || element.classList.contains('select2')))
+  );
 
   if (isFormField) {
     // Preceding <td> in a table row

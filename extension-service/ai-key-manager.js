@@ -280,6 +280,8 @@ async function dispatchToProvider({ systemPrompt, userPrompt, maxTokens, tempera
   switch (config.provider) {
     case 'openai':
     case 'azure_openai':
+    case 'openrouter':
+    case 'groq':
       return callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature });
     case 'anthropic':
       return callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature });
@@ -289,7 +291,7 @@ async function dispatchToProvider({ systemPrompt, userPrompt, maxTokens, tempera
 }
 
 /**
- * Call OpenAI-compatible API (works for OpenAI and Azure OpenAI).
+ * Call OpenAI-compatible API (works for OpenAI, Azure OpenAI, OpenRouter, Groq).
  */
 async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature }) {
   const endpoint = config.endpoint || 'https://api.openai.com/v1/chat/completions';
@@ -305,12 +307,19 @@ async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature }) 
     response_format: { type: 'json_object' },
   };
 
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${config.apiKey}`,
+  };
+  // OpenRouter requires HTTP-Referer and X-Title headers
+  if (config.provider === 'openrouter') {
+    headers['HTTP-Referer'] = 'https://cybercontrol.fun';
+    headers['X-Title'] = 'CyberControl';
+  }
+
   const res = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiKey}`,
-    },
+    headers,
     body: JSON.stringify(body),
   });
 
