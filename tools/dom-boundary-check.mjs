@@ -33,6 +33,7 @@ try {
 const allowed = [
   'extension/runtime/dom-gateway.js',
   'extension/runtime/teach-client.js',
+  'extension/popup.js',  // DOM code in func: args runs in content script via chrome.scripting.executeScript
   'extension/perception/',
 ];
 const patterns = [

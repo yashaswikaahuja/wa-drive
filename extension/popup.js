@@ -562,8 +562,10 @@ fillBtn.addEventListener('click', async () => {
 
     const [execResult] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      args: [plan],
-      func: async (actionPlan) => {
+      args: [plan, selectedProfile.id || '', data.backendUrl, data.accessToken],
+      func: async (actionPlan, profileId, backendUrl, accessToken) => {
+        // SEC-002: credentials stay in isolated-world context only (never page-readable)
+        window.__ccFillCtx = { backendUrl, accessToken, profileId, planId: actionPlan.plan_id || '' };
         // Execute each step using the runner's capability registry
         const results = [];
         for (const step of actionPlan.steps) {
@@ -622,6 +624,8 @@ fillBtn.addEventListener('click', async () => {
             results.push({ step_id: step.step_id, status: 'failed', failure_code: 'execution_error', postcondition_met: false, duration_ms: 0 });
           }
         }
+        // Store records in isolated-world memory for correction observer and background.js
+        window.__ccFillRecords = results;
         return results;
       }
     });
