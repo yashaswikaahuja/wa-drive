@@ -100,7 +100,7 @@ function resetContextCounter() {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { discoverContexts, generateContextId, resetContextCounter };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcContextDiscovery = { discoverContexts, generateContextId };
+  globalThis.CcContextDiscovery = { discoverContexts, generateContextId, resetContextCounter };
 }
 
 })();

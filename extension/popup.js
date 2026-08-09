@@ -459,6 +459,7 @@ fillBtn.addEventListener('click', async () => {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       files: [
+        'runtime/dom-gateway.js',
         'perception/binding-registry.js',
         'perception/revision-manager.js',
         'perception/canonical-hash.js',
@@ -470,7 +471,6 @@ fillBtn.addEventListener('click', async () => {
         'perception/snapshot-builder.js',
         'perception/validator.js',
         'perception/index.js',
-        'runtime/dom-gateway.js',
       ]
     });
 
@@ -480,6 +480,10 @@ fillBtn.addEventListener('click', async () => {
         try {
           if (typeof CcPerception === 'undefined') return { error: 'CcPerception not loaded' };
           if (typeof CcDomGateway === 'undefined') return { error: 'CcDomGateway not loaded' };
+          // Reset context counter so context_ids are consistent within this fill session
+          if (typeof CcContextDiscovery !== 'undefined' && CcContextDiscovery.resetContextCounter) {
+            CcContextDiscovery.resetContextCounter();
+          }
           await CcPerception.initPerception({
             gateway: CcDomGateway,
             bindingRegistry: new CcBindingRegistry(),
@@ -546,10 +550,23 @@ fillBtn.addEventListener('click', async () => {
       hideProgress(); return;
     }
 
-    const { plan, session } = await planResponse.json();
+    const { plan, session, diagnostics } = await planResponse.json();
     if (!plan || !plan.steps || plan.steps.length === 0) {
-      showStatus('Server returned empty plan â€” no fields to fill', CC.warning);
+      let reason = 'No fields matched';
+      if (diagnostics) {
+        const d = diagnostics;
+        const sm = d.semantic_mapping || {};
+        if (d.phase === 'profile_resolution') reason = 'Profile empty or not found';
+        else if (d.phase === 'mapping' && d.unmapped_count > 0) {
+          if (sm.strategy === 'no_ai_key') reason = d.unmapped_count + ' fields unrecognized (AI key missing)';
+          else if (sm.strategy === 'rate_limited') reason = 'AI rate-limited, retry shortly';
+          else if (sm.mapped === 0) reason = d.unmapped_count + ' fields - no knowledge match';
+          else reason = d.unmapped_count + ' fields unrecognized';
+        } else if (d.errors && d.errors[0]) reason = d.errors[0];
+      }
+      showStatus('Empty plan: ' + reason, CC.warning);
       hideProgress(); return;
+    }
     }
 
     // Step 3: Execute the ActionPlan via the runner
@@ -591,7 +608,14 @@ fillBtn.addEventListener('click', async () => {
             // 1. Resolve via BindingRegistry (primary path — zero DOM queries)
             let el = null;
             if (typeof CcPerception !== 'undefined' && CcPerception.resolveTarget) {
-              el = CcPerception.resolveTarget(step.target.context_id || 'ctx_top_level', step.target.node_id);
+              // context_id comes from plan step (set by plan-builder from mapping.context_id)
+              // Fallback to first context in the snapshot (ctx.top.N), never a hardcoded string
+              const ctxId = step.target.context_id
+                || (actionPlan.target_binding && actionPlan.target_binding.context_id)
+                || null;
+              if (ctxId) {
+                el = CcPerception.resolveTarget(ctxId, step.target.node_id);
+              }
             }
 
             // 2. Fallback: accessible-name matching (for when registry is unavailable)
