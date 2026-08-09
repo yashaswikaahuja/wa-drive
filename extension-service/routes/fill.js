@@ -181,7 +181,12 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
     };
     const result = handleObservation(sessionId, internalObservation);
 
-    let evidence = { persisted: false, persistentSessionId: null, learning: { attempted: 0, succeeded: 0, failed: 0 } };
+    let evidence = {
+      persisted: false,
+      persistentSessionId: null,
+      learning: { attempted: 0, succeeded: 0, failed: 0 },
+      mappingObservations: { persisted: false, count: 0, reason: 'not_acknowledged' },
+    };
     if (sessionId && result.acknowledged) {
       evidence = await persistExecutionEvidence({
         sessionId,
@@ -198,6 +203,7 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       persisted: evidence.persisted,
       persistent_session_id: evidence.persistentSessionId,
       learning: evidence.learning,
+      mapping_observations: evidence.mappingObservations,
     });
   } catch (err) {
     console.error('[fill-observation] error:', err.message);

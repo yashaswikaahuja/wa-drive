@@ -1,8 +1,9 @@
 import { pool } from './db.js';
 import { getSession } from './fill-session.js';
 import { recordSuccessfulExecution, recordFailedExecution } from './learning-engine.js';
+import { persistMappingObservations } from './mapping-observations.js';
 
-function buildRecords(session, observation) {
+export function buildRecords(session, observation) {
   const progressById = new Map((session.steps || []).map(step => [step.step_id, step]));
   const identity = {
     fillSessionId: session.session_id,
@@ -16,7 +17,6 @@ function buildRecords(session, observation) {
   if (!observation.steps?.length) {
     return [{
       ...identity,
-      selector: null,
       label: 'Action plan',
       type: 'plan',
       value: '',
@@ -34,13 +34,26 @@ function buildRecords(session, observation) {
       stepId: result.step_id,
       contextId: progress.context_id || null,
       nodeId: progress.node_id || null,
-      selector: progress.context_id && progress.node_id ? `${progress.context_id}/${progress.node_id}` : null,
       label: progress.label || progress.semantic_key || progress.node_id || result.step_id,
       type: progress.action_op || 'unknown',
       value: '',
       source: 'server-plan',
       semanticKey: progress.semantic_key || null,
       profileKey: progress.profile_key || null,
+      knowledgeRecordId: progress.knowledge_record_id || null,
+      mappingLineageId: progress.mapping_lineage_id || null,
+      mappingVersion: progress.mapping_version || null,
+      mappingSource: progress.mapping_source || null,
+      mappingStatus: progress.mapping_status || null,
+      mappingConfidence: progress.mapping_confidence ?? null,
+      mappingScope: progress.mapping_scope || null,
+      mappingDisposition: progress.mapping_disposition || null,
+      mappingMatchedPattern: progress.mapping_matched_pattern || null,
+      mappingMatchScore: progress.mapping_match_score ?? null,
+      mappingMatchPatterns: Array.isArray(progress.mapping_match_patterns)
+        ? progress.mapping_match_patterns.slice(0, 50)
+        : [],
+      transformation: progress.transformation || null,
       result: result.status === 'succeeded' ? 'filled' : result.status,
       failReason: result.failure_code || null,
       postconditionMet: result.postcondition_met,
@@ -85,16 +98,41 @@ async function recordLearning(session, observation, context) {
   };
 }
 
+async function journalMappings(session, observation, persistentSessionId) {
+  try {
+    return await persistMappingObservations({ session, observation, persistentSessionId });
+  } catch (error) {
+    console.error('[execution-evidence] mapping observation persistence failed:', error.message);
+    return { persisted: false, count: 0, error: error.message };
+  }
+}
+
 export async function persistExecutionEvidence({ sessionId, observation, workspaceId, userId, runtimeVersion = 'unknown' }) {
   const session = getSession(sessionId);
-  if (!session) return { persisted: false, persistentSessionId: null, learning: { attempted: 0, succeeded: 0, failed: 0 } };
+  const noLearning = { attempted: 0, succeeded: 0, failed: 0 };
+  if (!session) {
+    return {
+      persisted: false,
+      persistentSessionId: null,
+      learning: noLearning,
+      mappingObservations: { persisted: false, count: 0, reason: 'session_not_found' },
+    };
+  }
 
   const duplicate = await pool.query(
     `SELECT id FROM sessions WHERE workspace_id = $1 AND records @> $2::jsonb LIMIT 1`,
     [workspaceId, JSON.stringify([{ observationId: observation.observation_id }])]
   );
   if (duplicate.rows.length) {
-    return { persisted: true, persistentSessionId: duplicate.rows[0].id, duplicate: true, learning: { attempted: 0, succeeded: 0, failed: 0 } };
+    const persistentSessionId = duplicate.rows[0].id;
+    const mappingObservations = await journalMappings(session, observation, persistentSessionId);
+    return {
+      persisted: true,
+      persistentSessionId,
+      duplicate: true,
+      learning: noLearning,
+      mappingObservations,
+    };
   }
 
   const records = buildRecords(session, observation);
@@ -121,6 +159,16 @@ export async function persistExecutionEvidence({ sessionId, observation, workspa
     ]
   );
 
-  const learning = await recordLearning(session, observation, { workspaceId, userId });
-  return { persisted: true, persistentSessionId: rows[0].id, duplicate: false, learning };
+  const persistentSessionId = rows[0].id;
+  const [learning, mappingObservations] = await Promise.all([
+    recordLearning(session, observation, { workspaceId, userId }),
+    journalMappings(session, observation, persistentSessionId),
+  ]);
+  return {
+    persisted: true,
+    persistentSessionId,
+    duplicate: false,
+    learning,
+    mappingObservations,
+  };
 }

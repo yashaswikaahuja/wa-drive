@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 process.env.DATABASE_URL ||= 'postgresql://localhost:5432/cc_test_action_plan';
 const { buildPlan } = await import('../../extension-service/plan-builder.js');
-const { classifyField, FieldClassification } = await import('../../extension-service/mapping-engine.js');
+const { classifyField, FieldClassification, resolveNodeMapping } = await import('../../extension-service/mapping-engine.js');
+const { buildRecords } = await import('../../extension-service/execution-evidence.js');
+const { buildMappingObservationEntries, applyMappingObservations } = await import('../../extension-service/mapping-observations.js');
 const { createSession, attachPlan, getSession } = await import('../../extension-service/fill-session.js');
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -111,16 +113,106 @@ const secretNode = { affordances: ['type_text'], privacy: { classification: 'sec
 ok(classifyField(piiNode) === FieldClassification.PROFILE_DATA, 'privacy-sensitive Aadhaar/PAN-like data remains fillable profile data');
 ok(classifyField(secretNode) === FieldClassification.SENSITIVE, 'secret authentication data remains non-fillable');
 
+const textNode = (node_id, label) => ({
+  node_id, context_id: 'ctx.top.1', kind: 'control',
+  affordances: ['type_text'], state: { enabled: true, readonly: false },
+  observed: { accessible_name: label, description: '' },
+});
+const boardRecord = {
+  id: 'record:board', lineage_id: 'lineage:board', version: 1, status: 'active', confidence: 0.9,
+  source: { origin: 'imported' }, scope: { level: 'global' },
+  payload: {
+    field_label: 'board_10th', semantic_key: 'board_10th', profile_key: 'board_10th',
+    match_patterns: ['matriculation', 'class_10'],
+  },
+};
+const nameRecord = {
+  id: 'record:name', status: 'active', confidence: 0.9, source: { origin: 'imported' },
+  scope: { level: 'global' },
+  payload: { field_label: 'name', semantic_key: 'name', profile_key: 'name', match_patterns: ['full_name'] },
+};
+const rollRecord = {
+  id: 'record:roll', status: 'active', confidence: 0.9, source: { origin: 'imported' },
+  scope: { level: 'global' },
+  payload: { field_label: 'roll_number', semantic_key: 'roll_number', profile_key: 'roll_number', match_patterns: ['roll number'] },
+};
+const roll10thRecord = {
+  id: 'record:roll-10th', status: 'active', confidence: 0.9, source: { origin: 'imported' },
+  scope: { level: 'global' },
+  payload: {
+    field_label: 'roll_number_10th', semantic_key: 'roll_number_10th', profile_key: 'roll_number_10th',
+    match_patterns: ['matriculation_10th_class_roll_number'],
+  },
+};
+const mappingProfile = { name: 'Applicant', board_10th: 'Expected Board', roll_no_10th: '1500099' };
+const scribeMapping = resolveNodeMapping(
+  textNode('node:scribe', "Scribe's Name (As per Matriculation Certificate)"),
+  [boardRecord, nameRecord], [], mappingProfile
+);
+ok(scribeMapping === null, 'Scribe Name is not filled from applicant name or broad matriculation board knowledge');
+const rollMapping = resolveNodeMapping(
+  textNode('node:roll', 'Matriculation (10th class) Roll Number'),
+  [boardRecord, rollRecord, roll10thRecord], [], mappingProfile
+);
+ok(rollMapping?.semantic_key === 'roll_number_10th' && rollMapping?.profile_key === 'roll_number_10th', 'matriculation roll number resolves to the 10th-roll semantic/profile key');
+ok(rollMapping?.value === '1500099' && rollMapping?.mapping_record?.id === 'record:roll-10th', '10th-roll mapping reads roll_no_10th through the specific knowledge record');
+ok(rollMapping?.matched_pattern === 'matriculation 10th class roll number', 'punctuation-normalized match provenance identifies the exact 10th-roll pattern');
+const contextualRollFallback = resolveNodeMapping(
+  textNode('node:roll-fallback', 'Matriculation (10th class) Roll Number'),
+  [rollRecord], [], mappingProfile
+);
+ok(contextualRollFallback?.profile_key === 'roll_number_10th' && contextualRollFallback?.transformation === 'contextual_profile_alias', 'generic roll knowledge safely falls back to the contextual 10th-roll profile alias');
+const actualBoardMapping = resolveNodeMapping(
+  textNode('node:board', 'Matriculation Education Board'),
+  [boardRecord], [], mappingProfile
+);
+ok(actualBoardMapping?.profile_key === 'board_10th' && actualBoardMapping?.matched_pattern === 'matriculation', 'explicit board label can still use board_10th with matched-pattern provenance');
+
 const fillSession = createSession({
   workspace_id: 'workspace:test', document_id: 'doc:test', snapshot_id: 'snap:test', correlation_id: 'corr:test',
   metadata: { portal_id: 'ssc.gov.in', form_key: '/form', profile_id: null },
 });
 attachPlan(fillSession.session_id, 'plan:test', 1, ['step:text'], ['node:text'], [{
   context_id: 'ctx.top.1', label: 'Full Name', semantic_key: 'name', profile_key: 'name',
-  knowledge_record_id: 'record:test', action_op: 'type_text', risk: 'safe',
+  knowledge_record_id: 'record:test', mapping_lineage_id: 'lineage:test', mapping_version: 2,
+  mapping_source: 'imported', mapping_status: 'active', mapping_confidence: 0.9,
+  mapping_scope: { level: 'global' }, mapping_disposition: null,
+  mapping_matched_pattern: 'full name', mapping_match_score: 9,
+  mapping_match_patterns: ['full_name', 'candidate_name'], transformation: 'direct',
+  action_op: 'type_text', risk: 'safe',
 }]);
 const storedStep = getSession(fillSession.session_id).steps[0];
 ok(storedStep.label === 'Full Name' && storedStep.knowledge_record_id === 'record:test', 'fill session retains semantic and learning evidence links');
+ok(storedStep.mapping_source === 'imported' && storedStep.mapping_matched_pattern === 'full name', 'fill session retains source and exact match provenance');
+
+const evidenceObservation = {
+  observation_id: 'obs:test', plan_id: 'plan:test', correlation_id: 'corr:test',
+  document_id: 'doc:test', observed_at: new Date().toISOString(), outcome: 'completed',
+  steps: [{
+    step_id: 'step:text', status: 'succeeded', failure_code: null,
+    postcondition_met: true, observed_value_state: 'nonempty', duration_ms: 4,
+  }],
+};
+const evidenceRecords = buildRecords(getSession(fillSession.session_id), evidenceObservation);
+ok(evidenceRecords[0].knowledgeRecordId === 'record:test' && evidenceRecords[0].mappingConfidence === 0.9, 'PostgreSQL session record includes mapping record ID, source, status, confidence, and scope');
+ok(evidenceRecords[0].mappingMatchedPattern === 'full name' && evidenceRecords[0].transformation === 'direct', 'PostgreSQL session record explains the match and transformation');
+const mappingEntries = buildMappingObservationEntries(getSession(fillSession.session_id), evidenceObservation, 'persistent:test');
+ok(mappingEntries[0].semanticKey === 'name' && mappingEntries[0].contextId === 'ctx.top.1' && mappingEntries[0].nodeId === 'node:text', 'mapping journal links observed label and semantic/profile keys to public context/node IDs');
+ok(mappingEntries[0].result === 'filled' && mappingEntries[0].postconditionMet === true, 'mapping journal records mechanical result and postcondition without claiming semantic confirmation');
+const redactedEvidence = JSON.stringify({ evidenceRecords, mappingEntries });
+ok(!redactedEvidence.includes('selector') && !redactedEvidence.includes('binding') && !redactedEvidence.includes('Test'), 'persisted evidence contains no selectors, private binding IDs, or raw action/profile values');
+ok(mappingEntries[0].source === 'observed-server-plan', 'mechanical success remains observed diagnostic evidence rather than confirmed knowledge');
+const mappingDocument = {
+  '/form': {
+    name: { label: 'Full Name', profileKey: 'manually_reviewed_name', source: 'manual' },
+    email: { label: 'Email', profileKey: 'email', source: 'confirmed' },
+  },
+};
+applyMappingObservations(mappingDocument, {
+  formKey: '/form', hostname: 'ssc.gov.in', observedAt: evidenceObservation.observed_at, entries: mappingEntries,
+});
+ok(mappingDocument['/form'].name.profileKey === 'manually_reviewed_name' && mappingDocument['/form'].email.source === 'confirmed', 'observation persistence never overwrites manual or confirmed mappings');
+ok(mappingDocument['/form']._observations.length === 1, 'redacted evidence is retained in reserved metadata inside the existing per-form mappings store');
 
 const originalFetch = globalThis.fetch;
 const originalAIEnv = {

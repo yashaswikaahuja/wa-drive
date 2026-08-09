@@ -149,6 +149,7 @@ async function runTests() {
     }, token);
     ok(r.status === 200, '/fill-observation returns 200 for valid observation');
     ok(r.json && 'acknowledged' in r.json, '/fill-observation response has acknowledged field');
+    ok(r.json && 'mapping_observations' in r.json, '/fill-observation response reports mapping-observation persistence');
   }
 
   // Cleanup

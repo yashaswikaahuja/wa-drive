@@ -16,7 +16,7 @@ router.post('/cleanup', authMiddleware, async (_req, res) => {
     for (const formKey of Object.keys(all)) {
       const fields = all[formKey];
       for (const key of Object.keys(fields)) {
-        if (key === '_meta') continue;
+        if (key.startsWith('_')) continue;
         const lbl = fields[key].label || key;
         const trimmed = String(lbl).trim();
         // Same filters as seed: too short OR no letters at all
@@ -179,7 +179,7 @@ router.get('/list', authMiddleware, async (_req, res) => {
   } catch (e) { /* ignore — sessions table missing or DB down */ }
 
   const list = Object.entries(data).map(([formKey, fields]) => {
-    const entries = Object.entries(fields || {}).filter(([k]) => k !== '_meta');
+    const entries = Object.entries(fields || {}).filter(([key]) => !key.startsWith('_'));
     const fills = entries.reduce((s, [, m]) => s + (m?.fills || 0), 0);
     const corrections = entries.reduce((s, [, m]) => s + (m?.corrections || 0), 0);
     const lastSeen = entries.reduce((m, [, e]) => {
@@ -242,10 +242,23 @@ router.patch('/translations', authMiddleware, async (req, res) => {
   res.json({ ok: true });
 });
 
+// GET /api/mappings/observations/:formKey — redacted server-plan mapping evidence
+router.get('/observations/:formKey', authMiddleware, async (req, res) => {
+  const all = await load();
+  const form = all[req.params.formKey] || null;
+  if (!form) return res.json(null);
+  const requested = Number.parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(requested) ? Math.max(1, Math.min(requested, 1000)) : 200;
+  const observations = Array.isArray(form._observations) ? form._observations.slice(-limit) : [];
+  res.json({ _meta: form._meta || null, observations });
+});
+
 // GET /api/mappings/:formKey
 router.get('/:formKey', async (req, res) => {
   const mappings = await load();
-  res.json(mappings[req.params.formKey] || null);
+  const form = mappings[req.params.formKey];
+  if (!form) return res.json(null);
+  res.json(Object.fromEntries(Object.entries(form).filter(([key]) => key !== '_observations')));
 });
 
 // POST /api/mappings/:formKey — bulk update with confidence
@@ -263,6 +276,7 @@ router.post('/:formKey', async (req, res) => {
       // Sources that a background sync must NOT overwrite (set by admin/owner review).
       const PROTECTED = new Set(['manual', 'confirmed']);
       for (const [semanticKey, info] of Object.entries(updates)) {
+        if (semanticKey.startsWith('_')) continue;
         const { profileKey, delta = {}, label, type, order, options,
                 fillMode, rules, constantValue, fallback } = info;
         const existing = mappings[formKey][semanticKey];

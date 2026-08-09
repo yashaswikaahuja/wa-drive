@@ -13,6 +13,7 @@
  */
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'node:crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -175,7 +176,7 @@ function _authenticate(ws, req) {
     return null;
   }
 
-  const sessionId = `wss.${decoded.workspaceId.slice(0, 8)}.${Date.now().toString(36)}`;
+  const sessionId = `wss.${decoded.workspaceId.slice(0, 8)}.${randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
   return {
     sessionId,

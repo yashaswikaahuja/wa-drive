@@ -264,21 +264,22 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
   // Find matching field_mapping record.
   // Longest/most-specific matched pattern wins (so "father's name" matches
   // the `father_name` mapping via 'father' rather than the generic `name`).
-  // Priority (if set) is a tiebreaker on top of match specificity.
+  // Semantic guards reject lexical matches that describe a different entity;
+  // e.g. "Matriculation Certificate" is not evidence that a field is a board.
   let bestMapping = null;
-  let bestScore = 0;
+  let bestMatch = { score: 0, pattern: null };
   let bestPriority = -1;
 
   for (const record of mappings) {
     const payload = record.payload;
-    if (!payload) continue;
+    if (!payload || !isSemanticMatchAllowed(nodeName, nodeDesc, payload)) continue;
 
-    const score = matchLabelScore(nodeName, nodeDesc, payload);
-    if (score === 0) continue;
+    const match = findLabelMatch(nodeName, nodeDesc, payload);
+    if (match.score === 0) continue;
     const priority = payload.priority ?? 0;
-    if (score > bestScore || (score === bestScore && priority > bestPriority)) {
+    if (match.score > bestMatch.score || (match.score === bestMatch.score && priority > bestPriority)) {
       bestMapping = record;
-      bestScore = score;
+      bestMatch = match;
       bestPriority = priority;
     }
   }
@@ -286,13 +287,14 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
   if (!bestMapping) return null;
 
   const payload = bestMapping.payload;
+  const contextualKey = contextualProfileKey(nodeName, nodeDesc, payload.profile_key);
   let value = null;
-  let transformation = 'direct';
+  let transformation = contextualKey === payload.profile_key ? 'direct' : 'contextual_profile_alias';
   let resolvedClassification = FieldClassification.PROFILE_DATA;
 
   // Check if this is a derivation target
   const derivation = derivationRules.find(
-    r => r.payload?.output_key === payload.profile_key
+    r => r.payload?.output_key === contextualKey
   );
 
   if (derivation) {
@@ -300,26 +302,32 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
     value = computeDerivedValue(derivation, profile);
     transformation = derivation.payload.logic || 'derived';
   } else {
-    // Direct profile lookup, with alias fallback for common key divergences
-    // (e.g. seed uses `email` but real profiles store `email_id`).
-    value = lookupProfileValue(profile, payload.profile_key);
+    value = lookupProfileValue(profile, contextualKey);
   }
 
   return {
     node_id: node.node_id,
     context_id: node.context_id,
-    semantic_key: payload.semantic_key,
-    profile_key: payload.profile_key,
+    semantic_key: contextualKey === payload.profile_key ? payload.semantic_key : contextualKey,
+    profile_key: contextualKey,
     value,
     classification: resolvedClassification,
     transformation,
     mapping_record: bestMapping,
+    matched_pattern: bestMatch.pattern,
+    match_score: bestMatch.score,
   };
 }
 
 function resolveCandidateMapping(node, candidates, profile) {
+  const nodeName = node.observed?.accessible_name?.toLowerCase()?.trim() || '';
+  const nodeDesc = node.observed?.description?.toLowerCase()?.trim() || '';
   const candidate = candidates.find(item =>
     item.node_id === node.node_id && item.disposition === 'auto_accept' && item.profile_key
+      && isSemanticMatchAllowed(nodeName, nodeDesc, {
+        profile_key: item.profile_key,
+        semantic_key: item.semantic_key || item.profile_key,
+      })
   );
   if (!candidate) return null;
   const value = lookupProfileValue(profile, candidate.profile_key);
@@ -335,9 +343,40 @@ function resolveCandidateMapping(node, candidates, profile) {
       : FieldClassification.PROFILE_DATA,
     transformation: candidate.transformation || 'direct',
     mapping_record: candidate.knowledgeRecordId
-      ? { id: candidate.knowledgeRecordId, status: 'draft', source: { origin: 'ai_generated' } }
+      ? {
+        id: candidate.knowledgeRecordId,
+        status: 'draft',
+        confidence: candidate.confidence ?? null,
+        source: { origin: 'ai_generated' },
+      }
       : null,
+    matched_pattern: null,
+    match_score: null,
+    mapping_disposition: candidate.disposition,
   };
+}
+
+function isSemanticMatchAllowed(nodeName, nodeDesc, payload) {
+  const text = `${nodeName} ${nodeDesc}`;
+  const key = String(payload.profile_key || payload.semantic_key || '').toLowerCase();
+
+  // Scribe identity belongs to a separate person. Never substitute the
+  // applicant/candidate's generic name unless a dedicated scribe key exists.
+  if (/\bscribe\b/.test(text) && !key.includes('scribe')) return false;
+
+  // Education-level words identify context, not the requested attribute.
+  // A board mapping must have an explicit board/authority signal.
+  if (/^board(?:_|$)/.test(key) && !/\b(board|examining authority)\b/.test(text)) return false;
+
+  return true;
+}
+
+function contextualProfileKey(nodeName, nodeDesc, profileKey) {
+  if (profileKey !== 'roll_number') return profileKey;
+  const text = `${nodeName} ${nodeDesc}`;
+  if (/\b(matriculation|10th|class\s*(?:10|x)|sslc|tenth)\b/.test(text)) return 'roll_number_10th';
+  if (/\b(intermediate|12th|class\s*(?:12|xii)|hsc|twelfth)\b/.test(text)) return 'roll_number_12th';
+  return profileKey;
 }
 
 /**
@@ -350,13 +389,22 @@ function resolveCandidateMapping(node, candidates, profile) {
  * @param {object} payload — field_mapping payload
  * @returns {number}
  */
-function matchLabelScore(nodeName, nodeDesc, payload) {
+function findLabelMatch(nodeName, nodeDesc, payload) {
+  const normalize = (raw) => String(raw || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const normalizedName = normalize(nodeName);
+  const normalizedDesc = normalize(nodeDesc);
   let best = 0;
+  let matchedPattern = null;
   const consider = (raw) => {
-    const c = String(raw || '').toLowerCase().trim().replace(/_/g, ' ');
-    if (!c) return;
-    if (nodeName.includes(c) || nodeDesc.includes(c)) {
-      if (c.length > best) best = c.length;
+    const candidate = normalize(raw);
+    if (!candidate) return;
+    if ((normalizedName.includes(candidate) || normalizedDesc.includes(candidate)) && candidate.length > best) {
+      best = candidate.length;
+      matchedPattern = candidate;
     }
   };
 
@@ -364,10 +412,13 @@ function matchLabelScore(nodeName, nodeDesc, payload) {
   if (Array.isArray(payload.match_patterns)) {
     for (const pattern of payload.match_patterns) consider(pattern);
   }
-  // Semantic key as a normalized fallback (underscores → spaces)
   consider((payload.semantic_key || '').replace(/_/g, ' '));
 
-  return best;
+  return { score: best, pattern: matchedPattern };
+}
+
+function matchLabelScore(nodeName, nodeDesc, payload) {
+  return findLabelMatch(nodeName, nodeDesc, payload).score;
 }
 
 /**
@@ -428,6 +479,8 @@ const PROFILE_KEY_ALIASES = Object.freeze({
   pan_number: ['pan', 'pan_no', 'pan_number'],
   dob: ['date_of_birth', 'birth_date'],
   pincode: ['pin_code', 'postal_code', 'pin'],
+  roll_number_10th: ['roll_no_10th', 'roll_10th', 'matric_roll'],
+  roll_number_12th: ['roll_no_12th', 'roll_12th', 'inter_roll'],
 });
 
 /**

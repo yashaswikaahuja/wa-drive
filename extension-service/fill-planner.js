@@ -321,12 +321,26 @@ export async function generateFillPlan(request) {
   const stepMetadata = plan.steps.map(step => {
     const mapping = mappingByNodeId.get(step.target.node_id);
     const node = snapshot.nodes?.[step.target.node_id];
+    const record = mapping?.mapping_record || null;
     return {
       context_id: step.target.context_id,
       label: node?.observed?.accessible_name || mapping?.semantic_key || step.target.node_id,
       semantic_key: mapping?.semantic_key || null,
       profile_key: mapping?.profile_key || null,
-      knowledge_record_id: mapping?.mapping_record?.id || null,
+      knowledge_record_id: record?.id || null,
+      mapping_lineage_id: record?.lineage_id || null,
+      mapping_version: record?.version || null,
+      mapping_source: record?.source?.origin || null,
+      mapping_status: record?.status || null,
+      mapping_confidence: record?.confidence ?? null,
+      mapping_scope: record?.scope || null,
+      mapping_disposition: mapping?.mapping_disposition || null,
+      mapping_matched_pattern: mapping?.matched_pattern || null,
+      mapping_match_score: mapping?.match_score ?? null,
+      mapping_match_patterns: Array.isArray(record?.payload?.match_patterns)
+        ? record.payload.match_patterns.slice(0, 50)
+        : [],
+      transformation: mapping?.transformation || 'direct',
       action_op: step.action.op,
       risk: step.risk,
     };
