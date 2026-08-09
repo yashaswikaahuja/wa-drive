@@ -394,6 +394,31 @@ function computeAccessibleName(element, ariaLabel, ariaLabelledby) {
     const text = clone.textContent.trim();
     if (text) return text.slice(0, 160);
   }
+  // Preceding sibling or parent text (common in Angular/gov forms where <p>Label</p><input>)
+  const tag = element.tagName?.toLowerCase() || '';
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') {
+    // Check previous element sibling
+    let prev = element.previousElementSibling;
+    if (prev) {
+      const prevText = prev.textContent?.trim();
+      if (prevText && prevText.length < 160 && prevText.length > 1) return prevText.slice(0, 160);
+    }
+    // Check parent's preceding text (e.g. <div><p>Label</p><div><input></div></div>)
+    const parent = element.parentElement;
+    if (parent) {
+      prev = parent.previousElementSibling;
+      if (prev) {
+        const prevText = prev.textContent?.trim();
+        if (prevText && prevText.length < 160 && prevText.length > 1) return prevText.slice(0, 160);
+      }
+    }
+    // formControlName attribute (Angular reactive forms)
+    const fcn = element.getAttribute('formcontrolname') || element.getAttribute('formControlName');
+    if (fcn) return fcn.replace(/([A-Z])/g, ' $1').trim().slice(0, 160);
+    // name attribute as last resort for inputs
+    const nameAttr = element.getAttribute('name');
+    if (nameAttr && nameAttr.length > 2) return nameAttr.replace(/([A-Z_])/g, ' $1').replace(/_/g, ' ').trim().slice(0, 160);
+  }
   // Title / placeholder fallback
   return (element.title || element.placeholder || '').trim().slice(0, 160) || null;
 }
