@@ -237,6 +237,9 @@ export async function callAI({ systemPrompt, userPrompt, maxTokens, temperature 
   const startTime = Date.now();
   const effectiveMaxTokens = maxTokens || config.maxTokens;
   const effectiveTemperature = temperature ?? config.temperature;
+  const timeoutMs = config.timeoutMs || 15_000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await dispatchToProvider({
@@ -244,6 +247,7 @@ export async function callAI({ systemPrompt, userPrompt, maxTokens, temperature 
       userPrompt,
       maxTokens: effectiveMaxTokens,
       temperature: effectiveTemperature,
+      signal: controller.signal,
     });
 
     const latencyMs = Date.now() - startTime;
@@ -259,16 +263,21 @@ export async function callAI({ systemPrompt, userPrompt, maxTokens, temperature 
     };
   } catch (err) {
     const latencyMs = Date.now() - startTime;
-    console.error(`[ai-key-manager] AI call failed (${latencyMs}ms):`, err.message);
+    const failure = controller.signal.aborted
+      ? new Error(`AI request timed out after ${timeoutMs}ms`)
+      : err;
+    console.error(`[ai-key-manager] AI call failed (${latencyMs}ms):`, failure.message);
 
     return {
       ok: false,
       content: null,
       tokensUsed: 0,
-      error: err.message,
+      error: failure.message,
       model: config.model,
       latencyMs,
     };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -280,45 +289,24 @@ export async function callAI({ systemPrompt, userPrompt, maxTokens, temperature 
  * @param {object} params
  * @returns {Promise<{ content: string, tokensUsed: number }>}
  */
-async function dispatchToProvider({ systemPrompt, userPrompt, maxTokens, temperature }) {
+async function dispatchToProvider({ systemPrompt, userPrompt, maxTokens, temperature, signal }) {
   switch (config.provider) {
     case 'openai':
     case 'azure_openai':
     case 'openrouter':
     case 'groq':
-      return callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature });
+      return callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature, signal });
     case 'anthropic':
-      return callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature });
+      return callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature, signal });
     default:
       throw new Error(`Unsupported AI provider: ${config.provider}`);
   }
 }
 
 /**
- * Execute an AI HTTP request with a strict time budget. Fill planning must
- * return before the public gateway timeout; a timed-out cold-start mapping
- * degrades to the planner's existing partial/empty explained result.
- */
-async function fetchWithTimeout(endpoint, options) {
-  const timeoutMs = config.timeoutMs || 15_000;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(endpoint, { ...options, signal: controller.signal });
-  } catch (err) {
-    if (controller.signal.aborted) {
-      throw new Error(`AI request timed out after ${timeoutMs}ms`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/**
  * Call OpenAI-compatible API (works for OpenAI, Azure OpenAI, OpenRouter, Groq).
  */
-async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature }) {
+async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature, signal }) {
   const endpoint = config.endpoint || 'https://api.openai.com/v1/chat/completions';
 
   const body = {
@@ -342,10 +330,11 @@ async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature }) 
     headers['X-Title'] = 'CyberControl';
   }
 
-  const res = await fetchWithTimeout(endpoint, {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {
@@ -366,7 +355,7 @@ async function callOpenAI({ systemPrompt, userPrompt, maxTokens, temperature }) 
 /**
  * Call Anthropic Claude API.
  */
-async function callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature }) {
+async function callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature, signal }) {
   const endpoint = config.endpoint || 'https://api.anthropic.com/v1/messages';
 
   const body = {
@@ -379,7 +368,7 @@ async function callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature 
     ],
   };
 
-  const res = await fetchWithTimeout(endpoint, {
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -387,6 +376,7 @@ async function callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature 
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {

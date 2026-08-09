@@ -134,11 +134,17 @@ try {
   process.env.AI_TIMEOUT_MS = '25';
   const aiKeyManager = await import('../../extension-service/ai-key-manager.js');
   aiKeyManager._reset();
-  globalThis.fetch = (_url, options = {}) => new Promise((_resolve, reject) => {
-    options.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+  globalThis.fetch = async (_url, options = {}) => ({
+    ok: true,
+    json: () => new Promise((_resolve, reject) => {
+      options.signal?.addEventListener('abort', () => reject(new Error('aborted during body read')), { once: true });
+    }),
   });
   const startedAt = Date.now();
-  const timedOut = await aiKeyManager.callAI({ systemPrompt: 'system', userPrompt: 'user' });
+  const timedOut = await Promise.race([
+    aiKeyManager.callAI({ systemPrompt: 'system', userPrompt: 'user' }),
+    new Promise(resolve => setTimeout(() => resolve({ ok: false, error: 'test watchdog expired' }), 500)),
+  ]);
   ok(timedOut?.ok === false && /timed out after 25ms/.test(timedOut.error || ''), 'AI provider calls fail with an explicit bounded-timeout diagnostic');
   ok(Date.now() - startedAt < 1000, 'AI timeout returns well before the public gateway deadline');
   aiKeyManager._reset();
