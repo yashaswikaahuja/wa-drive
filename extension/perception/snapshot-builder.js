@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Snapshot Builder — assembles a validated PageSnapshot v2.
  *
@@ -171,3 +172,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcSnapshotBuilder = { buildSnapshot };
 }
+
+})();

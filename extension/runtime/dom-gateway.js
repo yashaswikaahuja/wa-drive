@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl DOM Observation Gateway — extension/runtime/dom-gateway.js
  *
@@ -463,3 +464,5 @@ if (typeof module !== 'undefined' && module.exports) {
     performAction,
   };
 }
+
+})();

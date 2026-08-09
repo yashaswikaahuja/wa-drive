@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Delta Emitter — extension/perception/delta-emitter.js
  * Phase 3.3 — Perception Completion
@@ -463,3 +464,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcDeltaEmitter = DeltaEmitter;
 }
+
+})();

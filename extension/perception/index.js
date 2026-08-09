@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Perception Entry Point — perceivePage() public API.
  *
@@ -188,3 +189,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcPerception = { initPerception, perceivePage, resetPerception, startDeltaObserver, stopDeltaObserver, getPerceptionState };
 }
+
+})();

@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Edge Factory — derives relationships between nodes.
  *
@@ -103,3 +104,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcEdgeFactory = { deriveEdges };
 }
+
+})();

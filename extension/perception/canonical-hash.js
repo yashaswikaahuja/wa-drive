@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Canonical Hash — deterministic serialization and SHA-256.
  *
@@ -145,3 +146,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcCanonicalHash = { canonicalize, computeCanonicalHash };
 }
+
+})();

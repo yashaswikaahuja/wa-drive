@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Widget Classifier v2 — Phase 3.2
  *
@@ -288,3 +289,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcWidgetClassifier = { classifyWidget, widgetAffordances };
 }
+
+})();

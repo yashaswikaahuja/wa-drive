@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Context Discovery — enumerates browsing contexts.
  *
@@ -101,3 +102,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcContextDiscovery = { discoverContexts, generateContextId };
 }
+
+})();

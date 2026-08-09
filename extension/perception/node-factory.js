@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Node Factory — transforms gateway-captured facts into IR Nodes.
  *
@@ -162,3 +163,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcNodeFactory = { createNode, classifyKind, generateNodeId };
 }
+
+})();

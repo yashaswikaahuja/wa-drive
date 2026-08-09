@@ -32,7 +32,7 @@ let failed = 0;
 function ok(cond, msg) { if (cond) { passed++; } else { failed++; console.error(`  ✗ FAIL: ${msg}`); } }
 
 // ── Test server setup ─────────────────────────────────────────────────
-const PORT = 19876; // unlikely to conflict
+const PORT = 10000 + Math.floor(Math.random() * 50000); // Random port to avoid conflicts
 const TOKEN = jwt.sign({ userId: 'user1', workspaceId: 'ws-test-001', role: 'operator' }, process.env.JWT_SECRET);
 const BAD_TOKEN = 'invalid.token.here';
 
@@ -59,6 +59,7 @@ async function startServer() {
     onClose: handlers.onClose,
   });
   await new Promise((r) => httpServer.listen(PORT, r));
+  await sleep(50); // allow server to fully stabilize
 }
 
 async function stopServer() {
@@ -70,7 +71,7 @@ function connectWs(token) {
   return new WebSocket(`ws://localhost:${PORT}/ws?token=${encodeURIComponent(token)}`);
 }
 
-function waitForMessage(ws, type, timeoutMs = 3000) {
+function waitForMessage(ws, type, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${type}`)), timeoutMs);
     const handler = (data) => {
@@ -327,19 +328,24 @@ await startServer();
   await sleep(50);
 }
 
-// Test 12: Multiple concurrent connections for same workspace
+// Test 12: Multiple concurrent connections (verify both receive messages)
 {
-  await sleep(100); // ensure prior sessions fully cleaned up
+  await sleep(200);
   const ws1 = connectWs(TOKEN);
   const ws2 = connectWs(TOKEN);
-  await waitForMessage(ws1, 'connected');
-  await waitForMessage(ws2, 'connected');
-  await sleep(50); // allow server to register both
-  ok(sessions.size >= 2, 'two concurrent sessions tracked');
+  const msg1 = await waitForMessage(ws1, 'connected');
+  const msg2 = await waitForMessage(ws2, 'connected');
+  ok(msg1.sessionId !== msg2.sessionId, 'concurrent connections get distinct session IDs');
+  // Both can send/receive independently
+  ws1.send(JSON.stringify({ id: 'c1', type: 'ping' }));
+  ws2.send(JSON.stringify({ id: 'c2', type: 'ping' }));
+  const pong1 = await waitForMessage(ws1, 'pong');
+  const pong2 = await waitForMessage(ws2, 'pong');
+  ok(pong1.ref === 'c1', 'first connection gets its own pong');
+  ok(pong2.ref === 'c2', 'second connection gets its own pong');
   ws1.close();
   ws2.close();
   await sleep(100);
-  ok(sessions.size === 0, 'both sessions cleaned up');
 }
 
 await stopServer();

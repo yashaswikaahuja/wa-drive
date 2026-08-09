@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Privacy Filter — enforces perception-privacy.yml.
  *
@@ -108,3 +109,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcPrivacyFilter = { classifyNode, applyPrivacyRules };
 }
+
+})();

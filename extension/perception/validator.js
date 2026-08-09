@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Page IR Validator — pre-publication schema validation.
  *
@@ -130,3 +131,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcValidator = { initValidator, validateSnapshot, validateDelta, isInitialized };
 }
+
+})();

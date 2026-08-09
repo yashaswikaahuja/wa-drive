@@ -1,3 +1,4 @@
+(function() {
 /**
  * CyberControl Revision Manager — manages document_id, snapshot_id,
  * and monotonic revision numbers per the perception lifecycle.
@@ -122,3 +123,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcRevisionManager = RevisionManager;
 }
+
+})();
