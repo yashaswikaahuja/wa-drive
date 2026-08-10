@@ -43,6 +43,19 @@ console.log('\n=== Binding Registry ===');
   ok(reg.resolve('ctx1', 'node1').liveNodeReference === el2, 'rebind updates element');
   equal(reg.getGeneration('ctx1', 'node1'), 2, 'rebind increments bindingGeneration');
 
+  // upsert: same element keeps generation; replacement advances
+  const touch = reg.upsert('ctx1', 'node1', el2, 'adapter-text', 5);
+  ok(touch.action === 'touched', 'upsert same element is touch');
+  equal(reg.getGeneration('ctx1', 'node1'), 2, 'upsert same element keeps generation');
+  equal(reg.resolve('ctx1', 'node1').createdRevision, 5, 'upsert same element updates createdRevision');
+  const el3 = { tagName: 'INPUT', id: 'name-v3' };
+  const rebound = reg.upsert('ctx1', 'node1', el3, 'adapter-text', 6);
+  ok(rebound.action === 'rebound', 'upsert different element is rebind');
+  equal(reg.getGeneration('ctx1', 'node1'), 3, 'upsert replacement advances generation 2→3');
+  const freshEl = { tagName: 'INPUT', id: 'fresh' };
+  const bound = reg.upsert('ctx1', 'node-new', freshEl, null, 6);
+  ok(bound.action === 'bound' && bound.bindingGeneration === 1, 'upsert new node binds at generation 1');
+
   // rebind non-existent throws
   let threw = false;
   try { reg.rebind('ctx1', 'ghost', {}); } catch { threw = true; }
@@ -51,13 +64,14 @@ console.log('\n=== Binding Registry ===');
   // multiple contexts are isolated
   reg.bind('ctx2', 'nodeA', { id: 'a' }, null, 1);
   reg.bind('ctx2', 'nodeB', { id: 'b' }, null, 1);
-  equal(reg.size, 3, 'size is 3 after adding to second context');
+  // ctx1: node1 + node-new from upsert tests; ctx2: nodeA + nodeB
+  equal(reg.size, 4, 'size is 4 after adding to second context');
 
   // invalidateContext removes only that context
   reg.invalidateContext('ctx2');
   ok(reg.resolve('ctx2', 'nodeA') === null, 'ctx2 entries removed');
   ok(reg.resolve('ctx1', 'node1') !== null, 'ctx1 entries preserved');
-  equal(reg.size, 1, 'size is 1 after invalidateContext');
+  equal(reg.size, 2, 'size is 2 after invalidateContext (ctx1 remains)');
 
   // invalidateNode
   reg.bind('ctx1', 'node2', { id: 'n2' }, null, 2);

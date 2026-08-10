@@ -58,10 +58,15 @@ class BindingRegistry {
   }
 
   /**
-   * Rebind a node to a new live element (e.g. after rerender).
-   * Increments binding_generation for TOCTOU detection.
+   * Rebind a node to a new live element (e.g. after SPA rerender).
+   * Increments binding_generation for TOCTOU detection (perception-lifecycle
+   * rebinding_continuity). Never silently preserves an old plan's generation.
+   * @param {string} contextId
+   * @param {string} nodeId
+   * @param {Element} newElement
+   * @param {{adapterId?: string|null, createdRevision?: number}} [opts]
    */
-  rebind(contextId, nodeId, newElement) {
+  rebind(contextId, nodeId, newElement, opts = {}) {
     const key = BindingRegistry._key(contextId, nodeId);
     const entry = this._entries.get(key);
     if (!entry) {
@@ -69,6 +74,33 @@ class BindingRegistry {
     }
     entry.liveNodeReference = newElement;
     entry.bindingGeneration += 1;
+    if (opts.adapterId !== undefined) entry.adapterId = opts.adapterId;
+    if (opts.createdRevision !== undefined) entry.createdRevision = opts.createdRevision;
+  }
+
+  /**
+   * Continuity-aware live binding for perception publish / delta paths.
+   * - New node → bind (generation 1)
+   * - Same live element → update metadata only (generation unchanged)
+   * - Different live element → rebind (generation advances)
+   * @returns {{action: 'bound'|'rebound'|'touched', bindingGeneration: number}}
+   */
+  upsert(contextId, nodeId, liveElement, adapterId, createdRevision) {
+    const entry = this.resolve(contextId, nodeId);
+    if (!entry) {
+      this.bind(contextId, nodeId, liveElement, adapterId, createdRevision);
+      return { action: 'bound', bindingGeneration: 1 };
+    }
+    if (entry.liveNodeReference !== liveElement) {
+      this.rebind(contextId, nodeId, liveElement, {
+        adapterId: adapterId ?? entry.adapterId,
+        createdRevision,
+      });
+      return { action: 'rebound', bindingGeneration: this.getGeneration(contextId, nodeId) };
+    }
+    entry.adapterId = adapterId ?? entry.adapterId;
+    entry.createdRevision = createdRevision;
+    return { action: 'touched', bindingGeneration: entry.bindingGeneration };
   }
 
   /**

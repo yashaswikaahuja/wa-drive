@@ -18,6 +18,7 @@ const suites = [
   { name: 'Perception Browser Tests', cmd: 'node extension-dev/tests/browser/run-perception-browser.mjs' },
   { name: 'Widget Classification Tests', cmd: 'node extension-dev/tests/browser/run-widget-classification.mjs' },
   { name: 'Relationship Lifecycle Tests', cmd: 'node extension-dev/tests/browser/run-relationship-lifecycle.mjs' },
+  { name: 'ActionPlanExecutor v3 Product E2E', cmd: 'node extension-dev/tests/browser/run-action-plan-executor.mjs' },
 ];
 
 let allPass = true;

@@ -49,6 +49,64 @@ function clearReplayCache() {
   _replayCache.clear();
 }
 
+/**
+ * Mechanical classification: does activation of this element submit a form?
+ * APE-IMPL-P1-02 / gateway-security compromised_service (allow_submit).
+ */
+function elementImpliesSubmit(el) {
+  if (!el || typeof el.tagName !== 'string') return false;
+  const tag = el.tagName.toUpperCase();
+  const type = String(el.type || el.getAttribute?.('type') || '').toLowerCase();
+  if (tag === 'INPUT' && (type === 'submit' || type === 'image')) return true;
+  if (tag === 'BUTTON') {
+    // HTML: button inside a form defaults to type=submit
+    const effective = type || 'submit';
+    if (effective === 'submit') return true;
+  }
+  if (el.getAttribute?.('formaction')) return true;
+  return false;
+}
+
+/**
+ * Mechanical classification: would activation navigate away?
+ * APE-IMPL-P1-02 / gateway-security navigation_and_file_policy.
+ */
+function elementImpliesNavigation(el) {
+  if (!el || typeof el.tagName !== 'string') return false;
+  const tag = el.tagName.toUpperCase();
+  if (tag === 'A' && el.hasAttribute('href')) {
+    const href = String(el.getAttribute('href') || '').trim();
+    // Pure fragment / no-op / javascript: void are not navigation for authz purposes
+    if (!href || href === '#' || href.startsWith('#')) return false;
+    if (/^javascript:/i.test(href)) return false;
+    return true;
+  }
+  if (String(el.getAttribute?.('role') || '').toLowerCase() === 'link') return true;
+  return false;
+}
+
+/**
+ * Hard-enforce allow_submit / allow_navigation against the resolved element.
+ * Returns failure code or null when authorized.
+ */
+function checkStepAuthorization(plan, step, element) {
+  if (step.action?.op !== 'activate') return null;
+  const auth = plan.authorization || {};
+  if (auth.allow_submit === false && elementImpliesSubmit(element)) {
+    return {
+      code: 'authorization_denied',
+      message: 'Submission action denied: allow_submit is false',
+    };
+  }
+  if (auth.allow_navigation === false && elementImpliesNavigation(element)) {
+    return {
+      code: 'authorization_denied',
+      message: 'Navigation action denied: allow_navigation is false',
+    };
+  }
+  return null;
+}
+
 function validatePlan(plan, state) {
   if (!plan || plan.kind !== 'action_plan' || plan.schema_version !== SCHEMA_VERSION) {
     return { ok: false, code: 'authorization_denied', message: 'Unsupported or malformed ActionPlan' };
@@ -70,6 +128,10 @@ function validatePlan(plan, state) {
   if (maxRisk == null) {
     return { ok: false, code: 'authorization_denied', message: 'ActionPlan has an invalid risk authorization' };
   }
+  // Authorization flags must be explicit booleans (fail closed on missing).
+  if (typeof plan.authorization.allow_submit !== 'boolean' || typeof plan.authorization.allow_navigation !== 'boolean') {
+    return { ok: false, code: 'authorization_denied', message: 'ActionPlan authorization flags must be boolean' };
+  }
   for (const step of plan.steps) {
     if (!step?.step_id || !step.target?.context_id || !step.target?.node_id || !step.action?.op || !step.postcondition) {
       return { ok: false, code: 'authorization_denied', message: 'ActionPlan contains a malformed step' };
@@ -80,9 +142,8 @@ function validatePlan(plan, state) {
     if (step.risk === 'irreversible' && !plan.authorization.operator_confirmed) {
       return { ok: false, code: 'authorization_denied', message: 'Irreversible action lacks operator confirmation' };
     }
-    if (step.action.op === 'activate' && plan.authorization.allow_navigation === false) {
-      // Navigation may still be accidental; risk check is primary. Soft allow.
-    }
+    // Element-level allow_submit / allow_navigation enforcement happens at
+    // execute time once the live target is resolved (checkStepAuthorization).
   }
   return { ok: true };
 }
@@ -208,21 +269,77 @@ async function execute(plan) {
       failureCode = optionTarget.error;
     }
 
+    // APE-IMPL-P1-02: hard authorization against resolved element
+    if (!failureCode && target?.element) {
+      const authz = checkStepAuthorization(plan, step, target.element);
+      if (authz) failureCode = authz.code;
+    }
+
     let postcondition = { met: false, valueState: null };
     if (!failureCode) {
       if (!globalThis.CcDomGateway?.performAction || !globalThis.CcDomGateway?.readAriaState) {
         failureCode = 'gateway_error';
       } else {
-        const result = globalThis.CcDomGateway.performAction(target.element, step.action, {
-          optionElement: optionTarget?.element || null,
-        });
-        if (!result.success) {
-          failureCode = normalizeFailureCode(result.error);
+        // APE-IMPL-P1-01: revalidate generation-aware binding immediately before
+        // mutation (gateway-security toctou_revalidation). Never act on a stale gen.
+        const toctou = globalThis.CcPerception.resolveExecutionTarget(
+          plan.target_binding,
+          step.target,
+          { requiredAffordance: step.required_affordance, requiredAdapterId: step.required_adapter_id }
+        );
+        if (toctou.error) {
+          failureCode = toctou.error;
+        } else if (
+          typeof toctou.expectedGeneration === 'number' &&
+          globalThis.CcDomGateway.resolveBinding &&
+          globalThis.CcPerception.getBindingRegistry
+        ) {
+          const registry = globalThis.CcPerception.getBindingRegistry();
+          const genCheck = globalThis.CcDomGateway.resolveBinding(
+            step.target.context_id,
+            step.target.node_id,
+            registry,
+            toctou.expectedGeneration
+          );
+          if (genCheck.error || !genCheck.element) {
+            failureCode = genCheck.error || 'stale_target';
+          } else {
+            target = { ...toctou, element: genCheck.element };
+          }
         } else {
-          const settleMs = step.action.op === 'select_option' ? 500 : (step.action.op === 'toggle' ? 160 : 120);
-          await new Promise(resolve => setTimeout(resolve, settleMs));
-          postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
-          if (!postcondition.met) failureCode = 'postcondition_failed';
+          target = toctou;
+        }
+
+        if (!failureCode && step.action.op === 'select_option' && step.action.option_target) {
+          const optToctou = globalThis.CcPerception.resolveExecutionTarget(
+            plan.target_binding,
+            step.action.option_target,
+            {}
+          );
+          if (optToctou.error) failureCode = optToctou.error;
+          else optionTarget = optToctou;
+        }
+
+        if (!failureCode) {
+          // Re-check authz on the TOCTOU-final element (submit/nav may differ).
+          const authz2 = checkStepAuthorization(plan, step, target.element);
+          if (authz2) {
+            failureCode = authz2.code;
+          }
+        }
+
+        if (!failureCode) {
+          const result = globalThis.CcDomGateway.performAction(target.element, step.action, {
+            optionElement: optionTarget?.element || null,
+          });
+          if (!result.success) {
+            failureCode = normalizeFailureCode(result.error);
+          } else {
+            const settleMs = step.action.op === 'select_option' ? 500 : (step.action.op === 'toggle' ? 160 : 120);
+            await new Promise(resolve => setTimeout(resolve, settleMs));
+            postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
+            if (!postcondition.met) failureCode = 'postcondition_failed';
+          }
         }
       }
     }
@@ -262,6 +379,9 @@ const api = {
   execute,
   validatePlan,
   verifyPostcondition,
+  checkStepAuthorization,
+  elementImpliesSubmit,
+  elementImpliesNavigation,
   clearReplayCache,
   REPLAY_TTL_MS,
 };

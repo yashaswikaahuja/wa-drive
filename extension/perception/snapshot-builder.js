@@ -73,8 +73,11 @@ async function buildSnapshot(options) {
   /** Private observation aids for relationship derivation — never published on nodes. */
   const factMeta = {};
 
-  // APE-P1-03: clear prior bindings for this perception pass (same document re-perceive)
-  if (bindingRegistry?.invalidateAll) bindingRegistry.invalidateAll();
+  // APE-IMPL-P1-01: continuity-aware binding. Do NOT wipe+rebind (that would
+  // reset binding_generation to 1 and hide SPA replacements). Upsert: same
+  // live element keeps generation; replaced live element advances generation
+  // via rebind(); nodes that disappear are invalidated after the pass.
+  const seenBindingKeys = new Set();
 
   for (let i = 0; i < rawFacts.length; i++) {
     const fact = rawFacts[i];
@@ -105,13 +108,32 @@ async function buildSnapshot(options) {
     // APE-P1-03: bind live Element only (never fact-index placeholder)
     const liveRef = liveElements && liveElements[i];
     if (liveRef && typeof liveRef.nodeType === 'number' && liveRef.nodeType === 1) {
-      bindingRegistry.bind(
-        topContext.context_id,
-        node.node_id,
-        liveRef,
-        node.widget?.adapter_id || null,
-        revision
-      );
+      const ctxId = topContext.context_id;
+      const adapterId = node.widget?.adapter_id || null;
+      if (typeof bindingRegistry.upsert === 'function') {
+        bindingRegistry.upsert(ctxId, node.node_id, liveRef, adapterId, revision);
+      } else {
+        const existing = bindingRegistry.resolve?.(ctxId, node.node_id);
+        if (existing && existing.liveNodeReference !== liveRef && bindingRegistry.rebind) {
+          bindingRegistry.rebind(ctxId, node.node_id, liveRef, { adapterId, createdRevision: revision });
+        } else if (!existing) {
+          bindingRegistry.bind(ctxId, node.node_id, liveRef, adapterId, revision);
+        } else {
+          existing.adapterId = adapterId;
+          existing.createdRevision = revision;
+        }
+      }
+      seenBindingKeys.add(`${ctxId}\0${node.node_id}`);
+    }
+  }
+
+  // Drop bindings for nodes no longer present in this perception pass.
+  if (bindingRegistry?.entries && bindingRegistry?.invalidateNode) {
+    for (const entry of bindingRegistry.entries()) {
+      const key = `${entry.contextId}\0${entry.nodeId}`;
+      if (!seenBindingKeys.has(key)) {
+        bindingRegistry.invalidateNode(entry.contextId, entry.nodeId);
+      }
     }
   }
 

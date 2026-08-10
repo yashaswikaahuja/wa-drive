@@ -12,6 +12,35 @@ let _initialized = false;
 let _deltaEmitter = null;
 /** @type {object|null} Last published PageSnapshot (for execution target checks). */
 let _lastSnapshot = null;
+/**
+ * Private authorship generations captured at perception publish.
+ * Map key: `${context_id}\0${node_id}` → binding_generation at publish time.
+ * Browser-private: never serialized, never sent to the service.
+ * APE-IMPL-P1-01 / perception-lifecycle rebinding_continuity.
+ */
+let _authorshipGenerations = new Map();
+/** @type {{documentId: string|null, snapshotId: string|null, revision: number}|null} */
+let _authorshipMeta = null;
+
+function _captureAuthorshipGenerations() {
+  _authorshipGenerations = new Map();
+  _authorshipMeta = {
+    documentId: _revisionManager?.currentDocumentId?.() || _lastSnapshot?.document_id || null,
+    snapshotId: _lastSnapshot?.snapshot_id || null,
+    revision: _revisionManager?.currentRevision?.() ?? _lastSnapshot?.revision ?? -1,
+  };
+  if (!_bindingRegistry?.entries) return;
+  for (const entry of _bindingRegistry.entries()) {
+    _authorshipGenerations.set(
+      `${entry.contextId}\0${entry.nodeId}`,
+      entry.bindingGeneration
+    );
+  }
+}
+
+function _authorshipKey(contextId, nodeId) {
+  return `${contextId}\0${nodeId}`;
+}
 
 /**
  * Initialize the perception system. Call once after all modules are loaded.
@@ -70,6 +99,8 @@ async function perceivePage(options = {}) {
       root: options.root,
       includeGeometry: options.includeGeometry,
     });
+    // Capture private binding generations for this published revision.
+    _captureAuthorshipGenerations();
     return _lastSnapshot;
   }
 
@@ -95,6 +126,7 @@ async function perceivePage(options = {}) {
     if (newSnapshot.canonical_hash === base.canonical_hash) return null;
     _deltaEmitter.setBaseSnapshot(newSnapshot);
     _lastSnapshot = newSnapshot;
+    _captureAuthorshipGenerations();
     return newSnapshot;
   }
 
@@ -104,6 +136,8 @@ async function perceivePage(options = {}) {
 function resetPerception() {
   if (_deltaEmitter) { _deltaEmitter.stop(); _deltaEmitter = null; }
   _lastSnapshot = null;
+  _authorshipGenerations = new Map();
+  _authorshipMeta = null;
   if (_bindingRegistry) _bindingRegistry.invalidateAll();
   if (_revisionManager) _revisionManager.onFullNavigation();
 }
@@ -126,7 +160,18 @@ function startDeltaObserver(baseSnapshot, options = {}) {
     widgetClassifier: _widgetClassifier,
     contextDiscovery: _contextDiscovery,
   }, {
-    onDelta: options.onDelta || null,
+    onDelta: (result) => {
+      // After delta/snapshot emission, registry has continuity-aware generations.
+      // Publish authorship gens from the complete resulting snapshot so old plans
+      // against the prior revision fail (revision + generation), and new plans
+      // capture the post-rebind generations.
+      const published = _deltaEmitter?.getBaseSnapshot?.() || (result?.kind === 'page_snapshot' ? result : null);
+      if (published?.kind === 'page_snapshot') {
+        _lastSnapshot = published;
+        _captureAuthorshipGenerations();
+      }
+      if (typeof options.onDelta === 'function') options.onDelta(result);
+    },
     onError: options.onError || null,
     coalesceMs: options.coalesceMs,
     settleMs: options.settleMs,
@@ -141,8 +186,9 @@ function stopDeltaObserver() {
 
 /**
  * Resolve ActionPlan target only when bound to the exact published
- * document/snapshot/revision. No selector or semantic fallback.
- * APE-P1-04 / APE-P1-05
+ * document/snapshot/revision and authorship binding_generation.
+ * No selector or semantic fallback. Never silently rebinds.
+ * APE-P1-04 / APE-P1-05 / APE-IMPL-P1-01
  */
 function resolveExecutionTarget(targetBinding, target, requirements = {}) {
   if (!_initialized || !_bindingRegistry || !_revisionManager || !_lastSnapshot) {
@@ -154,6 +200,16 @@ function resolveExecutionTarget(targetBinding, target, requirements = {}) {
   if (
     _lastSnapshot.snapshot_id !== targetBinding?.snapshot_id ||
     _revisionManager.currentRevision() !== targetBinding?.expected_revision
+  ) {
+    return { element: null, error: 'stale_snapshot' };
+  }
+
+  // Authorship generation table must match the published revision the plan targets.
+  if (
+    !_authorshipMeta ||
+    _authorshipMeta.documentId !== targetBinding.document_id ||
+    _authorshipMeta.snapshotId !== targetBinding.snapshot_id ||
+    _authorshipMeta.revision !== targetBinding.expected_revision
   ) {
     return { element: null, error: 'stale_snapshot' };
   }
@@ -176,8 +232,58 @@ function resolveExecutionTarget(targetBinding, target, requirements = {}) {
     }
   }
 
+  const expectedGeneration = _authorshipGenerations.get(
+    _authorshipKey(target.context_id, target.node_id)
+  );
+  if (expectedGeneration == null) {
+    return { element: null, error: 'stale_target' };
+  }
+
+  // Generation-aware binding resolution (gateway-security TOCTOU).
+  if (_gateway?.resolveBinding) {
+    const resolved = _gateway.resolveBinding(
+      target.context_id,
+      target.node_id,
+      _bindingRegistry,
+      expectedGeneration
+    );
+    if (resolved.error || !resolved.element) {
+      return { element: null, error: resolved.error || 'stale_target' };
+    }
+    const entry = _bindingRegistry.resolve(target.context_id, target.node_id);
+    if (!entry || entry.createdRevision !== targetBinding.expected_revision) {
+      return { element: null, error: 'stale_target' };
+    }
+    if (requirements.requiredAdapterId && entry.adapterId !== requirements.requiredAdapterId) {
+      return { element: null, error: 'adapter_mismatch' };
+    }
+    // Reject fact-index placeholders
+    const element = resolved.element;
+    if (
+      typeof element.nodeType !== 'number' ||
+      element.nodeType !== 1 ||
+      (element._factIndex != null && !element.tagName)
+    ) {
+      if (_bindingRegistry.invalidateNode) {
+        _bindingRegistry.invalidateNode(target.context_id, target.node_id);
+      }
+      return { element: null, error: 'stale_target' };
+    }
+    return {
+      element,
+      error: null,
+      adapterId: entry.adapterId,
+      bindingGeneration: entry.bindingGeneration,
+      expectedGeneration,
+    };
+  }
+
+  // Fallback when gateway resolveBinding is unavailable (should not happen in product path).
   const entry = _bindingRegistry.resolve(target.context_id, target.node_id);
   if (!entry || entry.createdRevision !== targetBinding.expected_revision) {
+    return { element: null, error: 'stale_target' };
+  }
+  if (entry.bindingGeneration !== expectedGeneration) {
     return { element: null, error: 'stale_target' };
   }
   if (requirements.requiredAdapterId && entry.adapterId !== requirements.requiredAdapterId) {
@@ -185,7 +291,6 @@ function resolveExecutionTarget(targetBinding, target, requirements = {}) {
   }
 
   const element = entry.liveNodeReference;
-  // Reject fact-index placeholders
   if (
     !element ||
     typeof element.nodeType !== 'number' ||
@@ -198,7 +303,13 @@ function resolveExecutionTarget(targetBinding, target, requirements = {}) {
     }
     return { element: null, error: 'stale_target' };
   }
-  return { element, error: null, adapterId: entry.adapterId, bindingGeneration: entry.bindingGeneration };
+  return {
+    element,
+    error: null,
+    adapterId: entry.adapterId,
+    bindingGeneration: entry.bindingGeneration,
+    expectedGeneration,
+  };
 }
 
 /**
@@ -212,12 +323,33 @@ function getPerceptionState() {
     revision: _revisionManager?.currentRevision() ?? -1,
     bindingCount: _bindingRegistry?.size ?? 0,
     deltaObserverActive: !!_deltaEmitter,
+    authorshipGenerationCount: _authorshipGenerations.size,
   };
+}
+
+/**
+ * Private registry accessor for generation-aware TOCTOU revalidation.
+ * Browser-private; never serialize.
+ */
+function getBindingRegistry() {
+  return _bindingRegistry;
+}
+
+/**
+ * Authorship generation for a node at last publish, or 0 if unknown.
+ */
+function getAuthorshipGeneration(contextId, nodeId) {
+  return _authorshipGenerations.get(_authorshipKey(contextId, nodeId)) ?? 0;
 }
 
 /** @internal test helper */
 function _setLastSnapshotForTests(snapshot) {
   _lastSnapshot = snapshot;
+}
+
+/** @internal test helper — re-capture authorship gens after manual bind setup */
+function _captureAuthorshipGenerationsForTests() {
+  _captureAuthorshipGenerations();
 }
 
 if (typeof module !== 'undefined' && module.exports) {
@@ -229,7 +361,10 @@ if (typeof module !== 'undefined' && module.exports) {
     startDeltaObserver,
     stopDeltaObserver,
     getPerceptionState,
+    getBindingRegistry,
+    getAuthorshipGeneration,
     _setLastSnapshotForTests,
+    _captureAuthorshipGenerationsForTests,
   };
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcPerception = {
@@ -240,5 +375,7 @@ if (typeof module !== 'undefined' && module.exports) {
     startDeltaObserver,
     stopDeltaObserver,
     getPerceptionState,
+    getBindingRegistry,
+    getAuthorshipGeneration,
   };
 }

@@ -282,17 +282,40 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
   ok(storageOffenders.length === 0, `credentials are never placed in page-readable local/session storage${storageOffenders.length ? ` (${storageOffenders.join(', ')})` : ''}`);
 
   const popup = read('extension/popup.js');
-  const executor = read('extension/autofill/executor.js');
+  const legacyExecutor = read('extension/autofill/executor.js');
+  const productExecutor = read('extension/runtime/action-plan-executor.js');
   const background = read('extension/background.js');
-  ok(popup.includes('window.__ccFillCtx'), 'fill credentials enter only the isolated-world context');
-  ok(executor.includes('window.__ccFillCtx'), 'executor reads credentials from isolated-world context');
-  ok(executor.includes('window.__ccFillRecords'), 'fill records stay in isolated-world memory');
-  ok(popup.includes('window.__ccUndoSnapshot'), 'undo values stay in isolated-world memory');
-  ok(background.includes('window.__ccFillRecords'), 'background reads fill records from isolated-world memory');
+
+  // APE-IMPL-P1-04: product Fill credentials stay in extension storage / Bearer headers.
+  // Do NOT require window.__ccFillCtx — product path intentionally never injects
+  // credentials into the page world (safer than the legacy isolated-world ctx).
+  ok(
+    popup.includes("chrome.storage.local.get(['backendUrl', 'accessToken']")
+      || (popup.includes('chrome.storage.local.get') && popup.includes('accessToken') && popup.includes('backendUrl')),
+    'product Fill reads credentials from extension-controlled chrome.storage.local'
+  );
+  ok(
+    /Authorization:\s*['"]Bearer ['"]\s*\+/.test(popup) || popup.includes("Authorization: 'Bearer '") || popup.includes('Authorization: "Bearer "'),
+    'product Fill authenticates with Bearer token from extension storage (not page)'
+  );
+  ok(popup.includes("'/fill-plan'") || popup.includes('/fill-plan'), 'product Fill posts /fill-plan with extension-side auth');
+  ok(!popup.includes('window.__ccFillCtx'), 'product Fill does not install window.__ccFillCtx in the page');
+  ok(!popup.includes('__ccFillCtx'), 'product Fill has no __ccFillCtx credential bridge');
+  ok(!productExecutor.includes('accessToken') && !productExecutor.includes('__ccFillCtx'), 'ActionPlanExecutor never handles bearer credentials');
+  // MAIN-world injection is forbidden for credential material (not for all scripts).
+  ok(!/world\s*:\s*['"]MAIN['"][\s\S]{0,800}(?:accessToken|backendUrl|Bearer)/.test(popup), 'product Fill never injects credential material via MAIN world');
+
+  // Legacy Agent path (default-off) may still use isolated-world symbols — keep
+  // proving those stay out of MAIN world / page-readable attributes.
+  ok(legacyExecutor.includes('window.__ccFillCtx') || legacyExecutor.includes('__ccFillCtx'), 'legacy executor (gated Agent path) keeps credentials in isolated-world symbols when used');
+  ok(legacyExecutor.includes('window.__ccFillRecords') || legacyExecutor.includes('__ccFillRecords'), 'legacy fill records stay in isolated-world memory');
+  ok(popup.includes('window.__ccUndoSnapshot'), 'undo values stay in isolated-world memory via executeScript');
+  ok(background.includes('window.__ccFillRecords') || background.includes('__ccFillRecords'), 'background reads fill records from isolated-world memory');
 
   const manifest = JSON.parse(read('extension/manifest.json'));
   ok((manifest.content_scripts || []).every((entry) => !entry.world || entry.world === 'ISOLATED'), 'content scripts never run in MAIN world');
   ok(!/world\s*:\s*['"]MAIN['"][\s\S]{0,500}__ccFillCtx/.test(popup), 'credential context is never installed by a MAIN-world injection');
+  ok(!/world\s*:\s*['"]MAIN['"][\s\S]{0,500}accessToken/.test(popup), 'accessToken is never installed by a MAIN-world injection');
 }
 
 // ────────────────────────────────────────────────────────────────────────────
