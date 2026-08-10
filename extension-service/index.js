@@ -46,12 +46,16 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '5mb' }));
 
-// Health endpoint (unauthenticated, for nginx + smoke tests)
-app.get('/health', (_req, res) => res.json({
+// Health endpoint (unauthenticated, for nginx + smoke tests + deploy lock)
+const healthPayload = () => ({
   status: 'ok',
   service: 'extension-service',
   version: '1.0.0',
-}));
+  commit: process.env.BUILD_SHA || 'development',
+});
+app.get('/health', (_req, res) => res.json(healthPayload()));
+// Public via api.cybercontrol.fun (nginx → extension-service). Used by side panel deploy lock (CYB-85).
+app.get('/api/extension/health', (_req, res) => res.json(healthPayload()));
 
 // Routes are mounted at the SAME paths the hub used to expose them at,
 // so nginx can transparently route /api/profiles, /api/mappings, /api/adapters here.

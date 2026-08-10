@@ -28,6 +28,7 @@ const suites = [
   { name: 'Model IR Tests', cmd: 'node extension-dev/tests/test-models.js' },
   { name: 'Capability Tests', cmd: 'node extension-dev/tests/test-capabilities.js' },
   { name: 'Runner Tests', cmd: 'node extension-dev/tests/test-runner.js' },
+  { name: 'Legacy Fill Gate (Phase 0)', cmd: 'node extension-dev/tests/test-legacy-fill-gate.mjs' },
   { name: 'Knowledge Store Tests', cmd: 'node extension-dev/tests/test-knowledge-store.js' },
   { name: 'Scope Resolver Tests', cmd: 'node extension-dev/tests/test-scope-resolver.js' },
   { name: 'Validation Engine Tests', cmd: 'node extension-dev/tests/test-validation-engine.mjs' },

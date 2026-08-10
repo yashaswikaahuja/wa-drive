@@ -1,6 +1,9 @@
 const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
+/** Phase 0: café default hides Agent; owner may set chrome.storage.local.allowLegacyClientFill = true */
+let allowLegacyClientFill = false;
+let _extBuildInfo = null;
 
 const profilesEl = document.getElementById('profiles');
 const searchEl = document.getElementById('search');
@@ -19,7 +22,94 @@ const progressEl = document.getElementById('progress');
 const progressText = document.getElementById('progress-text');
 const progressInner = document.getElementById('progress-inner');
 const resultsEl = document.getElementById('results');
-document.getElementById('ver').textContent = 'v' + VERSION;
+const versionEl = document.getElementById('ver');
+versionEl.textContent = 'v' + VERSION;
+
+function shortSha(s) {
+  if (!s || s === 'development') return s || 'dev';
+  return String(s).slice(0, 7);
+}
+
+function applyAgentVisibility() {
+  if (!agentBtn) return;
+  if (allowLegacyClientFill) {
+    agentBtn.style.display = '';
+    agentBtn.title = 'AI Agent (legacy — owner opt-in)';
+    agentBtn.disabled = !selectedProfile;
+  } else {
+    agentBtn.style.display = 'none';
+    agentBtn.disabled = true;
+    agentBtn.title = 'Legacy Agent disabled (Phase 0). Use Fill Form.';
+    if (agentPanel) agentPanel.style.display = 'none';
+  }
+}
+
+async function refreshLegacyFillGate() {
+  try {
+    const data = await chrome.storage.local.get('allowLegacyClientFill');
+    allowLegacyClientFill = data.allowLegacyClientFill === true;
+  } catch {
+    allowLegacyClientFill = false;
+  }
+  applyAgentVisibility();
+}
+
+function renderVersionLine(extCommit, svcCommit) {
+  const extShort = shortSha(extCommit || 'development');
+  let text = `v${VERSION} @ ${extShort}`;
+  let title = `Extension ${VERSION}, build ${extCommit || 'development'}`;
+  if (_extBuildInfo?.built_at) title += `, ${_extBuildInfo.built_at}`;
+  if (svcCommit) {
+    const svcShort = shortSha(svcCommit);
+    text += ` · svc ${svcShort}`;
+    title += ` | extension-service ${svcCommit}`;
+    const bothReal =
+      extCommit &&
+      svcCommit &&
+      extCommit !== 'development' &&
+      svcCommit !== 'development';
+    if (bothReal && String(extCommit).slice(0, 7) !== String(svcCommit).slice(0, 7)) {
+      text += ' ⚠ mismatch';
+      title +=
+        ' — DEPLOY LOCK: extension zip commit should match extension-service BUILD_SHA. See deploy/docs/EXTENSION-DEPLOY-LOCK.md';
+      versionEl.style.color = 'hsl(0 65% 42%)';
+    } else {
+      versionEl.style.color = '';
+    }
+  }
+  versionEl.textContent = text;
+  versionEl.title = title;
+}
+
+async function loadDeployProvenance() {
+  try {
+    const response = await fetch(chrome.runtime.getURL('build-info.json'));
+    _extBuildInfo = response.ok ? await response.json() : null;
+  } catch {
+    _extBuildInfo = null;
+  }
+  const extCommit = _extBuildInfo?.commit || 'development';
+  renderVersionLine(extCommit, null);
+
+  try {
+    const { backendUrl } = await chrome.storage.local.get('backendUrl');
+    if (!backendUrl) return;
+    // backendUrl is typically https://api…/api → health at /api/extension/health
+    const healthUrl = String(backendUrl).replace(/\/?$/, '') + '/extension/health';
+    const hr = await fetch(healthUrl);
+    if (!hr.ok) return;
+    const body = await hr.json();
+    if (body?.commit) renderVersionLine(extCommit, body.commit);
+  } catch {
+    /* offline or older service without route */
+  }
+}
+
+refreshLegacyFillGate();
+loadDeployProvenance();
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.allowLegacyClientFill) refreshLegacyFillGate();
+});
 
 // Side panel stays open across tab switches — always resolve the active *page* tab
 // (never chrome:// or the extension itself).
@@ -240,7 +330,7 @@ function renderProfiles(query) {
     selectedProfile = filteredProfiles[0];
     focusIdx = 0;
     fillBtn.disabled = false;
-    agentBtn.disabled = false;
+    applyAgentVisibility();
   }
 
   const visibleList = filteredProfiles.slice(0, 20);
@@ -272,7 +362,7 @@ function renderProfiles(query) {
 function selectProfile(id) {
   selectedProfile = allProfiles.find(p => p.id === id) || null;
   fillBtn.disabled = !selectedProfile;
-  agentBtn.disabled = !selectedProfile;
+  applyAgentVisibility();
   chrome.storage.session.set({ _cc_selected: id });
   // Pre-fetch full profile data
   if (selectedProfile) prefetchProfile(id);
@@ -360,7 +450,7 @@ async function init() {
     if (sess._cc_selected) {
       selectedProfile = allProfiles.find(p => p.id === sess._cc_selected) || null;
       fillBtn.disabled = !selectedProfile;
-      agentBtn.disabled = !selectedProfile;
+      applyAgentVisibility();
     }
     renderProfiles('');
     searchEl.focus();
@@ -976,6 +1066,12 @@ async function injectDriversInto(tabId) {
 
 agentBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
+  // Phase 0 (CYB-85): Agent path is legacy client intelligence — off by default.
+  await refreshLegacyFillGate();
+  if (!allowLegacyClientFill) {
+    showStatus('Legacy Agent disabled. Use Fill Form (side panel).', CC.warning);
+    return;
+  }
   agentBtn.disabled = true;
   agentBtn.textContent = '🤖 ...';
   showStatus('Snapshotting page + planning…', CC.info);
@@ -1052,8 +1148,8 @@ agentBtn.addEventListener('click', async () => {
     if (!plan.actions || plan.actions.length === 0) {
       showStatus('Agent returned 0 actions. Check console for raw response.', CC.warning);
       console.log('[CC agent] empty plan, raw:', plan);
-      agentBtn.disabled = false;
       agentBtn.textContent = '🤖';
+      applyAgentVisibility();
       return;
     }
 
@@ -1065,8 +1161,8 @@ agentBtn.addEventListener('click', async () => {
     showStatus('Agent error: ' + e.message, CC.danger);
     console.error('[CC agent]', e);
   } finally {
-    agentBtn.disabled = false;
     agentBtn.textContent = '🤖';
+    applyAgentVisibility();
   }
 });
 

@@ -20,8 +20,10 @@ you ──► Deploy (manual): pick service + version ──► VM: pull → rec
 | Service | Build workflow | Deploys to | Health check |
 |---|---|---|---|
 | backend | `docker-publish.yml` | `cybercontrol-app` | `:3000/api/health` |
-| extension-service | `docker-publish-extension.yml` | `cybercontrol-app` | `:3300/health` |
+| extension-service | `docker-publish-extension.yml` | `cybercontrol-app` | `:3300/health` (public: `/api/extension/health`) |
 | whatsapp-service | `docker-publish-whatsapp.yml` | `cybercontrol-wa` | `:3100/health` |
+
+**Extension package pairing:** Chrome extension zip `build-info.json` commit must match extension-service `BUILD_SHA`. See [`EXTENSION-DEPLOY-LOCK.md`](EXTENSION-DEPLOY-LOCK.md) (Phase 0 / CYB-85).
 
 > The **whatsapp-resolver stays on pm2** (not containerized, not in CD): whatsapp-web.js allows only one
 > active session per account, so a copied session in a container logs the account out. It's a single

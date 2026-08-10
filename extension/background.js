@@ -1,5 +1,28 @@
 // Load knowledge sync client (must be first — other code references ccKnowledgeSync)
 try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.js load failed:', e.message); }
+// Phase 0 (CYB-85): café default blocks DISPATCH_JOB / Agent client mapping path
+try { importScripts('shared/legacy-fill-gate.js'); } catch (e) { console.warn('[CC] legacy-fill-gate.js load failed:', e.message); }
+
+/** @returns {Promise<boolean>} */
+async function isLegacyClientFillAllowed() {
+  if (typeof CcLegacyFillGate !== 'undefined' && CcLegacyFillGate.isLegacyClientFillAllowed) {
+    const slice = await chrome.storage.local.get(CcLegacyFillGate.STORAGE_KEY || 'allowLegacyClientFill');
+    return CcLegacyFillGate.isLegacyClientFillAllowed(slice);
+  }
+  const { allowLegacyClientFill } = await chrome.storage.local.get('allowLegacyClientFill');
+  return allowLegacyClientFill === true;
+}
+
+function legacyClientFillDenied(pathName) {
+  if (typeof CcLegacyFillGate !== 'undefined' && CcLegacyFillGate.legacyClientFillDenied) {
+    return CcLegacyFillGate.legacyClientFillDenied(pathName);
+  }
+  return {
+    ok: false,
+    code: 'legacy_client_fill_disabled',
+    error: (pathName || 'legacy client fill') + ' is disabled (Phase 0). Use side-panel Fill.',
+  };
+}
 
 // Helper functions — use shared/label-utils.js as canonical source.
 // These are thin wrappers because background.js (service worker) cannot import
@@ -165,13 +188,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'DISPATCH_JOB') {
     // Phase A: extension receives dispatch envelope, runs runtime, reports back
     // Envelope: { type, version, jobId, sessionId, serviceType, executionType, payload }
+    // Phase 0 (CYB-85): gated — café default must use side-panel Fill only.
     const env = msg.envelope || msg;
     if (!env.jobId || !env.sessionId) { sendResponse({ ok: false, error: 'missing jobId/sessionId' }); return true; }
     if (env.executionType !== 'form_filling') { sendResponse({ ok: false, error: 'unsupported executionType: ' + env.executionType }); return true; }
     const tabId = sender?.tab?.id;
     if (!tabId) { sendResponse({ ok: false, error: 'no tab' }); return true; }
-    sendResponse({ ok: true, accepted: true });
-    runJobDispatch(env, tabId).catch(e => console.error('[CC] DISPATCH_JOB error:', e));
+    isLegacyClientFillAllowed().then((allowed) => {
+      if (!allowed) {
+        const denied = legacyClientFillDenied('DISPATCH_JOB');
+        console.warn('[CC]', denied.error);
+        sendResponse(denied);
+        return;
+      }
+      sendResponse({ ok: true, accepted: true });
+      runJobDispatch(env, tabId).catch(e => console.error('[CC] DISPATCH_JOB error:', e));
+    }).catch((e) => {
+      sendResponse({ ok: false, error: e.message || 'legacy gate failed' });
+    });
     return true;
   }
   return true;
@@ -181,6 +215,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Extension stays dumb: receives envelope, runs deterministic runtime, reports terminal result.
 // No knowledge of jobs/customers/mappings/tenancy.
 async function runJobDispatch(envelope, tabId) {
+  // Defense in depth: even if a caller bypasses message handlers, refuse unless opted in.
+  if (!(await isLegacyClientFillAllowed())) {
+    const denied = legacyClientFillDenied('runJobDispatch');
+    console.warn('[CC]', denied.error);
+    return;
+  }
   const { jobId, sessionId, payload } = envelope;
   const profile = payload?.profile || {};
   const { backendUrl, accessToken } = await chrome.storage.local.get(['backendUrl', 'accessToken']);
@@ -339,11 +379,18 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
   if (msg.type === 'OPEN_AND_DISPATCH') {
     const { envelope, formUrl } = msg;
     if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
-    chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
-      if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
-      chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
-      sendResponse({ ok: true, tabId: tab.id });
-    });
+    // Phase 0 (CYB-85): gated — async so port handler can reply after storage check.
+    isLegacyClientFillAllowed().then((allowed) => {
+      if (!allowed) {
+        sendResponse(legacyClientFillDenied('OPEN_AND_DISPATCH'));
+        return;
+      }
+      chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
+        if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
+        chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
+        sendResponse({ ok: true, tabId: tab.id });
+      });
+    }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
     return;
   }
   sendResponse({ ok: false, error: 'unknown type: ' + msg.type });
@@ -375,38 +422,61 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'DISPATCH_JOB_DIRECT') {
     // Frontend sends dispatch envelope directly + tabId (the form tab to operate on)
+    // Phase 0 (CYB-85): gated — not café product path.
     const { envelope, tabId } = msg;
-    if (!envelope || !tabId) { sendResponse({ ok: false, error: 'missing envelope or tabId' }); return; }
-    sendResponse({ ok: true, accepted: true });
-    runJobDispatch(envelope, tabId).catch(e => console.error('[CC] direct dispatch error:', e));
+    if (!envelope || !tabId) { sendResponse({ ok: false, error: 'missing envelope or tabId' }); return true; }
+    isLegacyClientFillAllowed().then((allowed) => {
+      if (!allowed) {
+        const denied = legacyClientFillDenied('DISPATCH_JOB_DIRECT');
+        console.warn('[CC]', denied.error);
+        sendResponse(denied);
+        return;
+      }
+      sendResponse({ ok: true, accepted: true });
+      runJobDispatch(envelope, tabId).catch(e => console.error('[CC] direct dispatch error:', e));
+    }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
     return true;
   }
   if (msg.type === 'OPEN_AND_DISPATCH') {
     // Persist job to storage BEFORE opening tab so it survives SW termination.
     // content.js sends CONTENT_READY when the page is ready; background picks up
     // the pending job from storage and dispatches it then.
+    // Phase 0 (CYB-85): gated.
     const { envelope, formUrl } = msg;
-    if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
-    chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
-      if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
-      // Persist — survives SW death between tab.create and page load
-      chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
-      sendResponse({ ok: true, tabId: tab.id });
-    });
+    if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return true; }
+    isLegacyClientFillAllowed().then((allowed) => {
+      if (!allowed) {
+        sendResponse(legacyClientFillDenied('OPEN_AND_DISPATCH'));
+        return;
+      }
+      chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
+        if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
+        // Persist — survives SW death between tab.create and page load
+        chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
+        sendResponse({ ok: true, tabId: tab.id });
+      });
+    }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
     return true;
   }
   if (msg.type === 'CONTENT_READY') {
     // content.js fires this when it's injected and ready to receive DISPATCH_JOB.
     // Pick up any pending job for this tab and dispatch it now.
     const tabId = sender?.tab?.id;
-    if (!tabId) { sendResponse({ ok: true }); return; }
+    if (!tabId) { sendResponse({ ok: true }); return true; }
     chrome.storage.local.get('_cc_pending_job', ({ _cc_pending_job: job }) => {
       if (!job || job.tabId !== tabId) { sendResponse({ ok: true }); return; }
-      // Job is for this tab — clear it and dispatch
+      // Job is for this tab — clear it; only dispatch if legacy path allowed.
       chrome.storage.local.remove('_cc_pending_job');
-      console.log('[CC] CONTENT_READY: dispatching pending job to tab', tabId);
-      runJobDispatch(job.envelope, tabId).catch(e => console.error('[CC] pending dispatch error:', e));
-      sendResponse({ ok: true, dispatching: true });
+      isLegacyClientFillAllowed().then((allowed) => {
+        if (!allowed) {
+          console.warn('[CC] CONTENT_READY: dropping pending job — legacy client fill disabled');
+          sendResponse(legacyClientFillDenied('CONTENT_READY pending job'));
+          return;
+        }
+        console.log('[CC] CONTENT_READY: dispatching pending job to tab', tabId);
+        runJobDispatch(job.envelope, tabId).catch(e => console.error('[CC] pending dispatch error:', e));
+        sendResponse({ ok: true, dispatching: true });
+      }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
     });
     return true;
   }
