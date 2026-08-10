@@ -1,0 +1,44 @@
+{
+  "fixture_id": "nav-positive-action-plan",
+  "description": "ActionPlan v3 activate step with allow_navigation; only public targets",
+  "kind": "action_plan",
+  "schema_version": "3.0.0",
+  "plan_id": "plan:nav:example1",
+  "correlation_id": "corr:nav:example1",
+  "supersedes_plan_id": null,
+  "issued_at": "2026-08-10T12:00:00.000Z",
+  "expires_at": "2026-08-10T12:05:00.000Z",
+  "target_binding": {
+    "document_id": "doc:example1",
+    "snapshot_id": "snap:example1",
+    "expected_revision": 2
+  },
+  "steps": [
+    {
+      "step_id": "step:nav:activate",
+      "target": {
+        "context_id": "ctx.top.1",
+        "node_id": "node:nav.link.1"
+      },
+      "action": {
+        "op": "activate"
+      },
+      "risk": "reversible",
+      "required_affordance": "activate",
+      "required_adapter_id": null,
+      "postcondition": {
+        "type": "none",
+        "expected_value_state": null,
+        "expected_boolean": null,
+        "expected_signal": null
+      },
+      "on_failure": "stop_and_report"
+    }
+  ],
+  "authorization": {
+    "max_risk": "reversible",
+    "operator_confirmed": false,
+    "allow_navigation": true,
+    "allow_submit": false
+  }
+}

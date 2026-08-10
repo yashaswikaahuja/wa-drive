@@ -1,0 +1,54 @@
+{
+  "$comment": "DRAFT additive wire fields for phase_3_5. NOT frozen. NOT required. Do not implement as mandatory until independent review and a schema freeze issue. Existing EO/ActionPlan v3 remain authoritative.",
+  "status": "architecture_draft",
+  "issue": "#145",
+  "phase": "phase_3_5",
+  "action_plan_postcondition_types_additive": [
+    "navigation_same_document",
+    "navigation_new_document",
+    "navigation_blocked",
+    "none"
+  ],
+  "execution_observation_additive_optional_fields": {
+    "navigation_outcome": {
+      "type": ["string", "null"],
+      "enum": [
+        "not_applicable",
+        "same_document_completed",
+        "new_document_completed",
+        "blocked",
+        "failed",
+        "canceled",
+        "interrupted",
+        null
+      ]
+    },
+    "resulting_document_id": {
+      "description": "Document id after the step when it differs from plan target_binding.document_id; optional until freeze.",
+      "type": ["string", "null"]
+    }
+  },
+  "page_state_signals_additive": [
+    "route_changed",
+    "document_navigation_started",
+    "document_navigation_settled",
+    "navigation_blocked_by_overlay",
+    "navigation_redirected",
+    "frame_document_replaced"
+  ],
+  "interim_mapping": {
+    "new_document_completed": "EO document_id change + rejection_reason/document_replaced for continued steps; diagnostics navigation_*",
+    "blocked": "postcondition_failed or diagnostic navigation_blocked",
+    "failed": "gateway_error or postcondition_failed + diagnostic navigation_failed"
+  },
+  "forbidden_even_in_draft": [
+    "selector",
+    "css_selector",
+    "xpath",
+    "dom_handle",
+    "href_raw",
+    "query_string",
+    "business_step_id",
+    "workflow_intent"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "fixture_id": "nav-positive-full-document",
+  "description": "Full navigation: new document_id, revision 0, old plans document_replaced",
+  "kind": "transition_example",
+  "before": {
+    "document_id": "doc:old",
+    "revision": 7,
+    "page": {
+      "origin": "https://portal.example.gov",
+      "path": "/step1",
+      "route_key": "step1"
+    }
+  },
+  "after": {
+    "document_id": "doc:new",
+    "revision": 0,
+    "page": {
+      "origin": "https://portal.example.gov",
+      "path": "/step2",
+      "route_key": "step2"
+    },
+    "state_signals": ["document_navigation_settled"]
+  },
+  "identity_effect": "new_document_id",
+  "plan_against_before": "document_replaced"
+}

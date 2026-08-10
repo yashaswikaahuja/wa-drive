@@ -1,0 +1,21 @@
+{
+  "fixture_id": "nav-malicious-query-leak",
+  "description": "Forbidden: public page location or diagnostics carrying query_string / credentials",
+  "kind": "malicious_page_location",
+  "expect": "reject",
+  "forbidden_keys_present": [
+    "query_string",
+    "fragment",
+    "credentials",
+    "destination_url_with_query"
+  ],
+  "page_location": {
+    "origin": "https://portal.example.gov",
+    "path": "/apply",
+    "route_key": "apply",
+    "query_string": "session=abc&token=secret",
+    "fragment": "section",
+    "credentials": "user:pass",
+    "destination_url_with_query": "https://portal.example.gov/apply?session=abc"
+  }
+}

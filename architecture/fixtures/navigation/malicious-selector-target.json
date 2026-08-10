@@ -1,0 +1,22 @@
+{
+  "fixture_id": "nav-malicious-selector",
+  "description": "Forbidden: navigation target smuggling css_selector / href_raw / workflow_intent",
+  "kind": "malicious_plan_fragment",
+  "expect": "reject",
+  "forbidden_keys_present": [
+    "css_selector",
+    "href_raw",
+    "workflow_intent",
+    "xpath"
+  ],
+  "fragment": {
+    "target": {
+      "context_id": "ctx.top.1",
+      "node_id": "node:nav.link.1",
+      "css_selector": "a.continue",
+      "xpath": "//a[@class='continue']",
+      "href_raw": "https://evil.example/phish?token=secret",
+      "workflow_intent": "go_to_step_2"
+    }
+  }
+}

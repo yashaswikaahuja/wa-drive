@@ -241,6 +241,22 @@ subsystems:
       - "extension/perception/"
     description: "Produces validated PageSnapshot/PageDelta through the observation gateway; owns no service intelligence. Core engine = phase_3_1; relationships/deltas/graph freeze = phase_3_3; widgets = phase_3_2; WSS = phase_3_4."
 
+  # ── SHARED CONTRACT: Navigation Understanding (phase_3_5 draft) ─
+  navigation_understanding:
+    owner: shared
+    status: architecture_draft
+    migration_phase: "phase_3_5"
+    paths:
+      - "architecture/navigation-understanding.yml"
+      - "architecture/navigation-understanding.draft-additives.json"
+      - "architecture/adrs/0008-navigation-transition-identity.md"
+      - "architecture/adrs/0009-navigation-target-mechanical-identity.md"
+      - "architecture/fixtures/navigation/"
+    description: >
+      Draft contract for mechanical navigation affordances and transitions.
+      Browser owns observation/execution evidence; service owns navigation goals.
+      Not frozen; no runtime modules until implementation issue after review.
+
   # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
   page_ir_consumers:
     owner: extension_service

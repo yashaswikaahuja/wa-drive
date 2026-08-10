@@ -192,7 +192,7 @@ phases:
 #   3.4 Widget classification → phase_3_2  (NOT phase_3_4)
 #   3.5 Relationship detection → phase_3_3
 #   3.6 Runtime state & deltas → phase_3_3 (folded)
-#   3.7 Navigation understanding → not yet a phase_3_* key (candidate next: phase_3_5)
+#   3.7 Navigation understanding → phase_3_5 (architecture_draft #145; not frozen)
 #   3.8 Visual context → ADR 0006 intent only; not a phase_3_* key
 #   3.9 Hardening & validation → partial work exists; not a phase_3_* freeze key
 #   3.10 Public API & migration → ir-migrations under 3.0; not a separate freeze key
@@ -210,9 +210,8 @@ phases:
 # ratified product freezes while constitution temporary_exceptions EXC-001..005
 # remain. Separate evidence is required before claiming those complete.
 #
-# Next legitimate Phase 3 milestone (after #144): phase_3_5 — Navigation
-# Understanding (first incomplete conceptual gap after registered 3.0–3.4).
-# Do not start it until an explicit implementation issue is opened.
+# phase_3_5 Navigation Understanding: architecture_draft only (#145). Independent
+# adversarial architecture review required before freeze or runtime implementation.
 
 # ── Phase 3 architecture gate ───────────────────────────────────────
 
@@ -549,6 +548,46 @@ phases:
       - "Duplicate message.id and stale seq cannot re-trigger side effects"
       - "ci-unit.mjs includes WSS Protocol Tests suite"
       - "Heartbeat with configurable interval; reconnect manager Suspended Mode"
+
+  phase_3_5:
+    name: "Navigation Understanding"
+    status: architecture_draft
+    draft_date: "2026-08-10"
+    issues: ["#145"]
+    depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4"]
+    conceptual_roadmap_slot: "3.7"
+    description: >
+      Architecture contract for mechanical navigation affordances, transition
+      identity (full vs same-document vs frame), privacy-safe location metadata,
+      and ActionPlan v3 activate + allow_navigation compatibility. Browser
+      observes and executes; service owns navigation goals and business meaning.
+      No runtime implementation and no freeze from #145.
+    discovery_reference: "Issue #145 — phase_3_5 architecture"
+    architecture_artifacts:
+      - path: "architecture/navigation-understanding.yml"
+        purpose: "Normative navigation understanding contract (draft)"
+      - path: "architecture/navigation-understanding.draft-additives.json"
+        purpose: "Optional future wire additives; not frozen"
+      - path: "architecture/adrs/0008-navigation-transition-identity.md"
+        purpose: "ADR: document vs revision transition identity"
+      - path: "architecture/adrs/0009-navigation-target-mechanical-identity.md"
+        purpose: "ADR: mechanical targets without selectors/business goals"
+      - path: "architecture/fixtures/navigation/"
+        purpose: "Positive and malicious contract fixtures"
+    done_criteria_architecture:
+      - "Versioned navigation contract answering ownership and lifecycle questions ✓"
+      - "ADRs for transition identity and mechanical targets ✓"
+      - "Fixtures + governance CI for contract shape and forbidden keys ✓"
+      - "No freeze; independent adversarial review requested ✓"
+    forbidden_from_this_status:
+      - "Runtime navigation detectors or ActionPlanExecutor navigation features"
+      - "status: frozen without independent architecture review"
+      - "Renaming phase_3_4 or other existing keys"
+      - "Business workflow semantics in browser perception"
+    next_gate: >
+      Independent adversarial architecture review of #145 artifacts. Implementation
+      issue only after APPROVE / APPROVE WITH CONDITIONS. Freeze only via explicit
+      freeze gate issue after implementation ratification policy is met.
 
 # ── Phase 4+: registry note (do not treat as ratified freezes) ─────
 # Historical status:complete on phase_4_*/5_*/7_* predates clearance of

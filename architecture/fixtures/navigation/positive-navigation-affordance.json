@@ -1,0 +1,54 @@
+{
+  "fixture_id": "nav-positive-affordance",
+  "description": "Link node with activate affordance; no forbidden public fields",
+  "kind": "node_excerpt",
+  "node": {
+    "node_id": "node:nav.link.1",
+    "kind": "navigation",
+    "context_id": "ctx.top.1",
+    "parent_id": "node:region.1",
+    "order": 3,
+    "observed": {
+      "accessible_name": "Continue",
+      "role": "link",
+      "sanitized_text": "Continue",
+      "language": null,
+      "description": null,
+      "value_state": "not_applicable"
+    },
+    "state": {
+      "visible": true,
+      "enabled": true,
+      "readonly": null,
+      "required": null,
+      "focused": false,
+      "expanded": null,
+      "selected": null,
+      "checked": null
+    },
+    "privacy": {
+      "classification": "ordinary",
+      "redacted": false,
+      "reason": null
+    },
+    "evidence": {
+      "signals": ["role.link", "affordance.activate"],
+      "confidence": 0.9,
+      "notes": null
+    },
+    "affordances": ["focus", "activate"],
+    "widget": {
+      "behavior_kind": "action",
+      "cardinality": "none",
+      "interaction_mode": "native",
+      "implementation_hint": "native",
+      "adapter_id": "adapter:native-action",
+      "status": "recognized"
+    }
+  },
+  "page_location": {
+    "origin": "https://portal.example.gov",
+    "path": "/apply/step-1",
+    "route_key": "apply/step-1"
+  }
+}

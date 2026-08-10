@@ -1,0 +1,26 @@
+{
+  "fixture_id": "nav-positive-same-document",
+  "description": "Same-document SPA route change: document_id retained, revision advances, route_key changes",
+  "kind": "transition_example",
+  "before": {
+    "document_id": "doc:spa1",
+    "revision": 4,
+    "page": {
+      "origin": "https://app.example.gov",
+      "path": "/form/a",
+      "route_key": "form/a"
+    }
+  },
+  "after": {
+    "document_id": "doc:spa1",
+    "revision": 5,
+    "page": {
+      "origin": "https://app.example.gov",
+      "path": "/form/b",
+      "route_key": "form/b"
+    },
+    "state_signals": ["route_changed", "document_navigation_settled"]
+  },
+  "identity_effect": "same_document_id_revision_up",
+  "plan_against_before": "stale_snapshot"
+}

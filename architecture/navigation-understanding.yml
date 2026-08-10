@@ -1,0 +1,284 @@
+# CyberControl Phase 3.5 — Navigation Understanding Architecture Contract
+# Repository key: phase_3_5 (architecture/phases.yml). Not frozen.
+#
+# Status: architecture_draft (issue #145)
+# Does NOT implement runtime behavior. Does NOT freeze.
+# Independent adversarial architecture review required before freeze or implementation.
+
+contract_id: navigation-understanding
+contract_version: "0.1.0"
+status: architecture_draft
+issue: "#145"
+phase: phase_3_5
+depends_on:
+  - phase_3_0   # frozen contracts
+  - phase_3_1   # perception engine
+  - phase_3_2   # widgets
+  - phase_3_3   # relationships / deltas
+  - phase_3_4   # WSS complete (transport only; not a navigation semantic owner)
+
+normative_words:
+  MUST: "mandatory for conformance when this contract is frozen"
+  MUST_NOT: "prohibited for conformance"
+  SHOULD: "recommended unless a documented reason exists"
+
+# ─────────────────────────────────────────────────────────────────────
+# Ownership boundary (browser vs service)
+# ─────────────────────────────────────────────────────────────────────
+ownership:
+  browser_perception:
+    owns:
+      - "observing navigation affordances on public IR nodes"
+      - "identifying mechanically executable navigation targets (node_id scoped)"
+      - "observing navigation start, completion, block, cancel, fail"
+      - "reporting document_id / context_id / revision changes and transition evidence"
+      - "mechanical activate execution and postcondition verification"
+      - "emitting navigation-related PageState signals and diagnostics"
+    must_not:
+      - "infer business workflow intent (e.g. 'this is the Next step of the application')"
+      - "choose which candidate satisfies a multi-step workflow goal"
+      - "emit service-side goals, portal-specific step names, or business depends_on for navigation"
+      - "send selectors, XPath, DOM handles, HTML, or private bindings in public IR"
+  extension_service:
+    owns:
+      - "selecting the navigation goal for the workflow"
+      - "interpreting business meaning of a navigation affordance"
+      - "deciding which candidate target satisfies the plan"
+      - "replanning after navigation outcomes / document_replaced / stale_snapshot"
+    must_not:
+      - "send selectors or browser-private recipes as navigation targets"
+      - "require the browser to invent off-snapshot destinations as transitions_to endpoints"
+
+# ─────────────────────────────────────────────────────────────────────
+# Answers to design questions (normative summary)
+# ─────────────────────────────────────────────────────────────────────
+design_answers:
+  q01_navigation_affordance:
+    definition: >
+      A navigation affordance is the mechanical capability of a public IR node
+      to cause a browsing-context location or document change (or an in-document
+      structural transition that perception models as navigation-class state
+      change) when activated. It is NOT a business goal.
+    page_ir_representation:
+      - "affordance 'activate' on the node (existing)"
+      - "kind may be navigation | control | widget | content (existing kinds)"
+      - "widget.behavior_kind action or container for tabs/accordions (existing taxonomy)"
+      - "optional state.signals navigation-class codes (see signals below)"
+      - "optional edges activates / transitions_to when endpoints are in-snapshot (existing)"
+    must_not: "Business labels like 'NextStep' as affordance values"
+
+  q02_navigation_targets:
+    representation: >
+      Public targets are exactly ActionPlan Target: { context_id, node_id }
+      scoped by plan target_binding { document_id, snapshot_id, expected_revision }.
+      No selectors, XPath, DOM handles, href strings as execution identity, or
+      private bindings on the wire.
+    private: >
+      Extension resolves (context_id, node_id) via BindingRegistry + binding_generation
+      (phase_3_0 lifecycle / rebinding_continuity). Service never sees bindings.
+
+  q03_same_document_spa_full:
+    full_document:
+      identity: "new top-level document_id; revision restarts at 0"
+      bindings: "invalidate all bindings owned by the replaced document"
+      public_evidence: "document_replaced failure if plan targets old document; new snapshot"
+    same_document_history_or_spa:
+      identity: "retain document_id"
+      revision: "strictly increase when public IR or page.route_key/path changes"
+      public_evidence: "page.path / page.route_key update; state.signals route_changed"
+    frame_document:
+      identity: "replace only Context.document_id for that frame context"
+      bindings: "invalidate only bindings for the replaced context's document"
+    distinction_rule: >
+      Classification is by identity effect (document_id change vs revision-only),
+      not by framework name (React router vs full reload).
+
+  q04_frame_document_identity:
+    rule: >
+      Context.document_id for top_level and frame contexts is the Document identity.
+      Full top-level navigation replaces PageSnapshot.document_id and top context.
+      Frame navigation replaces only that frame's Context.document_id and
+      root_node_id; parent/sibling contexts retained (perception-lifecycle.yml).
+
+  q05_snapshot_revision_invalidation:
+    full_navigation: "old document_id plans → document_replaced; re-perceive"
+    same_document: "revision advances → stale_snapshot for plans on old revision"
+    mid_step: "TOCTOU revalidation before act; after navigation, stop plan if document/revision mismatch"
+    never: "selector fallback or silent retarget"
+
+  q06_preconditions_postconditions:
+    preconditions_mechanical:
+      - "node still bound at exact revision + binding_generation"
+      - "required_affordance includes activate when stepping with activate"
+      - "authorization.allow_navigation true when activation implies navigation"
+      - "no blocking_overlay signal that makes the target non-activatable (when observed)"
+    postconditions_mechanical:
+      existing: ["node_present", "focused", "expanded", "none"]
+      navigation_class_outcomes:
+        - code: navigation_completed_same_document
+          meaning: "document_id unchanged; revision advanced and/or route_key/path changed"
+        - code: navigation_completed_new_document
+          meaning: "document_id changed; old plan must not continue"
+        - code: navigation_blocked
+          meaning: "activate ran or was refused; no document/route change; overlay/validation remains"
+        - code: navigation_failed
+          meaning: "navigation started but did not complete within bounded wait"
+        - code: navigation_canceled
+          meaning: "user or page aborted before commit"
+    interim_mapping_until_schema_amendment: >
+      Until EO/ActionPlan schemas gain optional navigation_outcome fields under a
+      frozen amendment, the extension MUST map outcomes to existing EO fields:
+      document_replaced, postcondition_failed, gateway_error, authorization_denied,
+      resulting_revision, resulting_snapshot_id, diagnostics[].code. Draft additive
+      fields are specified in navigation-understanding.draft-additives.json and
+      MUST NOT ship as required wire fields before freeze review.
+
+  q07_redirects:
+    rule: >
+      Redirects are not a separate public IR node type. They are observed as a
+      navigation chain ending in a final origin+sanitized_path+document_id.
+      Intermediate hop URLs MUST NOT be logged with query strings or credentials.
+    public: "final page.origin / page.path after settle; diagnostic navigation_redirected optional"
+    private_browser: "bounded hop count for TOCTOU wait; not serialized"
+
+  q08_failed_blocked_canceled:
+    signals_or_diagnostics:
+      - navigation_blocked
+      - navigation_failed
+      - navigation_canceled
+      - navigation_interrupted
+    eo: "step status failed with postcondition_failed or gateway_error; diagnostic carries code"
+    plan: "on_failure stop_and_report; service re-perceives"
+
+  q09_tabs_wizard_accordion_vs_goals:
+    mechanical:
+      tabs_wizard_accordion: "in-document structural state (selected/expanded); may use activate/expand_collapse"
+      links_buttons: "may cause same-document or full navigation"
+    business: "service decides 'wizard step 2' meaning; browser only reports state and transitions"
+    transitions_to: "only when target node is in the same snapshot (frozen edge authority)"
+
+  q10_cross_origin_inaccessible:
+    representation: "Context.access cross_origin | permission_denied | closed_shadow | unsupported"
+    document_id: "null for inaccessible frame documents per lifecycle"
+    navigation_into: "opaque; browser reports access change or inaccessible_context diagnostic"
+    must_not: "fabricate children or claim transitions_to into opaque contexts"
+
+  q11_action_plan_v3:
+    step:
+      action: { op: activate }
+      target: { context_id, node_id }
+      required_affordance: activate
+      risk: "safe | reversible | irreversible per plan; irreversible needs operator_confirmed"
+    authorization:
+      allow_navigation: "MUST be true for navigation-implying activate; false fails closed"
+      allow_submit: "orthogonal; submit controls still gated separately"
+    stale_toctou:
+      - "exact document_id, snapshot_id, expected_revision"
+      - "authorship binding_generation equality before mutation"
+      - "document_replaced if navigation occurred mid-plan"
+    must_not: "href, url, selector, or destination document_id as plan target identity"
+
+  q12_delta_and_eo:
+    page_delta:
+      - "replace page metadata when path/route_key changes"
+      - "node/edge ops for structural SPA transitions"
+      - "full snapshot when document_id changes (delta unsafe across document identity)"
+    execution_observation:
+      - "document_id of the document after the step when available"
+      - "resulting_revision / resulting_snapshot_id"
+      - "diagnostics for navigation_* codes"
+      - "rejection_reason document_replaced when applicable"
+
+  q13_evidence_confidence:
+    derived_edges:
+      activates: "only with observed activation target (aria-controls/owns etc.) — frozen 3.3 rule"
+      transitions_to: "in-snapshot only; evidence required; no dangling endpoints"
+    candidates:
+      rule: "state.candidates remain non-business (loading/ready/…); navigation intent is not a candidate enum value"
+    confidence: "technical evidence scores only; never business step confidence"
+
+  q14_privacy:
+    inherits: "architecture/perception-privacy.yml location rules"
+    public_allowed: [origin, sanitized_path, route_key]
+    public_prohibited: [query_string, fragment, credentials, authorization_headers, full_href_with_secrets]
+    navigation_labels: "accessible_name / sanitized_text subject to length and secret redaction"
+    must_not: "exfiltrate redirect hop query parameters in diagnostics"
+
+  q15_target_disappears:
+    before_act: "stale_target or stale_snapshot; no mutation"
+    during_navigation: "stop plan; report partial/aborted; service re-perceives"
+    never: "retarget to a different node_id by heuristics"
+
+  q16_fixtures_and_ci:
+    unit_contract: "extension-dev/tests/test-phase35-navigation-governance.mjs"
+    fixtures: "architecture/fixtures/navigation/"
+    checks: "CHECK-013 registers existence and forbidden-key validation"
+    browser_runtime: "out of scope for #145; required for implementation issue after review"
+
+# ─────────────────────────────────────────────────────────────────────
+# Navigation classification (mechanical)
+# ─────────────────────────────────────────────────────────────────────
+navigation_classes:
+  full_document:
+    identity_effect: new_document_id
+  same_document_route:
+    identity_effect: same_document_id_revision_up
+  frame_document:
+    identity_effect: frame_context_document_replaced
+  in_document_structure:
+    identity_effect: same_document_id_optional_revision_up
+    examples: [tab_selection, accordion_expand, dialog_open_without_url_change]
+  unknown:
+    identity_effect: fail_closed_observe_only
+
+# ─────────────────────────────────────────────────────────────────────
+# PageState signals (additive codes; consumers ignore unknown)
+# ─────────────────────────────────────────────────────────────────────
+state_signals:
+  navigation_class:
+    - route_changed
+    - document_navigation_started
+    - document_navigation_settled
+    - navigation_blocked_by_overlay
+    - navigation_redirected
+    - frame_document_replaced
+  rule: >
+    Signals are fact codes, not business outcomes. Unknown codes MUST be ignored
+    by older consumers (forward compatible).
+
+# ─────────────────────────────────────────────────────────────────────
+# Compatibility with frozen contracts
+# ─────────────────────────────────────────────────────────────────────
+compatibility:
+  page_ir_v2: "Uses existing kinds, affordances, edges, page.origin/path/route_key, contexts"
+  action_plan_v3: "Uses activate + allow_navigation + existing Target; no selector fields"
+  execution_observation_v3: "Maps navigation outcomes to existing failure codes + diagnostics"
+  lifecycle: "Extends interpretation of full/same-document/frame rules; does not weaken exact revision"
+  wss_phase_3_4: "Transport only; navigation semantics identical over HTTPS or WSS"
+  action_plan_executor: "Supporting infrastructure; not a phase_3_5 deliverable"
+
+forbidden_public_fields:
+  - selector
+  - css_selector
+  - xpath
+  - outer_html
+  - inner_html
+  - dom_handle
+  - element_reference
+  - binding_id
+  - href_raw
+  - destination_url_with_query
+  - business_step_id
+  - workflow_intent
+
+# ─────────────────────────────────────────────────────────────────────
+# Implementation readiness (not started by #145)
+# ─────────────────────────────────────────────────────────────────────
+implementation_gate:
+  requires:
+    - "independent adversarial architecture review APPROVE or APPROVE WITH CONDITIONS"
+    - "explicit implementation issue for phase_3_5 runtime"
+  forbids_from_this_issue:
+    - "runtime navigation detector code"
+    - "schema freeze of draft additives"
+    - "phase_3_5 status: frozen"
