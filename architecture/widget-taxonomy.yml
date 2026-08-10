@@ -84,6 +84,7 @@ standard_profiles:
     interaction_mode: delegated
     affordances: []
     status: unsupported
+    rule: "CAPTCHA must never receive mutating affordances or status recognized."
   datepicker:
     behavior_kind: date_time
     cardinality: one
@@ -127,6 +128,36 @@ adapter_contract:
   used_by: extension.execution_via_interaction_gateway
   service_role: "request semantic action only, such as select_one"
   mismatch: "Execution returns adapter_mismatch and requests re-perception."
+  registry: >
+    Every non-null public adapter_id MUST have a browser-local capability
+    envelope in the adapter registry. Missing registry entry is a CI failure.
+    Registry detection recipes MUST NOT appear in public Page IR or ActionPlan.
+
+# W-P1-05 (#136): deterministic first-match detector policy
+ambiguity_policy:
+  rule: first_match_wins
+  description: >
+    Detectors are evaluated in a fixed priority order (see
+    extension/perception/widget-classifier.js DETECTOR_PRIORITY / source order).
+    The first matching detector produces the sole public adapter_id and
+    behavior_kind. Classification MUST NOT invent multiple public adapter_ids
+    for one node.
+  multiple_matches: >
+    When multiple detectors could match (e.g. spoofed class names), the
+    higher-priority detector wins. Lower-priority matches are discarded, not
+    published as alternate adapter_ids.
+  alternatives: >
+    Optional evidence.alternatives may name discarded interpretations for
+    service telemetry. They are not execution targets and MUST NOT contain
+    selectors or private bindings.
+  no_adapter: >
+    When behavior is recognized but no stable adapter exists, adapter_id is
+    null with reduced affordances (generic fallback). Never invent an adapter
+    solely to avoid unknown.
+  framework_spoofing: >
+    Page-provided class names are untrusted hints. Mismatching adapter
+    mechanics fail closed at execution (adapter_mismatch / postcondition_failed)
+    after re-perception — the service must not trust spoofed library names.
 
 unknown_and_inaccessible:
   unknown:

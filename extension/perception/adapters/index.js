@@ -83,9 +83,25 @@ const ADAPTER_CONTRACTS = [
     interaction_mode: 'native',
     cardinality: 'one',
     affordances: ['focus', 'toggle'],
-    detection: { tags: ['input'], types: ['checkbox', 'radio'] },
+    detection: { tags: ['input'], types: ['checkbox'], role: 'switch' },
     capabilities: { desired_state_set: true, click_to_toggle: true },
     limitations: [],
+  },
+
+  {
+    id: 'native-radio',
+    version: '1.0.0',
+    behavior_kind: 'selection',
+    interaction_mode: 'composite',
+    cardinality: 'one',
+    affordances: ['focus', 'select_one'],
+    detection: { tags: ['input'], types: ['radio'], role: 'radio' },
+    capabilities: {
+      radio_group_selection: true,
+      option_match_by_value: true,
+      option_match_by_label: true,
+    },
+    limitations: ['selects one member of a same-name radio group; not a binary toggle'],
   },
 
   {
@@ -142,6 +158,30 @@ const ADAPTER_CONTRACTS = [
     detection: { tags: ['input'], types: ['month'] },
     capabilities: { iso_format_required: true, value_setter: true },
     limitations: ['requires ISO YYYY-MM format'],
+  },
+
+  {
+    id: 'native-week',
+    version: '1.0.0',
+    behavior_kind: 'date_time',
+    interaction_mode: 'native',
+    cardinality: 'one',
+    affordances: ['focus', 'type_text', 'clear'],
+    detection: { tags: ['input'], types: ['week'] },
+    capabilities: { iso_format_required: true, value_setter: true },
+    limitations: ['requires ISO week format'],
+  },
+
+  {
+    id: 'native-time',
+    version: '1.0.0',
+    behavior_kind: 'date_time',
+    interaction_mode: 'native',
+    cardinality: 'one',
+    affordances: ['focus', 'type_text', 'clear'],
+    detection: { tags: ['input'], types: ['time'] },
+    capabilities: { iso_format_required: true, value_setter: true },
+    limitations: ['requires ISO time format'],
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -435,7 +475,7 @@ const ADAPTER_CONTRACTS = [
     version: '1.0.0',
     behavior_kind: 'challenge',
     interaction_mode: 'delegated',
-    cardinality: 'none',
+    cardinality: 'unknown',
     affordances: [],
     detection: {
       class_fragments: ['captcha', 'recaptcha', 'hcaptcha', 'turnstile'],
@@ -444,6 +484,7 @@ const ADAPTER_CONTRACTS = [
     capabilities: {},
     limitations: ['requires human interaction — automation not supported'],
     privacy: 'secret',
+    status: 'unsupported',
   },
 ];
 

@@ -17,6 +17,7 @@ const suites = [
   { name: 'Canonical Hash', cmd: 'node extension-dev/tests/perception/test-canonical-hash.mjs' },
   { name: 'Privacy Filter', cmd: 'node extension-dev/tests/perception/test-privacy-filter.mjs' },
   { name: 'Widget Classifier', cmd: 'node extension-dev/tests/perception/test-widget-classifier.mjs' },
+  { name: 'Adapter Registry Matrix', cmd: 'node extension-dev/tests/perception/test-adapter-registry-matrix.mjs' },
   { name: 'Page IR Validator', cmd: 'node extension-dev/tests/perception/test-validator.mjs' },
   { name: 'Delta Emitter', cmd: 'node extension-dev/tests/perception/test-delta-emitter.mjs' },
   { name: 'Graph Invariants', cmd: 'node extension-dev/tests/perception/test-graph-invariants.mjs' },

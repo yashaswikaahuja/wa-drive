@@ -74,10 +74,11 @@ function classifyWidget(facts) {
   }
 
   // ── 2. CAPTCHA / Human challenge ──────────────────────────────────
+  // W-P1-01: taxonomy captcha.status = unsupported; no mutating affordances
   if (role === 'captcha' ||
       /captcha|recaptcha|hcaptcha|turnstile/i.test(facts.accessibleName || '') ||
-      /captcha|recaptcha|hcaptcha/i.test(cls)) {
-    return widget('challenge', 'none', 'composite', 'captcha', 'captcha', 0.85, []);
+      /captcha|recaptcha|hcaptcha|turnstile/i.test(cls)) {
+    return widget('challenge', 'unknown', 'delegated', 'captcha', 'captcha', 0.85, [], 'unsupported');
   }
 
   // ── 3. Select2 ────────────────────────────────────────────────────
@@ -184,7 +185,9 @@ function classifyWidget(facts) {
   if (tag === 'input' &&
       !['checkbox', 'radio', 'submit', 'button', 'reset', 'file', 'hidden', 'image'].includes(type)) {
     if (['date', 'datetime-local', 'month', 'week', 'time'].includes(type)) {
-      return widget('date_time', 'one', 'native', `native-${type}`, `native-${type}`, 0.95,
+      // Map week/time onto stable registry ids when present; all are date_time family
+      const adapterId = type === 'week' || type === 'time' ? `native-${type}` : `native-${type}`;
+      return widget('date_time', 'one', 'native', `native-${type}`, adapterId, 0.95,
         ['focus', 'type_text', 'clear']);
     }
     if (type === 'number') {
@@ -210,14 +213,15 @@ function classifyWidget(facts) {
       ['focus', 'expand', 'select_one']);
   }
 
-  // ── 18. Toggle (checkbox / radio / switch) ────────────────────────
+  // ── 18. Toggle (checkbox / switch) ────────────────────────────────
   if ((tag === 'input' && type === 'checkbox') || role === 'checkbox') {
     return widget('toggle', 'none', 'native', 'native-toggle', 'native-toggle', 0.95,
       ['focus', 'toggle']);
   }
+  // W-P1-03: radio is selection (radio_group), not generic toggle
   if ((tag === 'input' && type === 'radio') || role === 'radio') {
-    return widget('toggle', 'one', 'native', 'native-toggle', 'native-toggle', 0.95,
-      ['focus', 'toggle']);
+    return widget('selection', 'one', 'composite', 'radio_group', 'native-radio', 0.95,
+      ['focus', 'select_one']);
   }
   if (role === 'switch') {
     return widget('toggle', 'none', 'native', 'switch', 'native-toggle', 0.9, ['focus', 'toggle']);
@@ -251,24 +255,47 @@ function classifyWidget(facts) {
 
 /**
  * Helper: construct a Widget schema object.
+ * Affordances are stored non-enumerable so they pipe to node.affordances without
+ * polluting public Widget IR (schema additionalProperties: false) — W-P1-02.
+ *
+ * @param {string} [statusOverride] — force status (e.g. captcha → unsupported)
  */
-function widget(behaviorKind, cardinality, interactionMode, implementationHint, adapterId, confidence, affordances) {
-  return {
+function widget(behaviorKind, cardinality, interactionMode, implementationHint, adapterId, confidence, affordances, statusOverride) {
+  let status = statusOverride || null;
+  if (!status) {
+    if (confidence >= 0.8) status = 'recognized';
+    else if (confidence >= 0.5) status = 'partially_recognized';
+    else status = 'opaque';
+  }
+  const w = {
     behavior_kind: behaviorKind,
     cardinality: cardinality || 'none',
     interaction_mode: interactionMode || 'unknown',
     implementation_hint: implementationHint || null,
     adapter_id: adapterId || null,
-    status: confidence >= 0.8 ? 'recognized' : confidence >= 0.5 ? 'partially_recognized' : 'opaque',
+    status,
     confidence,
   };
+  // Non-enumerable: JSON.stringify / AJV public Widget omit this
+  Object.defineProperty(w, '_affordances', {
+    value: Array.isArray(affordances) ? affordances.slice() : [],
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  return w;
 }
 
 /**
  * Map a Widget classification to the Node affordances array.
+ * Prefers classification-time affordances; falls back to coarse behavior map.
  */
 function widgetAffordances(widgetObj) {
   if (!widgetObj) return [];
+  if (Array.isArray(widgetObj._affordances)) {
+    return widgetObj._affordances.slice();
+  }
+  // Fallback for hand-built widget objects in tests
   const map = {
     text_entry: ['focus', 'type_text', 'clear'],
     selection: ['focus', 'select_one'],
@@ -283,8 +310,19 @@ function widgetAffordances(widgetObj) {
   return map[widgetObj.behavior_kind] || [];
 }
 
+/**
+ * Detector order documentation helper for tests / governance (W-P1-05).
+ * Classification uses first-match: lower index wins. Do not invent multiple public adapter_ids.
+ */
+const DETECTOR_PRIORITY = Object.freeze([
+  'otp', 'captcha', 'select2', 'choices', 'ng-select', 'ng-dropdown', 'mat-select',
+  'react-select', 'vue-select', 'bootstrap-select', 'flatpickr', 'jquery-ui-datepicker',
+  'mat-datepicker', 'split-date', 'virtualized-list', 'native-text', 'native-select',
+  'generic-combobox', 'checkbox', 'radio', 'switch', 'file', 'action', 'container', 'unknown',
+]);
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { classifyWidget, widgetAffordances };
+  module.exports = { classifyWidget, widgetAffordances, DETECTOR_PRIORITY };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcWidgetClassifier = { classifyWidget, widgetAffordances };
+  globalThis.CcWidgetClassifier = { classifyWidget, widgetAffordances, DETECTOR_PRIORITY };
 }
