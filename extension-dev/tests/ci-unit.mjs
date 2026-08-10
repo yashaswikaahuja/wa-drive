@@ -6,10 +6,20 @@
 
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../..');
+
+// WSS protocol suite needs extension-service deps (ws, jsonwebtoken).
+// CI does not pre-install them; install once if missing.
+const extSvc = resolve(ROOT, 'extension-service');
+const extSvcJwt = resolve(extSvc, 'node_modules/jsonwebtoken');
+if (!existsSync(extSvcJwt)) {
+  console.log('Installing extension-service dependencies for WSS tests...');
+  execSync('npm install --omit=dev --no-audit --no-fund', { cwd: extSvc, stdio: 'inherit' });
+}
 
 const suites = [
   { name: 'Unit Tests', cmd: 'node extension-dev/tests/test-shared-modules.js' },
