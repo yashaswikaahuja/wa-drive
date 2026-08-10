@@ -109,9 +109,15 @@ async function testNative(browser) {
   ok('native32: native-toggle adapter detected', !!byAdapter['native-toggle']);
   ok('native32: action widget detected', Object.values(byAdapter).flat().some((w) => w.kind === 'action'));
   ok('native32: text_entry widgets recognized', (byAdapter['native-text'] || []).every((w) => w.status === 'recognized'));
-  ok('native32: no unknown adapter_ids on native widgets',
-    ['native-text', 'native-select', 'native-toggle', 'native-file', null, '__none__']
-      .includes(Object.keys(byAdapter).find((k) => !['native-text','native-select','native-select-multi','native-toggle','native-file',null,'__none__'].includes(k)) || null));
+  // Known native / null adapters only (W-P1: native-radio, native-date* included)
+  const knownNative = new Set([
+    'native-text', 'native-select', 'native-select-multi', 'native-toggle', 'native-radio',
+    'native-file', 'native-date', 'native-datetime-local', 'native-month', 'native-week',
+    'native-time', '__none__',
+  ]);
+  const unknownNative = Object.keys(byAdapter).filter((k) => !knownNative.has(k));
+  ok('native32: no unknown adapter_ids on native widgets', unknownNative.length === 0,
+    unknownNative.length ? `unexpected: ${unknownNative.join(',')}` : '');
 
   await page.close();
 }
