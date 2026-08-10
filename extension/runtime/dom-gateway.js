@@ -46,6 +46,8 @@ function captureStructuralFacts(root, options = {}) {
   const maxNodes = options.maxNodes ?? MAX_NODES;
   const includeGeometry = options.includeGeometry !== false;
   const nodes = [];
+  /** Parallel array of live Elements — browser-private, never in public IR. */
+  const liveElements = [];
   let truncated = false;
 
   function walk(element, depth, parentIndex) {
@@ -53,8 +55,7 @@ function captureStructuralFacts(root, options = {}) {
     if (depth > maxDepth) { truncated = true; return; }
     if (!element || element.nodeType !== 1) return;
 
-    // Skip CyberControl-injected elements
-    if (element.hasAttribute && element.hasAttribute('data-cc-id')) return;
+    // Skip only CyberControl-owned UI roots (not portal data-cc-id markers)
     if (element.id && element.id.startsWith('_cc_')) return;
 
     const fact = extractElementFacts(element, includeGeometry);
@@ -62,6 +63,7 @@ function captureStructuralFacts(root, options = {}) {
     fact._depth = depth;
     const thisIndex = nodes.length;
     nodes.push(fact);
+    liveElements.push(element);
 
     // Traverse children (including slotted content for open shadow roots)
     const children = element.shadowRoot?.mode === 'open'
@@ -74,7 +76,7 @@ function captureStructuralFacts(root, options = {}) {
 
   const startEl = root.nodeType === 9 ? root.documentElement : root;
   walk(startEl, 0, -1);
-  return { nodes, truncated, nodeCount: nodes.length };
+  return { nodes, liveElements, truncated, nodeCount: nodes.length };
 }
 
 /**
@@ -299,16 +301,39 @@ function resolveBinding(contextId, nodeId, registry, expectedGeneration) {
   return { element: entry.liveNodeReference, error: null };
 }
 
+/** Browser-private file tokens for upload (never service filesystem paths). */
+const _fileReferences = new Map();
+
+/**
+ * Register a File/Blob under an opaque file_reference token for ActionPlan upload.
+ * @param {string} token
+ * @param {File|Blob} file
+ */
+function registerFileReference(token, file) {
+  if (!token || typeof token !== 'string') throw new Error('file_reference token required');
+  if (!file) throw new Error('file required');
+  _fileReferences.set(token, file);
+}
+
 /**
  * Perform a mechanical action on an element with pre-validation.
  * TOCTOU: checks element is still connected immediately before acting.
  * @param {Element} element
  * @param {object} action — { op: string, ... }
+ * @param {object} [options]
+ * @param {Element|null} [options.optionElement] — for select_option
  * @returns {{ success: boolean, error: string|null }}
  */
-function performAction(element, action) {
+function performAction(element, action, options = {}) {
   // Final TOCTOU check — no yield between check and act
-  if (!element.isConnected) return { success: false, error: 'stale_target' };
+  if (!element?.isConnected) return { success: false, error: 'stale_target' };
+  // Fact-index placeholders must never reach interaction (APE-P1-03)
+  if (element._factIndex != null && typeof element.nodeType !== 'number') {
+    return { success: false, error: 'stale_target' };
+  }
+  if (typeof element.nodeType === 'number' && element.nodeType !== 1) {
+    return { success: false, error: 'stale_target' };
+  }
 
   switch (action.op) {
     case 'focus':
@@ -345,6 +370,57 @@ function performAction(element, action) {
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
       return { success: true, error: null };
+    }
+    case 'select_option': {
+      // Mechanical only: option is a concrete bound Element, not fuzzy text
+      const optionElement = options.optionElement;
+      if (!optionElement?.isConnected) return { success: false, error: 'stale_target' };
+      if (element.tagName === 'SELECT' && optionElement.tagName === 'OPTION') {
+        const owner = optionElement.closest('select');
+        if (owner !== element) return { success: false, error: 'stale_target' };
+        if (element.multiple) {
+          optionElement.selected = true;
+        } else {
+          const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+          if (setter) setter.call(element, optionElement.value);
+          else element.value = optionElement.value;
+          optionElement.selected = true;
+        }
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        // Custom overlay option: click the option node itself (no selector search)
+        optionElement.click();
+      }
+      return { success: true, error: null };
+    }
+    case 'expand_collapse': {
+      const want = !!action.expanded;
+      const cur = element.getAttribute('aria-expanded');
+      const isOpen = cur === 'true';
+      if (isOpen !== want) element.click();
+      return { success: true, error: null };
+    }
+    case 'upload': {
+      if (element.tagName !== 'INPUT' || String(element.type).toLowerCase() !== 'file') {
+        return { success: false, error: 'action_unsupported' };
+      }
+      const token = action.file_reference;
+      if (!token || typeof token !== 'string') {
+        return { success: false, error: 'file_reference_invalid' };
+      }
+      const file = _fileReferences.get(token);
+      if (!file) return { success: false, error: 'file_reference_invalid' };
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file instanceof File ? file : new File([file], 'upload.bin'));
+        element.files = dt.files;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return { success: true, error: null };
+      } catch {
+        return { success: false, error: 'gateway_error' };
+      }
     }
     case 'toggle': {
       const current = element.checked;
@@ -485,6 +561,7 @@ if (typeof module !== 'undefined' && module.exports) {
     // Interaction port
     resolveBinding,
     performAction,
+    registerFileReference,
     // Constants
     MAX_DEPTH,
     MAX_NODES,
@@ -500,5 +577,6 @@ if (typeof module !== 'undefined' && module.exports) {
     observeMutations,
     resolveBinding,
     performAction,
+    registerFileReference,
   };
 }

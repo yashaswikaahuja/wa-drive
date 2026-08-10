@@ -55,8 +55,13 @@ async function buildSnapshot(options) {
   const contexts = contextDiscovery.discoverContexts(gateway, documentId, revisionManager);
   const topContext = contexts[0]; // top_level is always first
 
-  // 3. Capture structural facts via gateway
-  const { nodes: rawFacts, truncated, nodeCount } = gateway.captureStructuralFacts(root, {
+  // 3. Capture structural facts via gateway (+ parallel live Elements)
+  const {
+    nodes: rawFacts,
+    liveElements,
+    truncated,
+    nodeCount,
+  } = gateway.captureStructuralFacts(root, {
     includeGeometry,
     maxNodes: 2000,
   });
@@ -67,6 +72,9 @@ async function buildSnapshot(options) {
   const parentStack = []; // maps raw fact index → node_id
   /** Private observation aids for relationship derivation — never published on nodes. */
   const factMeta = {};
+
+  // APE-P1-03: clear prior bindings for this perception pass (same document re-perceive)
+  if (bindingRegistry?.invalidateAll) bindingRegistry.invalidateAll();
 
   for (let i = 0; i < rawFacts.length; i++) {
     const fact = rawFacts[i];
@@ -94,9 +102,17 @@ async function buildSnapshot(options) {
       htmlFor: fact.htmlFor || null,
     };
 
-    // Register binding (the live element ref stays in-gateway; we simulate with fact index)
-    // In real browser context, we'd pass the actual live element from gateway internals
-    bindingRegistry.bind(topContext.context_id, node.node_id, { _factIndex: i }, node.widget?.adapter_id || null, revision);
+    // APE-P1-03: bind live Element only (never fact-index placeholder)
+    const liveRef = liveElements && liveElements[i];
+    if (liveRef && typeof liveRef.nodeType === 'number' && liveRef.nodeType === 1) {
+      bindingRegistry.bind(
+        topContext.context_id,
+        node.node_id,
+        liveRef,
+        node.widget?.adapter_id || null,
+        revision
+      );
+    }
   }
 
   // Set root_node_id on top context
