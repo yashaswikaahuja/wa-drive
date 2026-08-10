@@ -36,14 +36,17 @@
       display: flex;
       flex-direction: column;
       min-width: 0;
+      /* Hex fallbacks first so theme still works if modern HSL syntax fails */
+      color: #131A2B;
       color: hsl(var(--pt-ink));
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
       -webkit-font-smoothing: antialiased;
       letter-spacing: -0.01em;
+      background-color: #F6F2E9;
       background-color: hsl(var(--pt-bg));
       background-image:
-        radial-gradient(hsl(30 25% 78% / 0.35) 1px, transparent 1px),
-        radial-gradient(hsl(30 25% 70% / 0.18) 1px, transparent 1px);
+        radial-gradient(rgba(196, 178, 148, 0.35) 1px, transparent 1px),
+        radial-gradient(rgba(176, 156, 120, 0.18) 1px, transparent 1px);
       background-size: 22px 22px, 7px 7px;
       background-position: 0 0, 3px 5px;
     }
@@ -147,14 +150,19 @@
         0 8px 24px -16px hsl(30 30% 30% / 0.18);
     }
     .site-icon {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 9px;
       display: grid;
       place-items: center;
-      font-size: 15px;
-      background: hsl(var(--pt-marigold) / 0.12);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      color: hsl(var(--pt-marigold-deep));
+      background: hsl(var(--pt-marigold) / 0.14);
+      border: 1px solid hsl(var(--pt-marigold) / 0.22);
       flex-shrink: 0;
+      font-family: ui-monospace, 'Cascadia Code', monospace;
     }
     .site-name {
       font-size: 12px;
@@ -491,10 +499,11 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      background: linear-gradient(180deg, hsl(27 95% 58%), hsl(22 92% 50%));
+      background: #F98A1E;
+      background: linear-gradient(180deg, #fa9a38, #e8590c);
       box-shadow:
-        0 1px 0 hsl(22 90% 40% / 0.5) inset,
-        0 8px 20px -8px hsl(27 95% 55% / 0.55);
+        0 1px 0 rgba(180, 70, 10, 0.45) inset,
+        0 8px 20px -8px rgba(249, 138, 30, 0.55);
       transition: filter .15s, transform .15s;
     }
     #fill-btn:hover:not(:disabled) { filter: brightness(1.04); transform: translateY(-1px); }
@@ -508,16 +517,18 @@
     }
 
     .icon-btn {
-      width: 40px;
+      min-width: 40px;
       height: 40px;
-      padding: 0;
+      padding: 0 10px;
       display: grid;
       place-items: center;
       background: hsl(var(--pt-card));
-      color: hsl(var(--pt-ink) / 0.75);
+      color: hsl(var(--pt-ink) / 0.8);
       border: 1px solid hsl(var(--pt-border));
       border-radius: 12px;
-      font-size: 15px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
       cursor: pointer;
       box-shadow: 0 1px 0 hsl(35 18% 82% / 0.5);
       transition: background .15s, color .15s, border-color .15s, transform .15s;
@@ -629,7 +640,7 @@
   </div>
 
   <div class="site-bar">
-    <div class="site-icon" id="site-icon">🌐</div>
+    <div class="site-icon" id="site-icon">WWW</div>
     <div style="flex:1; min-width:0">
       <div class="site-name" id="site-name">Detecting page...</div>
       <div id="site-confidence"></div>
@@ -667,17 +678,17 @@
   <div id="status"></div>
 
   <div class="footer">
-    <button id="fill-btn" disabled>⚡ Fill Form</button>
-    <button id="undo-btn" class="icon-btn" style="display:none" title="Undo last fill">↩</button>
-    <button id="agent-btn" class="icon-btn" disabled title="AI Agent">🤖</button>
-    <button id="open-btn" class="icon-btn" title="Open CyberControl">🖥</button>
+    <button id="fill-btn" disabled>Fill Form</button>
+    <button id="undo-btn" class="icon-btn" style="display:none" title="Undo last fill">Undo</button>
+    <button id="agent-btn" class="icon-btn" disabled title="AI Agent">AI</button>
+    <button id="open-btn" class="icon-btn" title="Open CyberControl">App</button>
   </div>
 
   <div id="agent-panel">
     <div class="label">Proposed actions</div>
     <div id="agent-actions"></div>
     <div class="agent-btns">
-      <button id="agent-execute">▶ Execute</button>
+      <button id="agent-execute">Execute</button>
       <button id="agent-cancel">Cancel</button>
     </div>
   </div>

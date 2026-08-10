@@ -31,7 +31,45 @@ fetch(chrome.runtime.getURL('build-info.json'))
   })
   .catch(() => {});
 
-// Side panel stays open across tab switches â€” always resolve the active *page* tab
+// Map stored API base → operator app URL.
+// backendUrl is usually https://api.cybercontrol.fun/api (from frontend API_URL).
+// Wrong: strip only "/api" → https://api.cybercontrol.fun (API host, not the app).
+// Right: api.* → app.*, localhost:3000 → :5173, always land on /app.
+function resolveFrontendUrl(backendUrl) {
+  const FALLBACK = 'https://app.cybercontrol.fun';
+  const raw = (backendUrl || '').trim();
+  if (!raw) return FALLBACK + '/app';
+
+  try {
+    // Accept both absolute URLs and bare hosts
+    const u = new URL(raw.includes('://') ? raw : 'https://' + raw);
+    const host = u.hostname.toLowerCase();
+    const port = u.port;
+
+    // Local dev: API on 3000 → Vite app on 5173
+    if (host === 'localhost' || host === '127.0.0.1') {
+      const appPort = (port === '3000' || !port) ? '5173' : port;
+      return `http://${host}:${appPort}/app`;
+    }
+
+    // Production / staging: api.cybercontrol.fun → app.cybercontrol.fun
+    let appHost = host;
+    if (appHost.startsWith('api.')) appHost = 'app.' + appHost.slice(4);
+    else if (appHost === 'cybercontrol.fun') appHost = 'app.cybercontrol.fun';
+
+    return `https://${appHost}/app`;
+  } catch {
+    // String fallback for odd stored values
+    let s = raw.replace(/\/api\/?$/i, '').replace(/\/+$/, '');
+    s = s.replace('://api.', '://app.');
+    if (s.includes('localhost:3000')) s = s.replace('localhost:3000', 'localhost:5173');
+    if (!s) return FALLBACK + '/app';
+    if (!/\/app\/?$/.test(s)) s = s.replace(/\/+$/, '') + '/app';
+    return s;
+  }
+}
+
+// Side panel stays open across tab switches — always resolve the active *page* tab
 // (never chrome:// or the extension itself).
 async function getActivePageTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -70,20 +108,20 @@ function showStatus(msg, color) {
 statusEl?.addEventListener('click', () => { statusEl.style.display = 'none'; });
 
 const KNOWN_SITES = {
-  'ssc.nic.in': { icon: 'ðŸ›', name: 'SSC' },
-  'ssc.gov.in': { icon: 'ðŸ›', name: 'SSC' },
-  'rrbcdg.gov.in': { icon: 'ðŸš‚', name: 'RRB' },
-  'nta.ac.in': { icon: 'ðŸ“', name: 'NTA' },
-  'upsc.gov.in': { icon: 'ðŸ›', name: 'UPSC' },
-  'passportindia.gov.in': { icon: 'ðŸ›‚', name: 'Passport Seva' },
-  'digilocker.gov.in': { icon: 'ðŸ“', name: 'DigiLocker' },
+  'ssc.nic.in': { icon: 'SSC', name: 'SSC' },
+  'ssc.gov.in': { icon: 'SSC', name: 'SSC' },
+  'rrbcdg.gov.in': { icon: 'RRB', name: 'RRB' },
+  'nta.ac.in': { icon: 'NTA', name: 'NTA' },
+  'upsc.gov.in': { icon: 'UPSC', name: 'UPSC' },
+  'passportindia.gov.in': { icon: 'PPT', name: 'Passport Seva' },
+  'digilocker.gov.in': { icon: 'DL', name: 'DigiLocker' },
 };
 
 async function detectSite() {
   try {
     const tab = await getActivePageTab();
     if (!tab?.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
-      siteIcon.textContent = 'ðŸŒ';
+      siteIcon.textContent = 'WWW';
       siteName.textContent = 'No page detected';
       const conf = document.getElementById('site-confidence');
       if (conf) conf.style.display = 'none';
@@ -92,9 +130,9 @@ async function detectSite() {
     const url = new URL(tab.url);
     const host = url.hostname.replace('www.', '');
     const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
-    if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' â€” ' + host; }
-    else { siteIcon.textContent = 'ðŸŒ'; siteName.textContent = host; }
-    // Network-effect confidence badge: "filled 29Ã— by operators Â· 100%"
+    if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' — ' + host; }
+    else { siteIcon.textContent = 'WWW'; siteName.textContent = host; }
+    // Network-effect confidence badge: "filled 29× by operators · 100%"
     fetchConfidence(host);
   } catch { siteName.textContent = 'Unknown page'; }
 }
@@ -169,24 +207,24 @@ function showResults(filled, skipped, failed, records) {
     detailEl.style.display = 'none';
   }
 
-  // "Show, don't just do": list exactly what was filled (label â†’ value) so operator trusts it
+  // "Show, don't just do": list exactly what was filled (label → value) so operator trusts it
   const filledEl = document.getElementById('results-filled');
   if (filledEl) {
     const fr = window._lastFilledRecords || [];
     if (fr.length) {
-      filledEl.innerHTML = `<div class="filled-toggle" id="filled-toggle">â–¸ See what was filled (${fr.length})</div>
+      filledEl.innerHTML = `<div class="filled-toggle" id="filled-toggle">▸ See what was filled (${fr.length})</div>
         <div id="filled-list" style="display:none"></div>`;
       const listEl = filledEl.querySelector('#filled-list');
       listEl.innerHTML = fr.map(r => {
         const label = (r.label || r.selector || '').toString().replace(/[#.\[\]]/g, '').slice(0, 28);
         const val = (r.value != null ? String(r.value) : '').slice(0, 30);
-        return `<div class="filled-row"><span class="fl-label">${label}</span><span class="fl-val">${val}</span><span class="fl-check">âœ“</span></div>`;
+        return `<div class="filled-row"><span class="fl-label">${label}</span><span class="fl-val">${val}</span><span class="fl-check">✓</span></div>`;
       }).join('');
       const toggle = filledEl.querySelector('#filled-toggle');
       toggle.onclick = () => {
         const open = listEl.style.display === 'block';
         listEl.style.display = open ? 'none' : 'block';
-        toggle.textContent = (open ? 'â–¸' : 'â–¾') + ` See what was filled (${fr.length})`;
+        toggle.textContent = (open ? '▸' : '▾') + ` See what was filled (${fr.length})`;
       };
       filledEl.style.display = 'block';
     } else {
@@ -199,10 +237,12 @@ function showResults(filled, skipped, failed, records) {
     cpLink.style.display = 'block';
     cpLink.onclick = async () => {
       const data = await chrome.storage.local.get('backendUrl');
-      const frontendUrl = (data.backendUrl || '').replace('/api', '').replace('api.', 'app.');
-      const profileId = selectedProfile?.id;
+      // resolveFrontendUrl already ends with /app
+      const frontendUrl = resolveFrontendUrl(data.backendUrl);
       const phone = selectedProfile?.phone || selectedProfile?.primary_contact_phone || '';
-      const url = frontendUrl + '/app/customers/' + encodeURIComponent(phone);
+      const url = phone
+        ? frontendUrl.replace(/\/app\/?$/, '/app/customers/') + encodeURIComponent(phone)
+        : frontendUrl;
       chrome.tabs.create({ url });
     };
   } else {
@@ -268,7 +308,7 @@ function renderProfiles(query) {
       <div class="avatar">${initials}</div>
       <div>
         <div class="profile-name">${p.name || 'Unknown'}</div>
-        <div class="profile-phone">ðŸ“± ${phone}</div>
+        <div class="profile-phone">${phone}</div>
       </div>
     </div>`;
   }).join('');
@@ -315,7 +355,7 @@ searchEl.addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter') {
     e.preventDefault();
     if (selectedProfile && (focusIdx === -1 || filteredProfiles[focusIdx]?.id === selectedProfile.id)) {
-      // Profile already selected â€” trigger fill
+      // Profile already selected — trigger fill
       fillBtn.click();
     } else if (focusIdx >= 0 && filteredProfiles[focusIdx]) {
       // Select the focused profile
@@ -410,7 +450,7 @@ fillBtn.addEventListener('click', async () => {
   const { percent, missing } = getCompleteness(full);
   if (percent < 100 && missing.length > 0) {
     const warn = document.getElementById('completeness-warn');
-    warn.innerHTML = `<span>âš ï¸ ${percent}% complete â€” will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
+    warn.innerHTML = `<span>${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
     warn.style.display = 'flex';
     await new Promise(resolve => {
       document.getElementById('fill-anyway').onclick = () => { warn.style.display = 'none'; resolve(); };
@@ -458,10 +498,10 @@ fillBtn.addEventListener('click', async () => {
     }
     selectedProfile = fullProfile;
 
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-    // NEW ARCHITECTURE: perceive â†’ send snapshot â†’ receive plan â†’ execute â†’ report
+    // ═══════════════════════════════════════════════════════════════════
+    // NEW ARCHITECTURE: perceive → send snapshot → receive plan → execute → report
     // Extension = Eyes + Hands only. Server = Brain + Memory + Knowledge.
-    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    // ═══════════════════════════════════════════════════════════════════
 
     // Step 1: Inject perception pipeline and perceive the page
     updateProgress('Perceiving page structure...', 30);
@@ -656,7 +696,7 @@ fillBtn.addEventListener('click', async () => {
     showStatus('Error: ' + e.message, CC.danger);
   } finally {
     fillBtn.disabled = false;
-    fillBtn.innerHTML = 'âš¡ Fill Form';
+    fillBtn.innerHTML = 'Fill Form';
   }
 });
 
@@ -676,24 +716,31 @@ undoBtn.addEventListener('click', async () => {
     });
     undoBtn.style.display = 'none';
     resultsEl.style.display = 'none';
-    showStatus('â†© Fill undone', CC.success);
+    showStatus('Fill undone', CC.success);
   } catch (e) { showStatus('Undo failed: ' + e.message, CC.danger); }
 });
 
 // Open CyberControl
 document.getElementById('open-btn').addEventListener('click', async () => {
   const data = await chrome.storage.local.get('backendUrl');
-  const frontendUrl = data.backendUrl?.includes('localhost:3000')
-    ? 'http://localhost:5173'
-    : (data.backendUrl || '').replace('/api','');
+  const frontendUrl = resolveFrontendUrl(data.backendUrl);
+  // Match either https://app.cybercontrol.fun or .../app
+  const matchBase = frontendUrl.replace(/\/app\/?$/, '');
   const tabs = await chrome.tabs.query({});
-  const existing = tabs.find(t => t.url?.startsWith(frontendUrl));
-  if (existing) { chrome.tabs.update(existing.id, {active:true}); chrome.windows.update(existing.windowId,{focused:true}); }
-  else chrome.tabs.create({ url: frontendUrl || 'http://localhost:5173' });
-  // Side panel stays open (ChatGPT-style) â€” do not window.close()
+  const existing = tabs.find(t => {
+    const u = t.url || '';
+    return u.startsWith(frontendUrl) || u.startsWith(matchBase + '/app') || u === matchBase || u === matchBase + '/';
+  });
+  if (existing) {
+    chrome.tabs.update(existing.id, { active: true });
+    chrome.windows.update(existing.windowId, { focused: true });
+  } else {
+    chrome.tabs.create({ url: frontendUrl });
+  }
+  // Side panel stays open (ChatGPT-style) — do not window.close()
 });
 
-// â”€â”€ AI Agent flow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── AI Agent flow ─────────────────────────────────────────────────────────
 // Plan-then-execute model: popup posts (goal + page snapshot + driver list)
 // to /api/agent/plan, hub returns proposed actions, operator approves,
 // popup runs cc.run(actions) in the active tab.
@@ -729,8 +776,8 @@ async function injectDriversInto(tabId) {
 agentBtn.addEventListener('click', async () => {
   if (!selectedProfile) return;
   agentBtn.disabled = true;
-  agentBtn.textContent = 'ðŸ¤– ...';
-  showStatus('Snapshotting page + planningâ€¦', CC.info);
+  agentBtn.textContent = 'AI...';
+  showStatus('Snapshotting page + planning…', CC.info);
 
   try {
     const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
@@ -762,7 +809,7 @@ agentBtn.addEventListener('click', async () => {
       }
     } catch (e) {}
 
-    // Flatten data â€” strip metadata keys
+    // Flatten data — strip metadata keys
     const META_KEYS = new Set(['id', 'displayLabel', 'displayName', 'relationship', 'createdAt', 'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId', 'confirmedAt', 'confirmedBy', 'source', 'confidence']);
     const flatProfile = {};
     const raw = fullProfile.data || fullProfile;
@@ -792,9 +839,9 @@ agentBtn.addEventListener('click', async () => {
       let pretty = '';
       try {
         const parsed = JSON.parse(errBody);
-        if (parsed.status === 413) pretty = 'Form too big for one prompt â€” try again on a shorter section';
-        else if (parsed.status === 429) pretty = 'AI rate-limited â€” wait 30s and retry';
-        else if (parsed.status === 400) pretty = 'AI rejected schema â€” extension version mismatch?';
+        if (parsed.status === 413) pretty = 'Form too big for one prompt — try again on a shorter section';
+        else if (parsed.status === 429) pretty = 'AI rate-limited — wait 30s and retry';
+        else if (parsed.status === 400) pretty = 'AI rejected schema — extension version mismatch?';
         else pretty = parsed.error || errBody.slice(0, 100);
       } catch (e) { pretty = errBody.slice(0, 120); }
       throw new Error('plan ' + planRes.status + ': ' + pretty);
@@ -805,7 +852,7 @@ agentBtn.addEventListener('click', async () => {
       showStatus('Agent returned 0 actions. Check console for raw response.', CC.warning);
       console.log('[CC agent] empty plan, raw:', plan);
       agentBtn.disabled = false;
-      agentBtn.textContent = 'ðŸ¤–';
+      agentBtn.textContent = 'AI';
       return;
     }
 
@@ -818,7 +865,7 @@ agentBtn.addEventListener('click', async () => {
     console.error('[CC agent]', e);
   } finally {
     agentBtn.disabled = false;
-    agentBtn.textContent = 'ðŸ¤–';
+    agentBtn.textContent = 'AI';
   }
 });
 
@@ -843,7 +890,7 @@ agentExecuteBtn.addEventListener('click', async () => {
   const { plan, snapshot, tab } = _pendingPlan;
   agentExecuteBtn.disabled = true;
   agentExecuteBtn.textContent = '...';
-  showStatus('Executing ' + plan.actions.length + ' actionsâ€¦', CC.info);
+  showStatus('Executing ' + plan.actions.length + ' actions…', CC.info);
 
   try {
     const data = await chrome.storage.local.get(['accessToken', 'backendUrl']);
@@ -870,7 +917,7 @@ agentExecuteBtn.addEventListener('click', async () => {
       const summary = r?.error || (r?.result ? JSON.stringify(r.result).slice(0, 80) : '?');
       const args = JSON.stringify(a.args).slice(0, 60);
       return `<div class="agent-step">
-        <span style="color:${color}">${ok ? 'âœ“' : 'âœ—'}</span>
+        <span style="color:${color}">${ok ? '✓' : '✗'}</span>
         <span class="name">${a.name}</span>
         <span class="args">${args}</span>
         <div class="n" style="padding-left:16px;font-size:10px;margin-top:2px">${summary}</div>
@@ -883,7 +930,7 @@ agentExecuteBtn.addEventListener('click', async () => {
       func: async () => (await cc.do({ name: 'dom.snapshot', args: {} })).result,
     });
 
-    // Persist trace (best-effort) â€” also pass profile + formKey so server can
+    // Persist trace (best-effort) — also pass profile + formKey so server can
     // learn (formKey, label) -> profileKey mappings from successful fills.
     fetch(data.backendUrl + '/agent/trace', {
       method: 'POST',
@@ -900,15 +947,15 @@ agentExecuteBtn.addEventListener('click', async () => {
       }),
     }).catch(e => console.warn('[CC agent] trace persist failed:', e));
 
-    agentExecuteBtn.textContent = 'âœ“ Done';
-    setTimeout(() => { agentExecuteBtn.textContent = 'â–¶ Execute'; }, 3000);
+    agentExecuteBtn.textContent = 'Done';
+    setTimeout(() => { agentExecuteBtn.textContent = 'Execute'; }, 3000);
     _pendingPlan = null;
   } catch (e) {
     showStatus('Execute error: ' + e.message, CC.danger);
     console.error('[CC agent execute]', e);
   } finally {
     agentExecuteBtn.disabled = false;
-    agentExecuteBtn.textContent = 'â–¶ Execute';
+    agentExecuteBtn.textContent = 'Execute';
   }
 });
 

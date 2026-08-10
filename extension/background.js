@@ -63,18 +63,27 @@ if (typeof ccKnowledgeSync !== 'undefined') {
 
 // Side panel (ChatGPT-style right sidebar): toolbar icon opens the panel, not a dropdown popup.
 // Requires sidePanel permission + side_panel.default_path in manifest; no action.default_popup.
-if (chrome.sidePanel?.setPanelBehavior) {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((e) => {
+async function enableSidePanelOnActionClick() {
+  if (!chrome.sidePanel?.setPanelBehavior) {
+    console.warn('[CC] sidePanel API unavailable — need Chrome 114+');
+    return;
+  }
+  try {
+    await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+    console.log('[CC] side panel: open on action click enabled');
+  } catch (e) {
     console.warn('[CC] setPanelBehavior failed:', e?.message || e);
-  });
+  }
 }
+enableSidePanelOnActionClick();
 
 // Content script handles bridge via manifest injection — no manual injection needed
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[CC] Extension installed/updated');
-  if (chrome.sidePanel?.setPanelBehavior) {
-    chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
-  }
+  enableSidePanelOnActionClick();
+});
+chrome.runtime.onStartup?.addListener?.(() => {
+  enableSidePanelOnActionClick();
 });
 
 // SW stays alive via chrome.runtime.onMessage (wakes on demand)

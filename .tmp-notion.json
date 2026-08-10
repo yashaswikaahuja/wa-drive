@@ -1,0 +1,7 @@
+﻿node.exe : error: Public API request failed (400 Bad Request invalid_request_url): Invalid request URL.
+At C:\Users\yasha\AppData\Roaming\npm\ntn.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/ntn/bin/ntn" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: Public A...id request URL.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
