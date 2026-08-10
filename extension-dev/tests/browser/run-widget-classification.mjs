@@ -41,6 +41,7 @@ const PERCEPTION_SCRIPTS = [
   'perception/node-factory.js',
   'perception/edge-factory.js',
   'perception/graph-invariants.js',
+  'perception/delta-apply.js',
   'perception/context-discovery.js',
   'perception/snapshot-builder.js',
   'perception/validator.js',

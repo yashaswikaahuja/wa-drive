@@ -173,6 +173,21 @@ edge_types:
     transitions_to: >
       transitions_to targets MUST resolve to a node in the same snapshot.
       Off-snapshot destinations are forbidden (no dangling endpoints).
+    activates: >
+      activates is emitted only when an observed activation target is known
+      (e.g. aria-controls / aria-owns resolving to an interactive or dialog
+      node). Links MUST NOT claim activates→parent-container.
+    repeats: >
+      Progressive candidate only: structural sibling clone heuristic.
+      NOT a formal template/instance IR model. Service MUST NOT treat repeats
+      as business row semantics (e.g. family-member slots) without knowledge.
+
+  delta_composition:
+    rule: >
+      Typed PageDelta edge/node ops MUST be re-applied to the base snapshot and
+      the composed graph MUST pass graph invariants before the delta is published
+      as authoritative. Full snapshots remain the recovery path when composition
+      fails (issue #133 IMP-P1-02).
 
 page_state:
   signals:

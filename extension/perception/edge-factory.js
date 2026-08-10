@@ -270,19 +270,33 @@ function deriveEdges(nodesMap, contexts, options = {}) {
     }
   }
 
-  // ── 9. activates: navigation / buttons without dangling destination ──
+  // ── 9. activates: ONLY when a real activation target is observed ─────
+  // IMP-P1-03 (#133): do NOT emit activates→parent (over-claims). Require
+  // aria-controls / aria-owns resolving to an existing node that is an
+  // interactive control or dialog/region container.
   for (const node of nodes) {
-    if (node.kind === 'navigation' || node.observed?.role === 'link' ||
-        (factMeta[node.node_id]?.tag === 'a')) {
-      // activates self-region or parent navigation container if present
-      if (node.parent_id && byId[node.parent_id]) {
-        pushEdge('activates', node.node_id, node.parent_id, {
-          source: 'derived',
-          confidence: 0.7,
-          signals: ['structural.activates_container'],
-          facts: ['structural.activates_container'],
-        });
-      }
+    const meta = factMeta[node.node_id] || {};
+    const ids = [...(meta.controlsIds || []), ...(meta.ownsIds || [])];
+    for (const cid of ids) {
+      const targetId = resolveDomId(domIdIndex, cid, node.context_id);
+      if (!targetId || targetId === node.node_id || !byId[targetId]) continue;
+      const target = byId[targetId];
+      const role = (target.observed?.role || '').toLowerCase();
+      const isActivationTarget =
+        isInteractiveKind(target) ||
+        target.kind === 'region' ||
+        target.kind === 'form' ||
+        role === 'dialog' ||
+        role === 'alertdialog' ||
+        role === 'menu' ||
+        role === 'listbox';
+      if (!isActivationTarget) continue;
+      pushEdge('activates', node.node_id, targetId, {
+        source: 'observed',
+        confidence: 0.9,
+        signals: meta.controlsIds?.includes(cid) ? ['aria.controls'] : ['aria.owns'],
+        facts: ['aria.activation_target'],
+      });
     }
   }
 
@@ -339,7 +353,10 @@ function deriveEdges(nodesMap, contexts, options = {}) {
     }
   }
 
-  // ── 11. repeats: sibling structural clones (candidate, not business) ─
+  // ── 11. repeats: progressive candidate structural clones (NOT template IR) ─
+  // P1-05 (#133): repeats is a progressive candidate structural-clone hint,
+  // not a formal template/instance model. Service must not treat these as
+  // business "row of family members" semantics.
   const sectionLike = nodes.filter((n) =>
     n.kind === 'region' || n.kind === 'form' || n.kind === 'section');
   const byParent = new Map();

@@ -330,13 +330,14 @@ phases:
       - "31 delta-emitter unit tests passing"
       - "112 browser integration tests passing"
       - "Performance benchmark: real fixtures p95 ≤ 72ms, synthetic 2000-node p95 = 122ms"
-      - "12 graph-invariant + 29 edge-factory relationship tests"
+      - "12 graph-invariant + 31 edge-factory relationship tests"
+      - "#133 P1 remediation: fail-closed invariants, composed delta validation, activates fix, browser lifecycle"
       - "685 total CI tests, 108 governance, 92 D11 invariants all green"
 
     note: >
-      Implementation completion for relationships (#131) is separate from a formal
-      architecture freeze gate. Do not mark a new relationship freeze without a
-      dedicated adversarial review of the implementation.
+      Relationships implemented (#131) and #132 P1s remediated (#133). Formal
+      architecture freeze still requires a separate final adversarial ratification
+      review — do not freeze solely from green tests.
 
   phase_3_4:
     name: "WSS Protocol"

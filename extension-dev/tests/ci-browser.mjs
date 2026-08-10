@@ -17,6 +17,7 @@ const suites = [
   { name: 'Comprehensive Portal Tests', cmd: 'node extension-dev/tests/browser/run-comprehensive.mjs' },
   { name: 'Perception Browser Tests', cmd: 'node extension-dev/tests/browser/run-perception-browser.mjs' },
   { name: 'Widget Classification Tests', cmd: 'node extension-dev/tests/browser/run-widget-classification.mjs' },
+  { name: 'Relationship Lifecycle Tests', cmd: 'node extension-dev/tests/browser/run-relationship-lifecycle.mjs' },
 ];
 
 let allPass = true;

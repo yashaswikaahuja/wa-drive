@@ -69,9 +69,11 @@ const mockSnapshotBuilder = {
 const mockCanonicalHash = {
   computeCanonicalHash: async (s) => s.canonical_hash,
 };
+const { validateGraphInvariants } = require(resolve(ROOT, 'extension/perception/graph-invariants.js'));
 const mockValidator = {
   validateDelta: (d) => ({ valid: true, errors: null }),
   validateSnapshot: (s) => ({ valid: true, errors: null }),
+  validateGraphInvariants: (s) => validateGraphInvariants(s),
   isInitialized: () => true,
 };
 const mockNodeFactory = {};

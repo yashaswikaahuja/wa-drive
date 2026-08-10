@@ -21,6 +21,8 @@ const suites = [
   { name: 'Delta Emitter', cmd: 'node extension-dev/tests/perception/test-delta-emitter.mjs' },
   { name: 'Graph Invariants', cmd: 'node extension-dev/tests/perception/test-graph-invariants.mjs' },
   { name: 'Edge Factory Relationships', cmd: 'node extension-dev/tests/perception/test-edge-factory.mjs' },
+  { name: 'Delta Apply Composed Graph', cmd: 'node extension-dev/tests/perception/test-delta-apply.mjs' },
+  { name: 'Fail-Closed Graph Invariants', cmd: 'node extension-dev/tests/perception/test-fail-closed-invariants.mjs' },
 ];
 
 let allPass = true;

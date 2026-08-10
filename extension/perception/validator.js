@@ -129,16 +129,26 @@ function validateDelta(delta) {
  */
 function validateGraphInvariants(snapshot) {
   let impl = null;
+  let loadError = null;
   if (typeof globalThis !== 'undefined' && globalThis.CcGraphInvariants?.validateGraphInvariants) {
     impl = globalThis.CcGraphInvariants.validateGraphInvariants;
   } else if (typeof require !== 'undefined') {
     try {
       // eslint-disable-next-line global-require
       impl = require('./graph-invariants.js').validateGraphInvariants;
-    } catch { /* optional */ }
+    } catch (e) {
+      loadError = e?.message || String(e);
+    }
   }
+  // IMP-P1-01 (#133): fail closed — missing enforcement is a publication failure
   if (!impl) {
-    return { valid: true, errors: [] }; // soft if module missing
+    return {
+      valid: false,
+      errors: [
+        'graph_invariants_unavailable: graph-invariants module failed to load'
+          + (loadError ? ` (${loadError})` : '; ensure perception/graph-invariants.js is loaded before publish'),
+      ],
+    };
   }
   return impl(snapshot);
 }

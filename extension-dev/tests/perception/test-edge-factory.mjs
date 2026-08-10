@@ -197,6 +197,37 @@ console.log('\n=== Edge Factory Relationships ===');
   ok(edges.every((e) => e.target_id in nodesMap || e.type === 'belongs_to_context'), 'all edge targets resolve');
 }
 
+// IMP-P1-03: activates only with real target — not parent container for links
+{
+  const nodesMap = {
+    'n.page': node('n.page', 'page', null, 0),
+    'n.nav': node('n.nav', 'navigation', 'n.page', 1),
+    'n.link': node('n.link', 'control', 'n.nav', 2, {
+      role: 'link',
+      accessible_name: 'Home',
+      widget: { behavior_kind: 'action' },
+      affordances: ['activate'],
+    }),
+    'n.btn': node('n.btn', 'control', 'n.page', 3, {
+      role: 'button',
+      widget: { behavior_kind: 'action' },
+      affordances: ['activate'],
+    }),
+    'n.dlg': node('n.dlg', 'region', 'n.page', 4, { role: 'dialog' }),
+  };
+  const factMeta = {
+    'n.link': { id: 'lnk', tag: 'a', labelledByIds: [], describedByIds: [], controlsIds: [], ownsIds: [], errorMessageIds: [] },
+    'n.btn': {
+      id: 'open', tag: 'button', type: 'button',
+      controlsIds: ['dlg'], labelledByIds: [], describedByIds: [], ownsIds: [], errorMessageIds: [],
+    },
+    'n.dlg': { id: 'dlg', tag: 'div', labelledByIds: [], describedByIds: [], controlsIds: [], ownsIds: [], errorMessageIds: [] },
+  };
+  const edges = deriveEdges(nodesMap, contexts, { factMeta });
+  ok(!edges.some((e) => e.type === 'activates' && e.source_id === 'n.link'), 'link does not activates→parent');
+  ok(edges.some((e) => e.type === 'activates' && e.source_id === 'n.btn' && e.target_id === 'n.dlg'), 'button activates controlled dialog');
+}
+
 // Stable edge ids
 {
   const id1 = stableEdgeId('contains', 'a.b', 'c.d');

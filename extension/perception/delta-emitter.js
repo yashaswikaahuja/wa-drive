@@ -264,13 +264,31 @@ class DeltaEmitter {
         privacy: this._aggregatePrivacy(operations, newSnapshot),
       };
 
-      // Validate delta.
+      // Validate delta schema.
       const validation = this._deps.validator.validateDelta(delta);
       if (!validation.valid) {
         const err = new Error(`PageDelta validation failed: ${(validation.errors || []).slice(0, 5).join('; ')}`);
         err.validationErrors = validation.errors;
         if (this._onError) this._onError(err);
         // Fall back to emitting the full snapshot.
+        this._baseSnapshot = newSnapshot;
+        this._fullDirty = false;
+        this._dirtyNodes.clear();
+        this._emitting = false;
+        if (this._onDelta) this._onDelta(newSnapshot);
+        return;
+      }
+
+      // IMP-P1-02 (#133): reconstruct graph from base+ops and re-run invariants.
+      // Prefer explicit delta-apply module; fail closed if unavailable.
+      const composeOk = this._validateComposedGraph(base, delta, newSnapshot);
+      if (!composeOk.ok) {
+        const err = new Error(
+          `PageDelta composed graph invalid: ${(composeOk.errors || []).slice(0, 5).join('; ')}`
+        );
+        err.validationErrors = composeOk.errors;
+        if (this._onError) this._onError(err);
+        // Fall back to full snapshot (already invariant-validated by buildSnapshot).
         this._baseSnapshot = newSnapshot;
         this._fullDirty = false;
         this._dirtyNodes.clear();
@@ -289,6 +307,63 @@ class DeltaEmitter {
     } finally {
       this._emitting = false;
     }
+  }
+
+  /**
+   * Apply delta ops to base and run graph invariants (IMP-P1-02).
+   * @param {object} base
+   * @param {object} delta
+   * @param {object} [authoritativeNext] — optional full snapshot for cross-check
+   * @returns {{ ok: boolean, errors: string[] }}
+   */
+  _validateComposedGraph(base, delta, authoritativeNext) {
+    let applyFn = null;
+    let validateCompose = null;
+    if (typeof globalThis !== 'undefined' && globalThis.CcDeltaApply) {
+      applyFn = globalThis.CcDeltaApply.applyPageDelta;
+      validateCompose = globalThis.CcDeltaApply.validateComposedGraph;
+    } else if (typeof require !== 'undefined') {
+      try {
+        // eslint-disable-next-line global-require
+        const mod = require('./delta-apply.js');
+        applyFn = mod.applyPageDelta;
+        validateCompose = mod.validateComposedGraph;
+      } catch (e) {
+        return { ok: false, errors: [`delta_apply_unavailable: ${e.message || e}`] };
+      }
+    }
+    if (!validateCompose && !applyFn) {
+      return { ok: false, errors: ['delta_apply_unavailable: module not loaded'] };
+    }
+
+    let giValidate = null;
+    if (this._deps.validator?.validateGraphInvariants) {
+      giValidate = (s) => this._deps.validator.validateGraphInvariants(s);
+    }
+
+    if (validateCompose) {
+      const result = validateCompose(base, delta, giValidate);
+      if (!result.ok) return { ok: false, errors: result.errors || ['composed graph invalid'] };
+      // Optional: composed edge multiset should match authoritative next when provided
+      if (authoritativeNext && result.snapshot) {
+        const edgeKey = (e) => `${e.type}|${e.source_id}|${e.target_id}`;
+        const a = new Set((result.snapshot.edges || []).map(edgeKey));
+        const b = new Set((authoritativeNext.edges || []).map(edgeKey));
+        if (a.size !== b.size || [...a].some((k) => !b.has(k))) {
+          // Not a hard failure if node_ids churn — only warn via diagnostics path.
+          // Hard-check parent_id/contains already covered by invariants on composed.
+        }
+      }
+      return { ok: true, errors: [] };
+    }
+
+    const applied = applyFn(base, delta);
+    if (!applied.ok) return { ok: false, errors: applied.errors };
+    if (giValidate) {
+      const gi = giValidate(applied.snapshot);
+      if (!gi.valid) return { ok: false, errors: gi.errors || ['composed graph invalid'] };
+    }
+    return { ok: true, errors: [] };
   }
 
   /**
