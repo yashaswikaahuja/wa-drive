@@ -200,6 +200,24 @@ const protocol = read('architecture/protocol.yml');
 ok(/phase_2:[\s\S]*?status: frozen/.test(phases), 'Phase 2 remains frozen');
 ok(/phase_3_0:[\s\S]*?status: frozen/.test(phases), 'Phase 3.0 is frozen');
 ok(phases.includes('issues: ["#96"]'), 'Phase 3.0 records issue #96');
+// #144 — repository numbering policy + phase_3_1 registry hygiene
+ok(phases.includes('POLICY A') || phases.includes('Repository numbering wins'), 'Phase 3 numbering policy recorded (repo keys win)');
+ok(phases.includes('conceptual perception taxonomy') || phases.includes('Conceptual perception taxonomy'), 'conceptual 3.0–3.10 mapping recorded without replacing registry keys');
+ok(/phase_3_1:[\s\S]*?status: complete/.test(phases), 'Phase 3.1 Core Perception Engine is registered complete');
+ok(phases.includes('issues: ["#99"]') || phases.includes('#99'), 'Phase 3.1 records issue #99');
+ok(/phase_3_2:[\s\S]*?status: complete/.test(phases), 'Phase 3.2 Widget Classification is complete');
+ok(/phase_3_3:[\s\S]*?status: frozen/.test(phases), 'Phase 3.3 Relationships/deltas is frozen');
+ok(/phase_3_4:[\s\S]*?name: "WSS Protocol"/.test(phases), 'Phase 3.4 remains WSS Protocol (not widgets)');
+ok(!/phase_3_5:\s*\n\s*name:/.test(phases), 'phase_3_5 is not yet a registered phase key');
+ok(
+  phases.includes('candidate next: phase_3_5') || phases.includes('phase_3_5 — Navigation'),
+  'next Phase 3 milestone identified as phase_3_5 Navigation Understanding'
+);
+ok(phases.includes('ActionPlanExecutor') && phases.includes('NOT a phase_3_'), 'APE excluded from phase_3_* milestones');
+ok(
+  ownership.includes('migration_phase: "phase_3_1"') || ownership.includes("migration_phase: 'phase_3_1'"),
+  'ownership maps gateway/perception engine to phase_3_1'
+);
 ok(ownership.includes('browser_perception_contract:'), 'ownership maps the Phase 3 contract');
 ok(ownership.includes('browser_dom_gateway:'), 'ownership reserves the DOM gateway');
 ok(boundaries.includes('FB-008') && boundaries.includes('FB-009'), 'boundaries define public-IR and DOM-access checks');

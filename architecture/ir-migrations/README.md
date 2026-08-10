@@ -37,6 +37,13 @@ Legacy runtime model: `extension/models/ir.js` **1.0.0**
 
 ## Migration stages
 
+> **Numbering note (#144):** Stage labels below use rollout language (contract →
+> shadow → negotiated → primary). They are **not** a second copy of
+> `architecture/phases.yml` keys. Authoritative Phase 3 freezes and milestones
+> are `phase_3_0` … `phase_3_4` in `phases.yml` (Policy A: repository keys win).
+> Conceptual taxonomy 3.0–3.10 is mapped there; do not invent freezes from these
+> stage headings alone.
+
 ### Stage A — Phase 3.0: contract freeze
 
 - Freeze schema, identity, lifecycle, DOM gateway, privacy, confidence, and performance contracts.

@@ -217,23 +217,29 @@ subsystems:
       - "architecture/adrs/"
     description: "Frozen public IR, action/observation schemas, DOM boundary, gateway security, lifecycle, privacy, confidence, performance, and migration contracts"
 
-  # ── EXTENSION: Browser DOM Gateway (Phase 3.3) ──────────────────
+  # ── EXTENSION: Browser DOM Gateway (phase_3_1; evolved under 3.3) ──
+  # Numbering policy (#144): repository keys win. Gateway introduced with
+  # Core Perception Engine (phase_3_1 / #99). Relationships/deltas completion
+  # and ownership of the public perception API surface continued under
+  # phase_3_3 freeze. Do not re-label as conceptual "3.2 DOM Gateway".
   browser_dom_gateway:
     owner: extension
     status: correct
-    migration_phase: "phase_3_3"
+    migration_phase: "phase_3_1"
+    completion_phase: "phase_3_3"
     paths:
       - "extension/runtime/dom-gateway.js"
     description: "Restricted observation and interaction ports; sole new structural DOM access boundary"
 
-  # ── EXTENSION: Browser Perception Runtime (Phase 3.3) ────────────
+  # ── EXTENSION: Browser Perception Runtime (phase_3_1 + phase_3_3) ─
   browser_perception_runtime:
     owner: extension
     status: correct
-    migration_phase: "phase_3_3"
+    migration_phase: "phase_3_1"
+    completion_phase: "phase_3_3"
     paths:
       - "extension/perception/"
-    description: "Produces validated PageSnapshot/PageDelta through the observation gateway; owns no service intelligence"
+    description: "Produces validated PageSnapshot/PageDelta through the observation gateway; owns no service intelligence. Core engine = phase_3_1; relationships/deltas/graph freeze = phase_3_3; widgets = phase_3_2; WSS = phase_3_4."
 
   # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
   page_ir_consumers:

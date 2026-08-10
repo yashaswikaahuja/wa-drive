@@ -174,6 +174,46 @@ phases:
         description: "Derived values still computed in extension (derive.js)"
         removal_condition: "Service computes derived values and includes them in profile"
 
+# ── Phase 3 numbering policy (authoritative; #142 audit / #144 hygiene) ──
+#
+# POLICY A — Repository numbering wins.
+#   - architecture/phases.yml phase_3_* keys are the sole authoritative
+#     Phase 3 milestone identifiers for freezes, CI, and "what is next."
+#   - Issue titles, Notion/conceptual lists, and program maps must not
+#     override these keys.
+#   - Existing keys MUST NOT be renamed to resemble the conceptual
+#     3.0–3.10 perception taxonomy (that taxonomy is a separate axis).
+#
+# Conceptual perception taxonomy (planning language only; NOT registry keys):
+#   3.0 Architecture → phase_3_0
+#   3.1 IR (contracts) → contracts under phase_3_0; earlier FormModel IR = Phase 1.1
+#   3.2 DOM Gateway & context → implemented under phase_3_1 (gateway + contexts)
+#   3.3 Structural perception → phase_3_1 (snapshot/nodes) + completion in phase_3_3
+#   3.4 Widget classification → phase_3_2  (NOT phase_3_4)
+#   3.5 Relationship detection → phase_3_3
+#   3.6 Runtime state & deltas → phase_3_3 (folded)
+#   3.7 Navigation understanding → not yet a phase_3_* key (candidate next: phase_3_5)
+#   3.8 Visual context → ADR 0006 intent only; not a phase_3_* key
+#   3.9 Hardening & validation → partial work exists; not a phase_3_* freeze key
+#   3.10 Public API & migration → ir-migrations under 3.0; not a separate freeze key
+#   (no conceptual slot) WSS → phase_3_4
+#
+# Program map axis (GitHub #118 integer Phases 0–10) is product delivery
+# sequencing and is independent of phase_3_* keys (e.g. program Phase 7 = WSS
+# while repository WSS = phase_3_4).
+#
+# ActionPlanExecutor v3 (#138–#141) is supporting implementation of frozen
+# ActionPlan/EO contracts from phase_3_0.1 — NOT a phase_3_* milestone.
+#
+# phase_4_* / phase_5_* / phase_7_* entries below that still say status:complete
+# are historical registry text; they MUST NOT be treated as independently
+# ratified product freezes while constitution temporary_exceptions EXC-001..005
+# remain. Separate evidence is required before claiming those complete.
+#
+# Next legitimate Phase 3 milestone (after #144): phase_3_5 — Navigation
+# Understanding (first incomplete conceptual gap after registered 3.0–3.4).
+# Do not start it until an explicit implementation issue is opened.
+
 # ── Phase 3 architecture gate ───────────────────────────────────────
 
   phase_3_0:
@@ -181,6 +221,12 @@ phases:
     status: frozen
     frozen_date: "2026-08-05"
     issues: ["#96"]
+    issue_disposition:
+      "#96": >
+        Architecture freeze delivered and ratified via #97 (Phase 3.0.1).
+        GitHub issue #96 remaining OPEN was hygiene drift; closed under #144
+        with completed reason — freeze status is this registry entry, not the
+        issue open/closed bit alone.
     remediation:
       issue: "#97"
       tracker: "CYB-68"
@@ -261,16 +307,79 @@ phases:
       - "Weakening secret, screenshot, or cross-origin protections without a new ADR"
       - "Changing IR major-version semantics without a migration plan"
 
-# ── Phase 3 implementation (active) ────────────────────────────────
+# ── Phase 3 implementation ─────────────────────────────────────────
+
+  phase_3_1:
+    name: "Core Browser Perception Engine"
+    status: complete
+    completed_date: "2026-08-05"
+    issues: ["#99"]
+    depends_on: ["phase_3_0"]
+    registry_note: >
+      Registered retroactively under governance issue #144 to close the
+      #142 gap: the engine was already implemented under #99 (commit
+      ef14f70 and follow-ons) but never given a phases.yml key. This entry
+      does NOT invent a new implementation phase and does NOT freeze from
+      #144. Conceptual roadmap items "DOM gateway / structural perception"
+      map here (plus later completion under phase_3_3 for relationships/deltas).
+    issue_disposition:
+      "#99": >
+        Implementation complete; GitHub issue closed under #144 with
+        completed reason after registry registration.
+    description: >
+      First runtime implementation of frozen Phase 3.0 contracts: DOM
+      observation/interaction gateway, binding registry, revision/snapshot
+      lifecycle, context discovery, node factory, snapshot builder, privacy
+      filter, validator, and public perceivePage API producing PageSnapshot v2.
+      No business semantics, AI, or planning.
+    modules_implemented:
+      - path: "extension/runtime/dom-gateway.js"
+        purpose: "Observation and interaction ports"
+      - path: "extension/perception/binding-registry.js"
+        purpose: "Browser-private (context_id, node_id) → live element"
+      - path: "extension/perception/revision-manager.js"
+        purpose: "document_id / snapshot_id / revision lifecycle"
+      - path: "extension/perception/context-discovery.js"
+        purpose: "Top-level, frame, and shadow contexts"
+      - path: "extension/perception/snapshot-builder.js"
+        purpose: "Assemble validated PageSnapshot v2"
+      - path: "extension/perception/node-factory.js"
+        purpose: "Public IR nodes from structural facts"
+      - path: "extension/perception/privacy-filter.js"
+        purpose: "Secret/PII redaction in public IR"
+      - path: "extension/perception/canonical-hash.js"
+        purpose: "Deterministic snapshot hash"
+      - path: "extension/perception/validator.js"
+        purpose: "Publish-time validation"
+      - path: "extension/perception/index.js"
+        purpose: "perceivePage / resolveExecutionTarget public API"
+    validation_evidence:
+      - "Commit ef14f70 Phase 3.1: Core Browser Perception Engine (#99)"
+      - "Commit f7b1d57 Phase 3.1: golden perception browser tests + fixtures"
+      - "extension-dev/tests/browser/run-perception-browser.mjs labeled Phase 3.1"
+      - "Perception unit suite in CI (binding registry, revision, privacy, …)"
+    done_criteria:
+      - "Browser produces valid PageSnapshot v2 ✓"
+      - "No selectors or private bindings leave the browser ✓"
+      - "Perception validates against canonical schema / structural fallback ✓"
+      - "Golden fixtures for native / framework / shadow / iframe corpus ✓"
+    note: >
+      Not status:frozen from #144. Freeze of engine modules may be proposed
+      later under an explicit freeze gate; relationships/deltas completion
+      and public API surface evolved further under phase_3_3.
 
   phase_3_2:
     name: "Widget Classification & Adapter Contracts"
     status: complete
     frozen_date: "2026-08-08"
     issues: ["#100"]
+    depends_on: ["phase_3_0", "phase_3_1"]
+    conceptual_roadmap_slot: "3.4"
     description: >
       Behavior-first widget classification, versioned adapter contracts,
       browser fixtures, and 53 widget-classification assertions.
+      Repository number is 3.2; conceptual taxonomy slot is 3.4 — do not
+      rename. phase_3_4 remains WSS.
 
     frozen_files:
       - path: "extension/perception/widget-classifier.js"
@@ -293,12 +402,15 @@ phases:
     status: frozen
     frozen_date: "2026-08-10"
     issues: ["#131", "#132", "#133", "#134"]
-    depends_on: ["phase_3_0", "phase_3_2"]
+    depends_on: ["phase_3_0", "phase_3_1", "phase_3_2"]
+    conceptual_roadmap_slots: ["3.5", "3.6"]
     description: >
       Complete PageSnapshot v2 pipeline (delta-emitter, integration, performance)
       plus Relationships & Structural Semantics: evidence-backed edges,
       parent_id/contains authority, graph invariants, fail-closed publish,
       composed PageDelta validation, no business depends_on.
+      Repository number is 3.3; conceptual taxonomy maps relationships (3.5)
+      and runtime state/deltas (3.6) here — do not rename.
     discovery_reference: "Discussion 11 — Phase 3.3"
     ratification: >
       Final adversarial freeze gate #134 PASSED (APPROVE WITH CONDITIONS for
@@ -379,11 +491,25 @@ phases:
     name: "WSS Protocol"
     status: complete
     frozen_date: "2026-08-08"
-    depends_on: ["phase_3_3"]
+    depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3"]
+    depends_on_note: >
+      Logical dependency includes perception completion (phase_3_3). Historical
+      frozen_date 2026-08-08 predates phase_3_3 freeze (2026-08-10); chronology
+      is preserved — do not rewrite dates. Implementation issue #128 CLOSED;
+      duplicate open issue #127 disposed as duplicate under #144.
+    conceptual_roadmap_slot: null
+    program_map_slot: "Phase 7 (#119 / #118 axis) — different numbering system"
     description: >
       Live bidirectional WebSocket communication between extension and server.
       Enables real-time fill orchestration, teach sessions, and delta streaming.
+      Repository phase_3_4 is WSS only — never widget classification
+      (widgets = phase_3_2). Not present on the conceptual 3.0–3.10 perception
+      taxonomy list.
     discovery_reference: "Discussion 11 — Phase 3.4"
+    issue: "#128 / CYB-98"
+    issue_disposition:
+      "#128": "CLOSED — authoritative WSS implementation issue"
+      "#127": "CLOSED as duplicate of #128 under governance hygiene #144"
 
     frozen_files:
       - path: "extension-service/ws-server.js"
@@ -423,7 +549,12 @@ phases:
       - "Duplicate message.id and stale seq cannot re-trigger side effects"
       - "ci-unit.mjs includes WSS Protocol Tests suite"
       - "Heartbeat with configurable interval; reconnect manager Suspended Mode"
-    issue: "#128 / CYB-98"
+
+# ── Phase 4+: registry note (do not treat as ratified freezes) ─────
+# Historical status:complete on phase_4_*/5_*/7_* predates clearance of
+# constitution temporary_exceptions EXC-001..005. #144 does not re-audit
+# or re-mark those entries; they require separate evidence before product
+# "complete" claims.
 
 # ── Phase 4: Fill Planner ──────────────────────────────────────────
 

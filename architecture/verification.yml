@@ -62,7 +62,9 @@ checks:
       Verifies every frozen Phase 3.0/3.0.1 contract and ADR exists, the
       canonical Page IR, ActionPlan, and ExecutionObservation schemas parse,
       public schema fields contain no browser-private locator/binding keys,
-      Phase 2 remains frozen, and Phase 3.0 is frozen.
+      Phase 2 remains frozen, Phase 3.0 is frozen, and (since #144) the
+      repository Phase 3 registry reports phase_3_1..phase_3_4 with the
+      authoritative numbering policy (repo keys win; no conceptual renumber).
     method: "run_governance_test"
     command: "node extension-dev/tests/test-phase3-governance.mjs"
 
