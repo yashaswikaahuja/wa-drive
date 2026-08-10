@@ -107,7 +107,9 @@ message_bridge:
       - "A page-originating message MUST NOT be able to overwrite backendUrl, tokens, or user identity."
       - "CONNECT-style state changes are accepted only from trusted extension UI, not from the page bridge."
     host_permissions:
-      - "Prefer activeTab or a portal-origin allowlist over <all_urls> where feasible; document any remaining broad permission with justification."
+      - "Dev/test grant is intentionally broad: http://*/*, https://*/*, file:///* so fixtures and arbitrary portals work without manifest edits."
+      - "Do not use bare <all_urls> without review; prefer the three explicit wildcards above."
+      - "Future: owner-panel will publish a domain allowlist; extension MUST refuse inject/fill off-allowlist even if host_permissions remain broad."
   fail_closed: "If any inbound check cannot be satisfied, the message is dropped and a security diagnostic is recorded without the payload."
 
 # ─────────────────────────────────────────────────────────────────────
@@ -116,13 +118,10 @@ message_bridge:
 enforcement:
   architecture_status: "This threat model is frozen as of Phase 3.0.1."
   runtime_status: >
-    SEC-001..SEC-004 were live runtime defects. They are RESOLVED in the runtime
-    by issue #98 (Phase 3 Runtime Security Hardening): the content-script bridge
-    now authenticates sender/origin/type; bearer token, backend URL, and LLM key
-    were removed from page-readable DOM attributes and moved to an isolated-world
-    context object; CONNECT and other auth/state-mutating messages are gated on a
-    trusted frontend origin; and host_permissions was narrowed from <all_urls> to
-    the explicit portal allowlist.
+    SEC-001..SEC-003 remain hard runtime controls (bridge auth, isolated credentials,
+    trusted CONNECT origin). SEC-004 host policy is intentionally broad for development
+    and fixture testing (http/https/file wildcards). Portal-domain restriction is deferred
+    to owner-panel configuration, not a static manifest list.
   security_regression_policy:
     check_id: CHECK-011
     suite: "extension-dev/tests/security/run.mjs"

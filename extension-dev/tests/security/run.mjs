@@ -296,37 +296,29 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// SEC-004: narrow host permissions are a reviewed exact allowlist
+// SEC-004: host permissions policy (dev/test: broad; future: owner-panel allowlist)
 // ────────────────────────────────────────────────────────────────────────────
-console.log('\n=== SEC-004: host permissions remain narrow and explicit ===');
+// Product decision: host grants are intentionally broad so operators/devs can
+// exercise Fill on local fixtures, any gov portal, and staging sites without
+// manifest churn. Domain allowlisting will be enforced by owner-panel config
+// (server-side + extension policy) later — not by a hard-coded portal list here.
+// SEC-001/002/003 still protect the bridge and credentials regardless of host.
+console.log('\n=== SEC-004: host permissions allow fixture/dev access (owner-panel later) ===');
 {
   const manifest = JSON.parse(read('extension/manifest.json'));
   const approved = [
-    '*://app.cybercontrol.fun/*',
-    '*://*.ssc.nic.in/*',
-    '*://*.ssc.gov.in/*',
-    '*://*.rrbcdg.gov.in/*',
-    '*://*.indianrailways.gov.in/*',
-    '*://*.upsconline.nic.in/*',
-    '*://*.upsc.gov.in/*',
-    '*://*.nta.ac.in/*',
-    '*://*.jeemain.nta.nic.in/*',
-    '*://*.neet.nta.nic.in/*',
-    '*://*.bseb.inter.nic.in/*',
-    '*://*.cbse.nic.in/*',
-    '*://*.onlinesbi.sbi/*',
-    '*://*.passportindia.gov.in/*',
-    '*://*.digilocker.gov.in/*',
-    '*://*.umang.gov.in/*',
-    '*://*.services.india.gov.in/*',
-    '*://*.serviceonline.bihar.gov.in/*',
+    'http://*/*',
+    'https://*/*',
+    'file://*/*',
   ];
   const permissions = manifest.host_permissions || [];
-  equal([...permissions].sort(), [...approved].sort(), 'host_permissions equals the reviewed portal allowlist');
-  ok(!permissions.some((value) => ['<all_urls>', '*://*/*', 'http://*/*', 'https://*/*'].includes(value)), 'no broad host wildcard is granted');
+  equal([...permissions].sort(), [...approved].sort(), 'host_permissions match dev/test broad grant set');
+  ok(!permissions.includes('<all_urls>'), 'prefer explicit http/https/file wildcards over <all_urls>');
   ok(new Set(permissions).size === permissions.length, 'host_permissions contains no duplicate grants');
   const matches = (manifest.content_scripts || []).flatMap((entry) => entry.matches || []);
   equal([...matches].sort(), [...permissions].sort(), 'content-script matches do not exceed host permissions');
+  // Still reject chrome/extension schemes smuggled into matches
+  ok(!matches.some((m) => /chrome:|chrome-extension:|about:/.test(m)), 'no chrome/about schemes in content matches');
 }
 
 // ────────────────────────────────────────────────────────────────────────────

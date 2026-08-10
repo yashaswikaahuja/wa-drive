@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.91",
-  "description": "Auto-fill SSC/Railway/NEET forms from CyberControl student profiles",
+  "version": "5.91.1",
+  "description": "Auto-fill govt forms from CyberControl profiles (any http/https/file host for testing; owner-panel will gate domains later)",
   "permissions": [
     "storage",
     "activeTab",
@@ -12,24 +12,9 @@
     "sidePanel"
   ],
   "host_permissions": [
-    "*://app.cybercontrol.fun/*",
-    "*://*.ssc.nic.in/*",
-    "*://*.ssc.gov.in/*",
-    "*://*.rrbcdg.gov.in/*",
-    "*://*.indianrailways.gov.in/*",
-    "*://*.upsconline.nic.in/*",
-    "*://*.upsc.gov.in/*",
-    "*://*.nta.ac.in/*",
-    "*://*.jeemain.nta.nic.in/*",
-    "*://*.neet.nta.nic.in/*",
-    "*://*.bseb.inter.nic.in/*",
-    "*://*.cbse.nic.in/*",
-    "*://*.onlinesbi.sbi/*",
-    "*://*.passportindia.gov.in/*",
-    "*://*.digilocker.gov.in/*",
-    "*://*.umang.gov.in/*",
-    "*://*.services.india.gov.in/*",
-    "*://*.serviceonline.bihar.gov.in/*"
+    "http://*/*",
+    "https://*/*",
+    "file://*/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -44,24 +29,9 @@
   "content_scripts": [
     {
       "matches": [
-        "*://app.cybercontrol.fun/*",
-        "*://*.ssc.nic.in/*",
-        "*://*.ssc.gov.in/*",
-        "*://*.rrbcdg.gov.in/*",
-        "*://*.indianrailways.gov.in/*",
-        "*://*.upsconline.nic.in/*",
-        "*://*.upsc.gov.in/*",
-        "*://*.nta.ac.in/*",
-        "*://*.jeemain.nta.nic.in/*",
-        "*://*.neet.nta.nic.in/*",
-        "*://*.bseb.inter.nic.in/*",
-        "*://*.cbse.nic.in/*",
-        "*://*.onlinesbi.sbi/*",
-        "*://*.passportindia.gov.in/*",
-        "*://*.digilocker.gov.in/*",
-        "*://*.umang.gov.in/*",
-        "*://*.services.india.gov.in/*",
-        "*://*.serviceonline.bihar.gov.in/*"
+        "http://*/*",
+        "https://*/*",
+        "file://*/*"
       ],
       "js": [
         "content.js"

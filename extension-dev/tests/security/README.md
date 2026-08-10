@@ -13,7 +13,7 @@ The suite protects:
 - **SEC-001:** hostile `postMessage` origins, sources, markers, reply loops, and unknown message types fail closed.
 - **SEC-002:** credentials, fill records, undo values, and other sensitive state never use page-readable DOM attributes or page storage.
 - **SEC-003:** the real `background.js` listeners reject auth/backend overwrite attempts through `onMessage`, long-lived ports, and `onMessageExternal`; responses do not echo credentials.
-- **SEC-004:** extension host permissions remain the reviewed explicit portal allowlist and never regress to broad wildcards.
+- **SEC-004:** host permissions stay on the documented grant set (`http://*/*`, `https://*/*`, `file://*/*`) so fixtures and any portal can be tested. Domain allowlisting will move to owner-panel later; do not silently reintroduce `<all_urls>` without review.
 - **Browser-private boundary:** public Page IR, ActionPlan, and ExecutionObservation schemas cannot define selectors, DOM handles, live node references, or private binding fields; the DOM gateway remains inaccessible to the page.
 - **Pillar integrity:** GitHub Actions and the verification registry must retain the dedicated hard-failing `CHECK-011` job.
 
