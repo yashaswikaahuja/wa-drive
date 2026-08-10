@@ -70,6 +70,24 @@ class WsClient {
 
     /** @type {number|null} Last revision sent. */
     this._lastRevision = null;
+
+    /** @type {number} Outbound sequence for ordering. */
+    this._outSeq = 0;
+
+    /** Protocol version (must match server PROTOCOL_VERSION). */
+    this._protocolVersion = 1;
+
+    /** @type {string|null} Optional tab isolation. */
+    this._tabId = options.tabId || null;
+
+    /** @type {string|null} Optional workflow isolation. */
+    this._workflowId = options.workflowId || null;
+
+    /** @type {Set<string>} Server message ids already handled (dedupe action_plan etc.). */
+    this._seenServerIds = new Set();
+
+    /** @type {string|null} Last accepted action plan id (stale/dupe safety). */
+    this._lastPlanId = null;
   }
 
   /**
@@ -159,7 +177,17 @@ class WsClient {
       throw new Error(`Cannot send in state: ${this._state} (Suspended Mode)`);
     }
     const id = nextMsgId();
-    const message = { id, type, ...payload };
+    this._outSeq += 1;
+    const message = {
+      v: this._protocolVersion,
+      id,
+      type,
+      seq: this._outSeq,
+      ts: Date.now(),
+      ...(this._tabId ? { tabId: this._tabId } : {}),
+      ...(this._workflowId ? { workflowId: this._workflowId } : {}),
+      ...payload,
+    };
     this._ws.send(JSON.stringify(message));
     return id;
   }
@@ -237,6 +265,18 @@ class WsClient {
   // ─── Internal ─────────────────────────────────────────────────────
 
   _handleMessage(msg) {
+    // Dedupe server messages by id (prevents double-execute of action_plan)
+    if (msg.id && typeof msg.id === 'string') {
+      if (this._seenServerIds.has(msg.id)) {
+        return; // drop duplicate
+      }
+      this._seenServerIds.add(msg.id);
+      if (this._seenServerIds.size > 512) {
+        const first = this._seenServerIds.values().next().value;
+        this._seenServerIds.delete(first);
+      }
+    }
+
     // Check if this is a response to a pending request
     if (msg.ref && this._pending.has(msg.ref)) {
       const { resolve, timer } = this._pending.get(msg.ref);
@@ -250,6 +290,7 @@ class WsClient {
     switch (msg.type) {
       case 'connected':
         this._sessionId = msg.sessionId;
+        if (msg.protocolVersion != null) this._protocolVersion = Number(msg.protocolVersion) || 1;
         this._setState(STATE.CONNECTED);
         if (this._reconnectManager) this._reconnectManager.reset();
         // If reconnecting, send resume
@@ -263,6 +304,17 @@ class WsClient {
         this._setState(STATE.SUSPENDED);
         break;
 
+      case 'action_plan': {
+        // Stale plan safety: ignore same plan_id twice
+        const planId = msg.plan?.plan_id || msg.plan?.id || null;
+        if (planId && planId === this._lastPlanId) {
+          return;
+        }
+        if (planId) this._lastPlanId = planId;
+        if (this._onMessage) this._onMessage(msg);
+        break;
+      }
+
       case 'pong':
         // Server response to our ping — no-op
         break;
@@ -273,7 +325,8 @@ class WsClient {
 
       default:
         // Forward to the application-level message handler
-        if (this._onMessage) this._onMessage(msg);
+        // Suspended Mode: still deliver server messages only when CONNECTED
+        if (this._state === STATE.CONNECTED && this._onMessage) this._onMessage(msg);
         break;
     }
   }

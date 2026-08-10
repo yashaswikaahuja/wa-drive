@@ -363,11 +363,13 @@ phases:
       - "HTTPS fallback for every WSS operation ✓ (existing HTTP routes preserved)"
 
     validation_evidence:
-      - "41 WSS protocol tests passing (auth, messaging, resume, errors)"
-      - "726 total CI tests across 14 suites"
-      - "98 D11 invariants passing"
-      - "Heartbeat with configurable interval"
-      - "Message envelope validated on both sides"
+      - "48 WSS protocol tests passing (auth, messaging, resume, errors, dedupe, stale seq, tab/workflow, WSS-only)"
+      - "architecture/wss-protocol.yml — envelope, isolation, Suspended Mode, heartbeat"
+      - "Production rejects plaintext ws (code 4005) unless ALLOW_WS_PLAINTEXT or non-production"
+      - "Duplicate message.id and stale seq cannot re-trigger side effects"
+      - "ci-unit.mjs includes WSS Protocol Tests suite"
+      - "Heartbeat with configurable interval; reconnect manager Suspended Mode"
+    issue: "#128 / CYB-98"
 
 # ── Phase 4: Fill Planner ──────────────────────────────────────────
 

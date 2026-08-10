@@ -40,6 +40,10 @@ let httpServer;
 let wsServerHandle;
 
 async function startServer() {
+  // Allow plain ws:// in tests (production forbids plaintext)
+  process.env.ALLOW_WS_PLAINTEXT = '1';
+  process.env.NODE_ENV = 'test';
+  _clientSeq = 0;
   httpServer = createServer((req, res) => {
     if (req.url === '/health') { res.end('ok'); return; }
     res.writeHead(404); res.end();
@@ -68,6 +72,20 @@ async function stopServer() {
 
 function connectWs(token) {
   return new WebSocket(`ws://localhost:${PORT}/ws?token=${encodeURIComponent(token)}`);
+}
+
+/** Stamp protocol envelope required by Phase 3.4 server. */
+let _clientSeq = 0;
+function envMsg(type, extra = {}) {
+  _clientSeq += 1;
+  return JSON.stringify({
+    v: 1,
+    id: `test.${Date.now().toString(36)}.${_clientSeq}`,
+    type,
+    seq: _clientSeq,
+    ts: Date.now(),
+    ...extra,
+  });
 }
 
 function waitForMessage(ws, type, timeoutMs = 3000) {
@@ -213,7 +231,7 @@ await startServer();
     setTimeout(() => { ws.off('message', handler); resolve(); }, 2000);
   });
 
-  ws.send(JSON.stringify({ id: 'req1', type: 'page_snapshot', snapshot }));
+  ws.send(envMsg('page_snapshot', { id: 'req1', snapshot }));
   await collectPromise;
 
   const ack = messages.find((m) => m.type === 'snapshot_ack');
@@ -232,7 +250,7 @@ await startServer();
   await waitForMessage(ws, 'connected');
 
   const delta = { kind: 'page_delta', result_snapshot_id: 'snap.t.2', revision: 1 };
-  ws.send(JSON.stringify({ id: 'req2', type: 'page_delta', delta }));
+  ws.send(envMsg('page_delta', { id: 'req2', delta }));
 
   const ack = await waitForMessage(ws, 'delta_ack');
   ok(ack.resultSnapshotId === 'snap.t.2', 'delta_ack has result snapshot');
@@ -248,7 +266,7 @@ await startServer();
   await waitForMessage(ws, 'connected');
 
   const observation = { kind: 'execution_observation', observation_id: 'obs.1', outcome: 'completed' };
-  ws.send(JSON.stringify({ id: 'req3', type: 'execution_observation', observation }));
+  ws.send(envMsg('execution_observation', { id: 'req3', observation }));
 
   const ack = await waitForMessage(ws, 'observation_ack');
   ok(ack.observationId === 'obs.1', 'observation_ack has ID');
@@ -263,7 +281,7 @@ await startServer();
   const ws = connectWs(TOKEN);
   await waitForMessage(ws, 'connected');
 
-  ws.send(JSON.stringify({ id: 'req4', type: 'sync_request', requestType: 'bootstrap', payload: {} }));
+  ws.send(envMsg('sync_request', { id: 'req4', requestType: 'bootstrap', payload: {} }));
 
   const resp = await waitForMessage(ws, 'sync_response');
   ok(resp.requestType === 'bootstrap', 'sync_response echoes requestType');
@@ -278,7 +296,7 @@ await startServer();
   const ws = connectWs(TOKEN);
   await waitForMessage(ws, 'connected');
 
-  ws.send(JSON.stringify({ id: 'req5', type: 'ping' }));
+  ws.send(envMsg('ping', { id: 'req5' }));
   const pong = await waitForMessage(ws, 'pong');
   ok(pong.ref === 'req5', 'pong references ping');
   ok(typeof pong.serverTime === 'number', 'pong has serverTime');
@@ -292,7 +310,7 @@ await startServer();
   const ws = connectWs(TOKEN);
   await waitForMessage(ws, 'connected');
 
-  ws.send(JSON.stringify({ id: 'req6', type: 'resume', lastSnapshotId: 'snap.old', lastRevision: 5 }));
+  ws.send(envMsg('resume', { id: 'req6', lastSnapshotId: 'snap.old', lastRevision: 5 }));
   const ack = await waitForMessage(ws, 'resume_ack');
   ok(ack.accepted === true, 'resume accepted');
   ok(ack.lastSnapshotId === 'snap.old', 'resume echoes lastSnapshotId');
@@ -306,7 +324,7 @@ await startServer();
   const ws = connectWs(TOKEN);
   await waitForMessage(ws, 'connected');
 
-  ws.send(JSON.stringify({ type: 'nonexistent_type' }));
+  ws.send(envMsg('nonexistent_type'));
   const err = await waitForMessage(ws, 'error');
   ok(err.code === 'unknown_message_type', 'unknown type returns error');
 
@@ -331,16 +349,114 @@ await startServer();
 {
   const ws1 = connectWs(TOKEN);
   const ws2 = connectWs(TOKEN);
-  await waitForMessage(ws1, 'connected');
-  await waitForMessage(ws2, 'connected');
-  ok(sessions.size === 2, 'two concurrent sessions tracked');
+  const c1 = await waitForMessage(ws1, 'connected');
+  const c2 = await waitForMessage(ws2, 'connected');
+  ok(c1.sessionId !== c2.sessionId, 'concurrent sessions get distinct sessionIds');
+  ok(sessions.size === 2, `two concurrent sessions tracked (got ${sessions.size})`);
   ws1.close();
   ws2.close();
-  await sleep(50);
+  await sleep(80);
   ok(sessions.size === 0, 'both sessions cleaned up');
 }
 
-await stopServer();
+// Test 13: Duplicate message id rejected (no second side effect)
+{
+  const ws = connectWs(TOKEN);
+  await waitForMessage(ws, 'connected');
+  const payload = {
+    v: 1,
+    id: 'dup-id-1',
+    type: 'page_snapshot',
+    seq: 100,
+    snapshot: { kind: 'page_snapshot', snapshot_id: 'snap.dup', revision: 0 },
+  };
+  ws.send(JSON.stringify(payload));
+  const ack1 = await waitForMessage(ws, 'snapshot_ack');
+  ok(ack1.snapshotId === 'snap.dup', 'first snapshot accepted');
+  ws.send(JSON.stringify(payload)); // same id
+  const err = await waitForMessage(ws, 'error');
+  ok(err.code === 'duplicate_message', `duplicate rejected (got ${err.code})`);
+  ws.close();
+  await sleep(50);
+}
+
+// Test 14: Stale / out-of-order seq rejected
+{
+  const ws = connectWs(TOKEN);
+  await waitForMessage(ws, 'connected');
+  ws.send(JSON.stringify({
+    v: 1, id: 'seq-a', type: 'ping', seq: 10, ts: Date.now(),
+  }));
+  await waitForMessage(ws, 'pong');
+  ws.send(JSON.stringify({
+    v: 1, id: 'seq-b', type: 'ping', seq: 9, ts: Date.now(),
+  }));
+  const err = await waitForMessage(ws, 'error');
+  ok(err.code === 'stale_message', `stale seq rejected (got ${err.code})`);
+  ws.close();
+  await sleep(50);
+}
+
+// Test 15: Missing protocol version rejected
+{
+  const ws = connectWs(TOKEN);
+  await waitForMessage(ws, 'connected');
+  ws.send(JSON.stringify({ id: 'nov', type: 'ping' }));
+  const err = await waitForMessage(ws, 'error');
+  ok(err.code === 'missing_version' || err.code === 'protocol_version_unsupported',
+    `missing v rejected (got ${err.code})`);
+  ws.close();
+  await sleep(50);
+}
+
+// Test 16: tabId / workflowId isolation fields accepted on session
+{
+  const ws = connectWs(TOKEN);
+  await waitForMessage(ws, 'connected');
+  ws.send(envMsg('page_snapshot', {
+    id: 'tab-wf-1',
+    tabId: 'tab-42',
+    workflowId: 'wf-9',
+    snapshot: { kind: 'page_snapshot', snapshot_id: 'snap.tab', revision: 0 },
+  }));
+  const ack = await waitForMessage(ws, 'snapshot_ack');
+  ok(ack.tabId === 'tab-42', 'snapshot_ack echoes tabId');
+  ok(ack.workflowId === 'wf-9', 'snapshot_ack echoes workflowId');
+  ws.close();
+  await sleep(50);
+}
+
+// Test 17: Production rejects plaintext WS
+{
+  await stopServer();
+  const prev = process.env.NODE_ENV;
+  const prevAllow = process.env.ALLOW_WS_PLAINTEXT;
+  process.env.NODE_ENV = 'production';
+  delete process.env.ALLOW_WS_PLAINTEXT;
+  // Need fresh server instance — attachWebSocket throws if already attached
+  // stopServer already called shutdown which nulls _wss
+  httpServer = createServer();
+  const handlers = createHandlers({});
+  try {
+    wsServerHandle = attachWebSocket(httpServer, {
+      onConnection: handlers.onConnection,
+      onMessage: handlers.onMessage,
+      onClose: handlers.onClose,
+    });
+  } catch (e) {
+    // if already attached, fail soft
+    ok(false, `reattach for prod test: ${e.message}`);
+  }
+  await new Promise((r) => httpServer.listen(PORT + 1, r));
+  const ws = new WebSocket(`ws://localhost:${PORT + 1}/ws?token=${encodeURIComponent(TOKEN)}`);
+  const closed = await new Promise((r) => ws.on('close', (code) => r(code)));
+  ok(closed === 4005, `plaintext forbidden in production (code ${closed})`);
+  process.env.NODE_ENV = prev;
+  if (prevAllow != null) process.env.ALLOW_WS_PLAINTEXT = prevAllow;
+  else process.env.ALLOW_WS_PLAINTEXT = '1';
+  shutdownWss();
+  await new Promise((r) => httpServer.close(r));
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 console.log(`\n${passed} passed, ${failed} failed`);

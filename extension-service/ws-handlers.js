@@ -102,14 +102,25 @@ handlers.set('page_snapshot', (session, message, ctx) => {
     revision: snapshot.revision,
     serverTime: Date.now(),
     ref: message.id,
+    tabId: message.tabId || session.tabId || null,
+    workflowId: message.workflowId || session.workflowId || null,
   });
 
   // If context has a resolver, attempt to generate an action plan
   if (ctx.resolveMapping) {
     try {
-      const plan = ctx.resolveMapping(session.workspaceId, snapshot);
+      const plan = ctx.resolveMapping(session.workspaceId, snapshot, {
+        tabId: message.tabId || session.tabId,
+        workflowId: message.workflowId || session.workflowId,
+      });
       if (plan) {
-        send(session.sessionId, { type: 'action_plan', plan, ref: message.id });
+        send(session.sessionId, {
+          type: 'action_plan',
+          plan,
+          ref: message.id,
+          tabId: message.tabId || session.tabId || null,
+          workflowId: message.workflowId || session.workflowId || null,
+        });
       }
     } catch (err) {
       console.error(`[ws] resolveMapping error:`, err.message);

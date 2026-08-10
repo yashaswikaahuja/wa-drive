@@ -1,26 +1,35 @@
 /**
  * CyberControl WebSocket Server — extension-service/ws-server.js
- * Phase 3.4 — WSS Protocol
+ * Phase 3.4 — WSS Protocol (#128 / CYB-98)
  *
  * Upgrades the existing Express HTTP server to support WebSocket connections.
- * Handles authentication, session management, heartbeat/keepalive, and
+ * Handles authentication, session management, heartbeat/keepalive, envelope
+ * validation (version, id, seq), duplicate/stale rejection, and
  * delegates message routing to ws-handlers.js.
  *
  * ARCHITECTURE (constitution.yml):
  *   Server = Brain + Memory + Knowledge.
  *   Extension connects here to send observations and receive instructions.
  *   All planning, mapping, and AI remain server-side.
+ *
+ * Protocol: architecture/wss-protocol.yml
  */
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+/** Current application protocol version (envelope.v). */
+export const PROTOCOL_VERSION = 1;
+
 /** Heartbeat interval (ms). Clients must respond within this period. */
 const HEARTBEAT_INTERVAL_MS = 30_000;
 
 /** Maximum time to wait for pong after ping (ms). */
 const PONG_TIMEOUT_MS = 10_000;
+
+/** Bound on remembered message ids per session (dedupe). */
+const MAX_SEEN_IDS = 512;
 
 /**
  * @typedef {object} WsSession
@@ -63,6 +72,17 @@ export function attachWebSocket(httpServer, options = {}) {
   });
 
   _wss.on('connection', (ws, req) => {
+    // Production: refuse plaintext WS (must terminate TLS or arrive via HTTPS proxy).
+    if (!_isSecureUpgrade(req)) {
+      _send(ws, {
+        type: 'error',
+        code: 'plaintext_ws_forbidden',
+        message: 'Runtime path requires WSS (secure WebSocket). Plain ws:// is not accepted in production.',
+      });
+      ws.close(4005, 'plaintext_ws_forbidden');
+      return;
+    }
+
     const session = _authenticate(ws, req);
     if (!session) return; // ws already closed by _authenticate
 
@@ -75,10 +95,13 @@ export function attachWebSocket(httpServer, options = {}) {
 
     // Send welcome
     _send(ws, {
+      v: PROTOCOL_VERSION,
       type: 'connected',
+      id: `srv.${session.sessionId}.connected`,
       sessionId: session.sessionId,
       serverTime: Date.now(),
       heartbeatMs: HEARTBEAT_INTERVAL_MS,
+      protocolVersion: PROTOCOL_VERSION,
     });
 
     if (options.onConnection) options.onConnection(session);
@@ -90,13 +113,26 @@ export function attachWebSocket(httpServer, options = {}) {
       try {
         parsed = JSON.parse(data.toString());
       } catch {
-        _send(ws, { type: 'error', code: 'invalid_json', message: 'Message must be valid JSON' });
+        _send(ws, { v: PROTOCOL_VERSION, type: 'error', code: 'invalid_json', message: 'Message must be valid JSON' });
         return;
       }
-      if (!parsed.type) {
-        _send(ws, { type: 'error', code: 'missing_type', message: 'Message must have a "type" field' });
+
+      const envelopeError = _validateEnvelope(session, parsed);
+      if (envelopeError) {
+        _send(ws, {
+          v: PROTOCOL_VERSION,
+          type: 'error',
+          code: envelopeError.code,
+          message: envelopeError.message,
+          ref: parsed.id || null,
+        });
         return;
       }
+
+      // Track tab / workflow isolation hints (last-write wins on session)
+      if (parsed.tabId != null) session.tabId = String(parsed.tabId);
+      if (parsed.workflowId != null) session.workflowId = String(parsed.workflowId);
+
       if (options.onMessage) options.onMessage(session, parsed);
     });
 
@@ -144,8 +180,81 @@ export function attachWebSocket(httpServer, options = {}) {
 }
 
 /**
+ * Production requires secure WebSocket. Dev/test may use plain ws when allowed.
+ * @param {import('http').IncomingMessage} req
+ */
+function _isSecureUpgrade(req) {
+  const allowPlain =
+    process.env.ALLOW_WS_PLAINTEXT === '1' ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.NODE_ENV !== 'production';
+  if (allowPlain) return true;
+
+  if (req.socket && req.socket.encrypted) return true;
+  const xf = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  if (xf === 'https' || xf.split(',').map((s) => s.trim()).includes('https')) return true;
+  return false;
+}
+
+/**
+ * Validate application envelope: type, id, protocol version, dedupe, sequence.
+ * @returns {{ code: string, message: string }|null}
+ */
+function _validateEnvelope(session, msg) {
+  if (!msg || typeof msg !== 'object') {
+    return { code: 'invalid_json', message: 'Message must be a JSON object' };
+  }
+  if (!msg.type || typeof msg.type !== 'string') {
+    return { code: 'missing_type', message: 'Message must have a "type" field' };
+  }
+  // Welcome handshake client may not re-send v on every frame until connected —
+  // require v on all application messages after connect.
+  if (msg.v == null) {
+    return { code: 'missing_version', message: 'Message must include protocol version field "v"' };
+  }
+  if (Number(msg.v) !== PROTOCOL_VERSION) {
+    return {
+      code: 'protocol_version_unsupported',
+      message: `Unsupported protocol version ${msg.v}; server speaks v=${PROTOCOL_VERSION}`,
+    };
+  }
+  if (!msg.id || typeof msg.id !== 'string') {
+    return { code: 'missing_id', message: 'Message must have a string "id" for correlation/dedupe' };
+  }
+
+  // Dedupe by message id
+  if (!session.seenMessageIds) session.seenMessageIds = new Set();
+  if (session.seenMessageIds.has(msg.id)) {
+    return { code: 'duplicate_message', message: `Duplicate message id: ${msg.id}` };
+  }
+  session.seenMessageIds.add(msg.id);
+  if (session.seenMessageIds.size > MAX_SEEN_IDS) {
+    // Drop oldest-ish: Set iteration order is insertion order
+    const first = session.seenMessageIds.values().next().value;
+    session.seenMessageIds.delete(first);
+  }
+
+  // Optional monotonic seq from client
+  if (msg.seq != null) {
+    const seq = Number(msg.seq);
+    if (!Number.isFinite(seq) || seq < 0) {
+      return { code: 'stale_message', message: 'Invalid seq' };
+    }
+    if (session.lastClientSeq != null && seq <= session.lastClientSeq) {
+      return {
+        code: 'stale_message',
+        message: `Out-of-order or stale seq ${seq} (last accepted ${session.lastClientSeq})`,
+      };
+    }
+    session.lastClientSeq = seq;
+  }
+
+  return null;
+}
+
+/**
  * Authenticate incoming WebSocket upgrade request.
- * Expects: ws://host/ws?token=<jwt>
+ * Expects: wss://host/ws?token=<jwt> (or ws:// in non-production)
  * @returns {WsSession|null}
  */
 function _authenticate(ws, req) {
@@ -175,7 +284,8 @@ function _authenticate(ws, req) {
     return null;
   }
 
-  const sessionId = `wss.${decoded.workspaceId.slice(0, 8)}.${Date.now().toString(36)}`;
+  // Include random suffix so two concurrent connects in the same ms never collide
+  const sessionId = `wss.${decoded.workspaceId.slice(0, 8)}.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
 
   return {
     sessionId,
@@ -186,6 +296,10 @@ function _authenticate(ws, req) {
     connectedAt: Date.now(),
     lastActivity: Date.now(),
     state: 'active',
+    tabId: null,
+    workflowId: null,
+    lastClientSeq: null,
+    seenMessageIds: new Set(),
     _alive: true,
   };
 }
@@ -271,12 +385,14 @@ export function shutdown() {
 }
 
 /**
- * Internal: send JSON message over a WebSocket.
+ * Internal: send JSON message over a WebSocket (always stamps protocol version).
  */
 function _send(ws, obj) {
   if (ws.readyState === 1) {
-    ws.send(JSON.stringify(obj));
+    const payload = { v: PROTOCOL_VERSION, ...obj };
+    if (!payload.id) payload.id = `srv.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;
+    ws.send(JSON.stringify(payload));
   }
 }
 
-export { sessions, HEARTBEAT_INTERVAL_MS, PONG_TIMEOUT_MS };
+export { sessions, HEARTBEAT_INTERVAL_MS, PONG_TIMEOUT_MS, _validateEnvelope, _isSecureUpgrade };

@@ -1,0 +1,97 @@
+# CyberControl Phase 3.4 — WSS Runtime Protocol
+# Normative contract for live Extension ↔ Extension-Service communication.
+# Issue: #128 / CYB-98
+#
+# Transport: WebSocket Secure only in production (wss://).
+# Plain ws:// is allowed only when NODE_ENV is not production OR ALLOW_WS_PLAINTEXT=1.
+
+version: 1
+status: active
+phase: "3.4"
+
+transport:
+  path: "/ws"
+  production: "wss only (TLS or X-Forwarded-Proto: https)"
+  auth: "JWT in query ?token= — must include workspaceId"
+  max_payload_bytes: 2097152
+
+envelope:
+  # Every application message MUST include these fields when sent by either side.
+  required:
+    - v          # integer protocol version (currently 1)
+    - type       # string message type
+    - id         # unique message id (sender-generated) for correlation / dedupe
+  optional:
+    - ref        # id of request being answered
+    - seq        # monotonic sender sequence (uint) for ordering
+    - tabId      # browser tab isolation
+    - workflowId # multi-page workflow isolation
+    - ts         # sender unix ms
+
+  version_rules:
+    - "Server rejects unknown major versions with error code protocol_version_unsupported"
+    - "Current version: 1"
+
+session:
+  scope: "one WSS connection = one sessionId"
+  isolation:
+    - "workspaceId from JWT"
+    - "optional tabId / workflowId on messages for multi-tab safety"
+  fields:
+    sessionId: "server-assigned"
+    workspaceId: "from JWT"
+    userId: "from JWT"
+    lastClientSeq: "highest accepted client seq"
+    seenMessageIds: "bounded set of recent message ids for dedupe"
+
+message_types_extension_to_service:
+  - page_snapshot
+  - page_delta
+  - execution_observation
+  - sync_request
+  - teach_observation
+  - ping
+  - resume
+
+message_types_service_to_extension:
+  - connected
+  - snapshot_ack
+  - delta_ack
+  - observation_ack
+  - action_plan
+  - sync_response
+  - teach_ack
+  - teach_prompt
+  - pong
+  - resume_ack
+  - server_shutdown
+  - error
+
+safety:
+  duplicate_id:
+    rule: "Same message.id within a session is acked as duplicate and MUST NOT re-trigger side effects"
+  sequence:
+    rule: "If seq is present and seq <= lastClientSeq, treat as stale/out-of-order (error stale_message)"
+  suspended_mode:
+    rule: >
+      When extension is not CONNECTED, it MUST NOT send runtime messages and MUST NOT
+      plan, map, call AI, or invent recovery. MAY reconnect and buffer observations.
+  heartbeat:
+    interval_ms: 30000
+    pong_timeout_ms: 10000
+  resume:
+    rule: "Client sends resume with lastSnapshotId + lastRevision after reconnect"
+
+errors:
+  codes:
+    - invalid_json
+    - missing_type
+    - missing_id
+    - protocol_version_unsupported
+    - duplicate_message
+    - stale_message
+    - unknown_message_type
+    - invalid_snapshot
+    - invalid_delta
+    - invalid_observation
+    - plaintext_ws_forbidden
