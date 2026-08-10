@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Graph Invariants — Phase 3.3 / issue #131
  *
@@ -204,3 +207,4 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcGraphInvariants = { validateGraphInvariants };
 }
+})();

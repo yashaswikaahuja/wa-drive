@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Edge Factory — Phase 3.3 Relationships & Structural Semantics (#131)
  *
@@ -557,3 +560,4 @@ if (typeof module !== 'undefined' && module.exports) {
     stableEdgeId,
   };
 }
+})();

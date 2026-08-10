@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Delta Emitter — extension/perception/delta-emitter.js
  * Phase 3.3 — Perception Completion
@@ -538,3 +541,4 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcDeltaEmitter = DeltaEmitter;
 }
+})();

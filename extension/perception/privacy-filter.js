@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Privacy Filter — enforces perception-privacy.yml.
  *
@@ -108,3 +111,4 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcPrivacyFilter = { classifyNode, applyPrivacyRules };
 }
+})();

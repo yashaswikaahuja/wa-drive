@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Page IR Validator — pre-publication schema validation.
  *
@@ -190,3 +193,4 @@ if (typeof module !== 'undefined' && module.exports) {
     isInitialized,
   };
 }
+})();

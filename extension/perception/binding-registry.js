@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Binding Registry — browser-private binding table.
  * Maps (context_id, node_id) → live DOM element with binding_generation tracking.
@@ -157,3 +160,4 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcBindingRegistry = BindingRegistry;
 }
+})();

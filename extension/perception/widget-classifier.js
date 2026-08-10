@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Widget Classifier v2 — Phase 3.2
  *
@@ -326,3 +329,4 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcWidgetClassifier = { classifyWidget, widgetAffordances, DETECTOR_PRIORITY };
 }
+})();

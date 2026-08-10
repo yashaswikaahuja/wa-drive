@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl DOM Observation Gateway — extension/runtime/dom-gateway.js
  *
@@ -580,3 +583,4 @@ if (typeof module !== 'undefined' && module.exports) {
     registerFileReference,
   };
 }
+})();

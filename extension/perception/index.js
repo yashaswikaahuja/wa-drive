@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Perception Entry Point — perceivePage() public API.
  *
@@ -379,3 +382,4 @@ if (typeof module !== 'undefined' && module.exports) {
     getAuthorshipGeneration,
   };
 }
+})();

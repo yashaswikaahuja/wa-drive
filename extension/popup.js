@@ -537,27 +537,41 @@ fillBtn.addEventListener('click', async () => {
 
     // PRODUCT PATH (APE-P1-07): perceive → server plan → ActionPlanExecutor → EO
     // Must NOT call autofill/executor.js, mapper, or selector resolvers.
+    // Scripts are IIFE-wrapped so re-inject is safe; skip when already present
+    // to avoid needless work on repeated Fill in the same tab.
     updateProgress('Perceiving page structure...', 30);
-    await chrome.scripting.executeScript({
+    const PRODUCT_PATH_SCRIPTS = [
+      'runtime/dom-gateway.js',
+      'perception/binding-registry.js',
+      'perception/revision-manager.js',
+      'perception/canonical-hash.js',
+      'perception/privacy-filter.js',
+      'perception/widget-classifier.js',
+      'perception/adapters/index.js',
+      'perception/node-factory.js',
+      'perception/edge-factory.js',
+      'perception/graph-invariants.js',
+      'perception/context-discovery.js',
+      'perception/snapshot-builder.js',
+      'perception/validator.js',
+      'perception/index.js',
+      'runtime/action-plan-executor.js',
+    ];
+    const [loadedCheck] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: [
-        'runtime/dom-gateway.js',
-        'perception/binding-registry.js',
-        'perception/revision-manager.js',
-        'perception/canonical-hash.js',
-        'perception/privacy-filter.js',
-        'perception/widget-classifier.js',
-        'perception/adapters/index.js',
-        'perception/node-factory.js',
-        'perception/edge-factory.js',
-        'perception/graph-invariants.js',
-        'perception/context-discovery.js',
-        'perception/snapshot-builder.js',
-        'perception/validator.js',
-        'perception/index.js',
-        'runtime/action-plan-executor.js',
-      ],
+      func: () => !!(
+        globalThis.CcDomGateway
+        && globalThis.CcBindingRegistry
+        && globalThis.CcPerception
+        && globalThis.CcActionPlanExecutor
+      ),
     });
+    if (!loadedCheck?.result) {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: PRODUCT_PATH_SCRIPTS,
+      });
+    }
 
     const [percResult] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },

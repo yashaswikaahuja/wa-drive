@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl Context Discovery — enumerates browsing contexts.
  *
@@ -101,3 +104,4 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcContextDiscovery = { discoverContexts, generateContextId };
 }
+})();

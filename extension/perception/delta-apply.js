@@ -1,3 +1,6 @@
+/* __CC_IIFE_WRAPPED__ — re-injectable isolated-world script */
+(function () {
+'use strict';
 /**
  * CyberControl PageDelta application — Phase 3.3 remediation (#133 / IMP-P1-02)
  *
@@ -217,3 +220,4 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcDeltaApply = { applyPageDelta, validateComposedGraph, cloneJson };
 }
+})();
