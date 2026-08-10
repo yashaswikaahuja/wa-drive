@@ -47,6 +47,7 @@ const PERCEPTION_SCRIPTS = [
   'perception/widget-classifier.js',
   'perception/node-factory.js',
   'perception/edge-factory.js',
+  'perception/graph-invariants.js',
   'perception/context-discovery.js',
   'perception/snapshot-builder.js',
   'perception/validator.js',

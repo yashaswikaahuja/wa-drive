@@ -19,6 +19,8 @@ const suites = [
   { name: 'Widget Classifier', cmd: 'node extension-dev/tests/perception/test-widget-classifier.mjs' },
   { name: 'Page IR Validator', cmd: 'node extension-dev/tests/perception/test-validator.mjs' },
   { name: 'Delta Emitter', cmd: 'node extension-dev/tests/perception/test-delta-emitter.mjs' },
+  { name: 'Graph Invariants', cmd: 'node extension-dev/tests/perception/test-graph-invariants.mjs' },
+  { name: 'Edge Factory Relationships', cmd: 'node extension-dev/tests/perception/test-edge-factory.mjs' },
 ];
 
 let allPass = true;

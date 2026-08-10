@@ -65,6 +65,8 @@ async function buildSnapshot(options) {
   const nodesMap = {};
   const diagnostics = [];
   const parentStack = []; // maps raw fact index → node_id
+  /** Private observation aids for relationship derivation — never published on nodes. */
+  const factMeta = {};
 
   for (let i = 0; i < rawFacts.length; i++) {
     const fact = rawFacts[i];
@@ -78,6 +80,20 @@ async function buildSnapshot(options) {
     nodesMap[node.node_id] = node;
     parentStack[i] = node.node_id;
 
+    factMeta[node.node_id] = {
+      id: fact.id || null,
+      domId: fact.id || null,
+      tag: fact.tag || null,
+      type: fact.type || null,
+      labelledByIds: fact.labelledByIds || [],
+      describedByIds: fact.describedByIds || [],
+      controlsIds: fact.controlsIds || [],
+      ownsIds: fact.ownsIds || [],
+      errorMessageIds: fact.errorMessageIds || [],
+      hasPopup: fact.hasPopup || null,
+      htmlFor: fact.htmlFor || null,
+    };
+
     // Register binding (the live element ref stays in-gateway; we simulate with fact index)
     // In real browser context, we'd pass the actual live element from gateway internals
     bindingRegistry.bind(topContext.context_id, node.node_id, { _factIndex: i }, node.widget?.adapter_id || null, revision);
@@ -88,8 +104,8 @@ async function buildSnapshot(options) {
     topContext.root_node_id = parentStack[0];
   }
 
-  // 5. Derive edges
-  const edges = edgeFactory.deriveEdges(nodesMap, contexts);
+  // 5. Derive edges (relationships & structural semantics)
+  const edges = edgeFactory.deriveEdges(nodesMap, contexts, { factMeta });
 
   // 6. Assemble page metadata
   const page = {
@@ -136,7 +152,7 @@ async function buildSnapshot(options) {
     producer: {
       name: 'cybercontrol-browser-perception',
       version: '1.0.0',
-      detectors: { 'dom-gateway': '1.0.0', 'widget-classifier': '1.0.0', 'edge-factory': '1.0.0' },
+      detectors: { 'dom-gateway': '1.0.0', 'widget-classifier': '1.0.0', 'edge-factory': '2.0.0' },
     },
     snapshot_id: snapshotId,
     document_id: documentId,
@@ -155,12 +171,29 @@ async function buildSnapshot(options) {
   // 9. Compute canonical hash
   snapshot.canonical_hash = await canonicalHash.computeCanonicalHash(snapshot);
 
-  // 10. Validate
+  // 10. Schema validate
   const validation = validator.validateSnapshot(snapshot);
   if (!validation.valid) {
     const err = new Error(`PageSnapshot validation failed: ${(validation.errors || []).slice(0, 5).join('; ')}`);
     err.validationErrors = validation.errors;
     throw err;
+  }
+
+  // 11. Graph invariants (#131 / #130 P1)
+  if (typeof validator.validateGraphInvariants === 'function') {
+    const gi = validator.validateGraphInvariants(snapshot);
+    if (!gi.valid) {
+      const err = new Error(`PageSnapshot graph invariants failed: ${(gi.errors || []).slice(0, 5).join('; ')}`);
+      err.validationErrors = gi.errors;
+      throw err;
+    }
+  } else if (options.graphInvariants?.validateGraphInvariants) {
+    const gi = options.graphInvariants.validateGraphInvariants(snapshot);
+    if (!gi.valid) {
+      const err = new Error(`PageSnapshot graph invariants failed: ${(gi.errors || []).slice(0, 5).join('; ')}`);
+      err.validationErrors = gi.errors;
+      throw err;
+    }
   }
 
   return snapshot;

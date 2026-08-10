@@ -161,6 +161,18 @@ edge_types:
   navigation: [activates, transitions_to]
   visual: [overlays, visually_groups_with]
   rule: "Every non-observed relationship includes evidence and confidence."
+  authority:
+    parent_id: >
+      Node.parent_id is authoritative for single-parent UI containment.
+      A contains edge MUST mirror parent_id (source=parent, target=child).
+      Divergence is an invalid graph.
+    non_tree: "Non-containment relationships exist only as edges, never as parent_id."
+    depends_on: >
+      Browser perception MUST NOT emit business-semantic depends_on edges
+      (e.g. State→District). Mechanical co-change evidence is service-interpreted.
+    transitions_to: >
+      transitions_to targets MUST resolve to a node in the same snapshot.
+      Off-snapshot destinations are forbidden (no dangling endpoints).
 
 page_state:
   signals:

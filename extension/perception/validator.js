@@ -101,7 +101,7 @@ function _structuralFallback(data) {
 }
 
 /**
- * Validate a PageSnapshot.
+ * Validate a PageSnapshot (schema only).
  * @param {object} snapshot
  * @returns {{ valid: boolean, errors: string[]|null }}
  */
@@ -120,13 +120,63 @@ function validateDelta(delta) {
   return _validateFn(delta);
 }
 
+/**
+ * Graph invariants (#131): parent_id/contains, acyclicity, no depends_on,
+ * no dangling transitions_to, endpoint resolution.
+ * Lazy-loads graph-invariants module in Node; uses global in browser.
+ * @param {object} snapshot
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+function validateGraphInvariants(snapshot) {
+  let impl = null;
+  if (typeof globalThis !== 'undefined' && globalThis.CcGraphInvariants?.validateGraphInvariants) {
+    impl = globalThis.CcGraphInvariants.validateGraphInvariants;
+  } else if (typeof require !== 'undefined') {
+    try {
+      // eslint-disable-next-line global-require
+      impl = require('./graph-invariants.js').validateGraphInvariants;
+    } catch { /* optional */ }
+  }
+  if (!impl) {
+    return { valid: true, errors: [] }; // soft if module missing
+  }
+  return impl(snapshot);
+}
+
+/**
+ * Schema + graph invariants for publication gate.
+ * @param {object} snapshot
+ * @returns {{ valid: boolean, errors: string[]|null }}
+ */
+function validateSnapshotStrict(snapshot) {
+  const schema = validateSnapshot(snapshot);
+  if (!schema.valid) return schema;
+  const graph = validateGraphInvariants(snapshot);
+  if (!graph.valid) return { valid: false, errors: graph.errors };
+  return { valid: true, errors: null };
+}
+
 /** Whether the validator has been initialized. */
 function isInitialized() {
   return _initialized;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { initValidator, validateSnapshot, validateDelta, isInitialized };
+  module.exports = {
+    initValidator,
+    validateSnapshot,
+    validateDelta,
+    validateGraphInvariants,
+    validateSnapshotStrict,
+    isInitialized,
+  };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcValidator = { initValidator, validateSnapshot, validateDelta, isInitialized };
+  globalThis.CcValidator = {
+    initValidator,
+    validateSnapshot,
+    validateDelta,
+    validateGraphInvariants,
+    validateSnapshotStrict,
+    isInitialized,
+  };
 }

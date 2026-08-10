@@ -89,6 +89,14 @@ function extractElementFacts(element, includeGeometry) {
   const type = element.getAttribute('type') || null;
   const autocomplete = element.getAttribute('autocomplete') || null;
 
+  const labelledBy = element.getAttribute('aria-labelledby') || null;
+  const describedBy = element.getAttribute('aria-describedby') || null;
+  const ariaControls = element.getAttribute('aria-controls') || null;
+  const ariaOwns = element.getAttribute('aria-owns') || null;
+  const errorMessage = element.getAttribute('aria-errormessage') || null;
+  const hasPopup = element.getAttribute('aria-haspopup') || null;
+  const htmlFor = tag === 'label' ? (element.getAttribute('for') || null) : null;
+
   const fact = {
     tag,
     role,
@@ -99,10 +107,18 @@ function extractElementFacts(element, includeGeometry) {
     name: element.getAttribute('name') || null,
     placeholder: element.getAttribute('placeholder') || null,
     // Class list — used by classifier for library-specific detection (Select2, Choices, ng-select, etc.)
-    className: element.className || '',
+    className: normalizeClassName(element.className),
     // Extra attributes used by classifier
     maxlength: element.getAttribute('maxlength') || null,
     matdatepicker: element.hasAttribute('matDatepicker') ? '' : null,
+    // Private observation aids for edge-factory (never copied into public IR nodes)
+    labelledByIds: splitDomIds(labelledBy),
+    describedByIds: splitDomIds(describedBy),
+    controlsIds: splitDomIds(ariaControls),
+    ownsIds: splitDomIds(ariaOwns),
+    errorMessageIds: splitDomIds(errorMessage),
+    hasPopup: hasPopup || null,
+    htmlFor,
     // Mechanical state (never raw values)
     state: readMechanicalState(element),
     // Bounded text content (never the full innerHTML)
@@ -346,6 +362,29 @@ function performAction(element, action) {
 // ═══════════════════════════════════════════════════════════════════════
 // HELPERS (private)
 // ═══════════════════════════════════════════════════════════════════════
+
+/** Normalize SVGAnimatedString / DOMTokenList / string className to a plain string. */
+function normalizeClassName(className) {
+  if (!className) return '';
+  if (typeof className === 'string') return className;
+  if (typeof className.baseVal === 'string') return className.baseVal;
+  try { return String(className); } catch { return ''; }
+}
+
+/** Split space-separated DOM id references into a bounded unique list. */
+function splitDomIds(value) {
+  if (!value || typeof value !== 'string') return [];
+  const out = [];
+  const seen = Object.create(null);
+  for (const part of value.split(/\s+/)) {
+    const id = part.trim();
+    if (!id || seen[id]) continue;
+    seen[id] = true;
+    out.push(id);
+    if (out.length >= 16) break;
+  }
+  return out;
+}
 
 function isElementVisible(element) {
   // File and date inputs are considered visible even when they have zero visual dimensions

@@ -292,11 +292,12 @@ phases:
     name: "Perception Completion"
     status: complete
     frozen_date: "2026-08-08"
-    issues: []
+    issues: ["#131"]
     depends_on: ["phase_3_0", "phase_3_2"]
     description: >
-      Complete PageSnapshot v2 pipeline. Phase 3.1 implemented the core engine;
-      remaining work is delta-emitter, integration testing, and performance validation.
+      Complete PageSnapshot v2 pipeline (delta-emitter, integration, performance)
+      plus Relationships & Structural Semantics (#131): evidence-backed edges,
+      parent_id/contains authority, graph invariants, no business depends_on.
     discovery_reference: "Discussion 11 — Phase 3.3"
 
     frozen_files:
@@ -309,17 +310,33 @@ phases:
       - path: "extension/perception/delta-emitter.js"
         purpose: "Emit PageDelta on relevant DOM mutations"
         status: complete
+      - path: "extension/perception/edge-factory.js"
+        purpose: "Relationship derivation (contains, labels, controls, overlays, …)"
+        status: complete
+      - path: "extension/perception/graph-invariants.js"
+        purpose: "Machine-checkable graph invariants (#130 P1 / #131)"
+        status: complete
 
     done_criteria:
       - "PageDelta emitted on relevant DOM mutations ✓"
       - "Integration tests with real portal fixtures produce valid PageSnapshot v2 ✓"
       - "Performance budget confirmed: < 200ms for snapshot generation ✓"
+      - "parent_id ↔ contains consistency enforced ✓"
+      - "No business depends_on in perception ✓"
+      - "No dangling transitions_to ✓"
+      - "Graph invariant unit suite green ✓"
 
     validation_evidence:
       - "31 delta-emitter unit tests passing"
       - "112 browser integration tests passing"
       - "Performance benchmark: real fixtures p95 ≤ 72ms, synthetic 2000-node p95 = 122ms"
+      - "12 graph-invariant + 29 edge-factory relationship tests"
       - "685 total CI tests, 108 governance, 92 D11 invariants all green"
+
+    note: >
+      Implementation completion for relationships (#131) is separate from a formal
+      architecture freeze gate. Do not mark a new relationship freeze without a
+      dedicated adversarial review of the implementation.
 
   phase_3_4:
     name: "WSS Protocol"
