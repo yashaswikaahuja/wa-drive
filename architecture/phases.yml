@@ -289,22 +289,48 @@ phases:
       - "Changing confidence calculation"
 
   phase_3_3:
-    name: "Perception Completion"
-    status: complete
-    frozen_date: "2026-08-08"
-    issues: ["#131"]
+    name: "Perception Completion + Relationships & Structural Semantics"
+    status: frozen
+    frozen_date: "2026-08-10"
+    issues: ["#131", "#132", "#133", "#134"]
     depends_on: ["phase_3_0", "phase_3_2"]
     description: >
       Complete PageSnapshot v2 pipeline (delta-emitter, integration, performance)
-      plus Relationships & Structural Semantics (#131): evidence-backed edges,
-      parent_id/contains authority, graph invariants, no business depends_on.
+      plus Relationships & Structural Semantics: evidence-backed edges,
+      parent_id/contains authority, graph invariants, fail-closed publish,
+      composed PageDelta validation, no business depends_on.
     discovery_reference: "Discussion 11 — Phase 3.3"
+    ratification: >
+      Final adversarial freeze gate #134 PASSED (APPROVE WITH CONDITIONS for
+      progressive-only P2 items). #130 architecture, #131 implementation,
+      #132 review, #133 P1 remediation all complete.
 
     frozen_files:
       - path: "extension/perception/delta-emitter.js"
         reason: "Delta emission pipeline — Phase 3.4 depends on this"
       - path: "extension/perception/index.js"
         reason: "Perception public API — all consumers depend on this contract"
+      - path: "extension/perception/edge-factory.js"
+        reason: "Canonical relationship derivation — planners depend on edge semantics"
+      - path: "extension/perception/graph-invariants.js"
+        reason: "Machine-checkable graph publish gate"
+      - path: "extension/perception/delta-apply.js"
+        reason: "Composed PageDelta graph validation (IMP-P1-02)"
+      - path: "architecture/page-ir.yml"
+        reason: "Edge authority / relationship contract prose (shared with 3.0; amendments ratified)"
+
+    allowed_changes:
+      - "Bug fixes with regression tests"
+      - "Non-breaking progressive detectors that do not change edge authority rules"
+      - "Performance improvements that preserve edge semantics and determinism"
+      - "Additional browser fixtures / CI coverage"
+
+    forbidden_changes:
+      - "Weakening fail-closed graph invariant publish gate"
+      - "Reintroducing business-semantic depends_on in browser perception"
+      - "Emitting dangling transitions_to or activates→parent over-claims"
+      - "Breaking parent_id ↔ contains authority"
+      - "Publishing unvalidated composed PageDelta graphs"
 
     modules_to_build:
       - path: "extension/perception/delta-emitter.js"
@@ -316,6 +342,9 @@ phases:
       - path: "extension/perception/graph-invariants.js"
         purpose: "Machine-checkable graph invariants (#130 P1 / #131)"
         status: complete
+      - path: "extension/perception/delta-apply.js"
+        purpose: "Apply PageDelta and validate composed graph (#133)"
+        status: complete
 
     done_criteria:
       - "PageDelta emitted on relevant DOM mutations ✓"
@@ -325,19 +354,26 @@ phases:
       - "No business depends_on in perception ✓"
       - "No dangling transitions_to ✓"
       - "Graph invariant unit suite green ✓"
+      - "Fail-closed when graph-invariants unavailable ✓ (#133/#134)"
+      - "Composed PageDelta graphs re-validated ✓ (#133/#134)"
+      - "activates only for observed activation targets ✓ (#133/#134)"
+      - "Browser relationship lifecycle verified ✓ (#133/#134)"
 
     validation_evidence:
       - "31 delta-emitter unit tests passing"
-      - "112 browser integration tests passing"
+      - "13 browser relationship lifecycle tests (#133)"
       - "Performance benchmark: real fixtures p95 ≤ 72ms, synthetic 2000-node p95 = 122ms"
-      - "12 graph-invariant + 31 edge-factory relationship tests"
-      - "#133 P1 remediation: fail-closed invariants, composed delta validation, activates fix, browser lifecycle"
-      - "685 total CI tests, 108 governance, 92 D11 invariants all green"
+      - "12 graph-invariant + 31 edge-factory + 9 delta-apply + 8 fail-closed tests"
+      - "230 perception unit tests; 108 governance; 131 D11; 103 security; 26 conformance"
+      - "#134 final adversarial ratification: APPROVE WITH CONDITIONS (P2 progressive only)"
+
+    accepted_non_blocking:
+      - "repeats is progressive candidate structural-clone (P1-05 documented) — not template IR"
+      - "P2: O(forms×controls) optimization, virtualization fixtures, accessible cross-frame policy, geometry labels"
 
     note: >
-      Relationships implemented (#131) and #132 P1s remediated (#133). Formal
-      architecture freeze still requires a separate final adversarial ratification
-      review — do not freeze solely from green tests.
+      Frozen 2026-08-10 by #134. Progressive detector additions remain allowed under
+      allowed_changes; authority and fail-closed rules are freeze-protected.
 
   phase_3_4:
     name: "WSS Protocol"
