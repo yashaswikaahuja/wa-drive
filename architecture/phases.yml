@@ -551,20 +551,21 @@ phases:
 
   phase_3_5:
     name: "Navigation Understanding"
-    status: architecture_draft
+    status: implemented_unfrozen
     draft_date: "2026-08-10"
-    issues: ["#145", "#147"]
+    implemented_date: "2026-08-11"
+    issues: ["#145", "#147", "#148", "#150"]
     depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4"]
     conceptual_roadmap_slot: "3.7"
     description: >
-      Architecture contract for mechanical navigation affordances, transition
-      identity (full vs same-document vs frame), privacy-safe location metadata,
-      and ActionPlan v3 activate + allow_navigation compatibility. Browser
-      exposes observed activatable nodes and executes mechanically; service owns
-      navigation goals and business meaning. Contract v0.2.0 remediates
-      NAV-ARCH-P1-01..08 from #146/#147. No runtime implementation and no freeze
-      from #145/#147.
-    discovery_reference: "Issue #145 — phase_3_5 architecture; #147 P1 remediation"
+      Architecture contract v0.2.0 for mechanical navigation affordances,
+      transition identity, privacy-safe page.path, origin policy, settle budgets,
+      and deterministic EO diagnostics. Runtime implemented under #150
+      (navigation-contract.js + ActionPlanExecutor + snapshot path sanitization).
+      Browser exposes observed activatable nodes; service owns goals.
+      Status is implemented_unfrozen — independent implementation review required
+      before freeze. Do not treat as frozen from #150.
+    discovery_reference: "Issue #145 architecture; #147 P1 rem; #148 re-review; #150 runtime"
     architecture_artifacts:
       - path: "architecture/navigation-understanding.yml"
         purpose: "Normative navigation understanding contract (draft)"
@@ -586,10 +587,16 @@ phases:
       - "status: frozen without independent architecture review"
       - "Renaming phase_3_4 or other existing keys"
       - "Business workflow semantics in browser perception"
+    modules_implemented:
+      - path: "extension/runtime/navigation-contract.js"
+        purpose: "Classifier, origin policy, path sanitize, outcome map, settle observer"
+      - path: "extension/runtime/action-plan-executor.js"
+        purpose: "Activate path uses navigation contract (authz + observe)"
+      - path: "extension/perception/snapshot-builder.js"
+        purpose: "page.path sanitization via navigation contract"
     next_gate: >
-      Independent adversarial architecture review of #145 artifacts. Implementation
-      issue only after APPROVE / APPROVE WITH CONDITIONS. Freeze only via explicit
-      freeze gate issue after implementation ratification policy is met.
+      Independent adversarial implementation review of #150 runtime. Freeze only
+      via explicit freeze gate after that review. Residual P2 from #148 progressive.
 
 # ── Phase 4+: registry note (do not treat as ratified freezes) ─────
 # Historical status:complete on phase_4_*/5_*/7_* predates clearance of

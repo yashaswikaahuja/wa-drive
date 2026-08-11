@@ -36,6 +36,7 @@ const executablePath = CHROME_PATHS.find((p) => existsSync(p)) || undefined;
 /** Product path scripts only — no autofill/mapper/resolver/runner. */
 const PRODUCT_SCRIPTS = [
   'runtime/dom-gateway.js',
+  'runtime/navigation-contract.js',
   'perception/binding-registry.js',
   'perception/revision-manager.js',
   'perception/canonical-hash.js',
@@ -770,6 +771,83 @@ try {
     });
     ok(result.failure === 'authorization_denied', 'nav denied when allow_navigation false', JSON.stringify(result));
     ok(result.clicked !== true, 'nav link not activated');
+  });
+
+  // ── 12b. Destination origin policy denied ─────────────────────────
+  await withPage(browser, 'perception-native.html', async (page) => {
+    const result = await page.evaluate(async () => {
+      okNav = !!globalThis.CcNavigationContract?.classifyNavigationImplication;
+      const a = document.createElement('a');
+      a.href = 'https://evil.example/cross';
+      a.id = 'xo-link';
+      a.textContent = 'XO';
+      document.body.appendChild(a);
+      const snapshot = await globalThis.CcPerception.perceivePage({ mode: 'snapshot' });
+      let target = null;
+      const reg = globalThis.CcPerception.getBindingRegistry();
+      for (const e of reg.entries()) {
+        if (e.liveNodeReference?.id === 'xo-link') {
+          const n = snapshot.nodes[e.nodeId];
+          if (n) { target = { id: e.nodeId, node: n, el: e.liveNodeReference }; break; }
+        }
+      }
+      if (!target) return { error: 'no xo link', okNav };
+      let clicked = false;
+      target.el.addEventListener('click', (ev) => { ev.preventDefault(); clicked = true; }, true);
+      const plan = {
+        kind: 'action_plan', schema_version: '3.0.0',
+        plan_id: 'plan:e2e-origin', correlation_id: 'corr:e2e-origin',
+        supersedes_plan_id: null,
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 120000).toISOString(),
+        target_binding: {
+          document_id: snapshot.document_id,
+          snapshot_id: snapshot.snapshot_id,
+          expected_revision: snapshot.revision,
+        },
+        steps: [{
+          step_id: 'step:xo',
+          target: { context_id: target.node.context_id, node_id: target.id },
+          action: { op: 'activate' },
+          risk: 'safe',
+          required_affordance: null,
+          required_adapter_id: null,
+          postcondition: { type: 'none', expected_value_state: null, expected_boolean: null, expected_signal: null },
+          on_failure: 'stop_and_report',
+        }],
+        authorization: { max_risk: 'safe', operator_confirmed: false, allow_navigation: true, allow_submit: false },
+      };
+      const obs = await globalThis.CcActionPlanExecutor.execute(plan);
+      return {
+        okNav,
+        failure: obs.rejection_reason || obs.steps?.find(s => s.status === 'failed')?.failure_code,
+        diag: (obs.diagnostics || []).map(d => d.code),
+        clicked,
+      };
+    });
+    ok(result.okNav === true, 'navigation-contract loaded in browser');
+    ok(result.failure === 'authorization_denied', 'cross-origin destination denied', JSON.stringify(result));
+    ok(result.clicked !== true, 'cross-origin link not clicked');
+  });
+
+  // ── 12c. page.path sanitization ───────────────────────────────────
+  await withPage(browser, 'perception-native.html', async (page) => {
+    const result = await page.evaluate(async () => {
+      // Simulate sensitive location via history (pathname only visible to sanitize)
+      const s = globalThis.CcNavigationContract.sanitizePagePath(
+        'https://user:pass@portal.example/apply/a1b2c3d4e5f6789012345678abcdef01/edit?session=secret#x'
+      );
+      const snapshot = await globalThis.CcPerception.perceivePage({ mode: 'snapshot' });
+      return {
+        path: s.path,
+        redacted: s.redacted,
+        pagePath: snapshot.page?.path,
+        hasQuery: (s.path || '').includes('?') || (s.path || '').includes('session'),
+      };
+    });
+    ok(result.hasQuery === false, 'sanitized path has no query secrets');
+    ok(result.path && result.path.startsWith('/'), 'sanitized path is pathname-like');
+    ok(result.pagePath == null || !String(result.pagePath).includes('?'), 'snapshot page.path has no query');
   });
 
   // ── 13. Replay protection ─────────────────────────────────────────

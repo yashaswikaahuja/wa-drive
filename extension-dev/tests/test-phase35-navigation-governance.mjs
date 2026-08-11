@@ -249,9 +249,10 @@ ok(denyFix.expected_primary_failure_code === 'authorization_denied', 'allow_navi
 console.log('\n=== Registry alignment ===');
 const phases = read('architecture/phases.yml');
 ok(
-  /phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*architecture_draft/.test(phases),
-  'phase_3_5 status is architecture_draft (not frozen)'
+  /phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
+  'phase_3_5 status is architecture_draft or implemented_unfrozen (not frozen)'
 );
+ok(!/phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*frozen\s*$/m.test(phases), 'phase_3_5 is not frozen');
 ok(phases.includes('phase_3_4') && phases.includes('WSS'), 'phase_3_4 WSS retained');
 const ownership = read('architecture/ownership.yml');
 ok(ownership.includes('navigation_understanding') || ownership.includes('phase_3_5'), 'ownership maps navigation understanding');

@@ -542,6 +542,7 @@ fillBtn.addEventListener('click', async () => {
     updateProgress('Perceiving page structure...', 30);
     const PRODUCT_PATH_SCRIPTS = [
       'runtime/dom-gateway.js',
+      'runtime/navigation-contract.js',
       'perception/binding-registry.js',
       'perception/revision-manager.js',
       'perception/canonical-hash.js',

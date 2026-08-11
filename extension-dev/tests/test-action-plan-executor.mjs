@@ -10,6 +10,8 @@ import { readFileSync } from 'node:fs';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const require = createRequire(import.meta.url);
+const nav = require(resolve(ROOT, 'extension/runtime/navigation-contract.js'));
+globalThis.CcNavigationContract = nav;
 const executor = require(resolve(ROOT, 'extension/runtime/action-plan-executor.js'));
 const popup = readFileSync(resolve(ROOT, 'extension/popup.js'), 'utf8');
 const gateway = readFileSync(resolve(ROOT, 'extension/runtime/dom-gateway.js'), 'utf8');
@@ -56,6 +58,7 @@ ok(popup.includes('fill-observation') || popup.includes('/fill-observation'), 'p
 ok(!popup.includes("'autofill/executor.js'"), 'popup does not inject autofill/executor.js');
 ok(!popup.includes("'autofill/mapper.js'"), 'popup does not inject mapper.js');
 ok(popup.includes('runtime/action-plan-executor.js'), 'popup injects action-plan-executor');
+ok(popup.includes('runtime/navigation-contract.js'), 'popup injects navigation-contract (phase 3.5)');
 
 // Gateway ops
 ok(gateway.includes("case 'select_option'"), 'gateway has select_option');

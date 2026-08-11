@@ -69,14 +69,19 @@ function elementImpliesSubmit(el) {
 
 /**
  * Mechanical classification: would activation navigate away?
- * APE-IMPL-P1-02 / gateway-security navigation_and_file_policy.
+ * Phase 3.5: delegates to architecture-owned CcNavigationContract classifier.
  */
 function elementImpliesNavigation(el) {
+  const nav = globalThis.CcNavigationContract;
+  if (nav?.classifyNavigationImplication) {
+    return !!nav.classifyNavigationImplication(el).implies;
+  }
+  if (nav?.elementImpliesNavigation) return !!nav.elementImpliesNavigation(el);
+  // Minimal fallback if contract module not loaded (tests / legacy inject)
   if (!el || typeof el.tagName !== 'string') return false;
   const tag = el.tagName.toUpperCase();
   if (tag === 'A' && el.hasAttribute('href')) {
     const href = String(el.getAttribute('href') || '').trim();
-    // Pure fragment / no-op / javascript: void are not navigation for authz purposes
     if (!href || href === '#' || href.startsWith('#')) return false;
     if (/^javascript:/i.test(href)) return false;
     return true;
@@ -86,11 +91,20 @@ function elementImpliesNavigation(el) {
 }
 
 /**
- * Hard-enforce allow_submit / allow_navigation against the resolved element.
- * Returns failure code or null when authorized.
+ * Hard-enforce allow_submit / allow_navigation / origin policy against the resolved element.
+ * Returns { code, message, diagnostic? } or null when authorized.
  */
 function checkStepAuthorization(plan, step, element) {
   if (step.action?.op !== 'activate') return null;
+  const nav = globalThis.CcNavigationContract;
+  if (nav?.checkNavigationAuthorization) {
+    const r = nav.checkNavigationAuthorization(plan, step, element, {
+      elementImpliesSubmit,
+      currentOrigin: typeof location !== 'undefined' ? location.origin : null,
+      originAllowlist: nav.getOriginAllowlist?.() || [],
+    });
+    if (r) return r;
+  }
   const auth = plan.authorization || {};
   if (auth.allow_submit === false && elementImpliesSubmit(element)) {
     return {
@@ -101,10 +115,35 @@ function checkStepAuthorization(plan, step, element) {
   if (auth.allow_navigation === false && elementImpliesNavigation(element)) {
     return {
       code: 'authorization_denied',
+      diagnostic: 'navigation_allow_navigation_false',
       message: 'Navigation action denied: allow_navigation is false',
     };
   }
   return null;
+}
+
+function readNavigationIdentity() {
+  const perc = globalThis.CcPerception?.getPerceptionState?.() || {};
+  let path = null;
+  if (typeof location !== 'undefined') {
+    const nav = globalThis.CcNavigationContract;
+    if (nav?.sanitizePagePath) {
+      path = nav.sanitizePagePath(location.pathname || location.href).path;
+    } else {
+      path = location.pathname || null;
+    }
+  }
+  const blockingOverlay = !!(
+    typeof document !== 'undefined'
+    && document.querySelector?.('[aria-modal="true"], .modal.show, [data-cc-blocking-overlay]')
+  );
+  return {
+    documentId: perc.documentId || null,
+    revision: perc.revision ?? -1,
+    path,
+    origin: typeof location !== 'undefined' ? location.origin : null,
+    blockingOverlay,
+  };
 }
 
 function validatePlan(plan, state) {
@@ -269,13 +308,18 @@ async function execute(plan) {
       failureCode = optionTarget.error;
     }
 
-    // APE-IMPL-P1-02: hard authorization against resolved element
+    // Hard authorization against resolved element (submit / nav / origin)
+    let authDiagnostic = null;
     if (!failureCode && target?.element) {
       const authz = checkStepAuthorization(plan, step, target.element);
-      if (authz) failureCode = authz.code;
+      if (authz) {
+        failureCode = authz.code;
+        authDiagnostic = authz.diagnostic || null;
+      }
     }
 
     let postcondition = { met: false, valueState: null };
+    let navMapped = null;
     if (!failureCode) {
       if (!globalThis.CcDomGateway?.performAction || !globalThis.CcDomGateway?.readAriaState) {
         failureCode = 'gateway_error';
@@ -321,19 +365,61 @@ async function execute(plan) {
         }
 
         if (!failureCode) {
-          // Re-check authz on the TOCTOU-final element (submit/nav may differ).
           const authz2 = checkStepAuthorization(plan, step, target.element);
           if (authz2) {
             failureCode = authz2.code;
+            authDiagnostic = authz2.diagnostic || null;
+          }
+        }
+
+        // Mid-plan document check before mutate
+        if (!failureCode) {
+          const live = globalThis.CcPerception.getPerceptionState?.() || {};
+          if (live.documentId && live.documentId !== plan.target_binding.document_id) {
+            failureCode = 'document_replaced';
+            authDiagnostic = 'navigation_document_replaced';
           }
         }
 
         if (!failureCode) {
+          const nav = globalThis.CcNavigationContract;
+          const classification = nav?.classifyNavigationImplication?.(target.element)
+            || { implies: elementImpliesNavigation(target.element), isBlankTarget: false };
+          const beforeIdentity = readNavigationIdentity();
+
           const result = globalThis.CcDomGateway.performAction(target.element, step.action, {
             optionElement: optionTarget?.element || null,
           });
           if (!result.success) {
             failureCode = normalizeFailureCode(result.error);
+          } else if (step.action.op === 'activate' && (classification.implies || classification.isBlankTarget) && nav?.observeNavigationAfterActivate) {
+            const observed = await nav.observeNavigationAfterActivate({
+              beforeDocumentId: beforeIdentity.documentId,
+              beforeRevision: beforeIdentity.revision,
+              beforePath: beforeIdentity.path,
+              impliesNavigation: !!classification.implies,
+              isBlankTarget: !!classification.isBlankTarget,
+              readIdentity: readNavigationIdentity,
+            });
+            if (observed.mapped) {
+              navMapped = observed.mapped;
+              if (observed.mapped.primary_failure_code) {
+                failureCode = observed.mapped.primary_failure_code;
+                authDiagnostic = observed.mapped.primary_diagnostic;
+              } else {
+                // Success navigation outcomes satisfy mechanical postcondition
+                postcondition = { met: true, valueState: 'not_applicable' };
+                if (observed.outcome === 'new_document_completed') {
+                  // Stop plan after new document; further steps would be stale
+                  stopped = true;
+                }
+              }
+            } else {
+              const settleMs = 120;
+              await new Promise(resolve => setTimeout(resolve, settleMs));
+              postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
+              if (!postcondition.met) failureCode = 'postcondition_failed';
+            }
           } else {
             const settleMs = step.action.op === 'select_option' ? 500 : (step.action.op === 'toggle' ? 160 : 120);
             await new Promise(resolve => setTimeout(resolve, settleMs));
@@ -348,10 +434,14 @@ async function execute(plan) {
     if (failureCode) {
       const code = normalizeFailureCode(failureCode);
       steps.push({ step_id: step.step_id, status: 'failed', failure_code: code, postcondition_met: false, observed_value_state: postcondition.valueState, duration_ms: duration });
-      diagnostics.push(diagnostic(code, 'error', step.step_id, `Mechanical execution failed: ${code}`));
+      const diagCode = authDiagnostic || code;
+      diagnostics.push(diagnostic(diagCode, 'error', step.step_id, `Mechanical execution failed: ${diagCode}`));
       stopped = true;
     } else {
       steps.push({ step_id: step.step_id, status: 'succeeded', failure_code: null, postcondition_met: true, observed_value_state: postcondition.valueState, duration_ms: duration });
+      if (navMapped?.primary_diagnostic) {
+        diagnostics.push(diagnostic(navMapped.primary_diagnostic, 'info', step.step_id, `Navigation outcome: ${navMapped.primary_diagnostic}`));
+      }
     }
   }
 

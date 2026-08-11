@@ -208,13 +208,16 @@ ok(phases.includes('issues: ["#99"]') || phases.includes('#99'), 'Phase 3.1 reco
 ok(/phase_3_2:[\s\S]*?status: complete/.test(phases), 'Phase 3.2 Widget Classification is complete');
 ok(/phase_3_3:[\s\S]*?status: frozen/.test(phases), 'Phase 3.3 Relationships/deltas is frozen');
 ok(/phase_3_4:[\s\S]*?name: "WSS Protocol"/.test(phases), 'Phase 3.4 remains WSS Protocol (not widgets)');
-// #145: phase_3_5 is registered as architecture_draft only (not frozen / not complete)
+// #145–#150: phase_3_5 may be architecture_draft or implemented_unfrozen — never frozen without freeze gate
 ok(
-  /phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*architecture_draft/.test(phases),
-  'phase_3_5 Navigation Understanding registered as architecture_draft'
+  /phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
+  'phase_3_5 Navigation Understanding registered as architecture_draft or implemented_unfrozen'
 );
 ok(!/phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*frozen/.test(phases), 'phase_3_5 is not frozen');
-ok(phases.includes('Independent adversarial architecture review') || phases.includes('architecture_draft only'), 'phase_3_5 requires independent review before freeze');
+ok(
+  phases.includes('Independent adversarial') || phases.includes('implementation review') || phases.includes('architecture_draft'),
+  'phase_3_5 requires independent review before freeze'
+);
 ok(phases.includes('ActionPlanExecutor') && phases.includes('NOT a phase_3_'), 'APE excluded from phase_3_* milestones');
 ok(
   ownership.includes('migration_phase: "phase_3_1"') || ownership.includes("migration_phase: 'phase_3_1'"),

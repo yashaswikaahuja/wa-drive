@@ -148,11 +148,33 @@ async function buildSnapshot(options) {
   // 5. Derive edges (relationships & structural semantics)
   const edges = edgeFactory.deriveEdges(nodesMap, contexts, { factMeta });
 
-  // 6. Assemble page metadata
+  // 6. Assemble page metadata — path is privacy-sanitized pathname (phase 3.5)
+  let pagePath = typeof location !== 'undefined' ? location.pathname : null;
+  let routeKey = null;
+  let navContract = (typeof globalThis !== 'undefined' && globalThis.CcNavigationContract) || null;
+  if (!navContract && typeof require !== 'undefined') {
+    try { navContract = require('../runtime/navigation-contract.js'); } catch { /* browser inject */ }
+  }
+  if (navContract?.sanitizePagePath) {
+    const raw = typeof location !== 'undefined' ? (location.pathname || location.href) : pagePath;
+    const sanitized = navContract.sanitizePagePath(raw);
+    pagePath = sanitized.path;
+    if (sanitized.diagnostic) {
+      diagnostics.push({
+        code: sanitized.diagnostic,
+        severity: 'info',
+        node_id: null,
+        message: 'page.path sanitized per navigation-understanding page_path_privacy',
+      });
+    }
+    if (navContract.routeKeyFromPath) {
+      routeKey = navContract.routeKeyFromPath(pagePath);
+    }
+  }
   const page = {
     origin: typeof location !== 'undefined' ? location.origin : null,
-    path: typeof location !== 'undefined' ? location.pathname : null,
-    route_key: null,
+    path: pagePath,
+    route_key: routeKey,
     title: typeof document !== 'undefined' ? (document.title || '').slice(0, 160) : null,
     language: typeof document !== 'undefined' ? (document.documentElement?.lang || null) : null,
     viewport: typeof window !== 'undefined' ? {
