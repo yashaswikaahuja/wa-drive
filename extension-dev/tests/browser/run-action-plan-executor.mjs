@@ -850,6 +850,105 @@ try {
     ok(result.pagePath == null || !String(result.pagePath).includes('?'), 'snapshot page.path has no query');
   });
 
+  // ── 12d. Classifier: hash / download / blank in browser ───────────
+  await withPage(browser, 'perception-native.html', async (page) => {
+    const result = await page.evaluate(() => {
+      const nav = globalThis.CcNavigationContract;
+      const hash = document.createElement('a');
+      hash.href = '#section';
+      const dl = document.createElement('a');
+      dl.href = '/file.pdf';
+      dl.setAttribute('download', '');
+      const blank = document.createElement('a');
+      blank.href = 'https://example.com/x';
+      blank.target = '_blank';
+      const sub = document.createElement('button');
+      sub.type = 'submit';
+      return {
+        hash: nav.classifyNavigationImplication(hash),
+        dl: nav.classifyNavigationImplication(dl),
+        blank: nav.classifyNavigationImplication(blank),
+        sub: nav.classifyNavigationImplication(sub),
+      };
+    });
+    ok(result.hash.implies === false, 'browser: hash link not navigation-class');
+    ok(result.dl.implies === false, 'browser: download link not navigation-class');
+    ok(result.blank.isBlankTarget === true && result.blank.implies === true, 'browser: _blank detected');
+    ok(result.sub.implies === false, 'browser: submit button not navigation-class');
+  });
+
+  // ── 12e. Settle timeout with short budgets ────────────────────────
+  await withPage(browser, 'perception-native.html', async (page) => {
+    const result = await page.evaluate(async () => {
+      globalThis.__ccNavBudgets = { settleMs: 250, quietMs: 40, maxHops: 5 };
+      const r = await globalThis.CcNavigationContract.observeNavigationAfterActivate({
+        beforeDocumentId: 'doc:1',
+        beforeRevision: 1,
+        beforePath: '/same',
+        beforeOrigin: location.origin,
+        impliesNavigation: true,
+        isBlankTarget: false,
+        readIdentity: () => ({
+          documentId: 'doc:1',
+          revision: 1,
+          path: '/same',
+          origin: location.origin,
+          browseKey: location.origin + '/same',
+          blockingOverlay: false,
+        }),
+      });
+      delete globalThis.__ccNavBudgets;
+      return r;
+    });
+    ok(result.outcome === 'failed_timeout', 'browser: settle timeout', JSON.stringify(result));
+  });
+
+  // ── 12f. Same-document path settle (mock identity) ────────────────
+  await withPage(browser, 'perception-native.html', async (page) => {
+    const result = await page.evaluate(async () => {
+      globalThis.__ccNavBudgets = { settleMs: 500, quietMs: 40, maxHops: 5 };
+      const t0 = Date.now();
+      const origin = location.origin;
+      const r = await globalThis.CcNavigationContract.observeNavigationAfterActivate({
+        beforeDocumentId: 'doc:1',
+        beforeRevision: 1,
+        beforePath: '/a',
+        beforeOrigin: origin,
+        impliesNavigation: true,
+        isBlankTarget: false,
+        readIdentity: () => {
+          const p = Date.now() - t0 > 40 ? '/b' : '/a';
+          return {
+            documentId: 'doc:1',
+            revision: 1,
+            path: p,
+            origin,
+            browseKey: origin + p,
+          };
+        },
+      });
+      delete globalThis.__ccNavBudgets;
+      return r;
+    });
+    ok(result.outcome === 'same_document_completed', 'browser: same-document path settle', JSON.stringify(result));
+  });
+
+  // ── 12g. _blank observe ───────────────────────────────────────────
+  await withPage(browser, 'perception-native.html', async (page) => {
+    const result = await page.evaluate(async () => {
+      const r = await globalThis.CcNavigationContract.observeNavigationAfterActivate({
+        beforeDocumentId: 'doc:1',
+        beforeRevision: 0,
+        beforePath: '/',
+        impliesNavigation: true,
+        isBlankTarget: true,
+        readIdentity: () => ({ documentId: 'doc:1', revision: 0, path: '/', origin: location.origin }),
+      });
+      return r;
+    });
+    ok(result.mapped?.primary_diagnostic === 'navigation_new_context', 'browser: _blank diagnostic');
+  });
+
   // ── 13. Replay protection ─────────────────────────────────────────
   await withPage(browser, 'perception-native.html', async (page) => {
     const result = await page.evaluate(async () => {

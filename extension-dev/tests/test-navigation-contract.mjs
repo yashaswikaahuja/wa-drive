@@ -118,5 +118,215 @@ ok(nav.SETTLE_DEADLINE_MS === 8000, 'settle 8000');
 ok(nav.QUIET_WINDOW_MS === 300, 'quiet 300');
 ok(nav.MAX_REDIRECT_HOPS === 10, 'hops 10');
 
+console.log('\n=== Settle observer (mock identity) ===');
+globalThis.__ccNavBudgets = { settleMs: 400, quietMs: 50, maxHops: 3 };
+
+// Timeout: no identity change
+{
+  let n = 0;
+  const r = await nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    readIdentity: () => ({
+      documentId: 'doc:1',
+      revision: 1,
+      path: '/a',
+      origin: 'https://good.example',
+      browseKey: 'https://good.example/a',
+      blockingOverlay: false,
+    }),
+    doc: null,
+    win: null,
+  });
+  ok(r.outcome === 'failed_timeout', 'no change → failed_timeout');
+  ok(r.mapped.primary_failure_code === 'gateway_error', 'timeout primary gateway_error');
+}
+
+// Same-document path change
+{
+  let t0 = Date.now();
+  const r = await nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    readIdentity: () => {
+      const elapsed = Date.now() - t0;
+      return {
+        documentId: 'doc:1',
+        revision: 1,
+        path: elapsed > 30 ? '/b' : '/a',
+        origin: 'https://good.example',
+        browseKey: elapsed > 30 ? 'https://good.example/b' : 'https://good.example/a',
+      };
+    },
+    doc: null,
+    win: null,
+  });
+  ok(r.outcome === 'same_document_completed', 'path change → same_document_completed');
+  ok(r.mapped.primary_failure_code === null, 'same-doc success');
+}
+
+// New document via documentId swap
+{
+  let t0 = Date.now();
+  const r = await nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:old',
+    beforeRevision: 2,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    readIdentity: () => {
+      const elapsed = Date.now() - t0;
+      return {
+        documentId: elapsed > 30 ? 'doc:new' : 'doc:old',
+        revision: elapsed > 30 ? 0 : 2,
+        path: elapsed > 30 ? '/z' : '/a',
+        origin: 'https://good.example',
+        browseKey: elapsed > 30 ? 'https://good.example/z' : 'https://good.example/a',
+      };
+    },
+    doc: null,
+    win: null,
+  });
+  ok(r.outcome === 'new_document_completed', 'documentId change → new_document_completed');
+}
+
+// Hop overflow
+{
+  globalThis.__ccNavBudgets = { settleMs: 800, quietMs: 200, maxHops: 2 };
+  let i = 0;
+  const r = await nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 0,
+    beforePath: '/0',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    readIdentity: () => {
+      i += 1;
+      const p = `/${i}`;
+      return {
+        documentId: 'doc:1',
+        revision: 0,
+        path: p,
+        origin: 'https://good.example',
+        browseKey: `https://good.example${p}`,
+      };
+    },
+    doc: null,
+    win: null,
+  });
+  ok(r.outcome === 'failed_error', 'hop overflow → failed_error');
+  globalThis.__ccNavBudgets = { settleMs: 400, quietMs: 50, maxHops: 3 };
+}
+
+// _blank
+{
+  const r = await nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    impliesNavigation: true,
+    isBlankTarget: true,
+    readIdentity: () => ({ documentId: 'doc:1', revision: 1, path: '/a', origin: 'https://good.example' }),
+  });
+  ok(r.mapped.primary_diagnostic === 'navigation_new_context', '_blank → navigation_new_context');
+}
+
+// Post-settle origin recheck (NAV-IMPL-P1-03)
+{
+  let t0 = Date.now();
+  const r = await nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    originAllowlist: [],
+    readIdentity: () => {
+      const elapsed = Date.now() - t0;
+      return {
+        documentId: 'doc:1',
+        revision: 1,
+        path: elapsed > 30 ? '/b' : '/a',
+        origin: elapsed > 30 ? 'https://evil.example' : 'https://good.example',
+        browseKey: elapsed > 30 ? 'https://evil.example/b' : 'https://good.example/a',
+      };
+    },
+    doc: null,
+    win: null,
+  });
+  ok(
+    r.outcome === 'blocked_origin_policy' || r.mapped?.primary_diagnostic === 'navigation_origin_denied',
+    'post-settle XO origin denied'
+  );
+}
+
+// recheck helper direct
+{
+  const deny = nav.recheckOriginAfterSettle('https://a.example', 'https://b.example', []);
+  ok(deny && deny.outcome === 'blocked_origin_policy', 'recheckOriginAfterSettle denies XO');
+  ok(nav.recheckOriginAfterSettle('https://a.example', 'https://a.example', []) === null, 'recheck same origin ok');
+}
+
+// Cancel via Escape simulation
+{
+  const listeners = {};
+  const fakeDoc = {
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+    removeEventListener: () => {},
+  };
+  const p = nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    readIdentity: () => ({
+      documentId: 'doc:1', revision: 1, path: '/a', origin: 'https://good.example',
+      browseKey: 'https://good.example/a',
+    }),
+    doc: fakeDoc,
+    win: null,
+  });
+  // fire escape after start
+  setTimeout(() => {
+    if (listeners.keydown) listeners.keydown({ key: 'Escape', isTrusted: true });
+  }, 20);
+  const r = await p;
+  ok(r.outcome === 'canceled', 'Escape → canceled');
+}
+
+// Blocking overlay at timeout
+{
+  const r = await nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    readIdentity: () => ({
+      documentId: 'doc:1', revision: 1, path: '/a', origin: 'https://good.example',
+      browseKey: 'https://good.example/a', blockingOverlay: true,
+    }),
+    doc: null,
+    win: null,
+  });
+  ok(r.outcome === 'blocked_overlay', 'overlay at deadline → blocked_overlay');
+}
+
+delete globalThis.__ccNavBudgets;
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

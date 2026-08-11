@@ -12,6 +12,16 @@ const QUIET_WINDOW_MS = 300;
 const MAX_REDIRECT_HOPS = 10;
 const PATH_MAX_LEN = 512;
 
+/** Optional test overrides: globalThis.__ccNavBudgets = { settleMs, quietMs, maxHops } */
+function budgets() {
+  const o = (typeof globalThis !== 'undefined' && globalThis.__ccNavBudgets) || {};
+  return {
+    settleMs: Number(o.settleMs) > 0 ? Number(o.settleMs) : SETTLE_DEADLINE_MS,
+    quietMs: Number(o.quietMs) >= 0 ? Number(o.quietMs) : QUIET_WINDOW_MS,
+    maxHops: Number(o.maxHops) > 0 ? Number(o.maxHops) : MAX_REDIRECT_HOPS,
+  };
+}
+
 /** @type {Readonly<Record<string, {primary_failure_code: string|null, primary_diagnostic: string}>>} */
 const OUTCOME_MAP = Object.freeze({
   same_document_completed: { primary_failure_code: null, primary_diagnostic: 'navigation_same_document_completed' },
@@ -242,15 +252,45 @@ function sleep(ms) {
 }
 
 /**
+ * Live browse identity for settle observation (NAV-IMPL-P1-01).
+ * Prefer live location over perception documentId so SPA path changes are visible
+ * without re-perceive. Full top-level unload is signalled via pagehide/beforeunload.
+ */
+function browseKeyFromIdentity(identity) {
+  if (!identity) return null;
+  const o = identity.origin || '';
+  const p = identity.path || '';
+  return `${o}${p}`;
+}
+
+/**
+ * Post-settle origin policy recheck (NAV-IMPL-P1-03).
+ * @returns {{ outcome: string, mapped: object }|null} deny result or null if ok
+ */
+function recheckOriginAfterSettle(beforeOrigin, afterOrigin, allowlist) {
+  if (!afterOrigin) return null;
+  if (!beforeOrigin) return null;
+  if (afterOrigin === beforeOrigin) return null;
+  const allow = isDestinationOriginAllowed(beforeOrigin, afterOrigin, allowlist);
+  if (allow.allowed) return null;
+  return {
+    outcome: 'blocked_origin_policy',
+    mapped: mapNavigationOutcome('blocked_origin_policy'),
+  };
+}
+
+/**
  * Observe navigation identity-effect after activate (bounded).
  * @param {object} opts
  * @param {string|null} opts.beforeDocumentId
  * @param {number} opts.beforeRevision
  * @param {string|null} opts.beforePath
+ * @param {string|null} [opts.beforeOrigin]
  * @param {boolean} opts.impliesNavigation
  * @param {boolean} opts.isBlankTarget
- * @param {() => {documentId: string|null, revision: number, path: string|null, origin: string|null, blockingOverlay?: boolean}} opts.readIdentity
+ * @param {() => {documentId: string|null, revision: number, path: string|null, origin: string|null, browseKey?: string|null, blockingOverlay?: boolean}} opts.readIdentity
  * @param {object} [opts.doc] document for gesture listeners
+ * @param {string[]} [opts.originAllowlist]
  * @returns {Promise<{outcome: string, mapped: object, hops: number}>}
  */
 async function observeNavigationAfterActivate(opts) {
@@ -258,11 +298,16 @@ async function observeNavigationAfterActivate(opts) {
     beforeDocumentId,
     beforeRevision,
     beforePath,
+    beforeOrigin = null,
     impliesNavigation,
     isBlankTarget,
     readIdentity,
     doc = typeof document !== 'undefined' ? document : null,
+    win = typeof window !== 'undefined' ? window : null,
+    originAllowlist = getOriginAllowlist(),
   } = opts;
+
+  const b = budgets();
 
   if (isBlankTarget) {
     // New browsing context; origin document identity unchanged
@@ -282,22 +327,79 @@ async function observeNavigationAfterActivate(opts) {
 
   let interrupted = false;
   let canceled = false;
-  const onGesture = () => { interrupted = true; };
-  const onPageHide = () => { /* may be navigation */ };
+  let unloading = false;
+  const start = Date.now();
+  // Escape → canceled (NAV-IMPL-P1-02); other trusted keys after grace → interrupt
+  const onKey = (ev) => {
+    if (ev && (ev.key === 'Escape' || ev.keyCode === 27)) {
+      canceled = true;
+      return;
+    }
+    if (ev && ev.isTrusted === false) return;
+    if (ev && (ev.key === 'Tab' || ev.metaKey || ev.ctrlKey || ev.altKey)) return;
+    if (Date.now() - start < 100) return;
+    interrupted = true;
+  };
+  const onPointer = (ev) => {
+    if (ev && ev.isTrusted === false) return;
+    if (Date.now() - start < 100) return;
+    interrupted = true;
+  };
+  // NAV-IMPL-P1-01: full document unload → new_document_completed (fail-closed)
+  const onPageHide = (ev) => {
+    if (ev && ev.persisted) return;
+    unloading = true;
+  };
+  const onBeforeUnload = () => {
+    unloading = true;
+  };
+
   if (doc?.addEventListener) {
-    doc.addEventListener('pointerdown', onGesture, true);
-    doc.addEventListener('keydown', onGesture, true);
+    doc.addEventListener('keydown', onKey, true);
+    doc.addEventListener('pointerdown', onPointer, true);
+  }
+  if (win?.addEventListener) {
+    win.addEventListener('pagehide', onPageHide, true);
+    win.addEventListener('beforeunload', onBeforeUnload, true);
   }
 
-  const start = Date.now();
   let lastChangeAt = start;
   let hops = 0;
   let lastPath = beforePath;
   let lastDoc = beforeDocumentId;
+  let lastBrowseKey = null;
+  try {
+    const initial = readIdentity();
+    lastBrowseKey = initial.browseKey || browseKeyFromIdentity(initial);
+  } catch { /* ignore */ }
+  const beforeBrowseKey = lastBrowseKey;
   let sawChange = false;
 
+  const finishSuccess = (outcome, identity, hopCount) => {
+    const originDeny = recheckOriginAfterSettle(
+      beforeOrigin || null,
+      identity?.origin || null,
+      originAllowlist
+    );
+    if (originDeny) {
+      return { ...originDeny, hops: hopCount };
+    }
+    return {
+      outcome,
+      mapped: mapNavigationOutcome(outcome),
+      hops: hopCount,
+    };
+  };
+
   try {
-    while (Date.now() - start < SETTLE_DEADLINE_MS) {
+    while (Date.now() - start < b.settleMs) {
+      if (canceled) {
+        return {
+          outcome: 'canceled',
+          mapped: mapNavigationOutcome('canceled'),
+          hops,
+        };
+      }
       if (interrupted) {
         return {
           outcome: 'interrupted_by_user_gesture',
@@ -305,52 +407,66 @@ async function observeNavigationAfterActivate(opts) {
           hops,
         };
       }
+      // Top-level navigation tearing down the isolated world: report new document
+      // before the context is destroyed (NAV-IMPL-P1-01 fail-closed).
+      if (unloading) {
+        return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
+      }
 
       let identity;
       try {
         identity = readIdentity();
+        if (!identity.browseKey) {
+          identity.browseKey = browseKeyFromIdentity(identity);
+        }
       } catch (e) {
-        return {
-          outcome: 'failed_error',
-          mapped: mapNavigationOutcome('failed_error'),
-          hops,
-        };
+        // Context torn down mid-read → treat as document navigation (fail-closed)
+        return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
       }
 
-      if (identity.documentId !== lastDoc) {
+      // Compare to last* for hop counting; to before* for success classification
+      const pathStep = identity.path !== lastPath;
+      const browseStep = identity.browseKey != null && identity.browseKey !== lastBrowseKey;
+      const docStep = identity.documentId != null && lastDoc != null && identity.documentId !== lastDoc;
+
+      if (docStep || pathStep || browseStep) {
         hops += 1;
-        if (hops > MAX_REDIRECT_HOPS) {
+        if (hops > b.maxHops) {
           return { outcome: 'failed_error', mapped: mapNavigationOutcome('failed_error'), hops };
         }
         lastDoc = identity.documentId;
         lastPath = identity.path;
+        lastBrowseKey = identity.browseKey;
         lastChangeAt = Date.now();
         sawChange = true;
-      } else if (identity.path !== lastPath || identity.revision !== beforeRevision) {
-        if (identity.path !== lastPath) hops += 1;
-        if (hops > MAX_REDIRECT_HOPS) {
-          return { outcome: 'failed_error', mapped: mapNavigationOutcome('failed_error'), hops };
-        }
-        lastPath = identity.path;
+      } else if (
+        identity.revision != null && beforeRevision != null
+        && identity.revision >= 0 && beforeRevision >= 0
+        && identity.revision !== beforeRevision
+        && !sawChange
+      ) {
+        // revision-only bump without path hop
         lastChangeAt = Date.now();
         sawChange = true;
       }
 
       // Quiet window after change
-      if (sawChange && Date.now() - lastChangeAt >= QUIET_WINDOW_MS) {
-        if (identity.documentId !== beforeDocumentId) {
-          return {
-            outcome: 'new_document_completed',
-            mapped: mapNavigationOutcome('new_document_completed'),
-            hops,
-          };
+      if (sawChange && Date.now() - lastChangeAt >= b.quietMs) {
+        const docFromBefore = identity.documentId != null && beforeDocumentId != null
+          && identity.documentId !== beforeDocumentId;
+        const originFromBefore = beforeOrigin && identity.origin && identity.origin !== beforeOrigin;
+        const pathFromBefore = identity.path !== beforePath;
+        const browseFromBefore = identity.browseKey && beforeBrowseKey
+          && identity.browseKey !== beforeBrowseKey;
+        const revFromBefore = identity.revision != null && beforeRevision != null
+          && identity.revision >= 0 && beforeRevision >= 0
+          && identity.revision !== beforeRevision;
+
+        if (docFromBefore || originFromBefore) {
+          return finishSuccess('new_document_completed', identity, hops);
         }
-        if (identity.path !== beforePath || identity.revision !== beforeRevision) {
-          return {
-            outcome: 'same_document_completed',
-            mapped: mapNavigationOutcome('same_document_completed'),
-            hops,
-          };
+        if (pathFromBefore || browseFromBefore || revFromBefore) {
+          return finishSuccess('same_document_completed', identity, hops);
         }
       }
 
@@ -358,24 +474,36 @@ async function observeNavigationAfterActivate(opts) {
     }
 
     // Deadline exceeded
+    if (unloading) {
+      return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
+    }
     const finalId = (() => {
-      try { return readIdentity(); } catch { return null; }
+      try {
+        const id = readIdentity();
+        if (!id.browseKey) id.browseKey = browseKeyFromIdentity(id);
+        return id;
+      } catch {
+        return null;
+      }
     })();
-    if (finalId && finalId.documentId !== beforeDocumentId) {
-      return {
-        outcome: 'new_document_completed',
-        mapped: mapNavigationOutcome('new_document_completed'),
-        hops,
-      };
+    if (!finalId) {
+      // Context gone
+      return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
     }
-    if (finalId && (finalId.path !== beforePath || finalId.revision !== beforeRevision)) {
-      return {
-        outcome: 'same_document_completed',
-        mapped: mapNavigationOutcome('same_document_completed'),
-        hops,
-      };
+    if (finalId.documentId != null && beforeDocumentId != null && finalId.documentId !== beforeDocumentId) {
+      return finishSuccess('new_document_completed', finalId, hops);
     }
-    if (finalId?.blockingOverlay) {
+    if (beforeOrigin && finalId.origin && finalId.origin !== beforeOrigin) {
+      return finishSuccess('new_document_completed', finalId, hops);
+    }
+    if (
+      finalId.path !== beforePath
+      || (finalId.browseKey && beforeBrowseKey && finalId.browseKey !== beforeBrowseKey)
+      || (finalId.revision !== beforeRevision && finalId.revision >= 0 && beforeRevision >= 0)
+    ) {
+      return finishSuccess('same_document_completed', finalId, hops);
+    }
+    if (finalId.blockingOverlay) {
       return {
         outcome: 'blocked_overlay',
         mapped: mapNavigationOutcome('blocked_overlay'),
@@ -396,8 +524,12 @@ async function observeNavigationAfterActivate(opts) {
     };
   } finally {
     if (doc?.removeEventListener) {
-      doc.removeEventListener('pointerdown', onGesture, true);
-      doc.removeEventListener('keydown', onGesture, true);
+      doc.removeEventListener('keydown', onKey, true);
+      doc.removeEventListener('pointerdown', onPointer, true);
+    }
+    if (win?.removeEventListener) {
+      win.removeEventListener('pagehide', onPageHide, true);
+      win.removeEventListener('beforeunload', onBeforeUnload, true);
     }
   }
 }
@@ -456,6 +588,9 @@ const api = {
   MAX_REDIRECT_HOPS,
   PATH_MAX_LEN,
   OUTCOME_MAP,
+  budgets,
+  browseKeyFromIdentity,
+  recheckOriginAfterSettle,
   classifyNavigationImplication,
   elementImpliesNavigation,
   isNavigableHref,

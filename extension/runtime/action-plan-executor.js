@@ -124,9 +124,10 @@ function checkStepAuthorization(plan, step, element) {
 
 function readNavigationIdentity() {
   const perc = globalThis.CcPerception?.getPerceptionState?.() || {};
+  const nav = globalThis.CcNavigationContract;
   let path = null;
+  let origin = typeof location !== 'undefined' ? location.origin : null;
   if (typeof location !== 'undefined') {
-    const nav = globalThis.CcNavigationContract;
     if (nav?.sanitizePagePath) {
       path = nav.sanitizePagePath(location.pathname || location.href).path;
     } else {
@@ -137,13 +138,18 @@ function readNavigationIdentity() {
     typeof document !== 'undefined'
     && document.querySelector?.('[aria-modal="true"], .modal.show, [data-cc-blocking-overlay]')
   );
-  return {
+  const identity = {
     documentId: perc.documentId || null,
     revision: perc.revision ?? -1,
     path,
-    origin: typeof location !== 'undefined' ? location.origin : null,
+    origin,
     blockingOverlay,
   };
+  // Live browse key for SPA/full-nav settle (does not wait for re-perceive)
+  identity.browseKey = nav?.browseKeyFromIdentity
+    ? nav.browseKeyFromIdentity(identity)
+    : `${origin || ''}${path || ''}`;
+  return identity;
 }
 
 function validatePlan(plan, state) {
@@ -397,9 +403,11 @@ async function execute(plan) {
               beforeDocumentId: beforeIdentity.documentId,
               beforeRevision: beforeIdentity.revision,
               beforePath: beforeIdentity.path,
+              beforeOrigin: beforeIdentity.origin,
               impliesNavigation: !!classification.implies,
               isBlankTarget: !!classification.isBlankTarget,
               readIdentity: readNavigationIdentity,
+              originAllowlist: nav.getOriginAllowlist?.() || [],
             });
             if (observed.mapped) {
               navMapped = observed.mapped;
@@ -409,16 +417,32 @@ async function execute(plan) {
               } else {
                 // Success navigation outcomes satisfy mechanical postcondition
                 postcondition = { met: true, valueState: 'not_applicable' };
+                // NAV-IMPL-P1-03: post-settle origin already applied inside observe via recheck
                 if (observed.outcome === 'new_document_completed') {
-                  // Stop plan after new document; further steps would be stale
                   stopped = true;
                 }
               }
             } else {
-              const settleMs = 120;
-              await new Promise(resolve => setTimeout(resolve, settleMs));
-              postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
-              if (!postcondition.met) failureCode = 'postcondition_failed';
+              // Non-nav path after activate: still recheck origin if location moved
+              const after = readNavigationIdentity();
+              if (nav.recheckOriginAfterSettle && beforeIdentity.origin && after.origin) {
+                const deny = nav.recheckOriginAfterSettle(
+                  beforeIdentity.origin,
+                  after.origin,
+                  nav.getOriginAllowlist?.() || []
+                );
+                if (deny) {
+                  failureCode = deny.mapped.primary_failure_code;
+                  authDiagnostic = deny.mapped.primary_diagnostic;
+                  navMapped = deny.mapped;
+                }
+              }
+              if (!failureCode) {
+                const settleMs = 120;
+                await new Promise(resolve => setTimeout(resolve, settleMs));
+                postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
+                if (!postcondition.met) failureCode = 'postcondition_failed';
+              }
             }
           } else {
             const settleMs = step.action.op === 'select_option' ? 500 : (step.action.op === 'toggle' ? 160 : 120);
