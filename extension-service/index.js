@@ -47,6 +47,105 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: '5mb' }));
 
+// ── Local / Codespace fill-plan trace (test/local-codespace) ────────────
+// Opt-in only: DEBUG_FILL_TRACE=1. Redacts Authorization. Do not enable in prod.
+if (process.env.DEBUG_FILL_TRACE === '1' || process.env.DEBUG_FILL_TRACE === 'true') {
+  const TRACE_PATHS = new Set(['/fill-plan', '/fill-observation', '/api/fill-plan', '/api/fill-observation']);
+  app.use((req, res, next) => {
+    const path = req.path || '';
+    const match = TRACE_PATHS.has(path) || /fill-plan|fill-observation/.test(path);
+    if (!match || req.method === 'OPTIONS') return next();
+
+    const started = Date.now();
+    const auth = req.headers.authorization || '';
+    const redactedAuth = auth ? (auth.startsWith('Bearer ') ? 'Bearer ***' : '***') : '(none)';
+
+    const bodySummary = (() => {
+      try {
+        const b = req.body || {};
+        if (path.includes('fill-plan')) {
+          const snap = b.snapshot || {};
+          return {
+            profileId: b.profileId || null,
+            profileKeys: b.profile && typeof b.profile === 'object' ? Object.keys(b.profile).slice(0, 40) : [],
+            snapshot: {
+              kind: snap.kind || null,
+              document_id: snap.document_id || null,
+              snapshot_id: snap.snapshot_id || null,
+              revision: snap.revision ?? null,
+              nodeCount: snap.nodes ? Object.keys(snap.nodes).length : null,
+            },
+          };
+        }
+        if (path.includes('fill-observation')) {
+          return {
+            kind: b.kind || null,
+            plan_id: b.plan_id || null,
+            correlation_id: b.correlation_id || null,
+            outcome: b.outcome || null,
+            rejection_reason: b.rejection_reason || null,
+            stepCount: Array.isArray(b.steps) ? b.steps.length : null,
+          };
+        }
+        return { keys: Object.keys(b).slice(0, 20) };
+      } catch {
+        return { error: 'body_summary_failed' };
+      }
+    })();
+
+    console.log('[fill-trace] REQUEST', {
+      method: req.method,
+      path,
+      auth: redactedAuth,
+      body: bodySummary,
+    });
+
+    const origJson = res.json.bind(res);
+    res.json = (payload) => {
+      try {
+        let responseSummary = payload;
+        if (payload && typeof payload === 'object') {
+          const plan = payload.plan || payload.action_plan || payload;
+          if (plan && plan.kind === 'action_plan') {
+            responseSummary = {
+              kind: plan.kind,
+              plan_id: plan.plan_id,
+              correlation_id: plan.correlation_id,
+              expires_at: plan.expires_at,
+              stepCount: Array.isArray(plan.steps) ? plan.steps.length : 0,
+              steps: (plan.steps || []).slice(0, 30).map((s) => ({
+                step_id: s.step_id,
+                op: s.action?.op,
+                node_id: s.target?.node_id,
+                risk: s.risk,
+              })),
+              authorization: plan.authorization || null,
+              target_binding: plan.target_binding || null,
+            };
+          } else {
+            responseSummary = {
+              error: payload.error || null,
+              message: payload.message || null,
+              keys: Object.keys(payload).slice(0, 20),
+            };
+          }
+        }
+        console.log('[fill-trace] RESPONSE', {
+          path,
+          status: res.statusCode,
+          ms: Date.now() - started,
+          body: responseSummary,
+        });
+      } catch (e) {
+        console.log('[fill-trace] RESPONSE log failed', e.message);
+      }
+      return origJson(payload);
+    };
+    next();
+  });
+  console.log('[extension-service] DEBUG_FILL_TRACE enabled (local/codespace only)');
+}
+
 // Health endpoint (unauthenticated, for nginx + smoke tests + deploy lock)
 const healthPayload = () => ({
   status: 'ok',

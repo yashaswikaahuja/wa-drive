@@ -1,0 +1,33 @@
+﻿{
+  "name": "CyberControl local test (Codespaces)",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "forwardPorts": [3300, 5432],
+  "portsAttributes": {
+    "3300": {
+      "label": "extension-service",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "postgres",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint"]
+    }
+  },
+  "remoteEnv": {
+    "LOCAL_DEV": "1",
+    "DEBUG_FILL_TRACE": "1"
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "4gb"
+  }
+}
