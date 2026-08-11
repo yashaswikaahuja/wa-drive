@@ -18,5 +18,6 @@
       "href_raw": "https://evil.example/phish?token=secret",
       "workflow_intent": "go_to_step_2"
     }
-  }
+  },
+  "action_plan_invalid_if_merged": true
 }

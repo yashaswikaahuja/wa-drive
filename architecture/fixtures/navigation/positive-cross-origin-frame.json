@@ -1,0 +1,16 @@
+{
+  "fixture_id": "nav-positive-cross-origin-frame",
+  "description": "Cross-origin frame remains opaque; no fabricated transitions_to",
+  "kind": "context_example",
+  "context": {
+    "context_id": "ctx.frame.xo.1",
+    "kind": "frame",
+    "document_id": null,
+    "origin": "https://other.example",
+    "access": "cross_origin",
+    "root_node_id": null,
+    "diagnostic_code": "inaccessible_context"
+  },
+  "must_not": ["fabricated_children", "transitions_to_into_opaque", "selectors"],
+  "destination_origin_policy": "activate toward other.example requires operator allowlist or deny with navigation_origin_denied"
+}

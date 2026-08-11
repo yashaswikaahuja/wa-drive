@@ -1,0 +1,17 @@
+{
+  "fixture_id": "nav-positive-mid-plan-document-replaced",
+  "description": "After successful new_document step, subsequent steps fail document_replaced",
+  "kind": "outcome_example",
+  "navigation_outcome": "document_replaced_mid_plan",
+  "expected_primary_failure_code": "document_replaced",
+  "expected_primary_diagnostic": "navigation_document_replaced",
+  "plan_target_binding": {
+    "document_id": "doc:old",
+    "snapshot_id": "snap:old",
+    "expected_revision": 5
+  },
+  "active_after_nav": {
+    "document_id": "doc:new",
+    "revision": 0
+  }
+}

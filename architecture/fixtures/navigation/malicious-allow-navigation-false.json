@@ -1,12 +1,15 @@
 {
-  "fixture_id": "nav-positive-action-plan",
-  "description": "ActionPlan v3 activate step with allow_navigation; only public targets",
-  "expect": "accept",
+  "fixture_id": "nav-malicious-allow-navigation-false",
+  "description": "Plan activates a navigation-implying control with allow_navigation false — must fail closed",
+  "expect": "reject_at_execution",
+  "expected_primary_failure_code": "authorization_denied",
+  "expected_primary_diagnostic": "navigation_allow_navigation_false",
+  "mechanical_classifier": "html_anchor_with_navigable_href",
   "action_plan": {
     "kind": "action_plan",
     "schema_version": "3.0.0",
-    "plan_id": "plan:nav:example1",
-    "correlation_id": "corr:nav:example1",
+    "plan_id": "plan:nav:deny1",
+    "correlation_id": "corr:nav:deny1",
     "supersedes_plan_id": null,
     "issued_at": "2026-08-10T12:00:00.000Z",
     "expires_at": "2026-08-10T12:05:00.000Z",
@@ -17,7 +20,7 @@
     },
     "steps": [
       {
-        "step_id": "step:nav:activate",
+        "step_id": "step:nav:deny",
         "target": {
           "context_id": "ctx.top.1",
           "node_id": "node:nav.link.1"
@@ -25,7 +28,7 @@
         "action": {
           "op": "activate"
         },
-        "risk": "reversible",
+        "risk": "safe",
         "required_affordance": "activate",
         "required_adapter_id": null,
         "postcondition": {
@@ -38,9 +41,9 @@
       }
     ],
     "authorization": {
-      "max_risk": "reversible",
+      "max_risk": "safe",
       "operator_confirmed": false,
-      "allow_navigation": true,
+      "allow_navigation": false,
       "allow_submit": false
     }
   }

@@ -1,0 +1,21 @@
+{
+  "fixture_id": "nav-positive-blocked-overlay",
+  "description": "Activate with blocking overlay: no identity change → blocked_overlay mapping",
+  "kind": "outcome_example",
+  "navigation_outcome": "blocked_overlay",
+  "expected_primary_failure_code": "postcondition_failed",
+  "expected_primary_diagnostic": "navigation_blocked",
+  "before": {
+    "document_id": "doc:1",
+    "revision": 2,
+    "page": { "origin": "https://portal.example.gov", "path": "/form", "route_key": "form" },
+    "state_signals": ["blocking_overlay"]
+  },
+  "after": {
+    "document_id": "doc:1",
+    "revision": 2,
+    "page": { "origin": "https://portal.example.gov", "path": "/form", "route_key": "form" },
+    "state_signals": ["blocking_overlay", "navigation_blocked_by_overlay"]
+  },
+  "identity_effect": "none"
+}

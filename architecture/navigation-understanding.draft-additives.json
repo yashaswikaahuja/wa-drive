@@ -1,14 +1,38 @@
 {
-  "$comment": "DRAFT additive wire fields for phase_3_5. NOT frozen. NOT required. Do not implement as mandatory until independent review and a schema freeze issue. Existing EO/ActionPlan v3 remain authoritative.",
+  "$comment": "DRAFT additive wire fields for phase_3_5. NOT frozen. NOT required. Existing EO/ActionPlan v3 remain authoritative. NAV-ARCH-P1-01: primary failure codes stay in frozen FailureCode enum; navigation detail uses diagnostics[].code.",
   "status": "architecture_draft",
   "issue": "#145",
+  "remediation_issue": "#147",
   "phase": "phase_3_5",
-  "action_plan_postcondition_types_additive": [
-    "navigation_same_document",
-    "navigation_new_document",
-    "navigation_blocked",
-    "none"
-  ],
+  "contract_version": "0.2.0",
+  "normative_primary_failure_codes": {
+    "same_document_completed": null,
+    "new_document_completed": null,
+    "blocked_overlay": "postcondition_failed",
+    "blocked_origin_policy": "authorization_denied",
+    "authorization_allow_navigation_false": "authorization_denied",
+    "failed_timeout": "gateway_error",
+    "failed_error": "gateway_error",
+    "canceled": "postcondition_failed",
+    "interrupted_by_user_gesture": "postcondition_failed",
+    "document_replaced_mid_plan": "document_replaced",
+    "stale_snapshot": "stale_snapshot",
+    "stale_target": "stale_target"
+  },
+  "normative_primary_diagnostics": {
+    "same_document_completed": "navigation_same_document_completed",
+    "new_document_completed": "navigation_new_document_completed",
+    "blocked_overlay": "navigation_blocked",
+    "blocked_origin_policy": "navigation_origin_denied",
+    "authorization_allow_navigation_false": "navigation_allow_navigation_false",
+    "failed_timeout": "navigation_failed_timeout",
+    "failed_error": "navigation_failed_error",
+    "canceled": "navigation_canceled",
+    "interrupted_by_user_gesture": "navigation_interrupted",
+    "document_replaced_mid_plan": "navigation_document_replaced",
+    "stale_snapshot": "navigation_stale_snapshot",
+    "stale_target": "navigation_stale_target"
+  },
   "execution_observation_additive_optional_fields": {
     "navigation_outcome": {
       "type": ["string", "null"],
@@ -16,12 +40,17 @@
         "not_applicable",
         "same_document_completed",
         "new_document_completed",
-        "blocked",
-        "failed",
+        "blocked_overlay",
+        "blocked_origin_policy",
+        "authorization_allow_navigation_false",
+        "failed_timeout",
+        "failed_error",
         "canceled",
-        "interrupted",
+        "interrupted_by_user_gesture",
+        "document_replaced_mid_plan",
         null
-      ]
+      ],
+      "note": "Optional until schema amendment freeze; diagnostics[].code is normative until then."
     },
     "resulting_document_id": {
       "description": "Document id after the step when it differs from plan target_binding.document_id; optional until freeze.",
@@ -34,12 +63,13 @@
     "document_navigation_settled",
     "navigation_blocked_by_overlay",
     "navigation_redirected",
-    "frame_document_replaced"
+    "frame_document_replaced",
+    "navigation_new_context"
   ],
-  "interim_mapping": {
-    "new_document_completed": "EO document_id change + rejection_reason/document_replaced for continued steps; diagnostics navigation_*",
-    "blocked": "postcondition_failed or diagnostic navigation_blocked",
-    "failed": "gateway_error or postcondition_failed + diagnostic navigation_failed"
+  "navigation_observation_budgets": {
+    "settle_deadline_ms": 8000,
+    "quiet_window_ms": 300,
+    "max_redirect_hops": 10
   },
   "forbidden_even_in_draft": [
     "selector",
@@ -48,6 +78,8 @@
     "dom_handle",
     "href_raw",
     "query_string",
+    "fragment",
+    "credentials",
     "business_step_id",
     "workflow_intent"
   ]

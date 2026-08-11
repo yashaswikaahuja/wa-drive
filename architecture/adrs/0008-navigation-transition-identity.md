@@ -1,8 +1,8 @@
 # ADR-0008: Navigation Transition Identity (document vs revision)
 
-- Status: Proposed (architecture_draft for phase_3_5 / #145)
+- Status: Proposed (architecture_draft for phase_3_5 / #145; budgets clarified #147)
 - Date: 2026-08-10
-- Issue: #145
+- Issue: #145 / #147
 - Relates: ADR-0002 (immutable snapshots), ADR-0004 (perception identity), ADR-0005 (cross-origin contexts)
 
 ## Context
@@ -19,9 +19,11 @@ Portals navigate via full reloads, SPA route changes, frame loads, and redirects
 
 2. **Plans never span document identities.** An ActionPlan’s `target_binding.document_id` is exact. After full navigation, continuation with the same plan is `document_replaced`.
 
-3. **Redirects** collapse to the settled final origin + sanitized path under privacy rules; intermediate hops are browser-private wait details, not public multi-hop IR.
+3. **Redirects** collapse to the settled final origin + sanitized `page.path` under privacy rules within `max_redirect_hops` (10) and `settle_deadline_ms` (8000); intermediate hops are browser-private wait details, not public multi-hop IR.
 
-4. **Cross-origin / inaccessible contexts** remain opaque (`Context.access`); no fabricated `transitions_to` into them.
+4. **Cross-origin / inaccessible contexts** remain opaque (`Context.access`); no fabricated `transitions_to` into them. Destination origin policy still applies at activate.
+
+5. **New browsing contexts** (`target=_blank`, `window.open`) do not change the origin document’s `document_id`; report `navigation_new_context` and do not invent IR for the new context unless separately discovered.
 
 ## Consequences
 

@@ -1,0 +1,25 @@
+{
+  "fixture_id": "nav-positive-frame-document",
+  "description": "Frame document replacement invalidates only that context's bindings",
+  "kind": "transition_example",
+  "identity_effect": "frame_context_document_replaced",
+  "before": {
+    "document_id": "doc:top",
+    "revision": 3,
+    "contexts": [
+      { "context_id": "ctx.top.1", "kind": "top_level", "document_id": "doc:top" },
+      { "context_id": "ctx.frame.1", "kind": "frame", "document_id": "doc:frame:old" }
+    ]
+  },
+  "after": {
+    "document_id": "doc:top",
+    "revision": 4,
+    "contexts": [
+      { "context_id": "ctx.top.1", "kind": "top_level", "document_id": "doc:top" },
+      { "context_id": "ctx.frame.1", "kind": "frame", "document_id": "doc:frame:new" }
+    ],
+    "state_signals": ["frame_document_replaced"]
+  },
+  "plan_against_frame_old": "stale_target_or_document_mismatch_for_frame_bindings",
+  "top_level_plan_same_doc": "may_continue_if_revision_matches_or_stale_snapshot"
+}

@@ -1,8 +1,8 @@
 # ADR-0009: Mechanical Navigation Targets (no selectors, no business goals)
 
-- Status: Proposed (architecture_draft for phase_3_5 / #145)
+- Status: Proposed (architecture_draft for phase_3_5 / #145; amended #147)
 - Date: 2026-08-10
-- Issue: #145
+- Issue: #145 / #147
 - Relates: ADR-0001 (public IR / private bindings), ADR-0007 (service no selectors), gateway-security allow_navigation
 
 ## Context
@@ -13,13 +13,15 @@ The service needs to drive “click the control that navigates” without receiv
 
 1. **Public target identity** for navigation steps is exactly ActionPlan v3 `Target`: `{ context_id, node_id }`, under `target_binding` `{ document_id, snapshot_id, expected_revision }`.
 
-2. **Mechanical action** is `op: activate` with `required_affordance: activate` when applicable. Authorization requires `allow_navigation: true` when the resolved element implies navigation (link/location change). `allow_submit` remains orthogonal.
+2. **Mechanical action** is `op: activate` with `required_affordance: activate` when applicable. Authorization requires `allow_navigation: true` when the **normative mechanical navigation-implication classifier** in `architecture/navigation-understanding.yml` (`mechanical_navigation_classifier`) says the resolved element implies navigation. That classifier is architecture-owned; runtimes (including ActionPlanExecutor) MUST implement it and MUST NOT invent alternate implication rules. `allow_submit` remains orthogonal.
 
 3. **Private resolution** uses BindingRegistry + authorship `binding_generation` equality immediately before act (lifecycle rebinding_continuity). Mismatch → `stale_target`. No silent rebind.
 
-4. **Browser ownership** ends at observing affordances, executing activate, and reporting mechanical outcomes. **Service ownership** selects which candidate node satisfies the workflow goal.
+4. **Browser ownership** is limited to **exposing observed activatable nodes already in IR**, mechanical activate, and reporting outcomes. **Service ownership** selects which candidate node_id satisfies the workflow goal. The browser MUST NOT choose among candidates by business meaning.
 
-5. **Forbidden on the wire:** selectors, XPath, DOM handles, raw HTML, private bindings, full href with query/fragment/credentials, business `workflow_intent` / `business_step_id` as execution identity.
+5. **Destination origin policy** from `gateway-security.yml` applies even when `allow_navigation` is true (see `destination_origin_policy` in the navigation contract).
+
+6. **Forbidden on the wire:** selectors, XPath, DOM handles, raw HTML, private bindings, full href with query/fragment/credentials, business `workflow_intent` / `business_step_id` as execution identity.
 
 ## Consequences
 

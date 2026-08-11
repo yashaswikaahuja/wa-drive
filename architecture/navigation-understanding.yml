@@ -1,14 +1,15 @@
 # CyberControl Phase 3.5 — Navigation Understanding Architecture Contract
 # Repository key: phase_3_5 (architecture/phases.yml). Not frozen.
 #
-# Status: architecture_draft (issue #145)
+# Status: architecture_draft (issue #145; P1 remediation #147)
 # Does NOT implement runtime behavior. Does NOT freeze.
-# Independent adversarial architecture review required before freeze or implementation.
+# Independent adversarial architecture re-review required before freeze or implementation.
 
 contract_id: navigation-understanding
-contract_version: "0.1.0"
+contract_version: "0.2.0"
 status: architecture_draft
 issue: "#145"
+remediation_issue: "#147"
 phase: phase_3_5
 depends_on:
   - phase_3_0   # frozen contracts
@@ -23,20 +24,23 @@ normative_words:
   SHOULD: "recommended unless a documented reason exists"
 
 # ─────────────────────────────────────────────────────────────────────
-# Ownership boundary (browser vs service)
+# Ownership boundary (browser vs service) — NAV-ARCH-P1-08
 # ─────────────────────────────────────────────────────────────────────
 ownership:
   browser_perception:
     owns:
-      - "observing navigation affordances on public IR nodes"
-      - "identifying mechanically executable navigation targets (node_id scoped)"
-      - "observing navigation start, completion, block, cancel, fail"
+      - "observing navigation affordances on public IR nodes already present in the snapshot"
+      - "exposing observed activatable nodes already represented in IR (never selecting among workflow candidates)"
+      - "observing navigation start, completion, block, cancel, fail within settle budgets"
       - "reporting document_id / context_id / revision changes and transition evidence"
       - "mechanical activate execution and postcondition verification"
       - "emitting navigation-related PageState signals and diagnostics"
+      - "applying the normative mechanical navigation-implication classifier (see mechanical_navigation_classifier)"
+      - "enforcing destination origin policy at execution (see destination_origin_policy)"
     must_not:
       - "infer business workflow intent (e.g. 'this is the Next step of the application')"
       - "choose which candidate satisfies a multi-step workflow goal"
+      - "select a navigation target based on business meaning, planner intent, or synonyms"
       - "emit service-side goals, portal-specific step names, or business depends_on for navigation"
       - "send selectors, XPath, DOM handles, HTML, or private bindings in public IR"
   extension_service:
@@ -48,6 +52,220 @@ ownership:
     must_not:
       - "send selectors or browser-private recipes as navigation targets"
       - "require the browser to invent off-snapshot destinations as transitions_to endpoints"
+
+# ─────────────────────────────────────────────────────────────────────
+# NAV-ARCH-P1-02 — Normative mechanical navigation-implication classifier
+# ─────────────────────────────────────────────────────────────────────
+# Architecture owns these rules. Runtime (including ActionPlanExecutor) MUST
+# implement this classifier; it MUST NOT invent alternate implication logic.
+mechanical_navigation_classifier:
+  purpose: >
+    Decide whether activating a resolved live Element would imply navigation
+    for authorization (allow_navigation) and outcome classification.
+  fail_closed: >
+    If implication is ambiguous, treat as navigation-capable for authorization
+    purposes when the element is a hyperlink-like control; otherwise do not
+    claim navigation_completed without observed identity-effect evidence.
+  implies_navigation_true_when_any:
+    - id: html_anchor_with_navigable_href
+      rule: >
+        Element is HTMLAnchorElement (or tagName A) AND has an href attribute
+        whose trimmed value is non-empty AND is not '#' only AND does not start
+        with 'javascript:' (case-insensitive).
+    - id: role_link_with_activatable_name
+      rule: >
+        role is 'link' (ARIA) AND the element is activatable (enabled, not
+        aria-disabled) — treated as navigation-capable for allow_navigation.
+    - id: area_with_href
+      rule: >
+        HTMLAreaElement (or tagName AREA) with non-empty navigable href
+        (same exclusions as anchor).
+    - id: base_plus_link_context
+      rule: "Not used alone; does not create implication without anchor/area."
+  implies_navigation_false_when:
+    - id: button_without_form_nav
+      rule: "BUTTON or input type=button/reset that does not have role=link"
+    - id: submit_control
+      rule: "Submit controls are submit-class (allow_submit), not navigation-class"
+    - id: download_anchor
+      rule: >
+        Anchor with download attribute present — classified as download, not
+        document navigation (identity effect unknown; do not claim new_document
+        without observed document_id change).
+    - id: hash_only_href
+      rule: "href is empty, '#', or fragment-only — not navigation for allow_navigation"
+  blank_target_and_new_context:
+    rule: >
+      target=_blank or window.open-class activation is a new browsing context.
+      Public IR of the originating document does not gain the new document.
+      Browser MUST report diagnostic navigation_new_context and MUST NOT invent
+      nodes for the opened context unless a separate accessible context is
+      discovered under existing context discovery rules.
+  ambiguous:
+    rule: >
+      If none of the true/false rules match, implication is false for
+      allow_navigation hard-deny of non-nav activates; completion still requires
+      observed identity-effect evidence (never assume navigation_completed).
+
+# ─────────────────────────────────────────────────────────────────────
+# NAV-ARCH-P1-01 — Deterministic EO primary failure / diagnostic table
+# ─────────────────────────────────────────────────────────────────────
+# Frozen EO v3 failure_code enum is unchanged. Primary codes MUST use only
+# existing FailureCode values. diagnostics[].code carries the navigation_*
+# detail. Exactly one primary failure_code per negative navigation outcome.
+deterministic_outcome_mapping:
+  rule: >
+    Each navigation observation outcome has exactly one primary EO step
+    failure_code (or success with no failure_code). diagnostics MUST include
+    exactly one primary navigation diagnostic code from the table.
+  success_outcomes:
+    - navigation_outcome: same_document_completed
+      step_status: succeeded
+      primary_failure_code: null
+      primary_diagnostic: navigation_same_document_completed
+      meaning: "document_id unchanged; revision and/or route_key/path advanced"
+    - navigation_outcome: new_document_completed
+      step_status: succeeded
+      primary_failure_code: null
+      primary_diagnostic: navigation_new_document_completed
+      meaning: "document_id changed; plan MUST stop; further steps document_replaced"
+      subsequent_steps: "document_replaced"
+  negative_outcomes:
+    - navigation_outcome: blocked_overlay
+      step_status: failed
+      primary_failure_code: postcondition_failed
+      primary_diagnostic: navigation_blocked
+      meaning: "no document/route identity change; overlay/block remains"
+    - navigation_outcome: blocked_origin_policy
+      step_status: failed
+      primary_failure_code: authorization_denied
+      primary_diagnostic: navigation_origin_denied
+      meaning: "destination origin fails destination_origin_policy"
+    - navigation_outcome: authorization_allow_navigation_false
+      step_status: failed
+      primary_failure_code: authorization_denied
+      primary_diagnostic: navigation_allow_navigation_false
+      meaning: "activate would imply navigation but allow_navigation is false"
+    - navigation_outcome: failed_timeout
+      step_status: failed
+      primary_failure_code: gateway_error
+      primary_diagnostic: navigation_failed_timeout
+      meaning: "navigation started or expected but settle deadline exceeded"
+    - navigation_outcome: failed_error
+      step_status: failed
+      primary_failure_code: gateway_error
+      primary_diagnostic: navigation_failed_error
+      meaning: "browser reported navigation error before settle"
+    - navigation_outcome: canceled
+      step_status: failed
+      primary_failure_code: postcondition_failed
+      primary_diagnostic: navigation_canceled
+      meaning: "user or page aborted before commit within settle window"
+    - navigation_outcome: interrupted_by_user_gesture
+      step_status: failed
+      primary_failure_code: postcondition_failed
+      primary_diagnostic: navigation_interrupted
+      meaning: "new user gesture aborted observation wait"
+    - navigation_outcome: document_replaced_mid_plan
+      step_status: failed
+      primary_failure_code: document_replaced
+      primary_diagnostic: navigation_document_replaced
+      meaning: "active document_id no longer matches plan target_binding"
+    - navigation_outcome: stale_snapshot
+      step_status: failed
+      primary_failure_code: stale_snapshot
+      primary_diagnostic: navigation_stale_snapshot
+    - navigation_outcome: stale_target
+      step_status: failed
+      primary_failure_code: stale_target
+      primary_diagnostic: navigation_stale_target
+  forbidden:
+    - "Mapping the same outcome to either postcondition_failed or gateway_error arbitrarily"
+    - "Inventing new required FailureCode enum values without a frozen schema amendment"
+  draft_navigation_outcome_field: >
+    Optional EO.navigation_outcome in draft-additives remains non-required until
+    a separate schema amendment is frozen. Until then diagnostics[].code is the
+    normative detail channel.
+
+# ─────────────────────────────────────────────────────────────────────
+# NAV-ARCH-P1-03 — page.path privacy semantics
+# ─────────────────────────────────────────────────────────────────────
+page_path_privacy:
+  public_field: path
+  schema_field: "Page.page.path in architecture/page-ir.schema.json (frozen name)"
+  meaning: >
+    Public page.path is a sanitized pathname only. It is the privacy-sanitized
+    form referred to as sanitized_path in perception-privacy.yml. Implementations
+    MUST NOT emit a second public field named sanitized_path unless a future
+    schema amendment freezes it.
+  MUST:
+    - "Strip query string and fragment before publish"
+    - "Never include userinfo/credentials"
+    - "Normalize to pathname form (leading slash when origin is http(s))"
+    - "Truncate to schema maxLength (512) with diagnostic rather than leak overflow"
+  MUST_NOT:
+    - "Include '?' or '#' or raw query pairs"
+    - "Include session tokens, OTPs, or bearer material in path segments when classified as secret"
+  path_token_redaction: >
+    When a path segment matches high-entropy token patterns (e.g. long hex/base64
+    blobs) AND privacy classification requires redaction, replace the segment with
+    a constant placeholder such as ':redacted' and set a diagnostic path_segment_redacted.
+  route_key: "Coarse stable key without query/fragment; never a raw URL"
+
+# ─────────────────────────────────────────────────────────────────────
+# NAV-ARCH-P1-04 — Destination origin policy (binds gateway-security)
+# ─────────────────────────────────────────────────────────────────────
+destination_origin_policy:
+  inherits: "architecture/gateway-security.yml navigation_and_file_policy.navigation_urls"
+  rule: >
+    Even when ActionPlan.authorization.allow_navigation is true, the extension
+    MUST NOT navigate to a destination origin outside the allowed set.
+  default_allowed:
+    - "same origin as the target context's Document origin at plan authoring / execution check"
+  operator_confirmed_allowlist:
+    rule: >
+      Cross-origin destinations require an explicit operator-confirmed allowlist
+      entry for that origin. Absence of allowlist entry → deny.
+  enforcement_point: "Immediately before activate when mechanical classifier implies navigation"
+  on_deny:
+    primary_failure_code: authorization_denied
+    primary_diagnostic: navigation_origin_denied
+    mutation: "MUST NOT click/activate when destination is known and denied"
+  unknown_destination:
+    rule: >
+      If destination origin cannot be determined before activate (e.g. scripted
+      handler), activate MAY proceed only if allow_navigation is true; after
+      settle, if resulting origin violates policy, report authorization_denied
+      with diagnostic navigation_origin_denied and do not continue the plan.
+  must_not: "Silently complete cross-origin navigation as success without policy check"
+
+# ─────────────────────────────────────────────────────────────────────
+# NAV-ARCH-P1-05 — Settle / redirect / timeout budgets
+# ─────────────────────────────────────────────────────────────────────
+navigation_observation_budgets:
+  settle_deadline_ms: 8000
+  settle_deadline_meaning: >
+    Maximum wall time from activate until classification of completed, blocked,
+    failed, canceled, or interrupted. Exceeding deadline → failed_timeout
+    (gateway_error + navigation_failed_timeout).
+  quiet_window_ms: 300
+  quiet_window_meaning: >
+    After a candidate load/route event, require this quiet period without further
+    document or route identity changes before declaring settled.
+  max_redirect_hops: 10
+  max_redirect_hops_meaning: >
+    Browser-private hop counter. Exceeding hops → failed_error
+    (gateway_error + navigation_failed_error). Intermediate hop URLs MUST NOT
+    be published with query/fragment/credentials.
+  completion_criteria:
+    same_document: "document_id unchanged AND (revision advanced OR path/route_key changed) within deadline"
+    new_document: "document_id changed and new document reaches snapshot_ready or hard deadline"
+    blocked: "no identity-effect change and blocking_overlay or equivalent remains after quiet window"
+  cancellation:
+    - "page or user aborts before commit → canceled"
+    - "new user gesture (pointer/keyboard) on the page during wait → interrupted_by_user_gesture"
+  abort_pending_perception: "On document_id change, cancel stale perception work (lifecycle)"
+  must_not: "Unbounded wait for navigation settle"
 
 # ─────────────────────────────────────────────────────────────────────
 # Answers to design questions (normative summary)
@@ -76,6 +294,7 @@ design_answers:
     private: >
       Extension resolves (context_id, node_id) via BindingRegistry + binding_generation
       (phase_3_0 lifecycle / rebinding_continuity). Service never sees bindings.
+    selection: "Service selects among IR nodes; browser only exposes and activates the chosen node_id"
 
   q03_same_document_spa_full:
     full_document:
@@ -110,50 +329,27 @@ design_answers:
     preconditions_mechanical:
       - "node still bound at exact revision + binding_generation"
       - "required_affordance includes activate when stepping with activate"
-      - "authorization.allow_navigation true when activation implies navigation"
+      - "authorization.allow_navigation true when mechanical classifier implies navigation"
+      - "destination_origin_policy satisfied when destination is known"
       - "no blocking_overlay signal that makes the target non-activatable (when observed)"
-    postconditions_mechanical:
-      existing: ["node_present", "focused", "expanded", "none"]
-      navigation_class_outcomes:
-        - code: navigation_completed_same_document
-          meaning: "document_id unchanged; revision advanced and/or route_key/path changed"
-        - code: navigation_completed_new_document
-          meaning: "document_id changed; old plan must not continue"
-        - code: navigation_blocked
-          meaning: "activate ran or was refused; no document/route change; overlay/validation remains"
-        - code: navigation_failed
-          meaning: "navigation started but did not complete within bounded wait"
-        - code: navigation_canceled
-          meaning: "user or page aborted before commit"
-    interim_mapping_until_schema_amendment: >
-      Until EO/ActionPlan schemas gain optional navigation_outcome fields under a
-      frozen amendment, the extension MUST map outcomes to existing EO fields:
-      document_replaced, postcondition_failed, gateway_error, authorization_denied,
-      resulting_revision, resulting_snapshot_id, diagnostics[].code. Draft additive
-      fields are specified in navigation-understanding.draft-additives.json and
-      MUST NOT ship as required wire fields before freeze review.
+    postconditions: "See deterministic_outcome_mapping (NAV-ARCH-P1-01)"
 
   q07_redirects:
     rule: >
       Redirects are not a separate public IR node type. They are observed as a
-      navigation chain ending in a final origin+sanitized_path+document_id.
-      Intermediate hop URLs MUST NOT be logged with query strings or credentials.
+      navigation chain ending in a final origin+sanitized path+document_id within
+      max_redirect_hops and settle_deadline_ms.
     public: "final page.origin / page.path after settle; diagnostic navigation_redirected optional"
-    private_browser: "bounded hop count for TOCTOU wait; not serialized"
+    private_browser: "hop count for TOCTOU wait; hop URLs not serialized with secrets"
 
   q08_failed_blocked_canceled:
-    signals_or_diagnostics:
-      - navigation_blocked
-      - navigation_failed
-      - navigation_canceled
-      - navigation_interrupted
-    eo: "step status failed with postcondition_failed or gateway_error; diagnostic carries code"
+    rule: "See deterministic_outcome_mapping negative_outcomes — single primary code each"
     plan: "on_failure stop_and_report; service re-perceives"
 
   q09_tabs_wizard_accordion_vs_goals:
     mechanical:
       tabs_wizard_accordion: "in-document structural state (selected/expanded); may use activate/expand_collapse"
-      links_buttons: "may cause same-document or full navigation"
+      links_buttons: "may cause same-document or full navigation per classifier + identity effect"
     business: "service decides 'wizard step 2' meaning; browser only reports state and transitions"
     transitions_to: "only when target node is in the same snapshot (frozen edge authority)"
 
@@ -161,6 +357,7 @@ design_answers:
     representation: "Context.access cross_origin | permission_denied | closed_shadow | unsupported"
     document_id: "null for inaccessible frame documents per lifecycle"
     navigation_into: "opaque; browser reports access change or inaccessible_context diagnostic"
+    destination_policy: "Cross-origin activate denied unless operator allowlist (destination_origin_policy)"
     must_not: "fabricate children or claim transitions_to into opaque contexts"
 
   q11_action_plan_v3:
@@ -170,7 +367,7 @@ design_answers:
       required_affordance: activate
       risk: "safe | reversible | irreversible per plan; irreversible needs operator_confirmed"
     authorization:
-      allow_navigation: "MUST be true for navigation-implying activate; false fails closed"
+      allow_navigation: "MUST be true when mechanical classifier implies navigation; false → authorization_denied"
       allow_submit: "orthogonal; submit controls still gated separately"
     stale_toctou:
       - "exact document_id, snapshot_id, expected_revision"
@@ -184,10 +381,9 @@ design_answers:
       - "node/edge ops for structural SPA transitions"
       - "full snapshot when document_id changes (delta unsafe across document identity)"
     execution_observation:
-      - "document_id of the document after the step when available"
+      - "Use deterministic_outcome_mapping primary_failure_code + primary_diagnostic"
       - "resulting_revision / resulting_snapshot_id"
-      - "diagnostics for navigation_* codes"
-      - "rejection_reason document_replaced when applicable"
+      - "document_id after step when available (existing EO field)"
 
   q13_evidence_confidence:
     derived_edges:
@@ -199,24 +395,25 @@ design_answers:
 
   q14_privacy:
     inherits: "architecture/perception-privacy.yml location rules"
-    public_allowed: [origin, sanitized_path, route_key]
-    public_prohibited: [query_string, fragment, credentials, authorization_headers, full_href_with_secrets]
+    page_path: "See page_path_privacy (NAV-ARCH-P1-03) — path IS sanitized pathname"
+    public_allowed: [origin, path, route_key]
+    public_prohibited: [query_string, fragment, credentials, authorization_headers, full_href_with_secrets, sanitized_path_duplicate]
     navigation_labels: "accessible_name / sanitized_text subject to length and secret redaction"
     must_not: "exfiltrate redirect hop query parameters in diagnostics"
 
   q15_target_disappears:
     before_act: "stale_target or stale_snapshot; no mutation"
-    during_navigation: "stop plan; report partial/aborted; service re-perceives"
+    during_navigation: "stop plan; report partial/aborted per deterministic_outcome_mapping"
     never: "retarget to a different node_id by heuristics"
 
   q16_fixtures_and_ci:
-    unit_contract: "extension-dev/tests/test-phase35-navigation-governance.mjs"
+    unit_contract: "extension-dev/tests/test-phase35-navigation-governance.mjs (CHECK-013)"
     fixtures: "architecture/fixtures/navigation/"
-    checks: "CHECK-013 registers existence and forbidden-key validation"
-    browser_runtime: "out of scope for #145; required for implementation issue after review"
+    semantic_checks: "AJV ActionPlan validation, outcome table, classifier rules, origin policy, privacy path"
+    browser_runtime: "out of scope until implementation issue after architecture re-review"
 
 # ─────────────────────────────────────────────────────────────────────
-# Navigation classification (mechanical)
+# Navigation classification (mechanical identity effect)
 # ─────────────────────────────────────────────────────────────────────
 navigation_classes:
   full_document:
@@ -228,6 +425,9 @@ navigation_classes:
   in_document_structure:
     identity_effect: same_document_id_optional_revision_up
     examples: [tab_selection, accordion_expand, dialog_open_without_url_change]
+  new_browsing_context:
+    identity_effect: origin_document_unchanged_new_context_not_in_ir
+    examples: [target_blank, window_open]
   unknown:
     identity_effect: fail_closed_observe_only
 
@@ -242,6 +442,7 @@ state_signals:
     - navigation_blocked_by_overlay
     - navigation_redirected
     - frame_document_replaced
+    - navigation_new_context
   rule: >
     Signals are fact codes, not business outcomes. Unknown codes MUST be ignored
     by older consumers (forward compatible).
@@ -252,10 +453,11 @@ state_signals:
 compatibility:
   page_ir_v2: "Uses existing kinds, affordances, edges, page.origin/path/route_key, contexts"
   action_plan_v3: "Uses activate + allow_navigation + existing Target; no selector fields"
-  execution_observation_v3: "Maps navigation outcomes to existing failure codes + diagnostics"
+  execution_observation_v3: "Primary codes only from frozen FailureCode enum; detail in diagnostics"
   lifecycle: "Extends interpretation of full/same-document/frame rules; does not weaken exact revision"
+  gateway_security: "destination_origin_policy binds navigation_and_file_policy.navigation_urls"
   wss_phase_3_4: "Transport only; navigation semantics identical over HTTPS or WSS"
-  action_plan_executor: "Supporting infrastructure; not a phase_3_5 deliverable"
+  action_plan_executor: "Supporting infrastructure; MUST implement mechanical_navigation_classifier, not invent it"
 
 forbidden_public_fields:
   - selector
@@ -270,14 +472,30 @@ forbidden_public_fields:
   - destination_url_with_query
   - business_step_id
   - workflow_intent
+  - query_string
+  - fragment
+  - credentials
 
 # ─────────────────────────────────────────────────────────────────────
-# Implementation readiness (not started by #145)
+# P1 remediation tracking (#147)
+# ─────────────────────────────────────────────────────────────────────
+p1_remediation:
+  NAV-ARCH-P1-01: resolved_in_contract_v0_2_0
+  NAV-ARCH-P1-02: resolved_in_contract_v0_2_0
+  NAV-ARCH-P1-03: resolved_in_contract_v0_2_0
+  NAV-ARCH-P1-04: resolved_in_contract_v0_2_0
+  NAV-ARCH-P1-05: resolved_in_contract_v0_2_0
+  NAV-ARCH-P1-06: resolved_via_expanded_fixtures
+  NAV-ARCH-P1-07: resolved_via_check_013_semantic_suite
+  NAV-ARCH-P1-08: resolved_in_contract_v0_2_0
+
+# ─────────────────────────────────────────────────────────────────────
+# Implementation readiness (not started by #147)
 # ─────────────────────────────────────────────────────────────────────
 implementation_gate:
   requires:
-    - "independent adversarial architecture review APPROVE or APPROVE WITH CONDITIONS"
-    - "explicit implementation issue for phase_3_5 runtime"
+    - "independent adversarial architecture re-review of #147 remediation"
+    - "explicit implementation issue for phase_3_5 runtime after re-review clearance"
   forbids_from_this_issue:
     - "runtime navigation detector code"
     - "schema freeze of draft additives"

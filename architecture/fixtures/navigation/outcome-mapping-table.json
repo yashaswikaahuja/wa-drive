@@ -1,0 +1,33 @@
+{
+  "fixture_id": "nav-outcome-mapping-table",
+  "description": "Normative 1:1 navigation outcome → primary EO failure_code + diagnostic (NAV-ARCH-P1-01)",
+  "kind": "mapping_table",
+  "rows": [
+    { "navigation_outcome": "same_document_completed", "primary_failure_code": null, "primary_diagnostic": "navigation_same_document_completed" },
+    { "navigation_outcome": "new_document_completed", "primary_failure_code": null, "primary_diagnostic": "navigation_new_document_completed" },
+    { "navigation_outcome": "blocked_overlay", "primary_failure_code": "postcondition_failed", "primary_diagnostic": "navigation_blocked" },
+    { "navigation_outcome": "blocked_origin_policy", "primary_failure_code": "authorization_denied", "primary_diagnostic": "navigation_origin_denied" },
+    { "navigation_outcome": "authorization_allow_navigation_false", "primary_failure_code": "authorization_denied", "primary_diagnostic": "navigation_allow_navigation_false" },
+    { "navigation_outcome": "failed_timeout", "primary_failure_code": "gateway_error", "primary_diagnostic": "navigation_failed_timeout" },
+    { "navigation_outcome": "failed_error", "primary_failure_code": "gateway_error", "primary_diagnostic": "navigation_failed_error" },
+    { "navigation_outcome": "canceled", "primary_failure_code": "postcondition_failed", "primary_diagnostic": "navigation_canceled" },
+    { "navigation_outcome": "interrupted_by_user_gesture", "primary_failure_code": "postcondition_failed", "primary_diagnostic": "navigation_interrupted" },
+    { "navigation_outcome": "document_replaced_mid_plan", "primary_failure_code": "document_replaced", "primary_diagnostic": "navigation_document_replaced" },
+    { "navigation_outcome": "stale_snapshot", "primary_failure_code": "stale_snapshot", "primary_diagnostic": "navigation_stale_snapshot" },
+    { "navigation_outcome": "stale_target", "primary_failure_code": "stale_target", "primary_diagnostic": "navigation_stale_target" }
+  ],
+  "frozen_failure_codes_allowed": [
+    "plan_expired",
+    "stale_target",
+    "stale_snapshot",
+    "adapter_mismatch",
+    "affordance_mismatch",
+    "document_replaced",
+    "authorization_denied",
+    "correlation_replayed",
+    "file_reference_invalid",
+    "action_unsupported",
+    "postcondition_failed",
+    "gateway_error"
+  ]
+}

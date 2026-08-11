@@ -1,0 +1,20 @@
+{
+  "fixture_id": "nav-positive-target-blank",
+  "description": "target=_blank opens new browsing context; origin document identity unchanged",
+  "kind": "transition_example",
+  "identity_effect": "origin_document_unchanged_new_context_not_in_ir",
+  "navigation_outcome": "same_document_completed_or_observe_only",
+  "expected_primary_diagnostic": "navigation_new_context",
+  "before": {
+    "document_id": "doc:1",
+    "revision": 2,
+    "page": { "origin": "https://portal.example.gov", "path": "/a", "route_key": "a" }
+  },
+  "after": {
+    "document_id": "doc:1",
+    "revision": 2,
+    "page": { "origin": "https://portal.example.gov", "path": "/a", "route_key": "a" },
+    "state_signals": ["navigation_new_context"]
+  },
+  "must_not": ["invent_nodes_for_opened_tab_without_context_discovery"]
+}

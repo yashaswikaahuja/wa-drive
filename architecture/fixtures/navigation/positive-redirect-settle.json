@@ -1,0 +1,27 @@
+{
+  "fixture_id": "nav-positive-redirect-settle",
+  "description": "Redirect chain collapses to final origin+sanitized path within hop/settle budgets",
+  "kind": "transition_example",
+  "identity_effect": "new_document_id",
+  "budgets": {
+    "settle_deadline_ms": 8000,
+    "max_redirect_hops": 10
+  },
+  "private_hops_not_published": [
+    "https://portal.example.gov/a?token=secret1",
+    "https://portal.example.gov/b?session=xyz"
+  ],
+  "before": {
+    "document_id": "doc:start",
+    "revision": 1,
+    "page": { "origin": "https://portal.example.gov", "path": "/start", "route_key": "start" }
+  },
+  "after": {
+    "document_id": "doc:final",
+    "revision": 0,
+    "page": { "origin": "https://portal.example.gov", "path": "/done", "route_key": "done" },
+    "state_signals": ["navigation_redirected", "document_navigation_settled"]
+  },
+  "public_must_not_contain": ["token=", "session=", "query_string"],
+  "expected_primary_diagnostic_on_success": "navigation_new_document_completed"
+}

@@ -553,16 +553,18 @@ phases:
     name: "Navigation Understanding"
     status: architecture_draft
     draft_date: "2026-08-10"
-    issues: ["#145"]
+    issues: ["#145", "#147"]
     depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4"]
     conceptual_roadmap_slot: "3.7"
     description: >
       Architecture contract for mechanical navigation affordances, transition
       identity (full vs same-document vs frame), privacy-safe location metadata,
       and ActionPlan v3 activate + allow_navigation compatibility. Browser
-      observes and executes; service owns navigation goals and business meaning.
-      No runtime implementation and no freeze from #145.
-    discovery_reference: "Issue #145 — phase_3_5 architecture"
+      exposes observed activatable nodes and executes mechanically; service owns
+      navigation goals and business meaning. Contract v0.2.0 remediates
+      NAV-ARCH-P1-01..08 from #146/#147. No runtime implementation and no freeze
+      from #145/#147.
+    discovery_reference: "Issue #145 — phase_3_5 architecture; #147 P1 remediation"
     architecture_artifacts:
       - path: "architecture/navigation-understanding.yml"
         purpose: "Normative navigation understanding contract (draft)"
