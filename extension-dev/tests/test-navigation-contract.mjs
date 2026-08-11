@@ -326,6 +326,159 @@ globalThis.__ccNavBudgets = { settleMs: 400, quietMs: 50, maxHops: 3 };
   ok(r.outcome === 'blocked_overlay', 'overlay at deadline → blocked_overlay');
 }
 
+// ── NAV-RR2-P2-01: unload rechecks expectedDestinationOrigin ──
+console.log('\n=== NAV-RR2-P2 residual remediations ===');
+{
+  const listeners = {};
+  const fakeWin = {
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+    removeEventListener: () => {},
+  };
+  const p = nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    expectedDestinationOrigin: 'https://evil.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    originAllowlist: [],
+    readIdentity: () => ({
+      documentId: 'doc:1', revision: 1, path: '/a', origin: 'https://good.example',
+      browseKey: 'https://good.example/a',
+    }),
+    doc: null,
+    win: fakeWin,
+  });
+  setTimeout(() => {
+    if (listeners.pagehide) listeners.pagehide({ persisted: false });
+  }, 15);
+  const r = await p;
+  ok(
+    r.outcome === 'blocked_origin_policy' || r.mapped?.primary_diagnostic === 'navigation_origin_denied',
+    'P2-01 unload + expected XO dest → blocked_origin_policy'
+  );
+}
+{
+  const listeners = {};
+  const fakeWin = {
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+    removeEventListener: () => {},
+  };
+  const p = nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    expectedDestinationOrigin: 'https://partner.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    originAllowlist: ['https://partner.example'],
+    readIdentity: () => ({
+      documentId: 'doc:1', revision: 1, path: '/a', origin: 'https://good.example',
+      browseKey: 'https://good.example/a',
+    }),
+    doc: null,
+    win: fakeWin,
+  });
+  setTimeout(() => {
+    if (listeners.beforeunload) listeners.beforeunload();
+  }, 15);
+  const r = await p;
+  ok(r.outcome === 'new_document_completed', 'P2-01 unload + allowlisted dest → new_document_completed');
+}
+
+// ── NAV-RR2-P2-02: default Escape-only (pointer does not interrupt) ──
+{
+  const listeners = {};
+  const fakeDoc = {
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+    removeEventListener: () => {},
+  };
+  // Default: no aggressiveInterrupt — pointer listener should not be registered
+  const p = nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    readIdentity: () => ({
+      documentId: 'doc:1', revision: 1, path: '/a', origin: 'https://good.example',
+      browseKey: 'https://good.example/a',
+    }),
+    doc: fakeDoc,
+    win: null,
+  });
+  setTimeout(() => {
+    // Simulate trusted pointer — must NOT interrupt by default
+    if (listeners.pointerdown) listeners.pointerdown({ isTrusted: true });
+    if (listeners.keydown) listeners.keydown({ key: 'a', isTrusted: true });
+  }, 20);
+  const r = await p;
+  ok(r.outcome === 'failed_timeout', 'P2-02 default: pointer/key do not interrupt → timeout');
+  ok(listeners.pointerdown == null, 'P2-02 default: pointerdown listener not attached');
+}
+// Aggressive interrupt opt-in
+{
+  const listeners = {};
+  const fakeDoc = {
+    addEventListener: (t, fn) => { listeners[t] = fn; },
+    removeEventListener: () => {},
+  };
+  const p = nav.observeNavigationAfterActivate({
+    beforeDocumentId: 'doc:1',
+    beforeRevision: 1,
+    beforePath: '/a',
+    beforeOrigin: 'https://good.example',
+    impliesNavigation: true,
+    isBlankTarget: false,
+    aggressiveInterrupt: true,
+    readIdentity: () => ({
+      documentId: 'doc:1', revision: 1, path: '/a', origin: 'https://good.example',
+      browseKey: 'https://good.example/a',
+    }),
+    doc: fakeDoc,
+    win: null,
+  });
+  setTimeout(() => {
+    if (listeners.pointerdown) listeners.pointerdown({ isTrusted: true });
+  }, 120);
+  const r = await p;
+  ok(r.outcome === 'interrupted_by_user_gesture', 'P2-02 aggressiveInterrupt: pointer → interrupted');
+}
+
+// ── NAV-RR2-P2-03: detectBlockingOverlay prefers IR signal ──
+{
+  const ir = nav.detectBlockingOverlay({ stateSignals: ['blocking_overlay'], doc: null });
+  ok(ir.blocking === true && ir.source === 'ir_signal', 'P2-03 IR signal → blocking_overlay');
+  const none = nav.detectBlockingOverlay({ stateSignals: [], doc: null });
+  ok(none.blocking === false && none.source === 'none', 'P2-03 no signals/doc → none');
+  const fakeDoc = {
+    querySelector: (sel) => {
+      if (String(sel).includes('aria-modal') || String(sel).includes('alertdialog')) {
+        return { getAttribute: () => null, hidden: false };
+      }
+      return null;
+    },
+  };
+  const aria = nav.detectBlockingOverlay({ stateSignals: [], doc: fakeDoc });
+  ok(aria.blocking === true && aria.source === 'aria_modal', 'P2-03 ARIA modal → aria_modal source');
+}
+
+// ── NAV-RR2-P2-05: setOriginAllowlist / getOriginAllowlist ──
+{
+  ok(nav.ORIGIN_ALLOWLIST_STORAGE_KEY === 'navigationOriginAllowlist', 'P2-05 storage key constant');
+  const prev = globalThis.__ccNavigationOriginAllowlist;
+  nav.setOriginAllowlist(['https://allowed.example', '', 42, 'https://b.example']);
+  const list = nav.getOriginAllowlist();
+  ok(list.length === 2 && list.includes('https://allowed.example'), 'P2-05 set/get allowlist normalized');
+  ok(nav.isDestinationOriginAllowed('https://a.example', 'https://allowed.example', list).allowed, 'P2-05 allowlist permits');
+  nav.setOriginAllowlist([]);
+  if (prev !== undefined) globalThis.__ccNavigationOriginAllowlist = prev;
+  else delete globalThis.__ccNavigationOriginAllowlist;
+}
+
 delete globalThis.__ccNavBudgets;
 
 console.log(`\n${passed} passed, ${failed} failed`);

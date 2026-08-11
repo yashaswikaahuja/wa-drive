@@ -12,15 +12,23 @@ const QUIET_WINDOW_MS = 300;
 const MAX_REDIRECT_HOPS = 10;
 const PATH_MAX_LEN = 512;
 
-/** Optional test overrides: globalThis.__ccNavBudgets = { settleMs, quietMs, maxHops } */
+/**
+ * Optional test / operator overrides:
+ * globalThis.__ccNavBudgets = { settleMs, quietMs, maxHops, aggressiveInterrupt }
+ * aggressiveInterrupt (default false): pointer/key during settle → interrupted (NAV-RR2-P2-02)
+ */
 function budgets() {
   const o = (typeof globalThis !== 'undefined' && globalThis.__ccNavBudgets) || {};
   return {
     settleMs: Number(o.settleMs) > 0 ? Number(o.settleMs) : SETTLE_DEADLINE_MS,
     quietMs: Number(o.quietMs) >= 0 ? Number(o.quietMs) : QUIET_WINDOW_MS,
     maxHops: Number(o.maxHops) > 0 ? Number(o.maxHops) : MAX_REDIRECT_HOPS,
+    aggressiveInterrupt: o.aggressiveInterrupt === true,
   };
 }
+
+/** chrome.storage.local key for operator-confirmed destination origins (NAV-RR2-P2-05). */
+const ORIGIN_ALLOWLIST_STORAGE_KEY = 'navigationOriginAllowlist';
 
 /** @type {Readonly<Record<string, {primary_failure_code: string|null, primary_diagnostic: string}>>} */
 const OUTCOME_MAP = Object.freeze({
@@ -153,11 +161,80 @@ function isDestinationOriginAllowed(currentOrigin, destinationOrigin, allowlist 
 
 /**
  * Get operator allowlist from extension memory (never public IR).
+ * Seeded from chrome.storage.local via popup inject (NAV-RR2-P2-05).
  */
 function getOriginAllowlist() {
   if (typeof globalThis === 'undefined') return [];
   const raw = globalThis.__ccNavigationOriginAllowlist;
-  return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string') : [];
+  return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string' && x.length > 0) : [];
+}
+
+/**
+ * Set in-page allowlist (extension isolated world only; never public IR).
+ * @param {string[]|unknown} list
+ * @returns {string[]} normalized list stored
+ */
+function setOriginAllowlist(list) {
+  const normalized = Array.isArray(list)
+    ? list.filter((x) => typeof x === 'string' && x.length > 0)
+    : [];
+  if (typeof globalThis !== 'undefined') {
+    globalThis.__ccNavigationOriginAllowlist = normalized;
+  }
+  return normalized;
+}
+
+/**
+ * Detect blocking overlay (NAV-RR2-P2-03).
+ * Preference order:
+ *  1. IR PageState signals (blocking_overlay) from perception snapshot
+ *  2. IR-aligned ARIA dialog/modal live probes
+ *  3. Conservative heuristic selectors (last resort)
+ *
+ * @param {object} [opts]
+ * @param {string[]} [opts.stateSignals] from page_snapshot.state.signals
+ * @param {Document|null} [opts.doc]
+ * @returns {{ blocking: boolean, source: 'ir_signal'|'aria_modal'|'heuristic'|'none' }}
+ */
+function detectBlockingOverlay(opts = {}) {
+  const signals = Array.isArray(opts.stateSignals) ? opts.stateSignals : [];
+  if (signals.includes('blocking_overlay')) {
+    return { blocking: true, source: 'ir_signal' };
+  }
+
+  const doc = opts.doc != null
+    ? opts.doc
+    : (typeof document !== 'undefined' ? document : null);
+  if (!doc || typeof doc.querySelector !== 'function') {
+    return { blocking: false, source: 'none' };
+  }
+
+  // IR-aligned: explicit modal dialogs (page-ir blocking_overlay equivalent)
+  try {
+    const ariaModal = doc.querySelector(
+      '[aria-modal="true"], [role="dialog"][aria-modal="true"], [role="alertdialog"]'
+    );
+    if (ariaModal) {
+      // Prefer visible / not aria-hidden when computable
+      const hidden = ariaModal.getAttribute?.('aria-hidden') === 'true'
+        || ariaModal.hidden === true;
+      if (!hidden) {
+        return { blocking: true, source: 'aria_modal' };
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Heuristic last resort (legacy portals)
+  try {
+    const heuristic = doc.querySelector(
+      '.modal.show, .modal[style*="display: block"], [data-cc-blocking-overlay]'
+    );
+    if (heuristic) {
+      return { blocking: true, source: 'heuristic' };
+    }
+  } catch { /* ignore */ }
+
+  return { blocking: false, source: 'none' };
 }
 
 /**
@@ -286,11 +363,13 @@ function recheckOriginAfterSettle(beforeOrigin, afterOrigin, allowlist) {
  * @param {number} opts.beforeRevision
  * @param {string|null} opts.beforePath
  * @param {string|null} [opts.beforeOrigin]
+ * @param {string|null} [opts.expectedDestinationOrigin] known href origin for unload recheck (NAV-RR2-P2-01)
  * @param {boolean} opts.impliesNavigation
  * @param {boolean} opts.isBlankTarget
  * @param {() => {documentId: string|null, revision: number, path: string|null, origin: string|null, browseKey?: string|null, blockingOverlay?: boolean}} opts.readIdentity
  * @param {object} [opts.doc] document for gesture listeners
  * @param {string[]} [opts.originAllowlist]
+ * @param {boolean} [opts.aggressiveInterrupt] override budgets.aggressiveInterrupt
  * @returns {Promise<{outcome: string, mapped: object, hops: number}>}
  */
 async function observeNavigationAfterActivate(opts) {
@@ -299,15 +378,20 @@ async function observeNavigationAfterActivate(opts) {
     beforeRevision,
     beforePath,
     beforeOrigin = null,
+    expectedDestinationOrigin = null,
     impliesNavigation,
     isBlankTarget,
     readIdentity,
     doc = typeof document !== 'undefined' ? document : null,
     win = typeof window !== 'undefined' ? window : null,
     originAllowlist = getOriginAllowlist(),
+    aggressiveInterrupt: aggressiveInterruptOpt,
   } = opts;
 
   const b = budgets();
+  // NAV-RR2-P2-02: Escape-only cancel by default; pointer/key interrupt opt-in only
+  const aggressiveInterrupt = aggressiveInterruptOpt === true
+    || (aggressiveInterruptOpt !== false && b.aggressiveInterrupt === true);
 
   if (isBlankTarget) {
     // New browsing context; origin document identity unchanged
@@ -329,18 +413,20 @@ async function observeNavigationAfterActivate(opts) {
   let canceled = false;
   let unloading = false;
   const start = Date.now();
-  // Escape → canceled (NAV-IMPL-P1-02); other trusted keys after grace → interrupt
+  // Escape → canceled (NAV-IMPL-P1-02). Pointer/key interrupt only when aggressiveInterrupt.
   const onKey = (ev) => {
     if (ev && (ev.key === 'Escape' || ev.keyCode === 27)) {
       canceled = true;
       return;
     }
+    if (!aggressiveInterrupt) return;
     if (ev && ev.isTrusted === false) return;
     if (ev && (ev.key === 'Tab' || ev.metaKey || ev.ctrlKey || ev.altKey)) return;
     if (Date.now() - start < 100) return;
     interrupted = true;
   };
   const onPointer = (ev) => {
+    if (!aggressiveInterrupt) return;
     if (ev && ev.isTrusted === false) return;
     if (Date.now() - start < 100) return;
     interrupted = true;
@@ -356,7 +442,10 @@ async function observeNavigationAfterActivate(opts) {
 
   if (doc?.addEventListener) {
     doc.addEventListener('keydown', onKey, true);
-    doc.addEventListener('pointerdown', onPointer, true);
+    // Only attach pointer listener when aggressive interrupt is enabled (noise reduction)
+    if (aggressiveInterrupt) {
+      doc.addEventListener('pointerdown', onPointer, true);
+    }
   }
   if (win?.addEventListener) {
     win.addEventListener('pagehide', onPageHide, true);
@@ -375,10 +464,19 @@ async function observeNavigationAfterActivate(opts) {
   const beforeBrowseKey = lastBrowseKey;
   let sawChange = false;
 
+  /**
+   * On unload the live after-origin is unreadable. Prefer expectedDestinationOrigin
+   * from pre-activate classifier href (NAV-RR2-P2-01); else beforeOrigin (recheck no-op).
+   */
+  const identityForUnload = () => ({
+    origin: expectedDestinationOrigin || beforeOrigin || null,
+  });
+
   const finishSuccess = (outcome, identity, hopCount) => {
+    const afterOrigin = identity?.origin || null;
     const originDeny = recheckOriginAfterSettle(
       beforeOrigin || null,
-      identity?.origin || null,
+      afterOrigin,
       originAllowlist
     );
     if (originDeny) {
@@ -409,8 +507,9 @@ async function observeNavigationAfterActivate(opts) {
       }
       // Top-level navigation tearing down the isolated world: report new document
       // before the context is destroyed (NAV-IMPL-P1-01 fail-closed).
+      // NAV-RR2-P2-01: recheck known expected destination origin on unload.
       if (unloading) {
-        return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
+        return finishSuccess('new_document_completed', identityForUnload(), hops);
       }
 
       let identity;
@@ -421,7 +520,7 @@ async function observeNavigationAfterActivate(opts) {
         }
       } catch (e) {
         // Context torn down mid-read → treat as document navigation (fail-closed)
-        return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
+        return finishSuccess('new_document_completed', identityForUnload(), hops);
       }
 
       // Compare to last* for hop counting; to before* for success classification
@@ -475,7 +574,7 @@ async function observeNavigationAfterActivate(opts) {
 
     // Deadline exceeded
     if (unloading) {
-      return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
+      return finishSuccess('new_document_completed', identityForUnload(), hops);
     }
     const finalId = (() => {
       try {
@@ -488,7 +587,7 @@ async function observeNavigationAfterActivate(opts) {
     })();
     if (!finalId) {
       // Context gone
-      return finishSuccess('new_document_completed', { origin: beforeOrigin }, hops);
+      return finishSuccess('new_document_completed', identityForUnload(), hops);
     }
     if (finalId.documentId != null && beforeDocumentId != null && finalId.documentId !== beforeDocumentId) {
       return finishSuccess('new_document_completed', finalId, hops);
@@ -525,7 +624,9 @@ async function observeNavigationAfterActivate(opts) {
   } finally {
     if (doc?.removeEventListener) {
       doc.removeEventListener('keydown', onKey, true);
-      doc.removeEventListener('pointerdown', onPointer, true);
+      if (aggressiveInterrupt) {
+        doc.removeEventListener('pointerdown', onPointer, true);
+      }
     }
     if (win?.removeEventListener) {
       win.removeEventListener('pagehide', onPageHide, true);
@@ -587,6 +688,7 @@ const api = {
   QUIET_WINDOW_MS,
   MAX_REDIRECT_HOPS,
   PATH_MAX_LEN,
+  ORIGIN_ALLOWLIST_STORAGE_KEY,
   OUTCOME_MAP,
   budgets,
   browseKeyFromIdentity,
@@ -597,6 +699,8 @@ const api = {
   resolveDestinationOrigin,
   isDestinationOriginAllowed,
   getOriginAllowlist,
+  setOriginAllowlist,
+  detectBlockingOverlay,
   sanitizePagePath,
   routeKeyFromPath,
   mapNavigationOutcome,

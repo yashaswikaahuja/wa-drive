@@ -186,8 +186,28 @@ async function buildSnapshot(options) {
     } : { width: 0, height: 0, device_pixel_ratio: 1, scroll_x: 0, scroll_y: 0 },
   };
 
-  // 7. Page state
+  // 7. Page state (NAV-RR2-P2-03: emit blocking_overlay when IR-aligned modal present)
   const state = { signals: [], candidates: [] };
+  try {
+    const navContract = (typeof globalThis !== 'undefined' && globalThis.CcNavigationContract)
+      || (typeof require === 'function' ? (() => { try { return require('../runtime/navigation-contract.js'); } catch { return null; } })() : null);
+    if (navContract?.detectBlockingOverlay) {
+      const det = navContract.detectBlockingOverlay({
+        stateSignals: [],
+        doc: typeof document !== 'undefined' ? document : null,
+      });
+      if (det.blocking && !state.signals.includes('blocking_overlay')) {
+        state.signals.push('blocking_overlay');
+      }
+    } else if (typeof document !== 'undefined' && document.querySelector) {
+      const modal = document.querySelector(
+        '[aria-modal="true"], [role="dialog"][aria-modal="true"], [role="alertdialog"], .modal.show, [data-cc-blocking-overlay]'
+      );
+      if (modal && !state.signals.includes('blocking_overlay')) {
+        state.signals.push('blocking_overlay');
+      }
+    }
+  } catch { /* non-fatal */ }
 
   // Truncation diagnostic
   if (truncated) {

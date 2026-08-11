@@ -319,6 +319,10 @@ function resolveExecutionTarget(targetBinding, target, requirements = {}) {
  * Get current perception state for ActionPlan envelope checks.
  */
 function getPerceptionState() {
+  // stateSignals from last public snapshot (NAV-RR2-P2-03 blocking_overlay etc.)
+  const stateSignals = Array.isArray(_lastSnapshot?.state?.signals)
+    ? _lastSnapshot.state.signals.slice()
+    : [];
   return {
     initialized: _initialized,
     documentId: _revisionManager?.currentDocumentId() || null,
@@ -327,6 +331,7 @@ function getPerceptionState() {
     bindingCount: _bindingRegistry?.size ?? 0,
     deltaObserverActive: !!_deltaEmitter,
     authorshipGenerationCount: _authorshipGenerations.size,
+    stateSignals,
   };
 }
 

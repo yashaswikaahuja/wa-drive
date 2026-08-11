@@ -574,6 +574,28 @@ fillBtn.addEventListener('click', async () => {
       });
     }
 
+    // NAV-RR2-P2-05: seed operator destination-origin allowlist from chrome.storage.local
+    // into the isolated world (never public IR). Key: navigationOriginAllowlist (string[]).
+    try {
+      const allowStore = await chrome.storage.local.get('navigationOriginAllowlist');
+      const originAllowlist = Array.isArray(allowStore.navigationOriginAllowlist)
+        ? allowStore.navigationOriginAllowlist.filter((x) => typeof x === 'string' && x.length > 0)
+        : [];
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (list) => {
+          if (globalThis.CcNavigationContract?.setOriginAllowlist) {
+            globalThis.CcNavigationContract.setOriginAllowlist(list);
+          } else {
+            globalThis.__ccNavigationOriginAllowlist = Array.isArray(list) ? list : [];
+          }
+        },
+        args: [originAllowlist],
+      });
+    } catch (e) {
+      console.warn('[CC] navigation origin allowlist seed failed:', e.message);
+    }
+
     const [percResult] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: async () => {

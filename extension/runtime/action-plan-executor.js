@@ -134,10 +134,20 @@ function readNavigationIdentity() {
       path = location.pathname || null;
     }
   }
-  const blockingOverlay = !!(
-    typeof document !== 'undefined'
-    && document.querySelector?.('[aria-modal="true"], .modal.show, [data-cc-blocking-overlay]')
-  );
+  // NAV-RR2-P2-03: prefer IR PageState signals, then ARIA, then heuristic
+  let blockingOverlay = false;
+  if (nav?.detectBlockingOverlay) {
+    const det = nav.detectBlockingOverlay({
+      stateSignals: perc.stateSignals || [],
+      doc: typeof document !== 'undefined' ? document : null,
+    });
+    blockingOverlay = !!det.blocking;
+  } else {
+    blockingOverlay = !!(
+      typeof document !== 'undefined'
+      && document.querySelector?.('[aria-modal="true"], .modal.show, [data-cc-blocking-overlay]')
+    );
+  }
   const identity = {
     documentId: perc.documentId || null,
     revision: perc.revision ?? -1,
@@ -390,8 +400,18 @@ async function execute(plan) {
         if (!failureCode) {
           const nav = globalThis.CcNavigationContract;
           const classification = nav?.classifyNavigationImplication?.(target.element)
-            || { implies: elementImpliesNavigation(target.element), isBlankTarget: false };
+            || { implies: elementImpliesNavigation(target.element), isBlankTarget: false, destinationHref: null };
           const beforeIdentity = readNavigationIdentity();
+          // NAV-RR2-P2-01: known destination origin for unload recheck when context dies
+          let expectedDestinationOrigin = null;
+          if (classification.destinationHref && nav?.resolveDestinationOrigin) {
+            const baseHref = typeof location !== 'undefined' ? location.href : beforeIdentity.origin;
+            expectedDestinationOrigin = nav.resolveDestinationOrigin(
+              classification.destinationHref,
+              beforeIdentity.origin,
+              baseHref
+            );
+          }
 
           const result = globalThis.CcDomGateway.performAction(target.element, step.action, {
             optionElement: optionTarget?.element || null,
@@ -404,6 +424,7 @@ async function execute(plan) {
               beforeRevision: beforeIdentity.revision,
               beforePath: beforeIdentity.path,
               beforeOrigin: beforeIdentity.origin,
+              expectedDestinationOrigin,
               impliesNavigation: !!classification.implies,
               isBlankTarget: !!classification.isBlankTarget,
               readIdentity: readNavigationIdentity,
