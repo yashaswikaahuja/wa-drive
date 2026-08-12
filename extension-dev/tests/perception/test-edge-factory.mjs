@@ -271,5 +271,42 @@ console.log('\n=== Edge Factory Relationships ===');
   ok(!/querySelector|outerHTML|xpath/i.test(blob), 'no selector/html smuggling in edges');
 }
 
+// VC-IMPL-P1: geometry proximity edges use ordered endpoints; adjacent only
+{
+  const withGeo = (id, kind, parent, order, geo) => {
+    const n = node(id, kind, parent, order, {
+      widget: kind === 'control' ? { behavior_kind: 'text_entry' } : null,
+    });
+    n.geometry = geo;
+    return n;
+  };
+  const nodesMap = {
+    'n.page': node('n.page', 'page', null, 0),
+    'n.form': node('n.form', 'form', 'n.page', 1),
+    // order: z, a, m — proximity adjacent by order; endpoints must be sorted by id
+    'n.z': withGeo('n.z', 'control', 'n.form', 2, { x: 0, y: 0, width: 40, height: 20, viewport_intersection: 1 }),
+    'n.a': withGeo('n.a', 'control', 'n.form', 3, { x: 50, y: 0, width: 40, height: 20, viewport_intersection: 1 }),
+    'n.m': withGeo('n.m', 'control', 'n.form', 4, { x: 100, y: 0, width: 40, height: 20, viewport_intersection: 1 }),
+    // Far control: not adjacent-proximate to n.m (gap large after sort by order m is last)
+    'n.far': withGeo('n.far', 'control', 'n.form', 5, { x: 500, y: 0, width: 40, height: 20, viewport_intersection: 1 }),
+  };
+  const edges = deriveEdges(nodesMap, contexts, { factMeta: {} });
+  const prox = edges.filter((e) =>
+    e.type === 'visually_groups_with'
+    && Array.isArray(e.evidence?.[0]?.signals)
+    && e.evidence[0].signals.includes('geometry.proximity')
+  );
+  ok(prox.length >= 1, 'emits geometry.proximity visually_groups_with');
+  ok(prox.every((e) => e.source_id < e.target_id), 'proximity edges ordered source_id < target_id');
+  // No reverse duplicates
+  const keys = prox.map((e) => `${e.source_id}|${e.target_id}`);
+  ok(new Set(keys).size === keys.length, 'no duplicate proximity undirected edges');
+  // Non-adjacent far should not pair with first control via adjacency rule
+  ok(!prox.some((e) =>
+    (e.source_id === 'n.z' && e.target_id === 'n.far')
+    || (e.source_id === 'n.far' && e.target_id === 'n.z')
+  ), 'non-adjacent far not paired with first control');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

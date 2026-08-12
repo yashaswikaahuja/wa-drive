@@ -78,5 +78,32 @@ ok(vc.parseZIndexHint({ position: 'fixed', zIndex: '10' }) === 10, 'fixed z-inde
 ok(vc.parseZIndexHint({ position: 'static', zIndex: '10' }) === null, 'static → null');
 ok(vc.parseZIndexHint({ position: 'absolute', zIndex: 'auto' }) === null, 'auto → null');
 
+console.log('\n=== VC-IMPL-P1 edge endpoint ordering ===');
+{
+  const o1 = vc.orderedEdgeEndpoints('node:b', 'node:a');
+  ok(o1 && o1[0] === 'node:a' && o1[1] === 'node:b', 'ordered endpoints source < target');
+  ok(vc.orderedEdgeEndpoints('node:a', 'node:a') === null, 'self-edge rejected');
+  const o2 = vc.orderedEdgeEndpoints('node:a', 'node:b');
+  ok(o2 && o2[0] === 'node:a' && o2[1] === 'node:b', 'already ordered preserved');
+}
+
+console.log('\n=== Scroll-invariant document identity of bbox origin ===');
+{
+  // Same document position, different scroll: client moves, document coords stable
+  const docX = 500;
+  const docY = 400;
+  const vp1 = { width: 800, height: 600, scroll_x: 0, scroll_y: 0 };
+  const vp2 = { width: 800, height: 600, scroll_x: 100, scroll_y: 50 };
+  const g1 = vc.geometryFromClientRect(
+    { left: docX, top: docY, width: 30, height: 20, right: docX + 30, bottom: docY + 20 },
+    vp1
+  );
+  const g2 = vc.geometryFromClientRect(
+    { left: docX - 100, top: docY - 50, width: 30, height: 20, right: docX - 100 + 30, bottom: docY - 50 + 20 },
+    vp2
+  );
+  ok(g1 && g2 && g1.x === g2.x && g1.y === g2.y, 'document bbox stable across scroll');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

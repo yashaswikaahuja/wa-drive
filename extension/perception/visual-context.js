@@ -185,13 +185,30 @@ function sanitizeGeometryForPrivacy(geometry, classification) {
  */
 function hasVirtualizationHints(doc) {
   if (!doc || typeof doc.querySelector !== 'function') return false;
+  // Private diagnostic probes only — results are never selectors in public IR.
+  // Prefer ARIA/data attributes over framework class names when possible.
   try {
-    return !!doc.querySelector(
-      '[data-virtualized], [data-virtuoso-scroller], .ReactVirtualized, .ag-body-viewport, [aria-rowcount]'
-    );
+    if (doc.querySelector('[data-virtualized], [data-virtuoso-scroller], [aria-rowcount]')) {
+      return true;
+    }
+    // Framework classes: diagnostic only; do not publish class names
+    if (doc.querySelector('.ReactVirtualized, .ag-body-viewport')) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
+}
+
+/**
+ * Canonical undirected edge endpoints for visual edges (source_id < target_id).
+ * Prevents duplicate reversed visually_groups_with edges (VC-IMPL-P1-01).
+ * @returns {[string, string]|null}
+ */
+function orderedEdgeEndpoints(idA, idB) {
+  if (!idA || !idB || idA === idB) return null;
+  return idA < idB ? [idA, idB] : [idB, idA];
 }
 
 const FORBIDDEN_PUBLIC_VISUAL_KEYS = Object.freeze([
@@ -216,6 +233,7 @@ const api = {
   geometryEvidenceSignals,
   sanitizeGeometryForPrivacy,
   hasVirtualizationHints,
+  orderedEdgeEndpoints,
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

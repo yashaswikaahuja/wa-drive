@@ -246,21 +246,25 @@ function readGeometry(element) {
 
 /**
  * Batched geometry read for multiple elements (single layout pass for rects).
+ * Phase order: all getBoundingClientRect first, then optional z-index styles
+ * only for candidates that look non-static (avoid full-tree getComputedStyle).
  * @param {Element[]} elements
  * @returns {object[]} Array of geometry objects (same order as input).
  */
 function readGeometryBatch(elements) {
   const list = Array.isArray(elements) ? elements : [];
-  // Phase 1: force layout once, collect client rects
-  const rects = list.map((el) => {
+  // Phase 1: force layout once, collect client rects (no style reads)
+  const rects = new Array(list.length);
+  for (let i = 0; i < list.length; i++) {
+    const el = list[i];
     try {
-      return el && typeof el.getBoundingClientRect === 'function'
+      rects[i] = el && typeof el.getBoundingClientRect === 'function'
         ? el.getBoundingClientRect()
         : null;
     } catch {
-      return null;
+      rects[i] = null;
     }
-  });
+  }
   const vc = visualContextApi();
   const viewport = vc?.readPageViewport
     ? vc.readPageViewport(typeof window !== 'undefined' ? window : null)
@@ -271,29 +275,39 @@ function readGeometryBatch(elements) {
       scroll_x: typeof window !== 'undefined' ? (window.scrollX || 0) : 0,
       scroll_y: typeof window !== 'undefined' ? (window.scrollY || 0) : 0,
     };
-  // Phase 2: styles only for non-static (optional z-index)
-  return list.map((el, i) => {
+  // Phase 2: map rects → document geometry; z-index only when style.position ≠ static
+  const out = new Array(list.length);
+  for (let i = 0; i < list.length; i++) {
     const rect = rects[i];
-    if (!rect) return null;
-    let zHint = null;
-    try {
-      const style = el && typeof getComputedStyle === 'function' ? getComputedStyle(el) : null;
-      if (style && String(style.position || '').toLowerCase() !== 'static') {
-        zHint = vc?.parseZIndexHint ? vc.parseZIndexHint(style) : null;
-      }
-    } catch { /* ignore */ }
-    if (vc?.geometryFromClientRect) {
-      return vc.geometryFromClientRect(rect, viewport, zHint);
+    if (!rect) {
+      out[i] = null;
+      continue;
     }
-    return {
-      x: Math.round(rect.left + (viewport.scroll_x || 0)),
-      y: Math.round(rect.top + (viewport.scroll_y || 0)),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-      viewport_intersection: computeViewportIntersection(rect, viewport.width, viewport.height),
-      z_index_hint: zHint,
-    };
-  });
+    let zHint = null;
+    const el = list[i];
+    // Cheap skip: zero-size rects rarely need z-index for stacking evidence
+    if (rect.width > 0 && rect.height > 0 && el && typeof getComputedStyle === 'function') {
+      try {
+        const style = getComputedStyle(el);
+        if (style && String(style.position || '').toLowerCase() !== 'static') {
+          zHint = vc?.parseZIndexHint ? vc.parseZIndexHint(style) : null;
+        }
+      } catch { /* ignore */ }
+    }
+    if (vc?.geometryFromClientRect) {
+      out[i] = vc.geometryFromClientRect(rect, viewport, zHint);
+    } else {
+      out[i] = {
+        x: Math.round(rect.left + (viewport.scroll_x || 0)),
+        y: Math.round(rect.top + (viewport.scroll_y || 0)),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        viewport_intersection: computeViewportIntersection(rect, viewport.width, viewport.height),
+        z_index_hint: zHint,
+      };
+    }
+  }
+  return out;
 }
 
 /**

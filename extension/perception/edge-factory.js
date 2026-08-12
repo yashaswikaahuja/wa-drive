@@ -406,7 +406,8 @@ function deriveEdges(nodesMap, contexts, options = {}) {
   }
 
   // ── 12b. phase_3_6: geometry proximity groups for control siblings (mechanical only) ─
-  // Does NOT invent business region names. Caps edge count. A11y labels still win.
+  // Does NOT invent business region names. Ordered endpoints. O(n) adjacent pairs only
+  // (NAV/VC budget: never unbounded O(n²) full sibling pairs). A11y labels still win.
   const vc = (typeof globalThis !== 'undefined' && globalThis.CcVisualContext)
     || (typeof require === 'function' ? (() => { try { return require('./visual-context.js'); } catch { return null; } })() : null);
   if (vc?.areVisuallyProximate) {
@@ -424,22 +425,26 @@ function deriveEdges(nodesMap, contexts, options = {}) {
     for (const siblings of byParentCtrl.values()) {
       if (siblings.length < 2 || geoGroupCount >= maxEdges) continue;
       siblings.sort((a, b) => (a.order || 0) - (b.order || 0));
-      for (let i = 0; i < siblings.length && geoGroupCount < maxEdges; i++) {
-        for (let j = i + 1; j < siblings.length && geoGroupCount < maxEdges; j++) {
-          const a = siblings[i];
-          const b = siblings[j];
-          if (!vc.areVisuallyProximate(a.geometry, b.geometry)) continue;
-          // Skip if already grouped via section edge
-          const key = `visually_groups_with|${a.node_id < b.node_id ? a.node_id : b.node_id}|${a.node_id < b.node_id ? b.node_id : a.node_id}`;
-          if (seen.has(key)) continue;
-          pushEdge('visually_groups_with', a.node_id, b.node_id, {
-            source: 'derived',
-            confidence: 0.7,
-            signals: ['geometry.proximity'],
-            facts: ['geometry.proximity_sibling'],
-          });
-          geoGroupCount += 1;
-        }
+      // Adjacent-in-order only: O(n) per parent group (VC-IMPL-P1-01/02)
+      for (let i = 0; i < siblings.length - 1 && geoGroupCount < maxEdges; i++) {
+        const a = siblings[i];
+        const b = siblings[i + 1];
+        if (!vc.areVisuallyProximate(a.geometry, b.geometry)) continue;
+        // Canonical undirected endpoints (source_id < target_id) for dedupe
+        const ordered = vc.orderedEdgeEndpoints
+          ? vc.orderedEdgeEndpoints(a.node_id, b.node_id)
+          : (a.node_id < b.node_id ? [a.node_id, b.node_id] : [b.node_id, a.node_id]);
+        if (!ordered) continue;
+        const [srcId, tgtId] = ordered;
+        const key = `visually_groups_with|${srcId}|${tgtId}`;
+        if (seen.has(key)) continue;
+        pushEdge('visually_groups_with', srcId, tgtId, {
+          source: 'derived',
+          confidence: 0.7,
+          signals: ['geometry.proximity'],
+          facts: ['geometry.proximity_sibling'],
+        });
+        geoGroupCount += 1;
       }
     }
   }
@@ -454,8 +459,11 @@ function deriveEdges(nodesMap, contexts, options = {}) {
     const zt = tgt.geometry.z_index_hint;
     if (zs != null && zt != null && zs > zt) {
       const ev0 = Array.isArray(e.evidence) ? e.evidence[0] : null;
-      if (ev0 && Array.isArray(ev0.signals) && !ev0.signals.includes('geometry.z_stack')) {
-        ev0.signals = ev0.signals.concat(['geometry.z_stack']);
+      if (ev0) {
+        if (!Array.isArray(ev0.signals)) ev0.signals = [];
+        if (!ev0.signals.includes('geometry.z_stack')) {
+          ev0.signals = ev0.signals.concat(['geometry.z_stack']).slice(0, 32);
+        }
       }
     }
   }
