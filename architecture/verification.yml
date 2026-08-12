@@ -125,15 +125,14 @@ checks:
     name: "Phase 3.5 Navigation Understanding architecture contract"
     severity: fail
     description: >
-      Verifies phase_3_5 architecture_draft artifacts exist (navigation
-      contract, ADRs 0008–0009, draft additives, fixtures), ownership and
-      registry alignment, forbidden public keys on positive fixtures, and that
-      phase_3_5 is not frozen and does not rename prior phase_3_* keys.
-      Architecture-only; does not require runtime navigation implementation.
+      Verifies phase_3_5 frozen navigation understanding artifacts (contract
+      v0.2.0, ADRs 0008–0009, fixtures), ownership and registry alignment,
+      forbidden public keys on positive fixtures, deterministic outcome map,
+      and that phase_3_5 is frozen via independent gate #156 without renaming
+      prior phase_3_* keys. Draft additives remain non-frozen.
     method: "run_governance_test"
     command: "node extension-dev/tests/test-phase35-navigation-governance.mjs"
-    issue: "#145"
-    command: "node extension-dev/tests/test-d11-invariants.mjs"
+    issue: "#156"
     ci_job: "architecture"
     scope: "full_tree"
 

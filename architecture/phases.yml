@@ -192,7 +192,7 @@ phases:
 #   3.4 Widget classification → phase_3_2  (NOT phase_3_4)
 #   3.5 Relationship detection → phase_3_3
 #   3.6 Runtime state & deltas → phase_3_3 (folded)
-#   3.7 Navigation understanding → phase_3_5 (architecture_draft #145; not frozen)
+#   3.7 Navigation understanding → phase_3_5 (frozen #156)
 #   3.8 Visual context → ADR 0006 intent only; not a phase_3_* key
 #   3.9 Hardening & validation → partial work exists; not a phase_3_* freeze key
 #   3.10 Public API & migration → ir-migrations under 3.0; not a separate freeze key
@@ -210,8 +210,8 @@ phases:
 # ratified product freezes while constitution temporary_exceptions EXC-001..005
 # remain. Separate evidence is required before claiming those complete.
 #
-# phase_3_5 Navigation Understanding: architecture_draft only (#145). Independent
-# adversarial architecture review required before freeze or runtime implementation.
+# phase_3_5 Navigation Understanding: frozen via independent ratification #156
+# (architecture #145–#148; runtime #150–#153; residual P2 rem #153→f023d0b).
 
 # ── Phase 3 architecture gate ───────────────────────────────────────
 
@@ -551,52 +551,82 @@ phases:
 
   phase_3_5:
     name: "Navigation Understanding"
-    status: implemented_unfrozen
+    status: frozen
     draft_date: "2026-08-10"
     implemented_date: "2026-08-11"
-    issues: ["#145", "#147", "#148", "#150"]
+    frozen_date: "2026-08-12"
+    issues: ["#145", "#146", "#147", "#148", "#150", "#151", "#152", "#153", "#156"]
     depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4"]
     conceptual_roadmap_slot: "3.7"
     description: >
-      Architecture contract v0.2.0 for mechanical navigation affordances,
-      transition identity, privacy-safe page.path, origin policy, settle budgets,
-      and deterministic EO diagnostics. Runtime implemented under #150
-      (navigation-contract.js + ActionPlanExecutor + snapshot path sanitization).
-      Browser exposes observed activatable nodes; service owns goals.
-      Status is implemented_unfrozen — independent implementation review required
-      before freeze. Do not treat as frozen from #150.
-    discovery_reference: "Issue #145 architecture; #147 P1 rem; #148 re-review; #150 runtime"
+      Architecture contract v0.2.0 and runtime for mechanical navigation
+      affordances, transition identity, privacy-safe page.path, destination
+      origin policy, settle budgets, and deterministic EO FailureCode +
+      navigation_* diagnostics. Browser observes and mechanically executes;
+      service selects workflow/navigation candidates and owns business reasoning.
+    discovery_reference: >
+      #145 architecture; #146/#147/#148 arch review; #150 runtime;
+      #151/#152/#153 impl review+rem; #156 final ratification freeze.
+    ratification: >
+      Final independent ratification gate #156 returned APPROVE WITH CONDITIONS
+      (progressive-only residual P2). Runtime baseline f023d0b on
+      phase-3-perception. No unresolved P0/P1. SPA without path/href remains
+      accepted progressive P2. Frozen Phase 3.0–3.4 contracts unchanged.
+    runtime_baseline_commit: "f023d0b"
+    frozen_files:
+      - path: "architecture/navigation-understanding.yml"
+        reason: "Normative navigation understanding contract v0.2.0"
+      - path: "architecture/adrs/0008-navigation-transition-identity.md"
+        reason: "ADR: document vs revision transition identity"
+      - path: "architecture/adrs/0009-navigation-target-mechanical-identity.md"
+        reason: "ADR: mechanical targets without selectors/business goals"
+      - path: "architecture/fixtures/navigation/"
+        reason: "Positive and malicious navigation contract fixtures"
+      - path: "extension/runtime/navigation-contract.js"
+        reason: "Classifier, origin policy, path sanitize, outcome map, settle observer"
+      - path: "extension/runtime/action-plan-executor.js"
+        reason: "Activate path navigation authz + observe (shared with 3.0 ActionPlan runtime)"
     architecture_artifacts:
       - path: "architecture/navigation-understanding.yml"
-        purpose: "Normative navigation understanding contract (draft)"
+        purpose: "Normative navigation understanding contract (frozen)"
       - path: "architecture/navigation-understanding.draft-additives.json"
-        purpose: "Optional future wire additives; not frozen"
+        purpose: "Optional future wire additives; NOT frozen with phase_3_5"
       - path: "architecture/adrs/0008-navigation-transition-identity.md"
         purpose: "ADR: document vs revision transition identity"
       - path: "architecture/adrs/0009-navigation-target-mechanical-identity.md"
         purpose: "ADR: mechanical targets without selectors/business goals"
       - path: "architecture/fixtures/navigation/"
         purpose: "Positive and malicious contract fixtures"
-    done_criteria_architecture:
-      - "Versioned navigation contract answering ownership and lifecycle questions ✓"
-      - "ADRs for transition identity and mechanical targets ✓"
-      - "Fixtures + governance CI for contract shape and forbidden keys ✓"
-      - "No freeze; independent adversarial review requested ✓"
-    forbidden_from_this_status:
-      - "Runtime navigation detectors or ActionPlanExecutor navigation features"
-      - "status: frozen without independent architecture review"
-      - "Renaming phase_3_4 or other existing keys"
-      - "Business workflow semantics in browser perception"
+    allowed_changes:
+      - "Bug fixes with regression tests that preserve outcome map and classifier semantics"
+      - "Progressive SPA identity-effect detectors that do not invent business navigation goals"
+      - "Background webNavigation-assisted full-nav origin recheck that preserves fail-closed policy"
+      - "Operator allowlist UX that continues to require explicit origin entries (no silent XO)"
+      - "Additional fixtures / CI coverage"
+    forbidden_changes:
+      - "Weakening destination origin policy or allow_navigation fail-closed authz"
+      - "Emitting selectors, XPath, DOM handles, or private bindings in public IR/EO"
+      - "Browser selecting among workflow/navigation candidates (service owns selection)"
+      - "Inventing alternate mechanical classifier rules outside architecture contract"
+      - "Arbitrary dual FailureCode mapping for the same navigation_outcome"
+      - "Renaming phase_3_4 or other existing phase_3_* keys"
+      - "Weakening Phase 3.0–3.4 frozen contracts"
     modules_implemented:
       - path: "extension/runtime/navigation-contract.js"
         purpose: "Classifier, origin policy, path sanitize, outcome map, settle observer"
       - path: "extension/runtime/action-plan-executor.js"
         purpose: "Activate path uses navigation contract (authz + observe)"
       - path: "extension/perception/snapshot-builder.js"
-        purpose: "page.path sanitization via navigation contract"
-    next_gate: >
-      Independent adversarial implementation review of #150 runtime. Freeze only
-      via explicit freeze gate after that review. Residual P2 from #148 progressive.
+        purpose: "page.path sanitization + blocking_overlay PageState signal"
+    accepted_progressive_p2:
+      - id: NAV-RR2-P2-04
+        summary: "SPA without path/href still relies on identity-effect or timeout"
+      - id: unload_redirect_xo_without_expected_origin
+        summary: "Full-nav redirect to unknown XO after unload without expectedDestinationOrigin still cannot live-recheck (webNavigation progressive)"
+      - id: overlay_heuristic_fallback
+        summary: "Private heuristic overlay selectors remain last-resort after IR signal/ARIA"
+      - id: allowlist_operator_ui
+        summary: "Storage key navigationOriginAllowlist productized; full operator UI progressive"
 
 # ── Phase 4+: registry note (do not treat as ratified freezes) ─────
 # Historical status:complete on phase_4_*/5_*/7_* predates clearance of

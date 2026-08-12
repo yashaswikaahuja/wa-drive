@@ -85,7 +85,8 @@ for (const rel of required) {
 
 const contract = read('architecture/navigation-understanding.yml');
 ok(contract.includes('contract_version: "0.2.0"') || contract.includes("contract_version: '0.2.0'"), 'contract version 0.2.0 after #147');
-ok(contract.includes('status: architecture_draft'), 'contract remains architecture_draft (not frozen)');
+ok(contract.includes('status: frozen'), 'contract status is frozen (#156)');
+ok(contract.includes('freeze_issue: "#156"') || contract.includes('#156'), 'contract references freeze gate #156');
 ok(contract.includes('remediation_issue: "#147"') || contract.includes('#147'), 'contract references #147 remediation');
 
 // P1-08 ownership wording
@@ -249,10 +250,12 @@ ok(denyFix.expected_primary_failure_code === 'authorization_denied', 'allow_navi
 console.log('\n=== Registry alignment ===');
 const phases = read('architecture/phases.yml');
 ok(
-  /phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
-  'phase_3_5 status is architecture_draft or implemented_unfrozen (not frozen)'
+  /phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*frozen/.test(phases),
+  'phase_3_5 status is frozen (#156)'
 );
-ok(!/phase_3_5:\s*\n\s*name:\s*"Navigation Understanding"\s*\n\s*status:\s*frozen\s*$/m.test(phases), 'phase_3_5 is not frozen');
+ok(phases.includes('frozen_date: "2026-08-12"') || phases.includes("frozen_date: '2026-08-12'"), 'phase_3_5 has freeze date');
+ok(phases.includes('runtime_baseline_commit') && phases.includes('f023d0b'), 'phase_3_5 records runtime baseline f023d0b');
+ok(phases.includes('NAV-RR2-P2-04') || phases.includes('accepted_progressive_p2'), 'accepted progressive P2 recorded');
 ok(phases.includes('phase_3_4') && phases.includes('WSS'), 'phase_3_4 WSS retained');
 const ownership = read('architecture/ownership.yml');
 ok(ownership.includes('navigation_understanding') || ownership.includes('phase_3_5'), 'ownership maps navigation understanding');

@@ -1,15 +1,17 @@
 # CyberControl Phase 3.5 — Navigation Understanding Architecture Contract
-# Repository key: phase_3_5 (architecture/phases.yml). Not frozen.
+# Repository key: phase_3_5 (architecture/phases.yml). FROZEN.
 #
-# Status: architecture_draft (issue #145; P1 remediation #147)
-# Does NOT implement runtime behavior. Does NOT freeze.
-# Independent adversarial architecture re-review required before freeze or implementation.
+# Status: frozen (final independent ratification #156)
+# Architecture draft #145; P1 remediation #147; runtime #150; final freeze #156.
+# Runtime baseline: f023d0b on phase-3-perception (or equivalent tip with same surface).
 
 contract_id: navigation-understanding
 contract_version: "0.2.0"
-status: architecture_draft
+status: frozen
 issue: "#145"
 remediation_issue: "#147"
+freeze_issue: "#156"
+frozen_date: "2026-08-12"
 phase: phase_3_5
 depends_on:
   - phase_3_0   # frozen contracts
