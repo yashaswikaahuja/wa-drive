@@ -64,7 +64,8 @@ for (const rel of required) {
 
 const contract = read('architecture/visual-context.yml');
 ok(contract.includes('contract_version: "0.1.0"') || contract.includes("contract_version: '0.1.0'"), 'contract version 0.1.0');
-ok(contract.includes('status: architecture_draft'), 'contract remains architecture_draft (not frozen)');
+ok(contract.includes('status: frozen'), 'contract status is frozen (#163)');
+ok(contract.includes('freeze_issue: "#163"') || contract.includes('#163'), 'contract references freeze gate #163');
 ok(contract.includes('phase: phase_3_6') || contract.includes('phase_3_6'), 'contract uses registry key phase_3_6');
 ok(contract.includes('conceptual_roadmap_slot: "3.8"') || contract.includes('3.8'), 'maps conceptual 3.8');
 ok(contract.includes('issue: "#158"') || contract.includes('#158'), 'references #158');
@@ -100,9 +101,9 @@ ok(contract.includes('signals:') && contract.includes('normative:') && contract.
 ok(contract.includes('Node.geometry') || contract.includes('geometry_bbox'), 'reuses Node.geometry');
 ok(contract.includes('blocking_overlay'), 'ties to blocking_overlay PageState');
 
-// Non-goals
-ok(contract.includes('non_goals:') || contract.includes('Does NOT implement'), 'explicit non-goals / no runtime');
-ok(!/status:\s*frozen/.test(contract), 'contract file itself not frozen');
+// Non-goals at freeze
+ok(contract.includes('non_goals_at_freeze:') || contract.includes('Enabling screenshots'), 'explicit freeze non-goals');
+ok(contract.includes('status: frozen'), 'contract file is frozen');
 
 console.log('\n=== ADRs ===');
 const adr10 = read('architecture/adrs/0010-visual-geometry-identity.md');
@@ -214,10 +215,12 @@ ok(contract.includes('schema_version bump') || contract.includes('does NOT requi
 console.log('\n=== Registry / ownership / verification ===');
 const phases = read('architecture/phases.yml');
 ok(
-  /phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
-  'phase_3_6 status is architecture_draft or implemented_unfrozen (not frozen)'
+  /phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*frozen/.test(phases),
+  'phase_3_6 status is frozen (#163)'
 );
-ok(!/phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*frozen/.test(phases), 'phase_3_6 is not frozen');
+ok(phases.includes('frozen_date: "2026-08-12"') || phases.includes("frozen_date: '2026-08-12'"), 'phase_3_6 has freeze date');
+ok(phases.includes('runtime_baseline_commit') && phases.includes('b9e9427'), 'phase_3_6 records runtime baseline b9e9427');
+ok(phases.includes('accepted_progressive_p2') || phases.includes('VC-RR-P2'), 'accepted progressive P2 recorded');
 ok(phases.includes('conceptual_roadmap_slot: "3.8"') || phases.includes("conceptual_roadmap_slot: '3.8'"), 'phase_3_6 maps conceptual 3.8');
 ok(phases.includes('phase_3_5') && phases.includes('Navigation Understanding'), 'phase_3_5 retained');
 ok(phases.includes('phase_3_4') && phases.includes('WSS'), 'phase_3_4 WSS retained');

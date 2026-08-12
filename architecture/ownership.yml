@@ -258,10 +258,10 @@ subsystems:
       (phase_3_5 / #156). Browser owns observation/execution evidence; service
       owns navigation goals. Draft additives remain non-frozen.
 
-  # ── SHARED CONTRACT: Visual Context (phase_3_6 draft; conceptual 3.8) ─
+  # ── SHARED CONTRACT: Visual Context (phase_3_6 frozen; conceptual 3.8) ─
   visual_context:
     owner: shared
-    status: implemented_unfrozen
+    status: correct
     migration_phase: "phase_3_6"
     paths:
       - "architecture/visual-context.yml"
@@ -271,9 +271,9 @@ subsystems:
       - "architecture/fixtures/visual/"
       - "extension/perception/visual-context.js"
     description: >
-      Visual Context contract + runtime helpers (geometry document space,
+      Frozen Visual Context contract + runtime helpers (geometry document space,
       viewport, visibility/occlusion evidence, visual edges). Browser observes;
-      service interprets for planning. Implemented unfrozen (#160); not frozen.
+      service interprets for planning. Frozen #163; draft additives remain non-frozen.
 
   # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
   page_ir_consumers:

@@ -1,8 +1,8 @@
 # ADR-0011: Visual Privacy Boundaries (geometry yes, pixels no)
 
-- Status: Proposed (architecture_draft for phase_3_6 / conceptual 3.8 / #158)
+- Status: Accepted (frozen with phase_3_6 / #163)
 - Date: 2026-08-12
-- Issue: #158
+- Issue: #158 / #163
 - Relates: ADR-0006 (screenshots), perception-privacy.yml, page-ir secret handling
 
 ## Context

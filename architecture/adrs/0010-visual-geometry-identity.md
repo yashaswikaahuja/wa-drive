@@ -1,8 +1,8 @@
 # ADR-0010: Visual Geometry Identity (stable nodes under layout change)
 
-- Status: Proposed (architecture_draft for phase_3_6 / conceptual 3.8 / #158)
+- Status: Accepted (frozen with phase_3_6 / #163)
 - Date: 2026-08-12
-- Issue: #158
+- Issue: #158 / #163
 - Relates: ADR-0002 (immutable snapshots), ADR-0004 (perception identity), ADR-0006 (screenshots), phase_3_3 graph authority
 
 ## Context

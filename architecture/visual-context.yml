@@ -2,14 +2,16 @@
 # Repository key: phase_3_6 (architecture/phases.yml). Policy A: conceptual
 # taxonomy slot 3.8 maps here; do NOT rename phase_3_* keys to mirror 3.8.
 #
-# Status: architecture_draft (issue #158)
-# Does NOT implement runtime behavior. Does NOT freeze.
-# Independent adversarial architecture review required before freeze or implementation.
+# Status: frozen (final independent ratification #163)
+# Architecture #158; reviews #159/#161/#162; runtime #160; freeze #163.
+# Runtime baseline: b9e9427 on phase-3-perception (or equivalent tip).
 
 contract_id: visual-context
 contract_version: "0.1.0"
-status: architecture_draft
+status: frozen
 issue: "#158"
+freeze_issue: "#163"
+frozen_date: "2026-08-12"
 phase: phase_3_6
 conceptual_roadmap_slot: "3.8"
 depends_on:
@@ -346,13 +348,13 @@ design_answers:
 # ─────────────────────────────────────────────────────────────────────
 # Explicit non-goals (this issue)
 # ─────────────────────────────────────────────────────────────────────
-non_goals:
-  - "Runtime implementation of new detectors"
-  - "Freezing phase_3_6"
-  - "Amending frozen page-ir.schema.json in this draft (normative surface already covered)"
-  - "Enabling screenshots in default perception"
-  - "ActionPlanExecutor changes"
+non_goals_at_freeze:
+  - "Enabling screenshots in default perception (ADR-0006 / ADR-0011)"
+  - "Browser vision / OCR as perception IR"
+  - "Amending frozen page-ir.schema.json without a separate architecture review"
+  - "ActionPlanExecutor redesign for visual ranking (service owns ranking)"
   - "Renumbering phase_3_4 WSS or any historical phase_3_* key"
+  - "Progressive draft additives (occludes, layout_region_tag) as normative wire"
 
 verification:
   check_id: CHECK-014
