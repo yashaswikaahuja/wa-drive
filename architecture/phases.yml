@@ -193,7 +193,7 @@ phases:
 #   3.5 Relationship detection → phase_3_3
 #   3.6 Runtime state & deltas → phase_3_3 (folded)
 #   3.7 Navigation understanding → phase_3_5 (frozen #156)
-#   3.8 Visual context → ADR 0006 intent only; not a phase_3_* key
+#   3.8 Visual context → phase_3_6 (architecture_draft #158; not frozen)
 #   3.9 Hardening & validation → partial work exists; not a phase_3_* freeze key
 #   3.10 Public API & migration → ir-migrations under 3.0; not a separate freeze key
 #   (no conceptual slot) WSS → phase_3_4
@@ -212,6 +212,9 @@ phases:
 #
 # phase_3_5 Navigation Understanding: frozen via independent ratification #156
 # (architecture #145–#148; runtime #150–#153; residual P2 rem #153→f023d0b).
+#
+# phase_3_6 Visual Context (conceptual 3.8): architecture_draft only (#158).
+# Independent adversarial architecture review required before freeze or runtime.
 
 # ── Phase 3 architecture gate ───────────────────────────────────────
 
@@ -627,6 +630,50 @@ phases:
         summary: "Private heuristic overlay selectors remain last-resort after IR signal/ARIA"
       - id: allowlist_operator_ui
         summary: "Storage key navigationOriginAllowlist productized; full operator UI progressive"
+
+  phase_3_6:
+    name: "Visual Context"
+    status: architecture_draft
+    draft_date: "2026-08-12"
+    issues: ["#158"]
+    depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4", "phase_3_5"]
+    conceptual_roadmap_slot: "3.8"
+    description: >
+      Architecture contract for privacy-safe mechanical Visual Context:
+      geometry, viewport/scroll relationship, visibility/occlusion evidence,
+      and visual proximity/grouping among Page IR nodes — without screenshots,
+      browser vision, selectors, or business semantics. Repository key is
+      phase_3_6; conceptual taxonomy slot is 3.8 — do not rename keys.
+      Status is architecture_draft only. No runtime implementation from #158.
+      No freeze from #158.
+    discovery_reference: "Issue #158; ADR-0006 screenshot privacy; frozen Page IR geometry"
+    architecture_artifacts:
+      - path: "architecture/visual-context.yml"
+        purpose: "Normative Visual Context contract (draft)"
+      - path: "architecture/visual-context.draft-additives.json"
+        purpose: "Optional progressive wire additives; not frozen"
+      - path: "architecture/adrs/0010-visual-geometry-identity.md"
+        purpose: "ADR: geometry identity under layout change"
+      - path: "architecture/adrs/0011-visual-privacy-boundaries.md"
+        purpose: "ADR: geometry yes / pixels no privacy boundary"
+      - path: "architecture/fixtures/visual/"
+        purpose: "Positive and malicious Visual Context fixtures"
+    done_criteria_architecture:
+      - "Versioned Visual Context contract answering ownership and design questions ✓"
+      - "ADRs for geometry identity and visual privacy ✓"
+      - "Fixtures + CHECK-014 semantic governance ✓"
+      - "No freeze; independent adversarial architecture review requested ✓"
+    forbidden_from_this_status:
+      - "Runtime visual detectors beyond existing frozen geometry emission"
+      - "status: frozen without independent architecture review"
+      - "Enabling default screenshots or browser-side vision"
+      - "Renaming phase_3_4 / phase_3_5 or other existing keys"
+      - "Business region labels or workflow intent in public IR"
+      - "Weakening frozen Phase 3.0–3.5 contracts"
+    next_gate: >
+      Independent adversarial architecture review of #158 artifacts. Implement
+      runtime only after APPROVE or APPROVE WITH CONDITIONS with no unresolved
+      P0/P1, via a separate implementation issue.
 
 # ── Phase 4+: registry note (do not treat as ratified freezes) ─────
 # Historical status:complete on phase_4_*/5_*/7_* predates clearance of

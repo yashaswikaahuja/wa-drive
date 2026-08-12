@@ -1,0 +1,18 @@
+{
+  "fixture_id": "visual-positive-overlays-edge",
+  "description": "Dialog overlays underlay form; evidence-backed visual edge, no selectors",
+  "kind": "edge_excerpt",
+  "edge": {
+    "edge_id": "edge:overlays.1",
+    "type": "overlays",
+    "source": "node:dialog.confirm.1",
+    "target": "node:form.1",
+    "evidence": {
+      "signals": ["role.dialog_overlays_parent", "geometry.z_stack"],
+      "confidence": 0.88,
+      "notes": null
+    }
+  },
+  "state_signals": ["blocking_overlay"],
+  "forbidden_keys_absent": true
+}

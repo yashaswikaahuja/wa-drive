@@ -1,0 +1,22 @@
+{
+  "fixture_id": "visual-malicious-screenshot",
+  "description": "Forbidden: screenshot pixels / refs / canvas data in public visual payload",
+  "kind": "malicious_payload",
+  "expect": "reject",
+  "forbidden_keys_present": [
+    "screenshot",
+    "screenshot_ref",
+    "pixel_buffer",
+    "canvas_image_data",
+    "video_frame"
+  ],
+  "fragment": {
+    "node_id": "node:ctrl.email.1",
+    "geometry": { "x": 0, "y": 0, "width": 10, "height": 10, "viewport_intersection": 1 },
+    "screenshot": "data:image/png;base64,AAA",
+    "screenshot_ref": "blob:https://portal.example/ss-1",
+    "pixel_buffer": [1, 2, 3],
+    "canvas_image_data": { "width": 10, "height": 10 },
+    "video_frame": "frame:1"
+  }
+}

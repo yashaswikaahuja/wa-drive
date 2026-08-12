@@ -1,0 +1,359 @@
+# CyberControl Phase 3.8 — Visual Context Architecture Contract
+# Repository key: phase_3_6 (architecture/phases.yml). Policy A: conceptual
+# taxonomy slot 3.8 maps here; do NOT rename phase_3_* keys to mirror 3.8.
+#
+# Status: architecture_draft (issue #158)
+# Does NOT implement runtime behavior. Does NOT freeze.
+# Independent adversarial architecture review required before freeze or implementation.
+
+contract_id: visual-context
+contract_version: "0.1.0"
+status: architecture_draft
+issue: "#158"
+phase: phase_3_6
+conceptual_roadmap_slot: "3.8"
+depends_on:
+  - phase_3_0   # frozen contracts (Page IR, privacy, confidence, performance)
+  - phase_3_1   # perception engine / DOM gateway
+  - phase_3_2   # widgets
+  - phase_3_3   # relationships / deltas (includes visual edges overlays, visually_groups_with)
+  - phase_3_4   # WSS transport only — not a visual owner
+  - phase_3_5   # navigation understanding (blocking_overlay PageState; path privacy)
+
+normative_words:
+  MUST: "mandatory for conformance when this contract is frozen"
+  MUST_NOT: "prohibited for conformance"
+  SHOULD: "recommended unless a documented reason exists"
+
+# ─────────────────────────────────────────────────────────────────────
+# Purpose — design question 1
+# ─────────────────────────────────────────────────────────────────────
+definition:
+  visual_context: >
+    Visual Context is the mechanical observation of layout geometry, viewport
+    relationship, visibility/occlusion evidence, and visual proximity/grouping
+    among nodes already present (or explicitly opaque) in Page IR v2.
+  problem_solved: >
+    Structural relationships (contains, labels, controls) and accessibility
+    trees do not fully capture layout-time reality: CSS reordering, sticky
+    headers, modal stacking, off-viewport controls, virtualized lists, and
+    visual proximity that is not parent/child in the DOM. Planners need
+    privacy-safe spatial evidence to prefer visible in-viewport targets and
+    to interpret overlay blocking without inventing business meaning.
+  must_not_claim: >
+    Visual Context does NOT mean browser-side vision/OCR, screenshot analysis,
+    business region naming ("Applicant Details card"), candidate selection,
+    or workflow step inference.
+
+# ─────────────────────────────────────────────────────────────────────
+# Ownership boundary
+# ─────────────────────────────────────────────────────────────────────
+ownership:
+  browser_perception:
+    owns:
+      - "observing geometry for public IR nodes when include_geometry is enabled"
+      - "observing page.viewport (width, height, device_pixel_ratio, scroll_x, scroll_y)"
+      - "reporting state.visible and viewport_intersection as mechanical evidence"
+      - "emitting visual relationship edges (overlays, visually_groups_with) with evidence codes"
+      - "emitting PageState signals related to visual blocking (e.g. blocking_overlay)"
+      - "batching layout reads; applying observation budgets and truncation diagnostics"
+      - "refusing screenshots and pixel capture in default perception (ADR-0006)"
+    must_not:
+      - "perform browser-side vision, OCR, or screenshot classification"
+      - "infer business region names, form sections, or workflow meaning from layout"
+      - "select among workflow/fill candidates based on visual proximity"
+      - "emit selectors, XPath, DOM handles, raw HTML, or pixel buffers in public IR"
+      - "claim contents of inaccessible contexts from visual guesses (ADR-0005)"
+      - "bypass origin/permission boundaries to read geometry of cross-origin frames"
+  extension_service:
+    owns:
+      - "interpreting visual evidence for planning (which node is likely the active overlay control)"
+      - "selecting targets among multiple mechanically eligible nodes"
+      - "deciding business consequences of occlusion or off-viewport state"
+      - "any future purpose-bound screenshot protocol (separate approved design; not this contract)"
+    must_not:
+      - "require the browser to invent off-snapshot visual nodes"
+      - "send selector recipes as visual targets"
+      - "treat visual edges as business depends_on"
+
+# ─────────────────────────────────────────────────────────────────────
+# Compatibility with frozen Page IR v2 — design questions 2–4, 10
+# ─────────────────────────────────────────────────────────────────────
+page_ir_compatibility:
+  rule: >
+    Visual Context is primarily a normative interpretation and budget/privacy
+    tightening of fields already authorized by frozen Page IR v2 and phase_3_3
+    edges. It does NOT require a schema_version bump for the normative surface.
+  normative_reuses:
+    - field: "Node.geometry"
+      schema: "page-ir.schema.json Geometry"
+      meaning: "document CSS pixels bbox + viewport_intersection + optional z_index_hint"
+    - field: "PageMetadata.viewport"
+      meaning: "viewport size, DPR, scroll offsets"
+    - field: "Node.state.visible"
+      meaning: "mechanical visibility; null when unknown; never guessed without evidence"
+    - field: "edge type overlays"
+      meaning: "visual stacking / dialog overlay relationship with evidence"
+    - field: "edge type visually_groups_with"
+      meaning: "visual proximity/group evidence; not business section membership"
+    - field: "PageState signals blocking_overlay"
+      meaning: "already used by phase_3_5 navigation blocked outcomes"
+  coordinate_space:
+    normative: "document CSS pixels plus page.viewport metadata (frozen page-ir.yml)"
+    public: true
+    private_binding: false
+    absolute_screen_pixels: prohibited
+    device_pixels_without_dpr: prohibited
+  geometry_privacy_class: >
+    Geometry numbers are ordinary layout metadata. They MUST NOT encode control
+    values. Nodes with privacy.classification secret/sensitive still MAY expose
+    geometry when needed for occlusion/viewport reasoning, but MUST keep
+    sanitized_text null and value_state masked/unavailable/not_applicable per
+    frozen secret_handling. Geometry MUST NOT be used to smuggle text (no
+    width-as-character-count schemes).
+  progressive_additives:
+    reference: "architecture/visual-context.draft-additives.json"
+    rule: >
+      Progressive fields require a later compatible schema review before they
+      may appear in frozen PageSnapshot validation. Until then they are not
+      public wire requirements.
+
+# ─────────────────────────────────────────────────────────────────────
+# Normative vs progressive signals — design question 2
+# ─────────────────────────────────────────────────────────────────────
+signals:
+  normative:
+    - id: geometry_bbox
+      representation: "Node.geometry.{x,y,width,height}"
+      when: "include_geometry true and node is layout-measurable in an accessible context"
+    - id: viewport_intersection
+      representation: "Node.geometry.viewport_intersection in [0,1]"
+      when: "geometry present"
+    - id: z_index_hint
+      representation: "Node.geometry.z_index_hint integer|null"
+      when: "geometry present; null if not applicable / unknown"
+    - id: state_visible
+      representation: "Node.state.visible boolean|null"
+    - id: page_viewport
+      representation: "page.viewport"
+    - id: edge_overlays
+      representation: "edges type overlays with evidence"
+    - id: edge_visually_groups_with
+      representation: "edges type visually_groups_with with evidence (progressive emission rate; type is frozen)"
+    - id: blocking_overlay_signal
+      representation: "state.signals includes blocking_overlay when IR-aligned modal/overlay blocks interaction"
+  progressive:
+    - id: occlusion_pair
+      representation: "draft additive edge occludes or evidence code geometry.occluded_by"
+    - id: visual_reading_order
+      representation: "draft additive order index distinct from Node.order"
+    - id: layout_region_tag
+      representation: "draft additive non-business region id (mechanical only)"
+    - id: geometry_quantized
+      representation: "optional grid-snapped geometry for payload reduction"
+    - id: sticky_or_fixed_class
+      representation: "draft additive position_mode enum"
+    - id: scroll_container_membership
+      representation: "draft additive edge or context field for nested scrollers"
+
+# ─────────────────────────────────────────────────────────────────────
+# Minimum privacy-safe public representation — design questions 3–4
+# ─────────────────────────────────────────────────────────────────────
+public_representation:
+  minimum_useful:
+    - "page.viewport"
+    - "for interactive nodes in budget: geometry bbox + viewport_intersection when include_geometry"
+    - "state.visible"
+    - "overlays / visually_groups_with edges when evidence exists"
+  prohibited_in_public_ir:
+    - screenshots
+    - screenshot_refs
+    - pixel_buffers
+    - canvas_image_data
+    - raw_html
+    - outer_html
+    - inner_html
+    - selectors
+    - css_selector
+    - xpath
+    - dom_handles
+    - element_reference
+    - binding_id
+    - absolute_screen_coordinates
+    - video_frames
+    - business_region_labels
+    - workflow_intent
+  screenshot_policy:
+    reference: "ADR-0006 and perception-privacy.yml screenshots"
+    default: disabled
+    part_of_visual_context: false
+
+# ─────────────────────────────────────────────────────────────────────
+# Viewport, scroll, occlusion, responsive — design questions 5–6
+# ─────────────────────────────────────────────────────────────────────
+viewport_and_layout:
+  viewport:
+    fields: [width, height, device_pixel_ratio, scroll_x, scroll_y]
+    owner: browser_perception
+    note: "Already required on PageMetadata in frozen schema"
+  scroll:
+    page_scroll: "page.viewport.scroll_x / scroll_y"
+    nested_scroll: "progressive; do not invent until draft additive approved"
+  occlusion:
+    normative: >
+      state.visible false or viewport_intersection 0 is sufficient mechanical
+      evidence that a node is not interactively visible. blocking_overlay PageState
+      signals modal-class blocks. overlays edges may relate dialog→underlay nodes.
+    progressive: "pairwise occludes relationships with IoU thresholds"
+  responsive_layout:
+    rule: >
+      Geometry and viewport describe the current layout only. Responsive reflow
+      that changes public geometry MUST increase revision (same document_id).
+      Browser MUST NOT invent multiple breakpoint snapshots in one publish.
+  visual_vs_semantic_relationships:
+    visual_only: [overlays, visually_groups_with]
+    structural: [contains, belongs_to_context]
+    descriptive_a11y: [labels, describes, error_for]
+    behavioral: [controls, depends_on, validates, confirms, repeats]
+    rule: >
+      Prefer accessibility association over visual proximity when both are valid
+      and conflict (perception-confidence.yml). visually_groups_with MUST NOT
+      replace labels/controls. depends_on remains non-business in browser IR
+      (frozen phase_3_3 authority).
+
+# ─────────────────────────────────────────────────────────────────────
+# Geometry identity across revisions/deltas — design question 7
+# ─────────────────────────────────────────────────────────────────────
+geometry_identity:
+  node_id: "Geometry change MUST NOT change node_id"
+  document_id: "Geometry change MUST NOT change document_id"
+  binding_generation: "Geometry-only change MUST NOT rebind or advance binding generation"
+  revision: >
+    When geometry is part of the published public IR (include_geometry true),
+    a material geometry change that is published MUST advance revision.
+    Publisher SHOULD coalesce high-frequency layout thrash within
+    publish_debounce_ms (perception-performance).
+  page_delta: >
+    Prefer field-level geometry updates on existing node_id over node replace.
+    Composed deltas MUST pass graph invariants (phase_3_3). Geometry-only delta
+    MUST NOT invent new edge endpoints.
+  canonical_hash: >
+    Geometry included in published nodes participates in canonical_hash
+    (excluded_from_hash remains observed_at and diagnostic_timing only).
+  thresholds_progressive: >
+    Implementations MAY suppress sub-pixel noise with a documented epsilon
+    (draft additive); MUST NOT silently drop interactive nodes.
+
+# ─────────────────────────────────────────────────────────────────────
+# Virtualization, lazy load, inaccessible — design question 8
+# ─────────────────────────────────────────────────────────────────────
+degraded_contexts:
+  virtualized_unmounted:
+    rule: "Nodes not in the accessibility/DOM realization MUST NOT be invented"
+    diagnostic: "virtualized_content_not_realized"
+  lazy_loaded:
+    rule: "When content realizes, publish via revision/delta with real nodes"
+  closed_shadow:
+    rule: "Opaque context record only; no visual claims about closed contents (ADR-0005)"
+  cross_origin_frame:
+    rule: "Context.access cross_origin | permission_denied; no fabricated child geometry"
+  display_none_zero_box:
+    rule: "May omit geometry or publish zero-size with visible false; MUST NOT invent fake layout"
+  offscreen:
+    rule: "geometry may exist with viewport_intersection 0; truncation may defer ordinary offscreen content"
+
+# ─────────────────────────────────────────────────────────────────────
+# Budgets — design question 9 (binds perception-performance)
+# ─────────────────────────────────────────────────────────────────────
+budgets:
+  inherits: "architecture/perception-performance.yml"
+  geometry_specific:
+    batch_layout_reads: "MUST batch; MUST NOT interleave geometry reads with mutations"
+    max_geometry_nodes: "≤ max_public_nodes (2000)"
+    occlusion_pairwise: "progressive only; MUST cap work (e.g. top-K sticky/modal candidates), never unbounded O(n²) on full graph without budget"
+    visual_group_edges: "within max_public_edges; confidence + evidence required"
+    truncation_priority:
+      keep_first:
+        - "visible interactive controls in viewport"
+        - "labels and validation near those controls"
+        - "modal/dialog overlay roots"
+      defer_first:
+        - "offscreen ordinary content"
+        - "decorative geometry"
+        - "large unexpanded option lists"
+  degradation:
+    over_budget: "truncate with diagnostics; reduce confidence; never omit edge endpoints for retained edges"
+    fail_closed: "If geometry cannot be measured safely, omit geometry (null) and set unknown visibility rather than fabricate"
+
+# ─────────────────────────────────────────────────────────────────────
+# Interaction with frozen edges — design question 10
+# ─────────────────────────────────────────────────────────────────────
+edge_interaction:
+  contains: "Tree containment remains parent_id authority; visual does not override"
+  labels: "A11y labels win over visual proximity on conflict"
+  controls: "ARIA controls/owns win over pure geometric adjacency"
+  overlays: "Primary visual stacking relationship; evidence required"
+  visually_groups_with: "Proximity/group only; not business section membership"
+  activates_transitions_to: "Unchanged; navigation remains phase_3_5"
+
+# ─────────────────────────────────────────────────────────────────────
+# Planner consumption — design question 11
+# ─────────────────────────────────────────────────────────────────────
+planner_consumption:
+  browser_emits: "mechanical geometry, visibility, visual edges, PageState signals"
+  service_may:
+    - "rank mechanically eligible targets using viewport_intersection and visible"
+    - "detect likely blocked UI via blocking_overlay + overlays edges"
+    - "use visual groups as weak features alongside labels/roles"
+  service_must_not_require_browser_to:
+    - "choose the fill target"
+    - "name business sections"
+    - "solve CAPTCHA from pixels"
+  action_plan_targets: "remain context_id + node_id only (frozen ActionPlan)"
+
+# ─────────────────────────────────────────────────────────────────────
+# Adversarial fixtures / CI — design question 12
+# ─────────────────────────────────────────────────────────────────────
+adversarial_cases:
+  required_fixtures:
+    - "positive geometry on ordinary control with viewport_intersection"
+    - "positive overlays edge with evidence, no selectors"
+    - "positive virtualization: unmounted content not invented"
+    - "malicious screenshot / pixel buffer fields rejected"
+    - "malicious selector/xpath/dom_handle in visual payload rejected"
+    - "malicious business_region_label / workflow_intent rejected"
+    - "secret node: redacted text with geometry allowed or null per rules"
+    - "cross-origin frame: no fabricated child geometry"
+  ci_gate: "CHECK-014 semantic governance (not mere string presence)"
+
+# ─────────────────────────────────────────────────────────────────────
+# Answers summary (design questions 1–12)
+# ─────────────────────────────────────────────────────────────────────
+design_answers:
+  q01: "Visual Context = mechanical layout/visibility/occlusion/proximity evidence beyond pure structure"
+  q02: "Normative = existing Geometry/viewport/visible/overlays/visually_groups_with/blocking_overlay; progressive = occlusion pairs, reading order, quantized geometry, nested scroll"
+  q03: "Minimum public = viewport + optional node geometry + visible + visual edges with evidence"
+  q04: "Geometry is public, document CSS pixels, optional, finite, non-negative size; not private bindings"
+  q05: "page.viewport + viewport_intersection + visible; nested scroll progressive"
+  q06: "Visual edges distinct from structural/a11y/behavioral; a11y wins on conflict"
+  q07: "Geometry changes advance revision, not node_id/document_id/binding gen; deltas field-update"
+  q08: "Virtualized/unrealized not invented; inaccessible contexts opaque"
+  q09: "Inherit perception-performance budgets; batch layout; cap occlusion work"
+  q10: "Uses frozen edge types; does not weaken contains/labels/controls authority"
+  q11: "Service ranks/selects; browser only observes mechanical visual evidence"
+  q12: "Fixtures + CHECK-014 for smuggling, invention, and privacy"
+
+# ─────────────────────────────────────────────────────────────────────
+# Explicit non-goals (this issue)
+# ─────────────────────────────────────────────────────────────────────
+non_goals:
+  - "Runtime implementation of new detectors"
+  - "Freezing phase_3_6"
+  - "Amending frozen page-ir.schema.json in this draft (normative surface already covered)"
+  - "Enabling screenshots in default perception"
+  - "ActionPlanExecutor changes"
+  - "Renumbering phase_3_4 WSS or any historical phase_3_* key"
+
+verification:
+  check_id: CHECK-014
+  suite: "extension-dev/tests/test-phase36-visual-context-governance.mjs"

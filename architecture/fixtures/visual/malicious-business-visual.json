@@ -1,0 +1,21 @@
+{
+  "fixture_id": "visual-malicious-business",
+  "description": "Forbidden: business region labels and workflow intent from visual layer",
+  "kind": "malicious_payload",
+  "expect": "reject",
+  "forbidden_keys_present": [
+    "business_region_label",
+    "workflow_intent",
+    "business_step_id",
+    "form_section_name"
+  ],
+  "fragment": {
+    "visual_group": {
+      "node_ids": ["node:a", "node:b"],
+      "business_region_label": "Applicant Details",
+      "workflow_intent": "complete_identity_step",
+      "business_step_id": "step.identity",
+      "form_section_name": "KYC"
+    }
+  }
+}

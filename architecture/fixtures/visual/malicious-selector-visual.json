@@ -1,0 +1,25 @@
+{
+  "fixture_id": "visual-malicious-selector",
+  "description": "Forbidden: selector / xpath / dom_handle smuggling under visual context",
+  "kind": "malicious_payload",
+  "expect": "reject",
+  "forbidden_keys_present": [
+    "css_selector",
+    "xpath",
+    "dom_handle",
+    "element_reference",
+    "binding_id",
+    "outer_html"
+  ],
+  "fragment": {
+    "visual_target": {
+      "node_id": "node:ctrl.email.1",
+      "css_selector": "#email",
+      "xpath": "//input[@id='email']",
+      "dom_handle": "el:42",
+      "element_reference": "weakref:1",
+      "binding_id": "bind:private:1",
+      "outer_html": "<input id=\"email\">"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "fixture_id": "visual-positive-geometry-control",
+  "description": "Ordinary interactive control with privacy-safe geometry and viewport intersection",
+  "kind": "node_excerpt",
+  "node": {
+    "node_id": "node:ctrl.email.1",
+    "kind": "control",
+    "context_id": "ctx.top.1",
+    "parent_id": "node:form.1",
+    "order": 4,
+    "observed": {
+      "accessible_name": "Email",
+      "role": "textbox",
+      "sanitized_text": null,
+      "language": null,
+      "description": null,
+      "value_state": "empty"
+    },
+    "state": {
+      "visible": true,
+      "enabled": true,
+      "readonly": false,
+      "required": true,
+      "focused": false,
+      "expanded": null,
+      "selected": null,
+      "checked": null
+    },
+    "geometry": {
+      "x": 120,
+      "y": 480,
+      "width": 320,
+      "height": 40,
+      "viewport_intersection": 1,
+      "z_index_hint": 0
+    },
+    "privacy": {
+      "classification": "ordinary",
+      "redacted": false,
+      "reason": null
+    },
+    "evidence": {
+      "signals": ["role.textbox", "geometry.bbox", "geometry.viewport_intersection"],
+      "confidence": 0.92,
+      "notes": null
+    },
+    "affordances": ["focus", "type_text", "clear"]
+  },
+  "page_viewport": {
+    "width": 1280,
+    "height": 720,
+    "device_pixel_ratio": 1,
+    "scroll_x": 0,
+    "scroll_y": 200
+  }
+}

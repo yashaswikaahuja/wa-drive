@@ -1,0 +1,47 @@
+{
+  "contract_id": "visual-context-draft-additives",
+  "status": "architecture_draft",
+  "issue": "#158",
+  "phase": "phase_3_6",
+  "note": "Progressive wire fields only. NOT frozen. NOT valid PageSnapshot members until a later schema-compatible review amends page-ir.schema.json.",
+  "proposed_edge_types": [
+    {
+      "type": "occludes",
+      "meaning": "Source geometrically covers target with material IoU while both exist in snapshot",
+      "public": true,
+      "requires_evidence": true,
+      "business_semantics": false
+    }
+  ],
+  "proposed_node_fields": [
+    {
+      "path": "geometry.position_mode",
+      "type": "enum",
+      "values": ["static", "relative", "absolute", "sticky", "fixed", "unknown"],
+      "meaning": "CSS position class for sticky headers / fixed footers"
+    },
+    {
+      "path": "geometry.quantized",
+      "type": "boolean",
+      "meaning": "true when bbox was grid-snapped for payload reduction"
+    }
+  ],
+  "proposed_page_fields": [
+    {
+      "path": "page.visual.density_hint",
+      "type": "number",
+      "range": [0, 1],
+      "meaning": "Coarse interactive-control density in viewport; no text"
+    }
+  ],
+  "forbidden_even_as_draft": [
+    "screenshot",
+    "screenshot_ref",
+    "pixels",
+    "css_selector",
+    "xpath",
+    "outer_html",
+    "business_region_label",
+    "workflow_intent"
+  ]
+}

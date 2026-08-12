@@ -136,6 +136,22 @@ checks:
     ci_job: "architecture"
     scope: "full_tree"
 
+  - id: CHECK-014
+    name: "Phase 3.6 Visual Context architecture contract"
+    severity: fail
+    description: >
+      Verifies phase_3_6 architecture_draft Visual Context artifacts (contract
+      v0.1.0, ADRs 0010–0011, draft additives, fixtures), ownership and registry
+      alignment, forbidden public keys on positive/malicious fixtures, compatibility
+      with frozen Page IR geometry/edges, and that phase_3_6 is not frozen and
+      does not rename prior phase_3_* keys. Architecture-only; no runtime Visual
+      Context implementation required.
+    method: "run_governance_test"
+    command: "node extension-dev/tests/test-phase36-visual-context-governance.mjs"
+    issue: "#158"
+    ci_job: "architecture"
+    scope: "full_tree"
+
   # ── WARNINGS ───────────────────────────────────────────────────────
 
   - id: CHECK-002

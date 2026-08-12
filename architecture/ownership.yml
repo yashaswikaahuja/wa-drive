@@ -241,10 +241,10 @@ subsystems:
       - "extension/perception/"
     description: "Produces validated PageSnapshot/PageDelta through the observation gateway; owns no service intelligence. Core engine = phase_3_1; relationships/deltas/graph freeze = phase_3_3; widgets = phase_3_2; WSS = phase_3_4."
 
-  # ── SHARED CONTRACT: Navigation Understanding (phase_3_5 draft) ─
+  # ── SHARED CONTRACT: Navigation Understanding (phase_3_5 frozen) ─
   navigation_understanding:
     owner: shared
-    status: architecture_draft
+    status: correct
     migration_phase: "phase_3_5"
     paths:
       - "architecture/navigation-understanding.yml"
@@ -252,10 +252,27 @@ subsystems:
       - "architecture/adrs/0008-navigation-transition-identity.md"
       - "architecture/adrs/0009-navigation-target-mechanical-identity.md"
       - "architecture/fixtures/navigation/"
+      - "extension/runtime/navigation-contract.js"
     description: >
-      Draft contract for mechanical navigation affordances and transitions.
-      Browser owns observation/execution evidence; service owns navigation goals.
-      Not frozen; no runtime modules until implementation issue after review.
+      Frozen contract for mechanical navigation affordances and transitions
+      (phase_3_5 / #156). Browser owns observation/execution evidence; service
+      owns navigation goals. Draft additives remain non-frozen.
+
+  # ── SHARED CONTRACT: Visual Context (phase_3_6 draft; conceptual 3.8) ─
+  visual_context:
+    owner: shared
+    status: architecture_draft
+    migration_phase: "phase_3_6"
+    paths:
+      - "architecture/visual-context.yml"
+      - "architecture/visual-context.draft-additives.json"
+      - "architecture/adrs/0010-visual-geometry-identity.md"
+      - "architecture/adrs/0011-visual-privacy-boundaries.md"
+      - "architecture/fixtures/visual/"
+    description: >
+      Draft contract for privacy-safe mechanical Visual Context (geometry,
+      viewport, visibility/occlusion evidence, visual edges). Browser observes;
+      service interprets for planning. Not frozen; no new runtime from #158.
 
   # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
   page_ir_consumers:

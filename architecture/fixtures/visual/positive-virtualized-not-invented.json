@@ -1,0 +1,25 @@
+{
+  "fixture_id": "visual-positive-virtualized-not-invented",
+  "description": "Virtualized list shows only realized rows; unrealized rows are absent (not invented)",
+  "kind": "snapshot_excerpt",
+  "realized_node_ids": [
+    "node:list.1",
+    "node:row.12",
+    "node:row.13",
+    "node:row.14"
+  ],
+  "unrealized_row_range": { "start": 1, "end": 11 },
+  "diagnostics": [
+    {
+      "code": "virtualized_content_not_realized",
+      "severity": "info",
+      "node_id": "node:list.1",
+      "message": "Rows outside the realized window are not published"
+    }
+  ],
+  "must_not_include_node_ids": [
+    "node:row.1",
+    "node:row.5",
+    "node:row.11"
+  ]
+}

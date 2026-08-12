@@ -39,6 +39,7 @@ const suites = [
   { name: 'Knowledge Sync Tests', cmd: 'node extension-dev/tests/test-knowledge-sync.mjs' },
   { name: 'Phase 3 Governance Tests', cmd: 'node extension-dev/tests/test-phase3-governance.mjs' },
   { name: 'Phase 3.5 Navigation Architecture', cmd: 'node extension-dev/tests/test-phase35-navigation-governance.mjs' },
+  { name: 'Phase 3.6 Visual Context Architecture', cmd: 'node extension-dev/tests/test-phase36-visual-context-governance.mjs' },
   { name: 'Perception Unit Tests', cmd: 'node extension-dev/tests/perception/run-perception-unit.mjs' },
   { name: 'WSS Protocol Tests', cmd: 'node extension-dev/tests/test-wss-protocol.mjs' },
 ];

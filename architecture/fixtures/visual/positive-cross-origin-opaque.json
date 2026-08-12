@@ -1,0 +1,24 @@
+{
+  "fixture_id": "visual-positive-cross-origin-opaque",
+  "description": "Cross-origin frame remains opaque; no fabricated child geometry",
+  "kind": "context_excerpt",
+  "context": {
+    "context_id": "ctx.frame.xo.1",
+    "kind": "frame",
+    "access": "cross_origin",
+    "document_id": null,
+    "parent_context_id": "ctx.top.1"
+  },
+  "must_not_include": {
+    "child_nodes_with_geometry": true,
+    "invented_labels": true
+  },
+  "diagnostics": [
+    {
+      "code": "inaccessible_context",
+      "severity": "info",
+      "node_id": null,
+      "message": "Cross-origin frame geometry not observed"
+    }
+  ]
+}
