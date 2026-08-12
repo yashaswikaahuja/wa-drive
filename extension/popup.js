@@ -543,6 +543,7 @@ fillBtn.addEventListener('click', async () => {
     const PRODUCT_PATH_SCRIPTS = [
       'runtime/dom-gateway.js',
       'runtime/navigation-contract.js',
+      'perception/visual-context.js',
       'perception/binding-registry.js',
       'perception/revision-manager.js',
       'perception/canonical-hash.js',

@@ -633,20 +633,20 @@ phases:
 
   phase_3_6:
     name: "Visual Context"
-    status: architecture_draft
+    status: implemented_unfrozen
     draft_date: "2026-08-12"
-    issues: ["#158"]
+    implemented_date: "2026-08-12"
+    issues: ["#158", "#159", "#160"]
     depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4", "phase_3_5"]
     conceptual_roadmap_slot: "3.8"
     description: >
-      Architecture contract for privacy-safe mechanical Visual Context:
-      geometry, viewport/scroll relationship, visibility/occlusion evidence,
-      and visual proximity/grouping among Page IR nodes — without screenshots,
-      browser vision, selectors, or business semantics. Repository key is
-      phase_3_6; conceptual taxonomy slot is 3.8 — do not rename keys.
-      Status is architecture_draft only. No runtime implementation from #158.
-      No freeze from #158.
-    discovery_reference: "Issue #158; ADR-0006 screenshot privacy; frozen Page IR geometry"
+      Privacy-safe mechanical Visual Context: document-space geometry, viewport
+      relationship, visibility/occlusion evidence, and visual proximity edges
+      among Page IR nodes — without screenshots, browser vision, selectors, or
+      business semantics. Repository key is phase_3_6; conceptual slot is 3.8.
+      Architecture #158; review #159 AWC; runtime #160. Status is
+      implemented_unfrozen — independent implementation review required before freeze.
+    discovery_reference: "Issue #158 arch; #159 AWC; #160 runtime; ADR-0006; Page IR geometry"
     architecture_artifacts:
       - path: "architecture/visual-context.yml"
         purpose: "Normative Visual Context contract (draft)"
@@ -662,18 +662,25 @@ phases:
       - "Versioned Visual Context contract answering ownership and design questions ✓"
       - "ADRs for geometry identity and visual privacy ✓"
       - "Fixtures + CHECK-014 semantic governance ✓"
-      - "No freeze; independent adversarial architecture review requested ✓"
+      - "Architecture review #159 AWC (residual P2) ✓"
+    modules_implemented:
+      - path: "extension/perception/visual-context.js"
+        purpose: "Document-space geometry, materiality epsilon, proximity helpers"
+      - path: "extension/runtime/dom-gateway.js"
+        purpose: "Batched geometry reads in document CSS pixels + z_index_hint"
+      - path: "extension/perception/edge-factory.js"
+        purpose: "Geometry proximity visually_groups_with + z_stack overlay evidence"
+      - path: "extension/perception/snapshot-builder.js"
+        purpose: "page.viewport via visual-context; virtualization diagnostics"
     forbidden_from_this_status:
-      - "Runtime visual detectors beyond existing frozen geometry emission"
-      - "status: frozen without independent architecture review"
+      - "status: frozen without independent implementation review + freeze gate"
       - "Enabling default screenshots or browser-side vision"
       - "Renaming phase_3_4 / phase_3_5 or other existing keys"
       - "Business region labels or workflow intent in public IR"
       - "Weakening frozen Phase 3.0–3.5 contracts"
     next_gate: >
-      Independent adversarial architecture review of #158 artifacts. Implement
-      runtime only after APPROVE or APPROVE WITH CONDITIONS with no unresolved
-      P0/P1, via a separate implementation issue.
+      Independent adversarial implementation review of #160 runtime. Freeze only
+      via explicit freeze gate after that review. Residual P2 from #159 progressive.
 
 # ── Phase 4+: registry note (do not treat as ratified freezes) ─────
 # Historical status:complete on phase_4_*/5_*/7_* predates clearance of

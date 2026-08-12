@@ -214,10 +214,10 @@ ok(
   'phase_3_5 Navigation Understanding is frozen (#156)'
 );
 ok(phases.includes('freeze_issue') || phases.includes('#156') || phases.includes('runtime_baseline_commit'), 'phase_3_5 freeze evidence recorded');
-// #158: phase_3_6 Visual Context (conceptual 3.8) is architecture_draft only
+// #158–#160: phase_3_6 Visual Context (conceptual 3.8) draft or implemented_unfrozen
 ok(
-  /phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*architecture_draft/.test(phases),
-  'phase_3_6 Visual Context registered as architecture_draft (#158)'
+  /phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
+  'phase_3_6 Visual Context registered as architecture_draft or implemented_unfrozen'
 );
 ok(!/phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*frozen/.test(phases), 'phase_3_6 is not frozen');
 ok(phases.includes('ActionPlanExecutor') && phases.includes('NOT a phase_3_'), 'APE excluded from phase_3_* milestones');

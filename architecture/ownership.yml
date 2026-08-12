@@ -261,7 +261,7 @@ subsystems:
   # ── SHARED CONTRACT: Visual Context (phase_3_6 draft; conceptual 3.8) ─
   visual_context:
     owner: shared
-    status: architecture_draft
+    status: implemented_unfrozen
     migration_phase: "phase_3_6"
     paths:
       - "architecture/visual-context.yml"
@@ -269,10 +269,11 @@ subsystems:
       - "architecture/adrs/0010-visual-geometry-identity.md"
       - "architecture/adrs/0011-visual-privacy-boundaries.md"
       - "architecture/fixtures/visual/"
+      - "extension/perception/visual-context.js"
     description: >
-      Draft contract for privacy-safe mechanical Visual Context (geometry,
+      Visual Context contract + runtime helpers (geometry document space,
       viewport, visibility/occlusion evidence, visual edges). Browser observes;
-      service interprets for planning. Not frozen; no new runtime from #158.
+      service interprets for planning. Implemented unfrozen (#160); not frozen.
 
   # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
   page_ir_consumers:

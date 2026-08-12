@@ -104,13 +104,26 @@ function createNode(facts, contextId, parentId, order, deps) {
   };
 
   // Evidence
-  const evidence = [{
+  const factsList = [`tag:${facts.tag}`, facts.role ? `role:${facts.role}` : 'role:none'].filter(Boolean);
+  const signals = [];
+  if (facts.geometry) {
+    const vc = (typeof globalThis !== 'undefined' && globalThis.CcVisualContext)
+      || (typeof require === 'function' ? (() => { try { return require('./visual-context.js'); } catch { return null; } })() : null);
+    const geoSignals = vc?.geometryEvidenceSignals
+      ? vc.geometryEvidenceSignals(facts.geometry)
+      : ['geometry.bbox'];
+    for (const s of geoSignals) signals.push(s);
+    factsList.push('geometry.present');
+  }
+  const evidenceItem = {
     source: 'observed',
     detector: 'dom-gateway',
     detector_version: '1.0.0',
     confidence: 1,
-    facts: [`tag:${facts.tag}`, facts.role ? `role:${facts.role}` : 'role:none'].filter(Boolean),
-  }];
+    facts: factsList,
+  };
+  if (signals.length) evidenceItem.signals = signals.slice(0, 32);
+  const evidence = [evidenceItem];
 
   // Affordances from widget
   const affordances = widget
@@ -120,8 +133,8 @@ function createNode(facts, contextId, parentId, order, deps) {
   // Privacy (initial — will be refined by privacy filter)
   const privacy = { classification: 'ordinary', redacted: false, reason: null };
 
-  // Geometry
-  const geometry = facts.geometry ? {
+  // Geometry (document CSS pixels; null when omitted / fail-closed)
+  let geometry = facts.geometry ? {
     x: facts.geometry.x,
     y: facts.geometry.y,
     width: facts.geometry.width,
@@ -148,6 +161,18 @@ function createNode(facts, contextId, parentId, order, deps) {
   // Apply privacy filter
   if (privacyFilter) {
     privacyFilter.applyPrivacyRules(node, { type: facts.type, autocomplete: facts.autocomplete });
+  }
+
+  // ADR-0011: geometry may remain on secret nodes; sanitize shape only
+  if (node.geometry) {
+    const vc = (typeof globalThis !== 'undefined' && globalThis.CcVisualContext)
+      || (typeof require === 'function' ? (() => { try { return require('./visual-context.js'); } catch { return null; } })() : null);
+    if (vc?.sanitizeGeometryForPrivacy) {
+      node.geometry = vc.sanitizeGeometryForPrivacy(
+        node.geometry,
+        node.privacy?.classification
+      );
+    }
   }
 
   return node;

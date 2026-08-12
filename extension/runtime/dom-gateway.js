@@ -61,7 +61,7 @@ function captureStructuralFacts(root, options = {}) {
     // Skip only CyberControl-owned UI roots (not portal data-cc-id markers)
     if (element.id && element.id.startsWith('_cc_')) return;
 
-    const fact = extractElementFacts(element, includeGeometry);
+    const fact = extractElementFacts(element, false);
     fact._parentIndex = parentIndex;
     fact._depth = depth;
     const thisIndex = nodes.length;
@@ -79,6 +79,15 @@ function captureStructuralFacts(root, options = {}) {
 
   const startEl = root.nodeType === 9 ? root.documentElement : root;
   walk(startEl, 0, -1);
+
+  // Batch geometry after structural walk (phase_3_6): one layout pass for rects
+  if (includeGeometry && liveElements.length > 0) {
+    const geos = readGeometryBatch(liveElements);
+    for (let i = 0; i < nodes.length; i++) {
+      nodes[i].geometry = geos[i] || null;
+    }
+  }
+
   return { nodes, liveElements, truncated, nodeCount: nodes.length };
 }
 
@@ -135,10 +144,8 @@ function extractElementFacts(element, includeGeometry) {
     shadowMode: element.shadowRoot?.mode || null,
   };
 
-  if (includeGeometry) {
-    fact.geometry = readGeometry(element);
-  }
-
+  // Geometry is filled by captureStructuralFacts via readGeometryBatch after walk
+  // (phase_3_6). Standalone extract does not attach geometry here.
   return fact;
 }
 
@@ -168,21 +175,69 @@ function readMechanicalState(element) {
 }
 
 /**
+ * Resolve visual-context helpers (phase_3_6) when loaded; else local fallbacks.
+ */
+function visualContextApi() {
+  if (typeof globalThis !== 'undefined' && globalThis.CcVisualContext) {
+    return globalThis.CcVisualContext;
+  }
+  if (typeof require === 'function') {
+    try { return require('../perception/visual-context.js'); } catch { /* browser */ }
+  }
+  return null;
+}
+
+/**
  * Read bounding geometry for an element.
+ * Coordinate space: document CSS pixels + viewport_intersection (page-ir / visual-context).
+ * Fail-closed: returns null rather than fabricating layout.
  */
 function readGeometry(element) {
   try {
+    if (!element || typeof element.getBoundingClientRect !== 'function') return null;
     const rect = element.getBoundingClientRect();
-    const vw = window.innerWidth || document.documentElement.clientWidth;
-    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const vc = visualContextApi();
+    const viewport = vc?.readPageViewport
+      ? vc.readPageViewport(typeof window !== 'undefined' ? window : null)
+      : {
+        width: (typeof window !== 'undefined' ? window.innerWidth : 0)
+          || document.documentElement?.clientWidth || 0,
+        height: (typeof window !== 'undefined' ? window.innerHeight : 0)
+          || document.documentElement?.clientHeight || 0,
+        device_pixel_ratio: typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1,
+        scroll_x: typeof window !== 'undefined' ? (window.scrollX || window.pageXOffset || 0) : 0,
+        scroll_y: typeof window !== 'undefined' ? (window.scrollY || window.pageYOffset || 0) : 0,
+      };
+
+    let zHint = null;
+    try {
+      const style = typeof getComputedStyle === 'function' ? getComputedStyle(element) : null;
+      if (style) {
+        const pos = String(style.position || '').toLowerCase();
+        if (pos && pos !== 'static') {
+          zHint = vc?.parseZIndexHint
+            ? vc.parseZIndexHint(style)
+            : (style.zIndex && style.zIndex !== 'auto' ? parseInt(style.zIndex, 10) : null);
+          if (zHint != null && !Number.isFinite(zHint)) zHint = null;
+        }
+      }
+    } catch { /* z-index optional */ }
+
+    if (vc?.geometryFromClientRect) {
+      return vc.geometryFromClientRect(rect, viewport, zHint);
+    }
+
+    // Fallback without visual-context module
+    const vw = viewport.width;
+    const vh = viewport.height;
     const intersection = computeViewportIntersection(rect, vw, vh);
     return {
-      x: Math.round(rect.x),
-      y: Math.round(rect.y),
+      x: Math.round(rect.left + (viewport.scroll_x || 0)),
+      y: Math.round(rect.top + (viewport.scroll_y || 0)),
       width: Math.round(rect.width),
       height: Math.round(rect.height),
       viewport_intersection: intersection,
-      z_index_hint: null, // computed lazily if needed
+      z_index_hint: zHint,
     };
   } catch {
     return null;
@@ -190,12 +245,55 @@ function readGeometry(element) {
 }
 
 /**
- * Batched geometry read for multiple elements (reduces layout thrashing).
+ * Batched geometry read for multiple elements (single layout pass for rects).
  * @param {Element[]} elements
  * @returns {object[]} Array of geometry objects (same order as input).
  */
 function readGeometryBatch(elements) {
-  return elements.map((el) => readGeometry(el));
+  const list = Array.isArray(elements) ? elements : [];
+  // Phase 1: force layout once, collect client rects
+  const rects = list.map((el) => {
+    try {
+      return el && typeof el.getBoundingClientRect === 'function'
+        ? el.getBoundingClientRect()
+        : null;
+    } catch {
+      return null;
+    }
+  });
+  const vc = visualContextApi();
+  const viewport = vc?.readPageViewport
+    ? vc.readPageViewport(typeof window !== 'undefined' ? window : null)
+    : {
+      width: typeof window !== 'undefined' ? (window.innerWidth || 0) : 0,
+      height: typeof window !== 'undefined' ? (window.innerHeight || 0) : 0,
+      device_pixel_ratio: typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1,
+      scroll_x: typeof window !== 'undefined' ? (window.scrollX || 0) : 0,
+      scroll_y: typeof window !== 'undefined' ? (window.scrollY || 0) : 0,
+    };
+  // Phase 2: styles only for non-static (optional z-index)
+  return list.map((el, i) => {
+    const rect = rects[i];
+    if (!rect) return null;
+    let zHint = null;
+    try {
+      const style = el && typeof getComputedStyle === 'function' ? getComputedStyle(el) : null;
+      if (style && String(style.position || '').toLowerCase() !== 'static') {
+        zHint = vc?.parseZIndexHint ? vc.parseZIndexHint(style) : null;
+      }
+    } catch { /* ignore */ }
+    if (vc?.geometryFromClientRect) {
+      return vc.geometryFromClientRect(rect, viewport, zHint);
+    }
+    return {
+      x: Math.round(rect.left + (viewport.scroll_x || 0)),
+      y: Math.round(rect.top + (viewport.scroll_y || 0)),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      viewport_intersection: computeViewportIntersection(rect, viewport.width, viewport.height),
+      z_index_hint: zHint,
+    };
+  });
 }
 
 /**

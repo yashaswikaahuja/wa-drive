@@ -214,8 +214,8 @@ ok(contract.includes('schema_version bump') || contract.includes('does NOT requi
 console.log('\n=== Registry / ownership / verification ===');
 const phases = read('architecture/phases.yml');
 ok(
-  /phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*architecture_draft/.test(phases),
-  'phase_3_6 status is architecture_draft'
+  /phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
+  'phase_3_6 status is architecture_draft or implemented_unfrozen (not frozen)'
 );
 ok(!/phase_3_6:\s*\n\s*name:\s*"Visual Context"\s*\n\s*status:\s*frozen/.test(phases), 'phase_3_6 is not frozen');
 ok(phases.includes('conceptual_roadmap_slot: "3.8"') || phases.includes("conceptual_roadmap_slot: '3.8'"), 'phase_3_6 maps conceptual 3.8');

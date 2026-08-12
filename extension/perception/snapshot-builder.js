@@ -171,22 +171,28 @@ async function buildSnapshot(options) {
       routeKey = navContract.routeKeyFromPath(pagePath);
     }
   }
+  const vc = (typeof globalThis !== 'undefined' && globalThis.CcVisualContext)
+    || (typeof require === 'function' ? (() => { try { return require('./visual-context.js'); } catch { return null; } })() : null);
+  const pageViewport = vc?.readPageViewport
+    ? vc.readPageViewport(typeof window !== 'undefined' ? window : null)
+    : (typeof window !== 'undefined' ? {
+      width: window.innerWidth || 0,
+      height: window.innerHeight || 0,
+      device_pixel_ratio: window.devicePixelRatio || 1,
+      scroll_x: window.scrollX || 0,
+      scroll_y: window.scrollY || 0,
+    } : { width: 0, height: 0, device_pixel_ratio: 1, scroll_x: 0, scroll_y: 0 });
+
   const page = {
     origin: typeof location !== 'undefined' ? location.origin : null,
     path: pagePath,
     route_key: routeKey,
     title: typeof document !== 'undefined' ? (document.title || '').slice(0, 160) : null,
     language: typeof document !== 'undefined' ? (document.documentElement?.lang || null) : null,
-    viewport: typeof window !== 'undefined' ? {
-      width: window.innerWidth || 0,
-      height: window.innerHeight || 0,
-      device_pixel_ratio: window.devicePixelRatio || 1,
-      scroll_x: window.scrollX || 0,
-      scroll_y: window.scrollY || 0,
-    } : { width: 0, height: 0, device_pixel_ratio: 1, scroll_x: 0, scroll_y: 0 },
+    viewport: pageViewport,
   };
 
-  // 7. Page state (NAV-RR2-P2-03: emit blocking_overlay when IR-aligned modal present)
+  // 7. Page state (NAV-RR2-P2-03 / phase_3_6: blocking_overlay when IR-aligned modal present)
   const state = { signals: [], candidates: [] };
   try {
     const navContract = (typeof globalThis !== 'undefined' && globalThis.CcNavigationContract)
@@ -208,6 +214,36 @@ async function buildSnapshot(options) {
       }
     }
   } catch { /* non-fatal */ }
+
+  // phase_3_6: virtualization diagnostic (do not invent unrealized rows)
+  try {
+    if (vc?.hasVirtualizationHints?.(typeof document !== 'undefined' ? document : null)) {
+      diagnostics.push({
+        code: 'virtualized_content_not_realized',
+        severity: 'info',
+        node_id: null,
+        message: 'Virtualization hints observed; only realized DOM nodes are published',
+      });
+    }
+  } catch { /* non-fatal */ }
+
+  // Geometry emission stats (fail-closed omissions)
+  if (includeGeometry) {
+    let withGeo = 0;
+    let withoutGeo = 0;
+    for (const n of Object.values(nodesMap)) {
+      if (n.geometry) withGeo += 1;
+      else withoutGeo += 1;
+    }
+    if (withoutGeo > 0 && withGeo === 0 && nodeCount > 0) {
+      diagnostics.push({
+        code: 'geometry_unavailable',
+        severity: 'warning',
+        node_id: null,
+        message: 'include_geometry true but no node geometry measured (fail-closed omit)',
+      });
+    }
+  }
 
   // Truncation diagnostic
   if (truncated) {

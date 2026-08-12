@@ -30,6 +30,7 @@ ok(!productBlock.includes('runtime/resolver.js'), 'inject list excludes resolver
 ok(!productBlock.includes('shared/option-match'), 'inject list excludes option-match');
 ok(productBlock.includes('action-plan-executor'), 'inject list includes action-plan-executor');
 ok(productBlock.includes('navigation-contract'), 'inject list includes navigation-contract');
+ok(productBlock.includes('visual-context'), 'inject list includes visual-context (phase 3.6)');
 
 // Executor source must not reference legacy modules
 ok(!exec.includes('autofill/executor'), 'executor source excludes autofill/executor');

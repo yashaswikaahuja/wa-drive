@@ -405,6 +405,61 @@ function deriveEdges(nodesMap, contexts, options = {}) {
     }
   }
 
+  // ── 12b. phase_3_6: geometry proximity groups for control siblings (mechanical only) ─
+  // Does NOT invent business region names. Caps edge count. A11y labels still win.
+  const vc = (typeof globalThis !== 'undefined' && globalThis.CcVisualContext)
+    || (typeof require === 'function' ? (() => { try { return require('./visual-context.js'); } catch { return null; } })() : null);
+  if (vc?.areVisuallyProximate) {
+    const maxEdges = vc.MAX_VISUAL_GROUP_EDGES || 400;
+    let geoGroupCount = 0;
+    const controls = nodes.filter((n) =>
+      (n.kind === 'control' || n.kind === 'widget') && n.geometry && n.parent_id
+    );
+    const byParentCtrl = new Map();
+    for (const n of controls) {
+      const key = `${n.context_id}|${n.parent_id}`;
+      if (!byParentCtrl.has(key)) byParentCtrl.set(key, []);
+      byParentCtrl.get(key).push(n);
+    }
+    for (const siblings of byParentCtrl.values()) {
+      if (siblings.length < 2 || geoGroupCount >= maxEdges) continue;
+      siblings.sort((a, b) => (a.order || 0) - (b.order || 0));
+      for (let i = 0; i < siblings.length && geoGroupCount < maxEdges; i++) {
+        for (let j = i + 1; j < siblings.length && geoGroupCount < maxEdges; j++) {
+          const a = siblings[i];
+          const b = siblings[j];
+          if (!vc.areVisuallyProximate(a.geometry, b.geometry)) continue;
+          // Skip if already grouped via section edge
+          const key = `visually_groups_with|${a.node_id < b.node_id ? a.node_id : b.node_id}|${a.node_id < b.node_id ? b.node_id : a.node_id}`;
+          if (seen.has(key)) continue;
+          pushEdge('visually_groups_with', a.node_id, b.node_id, {
+            source: 'derived',
+            confidence: 0.7,
+            signals: ['geometry.proximity'],
+            facts: ['geometry.proximity_sibling'],
+          });
+          geoGroupCount += 1;
+        }
+      }
+    }
+  }
+
+  // Strengthen dialog overlays with z-stack evidence when available
+  for (const e of edges) {
+    if (e.type !== 'overlays') continue;
+    const src = byId[e.source_id];
+    const tgt = byId[e.target_id];
+    if (!src?.geometry || !tgt?.geometry) continue;
+    const zs = src.geometry.z_index_hint;
+    const zt = tgt.geometry.z_index_hint;
+    if (zs != null && zt != null && zs > zt) {
+      const ev0 = Array.isArray(e.evidence) ? e.evidence[0] : null;
+      if (ev0 && Array.isArray(ev0.signals) && !ev0.signals.includes('geometry.z_stack')) {
+        ev0.signals = ev0.signals.concat(['geometry.z_stack']);
+      }
+    }
+  }
+
   // Stable sort for determinism
   edges.sort((a, b) => {
     if (a.type !== b.type) return a.type.localeCompare(b.type);

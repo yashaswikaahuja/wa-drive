@@ -458,9 +458,14 @@ class DeltaEmitter {
       return JSON.stringify(rest);
     };
     if (strip(a) !== strip(b)) return false;
-    // Compare geometry with tolerance (1px).
+    // Geometry materiality (phase_3_6 / VC-ARCH-P2-01) — 1px / 0.01 intersection
     if (!a.geometry && !b.geometry) return true;
     if (!a.geometry || !b.geometry) return false;
+    const vc = (typeof globalThis !== 'undefined' && globalThis.CcVisualContext)
+      || (typeof require === 'function' ? (() => { try { return require('./visual-context.js'); } catch { return null; } })() : null);
+    if (vc?.geometriesMateriallyEqual) {
+      return vc.geometriesMateriallyEqual(a.geometry, b.geometry);
+    }
     return (
       Math.abs(a.geometry.x - b.geometry.x) <= 1 &&
       Math.abs(a.geometry.y - b.geometry.y) <= 1 &&
