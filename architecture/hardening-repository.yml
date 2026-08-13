@@ -311,9 +311,54 @@ dependency_direction:
     browser: "observe → classify → execute mechanically → report EO"
     service: "reason → select → plan → replan"
     public_evidence_only: "PageSnapshot / PageDelta / EO — no private bindings"
+  # Required artifact: Extension ↔ server boundary diagram (#164 / HARD-ARCH-P1-01 rem)
+  boundary_diagram: |
+    ```text
+    ┌─────────────────────────────────────────────────────────────┐
+    │ OPERATOR UI (popup)                                         │
+    │  presentation only → application/fill-orchestrator          │
+    └────────────────────────────┬────────────────────────────────┘
+                                 │ product path
+                                 ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │ BROWSER EXTENSION (eyes + hands)                            │
+    │  perception → PageSnapshot / PageDelta (public IR)          │
+    │  runtime gateway → mechanical observe / act                 │
+    │  ActionPlanExecutor → ExecutionObservation (public EO)      │
+    │  private: bindings, live Elements, developer diagnostics    │
+    │  MUST NOT: business candidate selection, planning, knowledge│
+    └────────────────────────────┬────────────────────────────────┘
+                                 │ public evidence only
+                                 │ (no selectors / HTML / bindings)
+                                 ▼
+    ┌─────────────────────────────────────────────────────────────┐
+    │ EXTENSION-SERVICE (brain + memory)                          │
+    │  reason → select → plan → replan                            │
+    │  knowledge / mapping / learning / fill-planner               │
+    │  MUST NOT: require browser-private selectors as targets     │
+    └─────────────────────────────────────────────────────────────┘
+    ```
   mechanical_checks_progressive:
     - "grep-based forbidden import matrix in CHECK-015"
     - "optional dependency-cruiser later (not required for architecture draft)"
+
+# ─────────────────────────────────────────────────────────────────────
+# Freeze-file internal split procedure (HARD-ARCH-P1-02)
+# ─────────────────────────────────────────────────────────────────────
+# Applies when implementation wants to split a path listed under any
+# phase_3_* frozen_files entry (e.g. navigation-contract.js, edge-factory).
+freeze_file_internal_split:
+  rule: >
+    Internal decomposition of a frozen_files path is allowed only when ALL
+    hold: (1) stable public facade export names and semantics unchanged;
+    (2) unit + product-path Chromium E2E green; (3) change fits that phase's
+    allowed_changes (bugfix / non-breaking progressive / performance) OR
+    an explicit freeze-gate amendment records the split; (4) no public
+    FailureCode / IR / EO schema change; (5) CHECK suites for that phase remain green.
+  must_not:
+    - "Move frozen semantics into a new public global without facade alias"
+    - "Change navigation OUTCOME_MAP or visual geometry coordinate space as a 'split'"
+    - "Use decomposition as cover for behavioral weakening"
 
 # ─────────────────────────────────────────────────────────────────────
 # F. Test taxonomy

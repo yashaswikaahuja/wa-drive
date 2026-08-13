@@ -95,6 +95,13 @@ ok(contract.includes('MUST NOT invent new public FailureCodes')
 // No mass reorg from this issue
 ok(/Mass file moves|mass reorg|Does NOT implement mass/i.test(contract), 'explicitly no mass reorg in this issue');
 
+// Boundary diagram + freeze-file split procedure (#165 P1 rem)
+ok(/boundary_diagram:|BROWSER EXTENSION|eyes \+ hands|EXTENSION-SERVICE/i.test(contract),
+  'extension↔server boundary diagram present');
+ok(contract.includes('freeze_file_internal_split') || contract.includes('frozen_files path'),
+  'freeze-file internal split procedure present');
+ok(/stable public facade|facade export/i.test(contract), 'freeze split requires stable facade');
+
 console.log('\n=== ADRs ===');
 const adr12 = read('architecture/adrs/0012-repository-module-boundaries.md');
 const adr13 = read('architecture/adrs/0013-error-taxonomy-ownership.md');
