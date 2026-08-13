@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Config, CatalogForm } from '../api';
-import { fetchOwnerForms, patchOwnerForm } from '../api';
+import { ApiError, fetchOwnerForms, patchOwnerForm } from '../api';
 
 const LIFECYCLE_OPTS = ['open', 'upcoming', 'closed', 'archived'] as const;
 
@@ -16,12 +16,19 @@ function fmtDate(iso: string | null) {
 export function FormsPanel({ cfg }: { cfg: Config }) {
   const [forms, setForms] = useState<CatalogForm[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<CatalogForm | null>(null);
 
   const load = useCallback(async (search: string) => {
-    setLoading(true);
-    try { setForms(await fetchOwnerForms(cfg, search)); } catch {}
+    setLoading(true); setError('');
+    try {
+      setForms(await fetchOwnerForms(cfg, search));
+    } catch (e) {
+      const err = e as ApiError;
+      setError(err.message || `Failed to load forms (${err.status || 'network'})`);
+      setForms([]);
+    }
     setLoading(false);
   }, [cfg]);
 
@@ -32,7 +39,7 @@ export function FormsPanel({ cfg }: { cfg: Config }) {
   }, [q, load]);
 
   return (
-    <section className="card" style={{ marginTop: 24 }}>
+    <section className="card" style={{ marginTop: 24, padding: 20 }}>
       <div className="row between" style={{ marginBottom: 12 }}>
         <h2 className="display" style={{ fontSize: 16 }}>Form Catalog</h2>
         <input
@@ -41,24 +48,37 @@ export function FormsPanel({ cfg }: { cfg: Config }) {
         />
       </div>
 
-      {loading ? <p className="muted">Loading…</p> : forms.length === 0 ? <p className="muted">No forms found</p> : (
-        <table className="table" style={{ width: '100%', fontSize: 13 }}>
-          <thead>
-            <tr><th>Form</th><th>Portal</th><th>Lifecycle</th><th>Closes</th><th>Updated</th><th></th></tr>
-          </thead>
-          <tbody>
-            {forms.map(f => (
-              <tr key={f.id}>
-                <td style={{ fontWeight: 600 }}>{f.short_name}</td>
-                <td>{f.portal}</td>
-                <td><span className={`badge ${BADGE_CLS[f.lifecycle] || ''}`}>{f.lifecycle}</span></td>
-                <td>{fmtDate(f.closes_at)}</td>
-                <td className="muted">{fmtDate(f.source_updated_at)}</td>
-                <td><button className="btn btn-sm" onClick={() => setEditing(f)}>Edit</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {error && (
+        <div className="banner" role="alert" style={{ marginBottom: 12 }}>
+          {error}
+          <button className="btn" style={{ marginLeft: 12, padding: '4px 10px', fontSize: 12 }} onClick={() => load(q)}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? <p className="muted">Loading…</p> : !error && forms.length === 0 ? (
+        <p className="muted">No forms found{q ? ` for "${q}"` : ' — catalog may be empty'}</p>
+      ) : forms.length > 0 && (
+        <div className="table-wrap">
+          <table className="table" style={{ width: '100%', fontSize: 13 }}>
+            <thead>
+              <tr><th>Form</th><th>Portal</th><th>Lifecycle</th><th>Closes</th><th>Updated</th><th></th></tr>
+            </thead>
+            <tbody>
+              {forms.map(f => (
+                <tr key={f.id}>
+                  <td style={{ fontWeight: 600 }}>{f.short_name}</td>
+                  <td>{f.portal}</td>
+                  <td><span className={`pill ${BADGE_CLS[f.lifecycle] || ''}`}>{f.lifecycle}</span></td>
+                  <td>{fmtDate(f.closes_at)}</td>
+                  <td className="muted">{fmtDate(f.source_updated_at)}</td>
+                  <td><button className="btn" style={{ padding: '5px 10px', fontSize: 12 }} onClick={() => setEditing(f)}>Edit</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {editing && (
@@ -105,46 +125,56 @@ function FormEditor({ form, cfg, onClose, onSaved }: {
   };
 
   return (
-    <div className="drawer-overlay" onClick={onClose}>
-      <div className="drawer" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
-        <div className="row between" style={{ marginBottom: 16 }}>
+    <div className="scrim" onClick={onClose}>
+      <div className="drawer" onClick={e => e.stopPropagation()}>
+        <div className="drawer__head row between">
           <h3 className="display" style={{ fontSize: 16 }}>{form.short_name}</h3>
-          <button className="btn btn-sm" onClick={onClose}>✕</button>
+          <button className="iconbtn" onClick={onClose}>✕</button>
         </div>
-        <p className="muted" style={{ marginBottom: 16 }}>{form.name} · {form.portal}</p>
+        <div className="drawer__body">
+          <p className="muted">{form.name} · {form.portal}</p>
 
-        <label className="field-label">Lifecycle</label>
-        <select className="input" value={lifecycle} onChange={e => setLifecycle(e.target.value as any)}>
-          {LIFECYCLE_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
-        </select>
-
-        <div className="row" style={{ gap: 12, marginTop: 12 }}>
-          <div style={{ flex: 1 }}>
-            <label className="field-label">Opens at</label>
-            <input className="input" type="date" value={opensAt} onChange={e => setOpensAt(e.target.value)} />
+          <div>
+            <label className="label">Lifecycle</label>
+            <select className="input" value={lifecycle} onChange={e => setLifecycle(e.target.value as any)} style={{ marginTop: 4 }}>
+              {LIFECYCLE_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
           </div>
-          <div style={{ flex: 1 }}>
-            <label className="field-label">Closes at</label>
-            <input className="input" type="date" value={closesAt} onChange={e => setClosesAt(e.target.value)} />
+
+          <div className="row" style={{ gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <label className="label">Opens at</label>
+              <input className="input" type="date" value={opensAt} onChange={e => setOpensAt(e.target.value)} style={{ marginTop: 4 }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="label">Closes at</label>
+              <input className="input" type="date" value={closesAt} onChange={e => setClosesAt(e.target.value)} style={{ marginTop: 4 }} />
+            </div>
           </div>
-        </div>
 
-        <label className="field-label" style={{ marginTop: 12 }}>Portal URL</label>
-        <input className="input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" />
+          <div>
+            <label className="label">Portal URL</label>
+            <input className="input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://…" style={{ marginTop: 4 }} />
+          </div>
 
-        <label className="field-label" style={{ marginTop: 12 }}>Official Notice URL</label>
-        <input className="input" value={noticeUrl} onChange={e => setNoticeUrl(e.target.value)} placeholder="https://…/notice.pdf" />
+          <div>
+            <label className="label">Official Notice URL</label>
+            <input className="input" value={noticeUrl} onChange={e => setNoticeUrl(e.target.value)} placeholder="https://…/notice.pdf" style={{ marginTop: 4 }} />
+          </div>
 
-        <label className="field-label" style={{ marginTop: 12 }}>Notice Summary</label>
-        <textarea className="input" rows={3} value={noticeSummary} onChange={e => setNoticeSummary(e.target.value)} placeholder="Short owner note about this cycle…" />
+          <div>
+            <label className="label">Notice Summary</label>
+            <textarea className="input" rows={3} value={noticeSummary} onChange={e => setNoticeSummary(e.target.value)} placeholder="Short owner note about this cycle…" style={{ marginTop: 4 }} />
+          </div>
 
-        {error && <p className="banner" style={{ marginTop: 12 }}>{error}</p>}
+          {error && <p className="banner">{error}</p>}
 
-        <div className="row" style={{ gap: 8, marginTop: 16 }}>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button className="btn" onClick={onClose}>Cancel</button>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn btn--primary" onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button className="btn" onClick={onClose}>Cancel</button>
+          </div>
         </div>
       </div>
     </div>
