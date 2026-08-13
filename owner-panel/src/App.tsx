@@ -8,6 +8,7 @@ import { WorkspacesTable, TableSkeleton } from './components/WorkspacesTable';
 import { WorkspaceDrawer } from './components/WorkspaceDrawer';
 import { Setup } from './components/Setup';
 import { AiSettingsPanel } from './components/AiSettings';
+import { FormsPanel } from './components/FormsPanel';
 import { exportWorkspacesCsv } from './lib/csv';
 
 type Sort = 'last_active' | 'created' | 'files' | 'health';
@@ -95,6 +96,7 @@ export function App() {
       {funnel && <FunnelWidget f={funnel} />}
       {trends && <TrendsPanel t={trends} />}
       <AiSettingsPanel cfg={cfg} />
+      <FormsPanel cfg={cfg} />
       {rows ? (
         <WorkspacesTable rows={rows} q={q} onQ={setQ} sort={sort} onSort={setSort}
           onSelect={setSelectedId} onExport={() => exportWorkspacesCsv(rows)} />
