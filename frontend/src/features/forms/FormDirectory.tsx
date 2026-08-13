@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   MagnifyingGlass, ArrowSquareOut, FileText, Camera,
-  Signature, CurrencyInr, CheckCircle, Buildings
+  Signature, CurrencyInr, CheckCircle, Buildings, Clock, CalendarBlank
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 
@@ -11,13 +11,56 @@ interface FormSpec { width: number; height: number; minKB: number; maxKB: number
 interface Form {
   id: string; name: string; short_name: string; portal: string; url: string;
   required_documents: string[]; fee: Record<string, number>;
-  photo_specs: FormSpec | null; signature_specs: FormSpec | null; fill_count: number; confidence?: number | null;
+  photo_specs: FormSpec | null; signature_specs: FormSpec | null;
+  fill_count: number; confidence?: number | null;
+  lifecycle: 'open' | 'upcoming' | 'closed' | 'archived';
+  opens_at: string | null; closes_at: string | null;
+  source_updated_at: string | null; closing_soon: boolean;
 }
+
+type FilterTab = 'all' | 'open' | 'closing_soon';
 
 const PORTAL_TINT: Record<string, string> = {
   SSC: '#0a84ff', Railway: '#30d158', UPSC: '#bf5af2', NTA: '#ff9f0a',
   IBPS: '#5e5ce6', 'Passport Seva': '#ff453a', 'Bihar Board': '#ffd60a',
 };
+
+const BADGE_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  open: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: 'Open' },
+  upcoming: { bg: 'bg-blue-500/15', text: 'text-blue-400', label: 'Upcoming' },
+  closed: { bg: 'bg-gray-500/15', text: 'text-gray-400', label: 'Closed' },
+  archived: { bg: 'bg-gray-500/10', text: 'text-gray-500', label: 'Archived' },
+  closing_soon: { bg: 'bg-amber-500/15', text: 'text-amber-400', label: 'Closing Soon' },
+};
+
+function LifecycleBadge({ form }: { form: Form }) {
+  const key = form.closing_soon ? 'closing_soon' : form.lifecycle;
+  const style = BADGE_STYLES[key] || BADGE_STYLES.open;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${style.bg} ${style.text}`}>
+      {form.closing_soon && <Clock size={10} weight="bold" />}
+      {style.label}
+    </span>
+  );
+}
+
+function formatDate(iso: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function DateLine({ form }: { form: Form }) {
+  const opens = formatDate(form.opens_at);
+  const closes = formatDate(form.closes_at);
+  if (!opens && !closes) return null;
+  return (
+    <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-0.5">
+      <CalendarBlank size={12} className="text-gray-600 shrink-0" />
+      {opens && <span>Opens {opens}</span>}
+      {closes && <span className={form.closing_soon ? 'text-amber-400 font-medium' : ''}>Closes {closes}</span>}
+    </div>
+  );
+}
 
 function SpecChip({ icon: Icon, label, spec }: { icon: any; label: string; spec: FormSpec | null }) {
   if (!spec) return null;
@@ -41,26 +84,39 @@ export default function FormDirectory() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Form | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [filter, setFilter] = useState<FilterTab>('all');
 
-  const load = useCallback(async (q: string) => {
+  const load = useCallback(async (q: string, tab: FilterTab) => {
     setLoading(true);
-    try { const r = await api.get(`/forms/search?q=${encodeURIComponent(q)}`); setForms(r.data); }
-    catch {}
+    try {
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      if (tab === 'open') params.set('lifecycle', 'open');
+      if (tab === 'closing_soon') params.set('closing_soon', '1');
+      const r = await api.get(`/forms/search?${params.toString()}`);
+      setForms(r.data);
+    } catch {}
     setLoading(false);
     requestAnimationFrame(() => setMounted(true));
   }, []);
 
-  useEffect(() => { load(''); }, [load]);
+  useEffect(() => { load('', filter); }, [load, filter]);
   useEffect(() => {
-    const t = setTimeout(() => load(search), 250);
+    const t = setTimeout(() => load(search, filter), 250);
     return () => clearTimeout(t);
-  }, [search, load]);
+  }, [search, filter, load]);
 
   const reveal = (i: number) => ({
     transform: mounted ? 'translateY(0)' : 'translateY(14px)',
     opacity: mounted ? 1 : 0,
     transition: `transform 600ms ${EASE} ${i * 50}ms, opacity 600ms ${EASE} ${i * 50}ms`,
   });
+
+  const TABS: { key: FilterTab; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'open', label: 'Open' },
+    { key: 'closing_soon', label: 'Closing Soon' },
+  ];
 
   return (
     <div className="max-w-3xl mx-auto pt-4">
@@ -73,7 +129,7 @@ export default function FormDirectory() {
       </div>
 
       {/* Search */}
-      <div style={reveal(1)} className="mb-8 sticky top-0 z-10">
+      <div style={reveal(1)} className="mb-4 sticky top-0 z-10">
         <div className="rounded-[1.25rem] p-1.5 bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl">
           <div className="relative">
             <MagnifyingGlass size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
@@ -85,6 +141,24 @@ export default function FormDirectory() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Filter chips */}
+      <div style={reveal(1)} className="mb-6 flex gap-2">
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setFilter(tab.key)}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all border ${
+              filter === tab.key
+                ? 'bg-white/[0.1] text-white border-white/[0.15]'
+                : 'bg-white/[0.03] text-gray-400 border-white/[0.06] hover:bg-white/[0.06]'
+            }`}
+            style={{ transitionTimingFunction: EASE, transitionDuration: '200ms' }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Results */}
@@ -120,8 +194,6 @@ function FormRow({ f, isOpen, onToggle, style }: { f: Form; isOpen: boolean; onT
   const contentRef = useRef<HTMLDivElement>(null);
   const [maxH, setMaxH] = useState(0);
 
-  // Measure the real content height so nothing gets clipped (forms vary; on
-  // mobile the doc chips + CTA buttons wrap to extra rows).
   useEffect(() => {
     const el = contentRef.current;
     if (!el) return;
@@ -145,8 +217,12 @@ function FormRow({ f, isOpen, onToggle, style }: { f: Form; isOpen: boolean; onT
             <Buildings size={20} weight="fill" style={{ color: tint }} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate">{f.short_name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-white truncate">{f.short_name}</p>
+              <LifecycleBadge form={f} />
+            </div>
             <p className="text-xs text-gray-500 truncate">{f.name}</p>
+            <DateLine form={f} />
           </div>
           {f.fill_count > 0 && (
             <span className="hidden sm:flex items-center gap-1.5 text-[11px] shrink-0">
@@ -159,7 +235,7 @@ function FormRow({ f, isOpen, onToggle, style }: { f: Form; isOpen: boolean; onT
           )}
         </button>
 
-        {/* Expanded detail — height measured from content, never clipped */}
+        {/* Expanded detail */}
         <div
           className="overflow-hidden transition-all"
           style={{ maxHeight: maxH, transitionTimingFunction: EASE, transitionDuration: '400ms' }}
