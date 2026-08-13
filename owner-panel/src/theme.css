@@ -171,3 +171,115 @@ tbody tr:hover { background: hsl(var(--bg) / 0.6); }
   .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
   .stat { padding: 13px; }
 }
+
+
+/* ─── Shell layout (sectioned navigation) ─────────────────────────────────── */
+
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.shell-nav {
+  position: sticky;
+  top: 0;
+  width: 200px;
+  min-width: 200px;
+  height: 100vh;
+  padding: 20px 12px;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 16px;
+  border-bottom: 1px solid hsl(var(--border-soft));
+  margin-bottom: 8px;
+}
+
+.nav-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-item {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: hsl(var(--ink-soft));
+  font: 500 13px/1.2 var(--sans);
+  text-align: left;
+  cursor: pointer;
+  transition: background 150ms, color 150ms;
+}
+
+.nav-item:hover {
+  background: hsl(var(--bg));
+  color: hsl(var(--ink));
+}
+
+.nav-item-active {
+  background: hsl(var(--marigold) / 0.1);
+  color: hsl(var(--marigold-deep));
+  font-weight: 600;
+}
+
+.shell-main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 32px;
+  max-width: 1100px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid hsl(var(--border-soft));
+}
+
+.section-body {
+  animation: fadeIn 200ms ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Mobile: collapse nav to top tabs */
+@media (max-width: 768px) {
+  .shell { flex-direction: column; }
+  .shell-nav {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    width: 100%;
+    min-width: unset;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 16px;
+    border-right: none;
+    border-bottom: 1px solid hsl(var(--border));
+    overflow-x: auto;
+    gap: 4px;
+  }
+  .nav-brand { display: none; }
+  .nav-items { flex-direction: row; gap: 2px; }
+  .nav-item { white-space: nowrap; padding: 7px 12px; font-size: 12px; }
+  .shell-main { padding: 16px; }
+}
