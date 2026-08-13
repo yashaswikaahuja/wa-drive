@@ -4,7 +4,6 @@ import { authMiddleware } from '../../middleware/auth.js';
 
 const router = Router();
 
-// Build a map of hostname → { fills, filled, failed } across ALL workspaces (network effect)
 async function getHostnameStats(): Promise<Record<string, { fills: number; filled: number; failed: number; corrections: number }>> {
   const { rows } = await pool.query(
     `SELECT hostname, COUNT(*)::int as fills, COALESCE(SUM(total_filled),0)::int as filled, COALESCE(SUM(total_failed),0)::int as failed
@@ -19,7 +18,6 @@ async function getHostnameStats(): Promise<Record<string, { fills: number; fille
   return map;
 }
 
-// Match a form URL to session stats by hostname (handles www. prefix + subdomain)
 function statsForUrl(url: string, stats: Record<string, any>) {
   let host = '';
   try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return { fills: 0, confidence: null, corrections: 0 }; }
@@ -35,27 +33,66 @@ function statsForUrl(url: string, stats: Record<string, any>) {
   return { fills: agg.fills, confidence, corrections: agg.corrections };
 }
 
-// GET /api/forms/search?q=railway
+const CLOSING_SOON_DAYS = 7;
+
+// GET /api/forms/search?q=railway&lifecycle=open&closing_soon=1
 router.get('/search', authMiddleware, async (req: any, res) => {
   try {
     const q = (req.query.q || '').toString().trim().toLowerCase();
+    const lifecycleFilter = (req.query.lifecycle || '').toString().trim().toLowerCase();
+    const closingSoon = req.query.closing_soon === '1' || req.query.closing_soon === 'true';
     const stats = await getHostnameStats();
-    const baseSql = q
-      ? `SELECT id, name, short_name, portal, url, required_documents, fee, photo_specs, signature_specs FROM forms
-         WHERE status = 'active' AND (LOWER(name) LIKE $1 OR LOWER(short_name) LIKE $1 OR LOWER(portal) LIKE $1
-           OR EXISTS (SELECT 1 FROM unnest(search_keywords) k WHERE k LIKE $1)) LIMIT 20`
-      : `SELECT id, name, short_name, portal, url, required_documents, fee, photo_specs, signature_specs FROM forms
-         WHERE status = 'active' LIMIT 20`;
-    const { rows } = await pool.query(baseSql, q ? [`%${q}%`] : []);
+
+    const selectCols = `id, name, short_name, portal, url, required_documents, fee, photo_specs, signature_specs, lifecycle, opens_at, closes_at, source_updated_at`;
+
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIdx = 0;
+
+    if (lifecycleFilter) {
+      const allowed = lifecycleFilter.split(',').map((s: string) => s.trim()).filter(Boolean);
+      paramIdx++;
+      conditions.push(`lifecycle = ANY($${paramIdx})`);
+      params.push(allowed);
+    } else {
+      conditions.push(`(lifecycle IN ('open','upcoming') OR status = 'active')`);
+    }
+
+    if (q) {
+      paramIdx++;
+      conditions.push(`(LOWER(name) LIKE $${paramIdx} OR LOWER(short_name) LIKE $${paramIdx} OR LOWER(portal) LIKE $${paramIdx} OR EXISTS (SELECT 1 FROM unnest(search_keywords) k WHERE k LIKE $${paramIdx}))`);
+      params.push(`%${q}%`);
+    }
+
+    if (closingSoon) {
+      conditions.push(`lifecycle = 'open' AND closes_at IS NOT NULL AND closes_at <= now() + interval '7 days' AND closes_at > now()`);
+    }
+
+    const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const orderSql = `ORDER BY
+      CASE lifecycle WHEN 'open' THEN 0 WHEN 'upcoming' THEN 1 WHEN 'closed' THEN 2 WHEN 'archived' THEN 3 ELSE 4 END,
+      CASE WHEN closes_at IS NOT NULL AND closes_at <= now() + interval '7 days' AND closes_at > now() THEN 0 ELSE 1 END,
+      short_name ASC`;
+
+    const sql = `SELECT ${selectCols} FROM forms ${whereSql} ${orderSql} LIMIT 30`;
+    const { rows } = await pool.query(sql, params);
+
+    const now = Date.now();
+    const closingSoonMs = CLOSING_SOON_DAYS * 24 * 60 * 60 * 1000;
+
     const result = rows.map((f: any) => {
       const s = statsForUrl(f.url, stats);
-      return { ...f, fill_count: s.fills, confidence: s.confidence };
-    }).sort((a: any, b: any) => b.fill_count - a.fill_count);
+      const closesAt = f.closes_at ? new Date(f.closes_at).getTime() : null;
+      const isClosingSoon = f.lifecycle === 'open' && closesAt != null && closesAt > now && (closesAt - now) <= closingSoonMs;
+      return { ...f, fill_count: s.fills, confidence: s.confidence, closing_soon: isClosingSoon };
+    });
+
     res.json(result);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/forms/confidence?hostname=ssc.gov.in — for extension popup badge
+// GET /api/forms/confidence?hostname=ssc.gov.in
 router.get('/confidence', authMiddleware, async (req: any, res) => {
   try {
     const hostname = (req.query.hostname || '').toString();
@@ -75,7 +112,7 @@ router.get('/:id', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/forms/readiness/:phone — readiness % for each form for this customer
+// GET /api/forms/readiness/:phone
 router.get('/readiness/:phone', authMiddleware, async (req: any, res) => {
   try {
     const phone = decodeURIComponent(req.params.phone);
@@ -83,7 +120,6 @@ router.get('/readiness/:phone', authMiddleware, async (req: any, res) => {
       `SELECT name, display_label, data FROM profiles WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL`,
       [req.user.workspaceId, phone]
     );
-    // Data is document-centric now (profiles.data is empty) — derive from extractions per person.
     const { deriveProfile } = await import('../../services/deriveProfile.js');
     const filledKeys = new Set<string>();
     for (const row of pr.rows) {
