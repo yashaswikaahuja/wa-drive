@@ -78,8 +78,24 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
           <h3>No cybercafés{q || band !== 'all' ? ' match' : ' yet'}</h3>
           <p className="muted" style={{ marginTop: 4 }}>{q || band !== 'all' ? 'Try a different search or filter.' : 'Signups will appear here.'}</p>
         </div>
-      ) : (
-        <div className="table-wrap">
+      ) : (<>
+        {/* Card view for phone */}
+        <div className="ws-cards" style={{ padding: '12px 16px' }}>
+          {view.map(w => (
+            <div key={w.id} className="ws-card" onClick={() => onSelect(w.id)} role="button" tabIndex={0}
+              onKeyDown={e => e.key === 'Enter' && onSelect(w.id)}>
+              <div className="ws-card__name">{w.name || 'Untitled'}</div>
+              <div className="ws-card__meta">
+                <HealthChip score={w.health} band={w.healthBand} />
+                <span>{w.whatsappConnected ? '📱 Connected' : ''}</span>
+                <span>{w.filesLast7 > 0 ? `${fmt(w.filesLast7)}/wk` : relativeTime(w.lastActiveAt)}</span>
+                {w.status === 'suspended' && <span className="pill" style={{ color: 'hsl(var(--danger))', borderColor: 'hsl(var(--danger) / 0.4)', fontSize: 11 }}>blocked</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Table view for tablet/desktop */}
+        <div className="table-wrap ws-table-wrap">
           <table>
             <thead>
               <tr>
@@ -149,7 +165,7 @@ export function WorkspacesTable({ rows, q, onQ, sort, onSort, onSelect, onExport
             </tbody>
           </table>
         </div>
-      )}
+      </>)}
     </section>
   );
 }
