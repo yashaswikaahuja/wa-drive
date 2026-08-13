@@ -3,12 +3,27 @@
 
 const SCHEMA_VERSION = '3.0.0';
 const RISK_ORDER = Object.freeze({ safe: 0, reversible: 1, irreversible: 2 });
-const FAILURE_CODES = new Set([
-  'plan_expired', 'stale_target', 'stale_snapshot', 'adapter_mismatch',
-  'affordance_mismatch', 'document_replaced', 'authorization_denied',
-  'correlation_replayed', 'file_reference_invalid', 'action_unsupported',
-  'postcondition_failed', 'gateway_error',
-]);
+
+/** Prefer shared runtime/errors catalog (MIG-ERR-01); fallback frozen set. */
+function runtimeErrors() {
+  if (typeof globalThis !== 'undefined' && globalThis.CcRuntimeErrors) {
+    return globalThis.CcRuntimeErrors;
+  }
+  if (typeof require === 'function') {
+    try { return require('./errors.js'); } catch { /* browser inject */ }
+  }
+  return null;
+}
+
+const _err = runtimeErrors();
+const FAILURE_CODES = new Set(
+  _err?.FROZEN_FAILURE_CODES || [
+    'plan_expired', 'stale_target', 'stale_snapshot', 'adapter_mismatch',
+    'affordance_mismatch', 'document_replaced', 'authorization_denied',
+    'correlation_replayed', 'file_reference_invalid', 'action_unsupported',
+    'postcondition_failed', 'gateway_error',
+  ]
+);
 
 function makeId(prefix) {
   const uuid = globalThis.crypto?.randomUUID?.().replace(/-/g, '')
@@ -21,6 +36,7 @@ function diagnostic(code, severity, stepId, message) {
 }
 
 function normalizeFailureCode(code) {
+  if (_err?.normalizeFailureCode) return _err.normalizeFailureCode(code);
   return FAILURE_CODES.has(code) ? code : 'gateway_error';
 }
 

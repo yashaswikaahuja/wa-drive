@@ -535,222 +535,49 @@ fillBtn.addEventListener('click', async () => {
     }
     selectedProfile = fullProfile;
 
-    // PRODUCT PATH (APE-P1-07): perceive → server plan → ActionPlanExecutor → EO
-    // Must NOT call autofill/executor.js, mapper, or selector resolvers.
-    // Scripts are IIFE-wrapped so re-inject is safe; skip when already present
-    // to avoid needless work on repeated Fill in the same tab.
-    updateProgress('Perceiving page structure...', 30);
-    const PRODUCT_PATH_SCRIPTS = [
-      'runtime/dom-gateway.js',
-      'runtime/navigation-contract.js',
-      'perception/visual-context.js',
-      'perception/binding-registry.js',
-      'perception/revision-manager.js',
-      'perception/canonical-hash.js',
-      'perception/privacy-filter.js',
-      'perception/widget-classifier.js',
-      'perception/adapters/index.js',
-      'perception/node-factory.js',
-      'perception/edge-factory.js',
-      'perception/graph-invariants.js',
-      'perception/context-discovery.js',
-      'perception/snapshot-builder.js',
-      'perception/validator.js',
-      'perception/index.js',
-      'runtime/action-plan-executor.js',
-    ];
-    const [loadedCheck] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => !!(
-        globalThis.CcDomGateway
-        && globalThis.CcBindingRegistry
-        && globalThis.CcPerception
-        && globalThis.CcActionPlanExecutor
-      ),
-    });
-    if (!loadedCheck?.result) {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: PRODUCT_PATH_SCRIPTS,
-      });
-    }
-
-    // NAV-RR2-P2-05: seed operator destination-origin allowlist from chrome.storage.local
-    // into the isolated world (never public IR). Key: navigationOriginAllowlist (string[]).
-    try {
-      const allowStore = await chrome.storage.local.get('navigationOriginAllowlist');
-      const originAllowlist = Array.isArray(allowStore.navigationOriginAllowlist)
-        ? allowStore.navigationOriginAllowlist.filter((x) => typeof x === 'string' && x.length > 0)
-        : [];
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: (list) => {
-          if (globalThis.CcNavigationContract?.setOriginAllowlist) {
-            globalThis.CcNavigationContract.setOriginAllowlist(list);
-          } else {
-            globalThis.__ccNavigationOriginAllowlist = Array.isArray(list) ? list : [];
-          }
-        },
-        args: [originAllowlist],
-      });
-    } catch (e) {
-      console.warn('[CC] navigation origin allowlist seed failed:', e.message);
-    }
-
-    const [percResult] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: async () => {
-        try {
-          if (typeof CcPerception === 'undefined') return { error: 'CcPerception not loaded' };
-          if (typeof CcDomGateway === 'undefined') return { error: 'CcDomGateway not loaded' };
-          if (typeof CcContextDiscovery !== 'undefined' && CcContextDiscovery.resetContextCounter) {
-            CcContextDiscovery.resetContextCounter();
-          }
-          if (typeof CcNodeFactory !== 'undefined' && CcNodeFactory.resetNodeCounter) {
-            CcNodeFactory.resetNodeCounter();
-          }
-          await CcPerception.initPerception({
-            gateway: CcDomGateway,
-            bindingRegistry: new CcBindingRegistry(),
-            revisionManager: new CcRevisionManager(),
-            privacyFilter: CcPrivacyFilter,
-            widgetClassifier: CcWidgetClassifier,
-            contextDiscovery: CcContextDiscovery,
-            nodeFactory: CcNodeFactory,
-            edgeFactory: CcEdgeFactory,
-            canonicalHash: CcCanonicalHash,
-            snapshotBuilder: CcSnapshotBuilder,
-            validator: CcValidator,
-            validatorOptions: { schema: null },
-          });
-          if (CcValidator && !CcValidator.isInitialized()) {
-            await CcValidator.initValidator({ schema: null });
-          }
-          return await CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
-        } catch (err) {
-          return { error: err.message, stack: (err.stack || '').slice(0, 300) };
-        }
-      },
-    });
-
-    const pageSnapshot = percResult?.result;
-    if (!pageSnapshot || pageSnapshot.kind !== 'page_snapshot') {
-      const errDetail = pageSnapshot?.error || JSON.stringify(percResult).slice(0, 120);
-      showStatus('Perception failed: ' + errDetail, CC.danger);
+    // PRODUCT PATH (MIG-POPUP-01): orchestrator owns perceive→plan→execute
+    if (!globalThis.CcFillOrchestrator?.runProductFill) {
+      showStatus('Fill orchestrator not loaded', CC.danger);
       hideProgress();
       return;
     }
-
-    updateProgress('Server planning fill...', 55);
-    const planResponse = await fetch(data.backendUrl + '/fill-plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.accessToken },
-      body: JSON.stringify({
-        snapshot: pageSnapshot,
-        profileId: selectedProfile.id,
-        profile: (() => {
-          const flat = {};
-          const raw = selectedProfile.data || selectedProfile;
-          for (const [k, v] of Object.entries(raw)) {
-            flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
-          }
-          if (selectedProfile.name) flat.name = flat.name || selectedProfile.name;
-          return flat;
-        })(),
-      }),
+    const fillOut = await globalThis.CcFillOrchestrator.runProductFill({
+      tabId: tab.id,
+      profile: selectedProfile,
+      backendUrl: data.backendUrl,
+      accessToken: data.accessToken,
+      runtimeVersion: VERSION,
+      onProgress: (text, pct) => updateProgress(text, pct),
     });
 
-    if (!planResponse.ok) {
-      let errMsg = String(planResponse.status);
-      try {
-        const errBody = await planResponse.text();
-        try {
-          const errJson = JSON.parse(errBody);
-          errMsg += ' - ' + (errJson.error || errJson.message || errBody.slice(0, 80));
-        } catch {
-          errMsg += ' - ' + (planResponse.statusText || 'Server error');
-        }
-      } catch { /* ignore */ }
-      showStatus('Server plan failed: ' + errMsg, CC.danger);
-      hideProgress();
-      return;
-    }
-
-    const planBody = await planResponse.json();
-    const plan = planBody.plan || planBody.action_plan || planBody;
-    if (!plan || !plan.steps || plan.steps.length === 0) {
-      showStatus('Empty plan from server (no mapped fields)', CC.warning);
-      hideProgress();
-      return;
-    }
-
-    updateProgress(`Executing ${plan.steps.length} steps...`, 70);
-    const [execResult] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: async (actionPlan) => {
-        if (!globalThis.CcActionPlanExecutor?.execute) {
-          throw new Error('ActionPlan executor not loaded');
-        }
-        if (typeof globalThis.ccExecutor === 'function' || globalThis.__ccLegacyFillActive) {
-          throw new Error('Legacy fill path must not run with ActionPlan v3');
-        }
-        return globalThis.CcActionPlanExecutor.execute(actionPlan);
-      },
-      args: [plan],
-    });
-
-    const executionObservation = execResult?.result;
-    if (!executionObservation || executionObservation.kind !== 'execution_observation') {
-      showStatus('Execution failed: invalid observation', CC.danger);
-      hideProgress();
-      return;
-    }
-
-    let observationError = null;
-    try {
-      const query = new URLSearchParams({
-        plan_id: plan.plan_id || '',
-        correlation_id: plan.correlation_id || '',
-        runtimeVersion: VERSION,
-      });
-      const reportResponse = await fetch(data.backendUrl + '/fill-observation?' + query.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.accessToken },
-        body: JSON.stringify(executionObservation),
-      });
-      if (!reportResponse.ok) observationError = 'HTTP ' + reportResponse.status;
-    } catch (e) {
-      observationError = e.message;
-    }
-
-    const stepResults = executionObservation.steps || [];
-    const filled = stepResults.filter(r => r.status === 'succeeded').length;
-    const failed = stepResults.filter(r => r.status === 'failed').length;
-    const skipped = stepResults.filter(r => r.status === 'skipped').length;
-
-    const resultByStep = new Map(stepResults.map(r => [r.step_id, r]));
-    const records = (plan.steps || []).map(step => {
-      const result = resultByStep.get(step.step_id);
-      return {
-        label: step.target?.node_id || step.step_id,
-        result: result?.status === 'succeeded' ? 'filled' : (result?.status || 'skipped'),
-        value: step.action?.value || '',
-        source: 'server-plan',
-      };
-    });
-    window._lastFilledRecords = records.filter(r => r.result === 'filled');
-    showResults(filled, skipped, failed, records.filter(r => r.result !== 'filled'));
+    const filled = fillOut.filled || 0;
+    const failed = fillOut.failed || 0;
+    const skipped = fillOut.skipped || 0;
+    const records = fillOut.records || [];
+    window._lastFilledRecords = records.filter((r) => r.result === 'filled');
+    showResults(filled, skipped, failed, records.filter((r) => r.result !== 'filled'));
     undoBtn.style.display = filled > 0 ? 'block' : 'none';
 
-    if (executionObservation.outcome === 'rejected' || executionObservation.outcome === 'aborted') {
-      showStatus('Fill stopped: ' + (executionObservation.rejection_reason || 'plan rejected'), CC.danger);
-    } else if (observationError) {
-      showStatus('Fields changed, but session evidence was not saved: ' + observationError, CC.danger);
-    } else {
-      showStatus(`Fill complete: ${filled} ok, ${failed} failed, ${skipped} skipped`, failed ? CC.warning : CC.success);
+    const statusColor = !fillOut.ok || failed
+      ? CC.danger
+      : (fillOut.observationError ? CC.danger : CC.success);
+    const errApi = globalThis.CcRuntimeErrors;
+    let statusMsg = fillOut.operatorMessage
+      || (errApi?.operatorMessageFor
+        ? errApi.operatorMessageFor(fillOut.error, null)
+        : (fillOut.error || 'Fill finished'));
+    // Never surface raw perception stacks / selectors to operator
+    if (errApi?.sanitizeOperatorDetail) {
+      const sanitized = errApi.sanitizeOperatorDetail(statusMsg);
+      if (sanitized) statusMsg = fillOut.operatorMessage || sanitized;
     }
+    showStatus(statusMsg, statusColor);
   } catch (e) {
-    showStatus('Error: ' + e.message, CC.danger);
+    const errApi = globalThis.CcRuntimeErrors;
+    const msg = errApi?.operatorMessageFor
+      ? errApi.operatorMessageFor('gateway_error', null)
+      : 'Something went wrong while filling.';
+    showStatus(msg, CC.danger);
   } finally {
     fillBtn.disabled = false;
     fillBtn.innerHTML = 'Fill Form';

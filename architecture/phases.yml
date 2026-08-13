@@ -721,19 +721,19 @@ phases:
 
   phase_3_7:
     name: "Hardening, Validation & Repository Architecture"
-    status: architecture_draft
+    status: implemented_unfrozen
     draft_date: "2026-08-12"
-    issues: ["#164"]
+    implemented_date: "2026-08-12"
+    issues: ["#164", "#165", "#166"]
     depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4", "phase_3_5", "phase_3_6"]
     conceptual_roadmap_slot: "3.9"
     description: >
-      Architecture and audit for maintainable module boundaries, dependency
-      direction, first-class error taxonomy ownership, test taxonomy, and
-      responsibility-driven decomposition of oversized mixed modules — without
+      Hardening implementation: error catalog, fill orchestrator extraction,
+      gateway interaction port split behind CcDomGateway facade — without
       weakening frozen Phase 3.0–3.6 contracts. Repository key is phase_3_7;
-      conceptual taxonomy slot is 3.9. Status is architecture_draft only.
-      No mass reorg, no freeze from #164.
-    discovery_reference: "Issue #164; inventory tip phase_3_6 frozen @ 6f05db2"
+      conceptual taxonomy slot is 3.9. Status is implemented_unfrozen.
+      Remaining migrations (edge/nav/background) progressive. No freeze from #166.
+    discovery_reference: "Issue #164 arch; #165 AWC; #166 runtime partial (ERR/POPUP/GW)"
     architecture_artifacts:
       - path: "architecture/hardening-repository.yml"
         purpose: "Normative hardening / repository architecture contract (draft)"
@@ -749,21 +749,28 @@ phases:
       - "Repository/module responsibility map ✓"
       - "Migration map + dependency direction ✓"
       - "Error taxonomy architecture ✓"
-      - "Test taxonomy + ownership ✓"
       - "ADRs 0012–0013 ✓"
       - "CHECK-015 semantic governance ✓"
-      - "No freeze; independent adversarial architecture review requested ✓"
+      - "Architecture review #165 AWC ✓"
+    modules_implemented:
+      - path: "extension/runtime/errors.js"
+        purpose: "Frozen FailureCode normalize + operator-safe messages (MIG-ERR-01)"
+      - path: "extension/application/fill-orchestrator.js"
+        purpose: "Product fill path orchestration (MIG-POPUP-01)"
+      - path: "extension/runtime/gateway/interaction.js"
+        purpose: "DOM gateway interaction port (MIG-GW-01)"
+      - path: "extension/runtime/dom-gateway.js"
+        purpose: "Gateway facade composing observation + interaction"
     forbidden_from_this_status:
-      - "Mass file moves/renames without independent architecture review clearance"
-      - "status: frozen without independent review + freeze gate"
+      - "status: frozen without independent implementation review + freeze gate"
       - "Weakening frozen phase_3_0–phase_3_6 contracts"
       - "Renumbering historical phase_3_* keys"
       - "Moving service planning into extension product path"
       - "Selectors/HTML/credentials in public IR or operator errors"
+      - "Big-bang mass rename without facade + E2E green"
     next_gate: >
-      Independent adversarial architecture review of #164 artifacts. Implement
-      decomposition only after APPROVE or APPROVE WITH CONDITIONS with no
-      unresolved P0/P1, via a separate implementation issue.
+      Independent adversarial implementation review of #166. Continue progressive
+      migrations (EDGE/NAV/BG) as needed. Freeze only via separate freeze gate.
 
 # ── Phase 4+: registry note (do not treat as ratified freezes) ─────
 # Historical status:complete on phase_4_*/5_*/7_* predates clearance of

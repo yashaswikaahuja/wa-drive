@@ -391,167 +391,29 @@ function observeMutations(root, callback) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// INTERACTION PORT — mechanical actions with TOCTOU revalidation
+// INTERACTION PORT — composed from runtime/gateway/interaction.js (MIG-GW-01)
 // ═══════════════════════════════════════════════════════════════════════
 
-/**
- * Resolve a binding from the registry with TOCTOU revalidation.
- * @param {string} contextId
- * @param {string} nodeId
- * @param {object} registry — BindingRegistry instance
- * @param {number} expectedGeneration — binding_generation the plan was authored against
- * @returns {{ element: Element|null, error: string|null }}
- */
-function resolveBinding(contextId, nodeId, registry, expectedGeneration) {
-  const entry = registry.resolve(contextId, nodeId);
-  if (!entry) return { element: null, error: 'stale_target' };
-  if (entry.bindingGeneration !== expectedGeneration) {
-    return { element: null, error: 'stale_target' };
+function loadInteractionPort() {
+  if (typeof globalThis !== 'undefined' && globalThis.CcDomGatewayInteraction) {
+    return globalThis.CcDomGatewayInteraction;
   }
-  // Verify element is still in the DOM
-  if (!entry.liveNodeReference?.isConnected) {
-    registry.invalidateNode(contextId, nodeId);
-    return { element: null, error: 'stale_target' };
+  if (typeof require === 'function') {
+    try { return require('./gateway/interaction.js'); } catch { /* browser inject order */ }
   }
-  return { element: entry.liveNodeReference, error: null };
+  return null;
 }
 
-/** Browser-private file tokens for upload (never service filesystem paths). */
-const _fileReferences = new Map();
-
-/**
- * Register a File/Blob under an opaque file_reference token for ActionPlan upload.
- * @param {string} token
- * @param {File|Blob} file
- */
-function registerFileReference(token, file) {
-  if (!token || typeof token !== 'string') throw new Error('file_reference token required');
-  if (!file) throw new Error('file required');
-  _fileReferences.set(token, file);
+const _interaction = loadInteractionPort();
+if (!_interaction) {
+  throw new Error('CcDomGateway: interaction port missing — inject runtime/gateway/interaction.js before dom-gateway.js');
 }
-
-/**
- * Perform a mechanical action on an element with pre-validation.
- * TOCTOU: checks element is still connected immediately before acting.
- * @param {Element} element
- * @param {object} action — { op: string, ... }
- * @param {object} [options]
- * @param {Element|null} [options.optionElement] — for select_option
- * @returns {{ success: boolean, error: string|null }}
- */
-function performAction(element, action, options = {}) {
-  // Final TOCTOU check — no yield between check and act
-  if (!element?.isConnected) return { success: false, error: 'stale_target' };
-  // Fact-index placeholders must never reach interaction (APE-P1-03)
-  if (element._factIndex != null && typeof element.nodeType !== 'number') {
-    return { success: false, error: 'stale_target' };
-  }
-  if (typeof element.nodeType === 'number' && element.nodeType !== 1) {
-    return { success: false, error: 'stale_target' };
-  }
-
-  switch (action.op) {
-    case 'focus':
-      element.focus();
-      return { success: true, error: null };
-    case 'activate':
-      element.click();
-      return { success: true, error: null };
-    case 'type_text': {
-      element.focus();
-      const niv = Object.getOwnPropertyDescriptor(
-        element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
-        'value'
-      );
-      if (action.clear_first !== false) {
-        if (niv) niv.set.call(element, '');
-        else element.value = '';
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      if (niv) niv.set.call(element, action.value);
-      else element.value = action.value;
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      return { success: true, error: null };
-    }
-    case 'clear': {
-      element.focus();
-      const niv = Object.getOwnPropertyDescriptor(
-        element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype,
-        'value'
-      );
-      if (niv) niv.set.call(element, '');
-      else element.value = '';
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-      element.dispatchEvent(new Event('change', { bubbles: true }));
-      return { success: true, error: null };
-    }
-    case 'select_option': {
-      // Mechanical only: option is a concrete bound Element, not fuzzy text
-      const optionElement = options.optionElement;
-      if (!optionElement?.isConnected) return { success: false, error: 'stale_target' };
-      if (element.tagName === 'SELECT' && optionElement.tagName === 'OPTION') {
-        const owner = optionElement.closest('select');
-        if (owner !== element) return { success: false, error: 'stale_target' };
-        if (element.multiple) {
-          optionElement.selected = true;
-        } else {
-          const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-          if (setter) setter.call(element, optionElement.value);
-          else element.value = optionElement.value;
-          optionElement.selected = true;
-        }
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-      } else {
-        // Custom overlay option: click the option node itself (no selector search)
-        optionElement.click();
-      }
-      return { success: true, error: null };
-    }
-    case 'expand_collapse': {
-      const want = !!action.expanded;
-      const cur = element.getAttribute('aria-expanded');
-      const isOpen = cur === 'true';
-      if (isOpen !== want) element.click();
-      return { success: true, error: null };
-    }
-    case 'upload': {
-      if (element.tagName !== 'INPUT' || String(element.type).toLowerCase() !== 'file') {
-        return { success: false, error: 'action_unsupported' };
-      }
-      const token = action.file_reference;
-      if (!token || typeof token !== 'string') {
-        return { success: false, error: 'file_reference_invalid' };
-      }
-      const file = _fileReferences.get(token);
-      if (!file) return { success: false, error: 'file_reference_invalid' };
-      try {
-        const dt = new DataTransfer();
-        dt.items.add(file instanceof File ? file : new File([file], 'upload.bin'));
-        element.files = dt.files;
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-        return { success: true, error: null };
-      } catch {
-        return { success: false, error: 'gateway_error' };
-      }
-    }
-    case 'toggle': {
-      const current = element.checked;
-      if (current !== action.desired_state) element.click();
-      return { success: true, error: null };
-    }
-    case 'scroll':
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return { success: true, error: null };
-    default:
-      return { success: false, error: 'action_unsupported' };
-  }
-}
+const resolveBinding = _interaction.resolveBinding;
+const registerFileReference = _interaction.registerFileReference;
+const performAction = _interaction.performAction;
 
 // ═══════════════════════════════════════════════════════════════════════
-// HELPERS (private)
+// HELPERS (private) — observation port
 // ═══════════════════════════════════════════════════════════════════════
 
 /** Normalize SVGAnimatedString / DOMTokenList / string className to a plain string. */

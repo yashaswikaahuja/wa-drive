@@ -174,8 +174,8 @@ ok(!ape.includes('autofill/mapper'), 'APE does not import autofill mapper');
 
 console.log('\n=== Registry / ownership / verification ===');
 ok(
-  /phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*architecture_draft/.test(phases),
-  'phase_3_7 status is architecture_draft'
+  /phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
+  'phase_3_7 status is architecture_draft or implemented_unfrozen (not frozen)'
 );
 ok(!/phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*frozen/.test(phases),
   'phase_3_7 is not frozen');

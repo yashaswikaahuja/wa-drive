@@ -220,10 +220,10 @@ ok(
   'phase_3_6 Visual Context is frozen (#163)'
 );
 ok(phases.includes('b9e9427') || phases.includes('runtime_baseline_commit'), 'phase_3_6 freeze baseline recorded');
-// #164: phase_3_7 Hardening (conceptual 3.9) architecture_draft only
+// #164–#166: phase_3_7 Hardening (conceptual 3.9) draft or implemented_unfrozen
 ok(
-  /phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*architecture_draft/.test(phases),
-  'phase_3_7 Hardening registered as architecture_draft (#164)'
+  /phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*(architecture_draft|implemented_unfrozen)/.test(phases),
+  'phase_3_7 Hardening registered as architecture_draft or implemented_unfrozen'
 );
 ok(!/phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*frozen/.test(phases),
   'phase_3_7 is not frozen');
