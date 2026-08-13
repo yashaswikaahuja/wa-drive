@@ -220,6 +220,13 @@ ok(
   'phase_3_6 Visual Context is frozen (#163)'
 );
 ok(phases.includes('b9e9427') || phases.includes('runtime_baseline_commit'), 'phase_3_6 freeze baseline recorded');
+// #164: phase_3_7 Hardening (conceptual 3.9) architecture_draft only
+ok(
+  /phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*architecture_draft/.test(phases),
+  'phase_3_7 Hardening registered as architecture_draft (#164)'
+);
+ok(!/phase_3_7:\s*\n\s*name:\s*"Hardening, Validation & Repository Architecture"\s*\n\s*status:\s*frozen/.test(phases),
+  'phase_3_7 is not frozen');
 ok(phases.includes('ActionPlanExecutor') && phases.includes('NOT a phase_3_'), 'APE excluded from phase_3_* milestones');
 ok(
   ownership.includes('migration_phase: "phase_3_1"') || ownership.includes("migration_phase: 'phase_3_1'"),

@@ -152,6 +152,21 @@ checks:
     ci_job: "architecture"
     scope: "full_tree"
 
+  - id: CHECK-015
+    name: "Phase 3.7 Hardening & Repository Architecture contract"
+    severity: fail
+    description: >
+      Verifies phase_3_7 architecture_draft hardening artifacts (contract v0.1.0,
+      ADRs 0012–0013, migration map, fixtures), ownership and registry alignment,
+      forbidden dependency/error-leak fixtures, frozen FailureCode preservation,
+      and that phase_3_7 is not frozen and does not rename prior phase_3_* keys.
+      Architecture-only; does not require repository decomposition implementation.
+    method: "run_governance_test"
+    command: "node extension-dev/tests/test-phase37-hardening-governance.mjs"
+    issue: "#164"
+    ci_job: "architecture"
+    scope: "full_tree"
+
   # ── WARNINGS ───────────────────────────────────────────────────────
 
   - id: CHECK-002

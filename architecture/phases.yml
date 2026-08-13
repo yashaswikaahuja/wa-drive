@@ -194,7 +194,7 @@ phases:
 #   3.6 Runtime state & deltas → phase_3_3 (folded)
 #   3.7 Navigation understanding → phase_3_5 (frozen #156)
 #   3.8 Visual context → phase_3_6 (frozen #163)
-#   3.9 Hardening & validation → partial work exists; not a phase_3_* freeze key
+#   3.9 Hardening & validation → phase_3_7 (architecture_draft #164; not frozen)
 #   3.10 Public API & migration → ir-migrations under 3.0; not a separate freeze key
 #   (no conceptual slot) WSS → phase_3_4
 #
@@ -215,6 +215,9 @@ phases:
 #
 # phase_3_6 Visual Context (conceptual 3.8): frozen via independent ratification #163
 # (architecture #158–#159; runtime #160; impl reviews #161–#162; tip b9e9427).
+#
+# phase_3_7 Hardening / Validation / Repository Architecture (conceptual 3.9):
+# architecture_draft only (#164). No mass reorg until independent arch review.
 
 # ── Phase 3 architecture gate ───────────────────────────────────────
 
@@ -715,6 +718,52 @@ phases:
         summary: "CHECK-014 does not AJV-validate every fixture against frozen Geometry"
       - id: VC-RR-P2-06
         summary: "High-frequency scroll publish can thrash revisions / stale ActionPlans"
+
+  phase_3_7:
+    name: "Hardening, Validation & Repository Architecture"
+    status: architecture_draft
+    draft_date: "2026-08-12"
+    issues: ["#164"]
+    depends_on: ["phase_3_0", "phase_3_1", "phase_3_2", "phase_3_3", "phase_3_4", "phase_3_5", "phase_3_6"]
+    conceptual_roadmap_slot: "3.9"
+    description: >
+      Architecture and audit for maintainable module boundaries, dependency
+      direction, first-class error taxonomy ownership, test taxonomy, and
+      responsibility-driven decomposition of oversized mixed modules — without
+      weakening frozen Phase 3.0–3.6 contracts. Repository key is phase_3_7;
+      conceptual taxonomy slot is 3.9. Status is architecture_draft only.
+      No mass reorg, no freeze from #164.
+    discovery_reference: "Issue #164; inventory tip phase_3_6 frozen @ 6f05db2"
+    architecture_artifacts:
+      - path: "architecture/hardening-repository.yml"
+        purpose: "Normative hardening / repository architecture contract (draft)"
+      - path: "architecture/hardening-repository.migration-map.json"
+        purpose: "Current-to-target migration map (not permission to move files yet)"
+      - path: "architecture/adrs/0012-repository-module-boundaries.md"
+        purpose: "ADR: facades over big-bang moves"
+      - path: "architecture/adrs/0013-error-taxonomy-ownership.md"
+        purpose: "ADR: error categories, FailureCode map, operator-safe messages"
+      - path: "architecture/fixtures/hardening/"
+        purpose: "Dependency policy and error-envelope fixtures"
+    done_criteria_architecture:
+      - "Repository/module responsibility map ✓"
+      - "Migration map + dependency direction ✓"
+      - "Error taxonomy architecture ✓"
+      - "Test taxonomy + ownership ✓"
+      - "ADRs 0012–0013 ✓"
+      - "CHECK-015 semantic governance ✓"
+      - "No freeze; independent adversarial architecture review requested ✓"
+    forbidden_from_this_status:
+      - "Mass file moves/renames without independent architecture review clearance"
+      - "status: frozen without independent review + freeze gate"
+      - "Weakening frozen phase_3_0–phase_3_6 contracts"
+      - "Renumbering historical phase_3_* keys"
+      - "Moving service planning into extension product path"
+      - "Selectors/HTML/credentials in public IR or operator errors"
+    next_gate: >
+      Independent adversarial architecture review of #164 artifacts. Implement
+      decomposition only after APPROVE or APPROVE WITH CONDITIONS with no
+      unresolved P0/P1, via a separate implementation issue.
 
 # ── Phase 4+: registry note (do not treat as ratified freezes) ─────
 # Historical status:complete on phase_4_*/5_*/7_* predates clearance of

@@ -1,0 +1,117 @@
+{
+  "contract_id": "hardening-repository-migration-map",
+  "status": "architecture_draft",
+  "issue": "#164",
+  "phase": "phase_3_7",
+  "note": "Current-to-target map for implementation phase after independent architecture review. NOT a permission to move files from #164.",
+  "entries": [
+    {
+      "id": "MIG-POPUP-01",
+      "current": "extension/popup.js",
+      "responsibilities": ["UI", "product fill orchestration", "status/progress"],
+      "proposed": [
+        "extension/ui/popup-view.js",
+        "extension/application/fill-orchestrator.js",
+        "extension/popup.js (thin entry)"
+      ],
+      "public_boundary": "popup.html event handlers only",
+      "dependency_direction": "ui → application → runtime/perception",
+      "compatibility_risk": "medium — inject script list and storage keys must stay stable",
+      "tests": ["legacy guard inject list", "manual fill path", "Chromium APE unchanged"]
+    },
+    {
+      "id": "MIG-BG-01",
+      "current": "extension/background.js",
+      "responsibilities": ["SW lifecycle", "auth", "messaging", "inject", "teach hooks"],
+      "proposed": [
+        "extension/sw/lifecycle.js",
+        "extension/sw/auth.js",
+        "extension/sw/messaging.js",
+        "extension/sw/inject.js",
+        "extension/background.js (compose)"
+      ],
+      "public_boundary": "chrome.runtime.onMessage handlers",
+      "dependency_direction": "sw → storage/chrome APIs; no perception imports of planning",
+      "compatibility_risk": "high — message shapes are de-facto API",
+      "tests": ["background message contract unit if added", "extension load smoke"]
+    },
+    {
+      "id": "MIG-GW-01",
+      "current": "extension/runtime/dom-gateway.js",
+      "responsibilities": ["observation", "interaction", "binding resolve"],
+      "proposed": [
+        "extension/runtime/gateway/observation.js",
+        "extension/runtime/gateway/interaction.js",
+        "extension/runtime/gateway/binding-resolve.js",
+        "extension/runtime/dom-gateway.js (facade CcDomGateway)"
+      ],
+      "public_boundary": "globalThis.CcDomGateway / module.exports API",
+      "dependency_direction": "gateway → browser primitives only",
+      "compatibility_risk": "high — all perception/execution depends on API",
+      "tests": ["perception unit", "APE unit", "Chromium APE E2E"]
+    },
+    {
+      "id": "MIG-NAV-01",
+      "current": "extension/runtime/navigation-contract.js",
+      "responsibilities": ["classifier", "origin", "sanitize", "settle", "map"],
+      "proposed": [
+        "extension/runtime/navigation/classifier.js",
+        "extension/runtime/navigation/origin-policy.js",
+        "extension/runtime/navigation/settle-observer.js",
+        "extension/runtime/navigation-contract.js (facade)"
+      ],
+      "public_boundary": "CcNavigationContract frozen semantics",
+      "dependency_direction": "navigation → optional visual-context; no service",
+      "compatibility_risk": "high — phase_3_5 frozen",
+      "tests": ["test-navigation-contract.mjs", "CHECK-013", "Chromium nav cases"]
+    },
+    {
+      "id": "MIG-EDGE-01",
+      "current": "extension/perception/edge-factory.js",
+      "responsibilities": ["multiple edge detectors"],
+      "proposed": [
+        "extension/perception/relationships/contains.js",
+        "extension/perception/relationships/labels.js",
+        "extension/perception/relationships/visual.js",
+        "extension/perception/edge-factory.js (compose deriveEdges)"
+      ],
+      "public_boundary": "deriveEdges(nodes, contexts, opts)",
+      "dependency_direction": "relationships → visual-context helpers optional",
+      "compatibility_risk": "medium — phase_3_3 edge authority",
+      "tests": ["test-edge-factory.mjs", "graph invariants"]
+    },
+    {
+      "id": "MIG-ERR-01",
+      "current": "scattered normalizeFailureCode / string errors",
+      "responsibilities": ["failure normalization", "operator messages"],
+      "proposed": [
+        "extension/runtime/errors/failure-codes.js",
+        "extension/runtime/errors/operator-messages.js",
+        "extension/runtime/errors/normalize.js"
+      ],
+      "public_boundary": "maps to frozen FailureCode enum only",
+      "dependency_direction": "runtime/errors ← creators; ui reads operator map",
+      "compatibility_risk": "medium — must not change EO machine codes",
+      "tests": ["new error unit", "APE failure mapping", "security no leak"]
+    },
+    {
+      "id": "MIG-LEG-01",
+      "current": "extension/autofill/*",
+      "responsibilities": ["legacy fill"],
+      "proposed": ["leave in place; quarantine; no new product-path callers"],
+      "public_boundary": "legacy fill gate only",
+      "dependency_direction": "must not be imported by perception product path",
+      "compatibility_risk": "low if unused on product path",
+      "tests": ["legacy fill gate", "legacy path guard"]
+    }
+  ],
+  "priority_order": [
+    "MIG-ERR-01",
+    "MIG-POPUP-01",
+    "MIG-GW-01",
+    "MIG-EDGE-01",
+    "MIG-NAV-01",
+    "MIG-BG-01",
+    "MIG-LEG-01"
+  ]
+}

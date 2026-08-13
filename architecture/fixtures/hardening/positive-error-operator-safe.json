@@ -1,0 +1,16 @@
+{
+  "fixture_id": "hardening-positive-error-operator-safe",
+  "description": "Operator-facing error envelope without secrets",
+  "kind": "error_envelope",
+  "envelope": {
+    "category": "execution",
+    "failure_code": "postcondition_failed",
+    "operator_message": "This control could not be safely operated.",
+    "developer_code": "postcondition_value_mismatch"
+  },
+  "assert": {
+    "failure_code_in_frozen_set": true,
+    "operator_message_max_len": 160,
+    "no_forbidden_keys": true
+  }
+}

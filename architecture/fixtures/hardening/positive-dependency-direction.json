@@ -1,0 +1,14 @@
+{
+  "fixture_id": "hardening-positive-dependency-direction",
+  "description": "Allowed dependency edges for product path modules",
+  "kind": "dependency_policy",
+  "allowed_edges": [
+    { "from": "extension/ui/*", "to": "extension/application/*" },
+    { "from": "extension/application/*", "to": "extension/runtime/*" },
+    { "from": "extension/application/*", "to": "extension/perception/*" },
+    { "from": "extension/runtime/*", "to": "extension/perception/visual-context.js" },
+    { "from": "extension/perception/*", "to": "extension/runtime/dom-gateway.js" },
+    { "from": "extension/runtime/action-plan-executor.js", "to": "extension/runtime/navigation-contract.js" }
+  ],
+  "note": "Globs are policy language for CHECK-015; not a runtime require graph yet."
+}

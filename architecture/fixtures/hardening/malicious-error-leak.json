@@ -1,0 +1,25 @@
+{
+  "fixture_id": "hardening-malicious-error-leak",
+  "description": "Forbidden: operator/public error carrying selector/HTML/value",
+  "kind": "error_envelope",
+  "expect": "reject",
+  "forbidden_keys_present": [
+    "css_selector",
+    "xpath",
+    "outer_html",
+    "raw_value",
+    "binding_id",
+    "password"
+  ],
+  "envelope": {
+    "category": "execution",
+    "failure_code": "gateway_error",
+    "operator_message": "Failed on #email",
+    "css_selector": "#email",
+    "xpath": "//input[@id='email']",
+    "outer_html": "<input id=\"email\" value=\"secret\">",
+    "raw_value": "secret",
+    "binding_id": "bind:1",
+    "password": "hunter2"
+  }
+}

@@ -1,0 +1,371 @@
+# CyberControl Phase 3.9 — Hardening, Validation & Repository Architecture
+# Repository key: phase_3_7 (architecture/phases.yml). Policy A: conceptual
+# taxonomy slot 3.9 maps here; do NOT rename historical phase_3_* keys.
+#
+# Status: architecture_draft (issue #164)
+# Architecture / audit only. Does NOT implement mass reorg. Does NOT freeze.
+# Independent adversarial architecture review required before implementation.
+
+contract_id: hardening-repository
+contract_version: "0.1.0"
+status: architecture_draft
+issue: "#164"
+phase: phase_3_7
+conceptual_roadmap_slot: "3.9"
+depends_on:
+  - phase_3_0
+  - phase_3_1
+  - phase_3_2
+  - phase_3_3
+  - phase_3_4
+  - phase_3_5
+  - phase_3_6
+
+normative_words:
+  MUST: "mandatory for conformance when this contract is frozen"
+  MUST_NOT: "prohibited for conformance"
+  SHOULD: "recommended unless a documented reason exists"
+
+# ─────────────────────────────────────────────────────────────────────
+# Purpose
+# ─────────────────────────────────────────────────────────────────────
+purpose: >
+  Make CyberControl maintainable as it grows by (1) documenting actual module
+  responsibilities, (2) defining target repository boundaries and dependency
+  direction, (3) establishing first-class error taxonomy ownership, and
+  (4) planning responsibility-driven decomposition of oversized mixed modules —
+  without weakening frozen Phase 3.0–3.6 contracts or moving business planning
+  into the browser.
+
+out_of_scope_this_issue:
+  - "Mass file moves / renames"
+  - "Behavioral changes to frozen perception, navigation, or visual contracts"
+  - "New product features"
+  - "Freezing phase_3_7"
+  - "Renumbering phase_3_* keys"
+
+# ─────────────────────────────────────────────────────────────────────
+# Ownership
+# ─────────────────────────────────────────────────────────────────────
+ownership:
+  browser_extension:
+    owns:
+      - "public Page IR observation (perception)"
+      - "mechanical execution (ActionPlanExecutor / DOM gateway)"
+      - "operator UI (popup) as thin orchestrator only"
+      - "extension-private bindings and error diagnostics"
+    must_not:
+      - "business workflow candidate selection"
+      - "strategic field mapping / knowledge judgment"
+      - "leaking selectors, HTML, credentials into public IR or operator errors"
+  extension_service:
+    owns:
+      - "fill planning, knowledge, learning, AI reasoning"
+      - "mapping and derivation"
+      - "WSS protocol server side"
+    must_not:
+      - "require browser-private selectors as plan targets"
+  shared_architecture:
+    owns:
+      - "frozen schemas and phase registry"
+      - "governance checks CHECK-*"
+      - "this hardening contract"
+
+# ─────────────────────────────────────────────────────────────────────
+# A. Repository responsibility map (as-is inventory summary)
+# ─────────────────────────────────────────────────────────────────────
+as_is_inventory:
+  inventory_date: "2026-08-12"
+  tip_reference: "phase-3-perception @ 6f05db2 (phase_3_6 frozen)"
+  top_level:
+    extension:
+      role: "eyes + hands + operator UI"
+      subtrees:
+        perception: "PageSnapshot/PageDelta pipeline (product path)"
+        runtime: "gateway, ActionPlanExecutor, navigation, WSS client, legacy runner"
+        autofill: "LEGACY client fill/mapper/AI (gated; not product path)"
+        drivers: "legacy driver dispatch"
+        shared: "utilities; some grandfathered semantic helpers"
+        popup_js: "operator UI + product-path orchestration (mixed)"
+        background_js: "SW lifecycle, auth, inject, teach hooks (mixed)"
+    extension_service:
+      role: "brain + knowledge + planning"
+      hotspots: ["orchestrator.js", "routes/agent.js", "learning/confidence engines"]
+    architecture:
+      role: "normative contracts, ADRs, fixtures, phases.yml"
+    extension_dev_tests:
+      role: "unit, governance, security, browser E2E"
+  oversized_mixed_candidates:
+    # Responsibility-driven, not line-count-only. Lines are evidence of scale.
+    - path: "extension/popup.js"
+      approx_lines: 940
+      responsibilities:
+        - "operator UI rendering"
+        - "auth/session display"
+        - "product-path script inject + perceive + fill-plan + execute"
+        - "progress/status UX"
+      target_split_hint: "ui/popup-ui.js | application/fill-orchestrator.js"
+    - path: "extension/background.js"
+      approx_lines: 990
+      responsibilities:
+        - "service worker lifecycle"
+        - "storage/auth token refresh"
+        - "script injection helpers"
+        - "teach job hooks"
+        - "message routing"
+      target_split_hint: "sw/lifecycle.js | sw/auth.js | sw/messaging.js | sw/inject.js"
+    - path: "extension/autofill/executor.js"
+      approx_lines: 1150
+      responsibilities:
+        - "legacy fill execution"
+        - "semantic option match / wait helpers"
+      disposition: "legacy gated; do not grow; migrate callers to ActionPlanExecutor"
+    - path: "extension/runtime/dom-gateway.js"
+      approx_lines: 650
+      responsibilities:
+        - "observation port (capture facts, geometry)"
+        - "interaction port (performAction)"
+        - "binding resolve TOCTOU"
+      target_split_hint: "runtime/gateway/observation.js | interaction.js | binding-resolve.js"
+      constraint: "public CcDomGateway API surface MUST remain stable during split"
+    - path: "extension/runtime/navigation-contract.js"
+      approx_lines: 660
+      responsibilities:
+        - "classifier"
+        - "origin policy"
+        - "path sanitize"
+        - "settle observer"
+        - "outcome map"
+      target_split_hint: "optional internal split under runtime/navigation/ with single facade"
+      constraint: "frozen phase_3_5 semantics; facade export must match"
+    - path: "extension/perception/edge-factory.js"
+      approx_lines: 580
+      responsibilities:
+        - "many edge type detectors in one module"
+      target_split_hint: "relationships/edges/*.js composed by edge-factory facade"
+    - path: "extension-service/orchestrator.js"
+      approx_lines: 860
+      responsibilities:
+        - "multi-concern service orchestration"
+      target_split_hint: "service-owned follow-on; not browser perception freeze path"
+  cohesion_findings:
+    - id: FIND-MIX-01
+      summary: "popup.js is the highest-risk mixed orchestrator on the product path"
+    - id: FIND-MIX-02
+      summary: "background.js mixes SW infrastructure with product messaging"
+    - id: FIND-LEG-01
+      summary: "autofill/* remains large but is legacy-gated; hardening MUST not re-expand it"
+    - id: FIND-GOOD-01
+      summary: "perception/* is already modular; prefer facades over wholesale moves"
+    - id: FIND-GOOD-02
+      summary: "navigation-contract + visual-context + action-plan-executor are coherent single-domain modules"
+
+# ─────────────────────────────────────────────────────────────────────
+# B. Target extension structure (direction)
+# ─────────────────────────────────────────────────────────────────────
+target_structure:
+  rule: >
+    Target folders are a migration *direction*. Implementation MUST not create
+    empty ceremony directories or move frozen modules without dependency evidence.
+  extension:
+    perception:
+      capture: "context-discovery, snapshot-builder orchestration, gateway facts"
+      classification: "widget-classifier, adapters"
+      relationships: "edge-factory (+ future edge detectors)"
+      visual: "visual-context.js"
+      navigation: "optional re-export of navigation affordance observation only"
+      state: "revision-manager, delta-emitter, delta-apply, binding-registry"
+      contracts: "validator, graph-invariants, privacy-filter, canonical-hash"
+      index: "small public CcPerception composition boundary (keep)"
+    runtime:
+      execution: "action-plan-executor"
+      gateway: "dom-gateway split observation/interaction"
+      navigation: "navigation-contract facade + internals"
+      transport: "ws-client, reconnect-manager"
+      legacy: "runner, resolver, plugin-bridge, teach-client (quarantine)"
+      errors: "NEW error catalog + normalize (implementation phase)"
+      index: "optional composition boundary"
+    ui:
+      popup: "presentation only"
+      application: "fill-orchestrator called by popup"
+    sw:
+      background slices: "lifecycle, auth, messaging, inject"
+  forbidden_target_moves:
+    - "Moving fill-planner / mapping-engine into extension/"
+    - "Merging autofill semantic mapper into perception"
+    - "Publishing private bindings under perception public API"
+
+# ─────────────────────────────────────────────────────────────────────
+# C. Error-management architecture
+# ─────────────────────────────────────────────────────────────────────
+error_architecture:
+  principle: >
+    Errors are first-class artifacts with category, machine code, operator-safe
+    message, and private developer diagnostic. They MUST NOT smuggle secrets.
+  layers:
+    creation:
+      owner: "module that detects the condition (gateway, perception, executor, nav)"
+    normalization:
+      owner: "runtime/errors (to be implemented) mapping internal reasons → FailureCode"
+    operator_presentation:
+      owner: "ui/popup or EO consumer"
+      rule: "operator messages are short, non-technical, non-leaking"
+    developer_diagnostics:
+      owner: "extension private diagnostics / logs"
+      rule: "may include technical codes; MUST NOT include raw values, HTML, selectors"
+  categories:
+    - id: perception
+      examples: ["graph_invariant_failed", "snapshot_validation_failed"]
+      maps_to_public: "EO diagnostics / gateway_error when execution cannot proceed"
+    - id: classification
+      examples: ["unknown_widget", "adapter_mismatch"]
+      maps_to_public: "adapter_mismatch | EO diagnostics"
+    - id: navigation
+      examples: ["navigation_failed_timeout", "navigation_origin_denied"]
+      maps_to_public: "navigation OUTCOME_MAP primary_failure_code (frozen phase_3_5)"
+    - id: execution
+      examples: ["postcondition_failed", "action_unsupported"]
+      maps_to_public: "ActionPlan FailureCode set"
+    - id: authorization_security
+      examples: ["authorization_denied", "allow_submit false"]
+      maps_to_public: "authorization_denied"
+    - id: stale_state
+      examples: ["stale_target", "stale_snapshot", "document_replaced"]
+      maps_to_public: "same FailureCodes (frozen)"
+    - id: contract_schema
+      examples: ["schema_validation_failed"]
+      maps_to_public: "gateway_error or plan reject before execute"
+    - id: infrastructure_service
+      examples: ["network_error", "auth_expired"]
+      maps_to_public: "UI status; not Page IR"
+    - id: unsupported_delegated
+      examples: ["file_reference_invalid"]
+      maps_to_public: "file_reference_invalid"
+  frozen_failure_codes:
+    source: "architecture/action-plan.schema.json / execution-observation.schema.json"
+    rule: >
+      Implementation of error catalog MUST map into existing frozen FailureCode
+      enum. It MUST NOT invent new public FailureCodes without a contract amendment
+      review.
+  operator_message_examples:
+    - machine: "stale_target"
+      operator: "The page changed. CyberControl will re-read the form."
+    - machine: "authorization_denied"
+      operator: "This action is not allowed for the current plan."
+    - machine: "postcondition_failed"
+      operator: "This control could not be safely operated."
+    - machine: "navigation_origin_denied"
+      operator: "Navigation to that site is not allowed."
+  must_not_in_operator_or_public_ir:
+    - selectors
+    - xpath
+    - outer_html
+    - inner_html
+    - raw field values
+    - credentials
+    - binding_id
+    - stack traces with page secrets
+
+# ─────────────────────────────────────────────────────────────────────
+# D. Large-file decomposition rules
+# ─────────────────────────────────────────────────────────────────────
+decomposition_rules:
+  justify_by:
+    - "responsibility count > 1 architectural concern"
+    - "dependency fan-out that blocks testing"
+    - "change frequency colliding unrelated features"
+  not_justify_by:
+    - "line count alone"
+    - "aesthetic folder symmetry"
+  required_record_per_split:
+    - current_file
+    - responsibilities_found
+    - new_modules
+    - public_private_boundary
+    - dependency_direction
+    - migration_strategy
+    - tests_moved_or_added
+    - compatibility_risk
+  migration_strategy_defaults:
+    - "Extract pure helpers first with unit tests"
+    - "Keep stable globalThis / module.exports facade until all callers updated"
+    - "One product-path facade change per PR; no silent behavioral drift"
+    - "Browser E2E product path green before merging facade swaps"
+
+# ─────────────────────────────────────────────────────────────────────
+# E. Dependency direction
+# ─────────────────────────────────────────────────────────────────────
+dependency_direction:
+  extension_layers_top_down:
+    - "ui (popup presentation)"
+    - "application orchestration (fill product path)"
+    - "runtime execution / navigation / transport"
+    - "perception capabilities"
+    - "gateway / browser primitives"
+  must_not:
+    - "perception importing popup or autofill mapper"
+    - "gateway importing ActionPlanExecutor"
+    - "navigation-contract importing service planning"
+    - "ui importing private binding table"
+  browser_service:
+    browser: "observe → classify → execute mechanically → report EO"
+    service: "reason → select → plan → replan"
+    public_evidence_only: "PageSnapshot / PageDelta / EO — no private bindings"
+  mechanical_checks_progressive:
+    - "grep-based forbidden import matrix in CHECK-015"
+    - "optional dependency-cruiser later (not required for architecture draft)"
+
+# ─────────────────────────────────────────────────────────────────────
+# F. Test taxonomy
+# ─────────────────────────────────────────────────────────────────────
+test_taxonomy:
+  unit: "extension-dev/tests/** pure modules"
+  contract_conformance: "ratification AJV + page-ir / action-plan"
+  governance: "test-phase*-governance, CHECK-*"
+  security: "extension-dev/tests/security"
+  browser_e2e: "extension-dev/tests/browser"
+  adversarial: "malicious fixtures + security smuggling cases"
+  performance: "perception-performance budgets / benches"
+  ownership_rule: >
+    New tests SHOULD live under a path that names the architectural concern
+    (e.g. perception/, security/, browser/). Do not dump product tests into
+    unrelated folders.
+
+# ─────────────────────────────────────────────────────────────────────
+# G. Implementation-phase allowed changes (after review clearance)
+# ─────────────────────────────────────────────────────────────────────
+implementation_allowed_after_review:
+  - "Create runtime/errors catalog mapping to frozen FailureCodes"
+  - "Extract popup fill orchestration behind facade without UX behavior change"
+  - "Split background.js by SW concern with message API stability"
+  - "Internal splits of dom-gateway / edge-factory behind stable exports"
+  - "Add CHECK-015 mechanical import guards"
+  - "Reorganize tests by taxonomy without deleting coverage"
+  - "Quarantine legacy autofill growth (no new product path callers)"
+implementation_forbidden_even_after_review:
+  - "Weakening frozen phase_3_0–phase_3_6 contracts"
+  - "Renumbering phase_3_* keys"
+  - "Moving planning/knowledge into extension product path"
+  - "Enabling screenshots/vision by default"
+  - "Selectors in public IR/EO/operator errors"
+  - "Mass rename without green product-path E2E"
+
+# ─────────────────────────────────────────────────────────────────────
+# Migration map reference
+# ─────────────────────────────────────────────────────────────────────
+migration_map: "architecture/hardening-repository.migration-map.json"
+adrs:
+  - "architecture/adrs/0012-repository-module-boundaries.md"
+  - "architecture/adrs/0013-error-taxonomy-ownership.md"
+
+verification:
+  check_id: CHECK-015
+  suite: "extension-dev/tests/test-phase37-hardening-governance.mjs"
+
+design_answers:
+  q_why: "Maintainability and ownership clarity as the repo grows"
+  q_structure: "Responsibility-driven target folders; facades preserve APIs"
+  q_errors: "Category + FailureCode + operator-safe message + private diagnostics"
+  q_deps: "UI → app → runtime → perception → gateway; service separate"
+  q_tests: "Taxonomy by concern; close to ownership"
+  q_gate: "Architecture review → impl → impl review → freeze gate; no freeze here"

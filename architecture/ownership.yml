@@ -275,6 +275,22 @@ subsystems:
       viewport, visibility/occlusion evidence, visual edges). Browser observes;
       service interprets for planning. Frozen #163; draft additives remain non-frozen.
 
+  # ── SHARED CONTRACT: Hardening / Repository Architecture (phase_3_7 draft) ─
+  hardening_repository:
+    owner: shared
+    status: architecture_draft
+    migration_phase: "phase_3_7"
+    paths:
+      - "architecture/hardening-repository.yml"
+      - "architecture/hardening-repository.migration-map.json"
+      - "architecture/adrs/0012-repository-module-boundaries.md"
+      - "architecture/adrs/0013-error-taxonomy-ownership.md"
+      - "architecture/fixtures/hardening/"
+    description: >
+      Draft contract for module boundaries, dependency direction, error taxonomy
+      ownership, and responsibility-driven decomposition. Not frozen; no mass
+      reorg from #164 until independent architecture review clears.
+
   # ── SERVICE: Page IR Consumers (Phase 4.1+) ─────────────────────
   page_ir_consumers:
     owner: extension_service
