@@ -52,6 +52,7 @@ const suites = [
   { name: 'Prior Key Alignment Tests', cmd: 'node extension-dev/tests/test-prior-key-alignment.mjs' },
   { name: 'Static Bounds Tests', cmd: 'node extension-dev/tests/test-static-bounds.mjs' },
   { name: 'Dynamic Loop Tests', cmd: 'node extension-dev/tests/test-dynamic-loop.mjs' },
+  { name: 'Safety Demotion Tests', cmd: 'node extension-dev/tests/test-safety-demotion.mjs' },
 ];
 
 let allPass = true;

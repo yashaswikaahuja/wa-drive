@@ -356,6 +356,101 @@ async function runProductFill(ctx) {
     });
     allRecords = allRecords.concat(records);
 
+    // Phase 4.7: Safety demotion — if a STATIC batch was stopped mid-execution
+    // due to hard evidence (outcome 'partial' + skipped steps + safety_demotion diagnostic),
+    // switch to dynamic one-step continuation for remaining fields.
+    const hasSafetyDemotion = (executionObservation.diagnostics || []).some(
+      d => d.code === 'safety_demotion'
+    );
+    if (hasSafetyDemotion && !isDynamic && skipped > 0) {
+      // Force switch to dynamic continuation loop for remaining fields
+      // Continue the loop as if isDynamic was true from the start
+      const remainingTurns = MAX_DYNAMIC_TURNS - turn - 1;
+      for (let dynTurn = 0; dynTurn < remainingTurns; dynTurn++) {
+        progress(`Safety demotion: dynamic turn ${dynTurn + 1}...`, 50 + dynTurn);
+        const [rePercResult] = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: async () => {
+            if (!globalThis.CcPerception?.perceivePage) return { error: 'perception_not_loaded' };
+            return await globalThis.CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
+          },
+        });
+        lastPageSnapshot = rePercResult?.result;
+        if (!lastPageSnapshot || lastPageSnapshot.kind !== 'page_snapshot') break;
+
+        const rePlanResponse = await fetch(backendUrl + '/fill-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+          body: JSON.stringify({
+            snapshot: lastPageSnapshot,
+            profileId: profile.id,
+            operator_execution_preference: 'DYNAMIC',
+            session_id: sessionId,
+            profile: (() => {
+              const flat = {};
+              const raw = profile.data || profile;
+              for (const [k, v] of Object.entries(raw)) {
+                flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+              }
+              if (profile.name) flat.name = flat.name || profile.name;
+              return flat;
+            })(),
+          }),
+        });
+        if (!rePlanResponse.ok) break;
+        const rePlanBody = await rePlanResponse.json();
+        if (rePlanBody.fill_complete) break;
+        const dynPlan = rePlanBody.plan || rePlanBody.action_plan || rePlanBody;
+        if (!dynPlan || !dynPlan.steps || dynPlan.steps.length === 0) break;
+
+        const [dynExecResult] = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: async (actionPlan) => {
+            if (!globalThis.CcActionPlanExecutor?.execute) throw new Error('executor not loaded');
+            if (globalThis.CcDomEvidence?.startObserving) {
+              const registry = globalThis.CcPerception?.getBindingRegistry?.();
+              globalThis.CcDomEvidence.startObserving(actionPlan, registry);
+            }
+            let obs;
+            try { obs = await globalThis.CcActionPlanExecutor.execute(actionPlan); }
+            finally {
+              if (globalThis.CcDomEvidence?.stopObserving) {
+                globalThis.CcDomEvidence.stopObserving();
+                const ev = globalThis.CcDomEvidence.getEvidence?.() || [];
+                if (ev.length > 0 && obs) obs.dom_evidence = ev;
+              }
+            }
+            return obs;
+          },
+          args: [dynPlan],
+        });
+        const dynObs = dynExecResult?.result;
+        if (!dynObs || dynObs.kind !== 'execution_observation') break;
+
+        try {
+          const q = new URLSearchParams({ sessionId: sessionId || '', plan_id: dynPlan.plan_id || '', correlation_id: dynPlan.correlation_id || '', runtimeVersion: runtimeVersion || '' });
+          await fetch(backendUrl + '/fill-observation?' + q.toString(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+            body: JSON.stringify(dynObs),
+          });
+        } catch (e) { lastObservationError = e.message; }
+
+        const dynSteps = dynObs.steps || [];
+        totalFilled += dynSteps.filter(r => r.status === 'succeeded').length;
+        totalFailed += dynSteps.filter(r => r.status === 'failed').length;
+        totalSkipped += dynSteps.filter(r => r.status === 'skipped').length;
+        const dynRecords = (dynPlan.steps || []).map(s => {
+          const r = dynSteps.find(x => x.step_id === s.step_id);
+          return { label: s.target?.node_id || s.step_id, result: r?.status === 'succeeded' ? 'filled' : (r?.status || 'skipped'), value: s.action?.value || '', source: 'server-plan' };
+        });
+        allRecords = allRecords.concat(dynRecords);
+        lastPlan = dynPlan;
+        if (dynSteps.some(r => r.status === 'failed') || dynObs.outcome === 'aborted') break;
+      }
+      break; // Exit the main loop — dynamic continuation handled above
+    }
+
     // Stop loop on failure or abort
     if (failed > 0 || executionObservation.outcome === 'aborted' || executionObservation.outcome === 'rejected') {
       break;

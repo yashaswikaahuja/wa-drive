@@ -504,6 +504,29 @@ async function execute(plan) {
       if (globalThis.CcDomEvidence?.notifyStepExecuted) {
         globalThis.CcDomEvidence.notifyStepExecuted(step.step_id, step.target.context_id, step.target.node_id);
       }
+      // Phase 4.7: Safety demotion — check if hard DOM evidence invalidates remaining steps.
+      // If so, stop the batch immediately. The orchestrator switches to dynamic continuation.
+      if (!stopped && globalThis.CcDomEvidence?.getEvidence) {
+        const evidence = globalThis.CcDomEvidence.getEvidence();
+        const HARD_TYPES = ['control_removed', 'subtree_replaced', 'option_set_changed', 'cascade_triggered', 'widget_recreated'];
+        const hardEvidence = evidence.filter(e => HARD_TYPES.includes(e.type));
+        if (hardEvidence.length > 0) {
+          // Check if any hard evidence affects remaining (not-yet-executed) step targets
+          const remainingSteps = plan.steps.filter(s => !steps.find(r => r.step_id === s.step_id));
+          const remainingNodeIds = new Set(remainingSteps.map(s => s.target?.node_id));
+          if (remainingNodeIds.size > 0) {
+            const invalidatesRemaining = hardEvidence.some(e => {
+              if (e.affected_node_id && remainingNodeIds.has(e.affected_node_id)) return true;
+              if (e.type === 'subtree_replaced' || e.type === 'cascade_triggered') return true;
+              return false;
+            });
+            if (invalidatesRemaining) {
+              stopped = true;
+              diagnostics.push(diagnostic('safety_demotion', 'warning', step.step_id, 'Hard DOM evidence invalidates remaining steps; batch stopped for safety'));
+            }
+          }
+        }
+      }
       if (navMapped?.primary_diagnostic) {
         diagnostics.push(diagnostic(navMapped.primary_diagnostic, 'info', step.step_id, `Navigation outcome: ${navMapped.primary_diagnostic}`));
       }
