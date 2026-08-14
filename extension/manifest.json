@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.91.1",
+  "version": "5.92.0",
   "description": "Auto-fill govt forms from CyberControl profiles (any http/https/file host for testing; owner-panel will gate domains later)",
   "permissions": [
     "storage",
