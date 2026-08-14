@@ -46,6 +46,7 @@ const suites = [
   { name: 'WSS Protocol Tests', cmd: 'node extension-dev/tests/test-wss-protocol.mjs' },
   { name: 'HIM Runtime Tests', cmd: 'node extension-dev/tests/test-him-runtime.mjs' },
   { name: 'No Legacy Brain Guard', cmd: 'node extension-dev/tests/test-no-legacy-brain.mjs' },
+  { name: 'DOM Evidence Tests', cmd: 'node extension-dev/tests/test-dom-evidence.mjs' },
 ];
 
 let allPass = true;
