@@ -54,6 +54,7 @@ const suites = [
   { name: 'Dynamic Loop Tests', cmd: 'node extension-dev/tests/test-dynamic-loop.mjs' },
   { name: 'Safety Demotion Tests', cmd: 'node extension-dev/tests/test-safety-demotion.mjs' },
   { name: 'DOM Settle Tests', cmd: 'node extension-dev/tests/test-dom-settle.mjs' },
+  { name: 'WSS Adaptive Transport Tests', cmd: 'node extension-dev/tests/test-wss-adaptive.mjs' },
 ];
 
 let allPass = true;

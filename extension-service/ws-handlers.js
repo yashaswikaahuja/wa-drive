@@ -240,4 +240,203 @@ handlers.set('resume', (session, message) => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════
+// Phase 4.10 — Adaptive Execution WSS Transport
+// Same semantics as HTTPS fill-plan/fill-observation but over WSS.
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * fill_plan_request — Extension requests adaptive fill plan over WSS.
+ * Same semantics as POST /fill-plan:
+ *   - Receives snapshot + operator preference + session_id
+ *   - Classifies behavior, merges mode, bounds/clamps plan
+ *   - Returns action_plan with classification + diagnostics
+ *   - Anti-duplicate: filters committed nodes on re-plan turns
+ *   - Plan race: supersedes prior plan if session active
+ */
+handlers.set('fill_plan_request', async (session, message, ctx) => {
+  const { snapshot, profile, profileId, operator_execution_preference, session_id } = message;
+
+  if (!snapshot || snapshot.kind !== 'page_snapshot') {
+    send(session.sessionId, { type: 'error', code: 'invalid_snapshot', message: 'Expected valid PageSnapshot', ref: message.id });
+    return;
+  }
+  if (!profile || Object.keys(profile).length === 0) {
+    send(session.sessionId, { type: 'error', code: 'invalid_profile', message: 'Profile required', ref: message.id });
+    return;
+  }
+
+  try {
+    // Reuse the same server logic as HTTP fill-plan
+    const { generateFillPlan, deriveScope } = await import('./fill-planner.js');
+    const { classifyFormBehavior } = await import('./behavior-classifier.js');
+    const { mergeExecutionMode } = await import('./execution-mode.js');
+    const { applyStaticBounds, STATIC_MAX_STEPS } = await import('./static-bounds.js');
+    const { getCommittedNodeIds, getActivePlanId, supersedePlan } = await import('./fill-session.js');
+
+    const scope = deriveScope(snapshot);
+    let planResult = await generateFillPlan({
+      snapshot,
+      workspace_id: session.workspaceId,
+      phone: null,
+      person_key: null,
+      profile_overrides: profile,
+      profile_id: profileId || null,
+    });
+
+    if (!planResult.success) {
+      send(session.sessionId, { type: 'fill_plan_response', plan: null, classification: null, session: null, diagnostics: planResult.diagnostics, ref: message.id });
+      return;
+    }
+
+    // Anti-duplicate filter
+    if (session_id && planResult.plan?.steps?.length > 0) {
+      const committed = getCommittedNodeIds(session_id);
+      if (committed.size > 0) {
+        const before = planResult.plan.steps.length;
+        planResult.plan.steps = planResult.plan.steps.filter(s => !committed.has(s.target?.node_id));
+        if (before > planResult.plan.steps.length) {
+          if (!planResult.diagnostics) planResult.diagnostics = {};
+          planResult.diagnostics.anti_duplicate_filtered = before - planResult.plan.steps.length;
+        }
+      }
+    }
+
+    if (planResult.plan && planResult.plan.steps.length === 0) {
+      send(session.sessionId, { type: 'fill_plan_response', plan: { ...planResult.plan, steps: [] }, fill_complete: true, classification: null, session: { id: planResult.session_id }, diagnostics: planResult.diagnostics, ref: message.id });
+      return;
+    }
+
+    // Plan race — supersede prior
+    let supersededPlanId = null;
+    if (session_id && planResult.plan) {
+      const activePlan = getActivePlanId(session_id);
+      if (activePlan && activePlan !== planResult.plan.plan_id) {
+        supersededPlanId = activePlan;
+        planResult.plan.supersedes_plan_id = activePlan;
+        const stepIds = planResult.plan.steps.map(s => s.step_id);
+        const nodeIds = planResult.plan.steps.map(s => s.target?.node_id);
+        supersedePlan(session_id, planResult.plan.plan_id, planResult.plan.steps.length, stepIds, nodeIds);
+      }
+    }
+
+    // Classification
+    let classification = null;
+    try {
+      const domEvidence = Array.isArray(message.dom_evidence) ? message.dom_evidence : [];
+      classification = classifyFormBehavior({ snapshot, domEvidence, priorKnowledge: null, planSteps: planResult.plan?.steps || [] });
+    } catch {
+      classification = { system_classification: 'UNKNOWN', effective_execution_mode: 'dynamic', confidence: 0, reason_codes: ['classification_error'], evidence_summary: {} };
+    }
+
+    // Mode merge
+    const modeResult = mergeExecutionMode({
+      operatorPreference: operator_execution_preference || 'AUTO',
+      systemClassification: classification.system_classification,
+    });
+    classification.effective_execution_mode = modeResult.effective_execution_mode;
+    classification.operator_preference = modeResult.preference_applied;
+    classification.preference_demotion = modeResult.demotion;
+
+    // Static bounds or dynamic clamp
+    const plan = planResult.plan;
+    let planClamped = false;
+    let staticBounded = false;
+
+    if (classification.effective_execution_mode === 'static' && plan?.steps?.length > 0) {
+      const result = applyStaticBounds({ steps: plan.steps, edges: snapshot.edges || [] });
+      if (result.bounded) {
+        plan.steps = result.steps;
+        staticBounded = true;
+        if (!planResult.diagnostics) planResult.diagnostics = {};
+        planResult.diagnostics.static_bounded = true;
+        planResult.diagnostics.static_bound_reason = result.bound_reason;
+      }
+    } else if (classification.effective_execution_mode === 'dynamic' && plan?.steps?.length > 1) {
+      const orig = plan.steps.length;
+      plan.steps = [plan.steps[0]];
+      planClamped = true;
+      if (!planResult.diagnostics) planResult.diagnostics = {};
+      planResult.diagnostics.plan_clamped = true;
+      planResult.diagnostics.original_step_count = orig;
+    }
+
+    send(session.sessionId, {
+      type: 'fill_plan_response',
+      plan,
+      classification,
+      plan_clamped: planClamped,
+      static_bounded: staticBounded,
+      session: { id: planResult.session_id },
+      diagnostics: planResult.diagnostics,
+      superseded_plan_id: supersededPlanId,
+      ref: message.id,
+    });
+  } catch (err) {
+    send(session.sessionId, { type: 'error', code: 'plan_error', message: err.message, ref: message.id });
+  }
+});
+
+/**
+ * fill_observation_wss — Extension reports execution observation over WSS.
+ * Same semantics as POST /fill-observation:
+ *   - Plan race check (rejects stale plans)
+ *   - Hard evidence → persist dynamic behavior
+ *   - Committed step tracking
+ */
+handlers.set('fill_observation_wss', async (session, message, ctx) => {
+  const { observation, session_id } = message;
+
+  if (!observation || observation.kind !== 'execution_observation') {
+    send(session.sessionId, { type: 'error', code: 'invalid_observation', message: 'Expected ExecutionObservation', ref: message.id });
+    return;
+  }
+
+  const planId = observation.plan_id;
+  if (!planId) {
+    send(session.sessionId, { type: 'error', code: 'missing_plan_id', message: 'plan_id required', ref: message.id });
+    return;
+  }
+
+  // Plan race guard
+  if (session_id) {
+    const { isPlanActive } = await import('./fill-session.js');
+    if (!isPlanActive(session_id, planId)) {
+      send(session.sessionId, {
+        type: 'fill_observation_rejected',
+        code: 'stale_plan',
+        message: 'Plan superseded; execution must stop.',
+        plan_id: planId,
+        ref: message.id,
+      });
+      return;
+    }
+  }
+
+  // Mark steps completed in session
+  if (session_id) {
+    const { markStepCompleted, markStepFailed } = await import('./fill-session.js');
+    for (const step of observation.steps || []) {
+      if (step.status === 'succeeded') {
+        try { markStepCompleted(session_id, step.step_id); } catch {}
+      } else if (step.status === 'failed') {
+        try { markStepFailed(session_id, step.step_id, step.failure_code || 'unknown'); } catch {}
+      }
+    }
+  }
+
+  send(session.sessionId, {
+    type: 'fill_observation_ack',
+    observation_id: observation.observation_id,
+    outcome: observation.outcome,
+    plan_id: planId,
+    ref: message.id,
+  });
+
+  // Record via context handler if available
+  if (ctx.recordObservation) {
+    try { ctx.recordObservation(session.workspaceId, observation); } catch {}
+  }
+});
+
 export { handlers };
