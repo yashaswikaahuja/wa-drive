@@ -125,8 +125,25 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
     let classification = null;
     try {
       const domEvidence = Array.isArray(req.body.dom_evidence) ? req.body.dom_evidence : [];
-      // Prior knowledge: look for behavior record in scope (if available)
-      const priorKnowledge = planResult.diagnostics?.prior_knowledge || null;
+
+      // Read prior behavior knowledge from durable store (written on observation)
+      const behaviorKey = `${scope.portal_id || ''}:${scope.form_key || ''}`;
+      let priorKnowledge = null;
+      try {
+        const { loadDoc, KEYS } = await import('../store.js');
+        const allMappings = await loadDoc(KEYS.MAPPINGS);
+        const formEntry = allMappings[behaviorKey] || allMappings[scope.form_key] || {};
+        if (formEntry._behavior) {
+          priorKnowledge = {
+            behavior: formEntry._behavior.behavior || (formEntry._behavior.classification === 'DYNAMIC' ? 'dynamic' : null),
+            hard_evidence_count: formEntry._behavior.hard_evidence_count || 0,
+            dynamic_incidents: formEntry._behavior.hard_evidence_count || 0,
+            last_dynamic_at: formEntry._behavior.last_dynamic_at || null,
+          };
+        }
+      } catch (e) {
+        console.warn('[fill-plan] prior behavior load failed:', e.message);
+      }
 
       classification = classifyFormBehavior({
         snapshot,
@@ -159,13 +176,14 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
     let planClamped = false;
     const plan = planResult.plan;
     if (classification && classification.effective_execution_mode === 'dynamic' && plan?.steps?.length > 1) {
+      const originalCount = plan.steps.length;
       plan.steps = [plan.steps[0]];
       planClamped = true;
       if (!planResult.diagnostics) planResult.diagnostics = {};
       planResult.diagnostics.plan_clamped = true;
       planResult.diagnostics.plan_clamp_reason = classification.system_classification === 'UNKNOWN'
         ? 'plan_clamped_unknown' : 'plan_clamped_dynamic';
-      planResult.diagnostics.original_step_count = planResult.plan?.steps?.length || 0;
+      planResult.diagnostics.original_step_count = originalCount;
     }
 
     return res.json({
@@ -257,20 +275,26 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
     const domEv = internalObservation.dom_evidence || [];
     const hardCount = domEv.filter(e => isHardEvidenceType(e.type)).length;
     let behaviorUpdated = false;
-    if (hardCount > 0 && req.query.plan_id) {
+    if (hardCount > 0) {
       try {
         const { mutateDoc, KEYS } = await import('../store.js');
-        const formKey = req.query.correlation_id || req.query.plan_id;
-        await mutateDoc(KEYS.MAPPINGS, (all) => {
-          const form = all[formKey] || {};
-          if (!form._behavior) form._behavior = {};
-          form._behavior.classification = 'DYNAMIC';
-          form._behavior.hard_evidence_count = (form._behavior.hard_evidence_count || 0) + hardCount;
-          form._behavior.last_dynamic_at = new Date().toISOString();
-          all[formKey] = form;
-          return all;
-        });
-        behaviorUpdated = true;
+        // Use stable form scope key: portal_id:form_key from correlation context
+        const portalId = req.query.portal_id || '';
+        const formKey = req.query.form_key || req.query.correlation_id || req.query.plan_id || '';
+        const behaviorKey = portalId ? `${portalId}:${formKey}` : formKey;
+        if (behaviorKey) {
+          await mutateDoc(KEYS.MAPPINGS, (all) => {
+            const form = all[behaviorKey] || {};
+            if (!form._behavior) form._behavior = {};
+            form._behavior.behavior = 'dynamic'; // classifier-native field
+            form._behavior.classification = 'DYNAMIC';
+            form._behavior.hard_evidence_count = (form._behavior.hard_evidence_count || 0) + hardCount;
+            form._behavior.last_dynamic_at = new Date().toISOString();
+            all[behaviorKey] = form;
+            return all;
+          });
+          behaviorUpdated = true;
+        }
       } catch (e) {
         console.warn('[fill-observation] behavior prior update failed:', e.message);
       }
