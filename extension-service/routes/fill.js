@@ -5,6 +5,7 @@ import { mapUnknownFields } from '../semantic-mapper.js';
 import { persistExecutionEvidence } from '../execution-evidence.js';
 import { classifyFormBehavior, isHardEvidenceType } from '../behavior-classifier.js';
 import { mergeExecutionMode } from '../execution-mode.js';
+import { applyStaticBounds, STATIC_MAX_STEPS } from '../static-bounds.js';
 
 const router = Router();
 
@@ -184,12 +185,38 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
     classification.preference_demotion = modeResult.demotion;
     classification.mode_reason = modeResult.reason;
 
+    // ── Phase 4.5: Safe bounded static execution ─────────────────────
+    // STATIC plans get bounded by hard max + dependency-closed subset.
+    // This runs BEFORE dynamic clamp (which only applies if mode is dynamic).
+    let staticBounded = false;
+    let staticBoundResult = null;
+    const plan = planResult.plan;
+    if (classification.effective_execution_mode === 'static' && plan?.steps?.length > 0) {
+      const snapshotEdges = snapshot.edges || [];
+      staticBoundResult = applyStaticBounds({
+        steps: plan.steps,
+        edges: snapshotEdges,
+      });
+      if (staticBoundResult.bounded) {
+        plan.steps = staticBoundResult.steps;
+        staticBounded = true;
+        if (!planResult.diagnostics) planResult.diagnostics = {};
+        planResult.diagnostics.static_bounded = true;
+        planResult.diagnostics.static_bound_reason = staticBoundResult.bound_reason;
+        planResult.diagnostics.static_max_steps = STATIC_MAX_STEPS;
+        planResult.diagnostics.original_step_count = staticBoundResult.original_count;
+        planResult.diagnostics.remaining_steps = staticBoundResult.remaining_count;
+        if (staticBoundResult.cascade_break_at !== null) {
+          planResult.diagnostics.cascade_break_at_step = staticBoundResult.cascade_break_at;
+        }
+      }
+    }
+
     // ── Phase 4.3: Plan clamping for dynamic/unknown mode ───────────
     // When effective mode is dynamic, only return the first step to prevent
     // unsafe multi-step blind batch execution. Extension must re-perceive
     // and re-plan after each step in dynamic mode.
     let planClamped = false;
-    const plan = planResult.plan;
     if (classification && classification.effective_execution_mode === 'dynamic' && plan?.steps?.length > 1) {
       const originalCount = plan.steps.length;
       plan.steps = [plan.steps[0]];
@@ -205,6 +232,7 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       plan,
       classification,
       plan_clamped: planClamped,
+      static_bounded: staticBounded,
       session: { id: planResult.session_id },
       diagnostics: planResult.diagnostics,
     });
