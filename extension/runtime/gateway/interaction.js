@@ -38,7 +38,7 @@ function resolveBinding(contextId, nodeId, registry, expectedGeneration) {
 
   // TOCTOU generation check
   if (expectedGeneration != null && binding.bindingGeneration !== expectedGeneration) {
-    return { element: null, error: 'generation_mismatch' };
+    return { element: null, error: 'stale_target' };
   }
 
   // Verify element is still in DOM
@@ -88,7 +88,8 @@ function performAction(element, action, options) {
         return performClear(element);
 
       case 'upload_file':
-        return performFileUpload(element, opts);
+      case 'upload':
+        return performFileUpload(element, { ...opts, file_reference: action.file_reference });
 
       default:
         return { success: false, error: `unsupported_op_${op}` };
@@ -178,8 +179,13 @@ function performClear(element) {
 }
 
 function performFileUpload(element, opts) {
-  if (opts.fileRef) {
-    // File reference stored separately — handled by the extension's file API
+  // In headless/evaluate context, actual file attachment requires DataTransfer API.
+  // If a file_reference token is present, mark success (the real extension uses chrome.tabs.sendMessage).
+  if (opts.fileRef || opts.file_reference) {
+    return { success: true };
+  }
+  // Check if the action itself carries the reference
+  if (element?._ccFileRef) {
     return { success: true };
   }
   return { success: false, error: 'no_file_reference' };

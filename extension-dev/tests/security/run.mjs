@@ -7,7 +7,7 @@
  * should add a regression here (or in a child suite invoked here) before its
  * issue is closed.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -285,6 +285,9 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
   const legacyExecutor = read('extension/autofill/executor.js');
   const productExecutor = read('extension/runtime/action-plan-executor.js');
   const background = read('extension/background.js');
+  const fillOrchestrator = existsSync(resolve(ROOT, 'extension/application/fill-orchestrator.js'))
+    ? read('extension/application/fill-orchestrator.js') : '';
+  const productFillCode = popup + '\n' + fillOrchestrator;
 
   // APE-IMPL-P1-04: product Fill credentials stay in extension storage / Bearer headers.
   // Do NOT require window.__ccFillCtx — product path intentionally never injects
@@ -298,7 +301,7 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
     /Authorization:\s*['"]Bearer ['"]\s*\+/.test(popup) || popup.includes("Authorization: 'Bearer '") || popup.includes('Authorization: "Bearer "'),
     'product Fill authenticates with Bearer token from extension storage (not page)'
   );
-  ok(popup.includes("'/fill-plan'") || popup.includes('/fill-plan'), 'product Fill posts /fill-plan with extension-side auth');
+  ok(productFillCode.includes("'/fill-plan'") || productFillCode.includes('/fill-plan'), 'product Fill posts /fill-plan with extension-side auth');
   ok(!popup.includes('window.__ccFillCtx'), 'product Fill does not install window.__ccFillCtx in the page');
   ok(!popup.includes('__ccFillCtx'), 'product Fill has no __ccFillCtx credential bridge');
   ok(!productExecutor.includes('accessToken') && !productExecutor.includes('__ccFillCtx'), 'ActionPlanExecutor never handles bearer credentials');

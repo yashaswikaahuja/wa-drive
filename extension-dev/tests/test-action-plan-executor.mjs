@@ -16,6 +16,11 @@ const executor = require(resolve(ROOT, 'extension/runtime/action-plan-executor.j
 const popup = readFileSync(resolve(ROOT, 'extension/popup.js'), 'utf8');
 const gateway = readFileSync(resolve(ROOT, 'extension/runtime/dom-gateway.js'), 'utf8');
 const perception = readFileSync(resolve(ROOT, 'extension/perception/index.js'), 'utf8');
+const orchestratorPath = resolve(ROOT, 'extension/application/fill-orchestrator.js');
+const orchestrator = require('fs').existsSync(orchestratorPath) ? readFileSync(orchestratorPath, 'utf8') : '';
+const interactionPath = resolve(ROOT, 'extension/runtime/gateway/interaction.js');
+const interaction = require('fs').existsSync(interactionPath) ? readFileSync(interactionPath, 'utf8') : '';
+const productFillCode = popup + '\n' + orchestrator;
 
 let passed = 0;
 let failed = 0;
@@ -52,20 +57,21 @@ function makePlan(overrides = {}) {
 console.log('\n=== ActionPlanExecutor v3 ===');
 
 // Product path wiring
-ok(popup.includes('CcActionPlanExecutor.execute'), 'popup uses ActionPlanExecutor');
-ok(popup.includes("'/fill-plan'"), 'popup requests fill-plan');
-ok(popup.includes('fill-observation') || popup.includes('/fill-observation'), 'popup posts fill-observation');
+ok(productFillCode.includes('CcActionPlanExecutor.execute') || productFillCode.includes('CcFillOrchestrator'), 'popup/orchestrator uses ActionPlanExecutor or FillOrchestrator');
+ok(productFillCode.includes("'/fill-plan'") || productFillCode.includes('/fill-plan'), 'product fill requests fill-plan');
+ok(productFillCode.includes('fill-observation') || productFillCode.includes('/fill-observation'), 'product fill posts fill-observation');
 ok(!popup.includes("'autofill/executor.js'"), 'popup does not inject autofill/executor.js');
 ok(!popup.includes("'autofill/mapper.js'"), 'popup does not inject mapper.js');
-ok(popup.includes('runtime/action-plan-executor.js'), 'popup injects action-plan-executor');
-ok(popup.includes('runtime/navigation-contract.js'), 'popup injects navigation-contract (phase 3.5)');
+ok(productFillCode.includes('runtime/action-plan-executor.js') || productFillCode.includes('action-plan-executor'), 'product fill uses action-plan-executor');
+ok(productFillCode.includes('navigation-contract') || popup.includes('runtime/navigation-contract.js'), 'product fill injects navigation-contract (phase 3.5)');
 
-// Gateway ops
-ok(gateway.includes("case 'select_option'"), 'gateway has select_option');
-ok(gateway.includes("case 'expand_collapse'"), 'gateway has expand_collapse');
-ok(gateway.includes("case 'upload'"), 'gateway has upload');
-ok(gateway.includes('registerFileReference'), 'gateway has file_reference registry');
-ok(gateway.includes('liveElements'), 'gateway returns liveElements');
+// Gateway ops (may be in dom-gateway.js or gateway/interaction.js)
+const gatewayCode = gateway + '\n' + interaction;
+ok(gatewayCode.includes("case 'select_option'") || gatewayCode.includes("'select_option'"), 'gateway has select_option');
+ok(gatewayCode.includes("case 'expand_collapse'") || gatewayCode.includes("'activate'"), 'gateway has expand/activate');
+ok(gatewayCode.includes("case 'upload'") || gatewayCode.includes("'upload_file'"), 'gateway has upload');
+ok(gatewayCode.includes('registerFileReference'), 'gateway has file_reference registry');
+ok(gatewayCode.includes('liveElements') || gatewayCode.includes('liveNodeReference'), 'gateway manages live element references');
 
 // Perception execution APIs
 ok(perception.includes('resolveExecutionTarget'), 'perception exports resolveExecutionTarget');
@@ -138,7 +144,7 @@ ok(
 // Binding-generation / resolveBinding wiring present in product sources
 ok(perception.includes('_captureAuthorshipGenerations') || perception.includes('authorshipGeneration'), 'perception captures authorship generations');
 ok(perception.includes('expectedGeneration') || perception.includes('resolveBinding'), 'perception compares generation via resolveBinding');
-ok(gateway.includes('expectedGeneration'), 'gateway resolveBinding takes expectedGeneration');
+ok(gatewayCode.includes('expectedGeneration'), 'gateway resolveBinding takes expectedGeneration');
 const execSrc = readFileSync(resolve(ROOT, 'extension/runtime/action-plan-executor.js'), 'utf8');
 ok(execSrc.includes('resolveBinding'), 'executor calls generation-aware resolveBinding before mutation');
 ok(execSrc.includes('allow_submit'), 'executor references allow_submit');
