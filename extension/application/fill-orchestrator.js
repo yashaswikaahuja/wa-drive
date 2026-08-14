@@ -29,6 +29,7 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
   'perception/validator.js',
   'perception/index.js',
   'runtime/action-plan-executor.js',
+  'runtime/dom-evidence.js',
 ]);
 
 /**
@@ -218,7 +219,21 @@ async function runProductFill(ctx) {
       if (typeof globalThis.ccExecutor === 'function' || globalThis.__ccLegacyFillActive) {
         throw new Error('Legacy fill path must not run with ActionPlan v3');
       }
-      return globalThis.CcActionPlanExecutor.execute(actionPlan);
+      // Phase 4.2: start DOM evidence observation for this plan
+      if (globalThis.CcDomEvidence?.startObserving) {
+        const registry = globalThis.CcPerception?.getBindingRegistry?.();
+        globalThis.CcDomEvidence.startObserving(actionPlan, registry);
+      }
+      const observation = await globalThis.CcActionPlanExecutor.execute(actionPlan);
+      // Phase 4.2: stop observation and attach evidence
+      if (globalThis.CcDomEvidence?.stopObserving) {
+        globalThis.CcDomEvidence.stopObserving();
+        const evidence = globalThis.CcDomEvidence.getEvidence?.() || [];
+        if (evidence.length > 0 && observation) {
+          observation.dom_evidence = evidence;
+        }
+      }
+      return observation;
     },
     args: [plan],
   });
