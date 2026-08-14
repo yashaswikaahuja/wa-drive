@@ -343,40 +343,50 @@ router.delete('/workspaces/:id', async (req: any, res) => {
 });
 
 // GET /owner/ai-settings — current AI model configuration (env-level)
+// GET /owner/ai-settings — reads from platform store, falls back to env for initial values
 router.get('/ai-settings', async (req: any, res) => {
   const mask = (k: string) => k ? '•'.repeat(Math.max(0, k.length - 8)) + k.slice(-8) : '';
-  res.json({
-    extractionProvider: 'mistral',
-    extractionModel: 'mistral-small-latest',
-    mistralKey: mask(process.env.MISTRAL_API_KEY || ''),
-    textProvider: process.env.OPENROUTER_API_KEY ? 'openrouter' : 'groq',
-    textModel: process.env.OPENROUTER_API_KEY ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile',
-    openrouterKey: mask(process.env.OPENROUTER_API_KEY || ''),
-    groqKey: mask(process.env.GROQ_API_KEY || ''),
-  });
+  try {
+    // Ensure table exists (same as extension-service pattern)
+    await req.pool.query(`CREATE TABLE IF NOT EXISTS ext_kv_store (key text PRIMARY KEY, data jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at timestamptz NOT NULL DEFAULT now())`);
+    const { rows } = await req.pool.query(`SELECT data FROM ext_kv_store WHERE key = 'ai_platform'`);
+    const stored = rows[0]?.data || {};
+    res.json({
+      extractionProvider: stored.extractionProvider || 'mistral',
+      extractionModel: stored.extractionModel || 'mistral-small-latest',
+      mistralKey: mask(stored.mistralKey || process.env.MISTRAL_API_KEY || ''),
+      textProvider: stored.textProvider || (process.env.OPENROUTER_API_KEY ? 'openrouter' : 'groq'),
+      textModel: stored.textModel || (process.env.OPENROUTER_API_KEY ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile'),
+      openrouterKey: mask(stored.openrouterKey || process.env.OPENROUTER_API_KEY || ''),
+      groqKey: mask(stored.groqKey || process.env.GROQ_API_KEY || ''),
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH /owner/ai-settings — update AI keys (writes to all workspace settings as global override)
+// PATCH /owner/ai-settings — persists to platform store (same table GET reads from)
 router.patch('/ai-settings', async (req: any, res) => {
   const { extractionProvider, extractionModel, mistralKey, textProvider, textModel, openrouterKey, groqKey } = req.body;
   try {
-    // Store globally in all workspaces (or we could just use a global table, but this reuses existing infra)
-    const updates: string[] = [];
-    if (extractionProvider) updates.push(`settings = jsonb_set(settings, '{ai,extractionProvider}', '"${extractionProvider}"'::jsonb)`);
-    if (extractionModel) updates.push(`settings = jsonb_set(settings, '{ai,extractionModel}', '"${extractionModel}"'::jsonb)`);
-    if (textProvider) updates.push(`settings = jsonb_set(settings, '{ai,textProvider}', '"${textProvider}"'::jsonb)`);
-    if (textModel) updates.push(`settings = jsonb_set(settings, '{ai,textModel}', '"${textModel}"'::jsonb)`);
-    if (mistralKey && !mistralKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,mistralKey}', '"${mistralKey}"'::jsonb)`);
-    if (openrouterKey && !openrouterKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,openrouterKey}', '"${openrouterKey}"'::jsonb)`);
-    if (groqKey && !groqKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,groqKey}', '"${groqKey}"'::jsonb)`);
-    if (updates.length > 0) {
-      // Ensure ai key exists first
-      await req.pool.query(`UPDATE workspaces SET settings = jsonb_set(settings, '{ai}', COALESCE(settings->'ai', '{}'::jsonb)) WHERE settings->'ai' IS NULL`);
-      for (const u of updates) {
-        await req.pool.query(`UPDATE workspaces SET ${u}`);
-      }
-    }
-    res.json({ ok: true });
+    await req.pool.query(`CREATE TABLE IF NOT EXISTS ext_kv_store (key text PRIMARY KEY, data jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at timestamptz NOT NULL DEFAULT now())`);
+    // Read current
+    const { rows } = await req.pool.query(`SELECT data FROM ext_kv_store WHERE key = 'ai_platform'`);
+    const current = rows[0]?.data || {};
+    // Merge only provided non-masked values
+    const next = { ...current };
+    if (extractionProvider) next.extractionProvider = extractionProvider;
+    if (extractionModel) next.extractionModel = extractionModel;
+    if (textProvider) next.textProvider = textProvider;
+    if (textModel) next.textModel = textModel;
+    if (mistralKey && !mistralKey.startsWith('•')) next.mistralKey = mistralKey;
+    if (openrouterKey && !openrouterKey.startsWith('•')) next.openrouterKey = openrouterKey;
+    if (groqKey && !groqKey.startsWith('•')) next.groqKey = groqKey;
+    // Upsert with parameterized query (no injection)
+    await req.pool.query(
+      `INSERT INTO ext_kv_store (key, data, updated_at) VALUES ('ai_platform', $1::jsonb, now())
+       ON CONFLICT (key) DO UPDATE SET data = $1::jsonb, updated_at = now()`,
+      [JSON.stringify(next)]
+    );
+    res.json({ ok: true, message: 'Saved for all cafés' });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

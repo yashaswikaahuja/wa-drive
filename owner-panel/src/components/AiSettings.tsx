@@ -1,24 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Brain, Key, FloppyDisk, CheckCircle } from '@phosphor-icons/react';
+import { Brain, Key, FloppyDisk, CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import type { Config, AiSettings } from '../api';
 import { fetchAiSettings, patchAiSettings } from '../api';
 
 export function AiSettingsPanel({ cfg }: { cfg: Config }) {
   const [ai, setAi] = useState<AiSettings | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState('');
+  const [status, setStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => { fetchAiSettings(cfg).then(setAi).catch(() => {}); }, [cfg]);
 
   const save = async () => {
     if (!ai) return;
-    setSaving(true); setMsg('');
+    setSaving(true); setStatus('idle'); setErrorMsg('');
     try {
       await patchAiSettings(cfg, ai);
-      setMsg('saved');
-      setTimeout(() => setMsg(''), 3000);
-    } catch (e: any) { setMsg(e.message || 'Save failed'); }
-    finally { setSaving(false); }
+      setStatus('saved');
+      // Re-fetch to show persisted masked values
+      const fresh = await fetchAiSettings(cfg);
+      setAi(fresh);
+      setTimeout(() => setStatus('idle'), 4000);
+    } catch (e: any) {
+      setStatus('error');
+      setErrorMsg(e.message || 'Save failed');
+    } finally { setSaving(false); }
   };
 
   if (!ai) return null;
@@ -29,7 +35,10 @@ export function AiSettingsPanel({ cfg }: { cfg: Config }) {
         <div style={{ width: 30, height: 30, borderRadius: 8, background: 'hsl(210 60% 50% / 0.1)', display: 'grid', placeItems: 'center' }}>
           <Brain size={16} weight="duotone" style={{ color: 'hsl(210 60% 45%)' }} />
         </div>
-        <h2 className="display" style={{ fontSize: 15, fontWeight: 700 }}>AI Models & Keys</h2>
+        <div>
+          <h2 className="display" style={{ fontSize: 15, fontWeight: 700 }}>AI Platform</h2>
+          <p className="muted" style={{ fontSize: 11, marginTop: 1 }}>Models and API keys used by all cafés for extraction and form fill.</p>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
@@ -53,7 +62,8 @@ export function AiSettingsPanel({ cfg }: { cfg: Config }) {
             </div>
             <div>
               <span className="muted" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}><Key size={10} /> Mistral Key</span>
-              <input value={ai.mistralKey} onChange={e => setAi({ ...ai, mistralKey: e.target.value })} className="input" placeholder="••••" style={{ marginTop: 3, fontFamily: 'var(--mono)', fontSize: 12 }} />
+              <input value={ai.mistralKey} onChange={e => setAi({ ...ai, mistralKey: e.target.value })} className="input" placeholder="Paste new key to replace" style={{ marginTop: 3, fontFamily: 'var(--mono)', fontSize: 12 }} />
+              <p className="muted" style={{ fontSize: 10, marginTop: 3 }}>Masked. Only replaced if you type a new value.</p>
             </div>
           </div>
         </div>
@@ -78,11 +88,11 @@ export function AiSettingsPanel({ cfg }: { cfg: Config }) {
             </div>
             <div>
               <span className="muted" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}><Key size={10} /> OpenRouter Key</span>
-              <input value={ai.openrouterKey} onChange={e => setAi({ ...ai, openrouterKey: e.target.value })} className="input" placeholder="sk-or-v1-••••" style={{ marginTop: 3, fontFamily: 'var(--mono)', fontSize: 12 }} />
+              <input value={ai.openrouterKey} onChange={e => setAi({ ...ai, openrouterKey: e.target.value })} className="input" placeholder="Paste new key to replace" style={{ marginTop: 3, fontFamily: 'var(--mono)', fontSize: 12 }} />
             </div>
             <div>
               <span className="muted" style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}><Key size={10} /> Groq Key (fallback)</span>
-              <input value={ai.groqKey} onChange={e => setAi({ ...ai, groqKey: e.target.value })} className="input" placeholder="gsk_••••" style={{ marginTop: 3, fontFamily: 'var(--mono)', fontSize: 12 }} />
+              <input value={ai.groqKey} onChange={e => setAi({ ...ai, groqKey: e.target.value })} className="input" placeholder="Paste new key to replace" style={{ marginTop: 3, fontFamily: 'var(--mono)', fontSize: 12 }} />
             </div>
           </div>
         </div>
@@ -91,10 +101,18 @@ export function AiSettingsPanel({ cfg }: { cfg: Config }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
         <button className="btn btn--primary" onClick={save} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <FloppyDisk size={14} weight="bold" />
-          {saving ? 'Saving…' : 'Save Keys'}
+          {saving ? 'Saving…' : 'Save'}
         </button>
-        {msg === 'saved' && <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'hsl(var(--good))' }}><CheckCircle size={14} weight="fill" /> Saved</span>}
-        {msg && msg !== 'saved' && <span className="banner" style={{ fontSize: 12, padding: '4px 10px' }}>{msg}</span>}
+        {status === 'saved' && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'hsl(var(--good))' }}>
+            <CheckCircle size={14} weight="fill" /> Saved for all cafés
+          </span>
+        )}
+        {status === 'error' && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'hsl(0 70% 55%)' }}>
+            <WarningCircle size={14} weight="fill" /> {errorMsg}
+          </span>
+        )}
       </div>
     </section>
   );

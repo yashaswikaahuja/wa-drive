@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChartLine, Buildings, FileText, Brain, Gear, ArrowClockwise } from '@phosphor-icons/react';
+import { ChartLine, Buildings, FileText, Brain, Plugs, ArrowClockwise } from '@phosphor-icons/react';
 import { ApiError, fetchMetrics, fetchFunnel, fetchTrends, fetchWorkspaces, loadConfig, saveConfig } from './api';
 import type { Config, Metrics, Funnel, Trends, Workspace } from './api';
 import { MetricsGrid, MetricsSkeleton } from './components/StatCards';
@@ -12,15 +12,15 @@ import { AiSettingsPanel } from './components/AiSettings';
 import { FormsPanel } from './components/FormsPanel';
 import { exportWorkspacesCsv } from './lib/csv';
 
-type Section = 'overview' | 'workspaces' | 'forms' | 'ai' | 'settings';
+type Section = 'overview' | 'workspaces' | 'forms' | 'ai' | 'connection';
 type Sort = 'last_active' | 'created' | 'files' | 'health';
 
 const NAV_ITEMS: { key: Section; label: string; icon: typeof ChartLine }[] = [
   { key: 'overview', label: 'Overview', icon: ChartLine },
   { key: 'workspaces', label: 'Workspaces', icon: Buildings },
   { key: 'forms', label: 'Forms', icon: FileText },
-  { key: 'ai', label: 'AI', icon: Brain },
-  { key: 'settings', label: 'Settings', icon: Gear },
+  { key: 'ai', label: 'AI Platform', icon: Brain },
+  { key: 'connection', label: 'Connection', icon: Plugs },
 ];
 
 function getInitialSection(): Section {
@@ -224,7 +224,7 @@ export function App() {
           </div>
         )}
 
-        {section === 'settings' && (
+        {section === 'connection' && (
           <div className="section-body">
             <Setup initial={cfg} error="" onConnect={onConnect} onCancel={() => navigate('overview')} />
           </div>

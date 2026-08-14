@@ -23,8 +23,8 @@ export function Setup({ initial, error, onConnect, onCancel }: Props) {
         <div className="row" style={{ gap: 12, marginBottom: 20 }}>
           <span className="brand-badge" aria-hidden>⚡</span>
           <div>
-            <div className="display" style={{ fontSize: 18, fontWeight: 700 }}>CyberControl</div>
-            <div className="label">Owner Control</div>
+            <div className="display" style={{ fontSize: 18, fontWeight: 700 }}>Connection</div>
+            <div className="label">How this device reaches the owner API</div>
           </div>
         </div>
 
@@ -43,7 +43,7 @@ export function Setup({ initial, error, onConnect, onCancel }: Props) {
           {onCancel && <button type="button" className="btn" onClick={onCancel}>Cancel</button>}
         </div>
         <p className="muted" style={{ fontSize: 12, marginTop: 16 }}>
-          Reachable only from your personal network (tailnet). The key is stored on this device.
+          This configures how <strong>this device</strong> connects to the owner API via your personal tailnet. No platform settings are stored here.
         </p>
       </form>
     </div>
