@@ -380,17 +380,15 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       });
     }
 
-    // Phase 4.3: If hard DOM evidence is present, persist dynamic behavior
-    // as prior knowledge so next fill-plan classifies DYNAMIC immediately.
+    // Phase 4.3/4.12: If hard DOM evidence is present, persist dynamic behavior
+    // with confidence, provenance, and expiry (M4.12 learning model).
     const domEv = internalObservation.dom_evidence || [];
     const hardCount = domEv.filter(e => isHardEvidenceType(e.type)).length;
     let behaviorUpdated = false;
     if (hardCount > 0) {
       try {
         const { mutateDoc, KEYS } = await import('../store.js');
-        // FIX: Resolve stable scope from fill session metadata (not query params).
-        // Session stores portal_id + form_key derived from snapshot at plan time,
-        // guaranteeing the observation write key matches the fill-plan read key.
+        const { recordDynamicEvidence } = await import('../behavior-learning.js');
         const { getSession: getFillSession } = await import('../fill-session.js');
         let portalId = '';
         let formKey = '';
@@ -399,20 +397,17 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
           portalId = fillSession.metadata.portal_id || '';
           formKey = fillSession.metadata.form_key || '';
         }
-        // Fallback to query params only if session metadata unavailable
         if (!portalId && !formKey) {
           portalId = req.query.portal_id || '';
           formKey = req.query.form_key || req.query.correlation_id || req.query.plan_id || '';
         }
         const behaviorKey = portalId ? `${portalId}:${formKey}` : formKey;
         if (behaviorKey) {
+          const evidenceTypes = domEv.filter(e => isHardEvidenceType(e.type)).map(e => e.type);
           await mutateDoc(KEYS.MAPPINGS, (all) => {
             const form = all[behaviorKey] || {};
-            if (!form._behavior) form._behavior = {};
-            form._behavior.behavior = 'dynamic'; // classifier-native field
-            form._behavior.classification = 'DYNAMIC';
-            form._behavior.hard_evidence_count = (form._behavior.hard_evidence_count || 0) + hardCount;
-            form._behavior.last_dynamic_at = new Date().toISOString();
+            const existing = form._behavior || null;
+            form._behavior = recordDynamicEvidence(existing, { hard_count: hardCount, types: evidenceTypes });
             all[behaviorKey] = form;
             return all;
           });
