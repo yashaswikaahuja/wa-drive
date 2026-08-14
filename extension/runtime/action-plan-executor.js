@@ -500,6 +500,10 @@ async function execute(plan) {
       stopped = true;
     } else {
       steps.push({ step_id: step.step_id, status: 'succeeded', failure_code: null, postcondition_met: true, observed_value_state: postcondition.valueState, duration_ms: duration });
+      // Phase 4.2: notify evidence emitter that this step completed (advances planned targets)
+      if (globalThis.CcDomEvidence?.notifyStepExecuted) {
+        globalThis.CcDomEvidence.notifyStepExecuted(step.step_id, step.target.context_id, step.target.node_id);
+      }
       if (navMapped?.primary_diagnostic) {
         diagnostics.push(diagnostic(navMapped.primary_diagnostic, 'info', step.step_id, `Navigation outcome: ${navMapped.primary_diagnostic}`));
       }

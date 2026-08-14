@@ -7,6 +7,7 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 const require = createRequire(import.meta.url);
@@ -771,6 +772,19 @@ console.log('\n--- EVIDENCE_TYPES enum ---');
 }
 
 // ─── Summary ─────────────────────────────────────────────────────────
+
+
+// -- Phase 4.2 wiring guard: singleton + orchestrator contract --
+console.log('\n=== Wiring Guard: Singleton + Orchestrator ===');
+
+const orchSrc = readFileSync(resolve(ROOT, 'extension/application/fill-orchestrator.js'), 'utf8');
+ok(orchSrc.includes('startObserving'), 'orchestrator starts evidence');
+ok(orchSrc.includes('finally'), 'orchestrator stops evidence in finally');
+ok(orchSrc.includes('getEvidence'), 'orchestrator collects evidence');
+
+const domEvSrc = readFileSync(resolve(ROOT, 'extension/runtime/dom-evidence.js'), 'utf8');
+ok(domEvSrc.includes('new DomEvidenceEmitter()'), 'content-script export is singleton instance');
+ok(!/globalThis\.CcDomEvidence\s*=\s*DomEvidenceEmitter\s*;/.test(domEvSrc), 'export is not bare class');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

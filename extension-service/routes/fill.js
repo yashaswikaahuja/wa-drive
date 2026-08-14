@@ -173,6 +173,8 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
     const sessionId = req.query.sessionId || body.sessionId || null;
     const internalObservation = {
       ...observation,
+      // Phase 4.2: pass through DOM evidence for server classification (M4.3)
+      dom_evidence: Array.isArray(body.dom_evidence) ? body.dom_evidence : [],
       step_results: observation.steps.map(step => ({
         step_id: step.step_id,
         status: step.status === 'succeeded' ? 'completed' : step.status,
