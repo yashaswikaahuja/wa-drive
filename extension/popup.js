@@ -1,7 +1,7 @@
 const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
-/** Phase 0: café default hides Agent; owner may set chrome.storage.local.allowLegacyClientFill = true */
+/** Phase 4.1: legacy Agent permanently disabled. Server-driven CcFillOrchestrator is the only fill path. */
 let allowLegacyClientFill = false;
 let _extBuildInfo = null;
 

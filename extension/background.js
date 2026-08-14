@@ -3,14 +3,9 @@ try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowl
 // Phase 0 (CYB-85): café default blocks DISPATCH_JOB / Agent client mapping path
 try { importScripts('shared/legacy-fill-gate.js'); } catch (e) { console.warn('[CC] legacy-fill-gate.js load failed:', e.message); }
 
-/** @returns {Promise<boolean>} */
+/** @returns {Promise<boolean>} Phase 4.1: always false — legacy paths permanently disabled. */
 async function isLegacyClientFillAllowed() {
-  if (typeof CcLegacyFillGate !== 'undefined' && CcLegacyFillGate.isLegacyClientFillAllowed) {
-    const slice = await chrome.storage.local.get(CcLegacyFillGate.STORAGE_KEY || 'allowLegacyClientFill');
-    return CcLegacyFillGate.isLegacyClientFillAllowed(slice);
-  }
-  const { allowLegacyClientFill } = await chrome.storage.local.get('allowLegacyClientFill');
-  return allowLegacyClientFill === true;
+  return false;
 }
 
 function legacyClientFillDenied(pathName) {
