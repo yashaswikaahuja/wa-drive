@@ -27,6 +27,7 @@ const suites = [
   { name: 'Phase 3 Governance Tests', cmd: 'node extension-dev/tests/test-phase3-governance.mjs' },
   { name: 'Perception Unit Tests', cmd: 'node extension-dev/tests/perception/run-perception-unit.mjs' },
   { name: 'WSS Protocol Tests', cmd: 'node extension-dev/tests/test-wss-protocol.mjs' },
+  { name: 'HIM Runtime Tests', cmd: 'node extension-dev/tests/test-him-runtime.mjs' },
 ];
 
 let allPass = true;

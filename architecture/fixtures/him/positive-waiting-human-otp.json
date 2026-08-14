@@ -1,0 +1,27 @@
+{
+  "description": "Valid HIM request for OTP field entry. Server pauses execution and instructs the extension to prompt the operator for OTP entry into a sensitive field.",
+  "expectation": "valid",
+  "payload": {
+    "him_protocol_version": "1.0.0",
+    "message_type": "him_request",
+    "session_id": "sess.a1b2c3d4e5f6",
+    "plan_id": "plan.ssc-chsl-2026-fill",
+    "step_id": "step.otp-verification",
+    "nonce": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    "issued_at": "2026-08-14T06:45:00.000Z",
+    "expires_at": "2026-08-14T06:48:00.000Z",
+    "interaction_type": "otp_entry",
+    "prompt": "Enter the OTP sent to mobile 98***10. Check the candidate's phone.",
+    "target": {
+      "context_id": "ctx.main-frame",
+      "node_id": "node.otp-input-field"
+    },
+    "sensitive_field": true,
+    "auto_detect": {
+      "watch_condition": "field_nonempty",
+      "timeout_ms": 180000
+    },
+    "show_summary": false,
+    "destructive_warning": false
+  }
+}
