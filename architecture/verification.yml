@@ -167,7 +167,7 @@ checks:
     ci_job: "architecture"
     scope: "full_tree"
 
-  - id: CHECK-013
+  - id: CHECK-016
     name: "HIM protocol conformance"
     severity: fail
     description: >
