@@ -223,6 +223,80 @@ async function runProductFill(ctx) {
   // re-perceive → re-plan → repeat until fill_complete or failure.
   const isDynamic = planBody.plan_clamped === true;
   const sessionId = planBody.session?.id || null;
+
+  // ── Phase 4.13: HIM checkpoint — pause for operator confirmation ────
+  // If server returned a HIM checkpoint, the first step is irreversible.
+  // Extension must pause and obtain operator confirmation before executing.
+  if (planBody.him_checkpoint) {
+    const checkpoint = planBody.him_checkpoint;
+    progress('Waiting for operator confirmation...', 65);
+
+    // Surface checkpoint to operator via chrome.runtime message or popup state
+    const confirmed = await new Promise((resolve) => {
+      // Store checkpoint for popup/UI to render confirmation dialog
+      if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+        chrome.storage.session.set({
+          _cc_him_checkpoint: checkpoint,
+          _cc_him_pending: true,
+        });
+        // Listen for confirmation (operator clicks confirm in popup)
+        const listener = (changes) => {
+          if (changes._cc_him_confirmed?.newValue) {
+            chrome.storage.session.onChanged.removeListener(listener);
+            chrome.storage.session.remove(['_cc_him_checkpoint', '_cc_him_pending', '_cc_him_confirmed']);
+            resolve(true);
+          }
+          if (changes._cc_him_cancelled?.newValue) {
+            chrome.storage.session.onChanged.removeListener(listener);
+            chrome.storage.session.remove(['_cc_him_checkpoint', '_cc_him_pending', '_cc_him_cancelled']);
+            resolve(false);
+          }
+        };
+        chrome.storage.session.onChanged.addListener(listener);
+
+        // Hard timeout: if no response within checkpoint expiry, cancel
+        const expiresIn = Math.max(0, new Date(checkpoint.expires_at).getTime() - Date.now());
+        setTimeout(() => {
+          chrome.storage.session.onChanged.removeListener(listener);
+          chrome.storage.session.remove(['_cc_him_checkpoint', '_cc_him_pending']);
+          resolve(false);
+        }, Math.min(expiresIn, 120000));
+      } else {
+        // No storage API (test env) — auto-confirm
+        resolve(true);
+      }
+    });
+
+    if (!confirmed) {
+      return {
+        ok: false, filled: 0, failed: 0, skipped: 0, records: [],
+        observationError: null,
+        operatorMessage: 'Operator cancelled irreversible action.',
+        error: 'him_cancelled', pageSnapshot, plan,
+      };
+    }
+
+    // After confirmation: validate resume (document/revision still valid)
+    progress('Resuming after confirmation...', 68);
+    const [resumeCheck] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const state = globalThis.CcPerception?.getPerceptionState?.() || {};
+        return { documentId: state.documentId, revision: state.revision };
+      },
+    });
+    const resumeState = resumeCheck?.result || {};
+    if (resumeState.documentId && plan.target_binding?.document_id &&
+        resumeState.documentId !== plan.target_binding.document_id) {
+      return {
+        ok: false, filled: 0, failed: 0, skipped: 0, records: [],
+        observationError: null,
+        operatorMessage: 'Page changed during confirmation — cannot continue safely.',
+        error: 'him_document_replaced', pageSnapshot, plan,
+      };
+    }
+  }
+
   let totalFilled = 0;
   let totalFailed = 0;
   let totalSkipped = 0;
