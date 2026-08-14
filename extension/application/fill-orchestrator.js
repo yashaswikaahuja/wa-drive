@@ -408,6 +408,37 @@ async function runProductFill(ctx) {
           } else { resolve(true); }
         });
         if (!dynConfirmed) break; // Operator cancelled — stop dynamic loop
+
+        // Phase 4.13: validateResume on dynamic turn (plan race + document + revision)
+        progress('Validating resume state...', 62 + turn);
+        try {
+          const [dynResumeCheck] = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => {
+              const state = globalThis.CcPerception?.getPerceptionState?.() || {};
+              return { documentId: state.documentId, revision: state.revision };
+            },
+          });
+          const dynResumeState = dynResumeCheck?.result || {};
+          const dynValidateResponse = await fetch(backendUrl + '/him-validate-resume', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+            body: JSON.stringify({
+              session_id: sessionId,
+              plan_id: plan.plan_id,
+              original_document_id: plan.target_binding?.document_id || null,
+              current_document_id: dynResumeState.documentId || null,
+              original_revision: plan.target_binding?.expected_revision || 0,
+              current_revision: dynResumeState.revision || 0,
+            }),
+          });
+          if (dynValidateResponse.ok) {
+            const dynValidation = await dynValidateResponse.json();
+            if (!dynValidation.valid) break; // Plan superseded or document replaced — stop
+          }
+        } catch (e) {
+          // Non-fatal: proceed with best effort
+        }
       }
     }
 
