@@ -28,8 +28,8 @@
 
 him_protocol_version: "1.0.0"
 schema_version: "4.0.0"
-status: draft
-frozen_at: null
+status: frozen
+frozen_at: "2026-08-14"
 date: "2026-08-14"
 owner: shared.security_privacy
 phase: phase_4_0

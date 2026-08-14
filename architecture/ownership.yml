@@ -308,7 +308,7 @@ subsystems:
   # ── SERVICE: HIM Protocol (Phase 4.0) ──────────────────────────────
   him_protocol:
     owner: extension_service
-    status: architecture_defined
+    status: frozen
     migration_phase: "phase_4_0"
     paths:
       - "architecture/him-protocol.yml"

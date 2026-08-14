@@ -979,7 +979,7 @@ phases:
 
   phase_4_0:
     name: "Human Interaction Mode"
-    status: architecture_defined
+    status: frozen
     depends_on: ["phase_3_0"]
     issues: ["#187"]
     description: >
