@@ -195,7 +195,9 @@ tbody tr:hover { background: hsl(var(--bg) / 0.6); }
 }
 
 .nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   min-height: 44px;
   padding: 12px 14px;
