@@ -1,3 +1,4 @@
+import { Funnel as FunnelIcon } from '@phosphor-icons/react';
 import type { Funnel } from '../api';
 import { fmt } from '../lib/format';
 
@@ -9,31 +10,35 @@ const STEPS: { key: keyof Funnel; label: string }[] = [
   { key: 'paying', label: 'Paying' },
 ];
 
-/** Activation funnel: signup → connected → activated (1st file) → weekly-active → paying. */
 export function FunnelWidget({ f }: { f: Funnel }) {
   const top = Math.max(f.signedUp, 1);
   return (
-    <section className="card" style={{ padding: 16, marginBottom: 16 }} aria-label="Activation funnel">
-      <div className="row between" style={{ marginBottom: 12, flexWrap: 'wrap', gap: 6 }}>
-        <h2 className="display" style={{ fontSize: 16 }}>Activation funnel</h2>
-        <span className="muted" style={{ fontSize: 12 }}>signup → connected → activated → weekly-active → paying</span>
+    <section className="card" style={{ padding: '18px 20px', marginBottom: 16 }} aria-label="Activation funnel">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{ width: 30, height: 30, borderRadius: 8, background: 'hsl(var(--marigold) / 0.1)', display: 'grid', placeItems: 'center' }}>
+          <FunnelIcon size={16} weight="duotone" style={{ color: 'hsl(var(--marigold-deep))' }} />
+        </div>
+        <div>
+          <h2 className="display" style={{ fontSize: 15, fontWeight: 700 }}>Activation Funnel</h2>
+          <span className="muted" style={{ fontSize: 11 }}>signup → connected → activated → weekly-active → paying</span>
+        </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {STEPS.map((s, i) => {
           const v = f[s.key];
           const pctOfTop = Math.round((v / top) * 100);
           const prev = i === 0 ? v : f[STEPS[i - 1].key];
           const step = i === 0 ? 100 : prev > 0 ? Math.round((v / prev) * 100) : 0;
           return (
-            <div key={s.key} className="row" style={{ gap: 10, alignItems: 'center' }}>
-              <div className="label" style={{ width: 104, textAlign: 'right', flexShrink: 0 }}>{s.label}</div>
-              <div style={{ flex: 1, position: 'relative', background: 'hsl(var(--muted) / 0.12)', borderRadius: 8, height: 26, overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', inset: '0 auto 0 0', width: `${pctOfTop}%`, minWidth: 2, background: 'hsl(var(--marigold) / 0.35)', borderRight: '2px solid hsl(var(--marigold-deep))' }} />
-                <span className="num" style={{ position: 'absolute', left: 10, lineHeight: '26px', fontSize: 13, fontWeight: 600 }}>{fmt(v)}</span>
+            <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="muted" style={{ width: 90, textAlign: 'right', flexShrink: 0, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</span>
+              <div style={{ flex: 1, position: 'relative', background: 'hsl(var(--border-soft))', borderRadius: 6, height: 28, overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', inset: '0 auto 0 0', width: `${Math.max(pctOfTop, 2)}%`, background: i === 0 ? 'hsl(var(--marigold) / 0.4)' : 'hsl(var(--marigold) / 0.25)', borderRadius: 6, transition: 'width 300ms ease' }} />
+                <span style={{ position: 'absolute', left: 10, lineHeight: '28px', fontSize: 13, fontWeight: 700, color: 'hsl(var(--ink))' }}>{fmt(v)}</span>
               </div>
-              <div className="muted num" style={{ width: 62, fontSize: 12, flexShrink: 0, textAlign: 'right' }}>
+              <span className="muted num" style={{ width: 56, fontSize: 11, textAlign: 'right', flexShrink: 0 }}>
                 {i === 0 ? `${pctOfTop}%` : `${step}% ↓`}
-              </div>
+              </span>
             </div>
           );
         })}

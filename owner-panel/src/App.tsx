@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChartLine, Buildings, FileText, Brain, Gear, ArrowClockwise } from '@phosphor-icons/react';
 import { ApiError, fetchMetrics, fetchFunnel, fetchTrends, fetchWorkspaces, loadConfig, saveConfig } from './api';
 import type { Config, Metrics, Funnel, Trends, Workspace } from './api';
 import { MetricsGrid, MetricsSkeleton } from './components/StatCards';
@@ -14,12 +15,12 @@ import { exportWorkspacesCsv } from './lib/csv';
 type Section = 'overview' | 'workspaces' | 'forms' | 'ai' | 'settings';
 type Sort = 'last_active' | 'created' | 'files' | 'health';
 
-const NAV_ITEMS: { key: Section; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'workspaces', label: 'Workspaces' },
-  { key: 'forms', label: 'Forms' },
-  { key: 'ai', label: 'AI' },
-  { key: 'settings', label: 'Settings' },
+const NAV_ITEMS: { key: Section; label: string; icon: typeof ChartLine }[] = [
+  { key: 'overview', label: 'Overview', icon: ChartLine },
+  { key: 'workspaces', label: 'Workspaces', icon: Buildings },
+  { key: 'forms', label: 'Forms', icon: FileText },
+  { key: 'ai', label: 'AI', icon: Brain },
+  { key: 'settings', label: 'Settings', icon: Gear },
 ];
 
 function getInitialSection(): Section {
@@ -145,15 +146,19 @@ export function App() {
           </div>
         </div>
         <div className="nav-items">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.key}
-              className={`nav-item ${section === item.key ? 'nav-item-active' : ''}`}
-              onClick={() => navigate(item.key)}
-            >
-              {item.label}
-            </button>
-          ))}
+          {NAV_ITEMS.map(item => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                className={`nav-item ${section === item.key ? 'nav-item-active' : ''}`}
+                onClick={() => navigate(item.key)}
+              >
+                <Icon size={16} weight={section === item.key ? 'fill' : 'regular'} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
         </div>
       </nav>
 
@@ -168,12 +173,14 @@ export function App() {
               {updatedAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
             </span>}
             {section === 'overview' && (
-              <button className="btn" onClick={() => loadOverview(cfg)} disabled={loading}>
+              <button className="btn" onClick={() => loadOverview(cfg)} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <ArrowClockwise size={14} weight="bold" />
                 {loading ? 'Refreshing…' : 'Refresh'}
               </button>
             )}
             {section === 'workspaces' && (
-              <button className="btn" onClick={() => loadWorkspaces(cfg, q, sort)} disabled={loading}>
+              <button className="btn" onClick={() => loadWorkspaces(cfg, q, sort)} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <ArrowClockwise size={14} weight="bold" />
                 {loading ? 'Refreshing…' : 'Refresh'}
               </button>
             )}
