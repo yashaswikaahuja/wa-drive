@@ -49,6 +49,7 @@ const suites = [
   { name: 'DOM Evidence Tests', cmd: 'node extension-dev/tests/test-dom-evidence.mjs' },
   { name: 'Behavior Classifier Tests', cmd: 'node extension-dev/tests/test-behavior-classifier.mjs' },
   { name: 'Execution Mode Tests', cmd: 'node extension-dev/tests/test-execution-mode.mjs' },
+  { name: 'Prior Key Alignment Tests', cmd: 'node extension-dev/tests/test-prior-key-alignment.mjs' },
 ];
 
 let allPass = true;

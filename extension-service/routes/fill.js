@@ -293,9 +293,22 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
     if (hardCount > 0) {
       try {
         const { mutateDoc, KEYS } = await import('../store.js');
-        // Use stable form scope key: portal_id:form_key from correlation context
-        const portalId = req.query.portal_id || '';
-        const formKey = req.query.form_key || req.query.correlation_id || req.query.plan_id || '';
+        // FIX: Resolve stable scope from fill session metadata (not query params).
+        // Session stores portal_id + form_key derived from snapshot at plan time,
+        // guaranteeing the observation write key matches the fill-plan read key.
+        const { getSession: getFillSession } = await import('../fill-session.js');
+        let portalId = '';
+        let formKey = '';
+        const fillSession = sessionId ? getFillSession(sessionId) : null;
+        if (fillSession?.metadata) {
+          portalId = fillSession.metadata.portal_id || '';
+          formKey = fillSession.metadata.form_key || '';
+        }
+        // Fallback to query params only if session metadata unavailable
+        if (!portalId && !formKey) {
+          portalId = req.query.portal_id || '';
+          formKey = req.query.form_key || req.query.correlation_id || req.query.plan_id || '';
+        }
         const behaviorKey = portalId ? `${portalId}:${formKey}` : formKey;
         if (behaviorKey) {
           await mutateDoc(KEYS.MAPPINGS, (all) => {
