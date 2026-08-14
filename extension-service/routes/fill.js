@@ -3,6 +3,7 @@ import { authMiddleware } from '../auth.js';
 import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '../fill-planner.js';
 import { mapUnknownFields } from '../semantic-mapper.js';
 import { persistExecutionEvidence } from '../execution-evidence.js';
+import { classifyFormBehavior } from '../behavior-classifier.js';
 
 const router = Router();
 
@@ -112,13 +113,41 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
     if (!planResult.success) {
       return res.status(200).json({
         plan: null,
+        classification: null,
         session: null,
         diagnostics: planResult.diagnostics,
       });
     }
 
+    // ── Phase 4.3: Behavior classification ──────────────────────────
+    // Classify static/dynamic after plan generation using snapshot topology,
+    // any dom_evidence passed by the extension, and prior server knowledge.
+    let classification = null;
+    try {
+      const domEvidence = Array.isArray(req.body.dom_evidence) ? req.body.dom_evidence : [];
+      // Prior knowledge: look for behavior record in scope (if available)
+      const priorKnowledge = planResult.diagnostics?.prior_knowledge || null;
+
+      classification = classifyFormBehavior({
+        snapshot,
+        domEvidence,
+        priorKnowledge,
+        planSteps: planResult.plan?.steps || [],
+      });
+
+      console.log(
+        `[fill-plan] classification: ${classification.system_classification} ` +
+        `(effective=${classification.effective_execution_mode}, ` +
+        `confidence=${classification.confidence.toFixed(2)}, ` +
+        `reasons=[${classification.reason_codes.join(',')}])`
+      );
+    } catch (classErr) {
+      console.error('[fill-plan] classification error (non-fatal):', classErr.message);
+    }
+
     return res.json({
       plan: planResult.plan,
+      classification,
       session: { id: planResult.session_id },
       diagnostics: planResult.diagnostics,
     });

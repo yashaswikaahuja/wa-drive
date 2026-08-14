@@ -47,6 +47,7 @@ const suites = [
   { name: 'HIM Runtime Tests', cmd: 'node extension-dev/tests/test-him-runtime.mjs' },
   { name: 'No Legacy Brain Guard', cmd: 'node extension-dev/tests/test-no-legacy-brain.mjs' },
   { name: 'DOM Evidence Tests', cmd: 'node extension-dev/tests/test-dom-evidence.mjs' },
+  { name: 'Behavior Classifier Tests', cmd: 'node extension-dev/tests/test-behavior-classifier.mjs' },
 ];
 
 let allPass = true;
