@@ -35,6 +35,7 @@ const executablePath = CHROME_PATHS.find((p) => existsSync(p)) || undefined;
 
 /** Product path scripts only — no autofill/mapper/resolver/runner. */
 const PRODUCT_SCRIPTS = [
+  'runtime/gateway/interaction.js',
   'runtime/dom-gateway.js',
   'runtime/navigation-contract.js',
   'perception/binding-registry.js',

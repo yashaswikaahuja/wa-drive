@@ -53,6 +53,7 @@ const PERCEPTION_SCRIPTS = [
   'perception/snapshot-builder.js',
   'perception/validator.js',
   'perception/index.js',
+  'runtime/gateway/interaction.js',
   'runtime/dom-gateway.js',
 ];
 
