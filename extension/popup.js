@@ -45,12 +45,8 @@ function applyAgentVisibility() {
 }
 
 async function refreshLegacyFillGate() {
-  try {
-    const data = await chrome.storage.local.get('allowLegacyClientFill');
-    allowLegacyClientFill = data.allowLegacyClientFill === true;
-  } catch {
-    allowLegacyClientFill = false;
-  }
+  // Phase 4.1: permanently disabled — no storage check needed
+  allowLegacyClientFill = false;
   applyAgentVisibility();
 }
 
