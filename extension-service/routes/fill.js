@@ -3,7 +3,7 @@ import { authMiddleware } from '../auth.js';
 import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '../fill-planner.js';
 import { mapUnknownFields } from '../semantic-mapper.js';
 import { persistExecutionEvidence } from '../execution-evidence.js';
-import { classifyFormBehavior } from '../behavior-classifier.js';
+import { classifyFormBehavior, isHardEvidenceType } from '../behavior-classifier.js';
 
 const router = Router();
 
@@ -142,12 +142,36 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
         `reasons=[${classification.reason_codes.join(',')}])`
       );
     } catch (classErr) {
-      console.error('[fill-plan] classification error (non-fatal):', classErr.message);
+      console.error('[fill-plan] classification error (fail-closed → UNKNOWN/dynamic):', classErr.message);
+      classification = {
+        system_classification: 'UNKNOWN',
+        effective_execution_mode: 'dynamic',
+        confidence: 0,
+        reason_codes: ['classification_error'],
+        evidence_summary: { hard_signals: 0, soft_signals: 0, cascade_edges: 0 },
+      };
+    }
+
+    // ── Phase 4.3: Plan clamping for dynamic/unknown mode ───────────
+    // When effective mode is dynamic, only return the first step to prevent
+    // unsafe multi-step blind batch execution. Extension must re-perceive
+    // and re-plan after each step in dynamic mode.
+    let planClamped = false;
+    const plan = planResult.plan;
+    if (classification && classification.effective_execution_mode === 'dynamic' && plan?.steps?.length > 1) {
+      plan.steps = [plan.steps[0]];
+      planClamped = true;
+      if (!planResult.diagnostics) planResult.diagnostics = {};
+      planResult.diagnostics.plan_clamped = true;
+      planResult.diagnostics.plan_clamp_reason = classification.system_classification === 'UNKNOWN'
+        ? 'plan_clamped_unknown' : 'plan_clamped_dynamic';
+      planResult.diagnostics.original_step_count = planResult.plan?.steps?.length || 0;
     }
 
     return res.json({
-      plan: planResult.plan,
+      plan,
       classification,
+      plan_clamped: planClamped,
       session: { id: planResult.session_id },
       diagnostics: planResult.diagnostics,
     });
@@ -228,6 +252,30 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       });
     }
 
+    // Phase 4.3: If hard DOM evidence is present, persist dynamic behavior
+    // as prior knowledge so next fill-plan classifies DYNAMIC immediately.
+    const domEv = internalObservation.dom_evidence || [];
+    const hardCount = domEv.filter(e => isHardEvidenceType(e.type)).length;
+    let behaviorUpdated = false;
+    if (hardCount > 0 && req.query.plan_id) {
+      try {
+        const { mutateDoc, KEYS } = await import('../store.js');
+        const formKey = req.query.correlation_id || req.query.plan_id;
+        await mutateDoc(KEYS.MAPPINGS, (all) => {
+          const form = all[formKey] || {};
+          if (!form._behavior) form._behavior = {};
+          form._behavior.classification = 'DYNAMIC';
+          form._behavior.hard_evidence_count = (form._behavior.hard_evidence_count || 0) + hardCount;
+          form._behavior.last_dynamic_at = new Date().toISOString();
+          all[formKey] = form;
+          return all;
+        });
+        behaviorUpdated = true;
+      } catch (e) {
+        console.warn('[fill-observation] behavior prior update failed:', e.message);
+      }
+    }
+
     return res.json({
       acknowledged: result.acknowledged,
       session_status: result.session_status,
@@ -235,6 +283,7 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       persistent_session_id: evidence.persistentSessionId,
       learning: evidence.learning,
       mapping_observations: evidence.mappingObservations,
+      behavior_updated: behaviorUpdated,
     });
   } catch (err) {
     console.error('[fill-observation] error:', err.message);
