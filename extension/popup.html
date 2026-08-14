@@ -552,6 +552,31 @@
       color: hsl(28 90% 30%);
     }
 
+    /* ── HIM confirmation panel ── */
+    #him-panel {
+      flex-shrink: 0;
+      padding: 12px;
+      margin: 8px 12px;
+      border: 2px solid var(--cc-danger, #e53e3e);
+      border-radius: 12px;
+      background: var(--cc-bg, #fff);
+    }
+    .him-label {
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--cc-danger, #e53e3e);
+      margin-bottom: 6px;
+    }
+    .him-reason { font-size: 12px; margin-bottom: 4px; }
+    .him-detail { font-size: 11px; color: var(--cc-muted, #666); margin-bottom: 10px; }
+    .him-btns { display: flex; gap: 8px; }
+    .him-btns button {
+      flex: 1; height: 34px; border-radius: 999px; font-size: 12px; font-weight: 600;
+      border: none; cursor: pointer; font-family: inherit;
+    }
+    #him-confirm { background: var(--cc-danger, #e53e3e); color: #fff; }
+    #him-cancel-btn { background: var(--cc-border, #e0e0e0); color: var(--cc-text, #222); }
+
     /* ── Agent panel ── */
     #agent-panel {
       display: none;
@@ -689,6 +714,16 @@
     <button id="undo-btn" class="icon-btn" style="display:none" title="Undo last fill">↩</button>
     <button id="agent-btn" class="icon-btn" disabled title="AI Agent">🤖</button>
     <button id="open-btn" class="icon-btn" title="Open CyberControl">🖥</button>
+  </div>
+
+  <div id="him-panel" style="display:none">
+    <div class="him-label">Confirmation Required</div>
+    <div id="him-reason" class="him-reason"></div>
+    <div id="him-detail" class="him-detail"></div>
+    <div class="him-btns">
+      <button id="him-confirm">Confirm</button>
+      <button id="him-cancel-btn">Cancel</button>
+    </div>
   </div>
 
   <div id="agent-panel">

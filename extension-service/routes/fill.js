@@ -302,18 +302,31 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
     }
 
     // ── Phase 4.13: HIM checkpoint for irreversible steps ─────────────
-    // If the first step is irreversible and not pre-confirmed, include
-    // a HIM checkpoint request so the extension can pause for operator confirmation.
+    // If ANY step is irreversible and not pre-confirmed, clamp plan to stop
+    // just before that step (or return only that step if it's first).
+    // This ensures HIM checkpoint fires before every irreversible action.
     let himCheckpoint = null;
     if (plan?.steps?.length > 0) {
       const { requiresHimCheckpoint, createCheckpointRequest } = await import('../him-adaptive-integration.js');
-      const firstStep = plan.steps[0];
-      if (requiresHimCheckpoint(firstStep, plan.authorization || {})) {
-        himCheckpoint = createCheckpointRequest({
-          session_id: planResult.session_id,
-          plan_id: plan.plan_id,
-          step: firstStep,
-        });
+      for (let i = 0; i < plan.steps.length; i++) {
+        if (requiresHimCheckpoint(plan.steps[i], plan.authorization || {})) {
+          if (i === 0) {
+            // First step is irreversible — emit checkpoint, keep plan as-is
+            himCheckpoint = createCheckpointRequest({
+              session_id: planResult.session_id,
+              plan_id: plan.plan_id,
+              step: plan.steps[0],
+            });
+          } else {
+            // Irreversible step at position i — clamp plan to steps before it
+            // Next plan call will have it as first step and emit checkpoint then
+            plan.steps = plan.steps.slice(0, i);
+            if (!planResult.diagnostics) planResult.diagnostics = {};
+            planResult.diagnostics.him_clamp_at = i;
+            planResult.diagnostics.him_clamp_reason = 'irreversible_step_ahead';
+          }
+          break; // Only handle first irreversible step found
+        }
       }
     }
 
@@ -500,6 +513,32 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
     });
   } catch (err) {
     console.error('[fill-observation] error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/him-validate-resume ────────────────────────────────────────
+// Phase 4.13: Validates whether execution can safely resume after HIM pause.
+// Checks plan still active + document unchanged + revision for re-perception.
+router.post('/him-validate-resume', authMiddleware, async (req, res) => {
+  try {
+    const { session_id, plan_id, original_document_id, current_document_id, original_revision, current_revision } = req.body;
+    const { isPlanActive } = await import('../fill-session.js');
+    const { validateResume } = await import('../him-adaptive-integration.js');
+
+    const active_plan_id = session_id ? (isPlanActive(session_id, plan_id) ? plan_id : 'superseded') : plan_id;
+
+    const result = validateResume({
+      original_document_id: original_document_id || '',
+      current_document_id: current_document_id || '',
+      original_revision: original_revision ?? 0,
+      current_revision: current_revision ?? 0,
+      plan_id: plan_id || '',
+      active_plan_id: active_plan_id,
+    });
+
+    return res.json(result);
+  } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });

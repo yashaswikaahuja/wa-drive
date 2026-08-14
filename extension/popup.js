@@ -108,6 +108,50 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.allowLegacyClientFill) refreshLegacyFillGate();
 });
 
+// ── Phase 4.13: HIM Confirmation UI ──────────────────────────────────────
+const himPanel = document.getElementById('him-panel');
+const himReasonEl = document.getElementById('him-reason');
+const himDetailEl = document.getElementById('him-detail');
+const himConfirmBtn = document.getElementById('him-confirm');
+const himCancelBtn = document.getElementById('him-cancel-btn');
+
+// Listen for HIM checkpoint from orchestrator (via session storage)
+chrome.storage.session?.onChanged?.addListener((changes) => {
+  if (changes._cc_him_pending?.newValue) {
+    chrome.storage.session.get('_cc_him_checkpoint', (result) => {
+      const checkpoint = result?._cc_him_checkpoint;
+      if (!checkpoint) return;
+      // Show HIM confirmation panel
+      if (himPanel) himPanel.style.display = 'block';
+      if (himReasonEl) himReasonEl.textContent = checkpoint.reason === 'irreversible_action'
+        ? 'This action is irreversible (e.g. file upload).'
+        : 'Server requires your confirmation to proceed.';
+      if (himDetailEl) {
+        const target = checkpoint.step_summary?.target_node_id || '';
+        const op = checkpoint.step_summary?.action_op || '';
+        himDetailEl.textContent = `Action: ${op}${target ? ' on ' + target : ''}`;
+      }
+    });
+  }
+  // Hide panel when checkpoint resolved
+  if (changes._cc_him_pending?.newValue === undefined && changes._cc_him_pending?.oldValue) {
+    if (himPanel) himPanel.style.display = 'none';
+  }
+});
+
+if (himConfirmBtn) {
+  himConfirmBtn.addEventListener('click', () => {
+    chrome.storage.session.set({ _cc_him_confirmed: true });
+    if (himPanel) himPanel.style.display = 'none';
+  });
+}
+if (himCancelBtn) {
+  himCancelBtn.addEventListener('click', () => {
+    chrome.storage.session.set({ _cc_him_cancelled: true });
+    if (himPanel) himPanel.style.display = 'none';
+  });
+}
+
 // Side panel stays open across tab switches — always resolve the active *page* tab
 // (never chrome:// or the extension itself).
 async function getActivePageTab() {

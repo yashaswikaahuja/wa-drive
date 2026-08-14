@@ -278,8 +278,8 @@ async function runProductFill(ctx) {
       };
     }
 
-    // After confirmation: validate resume (document/revision still valid)
-    progress('Resuming after confirmation...', 68);
+    // After confirmation: full validateResume (plan active + document + revision)
+    progress('Validating resume state...', 68);
     const [resumeCheck] = await chrome.scripting.executeScript({
       target: { tabId },
       func: () => {
@@ -288,14 +288,45 @@ async function runProductFill(ctx) {
       },
     });
     const resumeState = resumeCheck?.result || {};
-    if (resumeState.documentId && plan.target_binding?.document_id &&
-        resumeState.documentId !== plan.target_binding.document_id) {
-      return {
-        ok: false, filled: 0, failed: 0, skipped: 0, records: [],
-        observationError: null,
-        operatorMessage: 'Page changed during confirmation — cannot continue safely.',
-        error: 'him_document_replaced', pageSnapshot, plan,
-      };
+
+    // Server-side validateResume: checks plan active + document + revision
+    try {
+      const validateResponse = await fetch(backendUrl + '/him-validate-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+        body: JSON.stringify({
+          session_id: sessionId,
+          plan_id: plan.plan_id,
+          original_document_id: plan.target_binding?.document_id || null,
+          current_document_id: resumeState.documentId || null,
+          original_revision: plan.target_binding?.expected_revision || 0,
+          current_revision: resumeState.revision || 0,
+        }),
+      });
+      if (validateResponse.ok) {
+        const validation = await validateResponse.json();
+        if (!validation.valid) {
+          return {
+            ok: false, filled: 0, failed: 0, skipped: 0, records: [],
+            observationError: null,
+            operatorMessage: `Cannot resume: ${validation.rejection_reason || 'state invalid'}`,
+            error: 'him_resume_invalid', pageSnapshot, plan,
+          };
+        }
+        // If revision changed, server says re-perceive needed — but we proceed
+        // since the plan is still valid (server will re-plan on next turn if dynamic)
+      }
+    } catch (e) {
+      // Fallback: local document_id check only (non-fatal server error)
+      if (resumeState.documentId && plan.target_binding?.document_id &&
+          resumeState.documentId !== plan.target_binding.document_id) {
+        return {
+          ok: false, filled: 0, failed: 0, skipped: 0, records: [],
+          observationError: null,
+          operatorMessage: 'Page changed during confirmation — cannot continue safely.',
+          error: 'him_document_replaced', pageSnapshot, plan,
+        };
+      }
     }
   }
 
@@ -360,6 +391,24 @@ async function runProductFill(ctx) {
       plan = rePlanBody.plan || rePlanBody.action_plan || rePlanBody;
       if (!plan || !plan.steps || plan.steps.length === 0) break;
       lastPlan = plan;
+
+      // Phase 4.13: HIM checkpoint on dynamic re-plan turns
+      if (rePlanBody.him_checkpoint) {
+        progress('Waiting for operator confirmation...', 60 + turn);
+        const dynConfirmed = await new Promise((resolve) => {
+          if (typeof chrome !== 'undefined' && chrome.storage?.session) {
+            chrome.storage.session.set({ _cc_him_checkpoint: rePlanBody.him_checkpoint, _cc_him_pending: true });
+            const listener = (changes) => {
+              if (changes._cc_him_confirmed?.newValue) { chrome.storage.session.onChanged.removeListener(listener); chrome.storage.session.remove(['_cc_him_checkpoint', '_cc_him_pending', '_cc_him_confirmed']); resolve(true); }
+              if (changes._cc_him_cancelled?.newValue) { chrome.storage.session.onChanged.removeListener(listener); chrome.storage.session.remove(['_cc_him_checkpoint', '_cc_him_pending', '_cc_him_cancelled']); resolve(false); }
+            };
+            chrome.storage.session.onChanged.addListener(listener);
+            const expiresIn = Math.max(0, new Date(rePlanBody.him_checkpoint.expires_at).getTime() - Date.now());
+            setTimeout(() => { chrome.storage.session.onChanged.removeListener(listener); chrome.storage.session.remove(['_cc_him_checkpoint', '_cc_him_pending']); resolve(false); }, Math.min(expiresIn, 120000));
+          } else { resolve(true); }
+        });
+        if (!dynConfirmed) break; // Operator cancelled — stop dynamic loop
+      }
     }
 
     progress(`Executing ${plan.steps.length} step${plan.steps.length > 1 ? 's' : ''}...`, 70 + turn);
