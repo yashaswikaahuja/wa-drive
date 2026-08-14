@@ -63,6 +63,11 @@ async function injectExtension(page) {
     if (!existsSync(path)) { console.warn(`  SKIP: ${script} not found`); continue; }
     await page.addScriptTag({ content: readFileSync(path, 'utf8') });
   }
+  // Phase 4.1: stub deleted legacy functions so tests that reference them degrade gracefully
+  await page.evaluate(() => {
+    if (typeof fuzzyMatch === 'undefined') window.fuzzyMatch = () => ({});
+    if (typeof ccEvaluateField === 'undefined') window.ccEvaluateField = () => null;
+  });
   // Inject test aliases (simulates service-provided aliases for test environment)
   await page.evaluate(() => {
     if (window.ccSemanticAliases && window.ccSemanticAliases.merge) {
