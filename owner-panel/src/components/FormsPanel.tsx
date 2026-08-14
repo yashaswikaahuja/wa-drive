@@ -5,7 +5,7 @@ import {
   CaretRight, Image, Trash
 } from '@phosphor-icons/react';
 import type { Config, CatalogForm } from '../api';
-import { ApiError, fetchOwnerForms, patchOwnerForm } from '../api';
+import { ApiError, fetchOwnerForms, patchOwnerForm, createOwnerForm } from '../api';
 
 const LIFECYCLE_OPTS = ['open', 'upcoming', 'closed', 'archived'] as const;
 
@@ -38,6 +38,7 @@ export function FormsPanel({ cfg }: { cfg: Config }) {
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<CatalogForm | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async (search: string) => {
     setLoading(true); setError('');
@@ -64,6 +65,9 @@ export function FormsPanel({ cfg }: { cfg: Config }) {
             <input className="input" placeholder="Search…" value={q} onChange={e => setQ(e.target.value)}
               style={{ width: 180, paddingLeft: 30, fontSize: 13 }} />
           </div>
+          <button className="btn" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13 }} onClick={() => setCreating(true)}>
+            <Plus size={14} weight="bold" /> Add New
+          </button>
         </div>
       </div>
 
@@ -121,6 +125,11 @@ export function FormsPanel({ cfg }: { cfg: Config }) {
       {editing && (
         <FormEditor form={editing} cfg={cfg} onClose={() => setEditing(null)}
           onSaved={(updated) => { setForms(fs => fs.map(f => f.id === updated.id ? updated : f)); setEditing(null); }} />
+      )}
+
+      {creating && (
+        <CreateFormEditor cfg={cfg} onClose={() => setCreating(false)}
+          onCreated={(newForm) => { setForms(fs => [newForm, ...fs]); setCreating(false); }} />
       )}
     </section>
   );
@@ -319,6 +328,97 @@ function FormEditor({ form, cfg, onClose, onSaved }: {
             <button className="btn btn--primary" onClick={save} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <CheckCircle size={16} weight="bold" />
               {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+            <button className="btn" onClick={onClose}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Create form ──────────────────────────────────────────────────────────────
+
+function CreateFormEditor({ cfg, onClose, onCreated }: {
+  cfg: Config; onClose: () => void; onCreated: (f: CatalogForm) => void;
+}) {
+  const [name, setName] = useState('');
+  const [shortName, setShortName] = useState('');
+  const [portal, setPortal] = useState('');
+  const [url, setUrl] = useState('');
+  const [lifecycle, setLifecycle] = useState<string>('open');
+  const [opensAt, setOpensAt] = useState('');
+  const [closesAt, setClosesAt] = useState('');
+  const [noticeUrl, setNoticeUrl] = useState('');
+  const [noticeSummary, setNoticeSummary] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const save = async () => {
+    if (!name.trim() || !shortName.trim() || !portal.trim() || !url.trim()) {
+      setError('Name, short name, portal, and URL are required'); return;
+    }
+    setSaving(true); setError('');
+    try {
+      const created = await createOwnerForm(cfg, {
+        name: name.trim(),
+        short_name: shortName.trim(),
+        portal: portal.trim(),
+        url: url.trim(),
+        lifecycle: lifecycle as any,
+        opens_at: opensAt || null,
+        closes_at: closesAt || null,
+        official_notice_url: noticeUrl || null,
+        notice_summary: noticeSummary || null,
+      });
+      onCreated(created);
+    } catch (e: any) { setError(e.message || 'Create failed'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="scrim" onClick={onClose}>
+      <div className="drawer" onClick={e => e.stopPropagation()}>
+        <div className="drawer__head row between">
+          <div className="row" style={{ gap: 10 }}>
+            <Plus size={18} weight="duotone" style={{ color: 'hsl(var(--marigold-deep))' }} />
+            <h3 className="display" style={{ fontSize: 16 }}>Add New Form</h3>
+          </div>
+          <button className="iconbtn" onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="drawer__body">
+          <Section icon={Globe} title="Identity">
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div className="row" style={{ gap: 10 }}>
+                <div style={{ flex: 1 }}><span className="muted" style={{ fontSize: 10 }}>Short Name *</span><input className="input" value={shortName} onChange={e => setShortName(e.target.value)} placeholder="SSC CHSL" style={{ marginTop: 2, fontSize: 13 }} /></div>
+                <div style={{ flex: 1 }}><span className="muted" style={{ fontSize: 10 }}>Portal *</span><input className="input" value={portal} onChange={e => setPortal(e.target.value)} placeholder="SSC" style={{ marginTop: 2, fontSize: 13 }} /></div>
+              </div>
+              <div><span className="muted" style={{ fontSize: 10 }}>Full Name *</span><input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="SSC Combined Higher Secondary Level" style={{ marginTop: 2, fontSize: 13 }} /></div>
+              <div><span className="muted" style={{ fontSize: 10 }}>Portal URL *</span><input className="input" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://ssc.gov.in" style={{ marginTop: 2, fontSize: 13 }} /></div>
+            </div>
+          </Section>
+
+          <Section icon={CalendarBlank} title="Lifecycle & Dates">
+            <select className="input" value={lifecycle} onChange={e => setLifecycle(e.target.value)} style={{ fontSize: 13 }}>
+              {LIFECYCLE_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+            <div className="row" style={{ gap: 10, marginTop: 10 }}>
+              <div style={{ flex: 1 }}><span className="muted" style={{ fontSize: 10 }}>Opens</span><input className="input" type="date" value={opensAt} onChange={e => setOpensAt(e.target.value)} style={{ marginTop: 2 }} /></div>
+              <div style={{ flex: 1 }}><span className="muted" style={{ fontSize: 10 }}>Closes</span><input className="input" type="date" value={closesAt} onChange={e => setClosesAt(e.target.value)} style={{ marginTop: 2 }} /></div>
+            </div>
+          </Section>
+
+          <Section icon={FileText} title="Notice (optional)">
+            <div><span className="muted" style={{ fontSize: 10 }}>Official Notice URL</span><input className="input" value={noticeUrl} onChange={e => setNoticeUrl(e.target.value)} placeholder="https://…/notice.pdf" style={{ marginTop: 2, fontSize: 13 }} /></div>
+            <div style={{ marginTop: 8 }}><span className="muted" style={{ fontSize: 10 }}>Summary</span><textarea className="input" rows={2} value={noticeSummary} onChange={e => setNoticeSummary(e.target.value)} placeholder="Short note about this form cycle…" style={{ marginTop: 2, fontSize: 13 }} /></div>
+          </Section>
+
+          {error && <p className="banner">{error}</p>}
+
+          <div className="row" style={{ gap: 10, paddingTop: 8 }}>
+            <button className="btn btn--primary" onClick={save} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Plus size={16} weight="bold" />
+              {saving ? 'Creating…' : 'Create Form'}
             </button>
             <button className="btn" onClick={onClose}>Cancel</button>
           </div>

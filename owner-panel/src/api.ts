@@ -240,3 +240,17 @@ export async function patchOwnerForm(cfg: Config, id: string, data: Partial<Cata
   }
   return res.json();
 }
+
+export async function createOwnerForm(cfg: Config, data: Partial<CatalogForm>): Promise<CatalogForm> {
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/owner/forms`, {
+    method: 'POST',
+    headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    let msg = 'Create failed';
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new ApiError(res.status, msg);
+  }
+  return res.json();
+}
