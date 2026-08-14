@@ -1029,3 +1029,99 @@ phases:
       - "5 positive fixtures validate correct protocol behavior"
       - "5 malicious fixtures rejected by conformance checks"
       - "All 8 JSON fixtures parse successfully"
+
+
+# ── Phase 4 Adaptive Execution (M4.3–M4.14) ───────────────────────
+
+  phase_4_adaptive:
+    name: "Adaptive Execution Architecture"
+    status: frozen
+    frozen_date: "2026-08-14"
+    depends_on: ["phase_4_0", "phase_4_1"]
+    issues: ["#197", "#198", "#199", "#200", "#201", "#202", "#203", "#204", "#205", "#206", "#207", "#208", "#209"]
+    description: >
+      Complete adaptive execution architecture: STATIC bounded multi-action,
+      DYNAMIC one-action loop, AUTO mode selection, safety demotion,
+      DOM stabilization, WSS transport, behavior learning, HIM integration,
+      workflow continuity, and performance benchmarking. Server remains
+      sole strategic brain; extension is perception + mechanical execution.
+
+    milestones:
+      M4_3: "Behavior Classifier — system_classification from DOM evidence + prior knowledge"
+      M4_4: "Operator Mode Control — AUTO/STATIC/DYNAMIC preference with mode merge"
+      M4_5: "Static Bounded Execution — STATIC_MAX_STEPS hard cap + edge-based bounds"
+      M4_6: "Dynamic One-Action Loop — plan_clamped single-step with settle + re-perceive"
+      M4_7: "Safety Demotion — hard DOM evidence stops stale batch, skips remaining"
+      M4_8: "DOM Stabilization — CcDomSettle waitForSettle between dynamic turns"
+      M4_9: "Browser Test Matrix — real APE closed loop + live demotion proof"
+      M4_10: "WSS Adaptive Transport — CcFillOrchestrator over WSS with HTTPS fallback"
+      M4_11: "Performance Baseline — 30-run benchmark, STATIC 2.4x faster, settle=bottleneck"
+      M4_12: "Behavior Learning — effectiveClassification, isStale, recordStaticSuccess/DynamicEvidence"
+      M4_13: "HIM Integration — all-step scan, popup checkpoint, validateResume on both paths"
+      M4_14: "Workflow Continuity — HTTP routes, 3-task lifecycle, isolation, demotion within workflow"
+
+    frozen_files:
+      - path: "extension/runtime/action-plan-executor.js"
+        reason: "R_SAFE executor — validatePlan, TOCTOU, safety_demotion, bounded execution"
+      - path: "extension/runtime/dom-evidence.js"
+        reason: "DOM evidence collection — hard evidence triggers safety demotion"
+      - path: "extension/runtime/dom-settle.js"
+        reason: "DOM stabilization between dynamic turns"
+      - path: "extension/runtime/ws-client.js"
+        reason: "WSS client protocol — message framing, request/response correlation"
+      - path: "extension/application/fill-orchestrator.js"
+        reason: "Product fill path — WSS transport, workflow integration, HIM, demotion loop"
+      - path: "extension-service/behavior-classifier.js"
+        reason: "Server-owned classification — isHardEvidenceType, classifyFormBehavior"
+      - path: "extension-service/execution-mode.js"
+        reason: "Mode merge — operator preference + system classification"
+      - path: "extension-service/static-bounds.js"
+        reason: "STATIC_MAX_STEPS + edge-based bounds"
+      - path: "extension-service/behavior-learning.js"
+        reason: "effectiveClassification, isStale, recordDynamicEvidence, recordStaticSuccess"
+      - path: "extension-service/him-adaptive-integration.js"
+        reason: "requiresHimCheckpoint, createCheckpointRequest"
+      - path: "extension-service/workflow-session.js"
+        reason: "Workflow state machine — createWorkflow, completeCurrentTask, isolation"
+      - path: "extension-service/routes/workflow.js"
+        reason: "HTTP workflow routes — /workflow-create, /workflow-complete-task"
+      - path: "extension-service/ws-handlers.js"
+        reason: "WSS adaptive handlers — fill_plan_request, fill_observation_wss"
+
+    allowed_changes:
+      - "Bug fixes with test coverage"
+      - "Performance improvements that don't change behavior"
+      - "Adding telemetry/logging"
+      - "Tightening safety bounds"
+
+    forbidden_changes:
+      - "Moving classification/planning/learning to extension"
+      - "Bypassing safety demotion"
+      - "Removing STATIC_MAX_STEPS enforcement"
+      - "Allowing extension to plan fills"
+      - "Removing operator confirmation requirements"
+      - "Weakening plan validation (allow_submit/allow_navigation as boolean)"
+      - "Removing correlation_replayed or document_replaced checks"
+
+    r_safe_invariants:
+      - "STATIC plans bounded to STATIC_MAX_STEPS (12)"
+      - "DYNAMIC plans contain exactly one action"
+      - "UNKNOWN classification behaves conservatively (dynamic)"
+      - "Hard DOM evidence demotes STATIC to DYNAMIC"
+      - "Demotion stops stale remaining actions immediately"
+      - "Fresh perception occurs after demotion"
+      - "Re-planning uses current browser state"
+      - "Operator cannot prevent safety demotion"
+      - "Stale plans rejected against replaced documents"
+      - "Duplicate execution prevented via correlation_id replay guard"
+      - "Plan/session correlation enforced"
+
+    validation_evidence:
+      ci_unit: "37 suites, 2165 tests"
+      ci_browser: "11 suites, 651 tests"
+      product_integration: "47 tests (M4.9) — real closed loop + live demotion"
+      wss_integration: "55 tests (M4.10) — mock WSS server, protocol shape verified"
+      workflow_integration: "54 tests (M4.14) — 3-task lifecycle, isolation, demotion"
+      performance_benchmark: "30 measured runs per cell, 10/20/50 fields, STATIC/DYNAMIC/cascade"
+      him_tests: "44 adaptive integration + 175 runtime tests"
+      behavior_learning: "49 unit tests + server integration"
