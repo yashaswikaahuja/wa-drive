@@ -291,119 +291,186 @@ async function runTests() {
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // TEST 6: CLOSED LOOP — preference → server modules → APE.execute → observation
+    // TEST 6: CLOSED LOOP — real plan → real APE.execute → real observation
+    // Hard assertions: FAILS if APE never runs.
     // ═══════════════════════════════════════════════════════════════════
     {
       const page = await browser.newPage();
       await page.setContent(STATIC_FORM);
       await injectProductPath(page);
 
-      // 1. Real perception snapshot
       const snapshot = await page.evaluate(() => globalThis.CcPerception.perceivePage({ mode: 'snapshot' }));
       ok(snapshot?.kind === 'page_snapshot', 'LOOP: real perception snapshot');
 
-      // 2. Server generateFillPlan with profile
-      const profile = { name: 'Test User', email: 'test@x.com', phone: '9999999999', address: '123 St', city: 'Delhi', pin: '110001' };
-      let planResult;
-      try {
-        planResult = await generateFillPlan({
-          snapshot,
-          workspace_id: 'ws:loop-test',
-          phone: null,
-          person_key: null,
-          profile_overrides: profile,
-          profile_id: null,
-        });
-      } catch (e) {
-        planResult = { success: false, diagnostics: { error: e.message } };
-      }
+      const inputNodes = Object.values(snapshot.nodes || {}).filter(n => n.affordances?.includes('type_text'));
+      ok(inputNodes.length >= 3, `LOOP: found ${inputNodes.length} fillable nodes (need >= 3)`);
 
-      // 3. Classification + mode merge
-      const classification = classifyFormBehavior({ snapshot, domEvidence: [], priorKnowledge: null, planSteps: planResult.plan?.steps || [] });
+      // Operator preference → server classification → mode merge
+      const classification = classifyFormBehavior({
+        snapshot, domEvidence: [], priorKnowledge: null,
+        planSteps: inputNodes.map(n => ({ target: { node_id: n.node_id } })),
+      });
       const mode = mergeExecutionMode({ operatorPreference: 'STATIC', systemClassification: classification.system_classification });
-      ok(mode != null, `LOOP: mode merge result (effective=${mode.effective_execution_mode})`);
+      ok(typeof mode.effective_execution_mode === 'string', `LOOP: mode merged (${mode.effective_execution_mode})`);
 
-      // 4. If plan has steps, execute via APE
-      if (planResult.success && planResult.plan?.steps?.length > 0) {
-        const plan = planResult.plan;
+      // Build a plan using the SAME contracts routes/fill.js emits.
+      // authorization requires allow_submit AND allow_navigation as booleans.
+      const steps = inputNodes.slice(0, 3).map((n, i) => ({
+        step_id: `s:${i}`,
+        target: { context_id: n.context_id, node_id: n.node_id },
+        action: { op: 'type_text', value: `Val${i}`, clear_first: true },
+        risk: 'safe',
+        required_affordance: 'type_text',
+        required_adapter_id: null,
+        postcondition: { type: 'value_state', expected_value_state: 'nonempty', expected_boolean: null, expected_signal: null },
+        on_failure: 'stop_and_report',
+      }));
 
-        // Apply static bounds
-        const bounded = applyStaticBounds({ steps: plan.steps, edges: snapshot.edges || [] });
-        if (bounded.bounded) plan.steps = bounded.steps;
+      // Server policy: static bounds applied to the plan steps
+      const bounded = applyStaticBounds({ steps, edges: snapshot.edges || [] });
+      ok(bounded.steps.length <= STATIC_MAX_STEPS, `LOOP: bounded to ${bounded.steps.length} steps`);
 
-        const obs = await page.evaluate(async (planJson) => {
-          if (globalThis.CcDomEvidence?.startObserving) {
-            globalThis.CcDomEvidence.startObserving(planJson, globalThis.CcPerception?.getBindingRegistry?.());
+      const plan = {
+        kind: 'action_plan', schema_version: '3.0.0',
+        plan_id: 'plan:loop', correlation_id: 'corr:loop',
+        supersedes_plan_id: null,
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        target_binding: {
+          document_id: snapshot.document_id,
+          snapshot_id: snapshot.snapshot_id,
+          expected_revision: snapshot.revision,
+        },
+        steps: bounded.steps,
+        authorization: { max_risk: 'safe', operator_confirmed: false, allow_submit: false, allow_navigation: false },
+      };
+
+      // Real APE execution with real DomEvidence observation
+      const obs = await page.evaluate(async (planJson) => {
+        if (globalThis.CcDomEvidence?.startObserving) {
+          globalThis.CcDomEvidence.startObserving(planJson, globalThis.CcPerception?.getBindingRegistry?.());
+        }
+        let result;
+        try { result = await globalThis.CcActionPlanExecutor.execute(planJson); }
+        finally {
+          if (globalThis.CcDomEvidence?.stopObserving) {
+            globalThis.CcDomEvidence.stopObserving();
+            const ev = globalThis.CcDomEvidence.getEvidence?.() || [];
+            if (ev.length > 0 && result) result.dom_evidence = ev;
           }
-          let result;
-          try { result = await globalThis.CcActionPlanExecutor.execute(planJson); }
-          finally {
-            if (globalThis.CcDomEvidence?.stopObserving) {
-              globalThis.CcDomEvidence.stopObserving();
-              const ev = globalThis.CcDomEvidence.getEvidence?.() || [];
-              if (ev.length > 0 && result) result.dom_evidence = ev;
-            }
-          }
-          return result;
-        }, plan);
+        }
+        return result;
+      }, plan);
 
-        ok(obs?.kind === 'execution_observation', 'LOOP: execution observation returned');
-        const succeeded = (obs?.steps || []).filter(s => s.status === 'succeeded').length;
-        ok(succeeded > 0, `LOOP: ${succeeded} steps succeeded`);
-        ok(obs?.plan_id === plan.plan_id, 'LOOP: observation references correct plan_id');
-      } else {
-        // Plan may fail on cold start (no mappings) — acceptable
-        ok(true, 'LOOP: plan generation requires mappings (cold start acceptable)');
-        ok(true, 'LOOP: closed loop contract verified at module level');
-        ok(true, 'LOOP: plan_id correlation verified by schema');
-      }
+      // HARD assertions — these fail if APE never actually ran
+      ok(obs?.kind === 'execution_observation', 'LOOP: ExecutionObservation returned');
+      ok(obs?.plan_id === plan.plan_id, `LOOP: observation plan_id matches (${obs?.plan_id})`);
+      ok(obs?.correlation_id === plan.correlation_id, 'LOOP: correlation_id matches');
+      ok(Array.isArray(obs?.steps) && obs.steps.length === plan.steps.length,
+        `LOOP: observation has ${obs?.steps?.length} step results for ${plan.steps.length} steps`);
+      const loopSucceeded = (obs?.steps || []).filter(s => s.status === 'succeeded').length;
+      ok(loopSucceeded === plan.steps.length, `LOOP: all ${loopSucceeded}/${plan.steps.length} steps succeeded`);
+      ok(obs?.outcome === 'completed', `LOOP: outcome=${obs?.outcome}`);
+
+      // Verify the DOM actually changed (real execution, not a no-op)
+      const domValues = await page.evaluate(() => ({
+        v0: document.querySelectorAll('input')[0]?.value,
+        v1: document.querySelectorAll('input')[1]?.value,
+      }));
+      ok(domValues.v0 === 'Val0', `LOOP: DOM field 0 filled ("${domValues.v0}")`);
+      ok(domValues.v1 === 'Val1', `LOOP: DOM field 1 filled ("${domValues.v1}")`);
 
       await page.close();
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // TEST 7: LIVE DEMOTION — verified via real executor behavior
+    // TEST 7: LIVE DEMOTION — multi-step plan, DOM invalidates tail mid-batch
+    // Hard assertions: tail must NOT all succeed.
     // ═══════════════════════════════════════════════════════════════════
     {
       const page = await browser.newPage();
       await page.setContent(STATIC_FORM);
       await injectProductPath(page);
 
-      // Verify the live execution environment has demotion wired end-to-end:
-      // 1. DomEvidence emitter is loaded and functional
-      const evidenceCheck = await page.evaluate(() => {
-        const de = globalThis.CcDomEvidence;
-        return {
-          loaded: !!de,
-          hasStartObserving: typeof de?.startObserving === 'function',
-          hasStopObserving: typeof de?.stopObserving === 'function',
-          hasGetEvidence: typeof de?.getEvidence === 'function',
-          hasNotify: typeof de?.notifyStepExecuted === 'function',
-        };
-      });
-      ok(evidenceCheck.loaded, 'LIVE-DEMOTION: DomEvidence loaded');
-      ok(evidenceCheck.hasStartObserving, 'LIVE-DEMOTION: startObserving available');
-      ok(evidenceCheck.hasGetEvidence, 'LIVE-DEMOTION: getEvidence available');
+      const snapshot = await page.evaluate(() => globalThis.CcPerception.perceivePage({ mode: 'snapshot' }));
+      const inputNodes = Object.values(snapshot.nodes || {}).filter(n => n.affordances?.includes('type_text'));
+      ok(inputNodes.length >= 4, `LIVE-DEMOTION: ${inputNodes.length} fillable nodes (need >= 4)`);
 
-      // 2. Executor has TOCTOU revalidation (stale_target on removed elements)
-      const toctouCheck = await page.evaluate(() => {
-        const src = globalThis.CcActionPlanExecutor?.execute?.toString() || '';
-        return {
-          hasToctou: src.includes('toctou') || src.includes('resolveExecutionTarget'),
-          hasStaleTarget: src.includes('stale_target'),
-          hasOnFailureStop: src.includes('stop_and_report') || src.includes('stopped'),
-        };
-      });
-      ok(toctouCheck.hasToctou, 'LIVE-DEMOTION: TOCTOU revalidation in executor');
-      ok(toctouCheck.hasStaleTarget, 'LIVE-DEMOTION: stale_target failure path exists');
-      ok(toctouCheck.hasOnFailureStop, 'LIVE-DEMOTION: stop_and_report halts remaining');
+      // Multi-step STATIC plan across 4 fields
+      const plan = {
+        kind: 'action_plan', schema_version: '3.0.0',
+        plan_id: 'plan:live-dem', correlation_id: 'corr:live-dem',
+        supersedes_plan_id: null,
+        issued_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        target_binding: {
+          document_id: snapshot.document_id,
+          snapshot_id: snapshot.snapshot_id,
+          expected_revision: snapshot.revision,
+        },
+        steps: inputNodes.slice(0, 4).map((n, i) => ({
+          step_id: `s:${i}`,
+          target: { context_id: n.context_id, node_id: n.node_id },
+          action: { op: 'type_text', value: `Dem${i}`, clear_first: true },
+          risk: 'safe',
+          required_affordance: 'type_text',
+          required_adapter_id: null,
+          postcondition: { type: 'value_state', expected_value_state: 'nonempty', expected_boolean: null, expected_signal: null },
+          on_failure: 'stop_and_report',
+        })),
+        authorization: { max_risk: 'safe', operator_confirmed: false, allow_submit: false, allow_navigation: false },
+      };
 
-      // 3. Safety chain: stale_target OR safety_demotion → stopped → remaining skipped
-      // This is proven by:
-      //   - APE E2E suite (46 tests) with real plan execution
-      //   - Safety Demotion unit suite (28 tests) with logic verification
-      //   - The executor source has both paths wired in the loaded browser context
-      ok(true, 'LIVE-DEMOTION: safety chain verified (APE E2E 46 + unit 28 tests)');
+      // Invalidate the TAIL of the batch: remove fields 3 and 4 from the DOM
+      // mid-batch, after step 0's settle window opens.
+      const obs = await page.evaluate(async (planJson) => {
+        // Remove the last two planned targets shortly after execution begins.
+        // APE settles ~120ms per type_text step, so 60ms lands inside step 0.
+        setTimeout(() => {
+          const inputs = document.querySelectorAll('input');
+          if (inputs[3]) inputs[3].remove();
+          if (inputs[2]) inputs[2].remove();
+        }, 60);
+
+        if (globalThis.CcDomEvidence?.startObserving) {
+          globalThis.CcDomEvidence.startObserving(planJson, globalThis.CcPerception?.getBindingRegistry?.());
+        }
+        let result;
+        try { result = await globalThis.CcActionPlanExecutor.execute(planJson); }
+        finally {
+          if (globalThis.CcDomEvidence?.stopObserving) {
+            globalThis.CcDomEvidence.stopObserving();
+            const ev = globalThis.CcDomEvidence.getEvidence?.() || [];
+            if (ev.length > 0 && result) result.dom_evidence = ev;
+          }
+        }
+        return result;
+      }, plan);
+
+      ok(obs?.kind === 'execution_observation', 'LIVE-DEMOTION: ExecutionObservation returned');
+      ok(Array.isArray(obs?.steps) && obs.steps.length === 4, `LIVE-DEMOTION: ${obs?.steps?.length} step results`);
+
+      const demSucceeded = (obs?.steps || []).filter(s => s.status === 'succeeded').length;
+      const demFailed = (obs?.steps || []).filter(s => s.status === 'failed').length;
+      const demSkipped = (obs?.steps || []).filter(s => s.status === 'skipped').length;
+
+      // HARD assertion: the batch must NOT fully succeed once the tail is gone
+      ok(demSucceeded < 4, `LIVE-DEMOTION: batch did NOT fully succeed (${demSucceeded}/4 succeeded)`);
+      ok(demFailed + demSkipped > 0, `LIVE-DEMOTION: tail stopped (${demFailed} failed + ${demSkipped} skipped)`);
+
+      // At least one early step should have run (proves real execution, not a rejected plan)
+      ok(demSucceeded >= 1, `LIVE-DEMOTION: early steps executed (${demSucceeded} succeeded)`);
+      ok(obs?.outcome !== 'rejected', `LIVE-DEMOTION: plan was accepted and ran (outcome=${obs?.outcome})`);
+
+      // Safety mechanism: stale_target (TOCTOU) or safety_demotion (hard evidence)
+      const hasStale = (obs?.steps || []).some(s => s.failure_code === 'stale_target' || s.failure_code === 'node_not_found');
+      const hasDemotion = (obs?.diagnostics || []).some(d => d.code === 'safety_demotion');
+      ok(hasStale || hasDemotion,
+        `LIVE-DEMOTION: safety fired (stale_target=${hasStale}, safety_demotion=${hasDemotion})`);
+
+      // The removed fields must never have been written
+      const remainingCount = await page.evaluate(() => document.querySelectorAll('input').length);
+      ok(remainingCount < 6, `LIVE-DEMOTION: DOM tail actually removed (${remainingCount} inputs left)`);
 
       await page.close();
     }
