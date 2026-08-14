@@ -439,3 +439,99 @@ export function cleanupExpired() {
 export function getSessionCount() {
   return sessions.size;
 }
+
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Phase 4.6 — Dynamic one-action loop: committed tracking + plan race
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/**
+ * Get all node_ids that have been successfully committed (completed) in this session.
+ * Used by fill-plan to avoid re-issuing fills for already-filled fields.
+ *
+ * @param {string} session_id
+ * @returns {Set<string>} — Set of committed node_ids
+ */
+export function getCommittedNodeIds(session_id) {
+  const session = sessions.get(session_id);
+  if (!session) return new Set();
+  const committed = new Set();
+  for (const step of session.steps) {
+    if (step.status === 'completed') {
+      committed.add(step.node_id);
+    }
+  }
+  return committed;
+}
+
+/**
+ * Get the current active (authoritative) plan_id for a session.
+ * Only one plan may be in-flight per fill correlation.
+ *
+ * @param {string} session_id
+ * @returns {string|null}
+ */
+export function getActivePlanId(session_id) {
+  const session = sessions.get(session_id);
+  if (!session) return null;
+  return session.plan_id;
+}
+
+/**
+ * Supersede the current plan with a new one (dynamic re-plan).
+ * Marks old plan steps as skipped, attaches new plan, preserves committed history.
+ *
+ * @param {string} session_id
+ * @param {string} new_plan_id
+ * @param {number} totalSteps
+ * @param {string[]} stepIds
+ * @param {string[]} nodeIds
+ * @returns {{ session: FillSession, superseded_plan_id: string|null }}
+ */
+export function supersedePlan(session_id, new_plan_id, totalSteps, stepIds, nodeIds) {
+  const session = sessions.get(session_id);
+  if (!session) throw new Error(`Session not found: ${session_id}`);
+
+  const superseded_plan_id = session.plan_id;
+
+  // Skip any pending/executing steps from the old plan (don't touch completed ones)
+  for (const step of session.steps) {
+    if (step.status === 'pending' || step.status === 'executing') {
+      step.status = 'skipped';
+    }
+  }
+
+  // Attach new plan — keep completed history
+  session.plan_id = new_plan_id;
+  session.status = 'executing';
+  session.total_steps = session.completed_steps + totalSteps;
+  session.updated_at = Date.now();
+
+  // Append new step progress entries (preserving completed history)
+  const newSteps = stepIds.map((step_id, i) => ({
+    step_id,
+    node_id: nodeIds[i] || 'unknown',
+    status: 'pending',
+    error_code: null,
+    started_at: null,
+    completed_at: null,
+    duration_ms: null,
+  }));
+  session.steps = [...session.steps, ...newSteps];
+
+  return { session, superseded_plan_id };
+}
+
+/**
+ * Check if a plan_id is the active (authoritative) plan for a session.
+ * Stale plans must not continue execution.
+ *
+ * @param {string} session_id
+ * @param {string} plan_id
+ * @returns {boolean}
+ */
+export function isPlanActive(session_id, plan_id) {
+  const session = sessions.get(session_id);
+  if (!session) return false;
+  return session.plan_id === plan_id;
+}

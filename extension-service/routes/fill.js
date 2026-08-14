@@ -121,6 +121,58 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       });
     }
 
+    // ── Phase 4.6: Anti-duplicate filter ────────────────────────────
+    // On dynamic re-plan turns, filter out steps targeting node_ids that
+    // have already been successfully committed in the fill session.
+    const sessionId46 = req.body.session_id || null;
+    let committedCount = 0;
+    if (sessionId46 && planResult.plan?.steps?.length > 0) {
+      const { getCommittedNodeIds } = await import('../fill-session.js');
+      const committed = getCommittedNodeIds(sessionId46);
+      if (committed.size > 0) {
+        const before = planResult.plan.steps.length;
+        planResult.plan.steps = planResult.plan.steps.filter(
+          step => !committed.has(step.target?.node_id)
+        );
+        committedCount = before - planResult.plan.steps.length;
+        if (committedCount > 0) {
+          if (!planResult.diagnostics) planResult.diagnostics = {};
+          planResult.diagnostics.anti_duplicate_filtered = committedCount;
+          planResult.diagnostics.committed_node_ids = [...committed];
+        }
+      }
+    }
+
+    // If all steps were already committed, return empty plan (fill complete)
+    if (planResult.plan && planResult.plan.steps.length === 0) {
+      return res.json({
+        plan: { ...planResult.plan, steps: [] },
+        classification: null,
+        plan_clamped: false,
+        static_bounded: false,
+        fill_complete: true,
+        session: { id: planResult.session_id },
+        diagnostics: { ...planResult.diagnostics, fill_complete: true },
+      });
+    }
+
+    // ── Phase 4.6: Plan race — supersede prior plan ─────────────────
+    // If re-planning within same session, supersede old plan so stale
+    // plans cannot continue execution.
+    let supersededPlanId = null;
+    if (sessionId46 && planResult.plan) {
+      const { getActivePlanId, supersedePlan } = await import('../fill-session.js');
+      const activePlan = getActivePlanId(sessionId46);
+      if (activePlan && activePlan !== planResult.plan.plan_id) {
+        supersededPlanId = activePlan;
+        planResult.plan.supersedes_plan_id = activePlan;
+        // Supersede in session: skip old pending steps, attach new plan
+        const stepIds = planResult.plan.steps.map(s => s.step_id);
+        const nodeIds = planResult.plan.steps.map(s => s.target?.node_id);
+        supersedePlan(sessionId46, planResult.plan.plan_id, planResult.plan.steps.length, stepIds, nodeIds);
+      }
+    }
+
     // ── Phase 4.3: Behavior classification ──────────────────────────
     // Classify static/dynamic after plan generation using snapshot topology,
     // any dom_evidence passed by the extension, and prior server knowledge.
@@ -254,6 +306,22 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'planId or plan_id is required' });
     }
 
+    // ── Phase 4.6: Plan race guard ──────────────────────────────────
+    // Reject observations for superseded (stale) plans. Only the active
+    // plan may report results. Fail closed: stale plan execution stops.
+    const sessionId = req.query.sessionId || body.sessionId || null;
+    if (sessionId) {
+      const { isPlanActive } = await import('../fill-session.js');
+      if (!isPlanActive(sessionId, planId)) {
+        return res.status(409).json({
+          error: 'stale_plan',
+          message: 'This plan has been superseded. Execution must stop.',
+          plan_id: planId,
+          session_id: sessionId,
+        });
+      }
+    }
+
     const now = new Date().toISOString();
     const observation = isV3 ? body : {
       kind: 'execution_observation',
@@ -284,7 +352,6 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       return res.status(422).json({ error: 'Invalid ExecutionObservation v3', details: missing });
     }
 
-    const sessionId = req.query.sessionId || body.sessionId || null;
     const internalObservation = {
       ...observation,
       // Phase 4.2: pass through DOM evidence for server classification (M4.3)
