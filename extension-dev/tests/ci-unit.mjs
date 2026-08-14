@@ -58,6 +58,7 @@ const suites = [
   { name: 'Performance Baseline Tests', cmd: 'node extension-dev/tests/test-performance-baseline.mjs' },
   { name: 'Behavior Learning Tests', cmd: 'node extension-dev/tests/test-behavior-learning.mjs' },
   { name: 'HIM Adaptive Integration Tests', cmd: 'node extension-dev/tests/test-him-adaptive.mjs' },
+  { name: 'Workflow Session Tests', cmd: 'node extension-dev/tests/test-workflow-session.mjs' },
 ];
 
 let allPass = true;
