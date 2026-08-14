@@ -96,19 +96,6 @@ assert(normalizeFieldLabel('4. Father Name *') === 'Father Name', 'Strip numberi
 assert(normalizeFieldLabel('a. Mobile Number') === 'Mobile Number', 'Strip letter prefix');
 assert(normalizeFieldLabel('Normal Label') === 'Normal Label', 'No-op on clean label');
 
-console.log('\n=== rule-engine.js ccMatchOption delegation ===');
-
-// Load rule-engine (it references window.ccMatchOption)
-eval(require('fs').readFileSync(__dirname + '/../../extension/autofill/rule-engine.js', 'utf8'));
-
-// ccMatchOption in rule-engine should delegate to shared when window.ccMatchOption exists
-// Test with string options (rule-engine's original interface)
-const ruleResult = ccMatchOption('Bihar', ['Select State', 'Bihar', 'Jharkhand']);
-assert(ruleResult === 'Bihar', 'Rule-engine ccMatchOption delegates to shared');
-
-const ruleResult2 = ccMatchOption('Male', ['Male', 'Female']);
-assert(ruleResult2 === 'Male', 'Rule-engine exact match via shared');
-
 console.log('\n─────────────────────────────────');
 console.log(`Results: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

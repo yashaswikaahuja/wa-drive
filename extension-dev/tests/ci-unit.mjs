@@ -24,7 +24,6 @@ if (!existsSync(extSvcJwt)) {
 const suites = [
   { name: 'Unit Tests', cmd: 'node extension-dev/tests/test-shared-modules.js' },
   { name: 'Integration Tests', cmd: 'node extension-dev/tests/test-integration.js' },
-  { name: 'Mapping Guard Tests', cmd: 'node extension-dev/tests/test-mapping-guards.js' },
   { name: 'Model IR Tests', cmd: 'node extension-dev/tests/test-models.js' },
   { name: 'Capability Tests', cmd: 'node extension-dev/tests/test-capabilities.js' },
   { name: 'Runner Tests', cmd: 'node extension-dev/tests/test-runner.js' },
@@ -46,6 +45,7 @@ const suites = [
   { name: 'Perception Unit Tests', cmd: 'node extension-dev/tests/perception/run-perception-unit.mjs' },
   { name: 'WSS Protocol Tests', cmd: 'node extension-dev/tests/test-wss-protocol.mjs' },
   { name: 'HIM Runtime Tests', cmd: 'node extension-dev/tests/test-him-runtime.mjs' },
+  { name: 'No Legacy Brain Guard', cmd: 'node extension-dev/tests/test-no-legacy-brain.mjs' },
 ];
 
 let allPass = true;

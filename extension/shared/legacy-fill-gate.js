@@ -1,13 +1,11 @@
 /**
- * Phase 0 — legacy client-fill gate (CYB-85).
+ * Phase 4.1 — legacy client-fill gate (permanently closed).
  *
- * Café default: only side-panel Fill. DISPATCH_JOB / Agent / OPEN_AND_DISPATCH
- * remain in tree for Phase 6 removal but must not run unless explicitly opted
- * in via chrome.storage.local:
- *   { allowLegacyClientFill: true }
+ * All legacy client-side brain/planning paths are disabled. The server-driven
+ * CcFillOrchestrator is the only fill execution path. This gate always returns
+ * false regardless of storage state.
  *
- * This module is pure (no chrome.*). Service worker and popup duplicate a thin
- * async wrapper that reads storage; unit tests import these helpers.
+ * This module is pure (no chrome.*). Unit tests import these helpers.
  */
 (function (root, factory) {
   if (typeof module !== 'undefined' && module.exports) {
@@ -44,8 +42,7 @@
       code: 'legacy_client_fill_disabled',
       error:
         name +
-        ' is disabled (Phase 0). Use side-panel Fill (server plan). ' +
-        'Owner emergency only: chrome.storage.local.set({ allowLegacyClientFill: true })',
+        ' is permanently disabled (Phase 4.1). Use side-panel Fill (server plan).',
     };
   }
 

@@ -58,18 +58,16 @@ context.window = context;
 context.self = context;
 context.globalThis = context;
 
-// Load scripts in the EXACT order popup.js injects them
+// Load scripts in the EXACT order popup.js injects them (legacy brain modules removed in Phase 4.1)
 const INJECTION_ORDER = [
   'shared/option-match.js',
   'shared/dom-utils.js',
   'shared/network-idle.js',
-  'shared/llm-client.js',
   'shared/select-apply.js',
   'autofill/plugins/interface.js',
   'autofill/plugins/cascade-select.js',
   'autofill/plugins/ng-dropdown.js',
   'autofill/plugins/keystroke-input.js',
-  'autofill/rule-engine.js',
 ];
 
 let passed = 0;
@@ -100,28 +98,12 @@ assert(typeof context.ccDomUtils === 'object', 'window.ccDomUtils exists');
 assert(typeof context.ccDomUtils.isVisible === 'function', 'window.ccDomUtils.isVisible is a function');
 assert(typeof context.ccDomUtils.getLabel === 'function', 'window.ccDomUtils.getLabel is a function');
 assert(typeof context.ccWaitForNetworkIdle === 'function', 'window.ccWaitForNetworkIdle is a function');
-assert(typeof context.ccLLM === 'object', 'window.ccLLM exists');
-assert(typeof context.ccLLM.call === 'function', 'window.ccLLM.call is a function');
-assert(typeof context.ccLLM.parseJSON === 'function', 'window.ccLLM.parseJSON is a function');
 assert(typeof context.ccApplySelect === 'function', 'window.ccApplySelect is a function');
 
 console.log('\n=== Option Matching (via shared) ===');
 assert(context.ccMatchOption('Male', ['Male', 'Female']) === 'Male', 'Direct: exact match');
 assert(context.ccMatchOption('Bihar', [{text:'Bihar',value:'5'},{text:'UP',value:'9'}]).value === '5', 'Direct: object match');
 assert(context.ccMatchOption('12th', ['Matriculation', 'Higher Secondary', 'Graduate']) === 'Higher Secondary', 'Direct: synonym match');
-
-console.log('\n=== Rule Engine Delegation ===');
-// rule-engine now calls window.ccMatchOption directly (no wrapper function)
-// Verify ccEvaluateField uses it for radio/dropdown option matching
-const ruleResult = context.ccMatchOption('Male', ['Male', 'Female']);
-assert(ruleResult === 'Male', 'window.ccMatchOption accessible after rule-engine loads');
-
-console.log('\n=== LLM Client ===');
-const parseResult = context.ccLLM.parseJSON('some text {"name":"test"} more text');
-assert(parseResult && parseResult.name === 'test', 'ccLLM.parseJSON extracts JSON from text');
-assert(context.ccLLM.parseJSON('no json here') === null, 'ccLLM.parseJSON returns null on no JSON');
-assert(context.ccLLM.parseJSON('```json\n{"a":1}\n```') && context.ccLLM.parseJSON('```json\n{"a":1}\n```').a === 1, 'ccLLM.parseJSON handles markdown fences');
-
 console.log('\n=== Network Idle ===');
 // Set up fake monitor data
 context.document.body.dataset.ccAjaxActive = '0';
