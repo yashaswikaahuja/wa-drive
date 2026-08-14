@@ -320,11 +320,31 @@ handlers.set('fill_plan_request', async (session, message, ctx) => {
       }
     }
 
-    // Classification
+    // Classification (with M4.12 learning prior)
     let classification = null;
     try {
       const domEvidence = Array.isArray(message.dom_evidence) ? message.dom_evidence : [];
-      classification = classifyFormBehavior({ snapshot, domEvidence, priorKnowledge: null, planSteps: planResult.plan?.steps || [] });
+      const { loadDoc, KEYS } = await import('./store.js');
+      const { effectiveClassification, isStale } = await import('./behavior-learning.js');
+      const scope = deriveScope(snapshot);
+      const behaviorKey = `${scope.portal_id || ''}:${scope.form_key || ''}`;
+      let priorKnowledge = null;
+      try {
+        const allMappings = await loadDoc(KEYS.MAPPINGS);
+        const formEntry = allMappings[behaviorKey] || allMappings[scope.form_key] || {};
+        if (formEntry._behavior) {
+          const record = formEntry._behavior;
+          const stale = isStale(record);
+          const effectiveClass = stale ? 'UNKNOWN' : effectiveClassification(record);
+          priorKnowledge = {
+            behavior: effectiveClass === 'DYNAMIC' ? 'dynamic' : (effectiveClass === 'STATIC' ? 'static' : null),
+            hard_evidence_count: record.hard_evidence_count || 0,
+            dynamic_incidents: record.hard_evidence_count || 0,
+            last_dynamic_at: record.last_dynamic_at || null,
+          };
+        }
+      } catch {}
+      classification = classifyFormBehavior({ snapshot, domEvidence, priorKnowledge, planSteps: planResult.plan?.steps || [] });
     } catch {
       classification = { system_classification: 'UNKNOWN', effective_execution_mode: 'dynamic', confidence: 0, reason_codes: ['classification_error'], evidence_summary: {} };
     }
@@ -361,12 +381,42 @@ handlers.set('fill_plan_request', async (session, message, ctx) => {
       planResult.diagnostics.original_step_count = orig;
     }
 
+    // Phase 4.13: HIM checkpoint — scan all steps for irreversible
+    let himCheckpoint = null;
+    if (plan?.steps?.length > 0) {
+      const { requiresHimCheckpoint, createCheckpointRequest } = await import('./him-adaptive-integration.js');
+      for (let i = 0; i < plan.steps.length; i++) {
+        if (requiresHimCheckpoint(plan.steps[i], plan.authorization || {})) {
+          if (i === 0) {
+            himCheckpoint = createCheckpointRequest({ session_id: planResult.session_id, plan_id: plan.plan_id, step: plan.steps[0] });
+          } else {
+            plan.steps = plan.steps.slice(0, i);
+            if (!planResult.diagnostics) planResult.diagnostics = {};
+            planResult.diagnostics.him_clamp_at = i;
+          }
+          break;
+        }
+      }
+    }
+
+    // Phase 4.14: Workflow linkage
+    if (message.workflow_id && planResult.session_id) {
+      try {
+        const { getWorkflow, linkFillSession } = await import('./workflow-session.js');
+        const wf = getWorkflow(message.workflow_id);
+        if (wf && (wf.status === 'active' || wf.status === 'fill_in_progress')) {
+          linkFillSession(message.workflow_id, planResult.session_id);
+        }
+      } catch {}
+    }
+
     send(session.sessionId, {
       type: 'fill_plan_response',
       plan,
       classification,
       plan_clamped: planClamped,
       static_bounded: staticBounded,
+      him_checkpoint: himCheckpoint,
       session: { id: planResult.session_id },
       diagnostics: planResult.diagnostics,
       superseded_plan_id: supersededPlanId,
@@ -432,6 +482,45 @@ handlers.set('fill_observation_wss', async (session, message, ctx) => {
     plan_id: planId,
     ref: message.id,
   });
+
+  // Phase 4.12: Behavior learning — same as HTTPS path
+  try {
+    const { isHardEvidenceType } = await import('./behavior-classifier.js');
+    const domEv = Array.isArray(observation.dom_evidence) ? observation.dom_evidence : [];
+    const hardCount = domEv.filter(e => isHardEvidenceType(e.type)).length;
+
+    if (hardCount > 0 || (observation.steps || []).every(s => s.status === 'succeeded')) {
+      const { mutateDoc, KEYS } = await import('./store.js');
+      const { getSession: getFillSession } = await import('./fill-session.js');
+      const fillSession = session_id ? getFillSession(session_id) : null;
+      let portalId = fillSession?.metadata?.portal_id || '';
+      let formKey = fillSession?.metadata?.form_key || '';
+      const behaviorKey = portalId ? `${portalId}:${formKey}` : formKey;
+
+      if (behaviorKey) {
+        if (hardCount > 0) {
+          const { recordDynamicEvidence } = await import('./behavior-learning.js');
+          const evidenceTypes = domEv.filter(e => isHardEvidenceType(e.type)).map(e => e.type);
+          await mutateDoc(KEYS.MAPPINGS, (all) => {
+            const form = all[behaviorKey] || {};
+            form._behavior = recordDynamicEvidence(form._behavior || null, { hard_count: hardCount, types: evidenceTypes });
+            all[behaviorKey] = form;
+            return all;
+          });
+        } else if ((observation.steps || []).length > 0 && (observation.steps || []).every(s => s.status === 'succeeded')) {
+          const { recordStaticSuccess } = await import('./behavior-learning.js');
+          await mutateDoc(KEYS.MAPPINGS, (all) => {
+            const form = all[behaviorKey] || {};
+            form._behavior = recordStaticSuccess(form._behavior || null);
+            all[behaviorKey] = form;
+            return all;
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[ws] behavior learning failed:', e.message);
+  }
 
   // Record via context handler if available
   if (ctx.recordObservation) {
