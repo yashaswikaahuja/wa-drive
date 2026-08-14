@@ -632,6 +632,10 @@ class DomEvidenceEmitter {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { DomEvidenceEmitter, EVIDENCE_TYPES, MAX_EVIDENCE_PER_PLAN };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcDomEvidence = DomEvidenceEmitter;
+  // Export a singleton instance so orchestrator can call startObserving/stopObserving directly
+  globalThis.CcDomEvidence = new DomEvidenceEmitter();
+  globalThis.CcDomEvidence.DomEvidenceEmitter = DomEvidenceEmitter;
+  globalThis.CcDomEvidence.EVIDENCE_TYPES = EVIDENCE_TYPES;
+  globalThis.CcDomEvidence.MAX_EVIDENCE_PER_PLAN = MAX_EVIDENCE_PER_PLAN;
 }
 })();
