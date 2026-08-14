@@ -116,6 +116,7 @@ function createMockWssServer() {
   let planRequestCount = 0;
   let observationCount = 0;
   let lastObservation = null;
+  let lastPlanRequest = null; // Track last plan request message for shape validation
   let planResponse = null; // Set by test to control what server returns
   let dynamicPlanQueue = []; // Queue of plan responses for dynamic turns
 
@@ -133,6 +134,12 @@ function createMockWssServer() {
 
       if (msg.type === 'fill_plan_request') {
         planRequestCount++;
+        lastPlanRequest = msg;
+        // Production shape: snapshot, profile, profileId etc. at TOP LEVEL
+        // Validate the production shape is used (not nested under 'body')
+        if (msg.body) {
+          console.warn('[mock] WARNING: fill_plan_request received nested body — production expects top-level fields');
+        }
         const response = dynamicPlanQueue.length > 0
           ? dynamicPlanQueue.shift()
           : (planResponse || { type: 'fill_plan_response', plan: null, fill_complete: true });
@@ -141,7 +148,14 @@ function createMockWssServer() {
       } else if (msg.type === 'fill_observation_wss') {
         observationCount++;
         lastObservation = msg.observation || msg;
-        ws.send(JSON.stringify({ type: 'observation_ack', ok: true, ref: msg.id }));
+        // Production responds with 'fill_observation_ack' (not 'observation_ack')
+        ws.send(JSON.stringify({
+          type: 'fill_observation_ack',
+          observation_id: msg.observation?.observation_id || null,
+          outcome: msg.observation?.outcome || null,
+          plan_id: msg.observation?.plan_id || null,
+          ref: msg.id,
+        }));
       } else if (msg.type === 'resume') {
         // Acknowledge resume
         ws.send(JSON.stringify({ type: 'resume_ack', ref: msg.id }));
@@ -165,9 +179,10 @@ function createMockWssServer() {
     get planRequestCount() { return planRequestCount; },
     get observationCount() { return observationCount; },
     get lastObservation() { return lastObservation; },
+    get lastPlanRequest() { return lastPlanRequest; },
     set planResponse(v) { planResponse = v; },
     set dynamicPlanQueue(v) { dynamicPlanQueue = v; },
-    reset() { planRequestCount = 0; observationCount = 0; lastObservation = null; planResponse = null; dynamicPlanQueue = []; },
+    reset() { planRequestCount = 0; observationCount = 0; lastObservation = null; lastPlanRequest = null; planResponse = null; dynamicPlanQueue = []; },
   };
 }
 
@@ -314,7 +329,7 @@ async function runTests() {
         });
 
         // Request plan
-        const planResp = await client.request('fill_plan_request', { body: planBody });
+        const planResp = await client.request('fill_plan_request', planBody);
         if (!planResp?.plan) return { error: 'no plan in response' };
 
         // Execute plan via APE
@@ -352,12 +367,16 @@ async function runTests() {
       ok(wssResult.obs?.outcome === 'completed', `WSS-STATIC: outcome=${wssResult.obs?.outcome}`);
       ok((wssResult.obs?.steps || []).filter(s => s.status === 'succeeded').length === 3,
         'WSS-STATIC: all 3 steps succeeded');
-      ok(wssResult.obsResp?.type === 'observation_ack', `WSS-STATIC: observation ack received`);
+      ok(wssResult.obsResp?.type === 'fill_observation_ack', `WSS-STATIC: observation ack received`);
       ok(wssResult.domValues?.v0 === 'WssVal0', `WSS-STATIC: DOM[0]="${wssResult.domValues?.v0}"`);
       ok(wssResult.domValues?.v1 === 'WssVal1', `WSS-STATIC: DOM[1]="${wssResult.domValues?.v1}"`);
       ok(wssResult.domValues?.v2 === 'WssVal2', `WSS-STATIC: DOM[2]="${wssResult.domValues?.v2}"`);
       ok(mockServer.planRequestCount === 1, `WSS-STATIC: server got 1 plan request (${mockServer.planRequestCount})`);
       ok(mockServer.observationCount === 1, `WSS-STATIC: server got 1 observation (${mockServer.observationCount})`);
+
+      // Protocol shape validation: plan request fields at TOP LEVEL (not nested under 'body')
+      ok(!mockServer.lastPlanRequest?.body, 'WSS-STATIC: plan request NOT nested under body (production shape)');
+      ok(mockServer.lastObservation?.kind === 'execution_observation', 'WSS-STATIC: observation at top level');
 
       await page.close();
     }
@@ -416,7 +435,7 @@ async function runTests() {
         });
 
         // Turn 1: request plan over WSS
-        const planResp1 = await client.request('fill_plan_request', { body: { turn: 0 } });
+        const planResp1 = await client.request('fill_plan_request', { turn: 0 });
         const plan = planResp1.plan;
         const clamped = planResp1.plan_clamped;
 
@@ -438,7 +457,7 @@ async function runTests() {
         const obsAck = await client.request('fill_observation_wss', { observation: obs });
 
         // Turn 2: request next plan (server says fill_complete)
-        const planResp2 = await client.request('fill_plan_request', { body: { turn: 1 } });
+        const planResp2 = await client.request('fill_plan_request', { turn: 1 });
 
         client.disconnect();
         return {
@@ -452,7 +471,7 @@ async function runTests() {
       ok(dynResult.turn1?.outcome === 'completed', 'WSS-DYNAMIC: turn 1 completed');
       ok(dynResult.turn1?.succeeded === 1, 'WSS-DYNAMIC: turn 1 = 1 step succeeded');
       ok(dynResult.turn1?.clamped === true, 'WSS-DYNAMIC: plan_clamped flag received over WSS');
-      ok(dynResult.obsAck === 'observation_ack', 'WSS-DYNAMIC: observation ack over WSS');
+      ok(dynResult.obsAck === 'fill_observation_ack', 'WSS-DYNAMIC: observation ack over WSS');
       ok(dynResult.turn2?.fill_complete === true, 'WSS-DYNAMIC: fill_complete on turn 2 over WSS');
       ok(dynResult.domValue === 'DynA', `WSS-DYNAMIC: DOM[0]="${dynResult.domValue}"`);
       ok(mockServer.planRequestCount === 2, `WSS-DYNAMIC: 2 plan requests on single connection (${mockServer.planRequestCount})`);
@@ -505,7 +524,7 @@ async function runTests() {
         });
 
         // Get plan from server
-        const planResp = await client.request('fill_plan_request', { body: {} });
+        const planResp = await client.request('fill_plan_request', {});
         const plan = planResp.plan;
 
         // Remove tail targets 60ms into execution
@@ -548,7 +567,7 @@ async function runTests() {
       ok(demResult.succeeded < 4, `WSS-DEMOTION: batch did NOT fully succeed (${demResult.succeeded}/4)`);
       ok(demResult.skipped + demResult.failed > 0, `WSS-DEMOTION: tail stopped (${demResult.skipped}s+${demResult.failed}f)`);
       ok(demResult.hasDemotion, 'WSS-DEMOTION: safety_demotion diagnostic present');
-      ok(demResult.obsAck === 'observation_ack', 'WSS-DEMOTION: observation ack over WSS');
+      ok(demResult.obsAck === 'fill_observation_ack', 'WSS-DEMOTION: observation ack over WSS');
       ok(mockServer.planRequestCount === 1, `WSS-DEMOTION: 1 plan request (${mockServer.planRequestCount})`);
       ok(mockServer.observationCount === 1, `WSS-DEMOTION: 1 observation received (${mockServer.observationCount})`);
 
@@ -631,7 +650,10 @@ async function runTests() {
         const mainSrc = orch?.runProductFill?.toString() || '';
         return {
           planHasType: planSrc.includes('fill_plan_request'),
+          planFlat: !planSrc.includes('{ body }') && !planSrc.includes('{body}'),
           obsHasType: obsSrc.includes('fill_observation_wss'),
+          obsUsesSessionId: obsSrc.includes('session_id'),
+          obsAcceptsFillAck: obsSrc.includes('fill_observation_ack'),
           mainHasWsClient: mainSrc.includes('_getOrCreateWsClient') || mainSrc.includes('wsClient'),
           mainHasFallback: mainSrc.includes('fetch') && mainSrc.includes('/fill-plan'),
           hasTransportResult: mainSrc.includes('usedTransport'),
@@ -639,7 +661,10 @@ async function runTests() {
       });
 
       ok(srcCheck.planHasType, 'SOURCE: _requestPlanViaWss uses fill_plan_request');
+      ok(srcCheck.planFlat, 'SOURCE: plan payload is flat (not nested under body)');
       ok(srcCheck.obsHasType, 'SOURCE: _reportObservationViaWss uses fill_observation_wss');
+      ok(srcCheck.obsUsesSessionId, 'SOURCE: observation uses session_id (production field name)');
+      ok(srcCheck.obsAcceptsFillAck, 'SOURCE: observation accepts fill_observation_ack');
       ok(srcCheck.mainHasWsClient, 'SOURCE: runProductFill references WsClient');
       ok(srcCheck.mainHasFallback, 'SOURCE: HTTPS fallback path retained');
       ok(srcCheck.hasTransportResult, 'SOURCE: transport indicator in result');
@@ -693,7 +718,7 @@ async function runTests() {
           client.connect();
         });
 
-        const planResp = await client.request('fill_plan_request', { body: {} });
+        const planResp = await client.request('fill_plan_request', {});
         const plan = planResp.plan;
 
         // Execute the stale plan — APE should reject it

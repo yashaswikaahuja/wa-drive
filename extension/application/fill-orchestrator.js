@@ -102,10 +102,13 @@ async function _ensureWsConnected(client, timeoutMs = 5000) {
 
 /**
  * Request a fill plan via WSS. Returns the plan response body or null on failure.
+ * Sends fields at TOP LEVEL to match production ws-handlers.js fill_plan_request handler.
  */
 async function _requestPlanViaWss(client, body) {
   try {
-    const response = await client.request('fill_plan_request', { body });
+    // Production handler expects: snapshot, profile, profileId, operator_execution_preference,
+    // session_id, workflow_id, dom_evidence — all at message top level (not nested under 'body')
+    const response = await client.request('fill_plan_request', body);
     if (response?.type === 'fill_plan_response' || response?.plan || response?.fill_complete != null) {
       return response;
     }
@@ -117,17 +120,17 @@ async function _requestPlanViaWss(client, body) {
 
 /**
  * Report an observation via WSS. Returns true on success.
+ * Sends fields at TOP LEVEL to match production ws-handlers.js fill_observation_wss handler.
  */
 async function _reportObservationViaWss(client, observation, meta) {
   try {
+    // Production handler expects: { observation, session_id } at top level
+    // Production responds with type: 'fill_observation_ack' (not 'observation_ack')
     const response = await client.request('fill_observation_wss', {
       observation,
-      sessionId: meta.sessionId || '',
-      plan_id: meta.planId || '',
-      correlation_id: meta.correlationId || '',
-      runtimeVersion: meta.runtimeVersion || '',
+      session_id: meta.sessionId || '',
     });
-    return response?.type === 'observation_ack' || response?.ok === true || response != null;
+    return response?.type === 'fill_observation_ack' || response?.type === 'observation_ack' || response?.ok === true;
   } catch (e) {
     return false;
   }
