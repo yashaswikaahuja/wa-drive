@@ -224,13 +224,17 @@ async function runProductFill(ctx) {
         const registry = globalThis.CcPerception?.getBindingRegistry?.();
         globalThis.CcDomEvidence.startObserving(actionPlan, registry);
       }
-      const observation = await globalThis.CcActionPlanExecutor.execute(actionPlan);
-      // Phase 4.2: stop observation and attach evidence
-      if (globalThis.CcDomEvidence?.stopObserving) {
-        globalThis.CcDomEvidence.stopObserving();
-        const evidence = globalThis.CcDomEvidence.getEvidence?.() || [];
-        if (evidence.length > 0 && observation) {
-          observation.dom_evidence = evidence;
+      let observation;
+      try {
+        observation = await globalThis.CcActionPlanExecutor.execute(actionPlan);
+      } finally {
+        // Phase 4.2: stop observation and attach evidence (even on throw)
+        if (globalThis.CcDomEvidence?.stopObserving) {
+          globalThis.CcDomEvidence.stopObserving();
+          const evidence = globalThis.CcDomEvidence.getEvidence?.() || [];
+          if (evidence.length > 0 && observation) {
+            observation.dom_evidence = evidence;
+          }
         }
       }
       return observation;
