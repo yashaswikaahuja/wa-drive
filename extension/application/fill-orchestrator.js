@@ -66,6 +66,7 @@ async function runProductFill(ctx) {
     accessToken,
     runtimeVersion,
     executionPreference,
+    workflowId,
     onProgress,
   } = ctx;
 
@@ -181,6 +182,7 @@ async function runProductFill(ctx) {
       snapshot: pageSnapshot,
       profileId: profile.id,
       operator_execution_preference: executionPreference || 'AUTO',
+      workflow_id: workflowId || undefined,
       profile: (() => {
         const flat = {};
         const raw = profile.data || profile;
@@ -564,6 +566,24 @@ async function runProductFill(ctx) {
   } else {
     const turnLabel = isDynamic && allRecords.length > 1 ? ` (${allRecords.length} turns)` : '';
     operatorMessage = `Fill complete: ${totalFilled} ok, ${totalFailed} failed, ${totalSkipped} skipped${turnLabel}`;
+  }
+
+  // ── Phase 4.14: Workflow task completion ──────────────────────────────
+  // Notify server that fill task completed (if workflow active).
+  if (workflowId && totalFailed === 0 && totalFilled > 0) {
+    try {
+      await fetch(backendUrl + '/workflow-complete-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+        body: JSON.stringify({
+          workflow_id: workflowId,
+          result: { filled: totalFilled, skipped: totalSkipped },
+        }),
+      });
+    } catch (e) {
+      // Non-fatal: workflow advance failure doesn't invalidate fill
+      console.warn('[CC] workflow task completion failed:', e.message);
+    }
   }
 
   return {

@@ -504,4 +504,30 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
   }
 });
 
+// ── POST /api/workflow-complete-task ─────────────────────────────────────
+// Extension notifies that a fill task completed within a workflow.
+// Advances to the next task in the workflow.
+router.post('/workflow-complete-task', authMiddleware, async (req, res) => {
+  try {
+    const { workflow_id, result } = req.body;
+    if (!workflow_id) {
+      return res.status(400).json({ error: 'workflow_id required' });
+    }
+    const { getWorkflow, completeCurrentTask } = await import('../workflow-session.js');
+    const wf = getWorkflow(workflow_id);
+    if (!wf) {
+      return res.status(404).json({ error: 'workflow not found' });
+    }
+    const { workflow, next_task } = completeCurrentTask(workflow_id, result || null);
+    return res.json({
+      workflow_id: workflow.workflow_id,
+      status: workflow.status,
+      completed_at: workflow.completed_at,
+      next_task: next_task ? { task_id: next_task.task_id, type: next_task.type, form_key: next_task.form_key } : null,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
