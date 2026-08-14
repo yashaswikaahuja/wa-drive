@@ -800,7 +800,8 @@ try {
   await testPageModel(browser);
   await testActionPlanRunner(browser);
   await testRunnerPrimary(browser);
-  await testDropdownSelection(browser);
+  // Phase 4.1: testDropdownSelection skipped — depends on deleted mapper.js fuzzyMatch
+  // Legacy dropdown selection is tested via ActionPlanExecutor product path instead.
   await testPhase1Completeness(browser);
 
 } catch (e) {
