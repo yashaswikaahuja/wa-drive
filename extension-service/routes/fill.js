@@ -181,18 +181,25 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       const domEvidence = Array.isArray(req.body.dom_evidence) ? req.body.dom_evidence : [];
 
       // Read prior behavior knowledge from durable store (written on observation)
+      // Phase 4.12: Use effectiveClassification + isStale for proper learning integration
       const behaviorKey = `${scope.portal_id || ''}:${scope.form_key || ''}`;
       let priorKnowledge = null;
       try {
         const { loadDoc, KEYS } = await import('../store.js');
+        const { effectiveClassification, isStale } = await import('../behavior-learning.js');
         const allMappings = await loadDoc(KEYS.MAPPINGS);
         const formEntry = allMappings[behaviorKey] || allMappings[scope.form_key] || {};
         if (formEntry._behavior) {
+          const record = formEntry._behavior;
+          const stale = isStale(record);
+          const effectiveClass = stale ? 'UNKNOWN' : effectiveClassification(record);
           priorKnowledge = {
-            behavior: formEntry._behavior.behavior || (formEntry._behavior.classification === 'DYNAMIC' ? 'dynamic' : null),
-            hard_evidence_count: formEntry._behavior.hard_evidence_count || 0,
-            dynamic_incidents: formEntry._behavior.hard_evidence_count || 0,
-            last_dynamic_at: formEntry._behavior.last_dynamic_at || null,
+            behavior: effectiveClass === 'DYNAMIC' ? 'dynamic' : (effectiveClass === 'STATIC' ? 'static' : null),
+            hard_evidence_count: record.hard_evidence_count || 0,
+            dynamic_incidents: record.hard_evidence_count || 0,
+            last_dynamic_at: record.last_dynamic_at || null,
+            confidence: record.confidence || 0,
+            stale,
           };
         }
       } catch (e) {
@@ -280,11 +287,42 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       planResult.diagnostics.original_step_count = originalCount;
     }
 
+    // ── Phase 4.14: Workflow linkage ──────────────────────────────────
+    // If client provides workflow_id, link fill session to active workflow task.
+    if (req.body.workflow_id && planResult.session_id) {
+      try {
+        const { getWorkflow, linkFillSession } = await import('../workflow-session.js');
+        const wf = getWorkflow(req.body.workflow_id);
+        if (wf && (wf.status === 'active' || wf.status === 'fill_in_progress')) {
+          linkFillSession(req.body.workflow_id, planResult.session_id);
+        }
+      } catch (e) {
+        console.warn('[fill-plan] workflow link failed:', e.message);
+      }
+    }
+
+    // ── Phase 4.13: HIM checkpoint for irreversible steps ─────────────
+    // If the first step is irreversible and not pre-confirmed, include
+    // a HIM checkpoint request so the extension can pause for operator confirmation.
+    let himCheckpoint = null;
+    if (plan?.steps?.length > 0) {
+      const { requiresHimCheckpoint, createCheckpointRequest } = await import('../him-adaptive-integration.js');
+      const firstStep = plan.steps[0];
+      if (requiresHimCheckpoint(firstStep, plan.authorization || {})) {
+        himCheckpoint = createCheckpointRequest({
+          session_id: planResult.session_id,
+          plan_id: plan.plan_id,
+          step: firstStep,
+        });
+      }
+    }
+
     return res.json({
       plan,
       classification,
       plan_clamped: planClamped,
       static_bounded: staticBounded,
+      him_checkpoint: himCheckpoint,
       session: { id: planResult.session_id },
       diagnostics: planResult.diagnostics,
     });
@@ -415,6 +453,39 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
         }
       } catch (e) {
         console.warn('[fill-observation] behavior prior update failed:', e.message);
+      }
+    }
+
+    // Phase 4.12: Record static success when all steps succeeded without hard evidence.
+    // This provides contradicting evidence that reduces dynamic confidence over time.
+    const allSucceeded = (internalObservation.steps || []).every(s => s.status === 'succeeded' || s.status === 'completed');
+    if (allSucceeded && hardCount === 0 && (internalObservation.steps || []).length > 0) {
+      try {
+        const { mutateDoc, KEYS } = await import('../store.js');
+        const { recordStaticSuccess } = await import('../behavior-learning.js');
+        const { getSession: getFillSession } = await import('../fill-session.js');
+        let portalId = '';
+        let formKey = '';
+        const fillSession = sessionId ? getFillSession(sessionId) : null;
+        if (fillSession?.metadata) {
+          portalId = fillSession.metadata.portal_id || '';
+          formKey = fillSession.metadata.form_key || '';
+        }
+        if (!portalId && !formKey) {
+          portalId = req.query.portal_id || '';
+          formKey = req.query.form_key || '';
+        }
+        const behaviorKey = portalId ? `${portalId}:${formKey}` : formKey;
+        if (behaviorKey) {
+          await mutateDoc(KEYS.MAPPINGS, (all) => {
+            const form = all[behaviorKey] || {};
+            form._behavior = recordStaticSuccess(form._behavior || null);
+            all[behaviorKey] = form;
+            return all;
+          });
+        }
+      } catch (e) {
+        console.warn('[fill-observation] static success record failed:', e.message);
       }
     }
 

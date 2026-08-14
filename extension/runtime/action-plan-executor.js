@@ -516,7 +516,9 @@ async function execute(plan) {
           const remainingNodeIds = new Set(remainingSteps.map(s => s.target?.node_id));
           if (remainingNodeIds.size > 0) {
             const invalidatesRemaining = hardEvidence.some(e => {
-              if (e.affected_node_id && remainingNodeIds.has(e.affected_node_id)) return true;
+              // DomEvidenceEmitter uses 'node_id' field (not 'affected_node_id')
+              const evidenceNodeId = e.node_id || e.affected_node_id || null;
+              if (evidenceNodeId && remainingNodeIds.has(evidenceNodeId)) return true;
               if (e.type === 'subtree_replaced' || e.type === 'cascade_triggered') return true;
               return false;
             });

@@ -61,44 +61,45 @@ function simulateDemotionCheck(evidence, remainingNodeIds) {
   if (hardEvidence.length === 0) return false;
   const remaining = new Set(remainingNodeIds);
   return hardEvidence.some(e => {
-    if (e.affected_node_id && remaining.has(e.affected_node_id)) return true;
+    const evidenceNodeId = e.node_id || e.node_id || null;
+    if (evidenceNodeId && remaining.has(evidenceNodeId)) return true;
     if (e.type === 'subtree_replaced' || e.type === 'cascade_triggered') return true;
     return false;
   });
 }
 
 test('cascade_triggered always invalidates remaining', () => {
-  const evidence = [{ type: 'cascade_triggered', affected_node_id: null }];
+  const evidence = [{ type: 'cascade_triggered', node_id: null }];
   ok(simulateDemotionCheck(evidence, ['node:b', 'node:c']) === true, 'cascade always demotes');
 });
 
 test('subtree_replaced always invalidates remaining', () => {
-  const evidence = [{ type: 'subtree_replaced', affected_node_id: null }];
+  const evidence = [{ type: 'subtree_replaced', node_id: null }];
   ok(simulateDemotionCheck(evidence, ['node:b']) === true, 'subtree always demotes');
 });
 
 test('control_removed for a remaining target → demotes', () => {
-  const evidence = [{ type: 'control_removed', affected_node_id: 'node:b' }];
+  const evidence = [{ type: 'control_removed', node_id: 'node:b' }];
   ok(simulateDemotionCheck(evidence, ['node:b', 'node:c']) === true, 'control_removed on remaining');
 });
 
 test('control_removed for an already-executed target → no demotion', () => {
-  const evidence = [{ type: 'control_removed', affected_node_id: 'node:a' }];
+  const evidence = [{ type: 'control_removed', node_id: 'node:a' }];
   ok(simulateDemotionCheck(evidence, ['node:b', 'node:c']) === false, 'not in remaining');
 });
 
 test('option_set_changed for remaining target → demotes', () => {
-  const evidence = [{ type: 'option_set_changed', affected_node_id: 'node:state' }];
+  const evidence = [{ type: 'option_set_changed', node_id: 'node:state' }];
   ok(simulateDemotionCheck(evidence, ['node:state', 'node:district']) === true, 'option changed on remaining');
 });
 
 test('widget_recreated for remaining target → demotes', () => {
-  const evidence = [{ type: 'widget_recreated', affected_node_id: 'node:c' }];
+  const evidence = [{ type: 'widget_recreated', node_id: 'node:c' }];
   ok(simulateDemotionCheck(evidence, ['node:c']) === true, 'widget recreated on remaining');
 });
 
 test('no hard evidence → no demotion', () => {
-  const evidence = [{ type: 'value_changed', affected_node_id: 'node:a' }];
+  const evidence = [{ type: 'value_changed', node_id: 'node:a' }];
   ok(simulateDemotionCheck(evidence, ['node:b', 'node:c']) === false, 'soft evidence ignored');
 });
 
@@ -161,7 +162,7 @@ test('operator STATIC + hard evidence → demotion still triggers', () => {
   // The demotion logic in executor is independent of operator preference.
   // Operator preference is irrelevant at execution time — it's a server-side merge concern.
   // The executor always stops on hard evidence regardless.
-  const evidence = [{ type: 'cascade_triggered', affected_node_id: null }];
+  const evidence = [{ type: 'cascade_triggered', node_id: null }];
   ok(simulateDemotionCheck(evidence, ['node:state']) === true,
     'operator preference does not prevent executor demotion');
 });
@@ -172,7 +173,7 @@ test('STATIC plan A,B,C where A causes cascade → B,C never execute', () => {
   // Plan: country(A), state(B), district(C)
   // After A executes, cascade_triggered evidence appears
   // Executor checks: hard evidence + remaining [B, C] → stop
-  const evidence = [{ type: 'cascade_triggered', affected_node_id: null }];
+  const evidence = [{ type: 'cascade_triggered', node_id: null }];
   const remaining = ['node:state', 'node:district'];
   ok(simulateDemotionCheck(evidence, remaining) === true, 'B and C stopped');
   // Fresh perception + dynamic continuation handles B and C one-by-one
