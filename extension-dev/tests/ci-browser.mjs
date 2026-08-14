@@ -19,6 +19,7 @@ const suites = [
   { name: 'Widget Classification Tests', cmd: 'node extension-dev/tests/browser/run-widget-classification.mjs' },
   { name: 'Relationship Lifecycle Tests', cmd: 'node extension-dev/tests/browser/run-relationship-lifecycle.mjs' },
   { name: 'ActionPlanExecutor v3 Product E2E', cmd: 'node extension-dev/tests/browser/run-action-plan-executor.mjs' },
+  { name: 'Adaptive Execution Matrix', cmd: 'node extension-dev/tests/browser/run-adaptive-execution.mjs' },
 ];
 
 let allPass = true;
