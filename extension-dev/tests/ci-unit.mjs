@@ -55,6 +55,7 @@ const suites = [
   { name: 'Safety Demotion Tests', cmd: 'node extension-dev/tests/test-safety-demotion.mjs' },
   { name: 'DOM Settle Tests', cmd: 'node extension-dev/tests/test-dom-settle.mjs' },
   { name: 'WSS Adaptive Transport Tests', cmd: 'node extension-dev/tests/test-wss-adaptive.mjs' },
+  { name: 'Performance Baseline Tests', cmd: 'node extension-dev/tests/test-performance-baseline.mjs' },
 ];
 
 let allPass = true;
