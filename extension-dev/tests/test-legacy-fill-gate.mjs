@@ -31,7 +31,7 @@ assert(gate.isLegacyClientFillAllowed({}) === false, 'empty storage → denied')
 assert(gate.isLegacyClientFillAllowed({ allowLegacyClientFill: false }) === false, 'false → denied');
 assert(gate.isLegacyClientFillAllowed({ allowLegacyClientFill: 'true' }) === false, 'string true → denied');
 assert(gate.isLegacyClientFillAllowed({ allowLegacyClientFill: 1 }) === false, 'number 1 → denied');
-assert(gate.isLegacyClientFillAllowed({ allowLegacyClientFill: true }) === true, 'true → allowed');
+assert(gate.isLegacyClientFillAllowed({ allowLegacyClientFill: true }) === false, 'true → permanently denied (Phase 4.1)');
 
 const denied = gate.legacyClientFillDenied('DISPATCH_JOB');
 assert(denied.ok === false, 'denied.ok is false');

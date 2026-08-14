@@ -22,12 +22,15 @@
   const STORAGE_KEY = 'allowLegacyClientFill';
 
   /**
-   * @param {object|null|undefined} storageSlice - result of storage.local.get
-   * @returns {boolean} true only when flag is strictly true
+   * Phase 4.1: Legacy client-side brain paths are permanently disabled.
+   * The server-driven product Fill (CcFillOrchestrator) is the only execution path.
+   * This gate always returns false regardless of storage state.
+   *
+   * @param {object|null|undefined} _storageSlice - ignored (kept for API compat)
+   * @returns {boolean} always false
    */
-  function isLegacyClientFillAllowed(storageSlice) {
-    if (!storageSlice || typeof storageSlice !== 'object') return false;
-    return storageSlice[STORAGE_KEY] === true || storageSlice.allowLegacyClientFill === true;
+  function isLegacyClientFillAllowed(_storageSlice) {
+    return false;
   }
 
   /**
