@@ -34,8 +34,109 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
 ]);
 
 /**
- * Run product fill: perceive → /fill-plan → ActionPlanExecutor → /fill-observation.
+ * Derive a WSS URL from a backend HTTPS URL.
+ * e.g. https://api.cybercontrol.fun → wss://api.cybercontrol.fun/ws
+ *      http://localhost:3000 → ws://localhost:3000/ws
+ */
+function deriveWsUrl(backendUrl) {
+  const url = new URL(backendUrl);
+  url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:';
+  url.pathname = url.pathname.replace(/\/$/, '') + '/ws';
+  return url.toString();
+}
+
+/**
+ * Get or create a shared WsClient instance for the given backend.
+ * Reuses existing connection if already connected.
+ * @returns {WsClient|null}
+ */
+let _sharedWsClient = null;
+let _sharedWsUrl = null;
+
+function _getOrCreateWsClient(backendUrl, accessToken) {
+  const WsClientCtor = (typeof globalThis !== 'undefined' && globalThis.CcWsClient) || null;
+  if (!WsClientCtor) return null;
+
+  const wsUrl = deriveWsUrl(backendUrl);
+  if (_sharedWsClient && _sharedWsUrl === wsUrl && _sharedWsClient.state === 'connected') {
+    return _sharedWsClient;
+  }
+  // Disconnect old if URL changed
+  if (_sharedWsClient && _sharedWsUrl !== wsUrl) {
+    _sharedWsClient.disconnect();
+    _sharedWsClient = null;
+  }
+  if (!_sharedWsClient) {
+    _sharedWsClient = new WsClientCtor({ url: wsUrl, token: accessToken });
+    _sharedWsUrl = wsUrl;
+  }
+  return _sharedWsClient;
+}
+
+/**
+ * Attempt to connect WsClient (with timeout). Returns true if connected.
+ */
+async function _ensureWsConnected(client, timeoutMs = 5000) {
+  if (client.state === 'connected') return true;
+  return new Promise((resolve) => {
+    const origOnState = client._onStateChange;
+    const timer = setTimeout(() => {
+      client._onStateChange = origOnState;
+      resolve(false);
+    }, timeoutMs);
+    client._onStateChange = (state) => {
+      if (origOnState) origOnState(state);
+      if (state === 'connected') {
+        clearTimeout(timer);
+        client._onStateChange = origOnState;
+        resolve(true);
+      } else if (state === 'suspended' || state === 'disconnected') {
+        clearTimeout(timer);
+        client._onStateChange = origOnState;
+        resolve(false);
+      }
+    };
+    client.connect();
+  });
+}
+
+/**
+ * Request a fill plan via WSS. Returns the plan response body or null on failure.
+ */
+async function _requestPlanViaWss(client, body) {
+  try {
+    const response = await client.request('fill_plan_request', { body });
+    if (response?.type === 'fill_plan_response' || response?.plan || response?.fill_complete != null) {
+      return response;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Report an observation via WSS. Returns true on success.
+ */
+async function _reportObservationViaWss(client, observation, meta) {
+  try {
+    const response = await client.request('fill_observation_wss', {
+      observation,
+      sessionId: meta.sessionId || '',
+      plan_id: meta.planId || '',
+      correlation_id: meta.correlationId || '',
+      runtimeVersion: meta.runtimeVersion || '',
+    });
+    return response?.type === 'observation_ack' || response?.ok === true || response != null;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Run product fill: perceive → plan → ActionPlanExecutor → observation.
  * Phase 4.6: Dynamic mode loops one step at a time until fill_complete or failure.
+ * Phase 4.10: WSS adaptive transport — auto/wss/https with HTTPS fallback.
  *
  * @param {object} ctx
  * @param {number} ctx.tabId
@@ -44,6 +145,7 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
  * @param {string} ctx.accessToken
  * @param {string} ctx.runtimeVersion
  * @param {string} [ctx.executionPreference] - AUTO | STATIC | DYNAMIC (default AUTO)
+ * @param {string} [ctx.transport] - 'auto' | 'wss' | 'https' (default 'auto')
  * @param {(text: string, pct?: number) => void} [ctx.onProgress]
  * @returns {Promise<{
  *   ok: boolean,
@@ -66,9 +168,13 @@ async function runProductFill(ctx) {
     accessToken,
     runtimeVersion,
     executionPreference,
+    transport: transportOption,
     workflowId,
     onProgress,
   } = ctx;
+
+  const transport = transportOption || 'auto'; // 'auto' | 'wss' | 'https'
+  let usedTransport = 'https'; // Track which transport was actually used
 
   const progress = (t, p) => {
     if (typeof onProgress === 'function') onProgress(t, p);
@@ -175,36 +281,65 @@ async function runProductFill(ctx) {
   }
 
   progress('Server planning fill...', 55);
-  const planResponse = await fetch(backendUrl + '/fill-plan', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-    body: JSON.stringify({
-      snapshot: pageSnapshot,
-      profileId: profile.id,
-      operator_execution_preference: executionPreference || 'AUTO',
-      workflow_id: workflowId || undefined,
-      profile: (() => {
-        const flat = {};
-        const raw = profile.data || profile;
-        for (const [k, v] of Object.entries(raw)) {
-          flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
-        }
-        if (profile.name) flat.name = flat.name || profile.name;
-        return flat;
-      })(),
-    }),
-  });
 
-  if (!planResponse.ok) {
-    return {
-      ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null,
-      operatorMessage: opMsg('gateway_error', 'Server plan failed'),
-      error: 'plan_http_' + planResponse.status,
-      pageSnapshot,
-    };
+  // ── Transport-aware plan request (WSS preferred in auto/wss) ──────
+  const planRequestBody = {
+    snapshot: pageSnapshot,
+    profileId: profile.id,
+    operator_execution_preference: executionPreference || 'AUTO',
+    workflow_id: workflowId || undefined,
+    profile: (() => {
+      const flat = {};
+      const raw = profile.data || profile;
+      for (const [k, v] of Object.entries(raw)) {
+        flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+      }
+      if (profile.name) flat.name = flat.name || profile.name;
+      return flat;
+    })(),
+  };
+
+  let planBody = null;
+  let wsClient = null;
+
+  if (transport === 'auto' || transport === 'wss') {
+    wsClient = _getOrCreateWsClient(backendUrl, accessToken);
+    if (wsClient) {
+      const connected = await _ensureWsConnected(wsClient);
+      if (connected) {
+        planBody = await _requestPlanViaWss(wsClient, planRequestBody);
+        if (planBody) usedTransport = 'wss';
+      }
+    }
   }
 
-  const planBody = await planResponse.json();
+  // HTTPS fallback (or primary if transport === 'https')
+  if (!planBody) {
+    if (transport === 'wss') {
+      // Strict WSS mode — no fallback
+      return {
+        ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null,
+        operatorMessage: opMsg('gateway_error', 'WSS connection failed (no fallback)'),
+        error: 'wss_unavailable', transport: 'wss',
+      };
+    }
+    const planResponse = await fetch(backendUrl + '/fill-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+      body: JSON.stringify(planRequestBody),
+    });
+
+    if (!planResponse.ok) {
+      return {
+        ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null,
+        operatorMessage: opMsg('gateway_error', 'Server plan failed'),
+        error: 'plan_http_' + planResponse.status,
+        pageSnapshot, transport: usedTransport,
+      };
+    }
+    planBody = await planResponse.json();
+    usedTransport = 'https';
+  }
   let plan = planBody.plan || planBody.action_plan || planBody;
   if (!plan || !plan.steps || plan.steps.length === 0) {
     if (planBody.fill_complete) {
@@ -366,27 +501,38 @@ async function runProductFill(ctx) {
       if (!lastPageSnapshot || lastPageSnapshot.kind !== 'page_snapshot') break;
 
       progress(`Dynamic turn ${turn + 1}: re-planning...`, 55 + turn);
-      const rePlanResponse = await fetch(backendUrl + '/fill-plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-        body: JSON.stringify({
-          snapshot: lastPageSnapshot,
-          profileId: profile.id,
-          operator_execution_preference: executionPreference || 'AUTO',
-          session_id: sessionId,
-          profile: (() => {
-            const flat = {};
-            const raw = profile.data || profile;
-            for (const [k, v] of Object.entries(raw)) {
-              flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
-            }
-            if (profile.name) flat.name = flat.name || profile.name;
-            return flat;
-          })(),
-        }),
-      });
-      if (!rePlanResponse.ok) break;
-      const rePlanBody = await rePlanResponse.json();
+
+      // Transport-aware re-plan
+      const rePlanRequestBody = {
+        snapshot: lastPageSnapshot,
+        profileId: profile.id,
+        operator_execution_preference: executionPreference || 'AUTO',
+        session_id: sessionId,
+        profile: (() => {
+          const flat = {};
+          const raw = profile.data || profile;
+          for (const [k, v] of Object.entries(raw)) {
+            flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+          }
+          if (profile.name) flat.name = flat.name || profile.name;
+          return flat;
+        })(),
+      };
+
+      let rePlanBody = null;
+      if (usedTransport === 'wss' && wsClient && wsClient.state === 'connected') {
+        rePlanBody = await _requestPlanViaWss(wsClient, rePlanRequestBody);
+      }
+      if (!rePlanBody && transport !== 'wss') {
+        const rePlanResponse = await fetch(backendUrl + '/fill-plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+          body: JSON.stringify(rePlanRequestBody),
+        });
+        if (!rePlanResponse.ok) break;
+        rePlanBody = await rePlanResponse.json();
+      }
+      if (!rePlanBody) break;
       if (rePlanBody.fill_complete) break;
       plan = rePlanBody.plan || rePlanBody.action_plan || rePlanBody;
       if (!plan || !plan.steps || plan.steps.length === 0) break;
@@ -485,23 +631,40 @@ async function runProductFill(ctx) {
       break;
     }
 
-    // Report observation to server
+    // Report observation to server (WSS preferred, HTTPS fallback)
     let observationError = null;
-    try {
-      const query = new URLSearchParams({
-        sessionId: sessionId || '',
-        plan_id: plan.plan_id || '',
-        correlation_id: plan.correlation_id || '',
-        runtimeVersion: runtimeVersion || '',
-      });
-      const reportResponse = await fetch(backendUrl + '/fill-observation?' + query.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-        body: JSON.stringify(executionObservation),
-      });
-      if (!reportResponse.ok) observationError = 'HTTP ' + reportResponse.status;
-    } catch (e) {
-      observationError = e.message;
+    const obsMeta = {
+      sessionId: sessionId || '',
+      planId: plan.plan_id || '',
+      correlationId: plan.correlation_id || '',
+      runtimeVersion: runtimeVersion || '',
+    };
+
+    let obsReported = false;
+    if (usedTransport === 'wss' && wsClient && wsClient.state === 'connected') {
+      obsReported = await _reportObservationViaWss(wsClient, executionObservation, obsMeta);
+    }
+
+    if (!obsReported && transport !== 'wss') {
+      // HTTPS fallback for observation
+      try {
+        const query = new URLSearchParams({
+          sessionId: obsMeta.sessionId,
+          plan_id: obsMeta.planId,
+          correlation_id: obsMeta.correlationId,
+          runtimeVersion: obsMeta.runtimeVersion,
+        });
+        const reportResponse = await fetch(backendUrl + '/fill-observation?' + query.toString(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+          body: JSON.stringify(executionObservation),
+        });
+        if (!reportResponse.ok) observationError = 'HTTP ' + reportResponse.status;
+      } catch (e) {
+        observationError = e.message;
+      }
+    } else if (!obsReported && transport === 'wss') {
+      observationError = 'WSS observation report failed (no fallback)';
     }
     lastObservationError = observationError;
 
@@ -559,27 +722,36 @@ async function runProductFill(ctx) {
         lastPageSnapshot = rePercResult?.result;
         if (!lastPageSnapshot || lastPageSnapshot.kind !== 'page_snapshot') break;
 
-        const rePlanResponse = await fetch(backendUrl + '/fill-plan', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-          body: JSON.stringify({
-            snapshot: lastPageSnapshot,
-            profileId: profile.id,
-            operator_execution_preference: 'DYNAMIC',
-            session_id: sessionId,
-            profile: (() => {
-              const flat = {};
-              const raw = profile.data || profile;
-              for (const [k, v] of Object.entries(raw)) {
-                flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
-              }
-              if (profile.name) flat.name = flat.name || profile.name;
-              return flat;
-            })(),
-          }),
-        });
-        if (!rePlanResponse.ok) break;
-        const rePlanBody = await rePlanResponse.json();
+        const demotionRePlanBody_payload = {
+          snapshot: lastPageSnapshot,
+          profileId: profile.id,
+          operator_execution_preference: 'DYNAMIC',
+          session_id: sessionId,
+          profile: (() => {
+            const flat = {};
+            const raw = profile.data || profile;
+            for (const [k, v] of Object.entries(raw)) {
+              flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+            }
+            if (profile.name) flat.name = flat.name || profile.name;
+            return flat;
+          })(),
+        };
+
+        let rePlanBody = null;
+        if (usedTransport === 'wss' && wsClient && wsClient.state === 'connected') {
+          rePlanBody = await _requestPlanViaWss(wsClient, demotionRePlanBody_payload);
+        }
+        if (!rePlanBody && transport !== 'wss') {
+          const rePlanResponse = await fetch(backendUrl + '/fill-plan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+            body: JSON.stringify(demotionRePlanBody_payload),
+          });
+          if (!rePlanResponse.ok) break;
+          rePlanBody = await rePlanResponse.json();
+        }
+        if (!rePlanBody) break;
         if (rePlanBody.fill_complete) break;
         const dynPlan = rePlanBody.plan || rePlanBody.action_plan || rePlanBody;
         if (!dynPlan || !dynPlan.steps || dynPlan.steps.length === 0) break;
@@ -609,12 +781,19 @@ async function runProductFill(ctx) {
         if (!dynObs || dynObs.kind !== 'execution_observation') break;
 
         try {
-          const q = new URLSearchParams({ sessionId: sessionId || '', plan_id: dynPlan.plan_id || '', correlation_id: dynPlan.correlation_id || '', runtimeVersion: runtimeVersion || '' });
-          await fetch(backendUrl + '/fill-observation?' + q.toString(), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-            body: JSON.stringify(dynObs),
-          });
+          const dynObsMeta = { sessionId: sessionId || '', planId: dynPlan.plan_id || '', correlationId: dynPlan.correlation_id || '', runtimeVersion: runtimeVersion || '' };
+          let dynObsReported = false;
+          if (usedTransport === 'wss' && wsClient && wsClient.state === 'connected') {
+            dynObsReported = await _reportObservationViaWss(wsClient, dynObs, dynObsMeta);
+          }
+          if (!dynObsReported && transport !== 'wss') {
+            const q = new URLSearchParams({ sessionId: sessionId || '', plan_id: dynPlan.plan_id || '', correlation_id: dynPlan.correlation_id || '', runtimeVersion: runtimeVersion || '' });
+            await fetch(backendUrl + '/fill-observation?' + q.toString(), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+              body: JSON.stringify(dynObs),
+            });
+          }
         } catch (e) { lastObservationError = e.message; }
 
         const dynSteps = dynObs.steps || [];
@@ -682,10 +861,11 @@ async function runProductFill(ctx) {
     observationError: lastObservationError,
     operatorMessage,
     nextTask,
+    transport: usedTransport,
   };
 }
 
-const api = { PRODUCT_PATH_SCRIPTS, runProductFill };
+const api = { PRODUCT_PATH_SCRIPTS, runProductFill, deriveWsUrl, _getOrCreateWsClient, _ensureWsConnected, _requestPlanViaWss, _reportObservationViaWss };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else globalThis.CcFillOrchestrator = api;
 })();

@@ -21,6 +21,7 @@ const suites = [
   { name: 'ActionPlanExecutor v3 Product E2E', cmd: 'node extension-dev/tests/browser/run-action-plan-executor.mjs' },
   { name: 'Adaptive Execution Matrix', cmd: 'node extension-dev/tests/browser/run-adaptive-execution.mjs' },
   { name: 'Product Integration', cmd: 'node extension-dev/tests/browser/run-product-integration.mjs' },
+  { name: 'WSS Integration (M4.10)', cmd: 'node extension-dev/tests/browser/run-product-path-wss.mjs' },
 ];
 
 let allPass = true;
