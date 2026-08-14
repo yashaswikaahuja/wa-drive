@@ -22,6 +22,7 @@ const suites = [
   { name: 'Adaptive Execution Matrix', cmd: 'node extension-dev/tests/browser/run-adaptive-execution.mjs' },
   { name: 'Product Integration', cmd: 'node extension-dev/tests/browser/run-product-integration.mjs' },
   { name: 'WSS Integration (M4.10)', cmd: 'node extension-dev/tests/browser/run-product-path-wss.mjs' },
+  { name: 'Workflow Integration (M4.14)', cmd: 'node extension-dev/tests/browser/run-workflow-integration.mjs' },
 ];
 
 let allPass = true;

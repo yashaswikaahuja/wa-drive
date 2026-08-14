@@ -30,6 +30,7 @@ import validateRouter from './routes/validate.js';
 import versionsRouter from './routes/versions.js';
 import syncRouter from './routes/sync.js';
 import fillRouter from './routes/fill.js';
+import workflowRouter from './routes/workflow.js';
 import { ensureSchema } from './store.js';
 import { ensureKnowledgeSchema } from './knowledge-store.js';
 
@@ -74,6 +75,8 @@ app.use('/api/versions', versionsRouter);
 app.use('/api/sync', syncRouter);
 // ActionPlan v3 product path: POST /api/fill-plan, POST /api/fill-observation
 app.use('/api', fillRouter);
+// Phase 4.14: Workflow continuity — POST /api/workflow-create, POST /api/workflow-complete-task
+app.use('/api', workflowRouter);
 
 // 404 fallthrough
 app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
