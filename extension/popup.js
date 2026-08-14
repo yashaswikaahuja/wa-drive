@@ -8,6 +8,7 @@ let _extBuildInfo = null;
 const profilesEl = document.getElementById('profiles');
 const searchEl = document.getElementById('search');
 const fillBtn = document.getElementById('fill-btn');
+const modeSelect = document.getElementById('mode-select');
 const agentBtn = document.getElementById('agent-btn');
 const agentPanel = document.getElementById('agent-panel');
 const agentActionsEl = document.getElementById('agent-actions');
@@ -543,6 +544,7 @@ fillBtn.addEventListener('click', async () => {
       backendUrl: data.backendUrl,
       accessToken: data.accessToken,
       runtimeVersion: VERSION,
+      executionPreference: modeSelect ? modeSelect.value : 'AUTO',
       onProgress: (text, pct) => updateProgress(text, pct),
     });
 

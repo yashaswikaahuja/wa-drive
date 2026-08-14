@@ -41,6 +41,7 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
  * @param {string} ctx.backendUrl
  * @param {string} ctx.accessToken
  * @param {string} ctx.runtimeVersion
+ * @param {string} [ctx.executionPreference] - AUTO | STATIC | DYNAMIC (default AUTO)
  * @param {(text: string, pct?: number) => void} [ctx.onProgress]
  * @returns {Promise<{
  *   ok: boolean,
@@ -63,6 +64,7 @@ async function runProductFill(ctx) {
     backendUrl,
     accessToken,
     runtimeVersion,
+    executionPreference,
     onProgress,
   } = ctx;
 
@@ -177,6 +179,7 @@ async function runProductFill(ctx) {
     body: JSON.stringify({
       snapshot: pageSnapshot,
       profileId: profile.id,
+      operator_execution_preference: executionPreference || 'AUTO',
       profile: (() => {
         const flat = {};
         const raw = profile.data || profile;

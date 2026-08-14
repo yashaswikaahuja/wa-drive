@@ -476,6 +476,19 @@
       gap: 8px;
       padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
     }
+    #mode-select {
+      height: 40px;
+      padding: 0 8px;
+      border: 1px solid var(--cc-border, #e0e0e0);
+      border-radius: 999px;
+      font-size: 12px;
+      font-family: inherit;
+      background: var(--cc-bg, #fff);
+      color: var(--cc-text, #222);
+      cursor: pointer;
+      outline: none;
+    }
+    #mode-select:focus { border-color: var(--cc-accent, #4f46e5); }
     #fill-btn {
       flex: 1;
       height: 40px;
@@ -667,6 +680,11 @@
   <div id="status"></div>
 
   <div class="footer">
+    <select id="mode-select" title="Execution mode preference">
+      <option value="AUTO" selected>Auto</option>
+      <option value="STATIC">Static</option>
+      <option value="DYNAMIC">Dynamic</option>
+    </select>
     <button id="fill-btn" disabled>⚡ Fill Form</button>
     <button id="undo-btn" class="icon-btn" style="display:none" title="Undo last fill">↩</button>
     <button id="agent-btn" class="icon-btn" disabled title="AI Agent">🤖</button>
