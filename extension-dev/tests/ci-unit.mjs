@@ -57,6 +57,7 @@ const suites = [
   { name: 'WSS Adaptive Transport Tests', cmd: 'node extension-dev/tests/test-wss-adaptive.mjs' },
   { name: 'Performance Baseline Tests', cmd: 'node extension-dev/tests/test-performance-baseline.mjs' },
   { name: 'Behavior Learning Tests', cmd: 'node extension-dev/tests/test-behavior-learning.mjs' },
+  { name: 'HIM Adaptive Integration Tests', cmd: 'node extension-dev/tests/test-him-adaptive.mjs' },
 ];
 
 let allPass = true;
