@@ -45,6 +45,7 @@ const suites = [
   { name: 'Runtime Errors Catalog (3.7)', cmd: 'node extension-dev/tests/test-runtime-errors.mjs' },
   { name: 'Perception Unit Tests', cmd: 'node extension-dev/tests/perception/run-perception-unit.mjs' },
   { name: 'WSS Protocol Tests', cmd: 'node extension-dev/tests/test-wss-protocol.mjs' },
+  { name: 'HIM Runtime Tests', cmd: 'node extension-dev/tests/test-him-runtime.mjs' },
 ];
 
 let allPass = true;
