@@ -650,9 +650,10 @@ async function runProductFill(ctx) {
 
   // ── Phase 4.14: Workflow task completion ──────────────────────────────
   // Notify server that fill task completed (if workflow active).
+  let nextTask = null;
   if (workflowId && totalFailed === 0 && totalFilled > 0) {
     try {
-      await fetch(backendUrl + '/workflow-complete-task', {
+      const wfResponse = await fetch(backendUrl + '/workflow-complete-task', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
         body: JSON.stringify({
@@ -660,6 +661,10 @@ async function runProductFill(ctx) {
           result: { filled: totalFilled, skipped: totalSkipped },
         }),
       });
+      if (wfResponse.ok) {
+        const wfResult = await wfResponse.json();
+        nextTask = wfResult.next_task || null;
+      }
     } catch (e) {
       // Non-fatal: workflow advance failure doesn't invalidate fill
       console.warn('[CC] workflow task completion failed:', e.message);
@@ -676,6 +681,7 @@ async function runProductFill(ctx) {
     records: allRecords,
     observationError: lastObservationError,
     operatorMessage,
+    nextTask,
   };
 }
 

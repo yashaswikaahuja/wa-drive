@@ -582,6 +582,28 @@ fillBtn.addEventListener('click', async () => {
       hideProgress();
       return;
     }
+
+    // Phase 4.14: Auto-create workflow for the customer session if not active
+    if (!window._ccActiveWorkflowId && data.backendUrl) {
+      try {
+        const wfResponse = await fetch(data.backendUrl + '/workflow-create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.accessToken },
+          body: JSON.stringify({
+            customer_id: selectedProfile?.id || null,
+            profile_id: selectedProfile?.id || null,
+            tasks: [{ type: 'fill', form_key: tab.url || null, portal_id: new URL(tab.url).hostname }],
+          }),
+        });
+        if (wfResponse.ok) {
+          const wfData = await wfResponse.json();
+          window._ccActiveWorkflowId = wfData.workflow_id || null;
+        }
+      } catch (e) {
+        // Non-fatal: fill works without workflow
+        console.warn('[CC] workflow create failed:', e.message);
+      }
+    }
     const fillOut = await globalThis.CcFillOrchestrator.runProductFill({
       tabId: tab.id,
       profile: selectedProfile,
@@ -589,6 +611,7 @@ fillBtn.addEventListener('click', async () => {
       accessToken: data.accessToken,
       runtimeVersion: VERSION,
       executionPreference: modeSelect ? modeSelect.value : 'AUTO',
+      workflowId: window._ccActiveWorkflowId || undefined,
       onProgress: (text, pct) => updateProgress(text, pct),
     });
 
@@ -614,6 +637,15 @@ fillBtn.addEventListener('click', async () => {
       if (sanitized) statusMsg = fillOut.operatorMessage || sanitized;
     }
     showStatus(statusMsg, statusColor);
+
+    // Phase 4.14: Show next task if workflow has more tasks
+    if (fillOut.nextTask) {
+      const nextInfo = fillOut.nextTask;
+      const nextLabel = nextInfo.form_key || nextInfo.type || 'next form';
+      showStatus(`${statusMsg} — Next: ${nextLabel}`, statusColor);
+      // Store next task for potential auto-navigate
+      window._ccNextTask = nextInfo;
+    }
   } catch (e) {
     const errApi = globalThis.CcRuntimeErrors;
     const msg = errApi?.operatorMessageFor

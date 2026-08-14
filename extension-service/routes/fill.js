@@ -517,6 +517,28 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
   }
 });
 
+// ── POST /api/workflow-create ────────────────────────────────────────────
+// Phase 4.14: Create a new workflow session for a customer.
+router.post('/workflow-create', authMiddleware, async (req, res) => {
+  try {
+    const { customer_id, profile_id, tasks } = req.body;
+    const { createWorkflow } = await import('../workflow-session.js');
+    const wf = createWorkflow({
+      workspace_id: req.user.workspaceId,
+      customer_id: customer_id || null,
+      profile_id: profile_id || null,
+      tasks: Array.isArray(tasks) ? tasks : [],
+    });
+    return res.json({
+      workflow_id: wf.workflow_id,
+      status: wf.status,
+      tasks: wf.tasks.map(t => ({ task_id: t.task_id, type: t.type, form_key: t.form_key, status: t.status })),
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/him-validate-resume ────────────────────────────────────────
 // Phase 4.13: Validates whether execution can safely resume after HIM pause.
 // Checks plan still active + document unchanged + revision for re-perception.
