@@ -30,6 +30,7 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
   'perception/index.js',
   'runtime/action-plan-executor.js',
   'runtime/dom-evidence.js',
+  'runtime/dom-settle.js',
 ]);
 
 /**
@@ -233,6 +234,19 @@ async function runProductFill(ctx) {
 
   for (let turn = 0; turn < (isDynamic ? MAX_DYNAMIC_TURNS : 1); turn++) {
     if (turn > 0) {
+      progress(`Dynamic turn ${turn + 1}: stabilizing...`, 48 + turn);
+      // Phase 4.8: Wait for DOM to settle before re-perception
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        func: async () => {
+          if (globalThis.CcDomSettle?.waitForSettle) {
+            await globalThis.CcDomSettle.waitForSettle();
+          } else {
+            // Fallback: fixed delay if settle module not loaded
+            await new Promise(r => setTimeout(r, 400));
+          }
+        },
+      });
       progress(`Dynamic turn ${turn + 1}: re-perceiving...`, 50 + turn);
       const [rePercResult] = await chrome.scripting.executeScript({
         target: { tabId },
@@ -368,6 +382,17 @@ async function runProductFill(ctx) {
       const remainingTurns = MAX_DYNAMIC_TURNS - turn - 1;
       for (let dynTurn = 0; dynTurn < remainingTurns; dynTurn++) {
         progress(`Safety demotion: dynamic turn ${dynTurn + 1}...`, 50 + dynTurn);
+        // Phase 4.8: Wait for DOM to settle before re-perception
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: async () => {
+            if (globalThis.CcDomSettle?.waitForSettle) {
+              await globalThis.CcDomSettle.waitForSettle();
+            } else {
+              await new Promise(r => setTimeout(r, 400));
+            }
+          },
+        });
         const [rePercResult] = await chrome.scripting.executeScript({
           target: { tabId },
           func: async () => {

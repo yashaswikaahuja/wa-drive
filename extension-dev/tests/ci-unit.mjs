@@ -53,6 +53,7 @@ const suites = [
   { name: 'Static Bounds Tests', cmd: 'node extension-dev/tests/test-static-bounds.mjs' },
   { name: 'Dynamic Loop Tests', cmd: 'node extension-dev/tests/test-dynamic-loop.mjs' },
   { name: 'Safety Demotion Tests', cmd: 'node extension-dev/tests/test-safety-demotion.mjs' },
+  { name: 'DOM Settle Tests', cmd: 'node extension-dev/tests/test-dom-settle.mjs' },
 ];
 
 let allPass = true;
