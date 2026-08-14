@@ -4,6 +4,7 @@ import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } fr
 import { mapUnknownFields } from '../semantic-mapper.js';
 import { persistExecutionEvidence } from '../execution-evidence.js';
 import { classifyFormBehavior, isHardEvidenceType } from '../behavior-classifier.js';
+import { mergeExecutionMode } from '../execution-mode.js';
 
 const router = Router();
 
@@ -168,6 +169,20 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
         evidence_summary: { hard_signals: 0, soft_signals: 0, cascade_edges: 0 },
       };
     }
+
+    // ── Phase 4.4: Operator execution mode merge ──────────────────────
+    // Operator preference (AUTO/STATIC/DYNAMIC) merged with system classification.
+    // Authority: hard evidence > server policy > operator > classification.
+    const operatorPreference = req.body.operator_execution_preference || 'AUTO';
+    const modeResult = mergeExecutionMode({
+      operatorPreference,
+      systemClassification: classification.system_classification,
+    });
+    // Override the effective_execution_mode from classifier with merged result
+    classification.effective_execution_mode = modeResult.effective_execution_mode;
+    classification.operator_preference = modeResult.preference_applied;
+    classification.preference_demotion = modeResult.demotion;
+    classification.mode_reason = modeResult.reason;
 
     // ── Phase 4.3: Plan clamping for dynamic/unknown mode ───────────
     // When effective mode is dynamic, only return the first step to prevent
