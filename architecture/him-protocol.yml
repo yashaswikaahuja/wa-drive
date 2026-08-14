@@ -1,0 +1,878 @@
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# CyberControl Human Interaction Mode (HIM) Protocol
+# Phase 4.0 — Operator-in-the-loop authorization and sensitive field handling
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# This contract defines the full lifecycle of human interaction during
+# automated plan execution. It governs when execution pauses, how the
+# operator is engaged, how sensitive values are handled, and how
+# irreversible actions are authorized.
+#
+# Doctrine:
+#   Extension = Eyes + Hands (no policy decisions)
+#   Server = Brain + Memory + Knowledge (all policy lives here)
+#   Sensitive/irreversible actions must never be silently automated
+#
+# Related contracts:
+#   - architecture/protocol.yml §3 (human_interaction — Phase 3 wire types)
+#   - architecture/gateway-security.yml (trust domains, DOM gateway)
+#   - architecture/perception-privacy.yml (redaction, secret handling)
+#   - architecture/action-plan.schema.json (authorization envelope)
+#   - architecture/execution-observation.schema.json (observation contract)
+#
+# ADRs:
+#   - ADR-0010: Server owns all HIM policy decisions
+#   - ADR-0011: Nonce-bound operator confirmation (anti-replay)
+#   - ADR-0012: Sensitive values never persist
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+him_protocol_version: "1.0.0"
+schema_version: "4.0.0"
+status: draft
+frozen_at: null
+date: "2026-08-14"
+owner: shared.security_privacy
+phase: phase_4_0
+issues: []
+
+compatibility:
+  phase_3_protocol:
+    note: >
+      Phase 3 protocol.yml §3 defines the wire-level human_interaction actions
+      (request_human, confirm_submission, wait_external). HIM Phase 4.0 extends
+      these with server-authoritative policy, anti-replay nonces, sensitive-field
+      lifecycle, and a formal state machine. The Phase 3 wire types remain valid;
+      HIM adds mandatory fields (him_nonce, him_session_binding) and new message
+      types (him_request, him_response, him_cancel, him_timeout).
+  action_plan_schema:
+    note: >
+      ActionPlan v3 authorization envelope (operator_confirmed, max_risk,
+      allow_submit) is the outer authorization. HIM adds per-step inner
+      authorization for steps that cross the irreversible boundary at runtime.
+  execution_observation_schema:
+    note: >
+      ExecutionObservation v3 step observations gain a him_checkpoint field
+      when a step involved human interaction. Sensitive values are never
+      recorded; only action_type + result_enum appear.
+  perception_privacy:
+    note: >
+      HIM inherits and tightens perception-privacy.yml secret_handling rules.
+      Secret values (OTP, password, payment credential) are ephemeral
+      bridge-only and never appear in observations, logs, or service traffic.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 1: HIM STATE MACHINE
+# ══════════════════════════════════════════════════════════════════════
+
+state_machine:
+  description: >
+    The HIM state machine tracks the lifecycle of a single human interaction
+    checkpoint within an executing plan. Each plan step that requires human
+    involvement spawns an independent HIM state instance scoped to
+    (session_id, plan_id, step_id).
+
+  states:
+    idle:
+      description: "No human interaction active. Plan executing autonomously."
+      terminal: false
+
+    plan_executing:
+      description: >
+        Plan is executing mechanical steps. The extension is performing
+        automated actions. No operator involvement required for current step.
+      terminal: false
+
+    waiting_human:
+      description: >
+        Execution paused. The extension has rendered the HIM prompt to the
+        operator and is awaiting their action (e.g., enter OTP, solve CAPTCHA,
+        review values). The extension MUST NOT proceed autonomously.
+      terminal: false
+
+    human_active:
+      description: >
+        The operator is actively performing the requested action (typing OTP,
+        uploading file, reviewing summary). Extension monitors for completion
+        signals but does not intervene.
+      terminal: false
+
+    continued:
+      description: >
+        Operator has completed the required action and authorized continuation.
+        Confirmation has been validated (nonce, expiry, binding). Execution
+        resumes from the next step.
+      terminal: true
+
+    cancelled:
+      description: >
+        Operator explicitly cancelled the interaction. Plan execution aborts
+        with outcome=aborted, reason=operator_cancelled.
+      terminal: true
+
+    expired:
+      description: >
+        The HIM request timed out before operator completion. Server decides
+        disposition (abort, re-prompt, or escalate).
+      terminal: true
+
+    failed:
+      description: >
+        HIM interaction failed due to technical error (bridge failure,
+        extension crash, communication loss). Plan aborts with diagnostic.
+      terminal: true
+
+  transitions:
+    - from: idle
+      to: plan_executing
+      trigger: plan_dispatched
+      owner: server
+      description: "Server dispatches a plan; execution begins."
+
+    - from: plan_executing
+      to: waiting_human
+      trigger: him_step_reached
+      owner: extension
+      description: >
+        Extension encounters a step with him_required=true or a step classified
+        as irreversible (risk=irreversible) without pre-authorized
+        operator_confirmed. Extension pauses and emits him_request to server.
+
+    - from: waiting_human
+      to: human_active
+      trigger: operator_engaged
+      owner: extension
+      description: >
+        Extension detects operator has begun interacting (focus on target field,
+        keyboard activity in HIM prompt area). Informational transition only.
+
+    - from: waiting_human
+      to: continued
+      trigger: him_confirmation_valid
+      owner: server
+      description: >
+        Server validates the operator's confirmation (nonce match, not expired,
+        not replayed, session binding correct). Server sends him_response with
+        action=continue.
+
+    - from: human_active
+      to: continued
+      trigger: him_confirmation_valid
+      owner: server
+      description: >
+        Same as above — confirmation validated after operator was active.
+
+    - from: waiting_human
+      to: cancelled
+      trigger: operator_cancel
+      owner: operator
+      description: "Operator clicks Cancel in the HIM UI."
+
+    - from: human_active
+      to: cancelled
+      trigger: operator_cancel
+      owner: operator
+      description: "Operator cancels mid-action."
+
+    - from: waiting_human
+      to: expired
+      trigger: him_timeout
+      owner: server
+      description: >
+        Server's timeout fires. Server sends him_timeout message.
+        Extension stops waiting and reports timeout to server.
+
+    - from: human_active
+      to: expired
+      trigger: him_timeout
+      owner: server
+      description: "Timeout while operator is active but has not confirmed."
+
+    - from: waiting_human
+      to: failed
+      trigger: bridge_error
+      owner: extension
+      description: "Communication failure or extension crash during wait."
+
+    - from: human_active
+      to: failed
+      trigger: bridge_error
+      owner: extension
+      description: "Communication failure while operator is active."
+
+    - from: continued
+      to: plan_executing
+      trigger: resume_dispatched
+      owner: server
+      description: >
+        After successful HIM completion, server may dispatch continuation
+        or the extension auto-resumes from the next graph edge.
+
+  invariants:
+    - "Only the server may authorize continuation (transition to 'continued')."
+    - "Only the server may declare timeout (transition to 'expired')."
+    - "The extension may pause (→waiting_human) and detect engagement (→human_active) but never authorize."
+    - "The operator may cancel but never forge continuation."
+    - "A terminated state (continued, cancelled, expired, failed) cannot transition back."
+    - "Each HIM instance is scoped to exactly one (session_id, plan_id, step_id, nonce)."
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 2: MESSAGE CONTRACT
+# ══════════════════════════════════════════════════════════════════════
+
+messages:
+  description: >
+    HIM messages flow between the server and extension over the existing
+    authenticated WebSocket/HTTP channel. All HIM messages carry the
+    him_protocol_version field for forward compatibility.
+
+  him_request:
+    direction: server_to_extension
+    description: >
+      Server instructs the extension to pause and engage the operator.
+      Sent when the plan reaches a step requiring human interaction.
+    schema:
+      him_protocol_version:
+        type: string
+        const: "1.0.0"
+      message_type:
+        type: string
+        const: "him_request"
+      session_id:
+        type: string
+        description: "Active session identifier."
+      plan_id:
+        type: string
+        description: "Plan being executed."
+      step_id:
+        type: string
+        description: "Specific step requiring human interaction."
+      nonce:
+        type: string
+        format: "uuid-v4"
+        description: >
+          Server-generated, single-use, cryptographically random nonce.
+          Binds this HIM request to exactly one valid confirmation.
+      issued_at:
+        type: string
+        format: date-time
+      expires_at:
+        type: string
+        format: date-time
+        description: "Absolute expiry. After this instant, no confirmation is accepted."
+      interaction_type:
+        type: string
+        enum:
+          - otp_entry
+          - captcha_solve
+          - payment_authorization
+          - signature
+          - manual_review
+          - file_upload
+          - irreversible_submit
+          - custom
+      prompt:
+        type: string
+        maxLength: 500
+        description: "Human-readable instruction for the operator."
+      target:
+        description: "Optional semantic target where operator should act."
+        oneOf:
+          - type: object
+            properties:
+              context_id: { type: string }
+              node_id: { type: string }
+          - type: "null"
+      sensitive_field:
+        type: boolean
+        description: "If true, the value entered by operator MUST NOT be persisted or transmitted."
+      auto_detect:
+        description: "Optional auto-detection of completion."
+        oneOf:
+          - type: object
+            properties:
+              watch_condition:
+                type: string
+                enum: [field_nonempty, value_changed, element_gone, page_navigated, url_changed]
+              timeout_ms:
+                type: integer
+                minimum: 0
+          - type: "null"
+      show_summary:
+        type: boolean
+        description: "If true, extension should display filled values summary before confirmation."
+      destructive_warning:
+        type: boolean
+        description: "If true, UI renders elevated warning (red, double-confirm)."
+
+  him_response:
+    direction: server_to_extension
+    description: >
+      Server responds to an operator's confirmation attempt after validating
+      the nonce, expiry, session binding, and replay status.
+    schema:
+      him_protocol_version:
+        type: string
+        const: "1.0.0"
+      message_type:
+        type: string
+        const: "him_response"
+      session_id:
+        type: string
+      plan_id:
+        type: string
+      step_id:
+        type: string
+      nonce:
+        type: string
+        description: "Echo of the original nonce for correlation."
+      action:
+        type: string
+        enum: [continue, reject, re_prompt]
+        description: >
+          continue — valid confirmation, resume execution.
+          reject — confirmation invalid (wrong nonce, expired, replayed).
+          re_prompt — ask operator again (e.g., after a soft timeout).
+      rejection_reason:
+        oneOf:
+          - type: string
+            enum: [nonce_mismatch, expired, already_consumed, session_mismatch, invalid_signature]
+          - type: "null"
+      new_nonce:
+        oneOf:
+          - type: string
+            format: "uuid-v4"
+            description: "Issued with action=re_prompt to allow a fresh confirmation."
+          - type: "null"
+      new_expires_at:
+        oneOf:
+          - type: string
+            format: date-time
+          - type: "null"
+
+  him_cancel:
+    direction: extension_to_server
+    description: >
+      Extension reports that the operator cancelled the HIM interaction.
+    schema:
+      him_protocol_version:
+        type: string
+        const: "1.0.0"
+      message_type:
+        type: string
+        const: "him_cancel"
+      session_id:
+        type: string
+      plan_id:
+        type: string
+      step_id:
+        type: string
+      nonce:
+        type: string
+        description: "Original nonce of the cancelled request."
+      cancelled_at:
+        type: string
+        format: date-time
+      reason:
+        type: string
+        enum: [operator_explicit, ui_dismissed, page_navigated, extension_unloaded]
+
+  him_timeout:
+    direction: server_to_extension
+    description: >
+      Server declares the HIM request expired. Extension must stop waiting
+      and clean up the HIM UI.
+    schema:
+      him_protocol_version:
+        type: string
+        const: "1.0.0"
+      message_type:
+        type: string
+        const: "him_timeout"
+      session_id:
+        type: string
+      plan_id:
+        type: string
+      step_id:
+        type: string
+      nonce:
+        type: string
+      timed_out_at:
+        type: string
+        format: date-time
+      disposition:
+        type: string
+        enum: [abort_plan, re_prompt, escalate_operator]
+        description: >
+          abort_plan — plan terminates, observation reports expired.
+          re_prompt — server will issue a new him_request with fresh nonce.
+          escalate_operator — notify operator of missed interaction.
+
+  operator_confirmation:
+    direction: extension_to_server
+    description: >
+      Extension forwards the operator's confirmation to the server for
+      validation. The extension MUST NOT treat this as authorization —
+      only the server's him_response with action=continue authorizes.
+    schema:
+      him_protocol_version:
+        type: string
+        const: "1.0.0"
+      message_type:
+        type: string
+        const: "operator_confirmation"
+      session_id:
+        type: string
+      plan_id:
+        type: string
+      step_id:
+        type: string
+      nonce:
+        type: string
+        description: "Must exactly match the nonce from the him_request."
+      confirmed_at:
+        type: string
+        format: date-time
+      operator_action:
+        type: string
+        enum: [confirm_continue, confirm_submit, confirm_payment, confirm_with_value]
+        description: "What the operator confirmed."
+      confirmation_source:
+        type: string
+        enum: [him_ui_button, him_ui_keyboard_enter]
+        description: >
+          Where the confirmation originated. Only HIM UI sources are valid.
+          Page-originated confirmations are rejected by the bridge.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 3: PAUSE / RESUME SEMANTICS
+# ══════════════════════════════════════════════════════════════════════
+
+pause_resume:
+  description: >
+    When execution enters waiting_human, all automated action ceases.
+    Resumption requires server authorization via validated confirmation.
+
+  safe_pause:
+    rules:
+      - "Extension completes any in-flight mechanical action before pausing."
+      - "No DOM mutations are initiated after the pause point."
+      - "The extension snapshot revision is frozen at the pause instant."
+      - "Extension continues perception (observing page changes) but takes no action."
+      - "The HIM UI overlay is rendered in extension-controlled UI, not page DOM."
+    state_preservation:
+      - "Current plan graph position (node_id of paused step)."
+      - "Snapshot revision at pause time."
+      - "All completed step observations up to the pause point."
+      - "Active HIM nonce and expiry."
+
+  resume_authorization:
+    rules:
+      - "Resumption REQUIRES a him_response with action=continue from the server."
+      - "Extension MUST NOT resume on local UI events alone (click is not authorization)."
+      - "Server validates: nonce match, not expired, not replayed, session active."
+      - "After validation, server marks the nonce as consumed (single-use)."
+      - "If the page state changed during pause, extension reports stale_snapshot and server may re-plan."
+
+  stale_state_handling:
+    description: >
+      While waiting for the operator, the page may change (timers, server push,
+      auto-refresh). The extension handles this as follows:
+    rules:
+      - "Perception continues. Page changes increment the revision counter."
+      - "If the target field/element is removed, extension emits him_cancel with reason=page_navigated."
+      - "If the page navigates away, him_cancel with reason=page_navigated."
+      - "If minor DOM changes occur but target remains, execution resumes normally after authorization."
+      - "On resume, extension re-validates target binding. Mismatch → stale_target failure, no action."
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 4: SENSITIVE FIELD POLICY
+# ══════════════════════════════════════════════════════════════════════
+
+sensitive_fields:
+  description: >
+    Sensitive fields contain values that must never be persisted, logged,
+    transmitted to the service, or recorded in observations. The operator
+    enters them directly; the extension facilitates but does not capture.
+
+  classification:
+    otp:
+      sensitivity: secret
+      operator_enters: true
+      extension_may_observe_value: false
+      extension_may_display: false
+      service_receives_value: false
+      persisted: false
+      observation_records: "action_type: otp_entry, result: completed|failed|expired"
+    password:
+      sensitivity: secret
+      operator_enters: true
+      extension_may_observe_value: false
+      extension_may_display: false
+      service_receives_value: false
+      persisted: false
+      observation_records: "action_type: password_entry, result: completed|failed"
+    payment_credential:
+      sensitivity: secret
+      operator_enters: true
+      extension_may_observe_value: false
+      extension_may_display: false
+      service_receives_value: false
+      persisted: false
+      observation_records: "action_type: payment_entry, result: completed|failed"
+    captcha_response:
+      sensitivity: secret
+      operator_enters: true
+      extension_may_observe_value: false
+      extension_may_display: false
+      service_receives_value: false
+      persisted: false
+      observation_records: "action_type: captcha_solve, result: completed|failed"
+    signature:
+      sensitivity: secret
+      operator_enters: true
+      extension_may_observe_value: false
+      extension_may_display: false
+      service_receives_value: false
+      persisted: false
+      observation_records: "action_type: signature, result: completed|failed"
+    declaration_checkbox:
+      sensitivity: personal
+      operator_enters: true
+      extension_may_observe_value: true
+      extension_may_display: true
+      service_receives_value: false
+      persisted: false
+      observation_records: "action_type: declaration_confirm, result: checked|unchecked"
+
+  enforcement:
+    rules:
+      - "Extension content script MUST NOT read .value from a secret-classified field."
+      - "If auto_detect watches a secret field, it may only observe non_empty/empty state transitions, never the value."
+      - "The bridge between content script and background MUST NOT carry secret field values."
+      - "Background MUST NOT send secret field values to the service over WebSocket/HTTP."
+      - "Observations record only (action_type, result_enum, duration_ms) — never the value."
+      - "Extension logs MUST NOT contain secret values even at debug level."
+      - "Screenshots MUST NOT capture secret field regions (inherits perception-privacy.yml)."
+    fail_closed:
+      - "If the extension cannot determine sensitivity classification, treat as secret."
+      - "If the bridge message contains a suspected secret value, drop the message and emit a diagnostic."
+
+  redaction_in_observations:
+    rule: >
+      When a HIM step completes, the step observation includes:
+        him_checkpoint:
+          interaction_type: <enum>
+          result: <completed|failed|expired|cancelled>
+          duration_ms: <integer>
+      It MUST NOT include: entered_value, field_content, raw_text, or any
+      derivation of the secret value (hash, partial, encoded).
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 5: IRREVERSIBLE ACTION BOUNDARY
+# ══════════════════════════════════════════════════════════════════════
+
+irreversible_actions:
+  description: >
+    Actions that cannot be undone once performed. These ALWAYS require
+    explicit operator confirmation and server authorization, regardless
+    of plan-level operator_confirmed flag.
+
+  classification:
+    form_submission:
+      risk: irreversible
+      requires_him: true
+      requires_server_auth: true
+      description: "Final form submit (application, registration, exam form)."
+    payment:
+      risk: irreversible
+      requires_him: true
+      requires_server_auth: true
+      description: "Any payment authorization or transaction confirmation."
+    deletion:
+      risk: irreversible
+      requires_him: true
+      requires_server_auth: true
+      description: "Deleting data, applications, or accounts on target site."
+    digital_signature:
+      risk: irreversible
+      requires_him: true
+      requires_server_auth: true
+      description: "e-Sign, DSC, or digital signature on a document."
+    irreversible_navigation:
+      risk: irreversible
+      requires_him: true
+      requires_server_auth: true
+      description: "Navigation that abandons unsaved form state when no back is possible."
+
+  authorization_flow:
+    steps:
+      - step: 1
+        actor: extension
+        action: >
+          Encounters irreversible step. Pauses. Sends him_request with
+          interaction_type matching the classification.
+      - step: 2
+        actor: server
+        action: >
+          Receives him_request. Validates plan authorization envelope
+          (max_risk=irreversible, allow_submit=true if submit). Generates
+          nonce-bound HIM request for the operator.
+      - step: 3
+        actor: extension
+        action: >
+          Renders confirmation UI with destructive_warning=true, optional
+          summary of filled values. Waits for operator.
+      - step: 4
+        actor: operator
+        action: "Reviews and clicks Confirm (or Cancel)."
+      - step: 5
+        actor: extension
+        action: >
+          Sends operator_confirmation with nonce to server.
+          DOES NOT proceed yet — awaits him_response.
+      - step: 6
+        actor: server
+        action: >
+          Validates nonce, expiry, session, replay status.
+          If valid: marks nonce consumed, sends him_response action=continue.
+          If invalid: sends him_response action=reject with reason.
+      - step: 7
+        actor: extension
+        action: >
+          Receives him_response action=continue. NOW performs the irreversible
+          action. Reports observation.
+
+  hard_rules:
+    - "An irreversible action with no prior him_response action=continue is FORBIDDEN."
+    - "Extension MUST NOT cache or remember prior authorizations across steps."
+    - "Each irreversible action requires its own dedicated HIM cycle with unique nonce."
+    - "Plan-level operator_confirmed=true is necessary but NOT sufficient for irreversible steps."
+    - "If the page reloads between HIM approval and execution, the approval is void."
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 6: OPERATOR CONFIRMATION SEMANTICS
+# ══════════════════════════════════════════════════════════════════════
+
+operator_confirmation:
+  description: >
+    The operator's confirmation is not a simple UI event. It is a
+    cryptographically bound authorization token scoped to a specific
+    action at a specific moment.
+
+  binding:
+    required_fields:
+      session_id: "Active WebSocket/HTTP session."
+      plan_id: "Exact plan being executed."
+      step_id: "Exact step requiring confirmation."
+      nonce: "Server-generated UUID v4, single-use."
+      expires_at: "Absolute ISO-8601 timestamp. Non-renewable."
+    rule: >
+      A confirmation is valid if and only if ALL binding fields match the
+      original him_request AND the nonce has not been previously consumed
+      AND current_time < expires_at.
+
+  anti_replay:
+    mechanism:
+      - "Server generates a cryptographically random nonce (UUID v4) per him_request."
+      - "Nonce is stored server-side in a consumed_nonces set with TTL = expires_at + grace."
+      - "On operator_confirmation, server checks: nonce ∈ active_nonces AND nonce ∉ consumed_nonces."
+      - "Valid confirmation → nonce moved to consumed_nonces. Cannot be used again."
+      - "Expired nonce → rejected regardless of whether it was consumed."
+    grace_period:
+      duration_seconds: 5
+      description: >
+        After expires_at, a 5-second grace allows in-flight confirmations
+        to arrive (network latency). After grace, nonce is purged.
+
+  expiry_policy:
+    default_timeout_ms: 300000  # 5 minutes
+    max_timeout_ms: 600000      # 10 minutes
+    otp_timeout_ms: 180000      # 3 minutes (OTP windows are short)
+    irreversible_timeout_ms: 120000  # 2 minutes (force active attention)
+    rule: >
+      Server sets expires_at based on interaction_type. The extension
+      displays a countdown. If the countdown expires, extension sends
+      him_cancel with reason=ui_dismissed and awaits server's him_timeout.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 7: OBSERVATION / AUDIT CONTRACT
+# ══════════════════════════════════════════════════════════════════════
+
+observation_audit:
+  description: >
+    HIM interactions are auditable but privacy-safe. The audit trail
+    records what happened (type, timing, outcome) but never what was
+    entered (values, secrets, content).
+
+  recorded_in_observation:
+    him_checkpoint:
+      type: object
+      properties:
+        interaction_type:
+          type: string
+          enum: [otp_entry, captcha_solve, payment_authorization, signature, manual_review, file_upload, irreversible_submit, declaration_confirm, custom]
+        result:
+          type: string
+          enum: [completed, failed, expired, cancelled]
+        duration_ms:
+          type: integer
+          minimum: 0
+        nonce_echo:
+          type: string
+          description: "Echo of the nonce for audit correlation (not a secret — single-use token)."
+        confirmation_source:
+          type: string
+          enum: [him_ui_button, him_ui_keyboard_enter]
+
+  prohibited_in_observation:
+    - "Raw value entered by operator (OTP digits, password text, payment details)."
+    - "Partial or hashed value (e.g., first 2 digits of OTP)."
+    - "Screenshot or visual capture of the field during entry."
+    - "Keystroke timing patterns that could reconstruct the value."
+    - "CAPTCHA image content or solution text."
+    - "Any derivative that narrows the value search space."
+
+  audit_evidence_rules:
+    - "Observation proves the interaction happened, its type, and its outcome."
+    - "Observation proves operator engagement via duration and confirmation_source."
+    - "Observation does NOT prove what value was entered — this is by design."
+    - "Server-side audit log records: (nonce, consumed_at, session_id, plan_id, step_id)."
+    - "Server-side audit log does NOT record: values, page content, operator identity beyond session."
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 8: SECURITY / TRUST BOUNDARY
+# ══════════════════════════════════════════════════════════════════════
+
+security:
+  description: >
+    The HIM protocol operates across trust boundaries. The page is
+    untrusted. The extension content script is semi-trusted. Only the
+    extension background and server are trusted for authorization.
+
+  trust_hierarchy:
+    page_main_world:
+      trust: untrusted
+      him_role: none
+      rule: "Page scripts cannot see, trigger, forge, or intercept HIM flows."
+    content_isolated_world:
+      trust: semi_trusted
+      him_role: presenter
+      rule: >
+        Renders HIM UI overlays. Detects operator interactions on the HIM UI.
+        Forwards operator_confirmation to background. CANNOT authorize.
+    extension_background:
+      trust: trusted
+      him_role: bridge
+      rule: >
+        Validates confirmation_source. Relays to server. Enforces that only
+        him_response action=continue from server triggers execution resume.
+    server:
+      trust: authoritative
+      him_role: authorizer
+      rule: >
+        Generates nonces, validates confirmations, owns timeout policy,
+        issues him_response. Single source of authorization truth.
+
+  page_cannot_forge_confirmation:
+    threat: >
+      Malicious page script attempts to inject a fake operator_confirmation
+      into the extension message channel.
+    mitigations:
+      - mitigation: "HIM UI lives in extension-controlled shadow DOM or popup, not in page DOM."
+        enforcement: "Content script injects HIM overlay using closed Shadow DOM. Page cannot reach into it."
+      - mitigation: "confirmation_source must be him_ui_button or him_ui_keyboard_enter."
+        enforcement: "Background validates source field. Page-originated events use DOM events on page elements, not extension UI."
+      - mitigation: "Operator confirmation flows through chrome.runtime.sendMessage, not window.postMessage."
+        enforcement: "The extension's message bridge rejects any message from non-extension origin for HIM-type messages."
+      - mitigation: "Nonce is never exposed to page scripts."
+        enforcement: "Nonce is held in extension-scoped variables (isolated world / background). Not injected into page DOM or accessible via page APIs."
+
+  content_script_bridge_hardening:
+    rules:
+      - "HIM messages between content script and background use chrome.runtime.sendMessage exclusively."
+      - "No HIM state (nonce, expiry, session_id) is stored in DOM attributes or page-accessible storage."
+      - "The bridge validates message structure against a strict schema before forwarding."
+      - "Unknown message types are silently dropped (no error leak to page)."
+      - "Rate limiting: max 1 operator_confirmation per nonce per 5-second window."
+
+  ui_state_is_not_authorization:
+    rule: >
+      The extension's HIM UI may display a 'Confirmed' state locally, but
+      this is purely cosmetic. Execution DOES NOT resume until the server's
+      him_response arrives. If the server rejects the confirmation, the
+      extension reverts to waiting_human state regardless of UI state.
+    consequence: >
+      An attacker who compromises the content script and fakes UI state
+      cannot cause the extension to proceed with irreversible actions.
+
+  extension_compromise_mitigation:
+    rule: >
+      Even if the content script is fully compromised, the background
+      service worker validates all him_response messages originate from
+      the authenticated server WebSocket. A compromised content script
+      cannot fabricate a him_response because it does not hold the
+      server connection credentials.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 9: OFFLINE / DEGRADED BEHAVIOR
+# ══════════════════════════════════════════════════════════════════════
+
+offline_degraded:
+  description: >
+    When the server is unreachable, the extension cannot obtain HIM
+    authorization. The system fails safe: no autonomous continuation.
+
+  rules:
+    - rule: "If server connection is lost during waiting_human, extension remains paused indefinitely."
+      rationale: "Cannot validate confirmation without server."
+    - rule: "If server connection is lost during plan_executing and an irreversible step is next, extension pauses before the step."
+      rationale: "Cannot obtain authorization for irreversible action."
+    - rule: "Extension MUST NOT cache prior him_response messages and replay them for new interactions."
+      rationale: "Each interaction requires a fresh nonce and live server validation."
+    - rule: "Extension MUST NOT implement a local timeout that auto-continues after server disconnect."
+      rationale: "Local timeout decisions are prohibited (ADR-0010)."
+    - rule: "On reconnection, extension reports current state. Server decides whether to resume, re-plan, or abort."
+      rationale: "Server is the sole authority on next action after degraded period."
+
+  operator_notification:
+    on_disconnect: >
+      Extension displays a persistent warning: 'Server connection lost.
+      Cannot proceed with automated actions. Waiting for reconnection.'
+    on_reconnect: >
+      Extension reports accumulated state. Server re-evaluates plan
+      freshness and may issue new him_request or abort.
+
+  prohibition:
+    statement: >
+      UNDER NO CIRCUMSTANCES may the extension autonomously continue
+      execution of any step (safe, reversible, or irreversible) after
+      server connectivity is lost and not yet restored. The extension
+      enters suspended mode until live server authorization is available.
+
+# ══════════════════════════════════════════════════════════════════════
+# SECTION 10: PROTOCOL VERSIONING
+# ══════════════════════════════════════════════════════════════════════
+
+versioning:
+  current_version: "1.0.0"
+  version_field: him_protocol_version
+  rules:
+    - "All HIM messages carry him_protocol_version in their payload."
+    - "Server and extension negotiate version during session handshake."
+    - "Extension rejects messages with unknown major version (fail-closed)."
+    - "Minor version additions are backward-compatible (new optional fields)."
+    - "Patch versions are documentation-only."
+  compatibility_matrix:
+    "1.0.x":
+      extension_min: "4.0.0"
+      server_min: "4.0.0"
+      notes: "Initial HIM protocol. No prior version exists."
+
+  future_extensions:
+    planned:
+      - "him_protocol_version 1.1.0: multi-operator handoff (shift change)"
+      - "him_protocol_version 1.2.0: remote operator confirmation via mobile"
+    reserved_message_types:
+      - "him_handoff"
+      - "him_remote_confirm"
+      - "him_escalate"

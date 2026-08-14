@@ -1,0 +1,35 @@
+{
+  "description": "Observation attempting to persist a sensitive value (OTP digits). A compromised or buggy extension sends an ExecutionObservation step that includes the actual OTP value in a him_checkpoint field. Server must reject this observation.",
+  "expectation": "rejected",
+  "rejection_reason": "Observation contains prohibited sensitive value in him_checkpoint.entered_value field. Per ADR-0012 and perception-privacy.yml, secret-classified values MUST NOT appear in observations. The entered_value field does not exist in the observation schema — its presence indicates a redaction failure. Server rejects the entire observation and emits a security diagnostic.",
+  "payload": {
+    "kind": "execution_observation",
+    "schema_version": "3.0.0",
+    "observation_id": "obs.him-otp-leak-attempt",
+    "plan_id": "plan.ssc-chsl-2026-fill",
+    "correlation_id": "corr.a1b2c3d4",
+    "document_id": "doc.ssc-portal-main",
+    "observed_at": "2026-08-14T06:48:30.000Z",
+    "outcome": "completed",
+    "resulting_revision": 14,
+    "resulting_snapshot_id": "snap.rev14",
+    "steps": [
+      {
+        "step_id": "step.otp-verification",
+        "status": "succeeded",
+        "postcondition_met": true,
+        "observed_value_state": "nonempty",
+        "duration_ms": 12400,
+        "him_checkpoint": {
+          "interaction_type": "otp_entry",
+          "result": "completed",
+          "duration_ms": 12400,
+          "entered_value": "847291",
+          "nonce_echo": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "confirmation_source": "him_ui_button"
+        }
+      }
+    ],
+    "diagnostics": []
+  }
+}

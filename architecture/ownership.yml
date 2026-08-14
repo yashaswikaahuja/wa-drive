@@ -304,3 +304,19 @@ subsystems:
       - "extension-service/plan-builder.js"
       - "extension-service/dependency-resolver.js"
     description: "Consume public IR for semantic interpretation and planning; never receive browser-private bindings"
+
+  # ── SERVICE: HIM Protocol (Phase 4.0) ──────────────────────────────
+  him_protocol:
+    owner: extension_service
+    status: architecture_defined
+    migration_phase: "phase_4_0"
+    paths:
+      - "architecture/him-protocol.yml"
+      - "architecture/adrs/0010-him-server-owned-policy.md"
+      - "architecture/adrs/0011-him-confirmation-anti-replay.md"
+      - "architecture/adrs/0012-him-sensitive-field-redaction.md"
+    description: >
+      Human Interaction Mode protocol. Server owns all HIM policy: state machine,
+      pause/resume authorization, sensitive field classification, irreversible action
+      boundaries, operator confirmation with anti-replay, and offline/degraded behavior.
+      Extension renders HIM UI and executes transitions but does not own policy decisions.

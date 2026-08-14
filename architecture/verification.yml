@@ -167,6 +167,20 @@ checks:
     ci_job: "architecture"
     scope: "full_tree"
 
+  - id: CHECK-013
+    name: "HIM protocol conformance"
+    severity: fail
+    description: >
+      Validates HIM fixtures, state machine transitions, and anti-replay
+      invariants. Positive fixtures must produce valid protocol exchanges;
+      malicious fixtures (forged nonce, expired confirmation, replayed nonce,
+      page-injected fake, sensitive value leak) must be rejected.
+    method: "run_conformance"
+    command: "node extension-dev/tests/test-him-protocol.mjs"
+    ci_job: "architecture"
+    scope: "full_tree"
+    added_in: "phase_4_0"
+
   # ── WARNINGS ───────────────────────────────────────────────────────
 
   - id: CHECK-002

@@ -974,3 +974,58 @@ phases:
       - "ServicePlus-like portals get distinct form keys"
       - "Multi-signal form identity: URL path + page title + hidden fields + field signature"
       - "portal_definition knowledge records define per-portal identity strategies"
+
+# ── Phase 4.0: Human Interaction Mode ──────────────────────────────
+
+  phase_4_0:
+    name: "Human Interaction Mode"
+    status: architecture_defined
+    depends_on: ["phase_3_0"]
+    issues: ["#187"]
+    description: >
+      Architecture-only gate defining the Human Interaction Mode (HIM) protocol.
+      Server-owned state machine for pause/resume, sensitive field handoff, irreversible
+      action boundaries, operator confirmation with anti-replay, observation/audit
+      contracts, trust boundaries, and offline/degraded behavior. Extension renders
+      HIM UI and executes transitions but never owns policy decisions.
+    discovery_reference: "Issue #187 — Human Interaction Mode"
+
+    frozen_files:
+      - path: "architecture/him-protocol.yml"
+        reason: "Normative HIM protocol contract — state machine, messages, security, versioning"
+      - path: "architecture/adrs/0010-him-server-owned-policy.md"
+        reason: "Accepted decision: server owns all HIM policy"
+      - path: "architecture/adrs/0011-him-confirmation-anti-replay.md"
+        reason: "Accepted decision: nonce-bound confirmation with anti-replay"
+      - path: "architecture/adrs/0012-him-sensitive-field-redaction.md"
+        reason: "Accepted decision: sensitive values never persist"
+
+    allowed_changes:
+      - "Clarifications that do not weaken a MUST or MUST NOT rule"
+      - "Additive optional message fields with schema and tests"
+      - "Privacy restrictions that reduce collected data"
+      - "Tightening timeout or expiry bounds"
+
+    forbidden_changes:
+      - "Moving policy decisions to extension"
+      - "Allowing extension to autonomously resume after pause"
+      - "Persisting sensitive field values (OTP, password, payment)"
+      - "Removing anti-replay nonce binding from confirmations"
+      - "Allowing autonomous continuation when offline"
+
+    done_criteria:
+      - "HIM state machine implemented in extension-service (8 states, 12 transitions)"
+      - "WSS message types (him_request, him_response, him_cancel, him_timeout, operator_confirmation) implemented"
+      - "Extension HIM UI renders pause/resume, sensitive field entry, irreversible confirmation"
+      - "Anti-replay nonce binding enforced on all confirmations"
+      - "Sensitive fields redacted from observation/audit logs"
+      - "Offline/degraded mode prohibits autonomous continuation"
+      - "Protocol version negotiation operational"
+      - "Positive and malicious HIM fixtures pass conformance checks"
+
+    validation_evidence:
+      - "architecture/him-protocol.yml created (878 lines, 10 sections)"
+      - "3 ADRs (0010, 0011, 0012) document rejected alternatives"
+      - "5 positive fixtures validate correct protocol behavior"
+      - "5 malicious fixtures rejected by conformance checks"
+      - "All 8 JSON fixtures parse successfully"
