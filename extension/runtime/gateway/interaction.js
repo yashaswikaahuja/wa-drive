@@ -122,23 +122,93 @@ function performTypeText(element, value) {
 
 function performSelectOption(element, action, opts) {
   const optionElement = opts.optionElement;
+  const value = action.value || '';
 
-  // For native <select>
-  if (element.tagName?.toLowerCase() === 'select' && action.value != null) {
-    element.value = action.value;
-    element.dispatchEvent(new Event('change', { bubbles: true }));
-    return { success: true };
+  // For native <select>: use value-based matching or direct option element
+  if (element.tagName?.toLowerCase() === 'select') {
+    // Strategy 0: If we have a resolved option element, use it directly
+    if (optionElement && optionElement.isConnected) {
+      element.value = optionElement.value;
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return { success: true };
+    }
+
+    // Strategy 1: Try matching option by text content
+    if (value) {
+      const options = Array.from(element.options || []);
+      const normalizedValue = value.trim().toLowerCase();
+
+      // Exact text match
+      let match = options.find(opt =>
+        opt.textContent.trim().toLowerCase() === normalizedValue
+      );
+
+      // Partial/contains match
+      if (!match) {
+        match = options.find(opt =>
+          opt.textContent.trim().toLowerCase().includes(normalizedValue) ||
+          normalizedValue.includes(opt.textContent.trim().toLowerCase())
+        );
+      }
+
+      // Match by value attribute
+      if (!match) {
+        match = options.find(opt =>
+          opt.value.toLowerCase() === normalizedValue
+        );
+      }
+
+      if (match) {
+        element.value = match.value;
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return { success: true };
+      }
+    }
+
+    // Strategy 2: Direct value set (legacy path)
+    if (value) {
+      element.value = value;
+      if (element.value === value) {
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return { success: true };
+      }
+    }
+
+    return { success: false, error: 'option_not_found' };
   }
 
-  // Custom dropdown: click trigger then option
+  // Custom dropdown: click trigger then find option by text
   const trigger = element.querySelector?.(
-    '.value-area,.select-type'
-  );
-  if (trigger && trigger !== optionElement) trigger.click();
+    '.value-area,.select-type,[role="combobox"],[role="listbox"],.mat-select-trigger,.select2-selection'
+  ) || element;
+  trigger.click();
 
+  // If we have a resolved option element, click it directly
   if (optionElement && optionElement.isConnected) {
     optionElement.click();
     return { success: true };
+  }
+
+  // Value-based matching for custom dropdowns: find option by text in expanded overlay
+  if (value) {
+    const normalizedValue = value.trim().toLowerCase();
+    const optionSelectors = [
+      '[role="option"]',
+      '[role="menuitem"]',
+      '.mat-option',
+      '.select2-results__option',
+      '.ng-option',
+      'li[class*="option"]',
+      '.dropdown-item',
+    ];
+    const allOptions = document.querySelectorAll(optionSelectors.join(','));
+    for (const opt of allOptions) {
+      if (opt.textContent.trim().toLowerCase().includes(normalizedValue) ||
+          normalizedValue.includes(opt.textContent.trim().toLowerCase())) {
+        opt.click();
+        return { success: true };
+      }
+    }
   }
 
   return { success: false, error: 'option_target_missing' };

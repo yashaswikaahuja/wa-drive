@@ -142,6 +142,22 @@ export function buildPostcondition(mapping, node) {
 }
 
 /**
+ * Resolve the option node_id from the snapshot for a select element.
+ * Searches child nodes of the select for an option matching the mapping value.
+ *
+ * @param {MappingResult} mapping — The resolved mapping (has value, node_id, context_id)
+ * @param {object} node — The snapshot node for the select element
+ * @returns {string|null} — The option node_id, or null if not resolvable from snapshot
+ */
+function resolveOptionNodeId(mapping, node) {
+  // Option resolution requires the snapshot nodes to be available on the node.
+  // In the current architecture, child option nodes are separate entries in the
+  // snapshot — we don't have them here in buildAction. Return null to let the
+  // executor use value-based matching at runtime.
+  return null;
+}
+
+/**
  * Build the action object for a fill step.
  *
  * @param {MappingResult} mapping — The resolved mapping
@@ -160,15 +176,17 @@ export function buildAction(mapping, node) {
   }
 
   if (affordances.includes('select_one')) {
-    // For select fields, we need an option_target — this requires the option node.
-    // The fill planner must resolve the option node_id separately.
-    // For now, produce a placeholder that the planner populates.
+    // For select fields, include the value so the executor can match options.
+    // option_node_id is resolved from snapshot options when available;
+    // otherwise the executor uses value-based matching at runtime.
+    const optionNodeId = resolveOptionNodeId(mapping, node);
     return {
       op: 'select_option',
-      option_target: {
+      value: mapping.value || '',
+      option_target: optionNodeId ? {
         context_id: mapping.context_id,
-        node_id: `option:${mapping.node_id}:pending`,
-      },
+        node_id: optionNodeId,
+      } : null,
     };
   }
 

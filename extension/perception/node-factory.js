@@ -101,6 +101,10 @@ function createNode(facts, contextId, parentId, order, deps) {
     language: null, // could be detected from lang attribute
     description: null,
     value_state: valueState,
+    // Form control hints for mapping (not raw values)
+    placeholder: facts.placeholder || null,
+    form_control_name: facts.name || null,
+    autocomplete: facts.autocomplete || null,
   };
 
   // Evidence

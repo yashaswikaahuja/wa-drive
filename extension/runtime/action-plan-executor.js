@@ -332,12 +332,20 @@ async function execute(plan) {
     }
 
     if (!failureCode && step.action.op === 'select_option') {
-      optionTarget = globalThis.CcPerception.resolveExecutionTarget(
-        plan.target_binding,
-        step.action.option_target,
-        {}
-      );
-      failureCode = optionTarget.error;
+      // option_target may be null when plan uses value-based matching
+      if (step.action.option_target) {
+        optionTarget = globalThis.CcPerception.resolveExecutionTarget(
+          plan.target_binding,
+          step.action.option_target,
+          {}
+        );
+        // Non-fatal: if option_target can't be resolved, fall through to value-based matching
+        if (optionTarget.error && step.action.value) {
+          optionTarget = { element: null, error: null };
+        } else {
+          failureCode = optionTarget.error;
+        }
+      }
     }
 
     // Hard authorization against resolved element (submit / nav / origin)
@@ -392,8 +400,14 @@ async function execute(plan) {
             step.action.option_target,
             {}
           );
-          if (optToctou.error) failureCode = optToctou.error;
-          else optionTarget = optToctou;
+          // Non-fatal when value-based matching is available
+          if (optToctou.error && step.action.value) {
+            optionTarget = { element: null, error: null };
+          } else if (optToctou.error) {
+            failureCode = optToctou.error;
+          } else {
+            optionTarget = optToctou;
+          }
         }
 
         if (!failureCode) {

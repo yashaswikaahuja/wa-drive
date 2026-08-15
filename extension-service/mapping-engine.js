@@ -493,28 +493,48 @@ export async function resolveAllMappings(snapshot, profile, scope, request) {
       value: profile[k],
     }));
 
-    // Common label → profile key aliases
+    // Common label → profile key aliases (covers verbose government portal labels)
     const ALIASES = {
       'full name': ['name', 'fullname', 'full_name', 'applicant_name'],
+      'applicant': ['name', 'fullname', 'full_name', 'applicant_name'],
+      'candidate': ['name', 'fullname', 'full_name', 'applicant_name'],
       'first name': ['first_name', 'firstname', 'fname'],
       'last name': ['last_name', 'lastname', 'lname', 'surname'],
       'middle name': ['middle_name', 'middlename', 'mname'],
       'email': ['email', 'email_address', 'emailid', 'email_id'],
       'phone': ['phone', 'mobile', 'phone_number', 'mobile_number', 'contact'],
+      'mobile': ['phone', 'mobile', 'phone_number', 'mobile_number'],
       'address': ['address', 'street', 'street_address', 'address_line_1'],
       'city': ['city', 'town', 'district'],
       'state': ['state', 'province', 'region'],
+      'district': ['district', 'city'],
       'pin': ['pin', 'pincode', 'pin_code', 'zip', 'zipcode', 'zip_code', 'postal_code'],
+      'pincode': ['pin', 'pincode', 'pin_code', 'zip', 'zipcode', 'zip_code', 'postal_code'],
       'country': ['country', 'nation'],
       'dob': ['dob', 'date_of_birth', 'birth_date', 'dateofbirth'],
+      'date of birth': ['dob', 'date_of_birth', 'birth_date', 'dateofbirth'],
       'gender': ['gender', 'sex'],
       'father': ['father_name', 'fathers_name', 'father'],
       'mother': ['mother_name', 'mothers_name', 'mother'],
-      'aadhaar': ['aadhaar', 'aadhar', 'aadhaar_number', 'uid'],
+      'aadhaar': ['aadhaar', 'aadhar', 'aadhaar_number', 'uid', 'aadhaar_no'],
+      'uid': ['aadhaar', 'aadhar', 'aadhaar_number', 'uid'],
       'pan': ['pan', 'pan_number', 'pan_no'],
       'bank': ['bank', 'bank_name'],
       'ifsc': ['ifsc', 'ifsc_code'],
       'account': ['account', 'account_number', 'account_no', 'bank_account'],
+      'nationality': ['nationality', 'country'],
+      'qualification': ['qualification', 'education', 'degree'],
+      'occupation': ['occupation', 'profession'],
+    };
+
+    // HTML autocomplete token → profile key mapping
+    const AUTOCOMPLETE_MAP = {
+      'name': 'name', 'given-name': 'first_name', 'family-name': 'last_name',
+      'additional-name': 'middle_name', 'email': 'email', 'tel': 'phone',
+      'tel-national': 'phone', 'street-address': 'address',
+      'address-line1': 'address', 'address-level2': 'city',
+      'address-level1': 'state', 'postal-code': 'pincode',
+      'country-name': 'country', 'bday': 'dob', 'sex': 'gender',
     };
 
     for (const nodeId of [...unmapped]) {
@@ -524,7 +544,8 @@ export async function resolveAllMappings(snapshot, profile, scope, request) {
       const nodeName = (node.observed?.accessible_name || '').toLowerCase().trim();
       const nodePlaceholder = (node.observed?.placeholder || '').toLowerCase().trim();
       const nodeFormControl = (node.observed?.form_control_name || '').toLowerCase().trim();
-      const candidates = [nodeName, nodePlaceholder, nodeFormControl].filter(Boolean);
+      const nodeAutocomplete = (node.observed?.autocomplete || '').toLowerCase().trim();
+      const candidates = [nodeName, nodePlaceholder, nodeFormControl, nodeAutocomplete].filter(Boolean);
 
       if (candidates.length === 0) continue;
 
@@ -533,7 +554,7 @@ export async function resolveAllMappings(snapshot, profile, scope, request) {
 
       // Try direct key match first
       for (const candidate of candidates) {
-        const candidateNorm = candidate.replace(/[_\-\s*:]+/g, '').replace(/[()]/g, '');
+        const candidateNorm = candidate.replace(/[_\-\s*:.\/\\,;#()0-9]+/g, '').toLowerCase();
         for (const pk of profileKeyNorms) {
           if (candidateNorm === pk.norm || candidateNorm.includes(pk.norm) || pk.norm.includes(candidateNorm)) {
             if (pk.norm.length >= 3) { // avoid false positives on very short keys
@@ -546,10 +567,22 @@ export async function resolveAllMappings(snapshot, profile, scope, request) {
         if (matchedKey) break;
       }
 
+      // Try autocomplete attribute mapping
+      if (!matchedKey && nodeAutocomplete) {
+        const acKey = AUTOCOMPLETE_MAP[nodeAutocomplete];
+        if (acKey) {
+          const pkEntry = profileKeyNorms.find(pk => pk.norm === acKey.replace(/[_\-\s]+/g, ''));
+          if (pkEntry) {
+            matchedKey = pkEntry.key;
+            matchedValue = pkEntry.value;
+          }
+        }
+      }
+
       // Try alias match
       if (!matchedKey) {
         for (const candidate of candidates) {
-          const candidateNorm = candidate.replace(/[_\-\s*:]+/g, '').replace(/[()]/g, '');
+          const candidateNorm = candidate.replace(/[_\-\s*:.\/\\,;#()0-9]+/g, '').toLowerCase();
           for (const [aliasLabel, aliasKeys] of Object.entries(ALIASES)) {
             const aliasNorm = aliasLabel.replace(/\s+/g, '');
             if (candidateNorm.includes(aliasNorm) || aliasNorm.includes(candidateNorm)) {
