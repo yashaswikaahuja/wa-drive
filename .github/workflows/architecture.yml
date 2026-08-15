@@ -311,11 +311,17 @@ jobs:
           npm ci
           npx playwright install chromium --with-deps
 
+      - name: Install extension-service dependencies
+        working-directory: extension-service
+        run: npm ci
+
       - name: "CHECK-005: Browser tests"
         run: node extension-dev/tests/ci-browser.mjs
         env:
           # Use Playwright's bundled Chromium (no system Chrome needed)
           PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ""
+          DATABASE_URL: "postgresql://test:test@localhost:5432/test_unused"
+          JWT_SECRET: "test-secret-for-ci"
 
       - name: Upload test artifacts on failure
         if: failure()
