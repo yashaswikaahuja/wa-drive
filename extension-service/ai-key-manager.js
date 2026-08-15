@@ -459,7 +459,8 @@ function resolveWorkspaceKeys(aiSettings) {
 }
 
 /**
- * Fallback: get key from environment variables.
+ * Fallback: get key from environment variables (AI_API_KEY only).
+ * GROQ_API_KEY is NOT used here — all keys come from owner-panel.
  */
 function getEnvFallback() {
   if (!config) loadConfig();
@@ -469,16 +470,6 @@ function getEnvFallback() {
       provider: config.provider,
       model: config.model,
       endpoint: config.endpoint,
-    };
-  }
-  // Also try GROQ_API_KEY env as last resort
-  const groqKey = process.env.GROQ_API_KEY || null;
-  if (groqKey) {
-    return {
-      apiKey: groqKey,
-      provider: 'groq',
-      model: 'llama-3.3-70b-versatile',
-      endpoint: 'https://api.groq.com/openai/v1/chat/completions',
     };
   }
   return { apiKey: null, provider: 'none', model: '', endpoint: null };

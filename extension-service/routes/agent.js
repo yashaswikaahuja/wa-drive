@@ -21,11 +21,11 @@ import express from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../db.js';
 import { mutateDoc, KEYS } from '../store.js';
+import { getKeyForWorkspace } from '../ai-key-manager.js';
 
 const router = express.Router();
 router.use(authMiddleware);
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
 
 // Compute semanticFormKey identically to extension/autofill/extractor.js
@@ -313,8 +313,10 @@ router.post('/plan', async (req, res) => {
     });
   }
 
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) return res.status(500).json({ error: 'GROQ_API_KEY not configured on server' });
+  const wsKeys = await getKeyForWorkspace(req.user.workspaceId);
+  if (!wsKeys.apiKey) return res.status(500).json({ error: 'No AI key configured — set keys in owner panel' });
+
+  const apiUrl = wsKeys.endpoint || 'https://api.groq.com/openai/v1/chat/completions';
 
   // For Groq, only send the UNCOVERED fields — not the whole snapshot.
   // Preserves token budget and lets Groq focus on novel fields.
@@ -329,9 +331,9 @@ router.post('/plan', async (req, res) => {
   const model = requestedModel || DEFAULT_MODEL;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + groqKey },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + wsKeys.apiKey },
       body: JSON.stringify({
         model,
         messages: [
