@@ -231,10 +231,17 @@ export async function generateFillPlan(request) {
       session_id: session_id || null,
       diagnostics: {
         correlation_id: correlationId,
-        errors: ['No fields could be mapped to profile data'],
+        errors: [`No fields could be mapped to profile data (${unmapped.length} unmapped, ${excluded.length} excluded)`],
         phase: 'mapping',
         unmapped_count: unmapped.length,
+        unmapped_node_ids: unmapped,
         excluded_count: excluded.length,
+        excluded_node_ids: excluded,
+        resolution_attempts: {
+          knowledge_store: 'empty',
+          candidate_mappings: candidate_mappings?.length > 0 ? `${candidate_mappings.length} provided` : 'none',
+          direct_match: 'no matches',
+        },
         duration_ms: Date.now() - startTime,
       },
     };

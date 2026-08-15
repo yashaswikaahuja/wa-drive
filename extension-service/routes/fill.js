@@ -54,7 +54,14 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       // Extract only planner-confirmed unresolved nodes for AI mapping.
       const nodes = snapshot.nodes || {};
       const unmappedNodeIds = new Set(planResult.diagnostics?.unmapped_node_ids || []);
-      const unmappedFields = Object.values(nodes).filter(node => unmappedNodeIds.has(node.node_id));
+      // Support both array-of-objects and object-keyed-by-node_id snapshot formats
+      let unmappedFields = Object.values(nodes).filter(node => unmappedNodeIds.has(node.node_id));
+      if (unmappedFields.length === 0 && unmappedNodeIds.size > 0) {
+        // Fallback: nodes may be keyed by node_id directly
+        unmappedFields = [...unmappedNodeIds]
+          .map(id => nodes[id])
+          .filter(Boolean);
+      }
 
       if (unmappedFields.length > 0) {
         const pageContext = {
@@ -113,10 +120,24 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
     }
 
     if (!planResult.success) {
+      // Build operator-facing message from diagnostics
+      const diag = planResult.diagnostics || {};
+      let message = 'Fill plan could not be generated.';
+      if (diag.phase === 'mapping') {
+        const parts = [];
+        if (diag.unmapped_count > 0) parts.push(`${diag.unmapped_count} field(s) could not be matched to profile keys`);
+        if (diag.excluded_count > 0) parts.push(`${diag.excluded_count} field(s) excluded by privacy/scope rules`);
+        if (diag.semantic_mapping?.note) parts.push(diag.semantic_mapping.note);
+        if (parts.length > 0) message = parts.join('. ') + '.';
+      } else if (diag.errors?.length > 0) {
+        message = diag.errors[0];
+      }
+
       return res.status(200).json({
         plan: null,
         classification: null,
         session: null,
+        message,
         diagnostics: planResult.diagnostics,
       });
     }
