@@ -178,12 +178,20 @@ export function classifyFormBehavior({ snapshot, domEvidence, priorKnowledge, pl
     effectiveMode = 'dynamic';
     confidence = computeConfidence(hardSignals, cascadeEdgeCount, reasonCodes, priorKnowledge);
   } else if (isFirstEncounter(priorKnowledge, evidenceArray)) {
-    // First encounter with no signals → UNKNOWN (conservative)
-    systemClassification = 'UNKNOWN';
-    effectiveMode = 'dynamic';
-    confidence = 0.3;
-    forceUnknown = true;
-    reasonCodes.push('first_encounter');
+    // First encounter: if no dynamic signals at all, treat as STATIC (fill all in one pass).
+    // Only default to dynamic when there's actual evidence of dynamic behavior.
+    if (hardSignals === 0 && cascadeEdgeCount === 0 && softSignals === 0) {
+      systemClassification = 'STATIC';
+      effectiveMode = 'static';
+      confidence = 0.6;
+      reasonCodes.push('first_encounter_no_signals');
+    } else {
+      systemClassification = 'UNKNOWN';
+      effectiveMode = 'dynamic';
+      confidence = 0.3;
+      forceUnknown = true;
+      reasonCodes.push('first_encounter_with_signals');
+    }
   } else if (hasCleanHistory(priorKnowledge) && hardSignals === 0 && cascadeEdgeCount === 0) {
     // Clean history + no signals → STATIC
     systemClassification = 'STATIC';

@@ -173,7 +173,7 @@ async function runTests() {
       ok(snapshot?.kind === 'page_snapshot', 'Auto→Dynamic: perception works');
 
       // Simulate cascade edges in snapshot
-      const snapshotWithEdges = { ...snapshot, edges: [{ type: 'depends_on', source_id: 'state', target_id: 'district' }] };
+      const snapshotWithEdges = { ...snapshot, edges: [{ type: 'cascade', source: 'state', target: 'district' }] };
       const classification = classifyFormBehavior({
         snapshot: snapshotWithEdges, domEvidence: [], priorKnowledge: null,
         planSteps: [{ target: { node_id: 'state' } }, { target: { node_id: 'district' } }],

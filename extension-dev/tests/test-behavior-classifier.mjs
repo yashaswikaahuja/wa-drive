@@ -153,9 +153,9 @@ console.log('\n--- First Encounter ---');
     planSteps: makeSteps(nodeIds),
   });
 
-  ok(result.system_classification === 'UNKNOWN', 'first encounter → UNKNOWN');
-  ok(result.effective_execution_mode === 'dynamic', 'UNKNOWN → effective dynamic');
-  ok(result.reason_codes.includes('first_encounter'), 'reason includes first_encounter');
+  ok(result.system_classification === 'STATIC', 'first encounter no signals → STATIC');
+  ok(result.effective_execution_mode === 'static', 'first encounter no signals → effective static');
+  ok(result.reason_codes.includes('first_encounter_no_signals'), 'reason includes first_encounter_no_signals');
   ok(result.confidence > 0 && result.confidence <= 1, 'confidence bounded');
 }
 
@@ -281,8 +281,8 @@ console.log('\n--- UNKNOWN Never Static ---');
     priorKnowledge: null,
     planSteps: makeSteps(nodeIds),
   });
-  ok(r1.system_classification === 'UNKNOWN', 'null prior → UNKNOWN');
-  ok(r1.effective_execution_mode === 'dynamic', 'UNKNOWN never returns static mode (null prior)');
+  ok(r1.system_classification === 'STATIC', 'null prior no signals → STATIC');
+  ok(r1.effective_execution_mode === 'static', 'null prior no signals → static mode');
 
   // Encounter with zero count
   const r2 = classifyFormBehavior({
@@ -291,8 +291,8 @@ console.log('\n--- UNKNOWN Never Static ---');
     priorKnowledge: { encounter_count: 0 },
     planSteps: makeSteps(nodeIds),
   });
-  ok(r2.system_classification === 'UNKNOWN', 'encounter_count=0 → UNKNOWN');
-  ok(r2.effective_execution_mode === 'dynamic', 'UNKNOWN never returns static mode (count=0)');
+  ok(r2.system_classification === 'STATIC', 'encounter_count=0 no signals → STATIC');
+  ok(r2.effective_execution_mode === 'static', 'encounter_count=0 no signals → static mode');
 
   // Ambiguous signals
   const r3 = classifyFormBehavior({
@@ -403,8 +403,8 @@ console.log('\n--- Edge Cases ---');
     priorKnowledge: null,
     planSteps: [],
   });
-  ok(r1.system_classification === 'UNKNOWN', 'empty planSteps → UNKNOWN');
-  ok(r1.effective_execution_mode === 'dynamic', 'empty planSteps → dynamic mode');
+  ok(r1.system_classification === 'STATIC', 'empty planSteps no signals → STATIC');
+  ok(r1.effective_execution_mode === 'static', 'empty planSteps no signals → static mode');
   ok(Array.isArray(r1.reason_codes), 'empty planSteps → reason_codes is array');
 
   // Null/undefined domEvidence handled gracefully
@@ -414,7 +414,7 @@ console.log('\n--- Edge Cases ---');
     priorKnowledge: null,
     planSteps: makeSteps(['node:x']),
   });
-  ok(r2.system_classification === 'UNKNOWN', 'null domEvidence → UNKNOWN (no crash)');
+  ok(r2.system_classification === 'STATIC', 'null domEvidence no signals → STATIC (no crash)');
   ok(r2.evidence_summary.hard_signals === 0, 'null domEvidence → zero hard signals');
 
   // undefined domEvidence
@@ -424,7 +424,7 @@ console.log('\n--- Edge Cases ---');
     priorKnowledge: null,
     planSteps: makeSteps(['node:x']),
   });
-  ok(r3.system_classification === 'UNKNOWN', 'undefined domEvidence → UNKNOWN (no crash)');
+  ok(r3.system_classification === 'STATIC', 'undefined domEvidence no signals → STATIC (no crash)');
 
   // Cascade edges NOT between targets (should not count)
   const edges = [{ type: 'cascade', source: 'node:other1', target: 'node:other2' }];
