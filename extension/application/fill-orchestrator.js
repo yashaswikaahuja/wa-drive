@@ -202,6 +202,7 @@ async function runProductFill(ctx) {
 
   const [loadedCheck] = await chrome.scripting.executeScript({
     target: { tabId },
+    world: 'MAIN',
     func: () => !!(
       globalThis.CcDomGateway
       && globalThis.CcBindingRegistry
@@ -212,6 +213,7 @@ async function runProductFill(ctx) {
   if (!loadedCheck?.result) {
     await chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',
       files: PRODUCT_PATH_SCRIPTS.slice(),
     });
   }
@@ -224,6 +226,7 @@ async function runProductFill(ctx) {
       : [];
     await chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',
       func: (list) => {
         if (globalThis.CcNavigationContract?.setOriginAllowlist) {
           globalThis.CcNavigationContract.setOriginAllowlist(list);
@@ -239,6 +242,7 @@ async function runProductFill(ctx) {
 
   const [percResult] = await chrome.scripting.executeScript({
     target: { tabId },
+    world: 'MAIN',
     func: async () => {
       try {
         if (typeof CcPerception === 'undefined') return { error: 'CcPerception not loaded' };
@@ -420,6 +424,7 @@ async function runProductFill(ctx) {
     progress('Validating resume state...', 68);
     const [resumeCheck] = await chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',
       func: () => {
         const state = globalThis.CcPerception?.getPerceptionState?.() || {};
         return { documentId: state.documentId, revision: state.revision };
@@ -483,6 +488,7 @@ async function runProductFill(ctx) {
       // Phase 4.8: Wait for DOM to settle before re-perception
       await chrome.scripting.executeScript({
         target: { tabId },
+        world: 'MAIN',
         func: async () => {
           if (globalThis.CcDomSettle?.waitForSettle) {
             await globalThis.CcDomSettle.waitForSettle();
@@ -495,6 +501,7 @@ async function runProductFill(ctx) {
       progress(`Dynamic turn ${turn + 1}: re-perceiving...`, 50 + turn);
       const [rePercResult] = await chrome.scripting.executeScript({
         target: { tabId },
+        world: 'MAIN',
         func: async () => {
           if (!globalThis.CcPerception?.perceivePage) return { error: 'perception_not_loaded' };
           return await globalThis.CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
@@ -563,6 +570,7 @@ async function runProductFill(ctx) {
         try {
           const [dynResumeCheck] = await chrome.scripting.executeScript({
             target: { tabId },
+            world: 'MAIN',
             func: () => {
               const state = globalThis.CcPerception?.getPerceptionState?.() || {};
               return { documentId: state.documentId, revision: state.revision };
@@ -594,6 +602,7 @@ async function runProductFill(ctx) {
     progress(`Executing ${plan.steps.length} step${plan.steps.length > 1 ? 's' : ''}...`, 70 + turn);
     const [execResult] = await chrome.scripting.executeScript({
       target: { tabId },
+      world: 'MAIN',
       func: async (actionPlan) => {
         if (!globalThis.CcActionPlanExecutor?.execute) {
           throw new Error('ActionPlan executor not loaded');
@@ -707,6 +716,7 @@ async function runProductFill(ctx) {
         // Phase 4.8: Wait for DOM to settle before re-perception
         await chrome.scripting.executeScript({
           target: { tabId },
+          world: 'MAIN',
           func: async () => {
             if (globalThis.CcDomSettle?.waitForSettle) {
               await globalThis.CcDomSettle.waitForSettle();
@@ -717,6 +727,7 @@ async function runProductFill(ctx) {
         });
         const [rePercResult] = await chrome.scripting.executeScript({
           target: { tabId },
+          world: 'MAIN',
           func: async () => {
             if (!globalThis.CcPerception?.perceivePage) return { error: 'perception_not_loaded' };
             return await globalThis.CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
@@ -761,6 +772,7 @@ async function runProductFill(ctx) {
 
         const [dynExecResult] = await chrome.scripting.executeScript({
           target: { tabId },
+          world: 'MAIN',
           func: async (actionPlan) => {
             if (!globalThis.CcActionPlanExecutor?.execute) throw new Error('executor not loaded');
             if (globalThis.CcDomEvidence?.startObserving) {
