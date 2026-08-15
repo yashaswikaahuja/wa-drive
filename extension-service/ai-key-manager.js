@@ -367,6 +367,225 @@ async function callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature 
   return { content, tokensUsed };
 }
 
+// ── Workspace-Aware Key Resolution ──────────────────────────────────
+// Fetches AI keys from the owner-panel configuration stored in
+// workspaces.settings->'ai'. Falls back to env vars if no DB key found.
+
+import { pool } from './db.js';
+
+/** Cache workspace keys for 5 minutes to avoid hammering DB on every fill */
+const _wsKeyCache = new Map(); // workspaceId → { keys, expiry }
+const WS_KEY_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Get AI key configuration for a specific workspace.
+ * Reads from workspaces.settings->'ai' (set via owner-panel).
+ * Falls back to process.env if no workspace-level key is configured.
+ *
+ * @param {string} workspaceId — UUID of the workspace
+ * @returns {Promise<{ apiKey: string|null, provider: string, model: string, endpoint: string|null }>}
+ */
+export async function getKeyForWorkspace(workspaceId) {
+  if (!workspaceId) return getEnvFallback();
+
+  // Check cache
+  const cached = _wsKeyCache.get(workspaceId);
+  if (cached && cached.expiry > Date.now()) {
+    return cached.keys;
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT settings->'ai' AS ai_settings FROM workspaces WHERE id = $1`,
+      [workspaceId]
+    );
+
+    const aiSettings = rows[0]?.ai_settings;
+    if (aiSettings) {
+      const keys = resolveWorkspaceKeys(aiSettings);
+      if (keys.apiKey) {
+        _wsKeyCache.set(workspaceId, { keys, expiry: Date.now() + WS_KEY_TTL_MS });
+        return keys;
+      }
+    }
+  } catch (err) {
+    console.warn(`[ai-key-manager] Failed to fetch workspace AI keys: ${err.message}`);
+  }
+
+  // Fallback to environment
+  return getEnvFallback();
+}
+
+/**
+ * Resolve the best key/provider/model from workspace AI settings.
+ * The owner-panel stores: groqKey, openrouterKey, mistralKey, textProvider, textModel.
+ * For semantic mapping (text LLM), we use the text provider keys.
+ *
+ * @param {object} aiSettings — workspaces.settings.ai object
+ * @returns {{ apiKey: string|null, provider: string, model: string, endpoint: string|null }}
+ */
+function resolveWorkspaceKeys(aiSettings) {
+  const textProvider = aiSettings.textProvider || 'groq';
+  const textModel = aiSettings.textModel || null;
+
+  if (textProvider === 'openrouter' && aiSettings.openrouterKey) {
+    return {
+      apiKey: aiSettings.openrouterKey,
+      provider: 'openrouter',
+      model: textModel || 'meta-llama/llama-3.3-70b-instruct',
+      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    };
+  }
+
+  if (aiSettings.groqKey) {
+    return {
+      apiKey: aiSettings.groqKey,
+      provider: 'groq',
+      model: textModel || 'llama-3.3-70b-versatile',
+      endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    };
+  }
+
+  if (aiSettings.openrouterKey) {
+    return {
+      apiKey: aiSettings.openrouterKey,
+      provider: 'openrouter',
+      model: textModel || 'meta-llama/llama-3.3-70b-instruct',
+      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+    };
+  }
+
+  return { apiKey: null, provider: 'none', model: '', endpoint: null };
+}
+
+/**
+ * Fallback: get key from environment variables.
+ */
+function getEnvFallback() {
+  if (!config) loadConfig();
+  if (config.apiKey) {
+    return {
+      apiKey: config.apiKey,
+      provider: config.provider,
+      model: config.model,
+      endpoint: config.endpoint,
+    };
+  }
+  // Also try GROQ_API_KEY env as last resort
+  const groqKey = process.env.GROQ_API_KEY || null;
+  if (groqKey) {
+    return {
+      apiKey: groqKey,
+      provider: 'groq',
+      model: 'llama-3.3-70b-versatile',
+      endpoint: 'https://api.groq.com/openai/v1/chat/completions',
+    };
+  }
+  return { apiKey: null, provider: 'none', model: '', endpoint: null };
+}
+
+/**
+ * Check if AI is available for a specific workspace.
+ *
+ * @param {string} workspaceId
+ * @returns {Promise<boolean>}
+ */
+export async function isAvailableForWorkspace(workspaceId) {
+  const keys = await getKeyForWorkspace(workspaceId);
+  return keys.apiKey != null && keys.apiKey.length > 0;
+}
+
+/**
+ * Make an AI call using workspace-specific keys.
+ * Uses OpenAI-compatible endpoint (works for Groq, OpenRouter, OpenAI).
+ *
+ * @param {string} workspaceId
+ * @param {object} params
+ * @param {string} params.systemPrompt
+ * @param {string} params.userPrompt
+ * @param {number} [params.maxTokens]
+ * @param {number} [params.temperature]
+ * @returns {Promise<AIResponse|null>}
+ */
+export async function callAIForWorkspace(workspaceId, { systemPrompt, userPrompt, maxTokens, temperature }) {
+  const keys = await getKeyForWorkspace(workspaceId);
+
+  if (!keys.apiKey) return null;
+
+  // Check quota (shared across all workspaces for now)
+  const quota = checkQuota();
+  if (!quota.allowed) {
+    return {
+      ok: false,
+      content: null,
+      tokensUsed: 0,
+      error: quota.reason,
+      model: keys.model,
+      latencyMs: 0,
+    };
+  }
+
+  const startTime = Date.now();
+  const effectiveMaxTokens = maxTokens || DEFAULT_CONFIG.maxTokens;
+  const effectiveTemperature = temperature ?? DEFAULT_CONFIG.temperature;
+
+  try {
+    const endpoint = keys.endpoint || 'https://api.openai.com/v1/chat/completions';
+    const body = {
+      model: keys.model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: effectiveMaxTokens,
+      temperature: effectiveTemperature,
+      response_format: { type: 'json_object' },
+    };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${keys.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => 'unknown');
+      throw new Error(`AI API error ${res.status} (${keys.provider}): ${errText}`);
+    }
+
+    const data = await res.json();
+    const choice = data.choices?.[0];
+    if (!choice) throw new Error('No completion choice returned');
+
+    const tokensUsed = data.usage?.total_tokens || 0;
+    const latencyMs = Date.now() - startTime;
+    recordUsage(tokensUsed);
+
+    return {
+      ok: true,
+      content: choice.message?.content || '',
+      tokensUsed,
+      error: null,
+      model: keys.model,
+      latencyMs,
+    };
+  } catch (err) {
+    const latencyMs = Date.now() - startTime;
+    console.error(`[ai-key-manager] Workspace AI call failed (${keys.provider}, ${latencyMs}ms):`, err.message);
+    return {
+      ok: false,
+      content: null,
+      tokensUsed: 0,
+      error: err.message,
+      model: keys.model,
+      latencyMs,
+    };
+  }
+}
+
 // ── Reset (for testing) ─────────────────────────────────────────────
 
 /**
@@ -374,6 +593,7 @@ async function callAnthropic({ systemPrompt, userPrompt, maxTokens, temperature 
  */
 export function _reset() {
   config = null;
+  _wsKeyCache.clear();
   usage = {
     requestCount: 0,
     tokenCount: 0,
