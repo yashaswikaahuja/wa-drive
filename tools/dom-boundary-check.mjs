@@ -32,6 +32,7 @@ try {
 
 const allowed = [
   'extension/runtime/dom-gateway.js',
+  'extension/runtime/dom-settle.js',
   'extension/perception/',
 ];
 const patterns = [

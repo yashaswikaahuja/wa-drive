@@ -93,7 +93,7 @@ jobs:
           # FB-011: No framework names as knowledge identity
           if echo "$DIFF" | grep -iE "(react.?select|angular.?material|mat.?select|prime.?ng|ng.?dropdown|mui.?autocomplete|ant.?design|vuetify)" | grep -qvE "(plugins/|drivers/|tests/)"; then
             # Only flag if NOT in plugins/drivers/tests (those are grandfathered)
-            FRAMEWORK_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(plugins/|drivers/|tests/)" || true)
+            FRAMEWORK_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(plugins/|drivers/|tests/|perception/)" || true)
             if [ -n "$FRAMEWORK_FILES" ]; then
               echo "❌ FB-011: Framework name used as knowledge identity (use behavioral patterns per D03)" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))

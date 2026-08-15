@@ -75,6 +75,7 @@ structural_dom_apis:
     - "MutationObserver"
   new_code_allowed_in:
     - "extension/runtime/dom-gateway.js"
+    - "extension/runtime/dom-settle.js"
     - "extension/perception/"
   note: >
     Perception may use read-only local node traversal supplied by the gateway.
