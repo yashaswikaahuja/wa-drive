@@ -139,7 +139,7 @@ export function validateSnapshot(snapshot) {
  * @returns {Promise<FillPlanResponse>}
  */
 export async function generateFillPlan(request) {
-  const { snapshot, workspace_id, phone, person_key, profile_overrides, supersedes_plan_id, session_id } = request;
+  const { snapshot, workspace_id, phone, person_key, profile_overrides, supersedes_plan_id, session_id, candidate_mappings } = request;
 
   const correlationId = `corr:${randomUUID().replace(/-/g, '').slice(0, 24)}`;
   const startTime = Date.now();
@@ -207,7 +207,7 @@ export async function generateFillPlan(request) {
       form_key: scope.form_key,
       organization_id: workspace_id,
       country: scope.country,
-    });
+    }, { candidate_mappings });
   } catch (err) {
     return {
       success: false,

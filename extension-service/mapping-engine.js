@@ -442,10 +442,20 @@ export async function resolveAllMappings(snapshot, profile, scope, request) {
   const fieldMappings = await resolveFieldMappings(scope);
   const derivationRules = await resolveDerivationRules(scope);
 
-  // Phase 4 cold-start fallback: if no knowledge records exist for this form,
-  // attempt direct profile-key matching based on field labels/names.
+  // Phase 4 cold-start: include candidate_mappings from AI semantic mapper
+  // These are draft records not yet in the active knowledge store.
   const hasCandidates = request?.candidate_mappings?.length > 0;
   const candidateMappings = hasCandidates ? request.candidate_mappings : [];
+
+  // Convert candidate_mappings to field_mapping-like records for matching
+  const allFieldMappings = [...fieldMappings];
+  if (candidateMappings.length > 0) {
+    for (const cm of candidateMappings) {
+      if (cm.payload?.field_label || cm.payload?.match_patterns) {
+        allFieldMappings.push(cm);
+      }
+    }
+  }
 
   /** @type {MappingResult[]} */
   const mappings = [];
@@ -464,7 +474,7 @@ export async function resolveAllMappings(snapshot, profile, scope, request) {
       continue;
     }
 
-    const result = resolveNodeMapping(node, fieldMappings, derivationRules, profile);
+    const result = resolveNodeMapping(node, allFieldMappings, derivationRules, profile);
     if (result) {
       mappings.push(result);
     } else {
