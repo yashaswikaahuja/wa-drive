@@ -27,7 +27,14 @@ import { fetchLivePlan } from './lib/plan-live.mjs';
 import { loadProfile } from './lib/profile.mjs';
 import { buildFillReport } from './lib/fill-report.mjs';
 import { reportFromTrace } from './lib/report-from-trace.mjs';
-import { listSessions, getSession, reportFromSession, authMe } from './lib/live-api.mjs';
+import {
+  listSessions,
+  getSession,
+  reportFromSession,
+  authMe,
+  extensionVersionOf,
+  pathHintFromRecords,
+} from './lib/live-api.mjs';
 
 const flags = parseArgs(process.argv);
 
@@ -155,13 +162,29 @@ async function cmdSessions() {
   if (!backend || !token) throw new Error('Need CC_BACKEND_URL and CC_ACCESS_TOKEN');
   const limit = flags.limit || 20;
   const rows = await listSessions(backend, token, { limit });
-  art.writeJson('sessions.json', rows);
-  console.log(`Recent live sessions (limit=${limit}):\n`);
+  // Enrich with full session when list omits version (usually present) + path hint from records
+  const enriched = [];
   for (const s of rows) {
+    let full = s;
+    if (!extensionVersionOf(s) || !s.records) {
+      try {
+        full = await getSession(backend, token, s.id);
+      } catch {
+        full = s;
+      }
+    }
+    const ver = extensionVersionOf(full) || '?';
+    const records = Array.isArray(full.records) ? full.records : [];
+    const hint = pathHintFromRecords(records);
+    enriched.push({ ...full, _ver: ver, _hint: hint });
     console.log(
-      `${s.id}  filled=${s.totalFilled} failed=${s.totalFailed}  host=${s.hostname || '?'}  at=${s.receivedAt || '?'}`
+      `${full.id}\n` +
+        `  extension=${ver}  filled=${full.totalFilled ?? full.total_filled}  failed=${full.totalFailed ?? full.total_failed}\n` +
+        `  host=${full.hostname || '(empty)'}  at=${full.receivedAt || full.created_at || '?'}\n` +
+        `  path=${hint}  records=${records.length}`
     );
   }
+  art.writeJson('sessions.json', enriched);
   console.log(`\nDetail: node extension-dev/cli/cc-debug.mjs session --id <id>`);
   console.log(`out: ${outDir}`);
 }
@@ -221,9 +244,13 @@ async function cmdLive() {
       for (const s of [...rows].reverse()) {
         if (seen.has(s.id)) continue;
         seen.add(s.id);
-        console.log(`\n>>> NEW SESSION ${s.id} host=${s.hostname} filled=${s.totalFilled} failed=${s.totalFailed}`);
+        console.log(
+          `\n>>> NEW SESSION ${s.id} host=${s.hostname || '(empty)'} filled=${s.totalFilled} failed=${s.totalFailed}`
+        );
         try {
           const full = await getSession(backend, token, s.id);
+          const ver = extensionVersionOf(full) || '?';
+          console.log(`    extension version: ${ver}`);
           const dir = resolve(ROOT, 'extension-dev/cli/out', `live-session-${s.id}`);
           const { createArtifacts: ca } = await import('./lib/artifacts.mjs');
           const a = ca(dir);

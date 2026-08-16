@@ -50,19 +50,46 @@ export async function authMe(backendUrl, token) {
 /**
  * Build a fill-style report from a sessions row (live operator data).
  */
+function extensionVersionOf(session) {
+  // Stored by product as runtime_version / runtimeVersion (extension manifest version)
+  return (
+    session.runtimeVersion ||
+    session.runtime_version ||
+    session.extensionVersion ||
+    session.extension_version ||
+    null
+  );
+}
+
+/** Heuristic path label from record shape (not a substitute for version). */
+function pathHintFromRecords(records) {
+  if (!records?.length) return 'unknown';
+  const r0 = records[0] || {};
+  if (r0.selector != null || r0.strategy != null || r0.actualValue != null) {
+    return 'legacy-style records (selector/strategy)';
+  }
+  if (r0.planId != null || r0.stepId != null || r0.nodeId != null) {
+    return 'ActionPlan/EO-style records (nodeId/stepId)';
+  }
+  return 'unknown-record-shape';
+}
+
 export function reportFromSession(session) {
   const records = Array.isArray(session.records) ? session.records : [];
+  const extVer = extensionVersionOf(session) || '?';
+  const pathHint = pathHintFromRecords(records);
   const lines = [];
   lines.push('═══════════════════════════════════════════════════════════');
   lines.push('  LIVE SESSION REPORT  (real operator fill via server)');
   lines.push('═══════════════════════════════════════════════════════════');
-  lines.push(`Session   ${session.id}`);
-  lines.push(`When      ${session.receivedAt || session.created_at || session.submitted_at || '?'}`);
-  lines.push(`Host      ${session.hostname || '?'}`);
-  lines.push(`FormKey   ${session.semanticFormKey || '?'}`);
-  lines.push(`Runtime   ${session.runtimeVersion || '?'}`);
+  lines.push(`Session            ${session.id}`);
+  lines.push(`When               ${session.receivedAt || session.created_at || session.submitted_at || '?'}`);
+  lines.push(`Extension version  ${extVer}`);
+  lines.push(`Path hint          ${pathHint}`);
+  lines.push(`Host               ${session.hostname || session.hostname === '' ? (session.hostname || '(empty)') : '?'}`);
+  lines.push(`FormKey            ${session.semanticFormKey || session.semantic_form_key || '?'}`);
   lines.push(
-    `Totals    filled=${session.totalFilled ?? session.total_filled ?? '?'}  failed=${session.totalFailed ?? session.total_failed ?? '?'}`
+    `Totals             filled=${session.totalFilled ?? session.total_filled ?? '?'}  failed=${session.totalFailed ?? session.total_failed ?? '?'}`
   );
   lines.push('───────────────────────────────────────────────────────────');
   lines.push('  #  result   op/type        label / node');
@@ -117,9 +144,13 @@ export function reportFromSession(session) {
     lines,
     summary: {
       id: session.id,
+      extensionVersion: extVer,
+      pathHint,
       filled: session.totalFilled ?? session.total_filled ?? ok,
       failed: session.totalFailed ?? session.total_failed ?? fail,
       recordCount: records.length,
     },
   };
 }
+
+export { extensionVersionOf, pathHintFromRecords };
