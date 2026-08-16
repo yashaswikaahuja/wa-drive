@@ -126,17 +126,27 @@ export function reportFromSession(session) {
   lines.push('───────────────────────────────────────────────────────────');
   lines.push(`RESULT    ok-ish=${ok}  fail=${fail}  other=${other}  record_rows=${records.length}`);
   lines.push('───────────────────────────────────────────────────────────');
-  lines.push('  NOTES');
+  lines.push('  NOTES / GAPS');
   lines.push('───────────────────────────────────────────────────────────');
-  lines.push('  • This report is from the LIVE server (what the real extension posted).');
-  lines.push('  • It does NOT modify the product extension.');
-  lines.push('  • MAIN-world DOM truth is NOT in sessions today — if totals say filled');
-  lines.push('    but the page was empty, that is the P0 lie gap (need product DOM check).');
+  lines.push('  • LIVE server data only (real operator extension posts). No product file patches.');
+  if (String(extVer).startsWith('5.91')) {
+    lines.push('  • Engine: LEGACY-style session records (5.91). Not ActionPlan product path.');
+  } else if (String(extVer).startsWith('5.92') || pathHint.includes('ActionPlan')) {
+    lines.push('  • Engine: ActionPlan product path (orchestrator → APE → gateway).');
+  }
+  const hasGatewayBlackHole = records.some(
+    (r) => String(r.failReason || r.failure_code || '') === 'gateway_error'
+  );
+  if (hasGatewayBlackHole) {
+    lines.push('  • GAP: failReason=gateway_error is a BLACK HOLE (unknown codes collapsed).');
+    lines.push('    Layer may be inject/globals, resolve, or act — cannot tell from this field alone.');
+  }
+  if (records.some((r) => String(r.type || '') === 'unknown')) {
+    lines.push('  • GAP: type=unknown means fill-session lost action_op — op not recorded.');
+  }
+  lines.push('  • MAIN-world DOM truth is NOT in sessions — cannot prove page-empty from this alone.');
   if ((session.totalFilled || session.total_filled || 0) > 0 && records.length === 0) {
     lines.push('  • GAP: totals > 0 but records empty — reporting incomplete.');
-  }
-  if ((session.totalFilled || 0) > 0 && fail === 0 && records.every((r) => (r.observedValueState || r.observed_value_state) === 'nonempty')) {
-    lines.push('  • EO-side values look nonempty; if operator saw empty page, DOM was wiped or wrong tab.');
   }
   lines.push('═══════════════════════════════════════════════════════════');
 
