@@ -42,6 +42,7 @@ export function parseArgs(argv) {
     else if (a === '--step-id') flags.stepId = next();
     else if (a === '--max-steps') flags.maxSteps = Number(next());
     else if (a === '--force-lie') flags.forceLie = true;
+    else if (a === '--file' || a === '--trace') flags.file = next();
     else if (a === '--extension' || a === '--runtime-extension') flags.extension = true;
     else if (a === '--runtime') {
       const v = next();
@@ -61,45 +62,22 @@ export function printHelp() {
 cc-debug — fill a REAL form and report what happened
 DEBUG BRANCH ONLY (debug/cc-cli). Never merge to master.
 
-PRIMARY COMMAND
-  fill     Open a real page (or fixture), run product fill, print:
-           what was planned, what claimed ok/fail, what the DOM shows
+PRIMARY WORKFLOW (recommended)
+  1. Load this branch's extension in Chrome (unpacked: extension/)
+  2. Login as the café operator (normal CONNECT / login)
+  3. Open a REAL form, pick profile, click Fill Form
+  4. Extension downloads cc-fill-trace-*.json (Downloads)
+  5. Analyze:
 
-  node extension-dev/cli/cc-debug.mjs fill --url "https://portal.../form" ^
-    --profile .\\my-profile.json ^
-    --backend-url https://api.../api ^
-    --token YOUR_JWT
+  node extension-dev/cli/cc-debug.mjs report --file %USERPROFILE%\\Downloads\\cc-fill-trace-....json
 
-  # env alternatives:
-  #   CC_BACKEND_URL, CC_ACCESS_TOKEN (or ACCESS_TOKEN)
+  Report shows: plan steps, EO claims, binding DOM, MAIN-world DOM, GAPS to fix.
 
-  node extension-dev/cli/cc-debug.mjs fill --url "..." --profile p.json --headed --keep-open
+OTHER
+  report --file <trace.json>   Analyze a captured operator fill (primary)
+  status                       Env check
+  fill --url ...               LAB ONLY: CLI-driven fill (not real operator path)
 
-REQUIRED for live fill (default for "fill")
-  --url <https://...>          Real form page
-  --profile <json-file>        Profile object or { id, data: {...} }
-  --backend-url <url>          Extension-service base (…/api)
-  --token <jwt>                Or CC_ACCESS_TOKEN / ACCESS_TOKEN
-
-OPTIONAL
-  --execution-preference AUTO|STATIC|DYNAMIC
-  --headed / --headless        fill defaults to headed
-  --keep-open                  Leave browser open ~60s after report
-  --out <dir>                  Artifact folder
-  --chrome-path <path>
-  --timeout-ms <n>
-
-LAB / SECONDARY (not the main goal)
-  fill-e2e --fixture …         Offline fixture truth-gate harness
-  perceive / plan / execute    Stage tools
-  status                       Chrome + inject list + optional health
-
-ARTIFACTS (every fill)
-  extension-dev/cli/out/<run-id>/
-    report.txt          ← human fill report (start here)
-    snapshot.json plan.json execution.json
-    dom-after.json main-world-after.json truth.json meta.json
-
-Exit code: 0 only if no fails and no DOM lies.
+Exit 0 on report if no lies and no fails.
 `);
 }

@@ -556,7 +556,24 @@ fillBtn.addEventListener('click', async () => {
     showResults(filled, skipped, failed, records.filter((r) => r.result !== 'filled'));
     undoBtn.style.display = filled > 0 ? 'block' : 'none';
 
-    const statusColor = !fillOut.ok || failed
+    // DEBUG: download fill trace so cc-debug report can analyze real operator fills
+    if (fillOut.debugTrace) {
+      try {
+        const blob = new Blob([JSON.stringify(fillOut.debugTrace, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        a.href = URL.createObjectURL(blob);
+        a.download = `cc-fill-trace-${ts}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        console.log('[CC-DEBUG] fill trace downloaded', fillOut.debugTrace.counts);
+      } catch (e) {
+        console.warn('[CC-DEBUG] trace download failed', e);
+      }
+    }
+
+    const statusColor = !fillOut.ok || failed || fillOut.debugTrace?.counts?.lies > 0
+      || fillOut.debugTrace?.counts?.page_empty_lie
       ? CC.danger
       : (fillOut.observationError ? CC.danger : CC.success);
     const errApi = globalThis.CcRuntimeErrors;

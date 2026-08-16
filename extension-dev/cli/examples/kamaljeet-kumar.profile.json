@@ -1,0 +1,330 @@
+{
+  "id": "187209fa-dd8a-40f5-8287-f76ec9fdf604",
+  "name": "Kamaljeet Kumar",
+  "displayLabel": "Kamaljeet Kumar",
+  "data": {
+    "mop": {
+      "value": "SINGLE",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "micr": {
+      "value": "803002501",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "name": {
+      "value": "Kamaljeet Kumar",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T01:08:25.006Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "block": {
+      "value": "Rajgir",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T01:11:50.095Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "email": {
+      "value": "kamaljeetkr67@gmail.com",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T01:08:56.356Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "phone": {
+      "value": "9031329418",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-05T11:55:07.497Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "custom": {
+      "value": "RFJPK",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "address": {
+      "value": "S/O: Jayram Yadav, Vishthapit Nagdih 2 Sithaura Silao Nalan Sithaura",
+      "source": "document",
+      "confidence": 0.85,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "bus_hrs": {
+      "value": "10:00:00-16:00:00",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "village": {
+      "value": "visthapit",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:05:34.724Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "ward_no": {
+      "value": "16",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:05:16.635Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "district": {
+      "value": "Nalanda",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T01:09:05.331Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "password": {
+      "value": "Kama@93",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-04T17:49:40.467Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "phone_no": {
+      "value": "9031829647",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "religion": {
+      "value": "hindu",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:06:07.363Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "ward_no.": {
+      "value": "",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:04:29.170Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "bank_name": {
+      "value": "STATE BANK OF INDIA",
+      "source": "document",
+      "confidence": 0.85,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "ifsc_code": {
+      "value": "SBIN0003499",
+      "source": "document",
+      "confidence": 0.97,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "ward_nol_": {
+      "value": "",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:04:34.930Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "cif_number": {
+      "value": "92383855592",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "issue_date": {
+      "value": "16/03/2016",
+      "source": "document",
+      "confidence": 0.85,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "nom_reg_no": {
+      "value": "000000055",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "branch_code": {
+      "value": "3499",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "branch_name": {
+      "value": "RAJGIR",
+      "source": "document",
+      "confidence": 0.85,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "customer_id": {
+      "value": "RFJPK",
+      "source": "document",
+      "confidence": 0.8,
+      "documentId": "1dbVOSzM447wWOFoRqS3pB9KCeISBZSzw",
+      "confirmedAt": "2026-08-01T18:18:30.315Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "father_name": {
+      "value": "Jairam Kumar",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-04T05:31:31.453Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "post_office": {
+      "value": "Sithaura",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:05:10.409Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "sub_division": {
+      "value": "Rajgir",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T01:11:36.756Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "qualification": {
+      "value": "REGULAR SAVINGS BANK ACCOUNT",
+      "source": "document",
+      "confidence": 0.85,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "document_label": {
+      "value": "Bank Passbook",
+      "source": "document",
+      "confidence": 1,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "marital_status": {
+      "value": "Unmarried",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-04T05:31:41.949Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "police_station": {
+      "value": "Rajgir",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T01:15:59.049Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "police_station_": {
+      "value": "",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:04:41.551Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "permanent_address": {
+      "value": "C/O Jairam Kumar, ward no-16, kanoul Vishapit, Sithaura, PO: Sithaura, DIST: Nalanda, Bihar - 803116",
+      "source": "manual",
+      "confidence": 1,
+      "documentId": null,
+      "confirmedAt": "2026-08-02T07:05:53.770Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "account_holder_name": {
+      "value": "Mr. Kamaljeet Kumar",
+      "source": "document",
+      "confidence": 0.85,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    },
+    "bank_account_number": {
+      "value": "45009381877",
+      "source": "document",
+      "confidence": 0.85,
+      "documentId": "1sUwiPNxVWS5EbfvnlKjNgqz0Y2cAB4oK",
+      "confirmedAt": "2026-08-01T18:27:12.961Z",
+      "confirmedBy": "30258ccd-f2c3-4d4d-9852-d191bdbb98ff"
+    }
+  },
+  "mop": "SINGLE",
+  "micr": "803002501",
+  "block": "Rajgir",
+  "email": "kamaljeetkr67@gmail.com",
+  "phone": "9031329418",
+  "custom": "RFJPK",
+  "address": "S/O: Jayram Yadav, Vishthapit Nagdih 2 Sithaura Silao Nalan Sithaura",
+  "bus_hrs": "10:00:00-16:00:00",
+  "village": "visthapit",
+  "ward_no": "16",
+  "district": "Nalanda",
+  "password": "Kama@93",
+  "phone_no": "9031829647",
+  "religion": "hindu",
+  "ward_no.": "",
+  "bank_name": "STATE BANK OF INDIA",
+  "ifsc_code": "SBIN0003499",
+  "ward_nol_": "",
+  "cif_number": "92383855592",
+  "issue_date": "16/03/2016",
+  "nom_reg_no": "000000055",
+  "branch_code": "3499",
+  "branch_name": "RAJGIR",
+  "customer_id": "RFJPK",
+  "father_name": "Jairam Kumar",
+  "post_office": "Sithaura",
+  "sub_division": "Rajgir",
+  "qualification": "REGULAR SAVINGS BANK ACCOUNT",
+  "document_label": "Bank Passbook",
+  "marital_status": "Unmarried",
+  "police_station": "Rajgir",
+  "police_station_": "",
+  "permanent_address": "C/O Jairam Kumar, ward no-16, kanoul Vishapit, Sithaura, PO: Sithaura, DIST: Nalanda, Bihar - 803116",
+  "account_holder_name": "Mr. Kamaljeet Kumar",
+  "bank_account_number": "45009381877"
+}

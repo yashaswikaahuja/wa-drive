@@ -22,6 +22,9 @@ import { scanMainWorldControls, summarizeMainWorld } from './lib/main-world-scan
 import { fetchLivePlan } from './lib/plan-live.mjs';
 import { loadProfile } from './lib/profile.mjs';
 import { buildFillReport } from './lib/fill-report.mjs';
+import { reportFromTrace } from './lib/report-from-trace.mjs';
+import { existsSync, copyFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 
 const flags = parseArgs(process.argv);
 
@@ -142,7 +145,60 @@ async function cmdStatus() {
   console.log(lines.join('\n'));
 }
 
-// ── PRIMARY: fill real form ─────────────────────────────────────────
+// ── PRIMARY: report from real operator fill trace ───────────────────
+async function cmdReport() {
+  let file = flags.file;
+  if (!file) {
+    // Try newest cc-fill-trace-*.json in Downloads
+    const dl = resolve(homedir(), 'Downloads');
+    if (existsSync(dl)) {
+      const { readdirSync, statSync } = await import('node:fs');
+      const files = readdirSync(dl)
+        .filter((f) => f.startsWith('cc-fill-trace-') && f.endsWith('.json'))
+        .map((f) => ({ f, t: statSync(resolve(dl, f)).mtimeMs }))
+        .sort((a, b) => b.t - a.t);
+      if (files[0]) file = resolve(dl, files[0].f);
+    }
+  }
+  if (!file) {
+    throw new Error(
+      'report requires --file <cc-fill-trace-....json>\n' +
+        'After operator Fill, the side panel downloads this file automatically.\n' +
+        'Or omit --file to use the newest cc-fill-trace-*.json in Downloads.'
+    );
+  }
+  const abs = resolve(file);
+  if (!existsSync(abs)) throw new Error(`Trace file not found: ${abs}`);
+
+  const trace = JSON.parse(readFileSync(abs, 'utf8'));
+  if (trace.schema !== 'cc-fill-trace/v1' && !trace.step_truth && !trace.plan) {
+    throw new Error('Not a cc-fill-trace/v1 file (missing schema/step_truth/plan)');
+  }
+
+  const { lines, summary } = reportFromTrace(trace);
+  const text = lines.join('\n') + `\nsource=${abs}\nout=${outDir}\n`;
+
+  // Copy full trace into out for this analysis run
+  try {
+    copyFileSync(abs, resolve(outDir, 'fill-trace.json'));
+  } catch {
+    /* ignore */
+  }
+  art.writeText('report.txt', text);
+  art.writeJson('report-summary.json', summary);
+  art.writeJson('meta.json', {
+    command: 'report',
+    source: abs,
+    gitSha: gitSha(),
+    branch: gitBranch(),
+    summary,
+  });
+
+  console.log(text);
+  if (!summary.honest) process.exitCode = 1;
+}
+
+// ── LAB: CLI-driven fill (secondary) ────────────────────────────────
 async function cmdFill() {
   const mode = flags.mode || 'live';
   if (mode !== 'live' && mode !== 'offline') {
@@ -354,6 +410,9 @@ try {
   switch (flags.command) {
     case 'status':
       await cmdStatus();
+      break;
+    case 'report':
+      await cmdReport();
       break;
     case 'fill':
       await cmdFill();

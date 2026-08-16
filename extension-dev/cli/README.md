@@ -1,146 +1,101 @@
-# cc-debug — fill a **real form** and see what happened
+# cc-debug — real operator fill → detailed report → fix gaps
 
 **DEBUG BRANCH ONLY (`debug/cc-cli`). Never merge to master.**
 
-This is **not** a test runner. It is a CLI to:
+## The right debugging loop
 
-1. Open a **real form URL**
-2. Run the **product fill path** (perceive → server `/fill-plan` → ActionPlan execute)
-3. Print a **fill report**: what was planned, what claimed ok/fail, what the **DOM** shows
-4. Save artifacts for deep inspection
+```text
+1. Operator logs in (real account) in the extension
+2. Operator opens REAL form, picks profile, clicks Fill Form
+3. Extension runs real product path + captures a detailed TRACE
+4. Trace JSON auto-downloads (cc-fill-trace-*.json)
+5. CLI turns trace into a gap report
+6. You fix product code using the gaps
+```
+
+CLI does **not** need to drive the form. The operator does. CLI only **analyzes**.
 
 ---
 
 ## Setup (once)
 
-```bash
+```powershell
+cd C:\Users\yasha\.grok\worktrees\yasha-wa-drive\cybercontrol
 git checkout debug/cc-cli
-cd extension-dev/tests/browser && npm install && cd ../../..
+
+# Load unpacked extension from THIS branch:
+# chrome://extensions → Developer mode → Load unpacked → select  extension\
 ```
 
-Chrome must be installed (or set `CHROME_PATH`).
+Login as **Ramishwar** (or any café account) via normal app CONNECT / login so the side panel has `backendUrl` + `accessToken`.
 
 ---
 
-## Primary command: `fill`
+## Capture (operator)
 
-```bash
-node extension-dev/cli/cc-debug.mjs fill ^
-  --url "https://your-portal.example/application" ^
-  --profile .\my-profile.json ^
-  --backend-url https://api.your-host/api ^
-  --token YOUR_JWT
-```
+1. Open the **real form page** in a tab.  
+2. Side panel: select **Kamaljeet Kumar** (or any profile).  
+3. Click **Fill Form**.  
+4. Browser **downloads** `cc-fill-trace-<timestamp>.json` (usually `Downloads\`).  
+5. Status may say “DOM truth failed” if lies were detected — that’s intentional.
 
-### Env alternatives
+Trace includes:
+
+- Page URL / title  
+- Perception summary  
+- Full ActionPlan + server classification / unmapped counts  
+- ExecutionObservation (every step status / failure_code)  
+- Binding DOM values after execute  
+- **MAIN-world** scan of all inputs (what the page really has)  
+- **step_truth** (claim vs DOM)  
+- **gaps[]** (PAGE_EMPTY_LIE, STEP_LIE, STEP_FAIL, UNMAPPED_FIELDS)
+
+---
+
+## Report (you / agent)
 
 ```powershell
-$env:CC_BACKEND_URL = "https://api.your-host/api"
-$env:CC_ACCESS_TOKEN = "YOUR_JWT"
+# Newest download automatically:
+node extension-dev\cli\cc-debug.mjs report
 
-node extension-dev/cli/cc-debug.mjs fill --url "https://..." --profile .\my-profile.json
+# Or explicit file:
+node extension-dev\cli\cc-debug.mjs report --file $env:USERPROFILE\Downloads\cc-fill-trace-....json
 ```
 
-### Profile JSON
+Output: console + `extension-dev\cli\out\<run>\report.txt` with:
 
-Either flat:
+- Each step: planned value → claim → binding DOM → ok / FAIL / **LIE**  
+- PAGE DOM nonempty list  
+- GAPS + suggested fix lane (execution vs mapping)
 
-```json
-{
-  "full_name": "Ravi Kumar",
-  "email": "ravi@example.com",
-  "mobile": "9876543210"
-}
-```
+Exit **1** if lies or fails (so you notice).
 
-Or extension-shaped:
+---
 
-```json
-{
-  "id": "profile-uuid",
-  "name": "Ravi",
-  "data": {
-    "full_name": "Ravi Kumar",
-    "email": "ravi@example.com"
-  }
-}
-```
+## Fix using the report
 
-### Useful flags
-
-| Flag | Meaning |
+| Gap code | Likely layer |
 |---|---|
-| `--headed` | Show browser (default for `fill`) |
-| `--headless` | Hide browser |
-| `--keep-open` | Leave browser open ~90s after report |
-| `--execution-preference AUTO\|STATIC\|DYNAMIC` | Same as side panel mode |
-| `--out <dir>` | Custom artifact folder |
+| `PAGE_EMPTY_LIE` / `STEP_LIE` | Executor / gateway / binding / post-fill wipe |
+| `STEP_FAIL` | stale_target, postcondition, affordance |
+| `UNMAPPED_FIELDS` | Knowledge / fill-planner / scope |
+| Zero filled, no lies | Empty plan — wrong page or mapping |
 
-### Example report (console + `report.txt`)
-
-```text
-═══════════════════════════════════════════════════════════
-  CC-DEBUG FILL REPORT  (real form / product path)
-═══════════════════════════════════════════════════════════
-URL       https://portal.../form
-Perceive  nodes=42  revision=1
-Plan      steps=8  plan_id=plan:...
-───────────────────────────────────────────────────────────
-   1  ok    type_text     node:...
-      planned "Ravi Kumar"  dom="Ravi Kumar"  → DOM ok
-   2  fail  select_option node:...
-      planned ...  dom="(empty)"  → LIE (claimed ok, select empty)
-RESULT    ok=1  fail=1  skip=0  lies=1
-PAGE DOM  nonempty_controls=1/12
-═══════════════════════════════════════════════════════════
-```
-
-### Artifacts
-
-```text
-extension-dev/cli/out/<run-id>/
-  report.txt              ← start here
-  report.json
-  snapshot.json           Page IR
-  plan.json               ActionPlan from server
-  fill-plan-response.json raw server body
-  execution.json          ExecutionObservation
-  dom-after.json          values via binding registry
-  main-world-after.json   all inputs/selects on page
-  truth.json
-  meta.json
-```
-
-Exit **0** only if no failed steps and no DOM lies.
+Ship fixes on **product** branches (`phase-3-perception` / master). Keep this debug instrumentation on **`debug/cc-cli`** only (or port carefully).
 
 ---
 
-## Other commands
+## Secondary: CLI-driven fill (lab)
 
-```bash
-node extension-dev/cli/cc-debug.mjs status
-node extension-dev/cli/cc-debug.mjs perceive --url "https://..."
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture perception-native.html   # lab only
+```powershell
+node extension-dev\cli\cc-debug.mjs fill --url "https://..." --profile ... --token ...
 ```
+
+Useful for fixtures / automation. **Not** a substitute for real operator fill.
 
 ---
 
-## Important limitations
+## Auth reminder
 
-| | |
-|---|---|
-| **What runs** | Product scripts injected into the page (same modules as extension inject list) + real `/fill-plan` |
-| **Not yet** | Driving the real side-panel UI / full MV3 service-worker path reliably |
-| **Never** | Merge this branch to `master` |
-
-If server mapping returns **0 steps**, the report will say so — that is a **brain/mapping** issue, not executor.
-
----
-
-## Sync product code into this branch
-
-```bash
-git checkout debug/cc-cli
-git merge phase-3-perception   # or rebase — product → debug only
-# never: merge debug/cc-cli into master
-```
+JWT for Ramishwar (24h) was minted earlier; re-mint via gcloud if expired.  
+Extension login is preferred for capture (stores token itself).
