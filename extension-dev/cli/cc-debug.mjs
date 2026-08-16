@@ -19,6 +19,7 @@ import { perceivePage } from './lib/perceive.mjs';
 import { buildOfflinePlan, loadPlanFile } from './lib/plan-offline.mjs';
 import { executePlan } from './lib/execute.mjs';
 import { observeDomForPlan, buildTruthReport } from './lib/dom-truth.mjs';
+import { scanMainWorldControls, summarizeMainWorld } from './lib/main-world-scan.mjs';
 import { fetchLivePlan } from './lib/plan-live.mjs';
 
 const flags = parseArgs(process.argv);
@@ -269,8 +270,35 @@ async function cmdFillE2E() {
     await page.waitForTimeout(150);
     const domAfter = await observeDomForPlan(page, plan);
     const truth = buildTruthReport(plan, obs, domAfter, plan._debug_expectations || {});
+    // Independent main-world scan (page document, not binding registry)
+    const mainBefore = await scanMainWorldControls(page).catch(() => null);
+    // re-scan after (same timing as domAfter)
+    const mainAfter = await scanMainWorldControls(page);
+    const mainSummary = summarizeMainWorld(mainAfter);
+    const eoSucceeded = (obs?.steps || []).filter((s) => s.status === 'succeeded').length;
 
-    return { snapshot, stats, plan, obs, domBefore, domAfter, truth, ctx };
+    // Cross-check: if EO claims successes but main world has zero nonempty fields → page_empty_lie
+    let pageEmptyLie = false;
+    if (!flags.forceLie && eoSucceeded > 0 && mainSummary.nonempty === 0) {
+      pageEmptyLie = true;
+      truth.ok = false;
+      truth.violations = (truth.violations || 0) + 1;
+      truth.page_empty_lie = true;
+      truth.checks = truth.checks || [];
+      truth.checks.push({
+        step_id: '*',
+        op: 'main_world_scan',
+        claim: `eo_succeeded=${eoSucceeded}`,
+        truth: 'violation',
+        detail: 'EO claims successes but main-world inputs/selects all empty (P0 class)',
+        dom: mainSummary,
+      });
+    }
+
+    return {
+      snapshot, stats, plan, obs, domBefore, domAfter, truth, ctx,
+      mainBefore, mainAfter, mainSummary, eoSucceeded, pageEmptyLie,
+    };
   });
 
   art.writeJson('snapshot.json', result.snapshot);
@@ -278,6 +306,7 @@ async function cmdFillE2E() {
   art.writeJson('execution.json', result.obs);
   art.writeJson('dom-before.json', result.domBefore);
   art.writeJson('dom-after.json', result.domAfter);
+  art.writeJson('main-world-after.json', result.mainAfter);
   art.writeJson('truth.json', result.truth);
   art.writeJson('meta.json', {
     command: 'fill-e2e',
@@ -290,6 +319,9 @@ async function cmdFillE2E() {
     stats: result.stats,
     truth_ok: result.truth.ok,
     violations: result.truth.violations,
+    eoSucceeded: result.eoSucceeded,
+    mainWorldNonempty: result.mainSummary.nonempty,
+    pageEmptyLie: result.pageEmptyLie,
   });
 
   const lines = [
@@ -297,7 +329,9 @@ async function cmdFillE2E() {
     `mode=${flags.mode}${flags.forceLie ? ' FORCE_LIE' : ''}`,
     `url=${result.ctx.url}`,
     `nodes=${result.stats.nodeCount} plan_steps=${result.plan.steps?.length}`,
-    `eo_outcome=${result.obs?.outcome}`,
+    `eo_outcome=${result.obs?.outcome} eo_succeeded=${result.eoSucceeded}`,
+    `main_world nonempty_controls=${result.mainSummary.nonempty}/${result.mainSummary.total}`,
+    `page_empty_lie=${result.pageEmptyLie}`,
     `truth_ok=${result.truth.ok} violations=${result.truth.violations}`,
     ...result.truth.checks.map(
       (c) => `  [${c.truth}] ${c.step_id} ${c.op} claim=${c.claim} — ${c.detail}`
