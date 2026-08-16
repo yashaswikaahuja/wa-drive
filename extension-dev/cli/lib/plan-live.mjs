@@ -51,14 +51,38 @@ export async function fetchLivePlan({
     );
   }
 
-  const plan = data.plan || data.action_plan || data;
-  if (!plan || plan.kind !== 'action_plan') {
-    throw new Error(
-      `live response missing action_plan (keys=${Object.keys(data).join(',')})`
+  // Server shape: { plan, classification, session, diagnostics, message? }
+  // plan may be null when planner finds nothing to fill (still HTTP 200).
+  const plan = data.plan ?? data.action_plan ?? null;
+  if (!plan) {
+    const diag = data.diagnostics || {};
+    const msg = data.message || diag.note || 'server returned plan: null';
+    const err = new Error(
+      `NO FILL PLAN from server — nothing to execute.\n` +
+        `  message: ${msg}\n` +
+        `  diagnostics: ${JSON.stringify(diag).slice(0, 600)}\n` +
+        `  classification: ${JSON.stringify(data.classification)}\n` +
+        `Tip: --url must be an actual form page (not a homepage/landing page). ` +
+        `SSC home (ssc.gov.in) has links, not fillable mapped fields.`
     );
+    err.raw = data;
+    err.code = 'empty_plan';
+    throw err;
   }
-  if (plan.schema_version !== '3.0.0') {
+  if (plan.kind && plan.kind !== 'action_plan') {
+    throw new Error(`unexpected plan.kind=${plan.kind} (want action_plan)`);
+  }
+  if (plan.schema_version && plan.schema_version !== '3.0.0') {
     throw new Error(`unexpected plan schema_version ${plan.schema_version}`);
+  }
+  if (!Array.isArray(plan.steps) || plan.steps.length === 0) {
+    const err = new Error(
+      `Server plan has 0 steps — mapping found no fields to fill.\n` +
+        `  diagnostics: ${JSON.stringify(data.diagnostics || {}).slice(0, 600)}`
+    );
+    err.raw = data;
+    err.code = 'empty_steps';
+    throw err;
   }
   return { plan, raw: data };
 }

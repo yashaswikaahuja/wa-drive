@@ -177,22 +177,37 @@ async function cmdFill() {
         console.log(`Plan loaded from file (${plan.steps?.length} steps)`);
       } else if (mode === 'live') {
         console.log('Requesting fill-plan from server…');
-        const { plan: p, raw } = await fetchLivePlan({
-          backendUrl: resolveBackend(),
-          token: resolveToken(),
-          snapshot,
-          profile: profile.flat,
-          profileId: flags.profileId || profile.id,
-          executionPreference: flags.executionPreference || 'AUTO',
-        });
+        let p;
+        let raw;
+        try {
+          ({ plan: p, raw } = await fetchLivePlan({
+            backendUrl: resolveBackend(),
+            token: resolveToken(),
+            snapshot,
+            profile: profile.flat,
+            profileId: flags.profileId || profile.id,
+            executionPreference: flags.executionPreference || 'AUTO',
+          }));
+        } catch (e) {
+          if (e.raw) art.writeJson('fill-plan-response.json', e.raw);
+          art.writeJson('snapshot.json', snapshot);
+          throw e;
+        }
         plan = p;
         planMeta = {
           classification: raw?.classification || raw?.diagnostics?.system_classification,
           diagnostics: raw?.diagnostics || null,
+          message: raw?.message || null,
           rawKeys: Object.keys(raw || {}),
         };
         art.writeJson('fill-plan-response.json', raw);
         console.log(`  plan steps=${plan.steps?.length} plan_id=${plan.plan_id}`);
+        if (raw?.classification) {
+          console.log(
+            `  classification=${raw.classification.system_classification || '?'} ` +
+              `mode=${raw.classification.effective_execution_mode || '?'}`
+          );
+        }
       } else {
         console.log('Offline lab plan…');
         plan = buildOfflinePlan(snapshot, { maxSteps: flags.maxSteps });
