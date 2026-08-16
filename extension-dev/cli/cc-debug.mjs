@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 /**
- * CyberControl debug CLI — fill REAL forms and report results
+ * CyberControl debug CLI — LIVE operator fill reports (no extension patches)
  *
  * DEBUG BRANCH ONLY (debug/cc-cli). Do NOT merge to master.
+ * Product code under extension/ must stay at product tip.
  *
- *   node extension-dev/cli/cc-debug.mjs fill --url "https://..." --profile p.json
+ *   node extension-dev/cli/cc-debug.mjs live
+ *   node extension-dev/cli/cc-debug.mjs sessions
+ *   node extension-dev/cli/cc-debug.mjs session --id <uuid>
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, copyFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execSync } from 'node:child_process';
+import { homedir } from 'node:os';
 import { parseArgs, printHelp } from './lib/args.mjs';
 import { launchBrowser, resolveChromePath, ROOT } from './lib/chrome.mjs';
 import { createArtifacts, defaultOutDir, makeRunId } from './lib/artifacts.mjs';
@@ -23,8 +27,7 @@ import { fetchLivePlan } from './lib/plan-live.mjs';
 import { loadProfile } from './lib/profile.mjs';
 import { buildFillReport } from './lib/fill-report.mjs';
 import { reportFromTrace } from './lib/report-from-trace.mjs';
-import { existsSync, copyFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { listSessions, getSession, reportFromSession, authMe } from './lib/live-api.mjs';
 
 const flags = parseArgs(process.argv);
 
@@ -145,7 +148,104 @@ async function cmdStatus() {
   console.log(lines.join('\n'));
 }
 
-// ── PRIMARY: report from real operator fill trace ───────────────────
+// ── PRIMARY: live sessions from production API ──────────────────────
+async function cmdSessions() {
+  const backend = resolveBackend();
+  const token = resolveToken();
+  if (!backend || !token) throw new Error('Need CC_BACKEND_URL and CC_ACCESS_TOKEN');
+  const limit = flags.limit || 20;
+  const rows = await listSessions(backend, token, { limit });
+  art.writeJson('sessions.json', rows);
+  console.log(`Recent live sessions (limit=${limit}):\n`);
+  for (const s of rows) {
+    console.log(
+      `${s.id}  filled=${s.totalFilled} failed=${s.totalFailed}  host=${s.hostname || '?'}  at=${s.receivedAt || '?'}`
+    );
+  }
+  console.log(`\nDetail: node extension-dev/cli/cc-debug.mjs session --id <id>`);
+  console.log(`out: ${outDir}`);
+}
+
+async function cmdSession() {
+  const backend = resolveBackend();
+  const token = resolveToken();
+  if (!backend || !token) throw new Error('Need CC_BACKEND_URL and CC_ACCESS_TOKEN');
+  const id = flags.id;
+  if (!id) throw new Error('session requires --id <session-uuid>');
+  const session = await getSession(backend, token, id);
+  art.writeJson('session.json', session);
+  const { lines, summary } = reportFromSession(session);
+  const text = lines.join('\n') + `\nout=${outDir}\n`;
+  art.writeText('report.txt', text);
+  art.writeJson('report-summary.json', summary);
+  console.log(text);
+}
+
+async function cmdLive() {
+  const backend = resolveBackend();
+  const token = resolveToken();
+  if (!backend || !token) throw new Error('Need CC_BACKEND_URL and CC_ACCESS_TOKEN');
+  const pollMs = flags.pollMs || 3000;
+  console.log(`
+═══════════════════════════════════════════════════════════
+  LIVE WATCH — server sessions (no extension code changes)
+═══════════════════════════════════════════════════════════
+  Backend  ${backend}
+  Poll     every ${pollMs}ms
+  Action   Operator fills with the REAL extension
+  Output   New sessions print here + extension-dev/cli/out/
+  Stop     Ctrl+C
+═══════════════════════════════════════════════════════════
+`);
+  try {
+    const me = await authMe(backend, token);
+    console.log(`Auth OK: ${me.email || me.name || me.id} workspace=${me.workspace_id || me.workspaceId || '?'}\n`);
+  } catch (e) {
+    console.warn(`Auth me check failed (continuing): ${e.message}\n`);
+  }
+
+  const seen = new Set();
+  // seed with current ids so we only report NEW fills
+  try {
+    const existing = await listSessions(backend, token, { limit: 50 });
+    for (const s of existing) seen.add(s.id);
+    console.log(`Seeded ${seen.size} existing sessions — waiting for NEW operator fills…\n`);
+  } catch (e) {
+    console.warn(`List seed failed: ${e.message}`);
+  }
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      const rows = await listSessions(backend, token, { limit: 15 });
+      for (const s of [...rows].reverse()) {
+        if (seen.has(s.id)) continue;
+        seen.add(s.id);
+        console.log(`\n>>> NEW SESSION ${s.id} host=${s.hostname} filled=${s.totalFilled} failed=${s.totalFailed}`);
+        try {
+          const full = await getSession(backend, token, s.id);
+          const dir = resolve(ROOT, 'extension-dev/cli/out', `live-session-${s.id}`);
+          const { createArtifacts: ca } = await import('./lib/artifacts.mjs');
+          const a = ca(dir);
+          a.writeJson('session.json', full);
+          const { lines, summary } = reportFromSession(full);
+          const text = lines.join('\n');
+          a.writeText('report.txt', text);
+          a.writeJson('report-summary.json', summary);
+          console.log(text);
+          console.log(`Saved: ${dir}\\report.txt`);
+        } catch (e) {
+          console.error(`Failed to load session ${s.id}: ${e.message}`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[poll] ${e.message}`);
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+}
+
+// ── optional: local file trace (legacy) ─────────────────────────────
 async function cmdReport() {
   let file = flags.file;
   if (!file) {
@@ -410,6 +510,15 @@ try {
   switch (flags.command) {
     case 'status':
       await cmdStatus();
+      break;
+    case 'live':
+      await cmdLive();
+      break;
+    case 'sessions':
+      await cmdSessions();
+      break;
+    case 'session':
+      await cmdSession();
       break;
     case 'report':
       await cmdReport();

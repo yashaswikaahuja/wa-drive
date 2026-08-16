@@ -1,101 +1,97 @@
-# cc-debug — real operator fill → detailed report → fix gaps
+# cc-debug — **live** operator fill reports (no product extension edits)
 
-**DEBUG BRANCH ONLY (`debug/cc-cli`). Never merge to master.**
-
-## The right debugging loop
-
-```text
-1. Operator logs in (real account) in the extension
-2. Operator opens REAL form, picks profile, clicks Fill Form
-3. Extension runs real product path + captures a detailed TRACE
-4. Trace JSON auto-downloads (cc-fill-trace-*.json)
-5. CLI turns trace into a gap report
-6. You fix product code using the gaps
-```
-
-CLI does **not** need to drive the form. The operator does. CLI only **analyzes**.
+**Branch:** `debug/cc-cli` only · **Never merge to master**  
+**Rule:** Do **not** modify `extension/*` for debugging. Product stays version-independent.
 
 ---
 
-## Setup (once)
+## What you asked for
+
+| Want | How |
+|---|---|
+| Authenticate real account | Use normal extension login (or JWT for API) |
+| Operator fills real form | Real extension, real UI, real page |
+| Record live what happened | Server already receives fill-plan / fill-observation / sessions |
+| Detailed report | CLI reads **live API** and prints gaps |
+| Fix from report | Product PRs on product branches |
+
+CLI does **not** drive Fill and does **not** patch the extension.
+
+---
+
+## Setup
 
 ```powershell
 cd C:\Users\yasha\.grok\worktrees\yasha-wa-drive\cybercontrol
 git checkout debug/cc-cli
+git pull origin debug/cc-cli
 
-# Load unpacked extension from THIS branch:
-# chrome://extensions → Developer mode → Load unpacked → select  extension\
+$env:CC_BACKEND_URL = "https://api.cybercontrol.fun/api"
+$env:CC_ACCESS_TOKEN = (Get-Content extension-dev\cli\out\ramishwar-access.jwt -Raw).Trim()
+# or paste a fresh JWT after login
 ```
 
-Login as **Ramishwar** (or any café account) via normal app CONNECT / login so the side panel has `backendUrl` + `accessToken`.
-
 ---
 
-## Capture (operator)
+## Live record (primary)
 
-1. Open the **real form page** in a tab.  
-2. Side panel: select **Kamaljeet Kumar** (or any profile).  
-3. Click **Fill Form**.  
-4. Browser **downloads** `cc-fill-trace-<timestamp>.json` (usually `Downloads\`).  
-5. Status may say “DOM truth failed” if lies were detected — that’s intentional.
-
-Trace includes:
-
-- Page URL / title  
-- Perception summary  
-- Full ActionPlan + server classification / unmapped counts  
-- ExecutionObservation (every step status / failure_code)  
-- Binding DOM values after execute  
-- **MAIN-world** scan of all inputs (what the page really has)  
-- **step_truth** (claim vs DOM)  
-- **gaps[]** (PAGE_EMPTY_LIE, STEP_LIE, STEP_FAIL, UNMAPPED_FIELDS)
-
----
-
-## Report (you / agent)
+**Terminal A — leave running:**
 
 ```powershell
-# Newest download automatically:
-node extension-dev\cli\cc-debug.mjs report
-
-# Or explicit file:
-node extension-dev\cli\cc-debug.mjs report --file $env:USERPROFILE\Downloads\cc-fill-trace-....json
+node extension-dev\cli\cc-debug.mjs live
 ```
 
-Output: console + `extension-dev\cli\out\<run>\report.txt` with:
+**Operator (any Chrome with the shipped / product extension):**
 
-- Each step: planned value → claim → binding DOM → ok / FAIL / **LIE**  
-- PAGE DOM nonempty list  
-- GAPS + suggested fix lane (execution vs mapping)
+1. Login as Ramishwar (or any café user)  
+2. Open real form  
+3. Select profile (e.g. Kamaljeet Kumar)  
+4. Click **Fill Form**
 
-Exit **1** if lies or fails (so you notice).
+**Terminal A** prints a new session report as soon as the server gets it, and writes:
 
----
-
-## Fix using the report
-
-| Gap code | Likely layer |
-|---|---|
-| `PAGE_EMPTY_LIE` / `STEP_LIE` | Executor / gateway / binding / post-fill wipe |
-| `STEP_FAIL` | stale_target, postcondition, affordance |
-| `UNMAPPED_FIELDS` | Knowledge / fill-planner / scope |
-| Zero filled, no lies | Empty plan — wrong page or mapping |
-
-Ship fixes on **product** branches (`phase-3-perception` / master). Keep this debug instrumentation on **`debug/cc-cli`** only (or port carefully).
+```text
+extension-dev/cli/out/live-session-<uuid>/report.txt
+extension-dev/cli/out/live-session-<uuid>/session.json
+```
 
 ---
 
-## Secondary: CLI-driven fill (lab)
+## One-shot commands
 
 ```powershell
-node extension-dev\cli\cc-debug.mjs fill --url "https://..." --profile ... --token ...
-```
+# list recent fills for this workspace
+node extension-dev\cli\cc-debug.mjs sessions
 
-Useful for fixtures / automation. **Not** a substitute for real operator fill.
+# one fill in detail
+node extension-dev\cli\cc-debug.mjs session --id <session-uuid>
+```
 
 ---
 
-## Auth reminder
+## What is in the live report
 
-JWT for Ramishwar (24h) was minted earlier; re-mint via gcloud if expired.  
-Extension login is preferred for capture (stores token itself).
+From the **server session** the real extension posted:
+
+- hostname / form key / runtime version  
+- total filled / failed  
+- per-field **records** (step result, failure codes, observed_value_state when present)
+
+**Honest limitation (product gap, not CLI):**  
+Sessions do not always include MAIN-world “page empty” proof. If the UI said filled and the page was empty, the report will still show what the **server was told**. That gap is a product bug to fix (DOM truth in EO/session) — and the live session data is what proves the mismatch between operator experience and reported totals.
+
+---
+
+## Lab only (optional)
+
+`fill --url ...` still exists for offline experiments. It is **not** the live operator path.
+
+---
+
+## Never do this
+
+- Edit `extension/application/fill-orchestrator.js` for debug  
+- Edit `popup.js` / `background.js` for debug  
+- Merge `debug/cc-cli` into master  
+
+All debug code stays under **`extension-dev/cli/`**.

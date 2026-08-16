@@ -43,6 +43,9 @@ export function parseArgs(argv) {
     else if (a === '--max-steps') flags.maxSteps = Number(next());
     else if (a === '--force-lie') flags.forceLie = true;
     else if (a === '--file' || a === '--trace') flags.file = next();
+    else if (a === '--id' || a === '--session') flags.id = next();
+    else if (a === '--limit') flags.limit = Number(next());
+    else if (a === '--poll-ms') flags.pollMs = Number(next());
     else if (a === '--extension' || a === '--runtime-extension') flags.extension = true;
     else if (a === '--runtime') {
       const v = next();
@@ -59,25 +62,33 @@ export function parseArgs(argv) {
 
 export function printHelp() {
   console.log(`
-cc-debug — fill a REAL form and report what happened
+cc-debug — LIVE operator fill recording (no product extension patches)
 DEBUG BRANCH ONLY (debug/cc-cli). Never merge to master.
+Does NOT edit files under extension/ — only extension-dev/cli/.
 
-PRIMARY WORKFLOW (recommended)
-  1. Load this branch's extension in Chrome (unpacked: extension/)
-  2. Login as the café operator (normal CONNECT / login)
-  3. Open a REAL form, pick profile, click Fill Form
-  4. Extension downloads cc-fill-trace-*.json (Downloads)
-  5. Analyze:
+PRIMARY WORKFLOW (live record)
+  1. Use the NORMAL production extension (or whatever you ship)
+  2. Operator logs in, opens REAL form, clicks Fill Form
+  3. Extension already posts fill-plan + fill-observation + sessions to the LIVE API
+  4. This CLI reads that live data and prints a detailed report
 
-  node extension-dev/cli/cc-debug.mjs report --file %USERPROFILE%\\Downloads\\cc-fill-trace-....json
+  # set auth (Ramishwar JWT or any operator token)
+  $env:CC_BACKEND_URL = "https://api.cybercontrol.fun/api"
+  $env:CC_ACCESS_TOKEN = "..."
 
-  Report shows: plan steps, EO claims, binding DOM, MAIN-world DOM, GAPS to fix.
+  # stream new sessions as the operator fills:
+  node extension-dev/cli/cc-debug.mjs live
 
-OTHER
-  report --file <trace.json>   Analyze a captured operator fill (primary)
-  status                       Env check
-  fill --url ...               LAB ONLY: CLI-driven fill (not real operator path)
+  # list recent fills:
+  node extension-dev/cli/cc-debug.mjs sessions
 
-Exit 0 on report if no lies and no fails.
+  # one session detail:
+  node extension-dev/cli/cc-debug.mjs session --id <session-uuid>
+
+LAB (optional — does not replace live operator path)
+  fill --url ... --profile ...     CLI-driven fill (fixture/lab)
+  status                           env check
+
+Never: patch extension/*.js for debug. Keep product version-independent.
 `);
 }
