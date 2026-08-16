@@ -1062,3 +1062,277 @@ function normalizeFieldLabel(label) {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ????????????????????????????????????????????????????????????????????
+// DEBUG CLI BRIDGE � debug/cc-cli ONLY. Do NOT merge this block to master.
+// Invoked by Playwright service-worker.evaluate from extension-dev/cli.
+// ????????????????????????????????????????????????????????????????????
+(function installCcDebugBridge() {
+  try {
+    importScripts('runtime/errors.js');
+  } catch (e) { /* optional */ }
+  try {
+    importScripts('application/fill-orchestrator.js');
+  } catch (e) {
+    console.warn('[CC-DEBUG] fill-orchestrator import failed:', e && e.message);
+  }
+
+  const PRODUCT_PATH = (typeof CcFillOrchestrator !== 'undefined' && CcFillOrchestrator.PRODUCT_PATH_SCRIPTS)
+    ? CcFillOrchestrator.PRODUCT_PATH_SCRIPTS.slice()
+    : [
+      'runtime/errors.js',
+      'runtime/gateway/interaction.js',
+      'runtime/dom-gateway.js',
+      'runtime/navigation-contract.js',
+      'perception/visual-context.js',
+      'perception/binding-registry.js',
+      'perception/revision-manager.js',
+      'perception/canonical-hash.js',
+      'perception/privacy-filter.js',
+      'perception/widget-classifier.js',
+      'perception/adapters/index.js',
+      'perception/node-factory.js',
+      'perception/edge-factory.js',
+      'perception/graph-invariants.js',
+      'perception/context-discovery.js',
+      'perception/snapshot-builder.js',
+      'perception/validator.js',
+      'perception/index.js',
+      'runtime/action-plan-executor.js',
+      'runtime/dom-evidence.js',
+    ];
+
+  async function ensureProductPath(tabId) {
+    const [loaded] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => !!(globalThis.CcPerception && globalThis.CcActionPlanExecutor && globalThis.CcDomGateway),
+    });
+    if (!loaded?.result) {
+      await chrome.scripting.executeScript({ target: { tabId }, files: PRODUCT_PATH });
+    }
+  }
+
+  async function initAndPerceive(tabId) {
+    await ensureProductPath(tabId);
+    const [perc] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: async () => {
+        try {
+          if (globalThis.CcContextDiscovery?.resetContextCounter) CcContextDiscovery.resetContextCounter();
+          if (globalThis.CcNodeFactory?.resetNodeCounter) CcNodeFactory.resetNodeCounter();
+          await CcPerception.initPerception({
+            gateway: CcDomGateway,
+            bindingRegistry: new CcBindingRegistry(),
+            revisionManager: new CcRevisionManager(),
+            privacyFilter: CcPrivacyFilter,
+            widgetClassifier: CcWidgetClassifier,
+            contextDiscovery: CcContextDiscovery,
+            nodeFactory: CcNodeFactory,
+            edgeFactory: CcEdgeFactory,
+            canonicalHash: CcCanonicalHash,
+            snapshotBuilder: CcSnapshotBuilder,
+            validator: CcValidator,
+            validatorOptions: { schema: null },
+          });
+          if (CcValidator && !CcValidator.isInitialized()) {
+            await CcValidator.initValidator({ schema: null });
+          }
+          return await CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
+        } catch (err) {
+          return { error: err.message, stack: String(err.stack || '').slice(0, 400) };
+        }
+      },
+    });
+    return perc?.result;
+  }
+
+  async function executePlanOnTab(tabId, plan) {
+    await ensureProductPath(tabId);
+    const [exec] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: async (actionPlan) => {
+        if (!globalThis.CcActionPlanExecutor?.execute) {
+          return { error: 'CcActionPlanExecutor missing' };
+        }
+        try {
+          return await globalThis.CcActionPlanExecutor.execute(actionPlan);
+        } catch (e) {
+          return { error: String(e.message || e), stack: String(e.stack || '').slice(0, 400) };
+        }
+      },
+      args: [plan],
+    });
+    return exec?.result;
+  }
+
+  async function mainWorldScan(tabId) {
+    const [r] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: () => Array.from(document.querySelectorAll('input, select, textarea')).map((el) => ({
+        tag: el.tagName,
+        id: el.id || null,
+        name: el.name || null,
+        type: el.type || null,
+        value: 'value' in el ? String(el.value ?? '') : null,
+        checked: 'checked' in el ? !!el.checked : null,
+      })),
+    });
+    return r?.result || [];
+  }
+
+  /**
+   * @param {object} opts
+   * @param {number} opts.tabId
+   * @param {'offline'|'live'} [opts.mode]
+   * @param {object} [opts.plan] - offline plan
+   * @param {object} [opts.profile] - live
+   * @param {string} [opts.backendUrl]
+   * @param {string} [opts.accessToken]
+   * @param {string} [opts.executionPreference]
+   * @param {boolean} [opts.forceLie]
+   */
+  globalThis.__ccDebugRun = async function __ccDebugRun(opts) {
+    const tabId = opts && opts.tabId;
+    if (!tabId) return { ok: false, error: 'tabId required' };
+
+    const mainBefore = await mainWorldScan(tabId);
+
+    if (opts.mode === 'live') {
+      if (typeof CcFillOrchestrator === 'undefined' || !CcFillOrchestrator.runProductFill) {
+        return { ok: false, error: 'CcFillOrchestrator unavailable in SW' };
+      }
+      const fillOut = await CcFillOrchestrator.runProductFill({
+        tabId,
+        profile: opts.profile,
+        backendUrl: opts.backendUrl,
+        accessToken: opts.accessToken,
+        runtimeVersion: opts.runtimeVersion || 'debug-cli-ext',
+        executionPreference: opts.executionPreference || 'AUTO',
+      });
+      const mainAfter = await mainWorldScan(tabId);
+      return { ok: !!fillOut.ok, fillOut, mainBefore, mainAfter, runtime: 'extension' };
+    }
+
+    // offline path via chrome.scripting (isolated world � same as production inject)
+    const snapshot = await initAndPerceive(tabId);
+    if (!snapshot || snapshot.error || snapshot.kind !== 'page_snapshot') {
+      return { ok: false, error: 'perception_failed', snapshot, mainBefore, runtime: 'extension' };
+    }
+
+    let plan = opts.plan;
+    if (!plan) {
+      // Build offline plan in isolated world so node_ids match perception
+      const maxSteps = opts.maxSteps || 5;
+      const [built] = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: (snap, maxN) => {
+          const nodes = snap.nodes || {};
+          const steps = [];
+          let i = 0;
+          for (const [id, n] of Object.entries(nodes)) {
+            if (i >= maxN) break;
+            if (!(n.affordances || []).includes('type_text')) continue;
+            if (n.widget && n.widget.status === 'unsupported') continue;
+            if (n.input_type === 'password') continue;
+            const value = 'DEBUG_VALUE_' + (i + 1);
+            steps.push({
+              step_id: 'step:debug-text-' + (i + 1),
+              target: { context_id: n.context_id, node_id: id },
+              action: { op: 'type_text', value: value, clear_first: true },
+              risk: 'safe',
+              required_affordance: 'type_text',
+              required_adapter_id: (n.widget && n.widget.adapter_id) || null,
+              postcondition: {
+                type: 'value_state',
+                expected_value_state: 'nonempty',
+                expected_boolean: null,
+                expected_signal: null,
+              },
+              on_failure: 'stop_and_report',
+            });
+            i++;
+          }
+          if (!steps.length) return { error: 'no type_text nodes' };
+          return {
+            kind: 'action_plan',
+            schema_version: '3.0.0',
+            plan_id: 'plan:cc-debug-ext-' + Date.now().toString(36),
+            correlation_id: 'corr:cc-debug-ext',
+            supersedes_plan_id: null,
+            issued_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 120000).toISOString(),
+            target_binding: {
+              document_id: snap.document_id,
+              snapshot_id: snap.snapshot_id,
+              expected_revision: snap.revision,
+            },
+            steps: steps,
+            authorization: {
+              max_risk: 'safe',
+              operator_confirmed: false,
+              allow_navigation: false,
+              allow_submit: false,
+            },
+          };
+        },
+        args: [snapshot, maxSteps],
+      });
+      plan = built && built.result;
+      if (!plan || plan.error) {
+        return {
+          ok: false,
+          error: (plan && plan.error) || 'plan_build_failed',
+          snapshot,
+          mainBefore,
+          runtime: 'extension',
+        };
+      }
+    } else {
+      plan = JSON.parse(JSON.stringify(plan));
+      plan.target_binding = {
+        document_id: snapshot.document_id,
+        snapshot_id: snapshot.snapshot_id,
+        expected_revision: snapshot.revision,
+      };
+      delete plan._debug_expectations;
+    }
+
+    let observation;
+    if (opts.forceLie) {
+      observation = {
+        kind: 'execution_observation',
+        outcome: 'completed',
+        steps: (plan.steps || []).map((s) => ({ step_id: s.step_id, status: 'succeeded' })),
+        _debug_force_lie: true,
+      };
+    } else {
+      observation = await executePlanOnTab(tabId, plan);
+    }
+
+    // settle
+    await new Promise((r) => setTimeout(r, 200));
+    const mainAfter = await mainWorldScan(tabId);
+
+    return {
+      ok: observation && observation.kind === 'execution_observation' && !observation.error,
+      snapshot,
+      plan,
+      observation,
+      mainBefore,
+      mainAfter,
+      runtime: 'extension',
+    };
+  };
+
+  globalThis.__ccDebugPing = function () {
+    return {
+      ok: true,
+      bridge: 'cc-debug',
+      hasOrchestrator: typeof CcFillOrchestrator !== 'undefined',
+      productPathLen: PRODUCT_PATH.length,
+    };
+  };
+
+  console.log('[CC-DEBUG] bridge installed (__ccDebugRun / __ccDebugPing)');
+})();

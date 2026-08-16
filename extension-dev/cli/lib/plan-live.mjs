@@ -1,18 +1,31 @@
 /**
- * Phase 2: live /fill-plan against extension-service.
- * Offline MVP does not require this; implemented for --mode live.
+ * Live POST /fill-plan against extension-service.
  */
 
-export async function fetchLivePlan({ backendUrl, token, snapshot, profile, executionPreference }) {
+export async function fetchLivePlan({
+  backendUrl,
+  token,
+  snapshot,
+  profile,
+  profileId,
+  executionPreference,
+}) {
   if (!backendUrl) throw new Error('live plan requires --backend-url or CC_BACKEND_URL');
-  if (!token) throw new Error('live plan requires --token or CC_ACCESS_TOKEN / ACCESS_TOKEN');
-  if (!profile) throw new Error('live plan requires --profile <json-file>');
+  if (!token) throw new Error('live plan requires --token or CC_ACCESS_TOKEN');
+  if (!profile || typeof profile !== 'object') {
+    throw new Error('live plan requires profile object');
+  }
 
   const base = String(backendUrl).replace(/\/$/, '');
-  const url = `${base}/fill-plan`;
+  // Accept either https://host/api or https://host/api/ (routes are /fill-plan under /api)
+  const url = base.endsWith('/fill-plan') ? base : `${base}/fill-plan`;
+
   const body = {
     snapshot,
     profile,
+    profileId: profileId || null,
+    // match extension fill-orchestrator field names
+    operator_execution_preference: executionPreference || 'AUTO',
     executionPreference: executionPreference || 'AUTO',
   };
 
@@ -30,17 +43,22 @@ export async function fetchLivePlan({ backendUrl, token, snapshot, profile, exec
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error(`fill-plan non-JSON ${res.status}: ${text.slice(0, 300)}`);
+    throw new Error(`fill-plan non-JSON HTTP ${res.status}: ${text.slice(0, 400)}`);
   }
   if (!res.ok) {
-    throw new Error(`fill-plan HTTP ${res.status}: ${JSON.stringify(data).slice(0, 400)}`);
+    throw new Error(
+      `fill-plan HTTP ${res.status}: ${JSON.stringify(data).slice(0, 500)}`
+    );
   }
 
   const plan = data.plan || data.action_plan || data;
-  if (plan.kind !== 'action_plan' || plan.schema_version !== '3.0.0') {
+  if (!plan || plan.kind !== 'action_plan') {
     throw new Error(
-      `live plan is not action_plan 3.0.0 (kind=${plan.kind} schema=${plan.schema_version})`
+      `live response missing action_plan (keys=${Object.keys(data).join(',')})`
     );
+  }
+  if (plan.schema_version !== '3.0.0') {
+    throw new Error(`unexpected plan schema_version ${plan.schema_version}`);
   }
   return { plan, raw: data };
 }

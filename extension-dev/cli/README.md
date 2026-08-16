@@ -1,58 +1,146 @@
-# cc-debug — product-path debug CLI
+# cc-debug — fill a **real form** and see what happened
 
-**DEBUG ONLY.** Lives on branch `debug/cc-cli`.
+**DEBUG BRANCH ONLY (`debug/cc-cli`). Never merge to master.**
 
-| Rule | |
-|---|---|
-| **Do not merge to `master`** | Ever. This is not product/release code. |
-| **Do not ship in extension zip** | Operators use the side panel, not this CLI. |
-| **Sync direction** | Pull/rebase product tip *into* `debug/cc-cli` when product moves. Never merge debug → master. |
-| **Product bugfixes** | If CLI finds a product bug, fix on a product branch as a normal PR; leave the CLI here. |
+This is **not** a test runner. It is a CLI to:
 
-## Why
+1. Open a **real form URL**
+2. Run the **product fill path** (perceive → server `/fill-plan` → ActionPlan execute)
+3. Print a **fill report**: what was planned, what claimed ok/fail, what the **DOM** shows
+4. Save artifacts for deep inspection
 
-GUI status text can lie (“filled” while DOM is empty). This CLI drives the **in-page product inject path** (same scripts as `fill-orchestrator` `PRODUCT_PATH_SCRIPTS`) and applies a **DOM truth gate**.
+---
 
-Not a full Chrome-extension side-panel load (see optional future `--extension-load`).
-
-## Setup
+## Setup (once)
 
 ```bash
-# once
+git checkout debug/cc-cli
 cd extension-dev/tests/browser && npm install && cd ../../..
-
-# Chrome installed, or:
-# set CHROME_PATH=C:\Path\To\chrome.exe
 ```
 
-## Commands
+Chrome must be installed (or set `CHROME_PATH`).
+
+---
+
+## Primary command: `fill`
+
+```bash
+node extension-dev/cli/cc-debug.mjs fill ^
+  --url "https://your-portal.example/application" ^
+  --profile .\my-profile.json ^
+  --backend-url https://api.your-host/api ^
+  --token YOUR_JWT
+```
+
+### Env alternatives
+
+```powershell
+$env:CC_BACKEND_URL = "https://api.your-host/api"
+$env:CC_ACCESS_TOKEN = "YOUR_JWT"
+
+node extension-dev/cli/cc-debug.mjs fill --url "https://..." --profile .\my-profile.json
+```
+
+### Profile JSON
+
+Either flat:
+
+```json
+{
+  "full_name": "Ravi Kumar",
+  "email": "ravi@example.com",
+  "mobile": "9876543210"
+}
+```
+
+Or extension-shaped:
+
+```json
+{
+  "id": "profile-uuid",
+  "name": "Ravi",
+  "data": {
+    "full_name": "Ravi Kumar",
+    "email": "ravi@example.com"
+  }
+}
+```
+
+### Useful flags
+
+| Flag | Meaning |
+|---|---|
+| `--headed` | Show browser (default for `fill`) |
+| `--headless` | Hide browser |
+| `--keep-open` | Leave browser open ~90s after report |
+| `--execution-preference AUTO\|STATIC\|DYNAMIC` | Same as side panel mode |
+| `--out <dir>` | Custom artifact folder |
+
+### Example report (console + `report.txt`)
+
+```text
+═══════════════════════════════════════════════════════════
+  CC-DEBUG FILL REPORT  (real form / product path)
+═══════════════════════════════════════════════════════════
+URL       https://portal.../form
+Perceive  nodes=42  revision=1
+Plan      steps=8  plan_id=plan:...
+───────────────────────────────────────────────────────────
+   1  ok    type_text     node:...
+      planned "Ravi Kumar"  dom="Ravi Kumar"  → DOM ok
+   2  fail  select_option node:...
+      planned ...  dom="(empty)"  → LIE (claimed ok, select empty)
+RESULT    ok=1  fail=1  skip=0  lies=1
+PAGE DOM  nonempty_controls=1/12
+═══════════════════════════════════════════════════════════
+```
+
+### Artifacts
+
+```text
+extension-dev/cli/out/<run-id>/
+  report.txt              ← start here
+  report.json
+  snapshot.json           Page IR
+  plan.json               ActionPlan from server
+  fill-plan-response.json raw server body
+  execution.json          ExecutionObservation
+  dom-after.json          values via binding registry
+  main-world-after.json   all inputs/selects on page
+  truth.json
+  meta.json
+```
+
+Exit **0** only if no failed steps and no DOM lies.
+
+---
+
+## Other commands
 
 ```bash
 node extension-dev/cli/cc-debug.mjs status
-node extension-dev/cli/cc-debug.mjs perceive --fixture perception-native.html
-node extension-dev/cli/cc-debug.mjs plan --fixture perception-native.html
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture perception-native.html
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture perception-native.html --headed
-
-# prove truth gate detects lies
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture perception-native.html --force-lie
+node extension-dev/cli/cc-debug.mjs perceive --url "https://..."
+node extension-dev/cli/cc-debug.mjs fill-e2e --fixture perception-native.html   # lab only
 ```
 
-### Live mode (Phase 2)
+---
+
+## Important limitations
+
+| | |
+|---|---|
+| **What runs** | Product scripts injected into the page (same modules as extension inject list) + real `/fill-plan` |
+| **Not yet** | Driving the real side-panel UI / full MV3 service-worker path reliably |
+| **Never** | Merge this branch to `master` |
+
+If server mapping returns **0 steps**, the report will say so — that is a **brain/mapping** issue, not executor.
+
+---
+
+## Sync product code into this branch
 
 ```bash
-set CC_BACKEND_URL=https://your-service/api
-set CC_ACCESS_TOKEN=...
-node extension-dev/cli/cc-debug.mjs fill-e2e --mode live --fixture perception-native.html --profile path\to\profile.json
+git checkout debug/cc-cli
+git merge phase-3-perception   # or rebase — product → debug only
+# never: merge debug/cc-cli into master
 ```
-
-## Artifacts
-
-Each run writes under `extension-dev/cli/out/<run-id>/` (gitignored):
-
-- `meta.json`, `snapshot.json`, `plan.json`, `execution.json`
-- `dom-before.json`, `dom-after.json`, `truth.json`, `summary.txt`
-
-## Future
-
-Add more debug commands on **this branch** (HIM, adaptive modes, WSS). Still never merge to master.
