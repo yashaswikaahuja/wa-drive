@@ -1,6 +1,7 @@
 /**
  * Human-readable fill report: what was planned, what ran, what stuck in the DOM.
  */
+import { formatTimingLines, recordDurationMs } from './timing.mjs';
 
 function stepClaim(eoStep) {
   if (!eoStep) return 'missing';
@@ -119,6 +120,7 @@ export function buildFillReport({
 
     const target = step.target?.node_id || '?';
     const label = step._label || target;
+    const durationMs = recordDurationMs(eo);
     rows.push({
       n: i + 1,
       claim,
@@ -129,6 +131,7 @@ export function buildFillReport({
       domState,
       stick,
       failure_code: eo?.failure_code || null,
+      durationMs,
     });
   }
 
@@ -139,6 +142,19 @@ export function buildFillReport({
     pageEmptyLie = true;
     lies++;
   }
+
+  const timingRecords = eoSteps.map((s) => ({
+    result: s.status,
+    durationMs: s.duration_ms ?? s.durationMs,
+    label: s.step_id,
+    stepId: s.step_id,
+  }));
+  const { lines: timingLines, stats: timingStats } = formatTimingLines(timingRecords, {
+    includeTimeline: false,
+  });
+
+  const wallMs = observation?._cli_wall_ms ?? null;
+  const progressive = !!observation?._cli_progressive;
 
   const lines = [
     '═══════════════════════════════════════════════════════════',
@@ -154,20 +170,31 @@ export function buildFillReport({
     planMeta?.diagnostics
       ? `Server    unmapped=${planMeta.diagnostics.unmapped_count ?? '?'}`
       : null,
+    wallMs != null ? `Execute wall  ${wallMs} ms${progressive ? '  (progressive one-step-at-a-time)' : '  (batch APE)'}` : null,
     '───────────────────────────────────────────────────────────',
-    '  #  claim  op              target / value → DOM',
+    '  #  claim  ms     op              target / value → DOM',
     '───────────────────────────────────────────────────────────',
   ].filter((x) => x != null);
 
   for (const r of rows) {
     const valBit = r.plannedValue ? ` "${String(r.plannedValue).slice(0, 40)}"` : '';
+    const msCol = r.durationMs != null ? String(r.durationMs).padStart(5) : '    ?';
     lines.push(
-      `  ${String(r.n).padStart(2)}  ${r.claim.padEnd(5)} ${r.op.padEnd(14)} ${String(r.target).slice(0, 28)}`
+      `  ${String(r.n).padStart(2)}  ${r.claim.padEnd(5)} ${msCol}  ${r.op.padEnd(14)} ${String(r.target).slice(0, 28)}`
     );
     lines.push(
       `      planned${valBit}  dom=${r.domState}  → ${r.stick}` +
         (r.failure_code ? `  [${r.failure_code}]` : '')
     );
+  }
+
+  lines.push(...timingLines);
+  if (planMeta?.phaseClock?.length) {
+    lines.push('───────────────────────────────────────────────────────────');
+    lines.push('  PHASE CLOCK (CLI wall)');
+    for (const p of planMeta.phaseClock) {
+      lines.push(`    ${String(p.name).padEnd(22)} +${String(p.deltaMs).padStart(6)}ms  total=${p.totalMs}ms`);
+    }
   }
 
   lines.push('───────────────────────────────────────────────────────────');
@@ -200,6 +227,9 @@ export function buildFillReport({
       stepCount: steps.length,
       mainSummary: mainSummary || null,
       honest: lies === 0 && fail === 0,
+      timing: timingStats,
+      wallMs,
+      progressive,
     },
     rows,
   };

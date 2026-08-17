@@ -46,6 +46,8 @@ export function parseArgs(argv) {
     else if (a === '--id' || a === '--session') flags.id = next();
     else if (a === '--limit') flags.limit = Number(next());
     else if (a === '--poll-ms') flags.pollMs = Number(next());
+    else if (a === '--progressive') flags.progressive = true;
+    else if (a === '--batch') flags.progressive = false;
     else if (a === '--extension' || a === '--runtime-extension') flags.extension = true;
     else if (a === '--runtime') {
       const v = next();
@@ -72,22 +74,36 @@ PRIMARY WORKFLOW (live record)
   3. Extension already posts fill-plan + fill-observation + sessions to the LIVE API
   4. This CLI reads that live data and prints a detailed report
 
-  # set auth (Ramishwar JWT or any operator token)
-  $env:CC_BACKEND_URL = "https://api.cybercontrol.fun/api"
-  $env:CC_ACCESS_TOKEN = "..."
+  # Auth (optional if file present):
+  #   auto backend: https://api.cybercontrol.fun/api
+  #   auto token:   extension-dev/cli/out/ramishwar-access.jwt  (gitignored)
+  # Or set explicitly:
+  #   $env:CC_BACKEND_URL = "https://api.cybercontrol.fun/api"
+  #   $env:CC_ACCESS_TOKEN = (Get-Content extension-dev\\cli\\out\\ramishwar-access.jwt -Raw).Trim()
 
   # stream new sessions as the operator fills:
   node extension-dev/cli/cc-debug.mjs live
 
-  # list recent fills:
+  # list recent fills (shows sum step ms):
   node extension-dev/cli/cc-debug.mjs sessions
 
-  # one session detail:
+  # one session detail (per-field ms + TIMING block + timeline):
   node extension-dev/cli/cc-debug.mjs session --id <session-uuid>
 
+  # env check (backend health + token present):
+  node extension-dev/cli/cc-debug.mjs status
+
 LAB (optional — does not replace live operator path)
-  fill --url ... --profile ...     CLI-driven fill (fixture/lab)
-  status                           env check
+  fill --url ... --profile ...              CLI-driven fill
+  fill ... --progressive                    live per-step clock (watch field-by-field)
+  fill ... --batch                          one-shot APE (product-like)
+  status                                    env check
+
+TIMING NOTES
+  Product fill: perceive → /fill-plan → execute ALL steps → POST /fill-observation ONCE.
+  Sessions API only updates after that final post (not mid-fill).
+  Each record still has durationMs for how long that field's act took.
+  Legacy (5.91) also has absolute ts → wall timeline in session report.
 
 Never: patch extension/*.js for debug. Keep product version-independent.
 `);

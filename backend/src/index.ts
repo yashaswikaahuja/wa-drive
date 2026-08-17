@@ -68,6 +68,8 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+// CLI device authorize form posts as application/x-www-form-urlencoded
+app.use(express.urlencoded({ extended: false }));
 
 // Inject pool into req for legacy route handlers
 app.use((req: any, res, next) => { req.pool = pool; next(); });

@@ -1,0 +1,28 @@
+{
+  "name": "cybercontrol-cli",
+  "version": "0.1.0",
+  "description": "CyberControl operator CLI — browser login, sessions, live fill reports",
+  "type": "module",
+  "bin": {
+    "cyb": "./bin/cyb.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "cybercontrol",
+    "cli",
+    "autofill"
+  ],
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yashaswikaahuja/wa-drive.git",
+    "directory": "cyb-cli"
+  }
+}

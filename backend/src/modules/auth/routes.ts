@@ -11,10 +11,13 @@ import { createAccount, loginLimiter, setRefreshCookie, clearRefreshCookie, read
 import { captureIpLocation } from '../../services/geoip.js';
 import { reverseGeocode } from '../../services/geocode.js';
 import verifyRouter from './verify.routes.js';
+import cliAuthRouter from './cli.routes.js';
 
 const router = Router();
 // Signup-OTP + post-login contact verification endpoints (mounted on the same /api/auth path).
 router.use(verifyRouter);
+// Device-code browser login for the `cyb` CLI (POST /device, GET /poll, GET|POST /authorize).
+router.use('/cli', cliAuthRouter);
 
 // Google is server-verified (low brute-force risk); key by IP with a higher cap for multi-operator cafes.
 const googleLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40, message: { error: 'Too many attempts, try again later' } });

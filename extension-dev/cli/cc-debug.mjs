@@ -34,7 +34,9 @@ import {
   authMe,
   extensionVersionOf,
   pathHintFromRecords,
+  analyzeRecordTimings,
 } from './lib/live-api.mjs';
+import { createPhaseClock } from './lib/timing.mjs';
 
 const flags = parseArgs(process.argv);
 
@@ -66,11 +68,42 @@ function gitBranch() {
 function resolveToken() {
   if (flags.token) return flags.token;
   const envName = flags.tokenEnv || 'CC_ACCESS_TOKEN';
-  return process.env[envName] || process.env.ACCESS_TOKEN || process.env.CC_ACCESS_TOKEN || null;
+  const fromEnv = process.env[envName] || process.env.ACCESS_TOKEN || process.env.CC_ACCESS_TOKEN || null;
+  if (fromEnv) return fromEnv.trim();
+  // Convenience: local debug JWT from earlier gcloud mint (gitignored)
+  const jwtPath = resolve(ROOT, 'extension-dev/cli/out/ramishwar-access.jwt');
+  try {
+    if (existsSync(jwtPath)) {
+      const t = readFileSync(jwtPath, 'utf8').trim();
+      if (t) return t;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 function resolveBackend() {
-  return flags.backendUrl || process.env.CC_BACKEND_URL || process.env.BACKEND_URL || null;
+  return (
+    flags.backendUrl ||
+    process.env.CC_BACKEND_URL ||
+    process.env.BACKEND_URL ||
+    'https://api.cybercontrol.fun/api'
+  );
+}
+
+function requireLiveAuth() {
+  const backend = resolveBackend();
+  const token = resolveToken();
+  if (!token) {
+    throw new Error(
+      'No access token.\n' +
+        '  Set:  $env:CC_ACCESS_TOKEN = (Get-Content extension-dev\\cli\\out\\ramishwar-access.jwt -Raw).Trim()\n' +
+        '  Or:   $env:CC_ACCESS_TOKEN = \"your-jwt\"\n' +
+        '  File also auto-loaded if present: extension-dev/cli/out/ramishwar-access.jwt'
+    );
+  }
+  return { backend, token };
 }
 
 async function withBrowserPage(fn, { headedDefault = false } = {}) {
@@ -157,9 +190,8 @@ async function cmdStatus() {
 
 // ── PRIMARY: live sessions from production API ──────────────────────
 async function cmdSessions() {
-  const backend = resolveBackend();
-  const token = resolveToken();
-  if (!backend || !token) throw new Error('Need CC_BACKEND_URL and CC_ACCESS_TOKEN');
+  const { backend, token } = requireLiveAuth();
+  console.log(`backend=${backend}  token=${token.slice(0, 12)}…\n`);
   const limit = flags.limit || 20;
   const rows = await listSessions(backend, token, { limit });
   // Enrich with full session when list omits version (usually present) + path hint from records
@@ -176,12 +208,18 @@ async function cmdSessions() {
     const ver = extensionVersionOf(full) || '?';
     const records = Array.isArray(full.records) ? full.records : [];
     const hint = pathHintFromRecords(records);
-    enriched.push({ ...full, _ver: ver, _hint: hint });
+    const timing = analyzeRecordTimings(records);
+    enriched.push({ ...full, _ver: ver, _hint: hint, _timing: timing });
+    const timeBit = timing.timedCount
+      ? `  step_sum=${timing.sumMs}ms avg=${timing.avgMs}ms` +
+        (timing.wallFromTsMs != null ? ` wall=${timing.wallFromTsMs}ms` : '') +
+        (timing.maxMs != null ? ` slowest=${timing.maxMs}ms` : '')
+      : '  step_sum=n/a';
     console.log(
       `${full.id}\n` +
         `  extension=${ver}  filled=${full.totalFilled ?? full.total_filled}  failed=${full.totalFailed ?? full.total_failed}\n` +
         `  host=${full.hostname || '(empty)'}  at=${full.receivedAt || full.created_at || '?'}\n` +
-        `  path=${hint}  records=${records.length}`
+        `  path=${hint}  records=${records.length}${timeBit}`
     );
   }
   art.writeJson('sessions.json', enriched);
@@ -190,9 +228,7 @@ async function cmdSessions() {
 }
 
 async function cmdSession() {
-  const backend = resolveBackend();
-  const token = resolveToken();
-  if (!backend || !token) throw new Error('Need CC_BACKEND_URL and CC_ACCESS_TOKEN');
+  const { backend, token } = requireLiveAuth();
   const id = flags.id;
   if (!id) throw new Error('session requires --id <session-uuid>');
   const session = await getSession(backend, token, id);
@@ -205,9 +241,7 @@ async function cmdSession() {
 }
 
 async function cmdLive() {
-  const backend = resolveBackend();
-  const token = resolveToken();
-  if (!backend || !token) throw new Error('Need CC_BACKEND_URL and CC_ACCESS_TOKEN');
+  const { backend, token } = requireLiveAuth();
   const pollMs = flags.pollMs || 3000;
   console.log(`
 ═══════════════════════════════════════════════════════════
@@ -250,7 +284,15 @@ async function cmdLive() {
         try {
           const full = await getSession(backend, token, s.id);
           const ver = extensionVersionOf(full) || '?';
+          const records = Array.isArray(full.records) ? full.records : [];
+          const timing = analyzeRecordTimings(records);
           console.log(`    extension version: ${ver}`);
+          if (timing.timedCount) {
+            console.log(
+              `    timing: step_sum=${timing.sumMs}ms avg=${timing.avgMs}ms p95=${timing.p95Ms}ms` +
+                (timing.wallFromTsMs != null ? ` wall=${timing.wallFromTsMs}ms` : '')
+            );
+          }
           const dir = resolve(ROOT, 'extension-dev/cli/out', `live-session-${s.id}`);
           const { createArtifacts: ca } = await import('./lib/artifacts.mjs');
           const a = ca(dir);
@@ -345,18 +387,25 @@ async function cmdFill() {
   }
 
   const profile = flags.profile ? loadProfile(flags.profile) : null;
+  // Default progressive so operator can watch field-by-field + per-step ms.
+  // --batch matches product one-shot APE (fill all, then return).
+  const progressive = flags.progressive !== false;
 
   const pack = await withBrowserPage(
     async (page, ctx) => {
+      const clock = createPhaseClock('fill');
       console.log(`Opening ${ctx.url}`);
+      clock.mark('page_open');
       console.log('Perceiving…');
       const { snapshot, stats } = await perceivePage(page);
+      clock.mark('perceive');
       console.log(`  nodes=${stats.nodeCount} revision=${stats.revision}`);
 
       let plan;
       let planMeta = {};
       if (flags.plan) {
         plan = loadPlanFile(resolve(flags.plan), readFileSync);
+        clock.mark('plan_file');
         console.log(`Plan loaded from file (${plan.steps?.length} steps)`);
       } else if (mode === 'live') {
         console.log('Requesting fill-plan from server…');
@@ -377,6 +426,7 @@ async function cmdFill() {
           throw e;
         }
         plan = p;
+        clock.mark('fill_plan_http');
         planMeta = {
           classification: raw?.classification || raw?.diagnostics?.system_classification,
           diagnostics: raw?.diagnostics || null,
@@ -394,18 +444,31 @@ async function cmdFill() {
       } else {
         console.log('Offline lab plan…');
         plan = buildOfflinePlan(snapshot, { maxSteps: flags.maxSteps });
+        clock.mark('plan_offline');
       }
 
       if (!plan.steps?.length) {
         throw new Error('Plan has zero steps — nothing to fill (mapping empty?)');
       }
 
-      console.log('Executing ActionPlan…');
-      const observation = await executePlan(page, plan, { stepId: flags.stepId });
+      console.log(
+        progressive
+          ? 'Executing ActionPlan (progressive — live per-step ms)…'
+          : 'Executing ActionPlan (batch — product-like one shot)…'
+      );
+      const observation = await executePlan(page, plan, {
+        stepId: flags.stepId,
+        progressive,
+      });
+      clock.mark('execute');
       await page.waitForTimeout(200);
       const domAfter = await observeDomForPlan(page, plan);
       const mainAfter = await scanMainWorldControls(page);
       const mainSummary = summarizeMainWorld(mainAfter);
+      clock.mark('dom_observe');
+      planMeta.phaseClock = clock.phases;
+      planMeta.progressive = progressive;
+      console.log(clock.summaryLines().join('\n'));
 
       return {
         ctx,
@@ -575,12 +638,23 @@ try {
       process.exit(1);
   }
 } catch (e) {
-  console.error('\nFATAL:', e.message || e);
+  const msg = e?.message || String(e);
+  const cause = e?.cause?.message || e?.cause || null;
+  console.error('\nFATAL:', msg);
+  if (cause) console.error('  cause:', cause);
+  if (msg === 'fetch failed' || /fetch failed/i.test(msg)) {
+    console.error(
+      '  Hint: network/TLS failure talking to the API.\n' +
+        '  Try:  node extension-dev/cli/cc-debug.mjs status\n' +
+        '  Ensure token file exists or set CC_ACCESS_TOKEN; backend defaults to https://api.cybercontrol.fun/api'
+    );
+  }
   try {
-    art.writeText('error.txt', String(e.stack || e));
+    art.writeText('error.txt', String(e.stack || e) + (cause ? `\ncause: ${cause}` : ''));
     art.writeJson('meta.json', {
       command: flags.command,
-      error: String(e.message || e),
+      error: msg,
+      cause: cause ? String(cause) : null,
       gitSha: gitSha(),
       branch: gitBranch(),
     });
