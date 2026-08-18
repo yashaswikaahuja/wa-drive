@@ -129,6 +129,14 @@ async function runSequentialKernelFill(ctx) {
       const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
       if (!formFields.length) return { ok: false, error: 'no fields detected' };
 
+      // Derive BEFORE mapping so is_pwd / gender / etc. drive radio decisions
+      if (typeof ccDeriveProfile === 'function') {
+        try {
+          const derived = ccDeriveProfile(prof);
+          if (derived && typeof derived === 'object') Object.assign(prof, derived);
+        } catch { /* soft */ }
+      }
+
       // T9-ish: prefer visible fields when extractor marks them
       const visible = formFields.filter((f) => f.visible !== false && f.hidden !== true);
       const fields = visible.length ? visible : formFields;
@@ -146,59 +154,73 @@ async function runSequentialKernelFill(ctx) {
       let mapping = {};
       let fbs = {};
       const gsk = (l) => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+      const isChoiceType = (t) => /radio|checkbox/i.test(String(t || ''));
 
-      // Memory-first: taught form mappings
+      /** Apply a planned value onto a field — resolve radio-group → radio-click option. */
+      function applyMappedValue(f, rawValue, profileKey, source) {
+        if (rawValue == null || String(rawValue).trim() === '') return false;
+        if (isChoiceType(f.type) && typeof resolveChoiceToOption === 'function') {
+          const resolved = resolveChoiceToOption(f, rawValue, profileKey);
+          if (!resolved) return false;
+          mapping[resolved.selector] = resolved.entry;
+          fbs[resolved.selector] = {
+            label: f.label,
+            semanticKey: gsk(f.label),
+            profileKey: profileKey || null,
+            source: source,
+          };
+          return true;
+        }
+        mapping[f.selector] = {
+          value: rawValue,
+          type: f.type,
+          label: f.label,
+          profileKey: profileKey || null,
+        };
+        fbs[f.selector] = {
+          label: f.label,
+          semanticKey: gsk(f.label),
+          profileKey: profileKey || null,
+          source: source,
+        };
+        return true;
+      }
+
+      function choiceCovered(f) {
+        if (mapping[f.selector]) return true;
+        if (f.optionSelectors) {
+          for (const sel of f.optionSelectors) {
+            if (mapping[sel]) return true;
+          }
+        }
+        return false;
+      }
+
+      // Memory-first: taught form mappings (choice-aware)
       if (saved) {
         for (const f of fields) {
           const sk = gsk(f.label);
-          const s = saved[sk];
+          const s = saved[sk] || saved[gsk(f.name)] || null;
           if (s && s.profileKey && prof[s.profileKey] != null && String(prof[s.profileKey]).trim() !== '') {
-            mapping[f.selector] = {
-              value: prof[s.profileKey],
-              type: f.type,
-              label: f.label,
-              profileKey: s.profileKey,
-            };
-            fbs[f.selector] = {
-              label: f.label,
-              semanticKey: sk,
-              profileKey: s.profileKey,
-              source: s.kind === 'conditional' ? 'saved-conditional' : 'saved',
-            };
-          } else if (s && s.kind === 'conditional' && s.taughtValue) {
-            mapping[f.selector] = {
-              value: s.taughtValue,
-              type: f.type,
-              label: f.label,
-              profileKey: s.profileKey,
-            };
-            fbs[f.selector] = {
-              label: f.label,
-              semanticKey: sk,
-              profileKey: s.profileKey,
-              source: 'saved-conditional',
-            };
+            applyMappedValue(f, prof[s.profileKey], s.profileKey, s.kind === 'conditional' ? 'saved-conditional' : 'saved');
+          } else if (s && (s.kind === 'conditional' || s.class === 'CONDITIONAL') && s.taughtValue) {
+            applyMappedValue(f, s.taughtValue, s.profileKey, 'saved-conditional');
           }
         }
       }
 
-      // Label-primary residual map
-      const unmapped = fields.filter((f) => !mapping[f.selector]);
+      // Label-primary residual map (only fields not already covered, including choice options)
+      const unmapped = fields.filter((f) => !choiceCovered(f));
       if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
         const fz = fuzzyMatch(unmapped, prof);
         for (const [sel, v] of Object.entries(fz || {})) {
           mapping[sel] = v;
-          const ff = fields.find((x) => x.selector === sel);
-          if (ff) fbs[sel] = { label: ff.label, source: 'label-primary', profileKey: v.profileKey || null };
+          fbs[sel] = {
+            label: (v && v.label) || (fields.find((x) => x.selector === sel || (x.optionSelectors || []).includes(sel)) || {}).label || '',
+            source: 'label-primary',
+            profileKey: v.profileKey || null,
+          };
         }
-      }
-
-      // Derive pass if available (client common-sense)
-      if (typeof ccDeriveProfile === 'function') {
-        try {
-          const derived = ccDeriveProfile(prof);
-          if (derived && typeof derived === 'object') Object.assign(prof, derived);
-        } catch { /* soft */ }
       }
 
       let adp = {};

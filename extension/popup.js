@@ -403,6 +403,47 @@ searchEl.addEventListener('keydown', (e) => {
   }
 });
 
+function applyWssPresence(wss, fallbackName) {
+  if (!connDot || !connText) return;
+  const state = (wss && wss.state) || 'disconnected';
+  connDot.classList.remove('green', 'amber');
+  if (state === 'connected') {
+    connDot.classList.add('green');
+    connText.textContent = 'WSS · ' + (fallbackName || 'live');
+    connText.title = wss.sessionId ? ('session ' + wss.sessionId) : 'WebSocket connected';
+  } else if (state === 'connecting' || state === 'reconnecting') {
+    connDot.classList.add('amber');
+    connText.textContent = state === 'connecting' ? 'WSS connecting…' : 'WSS reconnecting…';
+    connText.title = (wss && wss.lastError) || state;
+  } else if (state === 'suspended') {
+    connText.textContent = 'WSS suspended';
+    connText.title = (wss && wss.lastError) || 'server unavailable';
+  } else if (fallbackName) {
+    // HTTPS auth ok but WSS not up yet
+    connText.textContent = fallbackName + ' · no WSS';
+    connText.title = (wss && wss.lastError) || 'WebSocket not connected';
+  } else {
+    connText.textContent = 'WSS off';
+  }
+}
+
+async function refreshWssPresence(fallbackName) {
+  try {
+    const st = await chrome.storage.local.get('ccWssState');
+    applyWssPresence(st.ccWssState, fallbackName);
+    // Ask SW to ensure socket (wakes background)
+    chrome.runtime.sendMessage({ type: 'ENSURE_WSS' }, () => {
+      void chrome.runtime.lastError;
+    });
+  } catch { /* ignore */ }
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.ccWssState) return;
+  const name = (connText.textContent || '').split('·')[0].trim();
+  applyWssPresence(changes.ccWssState.newValue, name && !/^WSS|Not |Token|Offline/i.test(name) ? name : null);
+});
+
 async function init() {
   document.getElementById('ver').textContent = 'v' + VERSION;
   detectSite();
@@ -416,15 +457,17 @@ async function init() {
     return;
   }
 
-  // Verify token
+  // Verify token (HTTPS bootstrap)
+  let operatorName = null;
   try {
     const r = await fetch(data.backendUrl + '/auth/me', {
       headers: { 'Authorization': 'Bearer ' + data.accessToken }
     });
     if (r.ok) {
       const user = await r.json();
+      operatorName = (user.name || user.email || 'Operator').split(' ')[0];
       connDot.classList.add('green');
-      connText.textContent = (user.name || user.email || 'Operator').split(' ')[0];
+      connText.textContent = operatorName;
     } else {
       connText.textContent = 'Token expired';
       profilesEl.innerHTML = '<div class="empty">Please login again</div>';
@@ -433,6 +476,9 @@ async function init() {
   } catch {
     connText.textContent = 'Offline?';
   }
+
+  // T4: show real WSS presence (not HTTPS-only)
+  await refreshWssPresence(operatorName);
 
   // Load profiles
   try {

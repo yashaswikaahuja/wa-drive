@@ -10,6 +10,36 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   const STRATEGY_VERSION = '1.0';
   const WAIT_ENGINE_VERSION = '1.2'; // sequential fill: settle after every field (radio↔select AJAX too)
 
+  // T5 Stage B — live fill/debug over WSS (page → SW → socket). Soft-fail if offline.
+  const _fillRunId = 'fill:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  function _emitFillDebug(event, payload) {
+    try {
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) return;
+      chrome.runtime.sendMessage(
+        Object.assign(
+          {
+            type: 'FILL_DEBUG',
+            event: event,
+            fillRunId: _fillRunId,
+            hostname: (typeof location !== 'undefined' ? location.hostname : ''),
+            ts: Date.now(),
+            rv: RUNTIME_VERSION,
+          },
+          payload || {}
+        ),
+        function () {
+          void chrome.runtime.lastError;
+        }
+      );
+    } catch (e) {
+      /* extension context invalidated / no SW — ignore */
+    }
+  }
+  _emitFillDebug('fill.start', {
+    fieldCount: Object.keys(mapping || {}).length,
+    waitEngine: WAIT_ENGINE_VERSION,
+  });
+
   // Plugin dispatch (Phase 1: cascade-select)
   const _CC_USE_PLUGINS = true;
   const _CC_LEGACY_COMPARE = true;
@@ -102,6 +132,27 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     );
     _ccRecords.push(rec);
     _flushRecords();
+    const result = String(rec.result || '');
+    if (result === 'filled' || result === 'succeeded') {
+      _emitFillDebug('field.done', {
+        selector: rec.selector,
+        label: rec.label,
+        type: rec.type,
+        planned: rec.value,
+        actual: rec.actualValue,
+        strategy: rec.strategy,
+      });
+    } else if (result === 'skipped' || result === 'failed' || result === 'error' || result === 'waiting_human') {
+      _emitFillDebug(result === 'waiting_human' ? 'field.wait' : 'field.fail', {
+        selector: rec.selector,
+        label: rec.label,
+        type: rec.type,
+        planned: rec.value,
+        actual: rec.actualValue,
+        failReason: rec.failReason || rec.error || result,
+        strategy: rec.strategy,
+      });
+    }
     return rec;
   }
 
@@ -210,10 +261,20 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     'text-input': {
       name: 'text-input',
       description: 'Text/email/tel input: nativeInputValueSetter + input/change events',
-      applies: (el, type) => !['select','ng-dropdown','mat-select','mat-radio','mat-checkbox','radio','checkbox'].includes(type),
+      applies: (el, type) => !['select','ng-dropdown','mat-select','mat-radio','mat-checkbox','radio','checkbox','radio-group','radio-click','checkbox-group','checkbox-agreement'].includes(type),
       verify: {
         method: 'dom_value',
         check: (el, expected) => el.value === expected || el.value.includes(expected.slice(0,8)),
+        timeout: 200,
+      },
+    },
+    'radio-click': {
+      name: 'radio-click',
+      description: 'Click a specific radio option (resolved by planner)',
+      applies: (el, type) => type === 'radio-click' || type === 'radio' || type === 'radio-group' || (el && el.type === 'radio'),
+      verify: {
+        method: 'dom_value',
+        check: (el) => !!(el && (el.checked || (el.querySelector && el.querySelector('input[type=radio]:checked')))),
         timeout: 200,
       },
     },
@@ -247,9 +308,32 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     if (!liveEl) return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'no-element-on-verify' };
     const tag = (liveEl.tagName || '').toLowerCase();
     // Checkbox: verify by .checked state, not .value
-    if (liveEl.type === 'checkbox' || liveEl.type === 'radio') {
-      const want = /^(true|yes|1|on|checked)$/i.test(String(expected));
-      return { ok: liveEl.checked === want, actualValue: String(liveEl.checked), normExpected: String(want), normActual: String(liveEl.checked) };
+    if (liveEl.type === 'checkbox') {
+      return {
+        ok: !!liveEl.checked,
+        actualValue: liveEl.checked ? 'true' : 'false',
+        normExpected: String(expected || ''),
+        normActual: liveEl.checked ? 'true' : 'false',
+      };
+    }
+    if (liveEl.type === 'radio') {
+      // Report selected option label in the name group (not bare checked boolean)
+      const groupName = liveEl.name;
+      let selected = liveEl.checked ? liveEl : null;
+      if (groupName) {
+        const checked = document.querySelector('input[type="radio"][name="' + groupName + '"]:checked');
+        if (checked) selected = checked;
+      }
+      if (!selected) {
+        return { ok: false, actualValue: '', normExpected: String(expected || ''), normActual: '', reason: 'radio-none-checked' };
+      }
+      const lbl = selected.id ? document.querySelector('label[for="' + selected.id + '"]') : null;
+      const actualLabel = (lbl && lbl.textContent.trim()) || selected.value || 'true';
+      const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const ok = !expected || norm(actualLabel).includes(norm(expected).slice(0, 4))
+        || norm(expected).includes(norm(actualLabel).slice(0, 4))
+        || selected.checked;
+      return { ok: !!ok, actualValue: actualLabel, normExpected: norm(expected), normActual: norm(actualLabel) };
     }
     if (tag === 'select') {
       // For selects: compare selected option's text or value
@@ -661,10 +745,37 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       console.log('[CC] fillOne:', selector, 'elType:', elType, 'value:', value);
       // radio-click: directly click this specific radio option (matched by label in fuzzyMatch)
       if (type === 'radio-click') {
-        el.focus();
-        el.checked = true;
-        ['click','change'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
+        const target = (el.type === 'radio') ? el : (el.querySelector && el.querySelector('input[type="radio"]')) || el;
+        target.focus();
+        target.checked = true;
+        ['click', 'change'].forEach((ev) => target.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
         return 1;
+      }
+      // radio-group planned without option resolve — match option by value within the name group
+      if (type === 'radio-group' && elType === 'radio' && el.name) {
+        const normR0 = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+        const vR0 = normR0(value);
+        const radios0 = document.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
+        const match0 = Array.from(radios0).find((r) => {
+          if (normR0(r.value) === vR0) return true;
+          const lbl = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
+          const lblText = lbl ? normR0(lbl.textContent) : '';
+          if (lblText && (lblText === vR0 || lblText.startsWith(vR0) || vR0.startsWith(lblText))) return true;
+          // Gender synonyms
+          const wantFemale = /female|महिला|स्त्री/.test(String(value).toLowerCase());
+          const wantMale = /male|पुरुष/.test(String(value).toLowerCase()) && !wantFemale;
+          if (wantFemale && /female|महिला|स्त्री/.test((lbl && lbl.textContent) || r.value)) return true;
+          if (wantMale && /male|पुरुष/.test((lbl && lbl.textContent) || r.value) && !/female/.test((lbl && lbl.textContent) || '')) return true;
+          return false;
+        });
+        if (match0) {
+          match0.focus();
+          match0.checked = true;
+          ['click', 'change'].forEach((ev) => match0.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
+          return 1;
+        }
+        console.debug('[CC] radio-group no option match:', selector, value);
+        return 0;
       }
       if (elType === 'select') {
         const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -1001,6 +1112,14 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       const { value, type } = fieldData;
       let isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
       const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
+      const _fieldCtxEarly = filledBySource[selector] || {};
+      _emitFillDebug('field.start', {
+        selector,
+        label: _fieldCtxEarly.label || fieldLabel,
+        type,
+        planned: value,
+        profileKey: _fieldCtxEarly.profileKey || fieldData.profileKey || null,
+      });
       // Cascade treatment only applies to actual dropdowns (state→district→block
       // selects that load options via AJAX). A TEXT field labeled "district"
       // must NOT wait for <option>s it will never have.
@@ -1344,7 +1463,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             _trulyFilled = _r === 1 && _ver.ok;
           }
           if (_trulyFilled) filled += 1;
-          _ccRecords.push({
+          const _recChoice = {
             selector,
             value,
             type,
@@ -1366,8 +1485,18 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             durationMs: Date.now() - _t0,
             ts: Date.now(),
             rv: RUNTIME_VERSION,
-          });
+          };
+          _ccRecords.push(_recChoice);
           _flushRecords();
+          _emitFillDebug(_trulyFilled ? 'field.done' : 'field.fail', {
+            selector,
+            label: _fieldCtx.label,
+            type,
+            planned: value,
+            actual: _ver.actualValue,
+            failReason: _recChoice.failReason,
+            strategy: _strategy,
+          });
         } catch (e) {
           _ccRecords.push({
             selector,
@@ -1380,11 +1509,22 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             rv: RUNTIME_VERSION,
           });
           _flushRecords();
+          _emitFillDebug('field.fail', {
+            selector,
+            type,
+            planned: value,
+            failReason: e.message || 'error',
+          });
         }
       }
     }
   }
   await fillSequential();
+  _emitFillDebug('fill.end', {
+    filled: filled,
+    records: _ccRecords.length,
+    ajaxBudgetLeftMs: _ajaxWaitBudgetMs,
+  });
 
 
   // ── Operator Correction Observer ─────────────────────────────────────────

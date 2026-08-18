@@ -43,16 +43,21 @@ HTTPS: token mint, profile CRUD, health, rare fallback only
 - **Milestone:** [Legacy→Product Fill Transformation](https://github.com/yashaswikaahuja/wa-drive/milestone/1)
 - **Epic:** [#214](https://github.com/yashaswikaahuja/wa-drive/issues/214)
 - **Label:** `transform-legacy`
-- **Product build:** extension **5.92.1** — sequential kernel is **default Fill** (AUTO/STATIC); ActionPlan only if operator picks **DYNAMIC**
+- **Product build:** extension **5.92.3** — sequential kernel default; WSS Stage A presence wiring started
 - **Kernel freeze doc:** `extension/autofill/KERNEL-FREEZE.md`
 - **Golden pack:** `extension-dev/GOLDEN-PORTAL-REGRESSION.md`
+- **Honesty note:** legacy-like **actuator ≠** full WSS-first plan. T4/T5/T6/T7 were reopened.
 
-### Implementation status (2026-08 batch)
+### Implementation status (corrected)
 
 | ID | Status |
 |----|--------|
-| T1–T11, T13, T15–T17 | implemented in tree |
-| T12, T14 | partial (capture + WSS helpers; full WSS plan loop still HTTPS-primary) |
+| T1–T3, T8–T11, T13, T16–T17 | mostly done (actuator / polish) |
+| T4 | **reopened** — Stage A client wired in SW (5.92.3); needs live `/ws` + verify |
+| T5 | **reopened** — emit path not in fill loop yet |
+| T6–T7 | **reopened** — radio-click fix in tree, live verify pending |
+| T12, T14 | open (correct) |
+| T15 | soft — re-sign after radio + WSS presence |
 
 ## Path (phases) → issues
 

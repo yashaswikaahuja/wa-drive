@@ -113,6 +113,9 @@ function _labelPrimaryIdent(field) {
   if (field.placeholder && String(field.placeholder).trim().length > 2) {
     parts.push(String(field.placeholder).trim());
   }
+  // Always include name/id lightly so groups labeled only "Yes" still see "changed"/"isAddressSame"
+  if (field.name) parts.push(String(field.name));
+  if (field.id) parts.push(String(field.id));
   var ident = _normalizeIdent(parts.join(' '));
   if (!labelStrong) {
     // Weak/missing label — last resort: DOM keys (logged as dom-fallback)
@@ -121,6 +124,199 @@ function _labelPrimaryIdent(field) {
     ident = _normalizeIdent((ident ? ident + ' ' : '') + domBits);
   }
   return { ident: ident, matchBy: matchBy, labelEn: en, labelRaw: raw, labelStrong: labelStrong };
+}
+
+/** Normalize for option compare. */
+function _normChoice(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Resolve a planned value onto a specific radio/checkbox option.
+ * ALWAYS returns type radio-click / checkbox (never leave type=radio-group for executor).
+ * Returns null if no option matches (do not dump free-text onto the group).
+ */
+function resolveChoiceToOption(field, plannedValue, profileKey) {
+  if (!field || plannedValue == null || String(plannedValue).trim() === '') return null;
+  var planned = String(plannedValue).trim();
+  var plannedNorm = _normChoice(planned);
+  var type = field.type || '';
+
+  // Reject free-text dumps on Yes/No style groups (address/aadhaar onto radio)
+  var opts = field.options || [];
+  var looksYesNo = opts.length > 0 && opts.every(function (o) {
+    var n = _normChoice(o);
+    return !n || n === 'yes' || n === 'no' || n === 'y' || n === 'n' || n === 'haan' || n === 'nahi'
+      || n === 'true' || n === 'false' || n === '1' || n === '0';
+  });
+  if (looksYesNo && plannedNorm.length > 8 && !/^(yes|no|true|false|y|n)$/.test(plannedNorm)) {
+    return null;
+  }
+  if (looksYesNo && /^\d{8,}$/.test(plannedNorm)) return null; // aadhaar etc.
+
+  if (type === 'radio-group' && field.options && field.optionSelectors) {
+    var matchedIdx = -1;
+    for (var oi = 0; oi < field.options.length; oi++) {
+      if (_normChoice(field.options[oi]) === plannedNorm) { matchedIdx = oi; break; }
+    }
+    if (matchedIdx < 0) {
+      for (var oi2 = 0; oi2 < field.options.length; oi2++) {
+        var optText2 = _normChoice(field.options[oi2]);
+        var shorter = optText2.length < plannedNorm.length ? optText2 : plannedNorm;
+        var longer = optText2.length < plannedNorm.length ? plannedNorm : optText2;
+        if (shorter.length >= 2 && longer.includes(shorter) && shorter.length >= longer.length * 0.7) {
+          matchedIdx = oi2; break;
+        }
+      }
+    }
+    // Gender synonyms
+    if (matchedIdx < 0 && /male|female|other|third|पुरुष|महिला|स्त्री|तृतीय/i.test(planned + opts.join(' '))) {
+      var wantFemale = /female|f\b|woman|महिला|स्त्री/.test(planned.toLowerCase());
+      var wantMale = /male|m\b|man|पुरुष/.test(planned.toLowerCase()) && !wantFemale;
+      var wantOther = /other|third|trans|तृतीय/.test(planned.toLowerCase());
+      for (var gi = 0; gi < opts.length; gi++) {
+        var ol = opts[gi].toLowerCase();
+        if (wantFemale && /female|महिला|स्त्री|f\b/.test(ol)) { matchedIdx = gi; break; }
+        if (wantMale && /male|पुरुष|m\b/.test(ol) && !/female|third/.test(ol)) { matchedIdx = gi; break; }
+        if (wantOther && /other|third|trans|तृतीय/.test(ol)) { matchedIdx = gi; break; }
+      }
+    }
+    // Yes/No synonyms
+    if (matchedIdx < 0 && looksYesNo) {
+      var wantYes = /^(yes|y|true|1|haan|हां)$/i.test(planned);
+      var wantNo = /^(no|n|false|0|nahi|नहीं)$/i.test(planned);
+      for (var yi = 0; yi < opts.length; yi++) {
+        var yn = _normChoice(opts[yi]);
+        if (wantYes && (yn === 'yes' || yn === 'y' || yn === 'true' || yn === '1' || yn === 'haan')) { matchedIdx = yi; break; }
+        if (wantNo && (yn === 'no' || yn === 'n' || yn === 'false' || yn === '0' || yn === 'nahi')) { matchedIdx = yi; break; }
+      }
+    }
+    if (matchedIdx < 0 || !field.optionSelectors[matchedIdx]) return null;
+    return {
+      selector: field.optionSelectors[matchedIdx],
+      entry: {
+        value: field.options[matchedIdx],
+        type: 'radio-click',
+        profileKey: profileKey || null,
+        label: field.label,
+        matchBy: 'choice-resolve',
+      },
+    };
+  }
+
+  if (type === 'radio') {
+    return {
+      selector: field.selector,
+      entry: {
+        value: 'true',
+        type: 'radio-click',
+        profileKey: profileKey || null,
+        label: field.label,
+        matchBy: 'choice-resolve',
+      },
+    };
+  }
+
+  if (type === 'checkbox' || type === 'mat-checkbox' || type === 'checkbox-agreement') {
+    var truthy = /^(yes|y|true|1|checked|on|haan|हां)$/i.test(planned);
+    var falsy = /^(no|n|false|0|off|unchecked|nahi|नहीं)$/i.test(planned);
+    if (!truthy && !falsy) return null;
+    return {
+      selector: field.selector,
+      entry: {
+        value: truthy ? 'yes' : 'no',
+        type: type === 'mat-checkbox' ? 'mat-checkbox' : 'checkbox',
+        profileKey: profileKey || null,
+        label: field.label,
+        matchBy: 'choice-resolve',
+      },
+    };
+  }
+
+  if (type === 'checkbox-group' && field.options && field.optionSelectors) {
+    // Reject free-text dumps (aadhaar/address) onto checkbox groups
+    if (!/^(yes|no|y|n|true|false|1|0|on|off|checked)$/i.test(planned) && plannedNorm.length > 6) {
+      return null;
+    }
+    var wantCheck = /^(yes|y|true|1|on|checked|haan|हां)$/i.test(planned);
+    var wantUncheck = /^(no|n|false|0|off|unchecked|nahi|नहीं)$/i.test(planned);
+    var cIdx = -1;
+    for (var ci = 0; ci < field.options.length; ci++) {
+      if (_normChoice(field.options[ci]) === plannedNorm) { cIdx = ci; break; }
+    }
+    // Declaration groups often have a single option labeled "on" / empty — check first on Yes
+    if (cIdx < 0 && wantCheck && field.optionSelectors.length >= 1) cIdx = 0;
+    if (cIdx < 0 || !wantCheck) return null;
+    if (wantUncheck) return null; // leave unchecked
+    return {
+      selector: field.optionSelectors[cIdx],
+      entry: {
+        value: 'yes',
+        type: 'checkbox',
+        profileKey: profileKey || null,
+        label: field.label,
+        matchBy: 'choice-resolve',
+      },
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Decide Yes/No (or option) for conditional radio/checkbox groups from profile flags.
+ */
+function decideConditionalChoice(field, profile) {
+  var ident = _labelPrimaryIdent(field).ident;
+  var label = String(field.label || '').toLowerCase();
+  var nameId = ((field.name || '') + ' ' + (field.id || '')).toLowerCase();
+  var blob = ident + ' ' + label + ' ' + nameId;
+
+  // Changed name? → No unless profile.changed_name set
+  if (/changed|new_name|name_change|whether.*name/.test(blob)) {
+    return profile.changed_name ? 'Yes' : 'No';
+  }
+  // Same address?
+  if (/address.?same|same.?address|isaddresssame|correspondence.?same/.test(blob)) {
+    if (profile.same_address != null) return /^(yes|true|1)$/i.test(String(profile.same_address)) ? 'Yes' : 'No';
+    return 'Yes'; // default: same as permanent
+  }
+  // Disability / PwD
+  if (/disabilit|pwd|divyang|handicapped|is_pwd/.test(blob)) {
+    var d = profile.is_pwd || profile.disability || profile.pwd;
+    if (d != null) return /^(yes|y|true|1)$/i.test(String(d)) ? 'Yes' : 'No';
+    return 'No';
+  }
+  // Ex-serviceman
+  if (/ex.?serviceman|ex.?service/.test(blob)) {
+    var e = profile.ex_serviceman;
+    if (e != null) return /^(yes|y|true|1)$/i.test(String(e)) ? 'Yes' : 'No';
+    return 'No';
+  }
+  // Aadhaar declaration / consent checkboxes
+  if (/aadhar.?declar|aadhaar.?declar|declaration|consent|i_agree|i agree|confirm.*information/.test(blob)) {
+    return 'Yes';
+  }
+  // Gender — use profile
+  if (/gender|sex|ling|पुरुष|महिला|male|female|तृतीय/.test(blob)) {
+    return profile.gender || profile.sex || null;
+  }
+  // Marital
+  if (/marital|married|unmarried|विवाह/.test(blob)) {
+    return profile.marital_status || profile.marital || null;
+  }
+  // Reserved category
+  if (/reserv|category.?belong|is_reserved/.test(blob)) {
+    var r = profile.is_reserved_category;
+    if (r != null) return /^(yes|y|true|1)$/i.test(String(r)) ? 'Yes' : 'No';
+  }
+  return null;
+}
+
+/** Expose for fill-orchestrator saved-map path */
+if (typeof window !== 'undefined') {
+  window.ccResolveChoiceToOption = resolveChoiceToOption;
+  window.ccDecideConditionalChoice = decideConditionalChoice;
 }
 
 function fuzzyMatch(formFields, profile) {
@@ -158,8 +354,19 @@ function fuzzyMatch(formFields, profile) {
               || (field.name && /^(re_|retype|verify|confirm)/i.test(field.name));
     if (isTwin) continue;
 
-    // Skip yes/no question radio buttons (not data fields)
-    if ((field.type === 'radio' || field.type === 'radio-group') && /have_you|do_you|are_you|is_your|changed|whether/i.test(ident)) continue;
+    // Conditional Yes/No radios (have you / changed name / same address / disability…)
+    // — do NOT skip; decide from profile flags and resolve to radio-click option.
+    if (field.type === 'radio' || field.type === 'radio-group') {
+      var condDecision = decideConditionalChoice(field, profile);
+      if (condDecision) {
+        var resolvedCond = resolveChoiceToOption(field, condDecision, null);
+        if (resolvedCond) {
+          mapping[resolvedCond.selector] = resolvedCond.entry;
+          continue;
+        }
+      }
+      // Gender / marital / category still fall through to alias matching below
+    }
 
     // Auto-check agreement / declaration / consent checkboxes (also mat-checkbox)
     if (field.type === 'checkbox' || field.type === 'mat-checkbox') {
@@ -325,59 +532,30 @@ function fuzzyMatch(formFields, profile) {
       // degree_name/course_name must not match 'highest level of education' fields
       if (profileKey === 'degree_name' && ident.includes('highest')) continue;
 
-      // For radio buttons: match GROUP by LABEL (not name/id), then pick option by value
+      // For radio buttons: match GROUP by LABEL (+ name), then pick option → radio-click
       if (field.type === 'radio' || field.type === 'radio-group') {
-        var profileVal = profile[profileKey].toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Label-primary group identity — do not use bare field.id/name when label is strong
-        var groupIdent = matchBy === 'label'
-          ? _normalizeIdent(field.label || '')
-          : _normalizeIdent([field.label, field.name, field.id].filter(Boolean).join(' '));
+        // Include name/id so label-only "Yes" groups still match "changed"/"gender"
+        var groupIdent = _normalizeIdent([field.label, field.name, field.id].filter(Boolean).join(' '));
         var groupMatches = aliases.some(function (a) {
           return groupIdent.includes(a.replace(/[^a-z0-9]/g, ''));
         });
+        // Also match gender aliases against bilingual Male/Female option text
+        if (!groupMatches && profileKey === 'gender' && field.options) {
+          groupMatches = /gender|sex|ling|male|female|पुरुष|महिला|स्त्री|तृतीय/.test(groupIdent + ' ' + field.options.join(' ').toLowerCase());
+        }
         if (!groupMatches) { continue; }
 
-        // For radio-group: iterate options to find the matching one
-        if (field.type === 'radio-group' && field.options && field.optionSelectors) {
-          // First pass: exact match
-          var matchedIdx = -1;
-          for (var oi = 0; oi < field.options.length; oi++) {
-            var optText = field.options[oi].toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (optText === profileVal) { matchedIdx = oi; break; }
-          }
-          // Second pass: substring (only if no exact match, and require word boundary or 3+ char overlap)
-          if (matchedIdx < 0) {
-            for (var oi2 = 0; oi2 < field.options.length; oi2++) {
-              var optText2 = field.options[oi2].toLowerCase().replace(/[^a-z0-9]/g, '');
-              // Avoid "female".includes("male") — require the shorter string to be at least 70% of the longer
-              var shorter = optText2.length < profileVal.length ? optText2 : profileVal;
-              var longer = optText2.length < profileVal.length ? profileVal : optText2;
-              if (longer.includes(shorter) && shorter.length >= longer.length * 0.7) { matchedIdx = oi2; break; }
-            }
-          }
-          if (matchedIdx >= 0) {
-            mapping[field.optionSelectors[matchedIdx]] = {
-              value: field.options[matchedIdx],
-              type: 'radio-click',
-              matchBy: matchBy,
-              profileKey: profileKey,
-              label: field.label,
-            };
-          }
-        } else {
-          // Single radio field (type === 'radio')
-          var optLabel = field.label.toLowerCase().replace(/[^a-z0-9]/g, '');
-          if (optLabel.includes(profileVal) || profileVal.includes(optLabel)) {
-            mapping[field.selector] = {
-              value: 'true',
-              type: 'radio-click',
-              matchBy: matchBy,
-              profileKey: profileKey,
-              label: field.label,
-            };
-          }
+        var resolved = resolveChoiceToOption(field, profile[profileKey], profileKey);
+        if (resolved) {
+          resolved.entry.matchBy = matchBy;
+          mapping[resolved.selector] = resolved.entry;
         }
-        continue; // don't fall through to text matching for radio buttons
+        continue; // never fall through to text matching for radios
+      }
+
+      // Never map free-text profile values onto checkbox-groups via aliases
+      if (field.type === 'checkbox-group') {
+        continue;
       }
 
       // Text/select: longest alias win on LABEL identity (more specific e.g. father_name > name)
@@ -391,13 +569,47 @@ function fuzzyMatch(formFields, profile) {
       }
     }
     if (bestKey) {
-      mapping[field.selector] = {
-        value: profile[bestKey],
-        type: field.type,
-        matchBy: matchBy,
-        profileKey: bestKey,
-        label: field.label || null,
-      };
+      // Never attach free-text to choice widgets via bestKey
+      if (field.type === 'radio' || field.type === 'radio-group' || field.type === 'checkbox-group') {
+        var bestResolved = resolveChoiceToOption(field, profile[bestKey], bestKey);
+        if (bestResolved) {
+          bestResolved.entry.matchBy = matchBy;
+          mapping[bestResolved.selector] = bestResolved.entry;
+        }
+      } else {
+        mapping[field.selector] = {
+          value: profile[bestKey],
+          type: field.type,
+          matchBy: matchBy,
+          profileKey: bestKey,
+          label: field.label || null,
+        };
+      }
+    }
+  }
+
+  // ── Post-pass: any still-unmapped choice groups get a conditional decision ──
+  function choiceAlreadyMapped(field) {
+    if (mapping[field.selector]) return true;
+    if (field.optionSelectors) {
+      for (var si = 0; si < field.optionSelectors.length; si++) {
+        if (mapping[field.optionSelectors[si]]) return true;
+      }
+    }
+    return false;
+  }
+  for (const field of formFields) {
+    if (!(field.type === 'radio' || field.type === 'radio-group' || field.type === 'checkbox-group'
+      || field.type === 'checkbox' || field.type === 'mat-checkbox' || field.type === 'checkbox-agreement')) {
+      continue;
+    }
+    if (choiceAlreadyMapped(field)) continue;
+    var decision = decideConditionalChoice(field, profile);
+    if (!decision) continue;
+    var resolvedPost = resolveChoiceToOption(field, decision, null);
+    if (resolvedPost) {
+      resolvedPost.entry.matchBy = 'conditional-post';
+      mapping[resolvedPost.selector] = resolvedPost.entry;
     }
   }
 

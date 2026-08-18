@@ -241,6 +241,7 @@ handlers.set('fill_debug_event', (session, message, ctx) => {
   send(session.sessionId, {
     type: 'fill_debug_ack',
     event,
+    fillRunId: message.fillRunId || null,
     serverTime: Date.now(),
     ref: message.id,
   });
@@ -256,10 +257,16 @@ handlers.set('fill_debug_event', (session, message, ctx) => {
       console.error('[ws] recordFillDebug error:', err.message);
     }
   } else {
-    // Default: debug log only (no durable store required for v1)
+    // Default: concise live log (Stage B)
+    const bit = message.label || message.selector || message.step_id || '';
+    const extra =
+      event === 'field.fail' || event === 'field.wait'
+        ? (message.failReason || '')
+        : (message.planned != null ? String(message.planned).slice(0, 40) : '');
     console.log(
-      `[ws] fill_debug ${session.sessionId.slice(0, 8)} ${event}`,
-      message.label || message.selector || message.step_id || ''
+      `[ws] fill_debug ${String(session.sessionId).slice(0, 8)} ${event}`,
+      bit,
+      extra
     );
   }
 });

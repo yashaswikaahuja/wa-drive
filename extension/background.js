@@ -2,6 +2,22 @@
 try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.js load failed:', e.message); }
 // Phase 0 (CYB-85): café default blocks DISPATCH_JOB / Agent client mapping path
 try { importScripts('shared/legacy-fill-gate.js'); } catch (e) { console.warn('[CC] legacy-fill-gate.js load failed:', e.message); }
+// T4 Stage A — WSS presence (auth after token mint)
+try { importScripts('runtime/reconnect-manager.js'); } catch (e) { console.warn('[CC] reconnect-manager load failed:', e.message); }
+try { importScripts('runtime/ws-client.js'); } catch (e) { console.warn('[CC] ws-client load failed:', e.message); }
+try { importScripts('runtime/wss-session.js'); } catch (e) { console.warn('[CC] wss-session load failed:', e.message); }
+
+function ccEnsureWss(reason) {
+  if (typeof CcWssSession === 'undefined' || !CcWssSession.ensureWssFromStorage) {
+    console.warn('[CC][wss] CcWssSession unavailable');
+    return Promise.resolve({ ok: false, error: 'wss_session_missing' });
+  }
+  console.log('[CC][wss] ensure from', reason || 'unknown');
+  return CcWssSession.ensureWssFromStorage().catch((e) => {
+    console.warn('[CC][wss] ensure failed:', e.message);
+    return { ok: false, error: e.message };
+  });
+}
 
 /** @returns {Promise<boolean>} Phase 4.1: always false — legacy paths permanently disabled. */
 async function isLegacyClientFillAllowed() {
@@ -93,6 +109,20 @@ chrome.runtime.onInstalled.addListener(() => {
   if (chrome.sidePanel?.setPanelBehavior) {
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   }
+  ccEnsureWss('onInstalled');
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  ccEnsureWss('onStartup');
+});
+
+// Alarm keeps SW warm enough to maintain / retry WSS (MV3)
+try {
+  chrome.alarms.create('cc_wss_keepalive', { periodInMinutes: 1 });
+} catch (e) { /* ignore */ }
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== 'cc_wss_keepalive') return;
+  ccEnsureWss('keepalive_alarm');
 });
 
 // SW stays alive via chrome.runtime.onMessage (wakes on demand)
@@ -363,8 +393,36 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
     const { token, refreshToken, user, backendUrl } = msg;
     if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
     chrome.storage.local.set({ accessToken: token, refreshToken: refreshToken || null, user: user || null, backendUrl }, () => {
+      ccEnsureWss('CONNECT');
       sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
     });
+    return;
+  }
+  if (msg.type === 'GET_WSS_STATE') {
+    if (typeof CcWssSession !== 'undefined' && CcWssSession.getState) {
+      CcWssSession.getState().then((st) => sendResponse({ ok: true, wss: st })).catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+    sendResponse({ ok: false, error: 'wss_session_missing' });
+    return;
+  }
+  if (msg.type === 'ENSURE_WSS') {
+    ccEnsureWss('ENSURE_WSS').then((r) => sendResponse(r));
+    return true;
+  }
+  // T5 Stage B — page fill loop → WSS fill_debug_event
+  if (msg.type === 'FILL_DEBUG') {
+    try {
+      if (typeof CcWssSession !== 'undefined' && CcWssSession.sendFillDebug) {
+        const { type: _t, ...payload } = msg;
+        CcWssSession.sendFillDebug(msg.event || 'field.unknown', payload);
+        sendResponse({ ok: true, forwarded: true });
+      } else {
+        sendResponse({ ok: false, error: 'wss_unavailable' });
+      }
+    } catch (e) {
+      sendResponse({ ok: false, error: e.message });
+    }
     return;
   }
   if (msg.type === 'PING') {
@@ -408,7 +466,10 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
       refreshToken: refreshToken || null,
       user: user || null,
       backendUrl,
-    }, () => sendResponse({ ok: true, version: chrome.runtime.getManifest().version }));
+    }, () => {
+      ccEnsureWss('CONNECT_EXTERNAL');
+      sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
     return true;
   }
   if (msg.type === 'PING') {
@@ -481,6 +542,18 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
+  // T4: (re)open WSS when credentials appear or rotate
+  if (changes.accessToken || changes.backendUrl) {
+    if (changes.accessToken?.newValue === undefined && changes.backendUrl?.newValue === undefined) {
+      // both cleared
+    }
+    const tokenGone = changes.accessToken && changes.accessToken.newValue == null;
+    if (tokenGone && typeof CcWssSession !== 'undefined') {
+      CcWssSession.disconnectWss('logout');
+    } else {
+      ccEnsureWss('storage_credentials');
+    }
+  }
   if (!changes._cc_teach_job?.newValue) return;
   const job = changes._cc_teach_job.newValue;
   // Deduplicate: same timestamp = same job, ignore

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.1",
-  "description": "Auto-fill govt forms — sequential kernel default (5.92.1 transform T1–T17); DYNAMIC = ActionPlan opt-in",
+  "version": "5.92.4",
+  "description": "Sequential kernel + radio-click + WSS Stage A/B fill_debug stream (5.92.4)",
   "permissions": [
     "storage",
     "activeTab",
