@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.6",
-  "description": "Fill plan+session over WSS Stage C (5.92.6); profiles HTTPS; HTTPS fill fallback",
+  "version": "5.92.7",
+  "description": "Fix WSS fill hang — route WSS_FILL_* on main SW listener (5.92.7)",
   "permissions": [
     "storage",
     "activeTab",

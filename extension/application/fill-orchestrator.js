@@ -169,6 +169,9 @@ async function runSequentialKernelFill(ctx) {
   let wssPlan = null;
   try {
     const planResp = await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        resolve({ ok: false, error: 'wss_plan_timeout' });
+      }, 30000);
       chrome.runtime.sendMessage(
         {
           type: 'WSS_FILL_REQUEST',
@@ -180,6 +183,7 @@ async function runSequentialKernelFill(ctx) {
           profileId: profile?.id || null,
         },
         (resp) => {
+          clearTimeout(timer);
           if (chrome.runtime.lastError) {
             resolve({ ok: false, error: chrome.runtime.lastError.message });
           } else {
