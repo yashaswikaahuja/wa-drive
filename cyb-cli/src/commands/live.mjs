@@ -1,6 +1,7 @@
 import { requireAuth } from '../credentials.mjs';
 import { listSessions, getSession, authMe } from '../api.mjs';
 import { reportFromSession, formatSessionListLine } from '../report.mjs';
+import { peekJwtClaims, jwtTtlSeconds } from '../jwt.mjs';
 
 function deriveWsUrl(apiBase) {
   const origin = String(apiBase || '').replace(/\/$/, '').replace(/\/api$/i, '');
@@ -8,7 +9,6 @@ function deriveWsUrl(apiBase) {
 }
 
 async function openWebSocket(url) {
-  // Node 22+ has global WebSocket; otherwise use `ws` if installed
   if (typeof WebSocket !== 'undefined') {
     return new WebSocket(url);
   }
@@ -42,31 +42,57 @@ function fmtLive(msg) {
   return `  · ${ev} ${label} ${planned}${fr}`;
 }
 
+function attach(sock, event, fn) {
+  if (typeof sock.addEventListener === 'function') {
+    sock.addEventListener(event, fn);
+  } else if (event === 'message') {
+    sock.on('message', (data) => fn({ data }));
+  } else {
+    sock.on(event, fn);
+  }
+}
+
 /**
  * Live watch over WSS fill_live fan-out (field-by-field).
- * Falls back to HTTPS session poll if WSS cannot connect.
+ * Auto-reconnects on close (common during Fill / LB blips).
+ * Falls back to HTTPS session poll if WSS cannot connect at all.
  */
 export async function cmdLive(flags) {
-  const auth = requireAuth(flags);
+  const auth = await requireAuth(flags);
   const pollMs = flags.pollMs || 3000;
-  const wsUrl = `${deriveWsUrl(auth.apiBase)}?token=${encodeURIComponent(auth.accessToken)}`;
+  const claims = peekJwtClaims(auth.accessToken) || auth.claims || null;
+  const wsHint = claims?.workspaceId || claims?.wid || null;
+  const ttl = jwtTtlSeconds(auth.accessToken);
 
   console.log('═══════════════════════════════════════════════════════════');
   console.log('  CYB LIVE — WSS field-by-field fill stream');
   console.log('═══════════════════════════════════════════════════════════');
   console.log(`  API    ${auth.apiBase}`);
   console.log(`  WSS    ${deriveWsUrl(auth.apiBase)}`);
+  if (wsHint) console.log(`  WS ID  ${wsHint}  (must match extension login workspace)`);
+  if (ttl != null) console.log(`  Token  expires in ${Math.max(0, ttl)}s`);
   console.log(`  Stop   Ctrl+C`);
   console.log('═══════════════════════════════════════════════════════════\n');
+  console.log('Expect during fill: ▶ FILL START → field.start/done → ■ FILL END');
+  console.log('(If you only see ★ SESSION SAVED, field debug is still not reaching WSS.)\n');
 
   try {
     const me = await authMe(auth.apiBase, auth.accessToken);
-    console.log(`Auth OK: ${me.email || me.name || me.id}\n`);
+    console.log(
+      `Auth OK: ${me.email || me.name || me.id}` +
+        (me.workspaceId || me.workspace_id
+          ? `  workspace=${me.workspaceId || me.workspace_id}`
+          : '') +
+        '\n'
+    );
   } catch (e) {
-    console.warn(`Auth check failed: ${e.message}\n`);
+    console.error(`Auth check failed: ${e.message}`);
+    console.error('  Token is invalid/expired for HTTPS — WSS will also fail.');
+    console.error('  Run:  cyb login\n');
+    process.exitCode = 1;
+    return;
   }
 
-  // Also seed completed sessions so we can still print full reports when a fill ends
   const seenSessions = new Set();
   try {
     const existing = await listSessions(auth.apiBase, auth.accessToken, { limit: 50 });
@@ -75,125 +101,151 @@ export async function cmdLive(flags) {
     /* ignore */
   }
 
-  let usePollFallback = false;
-  let sock;
+  const wsUrl = `${deriveWsUrl(auth.apiBase)}?token=${encodeURIComponent(auth.accessToken)}`;
 
-  try {
-    sock = await openWebSocket(wsUrl);
-  } catch (e) {
-    console.warn(`WSS unavailable (${e.message}) — falling back to HTTPS session poll.\n`);
-    usePollFallback = true;
-  }
+  // ── WSS with auto-reconnect ──────────────────────────────────────────
+  let attempt = 0;
+  const maxBackoffMs = 15000;
 
-  if (!usePollFallback && sock) {
-    await new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('WSS connect timeout')), 12000);
-      const onOpen = () => {
-        /* wait for server 'connected' */
-      };
-      const onMsg = (raw) => {
+  while (true) {
+    attempt += 1;
+    let sock;
+    try {
+      sock = await openWebSocket(wsUrl);
+    } catch (e) {
+      console.warn(`WSS open failed (${e.message}) — HTTPS poll fallback.\n`);
+      break;
+    }
+
+    const handshakeOk = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve(false), 12000);
+      attach(sock, 'message', (raw) => {
         let msg;
         try {
-          msg = JSON.parse(typeof raw === 'string' ? raw : raw.data || raw.toString());
+          msg = JSON.parse(typeof raw.data === 'string' ? raw.data : raw.data?.toString?.() || raw.toString());
         } catch {
           return;
         }
         if (msg.type === 'connected') {
           clearTimeout(t);
-          console.log(`WSS connected session=${msg.sessionId || '?'}\nWaiting for fill_live events…\n`);
-          resolve();
+          console.log(
+            `${attempt > 1 ? '[re]connected' : 'WSS connected'} session=${msg.sessionId || '?'}` +
+              `\nWaiting for fill_live events…\n`
+          );
+          resolve(true);
         }
         if (msg.type === 'error' && !msg.ref) {
           clearTimeout(t);
-          reject(new Error(msg.message || msg.code || 'wss error'));
+          console.warn(`[wss handshake error] ${msg.code || ''} ${msg.message || ''}`);
+          resolve(false);
         }
-      };
-      const onErr = () => {
+      });
+      attach(sock, 'error', () => {
         clearTimeout(t);
-        reject(new Error('WSS error'));
-      };
-      if (typeof sock.addEventListener === 'function') {
-        sock.addEventListener('open', onOpen);
-        sock.addEventListener('message', onMsg);
-        sock.addEventListener('error', onErr);
-      } else {
-        sock.on('open', onOpen);
-        sock.on('message', (data) => onMsg(data));
-        sock.on('error', onErr);
-      }
-    }).catch((e) => {
-      console.warn(`WSS handshake failed (${e.message}) — HTTPS poll fallback.\n`);
-      usePollFallback = true;
+        resolve(false);
+      });
+      attach(sock, 'close', (ev) => {
+        clearTimeout(t);
+        const code = ev?.code ?? ev;
+        const reason = ev?.reason || '';
+        if (code) console.warn(`[wss] closed during handshake code=${code} ${reason}`);
+        resolve(false);
+      });
+    });
+
+    if (!handshakeOk) {
       try {
         sock.close();
       } catch {
         /* ignore */
       }
-    });
-  }
-
-  if (!usePollFallback && sock) {
-    const handle = async (raw) => {
-      let msg;
-      try {
-        msg = JSON.parse(typeof raw === 'string' ? raw : raw.data || raw.toString());
-      } catch {
-        return;
-      }
-      if (msg.type === 'fill_live') {
-        console.log(fmtLive(msg));
-        // When a session is saved, pull full HTTPS report once
-        if (msg.event === 'fill.session_saved' && msg.sessionId && !seenSessions.has(msg.sessionId)) {
-          seenSessions.add(msg.sessionId);
-          try {
-            const full = await getSession(auth.apiBase, auth.accessToken, msg.sessionId);
-            console.log('\n>>> SESSION REPORT');
-            console.log(formatSessionListLine(full));
-            const { lines } = reportFromSession(full);
-            console.log(lines.join('\n'));
-            console.log('');
-          } catch (e) {
-            console.warn(`(report fetch failed: ${e.message})`);
-          }
-        }
-      } else if (msg.type === 'pong') {
-        /* ignore */
-      } else if (msg.type === 'error') {
-        console.warn(`[wss error] ${msg.code || ''} ${msg.message || ''}`);
-      }
-    };
-
-    if (typeof sock.addEventListener === 'function') {
-      sock.addEventListener('message', handle);
-      sock.addEventListener('close', () => {
-        console.warn('\nWSS closed — exiting. Re-run cyb live.');
-        process.exit(0);
-      });
-    } else {
-      sock.on('message', (data) => handle(data));
-      sock.on('close', () => {
-        console.warn('\nWSS closed — exiting. Re-run cyb live.');
-        process.exit(0);
-      });
+      const backoff = Math.min(maxBackoffMs, 1000 * Math.pow(1.5, Math.min(attempt, 8)));
+      console.warn(`WSS handshake failed — retry in ${Math.round(backoff / 1000)}s (Ctrl+C to stop)\n`);
+      await new Promise((r) => setTimeout(r, backoff));
+      continue;
     }
 
-    // Keepalive ping
-    setInterval(() => {
-      try {
-        if (sock.readyState === 1) {
-          sock.send(JSON.stringify({ v: 1, id: `ping.${Date.now()}`, type: 'ping', purpose: 'cyb_live' }));
-        }
-      } catch {
-        /* ignore */
-      }
-    }, 20000);
+    attempt = 1; // reset after success
 
-    // Keep process alive
-    await new Promise(() => {});
-    return;
+    const closed = await new Promise((resolve) => {
+      const handle = async (raw) => {
+        let msg;
+        try {
+          const data = typeof raw.data === 'string' ? raw.data : raw.data?.toString?.() || raw.toString();
+          msg = JSON.parse(data);
+        } catch {
+          return;
+        }
+        if (msg.type === 'fill_live') {
+          console.log(fmtLive(msg));
+          if (msg.event === 'fill.session_saved' && msg.sessionId && !seenSessions.has(msg.sessionId)) {
+            seenSessions.add(msg.sessionId);
+            try {
+              const full = await getSession(auth.apiBase, auth.accessToken, msg.sessionId);
+              console.log('\n>>> SESSION REPORT');
+              console.log(formatSessionListLine(full));
+              const { lines } = reportFromSession(full);
+              console.log(lines.join('\n'));
+              console.log('');
+            } catch (e) {
+              console.warn(`(report fetch failed: ${e.message})`);
+            }
+          }
+        } else if (msg.type === 'connected') {
+          console.log(`[wss] (re)connected session=${msg.sessionId || '?'}`);
+        } else if (msg.type === 'pong' || msg.type === 'ping') {
+          /* ignore */
+        } else if (msg.type === 'error') {
+          console.warn(`[wss error] ${msg.code || ''} ${msg.message || ''}`);
+          if (String(msg.code || '').includes('auth') || /401|403|token|jwt/i.test(msg.message || '')) {
+            console.warn('  Auth error on socket — run: cyb login');
+          }
+        } else if (msg.type && msg.type !== 'fill_debug_ack') {
+          console.log(`[wss] ${msg.type}`);
+        }
+      };
+
+      attach(sock, 'message', handle);
+      attach(sock, 'close', (ev) => {
+        const code = ev?.code ?? '?';
+        const reason = (ev?.reason || '').toString();
+        resolve({ code, reason });
+      });
+      attach(sock, 'error', () => {
+        /* close will follow */
+      });
+
+      const pingTimer = setInterval(() => {
+        try {
+          if (sock.readyState === 1) {
+            sock.send(
+              JSON.stringify({
+                v: 1,
+                id: `ping.${Date.now()}`,
+                type: 'ping',
+                purpose: 'cyb_live',
+              })
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+      }, 15000);
+
+      // clear ping on close
+      attach(sock, 'close', () => clearInterval(pingTimer));
+    });
+
+    console.warn(
+      `\nWSS closed code=${closed.code} ${closed.reason || ''} — reconnecting…` +
+        (closed.code === 4002 || closed.code === 4003
+          ? '\n  Auth close from server — run: cyb login'
+          : '')
+    );
+    await new Promise((r) => setTimeout(r, 1500));
   }
 
-  // ── HTTPS poll fallback (old behavior) ─────────────────────────────────
+  // ── HTTPS poll fallback ─────────────────────────────────────────────
   console.log(`HTTPS poll every ${pollMs}ms (no field-by-field stream)\n`);
   // eslint-disable-next-line no-constant-condition
   while (true) {
@@ -214,6 +266,9 @@ export async function cmdLive(flags) {
       }
     } catch (e) {
       console.warn(`[poll] ${e.message}`);
+      if (/Auth failed|401|403|expired/i.test(e.message)) {
+        console.warn('  Run: cyb login');
+      }
     }
     await new Promise((r) => setTimeout(r, pollMs));
   }

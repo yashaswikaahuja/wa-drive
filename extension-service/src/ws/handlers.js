@@ -1,0 +1,417 @@
+/**
+ * CyberControl WebSocket Message Handlers — extension-service/ws-handlers.js
+ * Phase 3.4 — WSS Protocol
+ *
+ * Routes incoming WebSocket messages to appropriate handlers.
+ * Messages from the extension:
+ *   - page_snapshot: full snapshot of current page
+ *   - page_delta: incremental changes
+ *   - execution_observation: result of executing an action plan
+ *   - sync_request: knowledge sync request
+ *   - teach_observation: teach-mode behavioral data
+ *   - heartbeat: keepalive acknowledgment
+ *
+ * Messages to the extension (sent via ws-server.send):
+ *   - action_plan: instructions to execute
+ *   - sync_response: knowledge data
+ *   - teach_prompt: teach-mode prompts
+ *   - status: server status updates
+ *   - error: error responses
+ *
+ * ARCHITECTURE (constitution.yml):
+ *   All planning, AI, knowledge interpretation, and learning happen here.
+ *   The extension only observes and executes.
+ */
+
+import { send, broadcast } from './server.js';
+import { buildFillMapping, persistFillSession } from './fill.js';
+import { pool } from '../db/db.js';
+
+/**
+ * @typedef {object} HandlerContext
+ * @property {function} getKnowledge — (workspaceId, kind, scope) => records
+ * @property {function} resolveMapping — (workspaceId, snapshot) => actionPlan
+ * @property {function} recordObservation — (workspaceId, observation) => void
+ * @property {function} recordTeachData — (workspaceId, data) => void
+ * @property {function} syncKnowledge — (workspaceId, request) => response
+ */
+
+/** Message type → handler function. */
+const handlers = new Map();
+
+/**
+ * Initialize the handlers with service dependencies.
+ *
+ * @param {HandlerContext} [ctx] — service functions (injected for testability)
+ * @returns {{ onMessage: function, onConnection: function, onClose: function }}
+ */
+export function createHandlers(ctx = {}) {
+  /**
+   * Handle an incoming message from a connected extension.
+   * @param {object} session — from ws-server (sessionId, workspaceId, ws, etc.)
+   * @param {object} message — parsed JSON with `type` field
+   */
+  function onMessage(session, message) {
+    const handler = handlers.get(message.type);
+    if (handler) {
+      Promise.resolve()
+        .then(() => handler(session, message, ctx))
+        .catch((err) => {
+          console.error(`[ws] handler ${message.type} error:`, err.message);
+          send(session.sessionId, {
+            type: 'error',
+            code: 'handler_error',
+            message: err.message || 'handler failed',
+            ref: message.id || null,
+          });
+        });
+    } else {
+      send(session.sessionId, {
+        type: 'error',
+        code: 'unknown_message_type',
+        message: `Unknown message type: ${message.type}`,
+        ref: message.id || null,
+      });
+    }
+  }
+
+  /**
+   * Handle new connection.
+   */
+  function onConnection(session) {
+    console.log(`[ws] Connected: ${session.sessionId} (workspace: ${session.workspaceId.slice(0, 8)}...)`);
+  }
+
+  /**
+   * Handle connection close.
+   */
+  function onClose(session, code, reason) {
+    console.log(`[ws] Disconnected: ${session.sessionId} (code=${code}, reason=${reason || 'none'})`);
+  }
+
+  return { onMessage, onConnection, onClose };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MESSAGE HANDLERS
+// ═══════════════════════════════════════════════════════════════════════
+
+/**
+ * page_snapshot — Extension sends a full PageSnapshot v2.
+ * Server acknowledges and may respond with an action_plan.
+ */
+handlers.set('page_snapshot', (session, message, ctx) => {
+  const { snapshot } = message;
+  if (!snapshot || snapshot.kind !== 'page_snapshot') {
+    send(session.sessionId, { type: 'error', code: 'invalid_snapshot', message: 'Expected a valid PageSnapshot', ref: message.id });
+    return;
+  }
+
+  // Acknowledge receipt
+  send(session.sessionId, {
+    type: 'snapshot_ack',
+    snapshotId: snapshot.snapshot_id,
+    revision: snapshot.revision,
+    serverTime: Date.now(),
+    ref: message.id,
+    tabId: message.tabId || session.tabId || null,
+    workflowId: message.workflowId || session.workflowId || null,
+  });
+
+  // If context has a resolver, attempt to generate an action plan
+  if (ctx.resolveMapping) {
+    try {
+      const plan = ctx.resolveMapping(session.workspaceId, snapshot, {
+        tabId: message.tabId || session.tabId,
+        workflowId: message.workflowId || session.workflowId,
+      });
+      if (plan) {
+        send(session.sessionId, {
+          type: 'action_plan',
+          plan,
+          ref: message.id,
+          tabId: message.tabId || session.tabId || null,
+          workflowId: message.workflowId || session.workflowId || null,
+        });
+      }
+    } catch (err) {
+      console.error(`[ws] resolveMapping error:`, err.message);
+    }
+  }
+});
+
+/**
+ * page_delta — Extension sends incremental changes.
+ * Server acknowledges.
+ */
+handlers.set('page_delta', (session, message, ctx) => {
+  const { delta } = message;
+  if (!delta || delta.kind !== 'page_delta') {
+    send(session.sessionId, { type: 'error', code: 'invalid_delta', message: 'Expected a valid PageDelta', ref: message.id });
+    return;
+  }
+
+  send(session.sessionId, {
+    type: 'delta_ack',
+    resultSnapshotId: delta.result_snapshot_id,
+    revision: delta.revision,
+    serverTime: Date.now(),
+    ref: message.id,
+  });
+});
+
+/**
+ * execution_observation — Extension reports action execution results.
+ */
+handlers.set('execution_observation', (session, message, ctx) => {
+  const { observation } = message;
+  if (!observation || observation.kind !== 'execution_observation') {
+    send(session.sessionId, { type: 'error', code: 'invalid_observation', message: 'Expected ExecutionObservation', ref: message.id });
+    return;
+  }
+
+  send(session.sessionId, {
+    type: 'observation_ack',
+    observationId: observation.observation_id,
+    outcome: observation.outcome,
+    ref: message.id,
+  });
+
+  if (ctx.recordObservation) {
+    try {
+      ctx.recordObservation(session.workspaceId, observation);
+    } catch (err) {
+      console.error(`[ws] recordObservation error:`, err.message);
+    }
+  }
+});
+
+/**
+ * sync_request — Extension requests knowledge sync over WSS.
+ * Mirrors the HTTP sync protocol but over the live connection.
+ */
+handlers.set('sync_request', (session, message, ctx) => {
+  const { requestType, payload } = message;
+  if (!requestType || !['bootstrap', 'delta', 'check'].includes(requestType)) {
+    send(session.sessionId, { type: 'error', code: 'invalid_sync_request', message: 'requestType must be bootstrap|delta|check', ref: message.id });
+    return;
+  }
+
+  if (ctx.syncKnowledge) {
+    try {
+      const response = ctx.syncKnowledge(session.workspaceId, { requestType, payload });
+      send(session.sessionId, { type: 'sync_response', requestType, data: response, ref: message.id });
+    } catch (err) {
+      send(session.sessionId, { type: 'error', code: 'sync_failed', message: err.message, ref: message.id });
+    }
+  } else {
+    send(session.sessionId, { type: 'error', code: 'sync_unavailable', message: 'Sync handler not configured', ref: message.id });
+  }
+});
+
+/**
+ * teach_observation — Extension sends behavioral observation during teach mode.
+ */
+handlers.set('teach_observation', (session, message, ctx) => {
+  const { data } = message;
+  if (!data) {
+    send(session.sessionId, { type: 'error', code: 'invalid_teach_data', message: 'Missing teach observation data', ref: message.id });
+    return;
+  }
+
+  send(session.sessionId, { type: 'teach_ack', ref: message.id });
+
+  if (ctx.recordTeachData) {
+    try {
+      ctx.recordTeachData(session.workspaceId, data);
+    } catch (err) {
+      console.error(`[ws] recordTeachData error:`, err.message);
+    }
+  }
+});
+
+/**
+ * ping — Client-initiated ping (in addition to WebSocket-level ping/pong).
+ * T4: auth presence / heartbeat — respond immediately (fail-fast).
+ */
+handlers.set('ping', (session, message) => {
+  send(session.sessionId, {
+    type: 'pong',
+    serverTime: Date.now(),
+    purpose: message.purpose || null,
+    ref: message.id,
+  });
+});
+
+/**
+ * fill_debug_event — T5 live field.start / wait / done / fail stream.
+ * Durable end-state remains HTTPS session / execution_observation.
+ */
+handlers.set('fill_debug_event', (session, message, ctx) => {
+  const event = message.event || message.payload?.event || 'unknown';
+  // Lightweight ack so client can measure RTT
+  send(session.sessionId, {
+    type: 'fill_debug_ack',
+    event,
+    fillRunId: message.fillRunId || null,
+    serverTime: Date.now(),
+    ref: message.id,
+  });
+
+  // Fan-out to workspace watchers (cyb live / other extensions) — field-by-field
+  broadcast(session.workspaceId, {
+    v: 1,
+    type: 'fill_live',
+    id: `live.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 6)}`,
+    ts: message.ts || Date.now(),
+    serverTime: Date.now(),
+    fromSession: session.sessionId,
+    event,
+    fillRunId: message.fillRunId || null,
+    hostname: message.hostname || null,
+    label: message.label || null,
+    selector: message.selector || null,
+    fieldType: message.type || message.fieldType || null,
+    planned: message.planned ?? null,
+    actual: message.actual ?? null,
+    failReason: message.failReason || null,
+    strategy: message.strategy || null,
+    profileKey: message.profileKey || null,
+  });
+
+  if (typeof ctx.recordFillDebug === 'function') {
+    try {
+      ctx.recordFillDebug(session.workspaceId, {
+        sessionId: session.sessionId,
+        event,
+        ts: message.ts || Date.now(),
+        ...message,
+      });
+    } catch (err) {
+      console.error('[ws] recordFillDebug error:', err.message);
+    }
+  } else {
+    const bit = message.label || message.selector || message.step_id || '';
+    const extra =
+      event === 'field.fail' || event === 'field.wait'
+        ? (message.failReason || '')
+        : (message.planned != null ? String(message.planned).slice(0, 40) : '');
+    console.log(
+      `[ws] fill_debug ${String(session.sessionId).slice(0, 8)} ${event}`,
+      bit,
+      extra
+    );
+  }
+});
+
+/**
+ * resume — Client reconnected and wants to resume from a known state.
+ */
+handlers.set('resume', (session, message) => {
+  const { lastSnapshotId, lastRevision } = message;
+  send(session.sessionId, {
+    type: 'resume_ack',
+    accepted: true,
+    lastSnapshotId: lastSnapshotId || null,
+    lastRevision: lastRevision ?? null,
+    serverTime: Date.now(),
+    ref: message.id,
+  });
+});
+
+/**
+ * fill_request — Stage C: plan sequential fill over WSS (replaces HTTPS /mappings during fill).
+ * Response type fill_mapping (matched by ref).
+ */
+handlers.set('fill_request', async (session, message) => {
+  try {
+    const plan = await buildFillMapping(message, session.workspaceId);
+    send(session.sessionId, {
+      type: 'fill_mapping',
+      ref: message.id,
+      serverTime: Date.now(),
+      ...plan,
+    });
+    console.log(
+      `[ws] fill_request ${String(session.sessionId).slice(0, 8)} fields=${plan.fieldCount} planned=${plan.plannedCount}`
+    );
+  } catch (err) {
+    send(session.sessionId, {
+      type: 'error',
+      code: 'fill_request_failed',
+      message: err.message || 'fill_request failed',
+      ref: message.id,
+    });
+  }
+});
+
+/**
+ * fill_session — Stage C: durable session evidence over WSS (replaces HTTPS POST /sessions).
+ */
+handlers.set('fill_session', async (session, message) => {
+  try {
+    const saved = await persistFillSession(message, session.workspaceId, session.userId);
+    send(session.sessionId, {
+      type: 'fill_session_ack',
+      ref: message.id,
+      serverTime: Date.now(),
+      ...saved,
+    });
+    // Notify live watchers that the fill finished
+    broadcast(session.workspaceId, {
+      v: 1,
+      type: 'fill_live',
+      id: `live.done.${Date.now().toString(36)}`,
+      ts: Date.now(),
+      serverTime: Date.now(),
+      fromSession: session.sessionId,
+      event: 'fill.session_saved',
+      sessionId: saved.id,
+      hostname: message.hostname || saved.hostname || null,
+      filled: message.totalFilled ?? null,
+      failed: message.totalFailed ?? null,
+      skipped: message.totalSkipped ?? null,
+    });
+    console.log(`[ws] fill_session ${String(session.sessionId).slice(0, 8)} id=${saved.id}`);
+  } catch (err) {
+    send(session.sessionId, {
+      type: 'error',
+      code: 'fill_session_failed',
+      message: err.message || 'fill_session failed',
+      ref: message.id,
+    });
+  }
+});
+
+/**
+ * profiles_list — list workspace profiles over WSS (replaces HTTPS GET /profiles for extension UI).
+ */
+handlers.set('profiles_list', async (session, message) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
+              relationship, updated_at AS "updatedAt"
+       FROM profiles
+       WHERE workspace_id = $1 AND deleted_at IS NULL
+       ORDER BY updated_at DESC`,
+      [session.workspaceId]
+    );
+    send(session.sessionId, {
+      type: 'profiles_list',
+      ref: message.id,
+      serverTime: Date.now(),
+      profiles: rows,
+      count: rows.length,
+      transport: 'wss',
+    });
+  } catch (err) {
+    send(session.sessionId, {
+      type: 'error',
+      code: 'profiles_list_failed',
+      message: err.message || 'profiles_list failed',
+      ref: message.id,
+    });
+  }
+});
+
+export { handlers };

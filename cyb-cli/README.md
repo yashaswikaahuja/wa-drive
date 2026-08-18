@@ -36,9 +36,11 @@ cyb login          # opens browser → sign in → terminal saves JWT
 cyb whoami
 cyb sessions
 cyb session <uuid>
-cyb live           # watch new operator fills
+cyb live           # WSS field-by-field fill stream (same workspace JWT as extension)
 cyb logout
 ```
+
+**Auth note:** `cyb login` mints a JWT over **HTTPS**. `cyb live` then watches **WSS** `fill_live` events. Extension login works the same way — HTTPS token, then WSS presence/fill/debug. See `docs/REPO-MAP.md`.
 
 ### Login modes
 

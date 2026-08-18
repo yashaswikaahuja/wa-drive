@@ -78,3 +78,10 @@ Expand-Archive legacy.zip -DestinationPath _tmp -Force
 - Phase 3 perception / ActionPlan / 5.92 orchestrator  
 - SEC-004 host allowlist / CHECK-011  
 - CYB-85 `allowLegacyClientFill` gate (that is later, `c2e183a`)  
+
+---
+
+## Maintenance
+
+**Read-only freeze.** Do not edit for product features. Product work happens in `extension/`. Compare against this tree only for regression / parity checks.
+

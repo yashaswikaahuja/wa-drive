@@ -3,7 +3,7 @@ import { listSessions, getSession } from '../api.mjs';
 import { formatSessionListLine, reportFromSession } from '../report.mjs';
 
 export async function cmdSessions(flags) {
-  const auth = requireAuth(flags);
+  const auth = await requireAuth(flags);
   const limit = flags.limit || 20;
   console.log(`API ${auth.apiBase}  (limit=${limit})\n`);
   const rows = await listSessions(auth.apiBase, auth.accessToken, { limit });
@@ -28,7 +28,7 @@ export async function cmdSessions(flags) {
 }
 
 export async function cmdSession(flags) {
-  const auth = requireAuth(flags);
+  const auth = await requireAuth(flags);
   const id = flags.id || flags._[0];
   if (!id) throw new Error('Usage: cyb session <session-uuid>');
   const session = await getSession(auth.apiBase, auth.accessToken, id);

@@ -101,6 +101,10 @@
         });
         if (state === 'connected') {
           try { _client.startHeartbeat(15000); } catch { /* ignore */ }
+          // Let background flush fill_debug outbox that queued while offline
+          try {
+            if (typeof root.__ccOnWssConnected === 'function') root.__ccOnWssConnected();
+          } catch { /* ignore */ }
         }
       },
       onError: (err) => {
@@ -111,7 +115,6 @@
         });
       },
       onMessage: (msg) => {
-        // Stage A: presence only. Stage B/C will route fill_debug / action_plan here.
         if (msg && msg.type === 'error') {
           publishState({
             state: _client ? _client.state : 'suspended',
@@ -162,13 +165,31 @@
     return data[STORAGE_KEY] || { state: 'disconnected' };
   }
 
-  /** Send fill debug event if connected (Stage B helper). */
+  /** Send fill debug event if connected. Returns message id or null. */
   function sendFillDebug(event, payload) {
     if (!_client || _client.state !== 'connected') return null;
     try {
-      return _client.sendFillDebugEvent(event, payload || {});
+      const raw = payload || {};
+      // Avoid clobbering envelope fields (type/id/v/event) on the wire frame
+      const {
+        event: _ev,
+        type: _ty,
+        id: _id,
+        v: _v,
+        seq: _seq,
+        ...rest
+      } = raw;
+      return _client.sendFillDebugEvent(event, rest);
     } catch (e) {
-      console.debug('[CC][wss] fill_debug skip:', e.message);
+      console.warn('[CC][wss] fill_debug send failed:', e.message);
+      publishState({
+        state: 'suspended',
+        sessionId: null,
+        lastError: e.message || 'send failed',
+      });
+      try {
+        if (_client && typeof _client.connect === 'function') _client.connect();
+      } catch { /* ignore */ }
       return null;
     }
   }

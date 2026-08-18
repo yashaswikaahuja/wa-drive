@@ -2,6 +2,22 @@
 
 Standalone API service that powers the Chrome AutoFill extension. Runs separately from the main hub so extension changes never risk breaking the dashboard.
 
+**Layout (after safe reorg):**
+
+```text
+index.js                 # process entry (Docker CMD: node index.js)
+src/
+  http/                  # auth middleware + Express routes
+  ws/                    # WSS server, handlers, fill over socket
+  db/                    # Postgres pool + store helpers
+  engines/               # planning, mapping, learning, HIM, …
+scripts/                 # migrators / seed (one-shots)
+migrations/              # SQL
+```
+
+Root `auth.js`, `db.js`, `ws-*.js` are **compatibility shims** → prefer `src/…`.  
+Repo map: `docs/REPO-MAP.md`.
+
 ## What it serves
 
 | Path | Purpose | Auth | Storage |

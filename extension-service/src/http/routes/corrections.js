@@ -1,0 +1,251 @@
+import { Router } from 'express';
+import { pool } from '../../db/db.js';
+import { authMiddleware } from '../auth.js';
+import { mutateDoc, KEYS } from '../../db/store.js';
+
+const router = Router();
+
+const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+
+// Label-↔-profileKey similarity score. Higher = more likely the label is asking for that key.
+function labelKeyAffinity(labelLower, profileKey) {
+  const pk = (profileKey || '').toLowerCase();
+  if (!pk) return 0;
+  const labelStripped = labelLower.replace(/[^a-z0-9]/g, '');
+  let score = 0;
+  // Tokens split on underscores AND camelCase boundaries.
+  // Min length 3 — short tokens like 'no', 'id', 'pn' produce false positives
+  // (e.g. 'ward no' matching 'si_no' because of 'no').
+  const tokens = pk.split(/[_-]|(?<=[a-z])(?=[A-Z])/).filter(t => t.length >= 3);
+  for (const t of tokens) {
+    if (labelLower.includes(t) || labelStripped.includes(t)) score++;
+  }
+  // Full-key compound match (handles 'pincode' matching 'pin code')
+  if (pk.length >= 4 && labelStripped.includes(pk.replace(/[_-]/g, ''))) score += 2;
+  return score;
+}
+
+/**
+ * Given a profile's data jsonb, an operator-entered value, and the field's label,
+ * find which profile key has that value AND has a label-compatible name.
+ * Returns the matching profileKey or null.
+ *
+ * Safety:
+ *   - Skips promotion if the value matches multiple profile keys (ambiguous)
+ *   - Skips promotion if the chosen key has zero label affinity
+ *     AND another key in the data has positive affinity (label contradicts)
+ */
+/**
+ * T11 — Yes/No / option conditionals map to profile flags by label, not free-string dump.
+ * Returns { kind: 'conditional', profileKey, value } or null.
+ */
+function findConditionalFlag(operatorValue, fieldLabel) {
+  const labelLower = (fieldLabel || '').toLowerCase();
+  const val = String(operatorValue || '').trim().toLowerCase();
+  if (!val) return null;
+
+  const isYes = ['yes', 'y', 'true', '1', 'haan', 'हां'].includes(val);
+  const isNo = ['no', 'n', 'false', '0', 'nahi', 'नहीं'].includes(val);
+  if (!isYes && !isNo) {
+    // Option strings like Male/Female → gender
+    if (/\b(gender|sex|पुरुष|महिला)\b/.test(labelLower)) {
+      return { kind: 'conditional', profileKey: 'gender', value: String(operatorValue).trim() };
+    }
+    if (/\b(marital|married|unmarried)\b/.test(labelLower)) {
+      return { kind: 'conditional', profileKey: 'marital_status', value: String(operatorValue).trim() };
+    }
+    return null;
+  }
+
+  const flagVal = isYes ? 'Yes' : 'No';
+  if (/disabilit|pwd|divyang|handicapped/.test(labelLower)) {
+    return { kind: 'conditional', profileKey: 'disability', value: flagVal };
+  }
+  if (/\b(ex[-\s]?serviceman|ex[-\s]?service)\b/.test(labelLower)) {
+    return { kind: 'conditional', profileKey: 'ex_serviceman', value: flagVal };
+  }
+  if (/\b(i\s*agree|accept|terms|consent|declaration)\b/.test(labelLower)) {
+    return { kind: 'conditional', profileKey: 'consent_accepted', value: flagVal };
+  }
+  // Generic yes/no with label affinity → synthetic key from label
+  const semantic = labelLower.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+  if (semantic.length >= 3) {
+    return { kind: 'conditional', profileKey: `flag_${semantic}`, value: flagVal };
+  }
+  return null;
+}
+
+function findProfileKeyForValue(profileData, operatorValue, fieldLabel) {
+  if (!operatorValue || !profileData || typeof profileData !== 'object') return null;
+  const target = String(operatorValue).trim().toLowerCase();
+  if (target.length < 2) return null;
+  const labelLower = (fieldLabel || '').toLowerCase();
+
+  // T11 — do not promote free Yes/No as if they were Aadhaar/name strings
+  if (['yes', 'y', 'no', 'n', 'true', 'false'].includes(target)) {
+    return null;
+  }
+
+  const exactMatches = [];
+  const fuzzyMatches = [];
+
+  for (const [key, raw] of Object.entries(profileData)) {
+    const val = (raw && typeof raw === 'object' && 'value' in raw) ? raw.value : raw;
+    if (val == null) continue;
+    const cmp = String(val).trim().toLowerCase();
+    if (!cmp) continue;
+    if (cmp === target) {
+      exactMatches.push({ key, affinity: labelKeyAffinity(labelLower, key) });
+    } else if (cmp.length >= 3 && (cmp.includes(target) || target.includes(cmp))) {
+      fuzzyMatches.push({ key, affinity: labelKeyAffinity(labelLower, key) });
+    }
+  }
+
+  // Prefer exact matches over fuzzy
+  const candidates = exactMatches.length ? exactMatches : fuzzyMatches;
+  if (!candidates.length) return null;
+
+  // If only one match — use it but ONLY if either:
+  //   - label has positive affinity, OR
+  //   - no profile key has positive affinity for this label (so we can't disambiguate via label, accept)
+  if (candidates.length === 1) {
+    const sole = candidates[0];
+    if (sole.affinity > 0) return sole.key;
+    // Check if any OTHER profile key has affinity to the label — if yes, reject (label contradicts)
+    for (const [k] of Object.entries(profileData)) {
+      if (k === sole.key) continue;
+      if (labelKeyAffinity(labelLower, k) > 0) return null;
+    }
+    return sole.key;
+  }
+
+  // Multiple candidates — pick the one with highest label affinity, but only if it's STRICTLY better
+  candidates.sort((a, b) => b.affinity - a.affinity);
+  if (candidates[0].affinity > 0 && candidates[0].affinity > (candidates[1]?.affinity || 0)) {
+    return candidates[0].key;
+  }
+  // Ambiguous — skip
+  return null;
+}
+
+// POST /api/corrections — operator supervised corrections
+// + auto-promote: for each correction whose final value matches a profile field,
+// save a (formKey, fieldLabel) -> profileKey mapping so future autofills get it right.
+router.post('/', authMiddleware, async (req, res) => {
+  try {
+    const { hostname, semanticFormKey, trigger, corrections, runtimeVersion, profileId } = req.body;
+    const insR = await pool.query(
+      `INSERT INTO corrections (workspace_id, user_id, profile_id, hostname, semantic_form_key, trigger, runtime_version, corrections)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [req.user.workspaceId, req.user.userId, profileId || null, hostname, semanticFormKey || null, trigger, runtimeVersion || null, JSON.stringify(corrections || [])]
+    );
+    const correctionId = insR.rows[0].id;
+
+    // ── Auto-promote ──────────────────────────────────────────────────────
+    let promoted = 0;
+    if (profileId && semanticFormKey && Array.isArray(corrections) && corrections.length) {
+      try {
+        const pR = await pool.query(
+          'SELECT data FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL',
+          [profileId, req.user.workspaceId]
+        );
+        const profileData = pR.rows[0]?.data || {};
+        const formKey = semanticFormKey;
+        const today = new Date().toISOString().slice(0, 10);
+
+        await mutateDoc(KEYS.MAPPINGS, (mappings) => {
+          if (!mappings[formKey]) mappings[formKey] = {};
+          for (const c of corrections) {
+            const operatorValue = c.finalOperatorValue || c.operatorValue;
+            if (!operatorValue) continue;
+            const fieldLabel = c.field || c.label;
+            const semanticKey = normLabel(fieldLabel);
+            if (!semanticKey) continue;
+
+            // T11 — class-aware promote: conditional Yes/No → flag; data → profileKey
+            const cond = findConditionalFlag(operatorValue, fieldLabel);
+            let profileKey = null;
+            let mapMeta = {};
+            if (cond) {
+              profileKey = cond.profileKey;
+              mapMeta = { kind: 'conditional', taughtValue: cond.value, class: 'CONDITIONAL' };
+            } else {
+              profileKey = findProfileKeyForValue(profileData, operatorValue, fieldLabel);
+              if (profileKey) mapMeta = { kind: 'data', class: 'PROFILE_DATA' };
+            }
+            if (!profileKey) continue;
+
+            const existing = mappings[formKey][semanticKey];
+            if (existing && existing.profileKey === profileKey) {
+              // Confirm existing mapping (boost confidence)
+              existing.fills = (existing.fills || 0) + 1;
+              existing.lastSeen = today;
+              Object.assign(existing, mapMeta);
+            } else {
+              // New or changed mapping (operator overrode the previous)
+              mappings[formKey][semanticKey] = {
+                profileKey,
+                fills: 1,
+                corrections: existing?.corrections ? existing.corrections + 1 : 1,
+                lastSeen: today,
+                source: 'auto-correction',
+                ...mapMeta,
+              };
+            }
+            promoted++;
+          }
+          return mappings;
+        });
+      } catch (e) {
+        console.warn('[ext/corrections] auto-promote failed:', e.message);
+      }
+    }
+
+    res.json({ ok: true, id: correctionId, promotedMappings: promoted });
+  } catch (e) {
+    console.error('[ext/corrections] post:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/corrections — list summaries
+router.get('/', authMiddleware, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = parseInt(req.query.offset) || 0;
+    const { rows } = await pool.query(
+      `SELECT id, hostname, semantic_form_key AS "semanticFormKey", trigger,
+              jsonb_array_length(corrections) AS "correctionCount",
+              created_at AS "receivedAt"
+       FROM corrections
+       WHERE workspace_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [req.user.workspaceId, limit, offset]
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error('[ext/corrections] list:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/corrections/:id
+router.get('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, hostname, semantic_form_key AS "semanticFormKey", trigger,
+              corrections, created_at AS "receivedAt"
+       FROM corrections
+       WHERE id = $1 AND workspace_id = $2`,
+      [req.params.id, req.user.workspaceId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[ext/corrections] get:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+export default router;

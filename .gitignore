@@ -74,3 +74,14 @@ WORKER_SECRET*
 
 # Keep the packaged extension for landing download (exception to *.zip)
 !landing/public/cybercontrol-extension.zip
+
+# Packaged extension / signing (never commit)
+*.pem
+*.crx
+extension.pem
+extension.crx
+
+# CLI debug artifacts / leaked tokens
+extension-dev/cli/out/
+*.jwt
+**/ramishwar-access.jwt

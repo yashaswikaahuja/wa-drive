@@ -3,7 +3,7 @@ import { authMe } from '../api.mjs';
 import { credentialsPath, CLI_VERSION } from '../config.mjs';
 
 export async function cmdWhoami(flags) {
-  const auth = requireAuth(flags);
+  const auth = await requireAuth(flags);
   let me;
   try {
     me = await authMe(auth.apiBase, auth.accessToken);

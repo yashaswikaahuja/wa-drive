@@ -59,26 +59,26 @@ Chrome Extension (installed on cybercafe PC)
 
 ## Project Structure
 
+> **Canonical map:** [`docs/REPO-MAP.md`](docs/REPO-MAP.md)  
+> **Prod topology:** [`deploy/docs/GHCR.md`](deploy/docs/GHCR.md) §4, [`deploy/docs/NETWORKING.md`](deploy/docs/NETWORKING.md)
+
 ```
-cybercontrol-hub/
-├── backend/          # Express + Socket.IO hub (GCP VM)
-│   └── src/
-│       ├── server.ts              # Routes, Drive upload, Socket.IO
-│       └── api/routes/
-│           ├── process.routes.ts  # AI extraction, photo processing
-│           └── profiles.routes.ts # Student profiles CRUD
-├── worker/           # Baileys WhatsApp worker (GCP VM)
-│   └── worker.ts
-├── frontend/         # React dashboard (Vercel)
-│   └── src/pages/
-│       ├── WhatsAppInboxPage.tsx  # Main inbox
-│       ├── FormReadyPage.tsx      # AI extraction + profile save
-│       └── ProfilesPage.tsx       # Profile management
-└── extension/        # Chrome extension (auto-fill govt forms)
-    ├── manifest.json
-    ├── popup.html / popup.js
-    └── content.js
+cybercontrol/
+├── architecture/         # Normative contracts, ADRs, fixtures
+├── docs/                 # Human docs + REPO-MAP.md
+├── deploy/               # Prod compose, CD, LB (canonical ops)
+├── backend/              # Hub API — auth mint/refresh, WA, profiles
+├── frontend/             # Operator dashboard
+├── extension/            # Chrome MV3 — eyes + hands + thin UI
+├── extension-service/    # Fill brain — plan, knowledge, WSS
+├── extension-legacy-best/# Read-only freeze of last-good legacy fill
+├── extension-dev/        # Tests + debug CLI (cli/out gitignored)
+├── cyb-cli/              # Operator CLI (cyb live, sessions)
+├── whatsapp-service/     # WA shards
+└── docker-compose*.yml   # Local/dev stacks (prod = deploy/compose)
 ```
+
+**HTTPS** = login/token mint, profile CRUD, health. **WSS** = presence, fill plan/session, live debug (see REPO-MAP).
 
 ## Quick Start
 

@@ -2,8 +2,8 @@ import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import { createRequire } from 'module';
-import { attachWebSocket } from './ws-server.js';
-import { createHandlers } from './ws-handlers.js';
+import { attachWebSocket } from './src/ws/server.js';
+import { createHandlers } from './src/ws/handlers.js';
 
 // Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
 // Non-blocking, fail-silent. Logs a warning if forbidden deps are installed.
@@ -17,21 +17,21 @@ setTimeout(() => {
   } catch {}
 }, 1000);
 
-import profilesRouter from './routes/profiles.js';
-import mappingsRouter from './routes/mappings.js';
-import adaptersRouter from './routes/adapters.js';
-import sessionsRouter from './routes/sessions.js';
-import correctionsRouter from './routes/corrections.js';
-import trainingRouter from './routes/training.js';
-import agentRouter from './routes/agent.js';
-import knowledgeRouter from './routes/knowledge.js';
-import resolveRouter from './routes/resolve.js';
-import validateRouter from './routes/validate.js';
-import versionsRouter from './routes/versions.js';
-import syncRouter from './routes/sync.js';
-import fillRouter from './routes/fill.js';
-import { ensureSchema } from './store.js';
-import { ensureKnowledgeSchema } from './knowledge-store.js';
+import profilesRouter from './src/http/routes/profiles.js';
+import mappingsRouter from './src/http/routes/mappings.js';
+import adaptersRouter from './src/http/routes/adapters.js';
+import sessionsRouter from './src/http/routes/sessions.js';
+import correctionsRouter from './src/http/routes/corrections.js';
+import trainingRouter from './src/http/routes/training.js';
+import agentRouter from './src/http/routes/agent.js';
+import knowledgeRouter from './src/http/routes/knowledge.js';
+import resolveRouter from './src/http/routes/resolve.js';
+import validateRouter from './src/http/routes/validate.js';
+import versionsRouter from './src/http/routes/versions.js';
+import syncRouter from './src/http/routes/sync.js';
+import fillRouter from './src/http/routes/fill.js';
+import { ensureSchema } from './src/db/store.js';
+import { ensureKnowledgeSchema } from './src/engines/knowledge-store.js';
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();

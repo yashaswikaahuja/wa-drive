@@ -1,25 +1,16 @@
-// Load knowledge sync client (must be first — other code references ccKnowledgeSync)
+﻿// Load knowledge sync client (must be first â€” other code references ccKnowledgeSync)
 try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.js load failed:', e.message); }
-// Phase 0 (CYB-85): café default blocks DISPATCH_JOB / Agent client mapping path
+// Phase 0 (CYB-85): cafÃ© default blocks DISPATCH_JOB / Agent client mapping path
 try { importScripts('shared/legacy-fill-gate.js'); } catch (e) { console.warn('[CC] legacy-fill-gate.js load failed:', e.message); }
-// T4 Stage A — WSS presence (auth after token mint)
+// T4 Stage A â€” WSS presence (auth after token mint)
 try { importScripts('runtime/reconnect-manager.js'); } catch (e) { console.warn('[CC] reconnect-manager load failed:', e.message); }
 try { importScripts('runtime/ws-client.js'); } catch (e) { console.warn('[CC] ws-client load failed:', e.message); }
 try { importScripts('runtime/wss-session.js'); } catch (e) { console.warn('[CC] wss-session load failed:', e.message); }
+// SW facades (MIG-BG-01 lite) â€” keep background.js as thin composer
+try { importScripts('sw/wss-bridge.js'); } catch (e) { console.warn('[CC] sw/wss-bridge load failed:', e.message); }
+try { importScripts('sw/auth-refresh.js'); } catch (e) { console.warn('[CC] sw/auth-refresh load failed:', e.message); }
 
-function ccEnsureWss(reason) {
-  if (typeof CcWssSession === 'undefined' || !CcWssSession.ensureWssFromStorage) {
-    console.warn('[CC][wss] CcWssSession unavailable');
-    return Promise.resolve({ ok: false, error: 'wss_session_missing' });
-  }
-  console.log('[CC][wss] ensure from', reason || 'unknown');
-  return CcWssSession.ensureWssFromStorage().catch((e) => {
-    console.warn('[CC][wss] ensure failed:', e.message);
-    return { ok: false, error: e.message };
-  });
-}
-
-/** @returns {Promise<boolean>} Phase 4.1: always false — legacy paths permanently disabled. */
+/** @returns {Promise<boolean>} Phase 4.1: always false â€” legacy paths permanently disabled. */
 async function isLegacyClientFillAllowed() {
   return false;
 }
@@ -35,7 +26,7 @@ function legacyClientFillDenied(pathName) {
   };
 }
 
-// Helper functions — use shared/label-utils.js as canonical source.
+// Helper functions â€” use shared/label-utils.js as canonical source.
 // These are thin wrappers because background.js (service worker) cannot import
 // page-context scripts directly. Kept in sync with shared/label-utils.js.
 const SEMANTIC_ALIASES = {
@@ -54,11 +45,11 @@ const SEMANTIC_ALIASES = {
   'state name': 'state', 'district name': 'district',
 };
 function getSemanticKey(label) { const n = normalizeLabel(label); return SEMANTIC_ALIASES[n] || n; }
-// Async version — checks server-synced aliases first, falls back to inline SEMANTIC_ALIASES
+// Async version â€” checks server-synced aliases first, falls back to inline SEMANTIC_ALIASES
 async function getSemanticKeyResolved(label) {
   const n = normalizeLabel(label);
   if (SEMANTIC_ALIASES[n]) return SEMANTIC_ALIASES[n];
-  // Check cached server aliases (variant→canonical lookup)
+  // Check cached server aliases (variantâ†’canonical lookup)
   if (typeof ccKnowledgeSync !== 'undefined') {
     const aliases = await ccKnowledgeSync.getCachedAliases();
     for (const [canonical, variants] of Object.entries(aliases)) {
@@ -72,7 +63,7 @@ function normalizeLabel(label) { return (label || '').toLowerCase().replace(/[^a
 
 console.log("[CC] background.js loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
 
-// ── SEC-003: trusted frontend origin for auth/state-mutating bridge messages ──
+// â”€â”€ SEC-003: trusted frontend origin for auth/state-mutating bridge messages â”€â”€
 // Only the CyberControl frontend may CONNECT (set tokens/backend) or open+dispatch
 // jobs. A content script on any other matched origin (e.g. a government portal)
 // must not be able to overwrite stored auth state through the bridge.
@@ -88,7 +79,7 @@ function ccIsTrustedFrontend(sender) {
 // Bridge message types that mutate auth/backend state or spawn privileged actions.
 const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 
-// ── Knowledge Sync ─────────────────────────────────────────────────────────
+// â”€â”€ Knowledge Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Start periodic knowledge sync (bootstrap on first run, delta after that).
 // ccKnowledgeSync is defined in knowledge-sync.js (imported via manifest).
 if (typeof ccKnowledgeSync !== 'undefined') {
@@ -103,7 +94,7 @@ if (chrome.sidePanel?.setPanelBehavior) {
   });
 }
 
-// Content script handles bridge via manifest injection — no manual injection needed
+// Content script handles bridge via manifest injection â€” no manual injection needed
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[CC] Extension installed/updated');
   if (chrome.sidePanel?.setPanelBehavior) {
@@ -128,12 +119,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // SW stays alive via chrome.runtime.onMessage (wakes on demand)
 // No keepalive alarm needed with sendMessage-based bridge
 
-// Background service worker — owns teach session, survives popup close
+// Background service worker â€” owns teach session, survives popup close
 
-// Wake on storage change — more reliable than sendMessage for waking SW
+// Wake on storage change â€” more reliable than sendMessage for waking SW
 let _teachRunning = false;
 let _lastTeachTs = 0;
-// Alarm-based wake — most reliable way to wake sleeping SW in MV3
+// Alarm-based wake â€” most reliable way to wake sleeping SW in MV3
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== 'cc_teach_wake') return;
   const data = await chrome.storage.local.get('_cc_teach_job');
@@ -146,34 +137,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   runTeachSession(job).catch(console.error);
 });
 
-// Also wake via message (more reliable than storage for sleeping SW)
-
-// ── Auth State Management ──────────────────────────────────────────────────
-// Background owns auth state. On startup, validate and refresh token.
-async function validateAuth() {
-  const { accessToken, refreshToken, backendUrl } = await chrome.storage.local.get(['accessToken', 'refreshToken', 'backendUrl']);
-  if (!accessToken || !backendUrl) return;
-  try {
-    const res = await fetch(backendUrl + '/auth/me', { headers: { 'Authorization': 'Bearer ' + accessToken } });
-    if (res.ok) { console.log('[CC] Auth valid'); return; }
-    // Try refresh
-    if (refreshToken) {
-      const rRes = await fetch(backendUrl + '/auth/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken }) });
-      if (rRes.ok) {
-        const data = await rRes.json();
-        await chrome.storage.local.set({ accessToken: data.accessToken, refreshToken: data.refreshToken });
-        console.log('[CC] Auth refreshed');
-      } else {
-        await chrome.storage.local.remove(['accessToken', 'refreshToken', 'user']);
-        console.log('[CC] Auth expired, cleared');
-      }
-    }
-  } catch (e) { console.log('[CC] Auth check failed:', e.message); }
-}
-// Delay initial auth check to not block extension startup
-setTimeout(validateAuth, 5000);
-// Re-validate every 10 minutes
-setInterval(validateAuth, 10 * 60 * 1000);
+// HTTPS token validate/refresh (sw/auth-refresh.js)
+if (typeof ccStartAuthRefreshTimers === 'function') ccStartAuthRefreshTimers();
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // SEC-003: reject auth/state-mutating bridge messages from untrusted senders.
@@ -198,7 +163,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     runTeachSession(job).catch(console.error);
   }
   if (msg.type === 'AUTOFILL_TRIGGER') {
-    // Store trigger and open popup — popup handles the full pipeline
+    // Store trigger and open popup â€” popup handles the full pipeline
     const { profileId } = msg;
     const tabId = sender?.tab?.id;
     chrome.storage.local.set({ _cc_float_trigger: { profileId, tabId, ts: Date.now() } });
@@ -213,7 +178,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'DISPATCH_JOB') {
     // Phase A: extension receives dispatch envelope, runs runtime, reports back
     // Envelope: { type, version, jobId, sessionId, serviceType, executionType, payload }
-    // Phase 0 (CYB-85): gated — café default must use side-panel Fill only.
+    // Phase 0 (CYB-85): gated â€” cafÃ© default must use side-panel Fill only.
     const env = msg.envelope || msg;
     if (!env.jobId || !env.sessionId) { sendResponse({ ok: false, error: 'missing jobId/sessionId' }); return true; }
     if (env.executionType !== 'form_filling') { sendResponse({ ok: false, error: 'unsupported executionType: ' + env.executionType }); return true; }
@@ -234,7 +199,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  // ── WSS presence / fill (popup + page) — must be on main listener, not bridge-only ──
+  // â”€â”€ WSS presence / fill (popup + page) â€” must be on main listener, not bridge-only â”€â”€
   if (msg.type === 'GET_WSS_STATE') {
     if (typeof CcWssSession !== 'undefined' && CcWssSession.getState) {
       CcWssSession.getState().then((st) => sendResponse({ ok: true, wss: st })).catch((e) => sendResponse({ ok: false, error: e.message }));
@@ -248,17 +213,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'FILL_DEBUG') {
-    try {
-      if (typeof CcWssSession !== 'undefined' && CcWssSession.sendFillDebug) {
-        const { type: _t, ...payload } = msg;
-        CcWssSession.sendFillDebug(msg.event || 'field.unknown', payload);
-        sendResponse({ ok: true, forwarded: true });
-      } else {
-        sendResponse({ ok: false, error: 'wss_unavailable' });
-      }
-    } catch (e) {
-      sendResponse({ ok: false, error: e.message });
-    }
+    forwardFillDebug(msg);
+    sendResponse({ ok: true, forwarded: true });
     return true;
   }
   if (msg.type === 'WSS_FILL_REQUEST') {
@@ -343,7 +299,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// ── Phase A: Job Dispatch Runner ───────────────────────────────────────────
+// â”€â”€ Phase A: Job Dispatch Runner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Extension stays dumb: receives envelope, runs deterministic runtime, reports terminal result.
 // No knowledge of jobs/customers/mappings/tenancy.
 async function runJobDispatch(envelope, tabId) {
@@ -386,7 +342,7 @@ async function runJobDispatch(envelope, tabId) {
         });
       }
     }
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor-bundle.js'] });
 
     const result = await chrome.scripting.executeScript({
       target: { tabId },
@@ -423,7 +379,7 @@ async function runJobDispatch(envelope, tabId) {
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
         const records = Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : [];
         const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
-        // Sync mappings — labels, types, order, options (same as popup path)
+        // Sync mappings â€” labels, types, order, options (same as popup path)
         try {
           const updates = {};
           for (let i = 0; i < formFields.length; i++) {
@@ -448,7 +404,7 @@ async function runJobDispatch(envelope, tabId) {
 
     const r = result?.[0]?.result || { ok: false };
     if (r.ok) {
-      // Report final state — runtime done, transition to needs_review
+      // Report final state â€” runtime done, transition to needs_review
       await reportProgress({
         totalFilled: r.filled,
         totalFailed: r.failed,
@@ -469,7 +425,7 @@ async function runJobDispatch(envelope, tabId) {
 
 
 
-// ── Long-lived port — keeps SW alive and bridges postMessage ─────────────────
+// â”€â”€ Long-lived port â€” keeps SW alive and bridges postMessage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Content script connects a port on load. This keeps SW alive (no 30s timeout).
 // Messages from the page are forwarded through the port.
 const _pendingPortMessages = new Map(); // reqId -> resolve
@@ -491,7 +447,7 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 function handleBridgeMessage(msg, sendResponse, trusted) {
-  // SEC-003: defense-in-depth — auth/state-mutating messages require a trusted sender.
+  // SEC-003: defense-in-depth â€” auth/state-mutating messages require a trusted sender.
   if (CC_TRUSTED_ONLY_TYPES[msg.type] && !trusted) {
     sendResponse({ ok: false, error: 'untrusted sender' });
     return;
@@ -512,7 +468,7 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
   if (msg.type === 'OPEN_AND_DISPATCH') {
     const { envelope, formUrl } = msg;
     if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
-    // Phase 0 (CYB-85): gated — async so port handler can reply after storage check.
+    // Phase 0 (CYB-85): gated â€” async so port handler can reply after storage check.
     isLegacyClientFillAllowed().then((allowed) => {
       if (!allowed) {
         sendResponse(legacyClientFillDenied('OPEN_AND_DISPATCH'));
@@ -529,7 +485,7 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
   sendResponse({ ok: false, error: 'unknown type: ' + msg.type });
 }
 
-// ── Frontend Bridge: zero-config auth handshake ────────────────────────────
+// â”€â”€ Frontend Bridge: zero-config auth handshake â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Frontend sends { type: 'CONNECT', token, refreshToken, user, backendUrl }
 // Extension stores credentials so it can act on behalf of the operator without popup config.
 chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
@@ -558,7 +514,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'DISPATCH_JOB_DIRECT') {
     // Frontend sends dispatch envelope directly + tabId (the form tab to operate on)
-    // Phase 0 (CYB-85): gated — not café product path.
+    // Phase 0 (CYB-85): gated â€” not cafÃ© product path.
     const { envelope, tabId } = msg;
     if (!envelope || !tabId) { sendResponse({ ok: false, error: 'missing envelope or tabId' }); return true; }
     isLegacyClientFillAllowed().then((allowed) => {
@@ -587,7 +543,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
       }
       chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
         if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
-        // Persist — survives SW death between tab.create and page load
+        // Persist â€” survives SW death between tab.create and page load
         chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
         sendResponse({ ok: true, tabId: tab.id });
       });
@@ -601,11 +557,11 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     if (!tabId) { sendResponse({ ok: true }); return true; }
     chrome.storage.local.get('_cc_pending_job', ({ _cc_pending_job: job }) => {
       if (!job || job.tabId !== tabId) { sendResponse({ ok: true }); return; }
-      // Job is for this tab — clear it; only dispatch if legacy path allowed.
+      // Job is for this tab â€” clear it; only dispatch if legacy path allowed.
       chrome.storage.local.remove('_cc_pending_job');
       isLegacyClientFillAllowed().then((allowed) => {
         if (!allowed) {
-          console.warn('[CC] CONTENT_READY: dropping pending job — legacy client fill disabled');
+          console.warn('[CC] CONTENT_READY: dropping pending job â€” legacy client fill disabled');
           sendResponse(legacyClientFillDenied('CONTENT_READY pending job'));
           return;
         }
@@ -669,7 +625,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
     } catch(e) { console.warn('[CC] tab query failed:', e.message); }
   }
   if (!tabId) { console.error('[CC] no tabId, aborting teach'); _teachRunning = false; stopKeepalive(); return; }
-  // Native <select> and radio are handled by executor directly — only teach custom dropdowns
+  // Native <select> and radio are handled by executor directly â€” only teach custom dropdowns
   const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'mat-radio'];
   const teachable = fields.filter(f => TEACHABLE_TYPES.includes(f.type));
 
@@ -680,21 +636,21 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
 
   for (const field of teachable) {
     const label = normalizeFieldLabel(field.label);
-    notifyPopup({ type: 'TEACH_PROGRESS', status: `🤖 Auto-teaching "${label}" with AI...`, done: false });
+    notifyPopup({ type: 'TEACH_PROGRESS', status: `ðŸ¤– Auto-teaching "${label}" with AI...`, done: false });
 
     // Try Groq auto-teach first
     if (groqKey) {
       const profileValue = field.profileValue || '';
       const autoSuccess = await groqAutoTeach(tabId, { ...field, profileValue }, groqKey, backendUrl, hostname, llmBaseUrl, llmModel);
       if (autoSuccess) {
-        notifyPopup({ type: 'TEACH_PROGRESS', status: `✓ AI learned "${label}" automatically!`, done: false });
+        notifyPopup({ type: 'TEACH_PROGRESS', status: `âœ“ AI learned "${label}" automatically!`, done: false });
         await sleep(800);
         continue;
       }
       console.log('[CC] Groq auto-teach failed, falling back to manual');
     }
 
-    notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Teach: "${label}" — click the dropdown, then select a value`, done: false });
+    notifyPopup({ type: 'TEACH_PROGRESS', status: `âš  Teach: "${label}" â€” click the dropdown, then select a value`, done: false });
 
     // Clear any stale result before injecting
     await chrome.scripting.executeScript({
@@ -762,7 +718,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
       });
     if (!injectResult) { _teachRunning = false; stopKeepalive(); return; }
 
-    // Poll sessionStorage for result (up to 45s) — background stays alive
+    // Poll sessionStorage for result (up to 45s) â€” background stays alive
     const adapter = await pollTeachResult(tabId, 45000);
     console.log('[CC] pollTeachResult returned:', JSON.stringify(adapter));
     // Always clear page teach state after poll (timeout or success)
@@ -773,11 +729,11 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
     }).catch(() => {});
 
     if (!adapter) {
-      notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Skipped "${label}" (timeout)`, done: false });
+      notifyPopup({ type: 'TEACH_PROGRESS', status: `âš  Skipped "${label}" (timeout)`, done: false });
       continue;
     }
     if (adapter.error) {
-      notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ "${label}": ${adapter.error}`, done: false });
+      notifyPopup({ type: 'TEACH_PROGRESS', status: `âš  "${label}": ${adapter.error}`, done: false });
       continue;
     }
 
@@ -791,10 +747,10 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
     console.log('[CC] save response:', saveRes?.ok, saveRes?.status);
 
     if (saveRes?.ok) {
-      notifyPopup({ type: 'TEACH_PROGRESS', status: `✓ Learned "${label}"`, done: false });
+      notifyPopup({ type: 'TEACH_PROGRESS', status: `âœ“ Learned "${label}"`, done: false });
     } else {
       const errText = await saveRes?.text?.().catch(() => 'network error') ?? 'network error';
-      notifyPopup({ type: 'TEACH_PROGRESS', status: `⚠ Save failed for "${label}": ${errText}`, done: false });
+      notifyPopup({ type: 'TEACH_PROGRESS', status: `âš  Save failed for "${label}": ${errText}`, done: false });
     }
 
     await sleep(600);
@@ -806,7 +762,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
 }
 
 
-// ── groqAutoTeach — tries to fill a custom dropdown using Groq AI ──
+// â”€â”€ groqAutoTeach â€” tries to fill a custom dropdown using Groq AI â”€â”€
 async function groqAutoTeach(tabId, field, groqKey, backendUrl, hostname, llmBaseUrl, llmModel) {
   try {
     // Step 1: Get DOM snapshot of the component (closed state)
@@ -947,7 +903,7 @@ Reply with ONLY valid JSON:
   }
 }
 
-// ── teachOneField — runs in PAGE context (injected via executeScript func:) ──
+// â”€â”€ teachOneField â€” runs in PAGE context (injected via executeScript func:) â”€â”€
 function teachOneField(field) {
   // Only one teach session at a time on the page
   if (sessionStorage.getItem('_cc_teach_active') === '1') return;
@@ -978,11 +934,11 @@ function teachOneField(field) {
     });
   }
 
-  // Click-to-identify mode: root still null — ask user to click the component
+  // Click-to-identify mode: root still null â€” ask user to click the component
   if (!root) {
     const _host = document.createElement('div');
     _host.style.cssText = 'position:fixed;z-index:2147483647;top:12px;left:50%;transform:translateX(-50%);pointer-events:none;background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:bold;font-family:sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.7);white-space:nowrap;border:2px solid #a855f7;';
-    _host.textContent = `⚠ Click the dropdown for ${field.label} to identify it`;
+    _host.textContent = `âš  Click the dropdown for ${field.label} to identify it`;
     document.body.appendChild(_host);
     function _onIdentify(e) {
       let el = e.target;
@@ -1015,7 +971,7 @@ function teachOneField(field) {
   _runTeach(root);
   function _runTeach(root) {
 
-  // Snapshot the full root text at start — works on any site
+  // Snapshot the full root text at start â€” works on any site
   // We detect change by comparing full text, not relying on specific child selectors
   const labelText = (root.querySelector('.label, label, mat-label')?.textContent || '').trim();
   const getDisplayText = () => {
@@ -1058,7 +1014,7 @@ function teachOneField(field) {
 
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;z-index:2147483647;top:12px;left:50%;transform:translateX(-50%);pointer-events:none;background:#dc2626;color:white;padding:10px 24px;border-radius:6px;font-size:15px;font-weight:bold;font-family:sans-serif;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.7);border:2px solid #ff6b6b;';
-  host.textContent = '⚠ Click the highlighted dropdown, then select a value';
+  host.textContent = 'âš  Click the highlighted dropdown, then select a value';
   const badge = host;
   document.body.appendChild(host);
 
@@ -1077,7 +1033,7 @@ function teachOneField(field) {
     sessionStorage.removeItem('_cc_teach_active');
   }
 
-  // Capture trigger click — works even if click is on child outside root bounds
+  // Capture trigger click â€” works even if click is on child outside root bounds
   function onTriggerClick(e) {
     if (triggerCaptured) return;
     // Accept click anywhere near the root (within 200px) or inside it
@@ -1089,12 +1045,12 @@ function teachOneField(field) {
     const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
     if (cls) triggerSelector = '.' + cls;
     triggerCaptured = true;
-    badge.textContent = '⚠ Select an option from the list';
+    badge.textContent = 'âš  Select an option from the list';
     document.removeEventListener('click', onTriggerClick, true);
   }
   document.addEventListener('click', onTriggerClick, true);
 
-  // ── Part 7: MutationObserver captures overlay subtree on trigger click ──
+  // â”€â”€ Part 7: MutationObserver captures overlay subtree on trigger click â”€â”€
   let _teachOverlayRoot = null;
   const _teachAddedNodes = [];
   const _teachMo = new MutationObserver(mutations => {
@@ -1185,7 +1141,7 @@ function teachOneField(field) {
   } // end _runTeach
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function pollTeachResult(tabId, timeout) {
   return new Promise(resolve => {
     let elapsed = 0;

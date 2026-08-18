@@ -59,7 +59,10 @@ const SEQUENTIAL_KERNEL_SCRIPTS = Object.freeze([
   'autofill/derive.js',
   'autofill/rule-engine.js',
   'autofill/ai-resolve.js',
-  'autofill/executor.js',
+  // One bundle (source still split under autofill/executor/ for editing).
+  // Multi-file inject caused: "Identifier 'CcExecParts' has already been declared"
+  // and missing installers (executor_parts_not_loaded).
+  'autofill/executor-bundle.js',
 ]);
 
 /**
@@ -107,6 +110,8 @@ async function runSequentialKernelFill(ctx) {
   }
 
   progress('Loading sequential fill kernel...', 25);
+  // Always inject the single bundle. Re-running IIFEs is safe; skipping caused
+  // stale kernels (missing baked chunks) → executor_parts_not_loaded:sequential_chunks.
   await chrome.scripting.executeScript({
     target: { tabId },
     files: SEQUENTIAL_KERNEL_SCRIPTS.slice(),
@@ -231,6 +236,13 @@ async function runSequentialKernelFill(ctx) {
   }
 
   // 3) Execute in page: apply WSS mapping + local residual fuzzyMatch (no HTTPS)
+  // Keep WSS hot so field.* debug events can stream to cyb live during fill
+  try {
+    await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'ENSURE_WSS' }, () => resolve());
+      setTimeout(resolve, 1500);
+    });
+  } catch { /* ignore */ }
   progress('Filling form (sequential)...', 70);
   const [execResult] = await chrome.scripting.executeScript({
     target: { tabId },

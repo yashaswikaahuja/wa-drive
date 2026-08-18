@@ -1,8 +1,8 @@
-{
+﻿{
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.8",
-  "description": "Profiles + fill plan/session over WSS; cyb live field stream (5.92.8)",
+  "version": "5.92.18",
+  "description": "5.92.18 split sources + solid sequential bundle",
   "permissions": [
     "storage",
     "activeTab",
