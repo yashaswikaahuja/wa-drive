@@ -480,25 +480,63 @@ async function init() {
   // T4: show real WSS presence (not HTTPS-only)
   await refreshWssPresence(operatorName);
 
-  // Load profiles
+  // Profiles stay on HTTPS (Stage A/B WSS = presence + fill_debug only — not CRUD)
+  await loadProfilesHttps(data);
+}
+
+/** HTTPS profile list — independent of WSS. WSS does not replace /profiles. */
+async function loadProfilesHttps(data) {
+  const creds = data || (await chrome.storage.local.get(['accessToken', 'backendUrl']));
+  if (!creds.accessToken || !creds.backendUrl) {
+    profilesEl.innerHTML = '<div class="empty">Login to CyberControl first</div>';
+    return;
+  }
+  profilesEl.innerHTML = '<div class="empty">Loading profiles…</div>';
   try {
-    const r = await fetch(data.backendUrl + '/profiles', {
-      headers: { 'Authorization': 'Bearer ' + data.accessToken }
+    const r = await fetch(String(creds.backendUrl).replace(/\/$/, '') + '/profiles', {
+      headers: { Authorization: 'Bearer ' + creds.accessToken },
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const profiles = await r.json();
-    allProfiles = Array.isArray(profiles) ? profiles : [];
-    // Restore last selected profile
+    const text = await r.text();
+    let profiles;
+    try {
+      profiles = text ? JSON.parse(text) : [];
+    } catch {
+      throw new Error('Bad JSON from /profiles (HTTP ' + r.status + ')');
+    }
+    if (!r.ok) {
+      const err = (profiles && profiles.error) || ('HTTP ' + r.status);
+      throw new Error(String(err));
+    }
+    // Accept bare array or { profiles: [...] }
+    if (Array.isArray(profiles)) {
+      allProfiles = profiles;
+    } else if (profiles && Array.isArray(profiles.profiles)) {
+      allProfiles = profiles.profiles;
+    } else {
+      allProfiles = [];
+      console.warn('[CC] unexpected /profiles shape', profiles);
+    }
     const sess = await chrome.storage.session.get('_cc_selected');
     if (sess._cc_selected) {
-      selectedProfile = allProfiles.find(p => p.id === sess._cc_selected) || null;
+      selectedProfile = allProfiles.find((p) => p.id === sess._cc_selected) || null;
       fillBtn.disabled = !selectedProfile;
       applyAgentVisibility();
+    }
+    if (!allProfiles.length) {
+      profilesEl.innerHTML =
+        '<div class="empty">No profiles in this workspace.<br><span class="pt-muted" style="font-size:11px">WSS is only for live session — profiles still load over HTTPS. Re-login as the café account that owns customers, or add profiles in the app.</span><br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>';
+      const btn = document.getElementById('retry-profiles');
+      if (btn) btn.onclick = () => loadProfilesHttps();
+      return;
     }
     renderProfiles('');
     searchEl.focus();
   } catch (e) {
-    profilesEl.innerHTML = `<div class="empty">Failed to load profiles: ${e.message}</div>`;
+    console.error('[CC] loadProfilesHttps', e);
+    profilesEl.innerHTML =
+      `<div class="empty">Failed to load profiles: ${e.message}<br><span class="pt-muted" style="font-size:11px">This is HTTPS /profiles — not WSS.</span><br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
+    const btn = document.getElementById('retry-profiles');
+    if (btn) btn.onclick = () => loadProfilesHttps();
   }
 }
 

@@ -425,6 +425,52 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
     }
     return;
   }
+  // T14 Stage C — fill plan over WSS (popup / orchestrator)
+  if (msg.type === 'WSS_FILL_REQUEST') {
+    (async () => {
+      try {
+        await ccEnsureWss('WSS_FILL_REQUEST');
+        if (!CcWssSession?.requestFillPlan) throw new Error('wss_session_missing');
+        const resp = await CcWssSession.requestFillPlan({
+          formKey: msg.formKey,
+          semanticFormKey: msg.semanticFormKey || msg.formKey,
+          hostname: msg.hostname,
+          fields: msg.fields || [],
+          profile: msg.profile || {},
+          profileId: msg.profileId || null,
+        });
+        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'fill_request_error');
+        sendResponse({ ok: true, plan: resp, transport: 'wss' });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
+      }
+    })();
+    return true;
+  }
+  if (msg.type === 'WSS_FILL_SESSION') {
+    (async () => {
+      try {
+        await ccEnsureWss('WSS_FILL_SESSION');
+        if (!CcWssSession?.postFillSession) throw new Error('wss_session_missing');
+        const resp = await CcWssSession.postFillSession({
+          hostname: msg.hostname,
+          url: msg.url,
+          semanticFormKey: msg.semanticFormKey || msg.formKey,
+          formKey: msg.formKey,
+          runtimeVersion: msg.runtimeVersion,
+          totalFilled: msg.totalFilled,
+          totalFailed: msg.totalFailed,
+          totalSkipped: msg.totalSkipped,
+          records: msg.records || [],
+        });
+        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'fill_session_error');
+        sendResponse({ ok: true, id: resp.id, transport: 'wss' });
+      } catch (e) {
+        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
+      }
+    })();
+    return true;
+  }
   if (msg.type === 'PING') {
     sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
     return;

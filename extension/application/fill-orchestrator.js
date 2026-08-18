@@ -113,78 +113,143 @@ async function runSequentialKernelFill(ctx) {
   });
 
   const flat = flattenProfile(profile);
-  progress('Extracting + mapping fields...', 45);
+  progress('Extracting fields...', 35);
 
-  const [execResult] = await chrome.scripting.executeScript({
+  // 1) Extract only (no HTTPS)
+  const [extractResult] = await chrome.scripting.executeScript({
     target: { tabId },
-    args: [flat, backendUrl, accessToken, profile?.id || null],
-    func: async (prof, bUrl, aToken, profileId) => {
-      const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + aToken };
+    args: [flat],
+    func: (prof) => {
       if (typeof extractFormFieldsWithFingerprint !== 'function') {
         return { ok: false, error: 'extractor_not_loaded' };
       }
-      if (typeof fillFormFieldsSequential !== 'function') {
-        return { ok: false, error: 'sequential_kernel_not_loaded' };
-      }
-      const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
-      if (!formFields.length) return { ok: false, error: 'no fields detected' };
-
-      // Derive BEFORE mapping so is_pwd / gender / etc. drive radio decisions
       if (typeof ccDeriveProfile === 'function') {
         try {
           const derived = ccDeriveProfile(prof);
           if (derived && typeof derived === 'object') Object.assign(prof, derived);
         } catch { /* soft */ }
       }
-
-      // T9-ish: prefer visible fields when extractor marks them
+      const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
+      if (!formFields.length) return { ok: false, error: 'no fields detected' };
       const visible = formFields.filter((f) => f.visible !== false && f.hidden !== true);
-      const fields = visible.length ? visible : formFields;
+      const fields = (visible.length ? visible : formFields).map((f) => ({
+        selector: f.selector,
+        id: f.id || '',
+        name: f.name || '',
+        label: f.label || '',
+        type: f.type || 'text',
+        options: f.options || null,
+        optionSelectors: f.optionSelectors || null,
+        placeholder: f.placeholder || '',
+      }));
+      return {
+        ok: true,
+        fields,
+        profile: prof,
+        formKey,
+        semanticFormKey: semanticFormKey || formKey,
+        hostname: location.hostname,
+        url: location.href,
+      };
+    },
+  });
 
-      const pk = semanticFormKey || formKey;
-      let saved = null;
-      try {
-        const r = await fetch(bUrl + '/mappings/' + encodeURIComponent(pk), { headers });
-        if (r.ok) {
-          const d = await r.json();
-          if (d && typeof d === 'object' && Object.keys(d).length > 0) saved = d;
+  const extracted = extractResult?.result;
+  if (!extracted?.ok) {
+    return {
+      ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null,
+      operatorMessage: opMsg('gateway_error', extracted?.error || 'Extract failed'),
+      error: extracted?.error || 'extract_failed',
+    };
+  }
+
+  // 2) Plan over WSS (Stage C) — HTTPS fallback only if socket down
+  progress('Planning over WSS...', 50);
+  let transport = 'wss';
+  let wssPlan = null;
+  try {
+    const planResp = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: 'WSS_FILL_REQUEST',
+          formKey: extracted.semanticFormKey || extracted.formKey,
+          semanticFormKey: extracted.semanticFormKey || extracted.formKey,
+          hostname: extracted.hostname,
+          fields: extracted.fields,
+          profile: extracted.profile,
+          profileId: profile?.id || null,
+        },
+        (resp) => {
+          if (chrome.runtime.lastError) {
+            resolve({ ok: false, error: chrome.runtime.lastError.message });
+          } else {
+            resolve(resp || { ok: false, error: 'no_response' });
+          }
         }
+      );
+    });
+    if (planResp?.ok && planResp.plan) {
+      wssPlan = planResp.plan;
+      transport = 'wss';
+    } else {
+      throw new Error(planResp?.error || 'wss_plan_failed');
+    }
+  } catch (e) {
+    console.warn('[CC] WSS fill plan failed, HTTPS fallback:', e.message);
+    transport = 'https-fallback';
+    progress('WSS unavailable — HTTPS fallback...', 52);
+    // HTTPS fallback: fetch mappings/adapters only
+    try {
+      const headers = { Authorization: 'Bearer ' + accessToken };
+      const pk = extracted.semanticFormKey || extracted.formKey;
+      let saved = {};
+      const mr = await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), { headers });
+      if (mr.ok) saved = await mr.json();
+      let adapters = {};
+      try {
+        const ar = await fetch(backendUrl + '/adapters/' + encodeURIComponent(extracted.hostname), { headers });
+        if (ar.ok) adapters = await ar.json();
       } catch { /* ignore */ }
+      wssPlan = {
+        mapping: {},
+        filledBySource: {},
+        adapters,
+        savedMappings: saved,
+        transport: 'https-fallback',
+      };
+    } catch (e2) {
+      return {
+        ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null,
+        operatorMessage: opMsg('gateway_error', 'Plan failed: ' + (e2.message || e.message)),
+        error: 'plan_failed',
+      };
+    }
+  }
 
-      let mapping = {};
-      let fbs = {};
+  // 3) Execute in page: apply WSS mapping + local residual fuzzyMatch (no HTTPS)
+  progress('Filling form (sequential)...', 70);
+  const [execResult] = await chrome.scripting.executeScript({
+    target: { tabId },
+    args: [
+      extracted.profile,
+      extracted.fields,
+      wssPlan?.mapping || {},
+      wssPlan?.filledBySource || {},
+      wssPlan?.adapters || {},
+      wssPlan?.savedMappings || {},
+      profile?.id || null,
+      transport,
+    ],
+    func: async (prof, fields, wssMapping, wssFbs, adapters, saved, profileId, fillTransport) => {
+      if (typeof fillFormFieldsSequential !== 'function') {
+        return { ok: false, error: 'sequential_kernel_not_loaded' };
+      }
+      try { window._ccProfileId = profileId; } catch { /* ignore */ }
+
+      let mapping = Object.assign({}, wssMapping || {});
+      let fbs = Object.assign({}, wssFbs || {});
       const gsk = (l) => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
       const isChoiceType = (t) => /radio|checkbox/i.test(String(t || ''));
-
-      /** Apply a planned value onto a field — resolve radio-group → radio-click option. */
-      function applyMappedValue(f, rawValue, profileKey, source) {
-        if (rawValue == null || String(rawValue).trim() === '') return false;
-        if (isChoiceType(f.type) && typeof resolveChoiceToOption === 'function') {
-          const resolved = resolveChoiceToOption(f, rawValue, profileKey);
-          if (!resolved) return false;
-          mapping[resolved.selector] = resolved.entry;
-          fbs[resolved.selector] = {
-            label: f.label,
-            semanticKey: gsk(f.label),
-            profileKey: profileKey || null,
-            source: source,
-          };
-          return true;
-        }
-        mapping[f.selector] = {
-          value: rawValue,
-          type: f.type,
-          label: f.label,
-          profileKey: profileKey || null,
-        };
-        fbs[f.selector] = {
-          label: f.label,
-          semanticKey: gsk(f.label),
-          profileKey: profileKey || null,
-          source: source,
-        };
-        return true;
-      }
 
       function choiceCovered(f) {
         if (mapping[f.selector]) return true;
@@ -196,90 +261,63 @@ async function runSequentialKernelFill(ctx) {
         return false;
       }
 
-      // Memory-first: taught form mappings (choice-aware)
-      if (saved) {
+      // If WSS plan was thin (HTTPS fallback with empty mapping), apply saved maps locally
+      if (saved && Object.keys(mapping).length === 0) {
         for (const f of fields) {
           const sk = gsk(f.label);
           const s = saved[sk] || saved[gsk(f.name)] || null;
-          if (s && s.profileKey && prof[s.profileKey] != null && String(prof[s.profileKey]).trim() !== '') {
-            applyMappedValue(f, prof[s.profileKey], s.profileKey, s.kind === 'conditional' ? 'saved-conditional' : 'saved');
-          } else if (s && (s.kind === 'conditional' || s.class === 'CONDITIONAL') && s.taughtValue) {
-            applyMappedValue(f, s.taughtValue, s.profileKey, 'saved-conditional');
+          if (!s) continue;
+          if (s.profileKey && prof[s.profileKey] != null && String(prof[s.profileKey]).trim() !== '') {
+            if (isChoiceType(f.type) && typeof resolveChoiceToOption === 'function') {
+              const resolved = resolveChoiceToOption(f, prof[s.profileKey], s.profileKey);
+              if (resolved) {
+                mapping[resolved.selector] = resolved.entry;
+                fbs[resolved.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' };
+              }
+            } else {
+              mapping[f.selector] = { value: prof[s.profileKey], type: f.type, label: f.label, profileKey: s.profileKey };
+              fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' };
+            }
           }
         }
       }
 
-      // Label-primary residual map (only fields not already covered, including choice options)
+      // Local residual fuzzyMatch (no network)
       const unmapped = fields.filter((f) => !choiceCovered(f));
       if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
         const fz = fuzzyMatch(unmapped, prof);
         for (const [sel, v] of Object.entries(fz || {})) {
+          if (mapping[sel]) continue;
           mapping[sel] = v;
           fbs[sel] = {
-            label: (v && v.label) || (fields.find((x) => x.selector === sel || (x.optionSelectors || []).includes(sel)) || {}).label || '',
+            label: (v && v.label) || '',
             source: 'label-primary',
             profileKey: v.profileKey || null,
           };
         }
       }
 
-      let adp = {};
-      try {
-        const r = await fetch(bUrl + '/adapters/' + location.hostname, { headers });
-        if (r.ok) adp = await r.json();
-      } catch { /* ignore */ }
-
-      // Expose profile id for corrections
-      try { window._ccProfileId = profileId; } catch { /* ignore */ }
-
-      const filledCount = await fillFormFieldsSequential(mapping, fbs, adp, fields);
+      const filledCount = await fillFormFieldsSequential(mapping, fbs, adapters || {}, fields);
       let records = [];
       try {
         const raw = document.body.getAttribute('data-cc-records');
         if (raw) records = JSON.parse(raw);
       } catch { /* ignore */ }
-      if (!records.length && Array.isArray(window.__ccFillRecords)) {
-        records = window.__ccFillRecords;
-      }
+      if (!records.length && Array.isArray(window.__ccFillRecords)) records = window.__ccFillRecords;
 
       const failed = records.filter((r) =>
-        r.result === 'failed' || r.result === 'error' || r.failReason
-      ).filter((r) => r.result !== 'skipped' && r.result !== 'waiting_human' && r.result !== 'filled').length;
+        (r.result === 'failed' || r.result === 'error') ||
+        (r.failReason && r.result !== 'skipped' && r.result !== 'waiting_human' && r.result !== 'filled')
+      ).length;
       const skipped = records.filter((r) => r.result === 'skipped' || r.result === 'waiting_human').length;
       const filled = records.filter((r) => r.result === 'filled').length || filledCount || 0;
-
-      // Ensure hostname + planned/actual on each record
       records = records.map((r) => ({
         ...r,
         hostname: r.hostname || location.hostname,
         plannedValue: r.plannedValue != null ? r.plannedValue : r.value,
         actualValue: r.actualValue != null ? r.actualValue : r.actual,
+        transport: fillTransport,
       }));
-
-      // Durable session
-      let sessionId = null;
-      try {
-        const sessRes = await fetch(bUrl + '/sessions', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            hostname: location.hostname,
-            url: location.href,
-            semanticFormKey: pk,
-            runtimeVersion: (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
-              ? chrome.runtime.getManifest().version
-              : '',
-            totalFilled: filled,
-            totalFailed: failed,
-            totalSkipped: skipped,
-            records,
-          }),
-        });
-        if (sessRes.ok) {
-          const body = await sessRes.json().catch(() => ({}));
-          sessionId = body.id || null;
-        }
-      } catch { /* soft */ }
 
       return {
         ok: true,
@@ -288,9 +326,10 @@ async function runSequentialKernelFill(ctx) {
         skipped,
         fields: Object.keys(mapping).length,
         records,
-        primaryKey: pk,
+        primaryKey: null,
         hostname: location.hostname,
-        sessionId,
+        url: location.href,
+        formKey: null,
       };
     },
   });
@@ -309,7 +348,50 @@ async function runSequentialKernelFill(ctx) {
     };
   }
 
-  progress(`Sequential fill done: ${r.filled} filled`, 100);
+  // 4) Session evidence over WSS (HTTPS fallback)
+  progress('Saving session over WSS...', 92);
+  let sessionId = null;
+  const sessionPayload = {
+    hostname: r.hostname || extracted.hostname,
+    url: r.url || extracted.url,
+    semanticFormKey: extracted.semanticFormKey || extracted.formKey,
+    formKey: extracted.formKey,
+    runtimeVersion: runtimeVersion || '',
+    totalFilled: r.filled || 0,
+    totalFailed: r.failed || 0,
+    totalSkipped: r.skipped || 0,
+    records: r.records || [],
+  };
+  try {
+    const sessResp = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'WSS_FILL_SESSION', ...sessionPayload }, (resp) => {
+        if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
+        else resolve(resp || { ok: false });
+      });
+    });
+    if (sessResp?.ok) {
+      sessionId = sessResp.id || null;
+      transport = transport === 'https-fallback' ? 'https-fallback' : 'wss';
+    } else {
+      throw new Error(sessResp?.error || 'wss_session_failed');
+    }
+  } catch (e) {
+    console.warn('[CC] WSS session failed, HTTPS fallback:', e.message);
+    try {
+      const sessRes = await fetch(backendUrl + '/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+        body: JSON.stringify(sessionPayload),
+      });
+      if (sessRes.ok) {
+        const body = await sessRes.json().catch(() => ({}));
+        sessionId = body.id || null;
+      }
+      transport = 'https-fallback';
+    } catch { /* soft */ }
+  }
+
+  progress(`Fill done (${transport}): ${r.filled} filled`, 100);
   return {
     ok: (r.failed || 0) === 0,
     filled: r.filled || 0,
@@ -317,10 +399,11 @@ async function runSequentialKernelFill(ctx) {
     skipped: r.skipped || 0,
     records: r.records || [],
     observationError: null,
-    operatorMessage: `Fill complete: ${r.filled || 0} ok, ${r.failed || 0} failed, ${r.skipped || 0} skipped (sequential kernel)`,
-    sessionId: r.sessionId || null,
-    hostname: r.hostname || '',
+    operatorMessage: `Fill complete: ${r.filled || 0} ok, ${r.failed || 0} failed, ${r.skipped || 0} skipped (${transport})`,
+    sessionId,
+    hostname: r.hostname || extracted.hostname || '',
     path: 'sequential-kernel',
+    transport,
   };
 }
 

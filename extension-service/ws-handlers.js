@@ -24,6 +24,7 @@
  */
 
 import { send } from './ws-server.js';
+import { buildFillMapping, persistFillSession } from './ws-fill.js';
 
 /**
  * @typedef {object} HandlerContext
@@ -52,7 +53,17 @@ export function createHandlers(ctx = {}) {
   function onMessage(session, message) {
     const handler = handlers.get(message.type);
     if (handler) {
-      handler(session, message, ctx);
+      Promise.resolve()
+        .then(() => handler(session, message, ctx))
+        .catch((err) => {
+          console.error(`[ws] handler ${message.type} error:`, err.message);
+          send(session.sessionId, {
+            type: 'error',
+            code: 'handler_error',
+            message: err.message || 'handler failed',
+            ref: message.id || null,
+          });
+        });
     } else {
       send(session.sessionId, {
         type: 'error',
@@ -284,6 +295,55 @@ handlers.set('resume', (session, message) => {
     serverTime: Date.now(),
     ref: message.id,
   });
+});
+
+/**
+ * fill_request — Stage C: plan sequential fill over WSS (replaces HTTPS /mappings during fill).
+ * Response type fill_mapping (matched by ref).
+ */
+handlers.set('fill_request', async (session, message) => {
+  try {
+    const plan = await buildFillMapping(message, session.workspaceId);
+    send(session.sessionId, {
+      type: 'fill_mapping',
+      ref: message.id,
+      serverTime: Date.now(),
+      ...plan,
+    });
+    console.log(
+      `[ws] fill_request ${String(session.sessionId).slice(0, 8)} fields=${plan.fieldCount} planned=${plan.plannedCount}`
+    );
+  } catch (err) {
+    send(session.sessionId, {
+      type: 'error',
+      code: 'fill_request_failed',
+      message: err.message || 'fill_request failed',
+      ref: message.id,
+    });
+  }
+});
+
+/**
+ * fill_session — Stage C: durable session evidence over WSS (replaces HTTPS POST /sessions).
+ */
+handlers.set('fill_session', async (session, message) => {
+  try {
+    const saved = await persistFillSession(message, session.workspaceId, session.userId);
+    send(session.sessionId, {
+      type: 'fill_session_ack',
+      ref: message.id,
+      serverTime: Date.now(),
+      ...saved,
+    });
+    console.log(`[ws] fill_session ${String(session.sessionId).slice(0, 8)} id=${saved.id}`);
+  } catch (err) {
+    send(session.sessionId, {
+      type: 'error',
+      code: 'fill_session_failed',
+      message: err.message || 'fill_session failed',
+      ref: message.id,
+    });
+  }
 });
 
 export { handlers };

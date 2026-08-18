@@ -173,6 +173,24 @@
     }
   }
 
+  /** Stage C — request sequential fill mapping over WSS. */
+  async function requestFillPlan(payload, timeoutMs) {
+    await ensureWssFromStorage();
+    if (!_client || _client.state !== 'connected') {
+      throw new Error('wss_not_connected');
+    }
+    return _client.request('fill_request', payload || {}, timeoutMs || 20000);
+  }
+
+  /** Stage C — persist fill session over WSS. */
+  async function postFillSession(payload, timeoutMs) {
+    await ensureWssFromStorage();
+    if (!_client || _client.state !== 'connected') {
+      throw new Error('wss_not_connected');
+    }
+    return _client.request('fill_session', payload || {}, timeoutMs || 15000);
+  }
+
   root.CcWssSession = {
     STORAGE_KEY,
     deriveWsUrl,
@@ -181,6 +199,9 @@
     getClient,
     getState,
     sendFillDebug,
+    requestFillPlan,
+    postFillSession,
+    isConnected: () => !(!_client || _client.state !== 'connected'),
     publishState,
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

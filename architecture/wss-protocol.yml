@@ -52,6 +52,9 @@ message_types_extension_to_service:
   - teach_observation
   - ping
   - resume
+  - fill_debug_event   # Stage B live field events
+  - fill_request       # Stage C sequential fill plan (fields+profile → mapping)
+  - fill_session       # Stage C durable session evidence
 
 message_types_service_to_extension:
   - connected
@@ -64,6 +67,9 @@ message_types_service_to_extension:
   - teach_prompt
   - pong
   - resume_ack
+  - fill_debug_ack
+  - fill_mapping       # response to fill_request
+  - fill_session_ack   # response to fill_session
   - server_shutdown
   - error
 

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.4",
-  "description": "Sequential kernel + radio-click + WSS Stage A/B fill_debug stream (5.92.4)",
+  "version": "5.92.6",
+  "description": "Fill plan+session over WSS Stage C (5.92.6); profiles HTTPS; HTTPS fill fallback",
   "permissions": [
     "storage",
     "activeTab",
