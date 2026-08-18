@@ -191,6 +191,20 @@
     return _client.request('fill_session', payload || {}, timeoutMs || 15000);
   }
 
+  /** List profiles over WSS (UI). */
+  async function requestProfilesList(timeoutMs) {
+    await ensureWssFromStorage();
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      if (_client && _client.state === 'connected') break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    if (!_client || _client.state !== 'connected') {
+      throw new Error('wss_not_connected');
+    }
+    return _client.request('profiles_list', {}, timeoutMs || 15000);
+  }
+
   root.CcWssSession = {
     STORAGE_KEY,
     deriveWsUrl,
@@ -201,6 +215,7 @@
     sendFillDebug,
     requestFillPlan,
     postFillSession,
+    requestProfilesList,
     isConnected: () => !(!_client || _client.state !== 'connected'),
     publishState,
   };

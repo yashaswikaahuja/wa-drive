@@ -53,7 +53,8 @@ Auth:
 Sessions (live operator fills):
   cyb sessions [--limit 20]
   cyb session <uuid>
-  cyb live [--poll-ms 3000]
+  cyb live                  WSS field-by-field stream (fallback: HTTPS poll)
+  cyb live --poll-ms 3000   HTTPS poll interval if WSS unavailable
 
 Global flags:
   --api <url>     API base (default https://api.cybercontrol.fun/api)

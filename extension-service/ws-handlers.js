@@ -23,8 +23,9 @@
  *   The extension only observes and executes.
  */
 
-import { send } from './ws-server.js';
+import { send, broadcast } from './ws-server.js';
 import { buildFillMapping, persistFillSession } from './ws-fill.js';
+import { pool } from './db.js';
 
 /**
  * @typedef {object} HandlerContext
@@ -256,6 +257,28 @@ handlers.set('fill_debug_event', (session, message, ctx) => {
     serverTime: Date.now(),
     ref: message.id,
   });
+
+  // Fan-out to workspace watchers (cyb live / other extensions) — field-by-field
+  broadcast(session.workspaceId, {
+    v: 1,
+    type: 'fill_live',
+    id: `live.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 6)}`,
+    ts: message.ts || Date.now(),
+    serverTime: Date.now(),
+    fromSession: session.sessionId,
+    event,
+    fillRunId: message.fillRunId || null,
+    hostname: message.hostname || null,
+    label: message.label || null,
+    selector: message.selector || null,
+    fieldType: message.type || message.fieldType || null,
+    planned: message.planned ?? null,
+    actual: message.actual ?? null,
+    failReason: message.failReason || null,
+    strategy: message.strategy || null,
+    profileKey: message.profileKey || null,
+  });
+
   if (typeof ctx.recordFillDebug === 'function') {
     try {
       ctx.recordFillDebug(session.workspaceId, {
@@ -268,7 +291,6 @@ handlers.set('fill_debug_event', (session, message, ctx) => {
       console.error('[ws] recordFillDebug error:', err.message);
     }
   } else {
-    // Default: concise live log (Stage B)
     const bit = message.label || message.selector || message.step_id || '';
     const extra =
       event === 'field.fail' || event === 'field.wait'
@@ -335,12 +357,58 @@ handlers.set('fill_session', async (session, message) => {
       serverTime: Date.now(),
       ...saved,
     });
+    // Notify live watchers that the fill finished
+    broadcast(session.workspaceId, {
+      v: 1,
+      type: 'fill_live',
+      id: `live.done.${Date.now().toString(36)}`,
+      ts: Date.now(),
+      serverTime: Date.now(),
+      fromSession: session.sessionId,
+      event: 'fill.session_saved',
+      sessionId: saved.id,
+      hostname: message.hostname || saved.hostname || null,
+      filled: message.totalFilled ?? null,
+      failed: message.totalFailed ?? null,
+      skipped: message.totalSkipped ?? null,
+    });
     console.log(`[ws] fill_session ${String(session.sessionId).slice(0, 8)} id=${saved.id}`);
   } catch (err) {
     send(session.sessionId, {
       type: 'error',
       code: 'fill_session_failed',
       message: err.message || 'fill_session failed',
+      ref: message.id,
+    });
+  }
+});
+
+/**
+ * profiles_list — list workspace profiles over WSS (replaces HTTPS GET /profiles for extension UI).
+ */
+handlers.set('profiles_list', async (session, message) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
+              relationship, updated_at AS "updatedAt"
+       FROM profiles
+       WHERE workspace_id = $1 AND deleted_at IS NULL
+       ORDER BY updated_at DESC`,
+      [session.workspaceId]
+    );
+    send(session.sessionId, {
+      type: 'profiles_list',
+      ref: message.id,
+      serverTime: Date.now(),
+      profiles: rows,
+      count: rows.length,
+      transport: 'wss',
+    });
+  } catch (err) {
+    send(session.sessionId, {
+      type: 'error',
+      code: 'profiles_list_failed',
+      message: err.message || 'profiles_list failed',
       ref: message.id,
     });
   }

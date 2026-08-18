@@ -484,60 +484,78 @@ async function init() {
   await loadProfilesHttps(data);
 }
 
-/** HTTPS profile list — independent of WSS. WSS does not replace /profiles. */
+/** Prefer WSS profiles_list; HTTPS /profiles only as fallback. */
 async function loadProfilesHttps(data) {
   const creds = data || (await chrome.storage.local.get(['accessToken', 'backendUrl']));
   if (!creds.accessToken || !creds.backendUrl) {
     profilesEl.innerHTML = '<div class="empty">Login to CyberControl first</div>';
     return;
   }
-  profilesEl.innerHTML = '<div class="empty">Loading profiles…</div>';
+  profilesEl.innerHTML = '<div class="empty">Loading profiles (WSS)…</div>';
+
+  let profiles = null;
+  let transport = 'wss';
+
+  // 1) WSS first
   try {
-    const r = await fetch(String(creds.backendUrl).replace(/\/$/, '') + '/profiles', {
-      headers: { Authorization: 'Bearer ' + creds.accessToken },
+    const wssResp = await new Promise((resolve) => {
+      const timer = setTimeout(() => resolve({ ok: false, error: 'wss_profiles_timeout' }), 12000);
+      chrome.runtime.sendMessage({ type: 'WSS_PROFILES_LIST' }, (resp) => {
+        clearTimeout(timer);
+        if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
+        else resolve(resp || { ok: false, error: 'no_response' });
+      });
     });
-    const text = await r.text();
-    let profiles;
-    try {
-      profiles = text ? JSON.parse(text) : [];
-    } catch {
-      throw new Error('Bad JSON from /profiles (HTTP ' + r.status + ')');
-    }
-    if (!r.ok) {
-      const err = (profiles && profiles.error) || ('HTTP ' + r.status);
-      throw new Error(String(err));
-    }
-    // Accept bare array or { profiles: [...] }
-    if (Array.isArray(profiles)) {
-      allProfiles = profiles;
-    } else if (profiles && Array.isArray(profiles.profiles)) {
-      allProfiles = profiles.profiles;
+    if (wssResp?.ok && Array.isArray(wssResp.profiles)) {
+      profiles = wssResp.profiles;
+      transport = 'wss';
     } else {
-      allProfiles = [];
-      console.warn('[CC] unexpected /profiles shape', profiles);
+      throw new Error(wssResp?.error || 'wss_profiles_failed');
     }
-    const sess = await chrome.storage.session.get('_cc_selected');
-    if (sess._cc_selected) {
-      selectedProfile = allProfiles.find((p) => p.id === sess._cc_selected) || null;
-      fillBtn.disabled = !selectedProfile;
-      applyAgentVisibility();
-    }
-    if (!allProfiles.length) {
+  } catch (e) {
+    console.warn('[CC] WSS profiles failed, HTTPS fallback:', e.message);
+    transport = 'https-fallback';
+    profilesEl.innerHTML = '<div class="empty">WSS busy — loading profiles (HTTPS)…</div>';
+    try {
+      const r = await fetch(String(creds.backendUrl).replace(/\/$/, '') + '/profiles', {
+        headers: { Authorization: 'Bearer ' + creds.accessToken },
+      });
+      const text = await r.text();
+      let body;
+      try {
+        body = text ? JSON.parse(text) : [];
+      } catch {
+        throw new Error('Bad JSON from /profiles (HTTP ' + r.status + ')');
+      }
+      if (!r.ok) throw new Error((body && body.error) || ('HTTP ' + r.status));
+      profiles = Array.isArray(body) ? body : (body && body.profiles) || [];
+    } catch (e2) {
+      console.error('[CC] loadProfiles', e2);
       profilesEl.innerHTML =
-        '<div class="empty">No profiles in this workspace.<br><span class="pt-muted" style="font-size:11px">WSS is only for live session — profiles still load over HTTPS. Re-login as the café account that owns customers, or add profiles in the app.</span><br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>';
+        `<div class="empty">Failed to load profiles: ${e2.message}<br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
       const btn = document.getElementById('retry-profiles');
       if (btn) btn.onclick = () => loadProfilesHttps();
       return;
     }
-    renderProfiles('');
-    searchEl.focus();
-  } catch (e) {
-    console.error('[CC] loadProfilesHttps', e);
+  }
+
+  allProfiles = profiles || [];
+  const sess = await chrome.storage.session.get('_cc_selected');
+  if (sess._cc_selected) {
+    selectedProfile = allProfiles.find((p) => p.id === sess._cc_selected) || null;
+    fillBtn.disabled = !selectedProfile;
+    applyAgentVisibility();
+  }
+  if (!allProfiles.length) {
     profilesEl.innerHTML =
-      `<div class="empty">Failed to load profiles: ${e.message}<br><span class="pt-muted" style="font-size:11px">This is HTTPS /profiles — not WSS.</span><br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
+      `<div class="empty">No profiles in this workspace (${transport}).<br><span class="pt-muted" style="font-size:11px">Re-login as the café account that owns customers, or add profiles in the app.</span><br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
     const btn = document.getElementById('retry-profiles');
     if (btn) btn.onclick = () => loadProfilesHttps();
+    return;
   }
+  renderProfiles('');
+  searchEl.focus();
+  console.log('[CC] profiles loaded via', transport, allProfiles.length);
 }
 
 // Search

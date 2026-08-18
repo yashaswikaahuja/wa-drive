@@ -323,6 +323,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true;
   }
+  if (msg.type === 'WSS_PROFILES_LIST') {
+    (async () => {
+      try {
+        await ccEnsureWss('WSS_PROFILES_LIST');
+        if (!CcWssSession?.requestProfilesList) throw new Error('wss_session_missing');
+        const resp = await CcWssSession.requestProfilesList(15000);
+        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'profiles_list_error');
+        const profiles = Array.isArray(resp.profiles) ? resp.profiles : [];
+        sendResponse({ ok: true, profiles, transport: 'wss', count: profiles.length });
+      } catch (e) {
+        console.warn('[CC] WSS_PROFILES_LIST failed:', e.message);
+        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
+      }
+    })();
+    return true;
+  }
 
   return true;
 });

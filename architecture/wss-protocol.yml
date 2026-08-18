@@ -55,6 +55,7 @@ message_types_extension_to_service:
   - fill_debug_event   # Stage B live field events
   - fill_request       # Stage C sequential fill plan (fields+profile → mapping)
   - fill_session       # Stage C durable session evidence
+  - profiles_list      # Stage C UI profiles over WSS
 
 message_types_service_to_extension:
   - connected
@@ -70,6 +71,8 @@ message_types_service_to_extension:
   - fill_debug_ack
   - fill_mapping       # response to fill_request
   - fill_session_ack   # response to fill_session
+  - fill_live          # workspace fan-out of field events (cyb live)
+  - profiles_list      # response to profiles_list request
   - server_shutdown
   - error
 
