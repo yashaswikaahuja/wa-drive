@@ -35,11 +35,56 @@ function labelKeyAffinity(labelLower, profileKey) {
  *   - Skips promotion if the chosen key has zero label affinity
  *     AND another key in the data has positive affinity (label contradicts)
  */
+/**
+ * T11 — Yes/No / option conditionals map to profile flags by label, not free-string dump.
+ * Returns { kind: 'conditional', profileKey, value } or null.
+ */
+function findConditionalFlag(operatorValue, fieldLabel) {
+  const labelLower = (fieldLabel || '').toLowerCase();
+  const val = String(operatorValue || '').trim().toLowerCase();
+  if (!val) return null;
+
+  const isYes = ['yes', 'y', 'true', '1', 'haan', 'हां'].includes(val);
+  const isNo = ['no', 'n', 'false', '0', 'nahi', 'नहीं'].includes(val);
+  if (!isYes && !isNo) {
+    // Option strings like Male/Female → gender
+    if (/\b(gender|sex|पुरुष|महिला)\b/.test(labelLower)) {
+      return { kind: 'conditional', profileKey: 'gender', value: String(operatorValue).trim() };
+    }
+    if (/\b(marital|married|unmarried)\b/.test(labelLower)) {
+      return { kind: 'conditional', profileKey: 'marital_status', value: String(operatorValue).trim() };
+    }
+    return null;
+  }
+
+  const flagVal = isYes ? 'Yes' : 'No';
+  if (/disabilit|pwd|divyang|handicapped/.test(labelLower)) {
+    return { kind: 'conditional', profileKey: 'disability', value: flagVal };
+  }
+  if (/\b(ex[-\s]?serviceman|ex[-\s]?service)\b/.test(labelLower)) {
+    return { kind: 'conditional', profileKey: 'ex_serviceman', value: flagVal };
+  }
+  if (/\b(i\s*agree|accept|terms|consent|declaration)\b/.test(labelLower)) {
+    return { kind: 'conditional', profileKey: 'consent_accepted', value: flagVal };
+  }
+  // Generic yes/no with label affinity → synthetic key from label
+  const semantic = labelLower.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+  if (semantic.length >= 3) {
+    return { kind: 'conditional', profileKey: `flag_${semantic}`, value: flagVal };
+  }
+  return null;
+}
+
 function findProfileKeyForValue(profileData, operatorValue, fieldLabel) {
   if (!operatorValue || !profileData || typeof profileData !== 'object') return null;
   const target = String(operatorValue).trim().toLowerCase();
   if (target.length < 2) return null;
   const labelLower = (fieldLabel || '').toLowerCase();
+
+  // T11 — do not promote free Yes/No as if they were Aadhaar/name strings
+  if (['yes', 'y', 'no', 'n', 'true', 'false'].includes(target)) {
+    return null;
+  }
 
   const exactMatches = [];
   const fuzzyMatches = [];
@@ -113,16 +158,29 @@ router.post('/', authMiddleware, async (req, res) => {
           for (const c of corrections) {
             const operatorValue = c.finalOperatorValue || c.operatorValue;
             if (!operatorValue) continue;
-            const profileKey = findProfileKeyForValue(profileData, operatorValue, c.field || c.label);
-            if (!profileKey) continue;
-            const semanticKey = normLabel(c.field || c.label);
+            const fieldLabel = c.field || c.label;
+            const semanticKey = normLabel(fieldLabel);
             if (!semanticKey) continue;
+
+            // T11 — class-aware promote: conditional Yes/No → flag; data → profileKey
+            const cond = findConditionalFlag(operatorValue, fieldLabel);
+            let profileKey = null;
+            let mapMeta = {};
+            if (cond) {
+              profileKey = cond.profileKey;
+              mapMeta = { kind: 'conditional', taughtValue: cond.value, class: 'CONDITIONAL' };
+            } else {
+              profileKey = findProfileKeyForValue(profileData, operatorValue, fieldLabel);
+              if (profileKey) mapMeta = { kind: 'data', class: 'PROFILE_DATA' };
+            }
+            if (!profileKey) continue;
 
             const existing = mappings[formKey][semanticKey];
             if (existing && existing.profileKey === profileKey) {
               // Confirm existing mapping (boost confidence)
               existing.fills = (existing.fills || 0) + 1;
               existing.lastSeen = today;
+              Object.assign(existing, mapMeta);
             } else {
               // New or changed mapping (operator overrode the previous)
               mappings[formKey][semanticKey] = {
@@ -131,6 +189,7 @@ router.post('/', authMiddleware, async (req, res) => {
                 corrections: existing?.corrections ? existing.corrections + 1 : 1,
                 lastSeen: today,
                 source: 'auto-correction',
+                ...mapMeta,
               };
             }
             promoted++;

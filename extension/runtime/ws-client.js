@@ -157,6 +157,7 @@ class WsClient {
    * Gracefully disconnect.
    */
   disconnect() {
+    this.stopHeartbeat();
     this._setState(STATE.DISCONNECTED);
     if (this._ws) {
       this._ws.close(1000, 'client_disconnect');
@@ -236,6 +237,55 @@ class WsClient {
    */
   sendObservation(observation) {
     return this.send('execution_observation', { observation });
+  }
+
+  /**
+   * T5 — live fill/debug event stream (field.start / wait / done / fail).
+   * Non-fatal if not connected; HTTPS session post remains durable end-state.
+   * @param {'field.start'|'field.wait'|'field.done'|'field.fail'|'fill.start'|'fill.end'|'auth.presence'} event
+   * @param {object} [payload]
+   */
+  sendFillDebugEvent(event, payload = {}) {
+    if (this._state !== STATE.CONNECTED) return null;
+    try {
+      return this.send('fill_debug_event', {
+        event,
+        ts: Date.now(),
+        ...payload,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * T4 — explicit auth presence ping (fail-fast detection of dead sockets).
+   */
+  async pingAuth(timeoutMs = 3000) {
+    if (this._state !== STATE.CONNECTED) {
+      throw new Error(`Cannot ping in state: ${this._state}`);
+    }
+    return this.request('ping', { purpose: 'auth_presence' }, timeoutMs);
+  }
+
+  /**
+   * Heartbeat helper for presence (T4). Call on an interval from popup/background.
+   */
+  startHeartbeat(intervalMs = 15000) {
+    this.stopHeartbeat();
+    this._heartbeatTimer = setInterval(() => {
+      if (this._state !== STATE.CONNECTED) return;
+      try {
+        this.send('ping', { purpose: 'heartbeat', ts: Date.now() });
+      } catch { /* suspended */ }
+    }, intervalMs);
+  }
+
+  stopHeartbeat() {
+    if (this._heartbeatTimer) {
+      clearInterval(this._heartbeatTimer);
+      this._heartbeatTimer = null;
+    }
   }
 
   /**

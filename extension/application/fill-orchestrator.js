@@ -14,6 +14,7 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
   'runtime/gateway/interaction.js',
   'runtime/dom-gateway.js',
   'runtime/navigation-contract.js',
+  'shared/network-idle.js', // T1 sequential settle for APE
   'perception/visual-context.js',
   'perception/binding-registry.js',
   'perception/revision-manager.js',
@@ -33,7 +34,278 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
 ]);
 
 /**
- * Run product fill: perceive → /fill-plan → ActionPlanExecutor → /fill-observation.
+ * T13 — sequential kernel scripts (legacy-best freeze in product tree).
+ * Default café fill path: extract → memory maps → sequential act+settle.
+ */
+const SEQUENTIAL_KERNEL_SCRIPTS = Object.freeze([
+  'shared/network-idle.js',
+  'shared/dom-utils.js',
+  'shared/label-utils.js',
+  'shared/option-match.js',
+  'shared/select-apply.js',
+  'shared/llm-client.js', // soft residual AI (never hard-throw)
+  'autofill/plugins/interface.js',
+  'autofill/plugins/cascade-select.js',
+  'autofill/plugins/ng-dropdown.js',
+  'autofill/plugins/button-click.js',
+  'autofill/plugins/keystroke-input.js',
+  'drivers/dispatch.js',
+  'drivers/dom.js',
+  'drivers/input.js',
+  'drivers/select.js',
+  'drivers/interaction.js',
+  'autofill/extractor.js',
+  'autofill/mapper.js',
+  'autofill/derive.js',
+  'autofill/rule-engine.js',
+  'autofill/ai-resolve.js',
+  'autofill/executor.js',
+]);
+
+/**
+ * Flatten profile data for sequential mapper.
+ */
+function flattenProfile(profile) {
+  const flat = {};
+  const raw = (profile && (profile.data || profile)) || {};
+  for (const [k, v] of Object.entries(raw)) {
+    flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+  }
+  if (profile?.name) flat.name = flat.name || profile.name;
+  return flat;
+}
+
+/**
+ * T13 — Sequential kernel fill (default café path).
+ * Eyes: extractor. Memory: saved mappings + label-primary fuzzy. Hand: sequential settle.
+ */
+async function runSequentialKernelFill(ctx) {
+  const {
+    tabId,
+    profile,
+    backendUrl,
+    accessToken,
+    runtimeVersion,
+    onProgress,
+  } = ctx;
+  const progress = (t, p) => {
+    if (typeof onProgress === 'function') onProgress(t, p);
+  };
+  const errors = (typeof globalThis !== 'undefined' && globalThis.CcRuntimeErrors) || null;
+  const opMsg = (code, detail) => (
+    errors?.operatorMessageFor
+      ? errors.operatorMessageFor(code, detail)
+      : (detail || code || 'Something went wrong')
+  );
+
+  if (!tabId) {
+    return {
+      ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null,
+      operatorMessage: opMsg('gateway_error', 'No active tab'),
+      error: 'no_tab',
+    };
+  }
+
+  progress('Loading sequential fill kernel...', 25);
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: SEQUENTIAL_KERNEL_SCRIPTS.slice(),
+  });
+
+  const flat = flattenProfile(profile);
+  progress('Extracting + mapping fields...', 45);
+
+  const [execResult] = await chrome.scripting.executeScript({
+    target: { tabId },
+    args: [flat, backendUrl, accessToken, profile?.id || null],
+    func: async (prof, bUrl, aToken, profileId) => {
+      const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + aToken };
+      if (typeof extractFormFieldsWithFingerprint !== 'function') {
+        return { ok: false, error: 'extractor_not_loaded' };
+      }
+      if (typeof fillFormFieldsSequential !== 'function') {
+        return { ok: false, error: 'sequential_kernel_not_loaded' };
+      }
+      const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
+      if (!formFields.length) return { ok: false, error: 'no fields detected' };
+
+      // T9-ish: prefer visible fields when extractor marks them
+      const visible = formFields.filter((f) => f.visible !== false && f.hidden !== true);
+      const fields = visible.length ? visible : formFields;
+
+      const pk = semanticFormKey || formKey;
+      let saved = null;
+      try {
+        const r = await fetch(bUrl + '/mappings/' + encodeURIComponent(pk), { headers });
+        if (r.ok) {
+          const d = await r.json();
+          if (d && typeof d === 'object' && Object.keys(d).length > 0) saved = d;
+        }
+      } catch { /* ignore */ }
+
+      let mapping = {};
+      let fbs = {};
+      const gsk = (l) => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+
+      // Memory-first: taught form mappings
+      if (saved) {
+        for (const f of fields) {
+          const sk = gsk(f.label);
+          const s = saved[sk];
+          if (s && s.profileKey && prof[s.profileKey] != null && String(prof[s.profileKey]).trim() !== '') {
+            mapping[f.selector] = {
+              value: prof[s.profileKey],
+              type: f.type,
+              label: f.label,
+              profileKey: s.profileKey,
+            };
+            fbs[f.selector] = {
+              label: f.label,
+              semanticKey: sk,
+              profileKey: s.profileKey,
+              source: s.kind === 'conditional' ? 'saved-conditional' : 'saved',
+            };
+          } else if (s && s.kind === 'conditional' && s.taughtValue) {
+            mapping[f.selector] = {
+              value: s.taughtValue,
+              type: f.type,
+              label: f.label,
+              profileKey: s.profileKey,
+            };
+            fbs[f.selector] = {
+              label: f.label,
+              semanticKey: sk,
+              profileKey: s.profileKey,
+              source: 'saved-conditional',
+            };
+          }
+        }
+      }
+
+      // Label-primary residual map
+      const unmapped = fields.filter((f) => !mapping[f.selector]);
+      if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
+        const fz = fuzzyMatch(unmapped, prof);
+        for (const [sel, v] of Object.entries(fz || {})) {
+          mapping[sel] = v;
+          const ff = fields.find((x) => x.selector === sel);
+          if (ff) fbs[sel] = { label: ff.label, source: 'label-primary', profileKey: v.profileKey || null };
+        }
+      }
+
+      // Derive pass if available (client common-sense)
+      if (typeof ccDeriveProfile === 'function') {
+        try {
+          const derived = ccDeriveProfile(prof);
+          if (derived && typeof derived === 'object') Object.assign(prof, derived);
+        } catch { /* soft */ }
+      }
+
+      let adp = {};
+      try {
+        const r = await fetch(bUrl + '/adapters/' + location.hostname, { headers });
+        if (r.ok) adp = await r.json();
+      } catch { /* ignore */ }
+
+      // Expose profile id for corrections
+      try { window._ccProfileId = profileId; } catch { /* ignore */ }
+
+      const filledCount = await fillFormFieldsSequential(mapping, fbs, adp, fields);
+      let records = [];
+      try {
+        const raw = document.body.getAttribute('data-cc-records');
+        if (raw) records = JSON.parse(raw);
+      } catch { /* ignore */ }
+      if (!records.length && Array.isArray(window.__ccFillRecords)) {
+        records = window.__ccFillRecords;
+      }
+
+      const failed = records.filter((r) =>
+        r.result === 'failed' || r.result === 'error' || r.failReason
+      ).filter((r) => r.result !== 'skipped' && r.result !== 'waiting_human' && r.result !== 'filled').length;
+      const skipped = records.filter((r) => r.result === 'skipped' || r.result === 'waiting_human').length;
+      const filled = records.filter((r) => r.result === 'filled').length || filledCount || 0;
+
+      // Ensure hostname + planned/actual on each record
+      records = records.map((r) => ({
+        ...r,
+        hostname: r.hostname || location.hostname,
+        plannedValue: r.plannedValue != null ? r.plannedValue : r.value,
+        actualValue: r.actualValue != null ? r.actualValue : r.actual,
+      }));
+
+      // Durable session
+      let sessionId = null;
+      try {
+        const sessRes = await fetch(bUrl + '/sessions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            hostname: location.hostname,
+            url: location.href,
+            semanticFormKey: pk,
+            runtimeVersion: (typeof chrome !== 'undefined' && chrome.runtime?.getManifest)
+              ? chrome.runtime.getManifest().version
+              : '',
+            totalFilled: filled,
+            totalFailed: failed,
+            totalSkipped: skipped,
+            records,
+          }),
+        });
+        if (sessRes.ok) {
+          const body = await sessRes.json().catch(() => ({}));
+          sessionId = body.id || null;
+        }
+      } catch { /* soft */ }
+
+      return {
+        ok: true,
+        filled,
+        failed,
+        skipped,
+        fields: Object.keys(mapping).length,
+        records,
+        primaryKey: pk,
+        hostname: location.hostname,
+        sessionId,
+      };
+    },
+  });
+
+  const r = execResult?.result || { ok: false, error: 'no_result' };
+  if (!r.ok) {
+    return {
+      ok: false,
+      filled: 0,
+      failed: 1,
+      skipped: 0,
+      records: [],
+      observationError: null,
+      operatorMessage: opMsg('gateway_error', r.error || 'Sequential fill failed'),
+      error: r.error || 'sequential_failed',
+    };
+  }
+
+  progress(`Sequential fill done: ${r.filled} filled`, 100);
+  return {
+    ok: (r.failed || 0) === 0,
+    filled: r.filled || 0,
+    failed: r.failed || 0,
+    skipped: r.skipped || 0,
+    records: r.records || [],
+    observationError: null,
+    operatorMessage: `Fill complete: ${r.filled || 0} ok, ${r.failed || 0} failed, ${r.skipped || 0} skipped (sequential kernel)`,
+    sessionId: r.sessionId || null,
+    hostname: r.hostname || '',
+    path: 'sequential-kernel',
+  };
+}
+
+/**
+ * Run product fill.
+ * T13: default café path = sequential kernel (AUTO/STATIC/SEQUENTIAL).
+ * ActionPlan/APE only when operator selects DYNAMIC (opt-in).
  *
  * @param {object} ctx
  * @param {number} ctx.tabId
@@ -41,23 +313,23 @@ const PRODUCT_PATH_SCRIPTS = Object.freeze([
  * @param {string} ctx.backendUrl
  * @param {string} ctx.accessToken
  * @param {string} ctx.runtimeVersion
- * @param {string} [ctx.executionPreference] - AUTO | STATIC | DYNAMIC (default AUTO)
+ * @param {string} [ctx.executionPreference] - AUTO | STATIC | SEQUENTIAL | DYNAMIC
  * @param {(text: string, pct?: number) => void} [ctx.onProgress]
- * @returns {Promise<{
- *   ok: boolean,
- *   pageSnapshot?: object,
- *   plan?: object,
- *   executionObservation?: object,
- *   filled: number,
- *   failed: number,
- *   skipped: number,
- *   records: object[],
- *   observationError: string|null,
- *   operatorMessage: string|null,
- *   error?: string
- * }>}
  */
 async function runProductFill(ctx) {
+  const pref = String(ctx.executionPreference || 'AUTO').toUpperCase();
+  // DYNAMIC = ActionPlan path (opt-in). Everything else uses sequential kernel.
+  if (pref === 'DYNAMIC') {
+    return runActionPlanFill(ctx);
+  }
+  return runSequentialKernelFill(ctx);
+}
+
+/**
+ * ActionPlan path: perceive → /fill-plan → ActionPlanExecutor → /fill-observation.
+ * Opt-in via executionPreference=DYNAMIC (T13).
+ */
+async function runActionPlanFill(ctx) {
   const {
     tabId,
     profile,
@@ -279,15 +551,60 @@ async function runProductFill(ctx) {
   const skipped = stepResults.filter((r) => r.status === 'skipped').length;
 
   const resultByStep = new Map(stepResults.map((r) => [r.step_id, r]));
+  const hostFromSnap = (() => {
+    try {
+      const origin = pageSnapshot?.page?.origin || pageSnapshot?.page?.url || '';
+      return origin ? new URL(origin).hostname : '';
+    } catch { return ''; }
+  })();
+
   const records = (plan.steps || []).map((step) => {
     const result = resultByStep.get(step.step_id);
+    const planned = step.action?.value ?? step.action?.text ?? '';
+    // T16 — always attempt actualValue from observation postcondition
+    const actual =
+      result?.observed_value_state
+      ?? result?.actual_value
+      ?? result?.actualValue
+      ?? null;
     return {
       label: step.target?.node_id || step.step_id,
       result: result?.status === 'succeeded' ? 'filled' : (result?.status || 'skipped'),
-      value: step.action?.value || '',
+      value: planned,
+      plannedValue: planned,
+      actualValue: actual,
+      failReason: result?.failure_code || null,
       source: 'server-plan',
+      fillMode: 'sequential-ape',
+      hostname: hostFromSnap,
+      verified: result?.postcondition_met === true,
     };
   });
+
+  // T16 — durable session POST with hostname (product path previously often empty)
+  let sessionId = null;
+  try {
+    const sessRes = await fetch(backendUrl + '/sessions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
+      body: JSON.stringify({
+        hostname: hostFromSnap,
+        url: pageSnapshot?.page?.url || pageSnapshot?.page?.origin || '',
+        semanticFormKey: pageSnapshot?.page?.route_key || null,
+        runtimeVersion: runtimeVersion || '',
+        totalFilled: filled,
+        totalFailed: failed,
+        totalSkipped: skipped,
+        records,
+      }),
+    });
+    if (sessRes.ok) {
+      const body = await sessRes.json().catch(() => ({}));
+      sessionId = body.id || null;
+    }
+  } catch (e) {
+    console.warn('[CC] session post failed:', e.message);
+  }
 
   let operatorMessage = null;
   if (executionObservation.outcome === 'rejected' || executionObservation.outcome === 'aborted') {
@@ -310,10 +627,18 @@ async function runProductFill(ctx) {
     records,
     observationError,
     operatorMessage,
+    sessionId,
+    hostname: hostFromSnap,
   };
 }
 
-const api = { PRODUCT_PATH_SCRIPTS, runProductFill };
+const api = {
+  PRODUCT_PATH_SCRIPTS,
+  SEQUENTIAL_KERNEL_SCRIPTS,
+  runProductFill,
+  runSequentialKernelFill,
+  runActionPlanFill,
+};
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else globalThis.CcFillOrchestrator = api;
 })();

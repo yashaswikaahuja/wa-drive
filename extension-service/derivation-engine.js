@@ -20,6 +20,7 @@
 //   - lookup: passthrough/default value
 //   - highest_education: derive highest qualification
 //   - concatenate: generic multi-source join
+//   - gender_from_name / salutation_from_gender / skip_if_unmarried / changed_name_only_if_set (T8)
 //
 // Architecture:
 //   All planning, AI, knowledge interpretation, and learning happen
@@ -541,6 +542,114 @@ function highestEducation(inputs, profile, parameters = {}) {
   return null;
 }
 
+/**
+ * T8 — gender_from_name: Indian first-name heuristic when gender missing.
+ * Conservative: only high-confidence common endings; else null (no guessing).
+ */
+function genderFromName(inputs, profile, parameters = {}) {
+  // Prefer explicit gender if present
+  const existing = getProfileValue(profile, 'gender') || getProfileValue(profile, 'sex');
+  if (existing) return existing;
+
+  const nameKey = inputs[0] || 'first_name';
+  let name = getProfileValue(profile, nameKey)
+    || getProfileValue(profile, 'first_name')
+    || getProfileValue(profile, 'name')
+    || getProfileValue(profile, 'full_name');
+  if (!name) return null;
+  // Use first token
+  const first = name.trim().split(/\s+/)[0].toLowerCase();
+  if (first.length < 3) return null;
+
+  // Common feminine endings (conservative list)
+  const femaleEnds = ['a', 'i', 'ee', 'ya', 'ika', 'ita', 'sha', 'si', 'ti', 'ni', 'li', 'ri'];
+  const femaleExact = new Set([
+    'priya', 'pooja', 'puja', 'neha', 'anjali', 'kavita', 'sunita', 'anita', 'meena',
+    'rekha', 'geeta', 'gita', 'sita', 'radha', 'usha', 'asha', 'nisha', 'divya',
+    'shweta', 'swati', 'ritu', 'richa', 'komal', 'jyoti', 'deepa', 'seema', 'reena',
+    'fatima', 'aisha', 'zara', 'mary', 'grace',
+  ]);
+  const maleExact = new Set([
+    'raj', 'ram', 'amit', 'rahul', 'rohit', 'vikas', 'suresh', 'ramesh', 'mahesh',
+    'dinesh', 'naresh', 'hitesh', 'vijay', 'ajay', 'sanjay', 'manoj', 'pankaj',
+    'ankit', 'nitin', 'deepak', 'vivek', 'pradeep', 'sandeep', 'kuldeep',
+    'mohammed', 'mohammad', 'ahmed', 'ali', 'john', 'james', 'david',
+  ]);
+
+  if (femaleExact.has(first)) return parameters.female_label || 'Female';
+  if (maleExact.has(first)) return parameters.male_label || 'Male';
+
+  // Ending heuristics (weak) — only if very common
+  if (first.endsWith('wati') || first.endsWith('preet') && first.includes('kaur')) {
+    return parameters.female_label || 'Female';
+  }
+  if (first.endsWith('jeet') || first.endsWith('pal') || first.endsWith('dev')) {
+    return parameters.male_label || 'Male';
+  }
+
+  // Feminine 'a' ending is common but also exists for males (e.g. Krishna) — skip unless exact
+  void femaleEnds;
+  return null;
+}
+
+/**
+ * T8 — salutation_from_gender: Mr/Mrs/Ms from gender + marital when present.
+ */
+function salutationFromGender(inputs, profile, parameters = {}) {
+  const gender = (
+    getProfileValue(profile, 'gender')
+    || getProfileValue(profile, 'sex')
+    || genderFromName(inputs, profile, parameters)
+    || ''
+  ).toLowerCase();
+  const marital = (
+    getProfileValue(profile, 'marital_status')
+    || getProfileValue(profile, 'marital')
+    || ''
+  ).toLowerCase();
+
+  if (/female|f\b|woman|महिला/.test(gender)) {
+    if (/married|widow|widow/.test(marital)) return parameters.mrs || 'Mrs';
+    return parameters.ms || 'Ms';
+  }
+  if (/male|m\b|man|पुरुष/.test(gender)) {
+    return parameters.mr || 'Mr';
+  }
+  return null;
+}
+
+/**
+ * T8 — skip_if_unmarried: return null when marital is unmarried (husband field).
+ * When married, pass through spouse/husband source.
+ */
+function skipIfUnmarried(inputs, profile, parameters = {}) {
+  const marital = (
+    getProfileValue(profile, 'marital_status')
+    || getProfileValue(profile, 'marital')
+    || getProfileValue(profile, 'married')
+    || ''
+  ).toLowerCase();
+  if (/unmarried|single|never\s*married|कुंवार/.test(marital)) {
+    return null;
+  }
+  const sourceKey = parameters.source_key || inputs[0] || 'husband_name';
+  return getProfileValue(profile, sourceKey)
+    || getProfileValue(profile, 'spouse_name')
+    || getProfileValue(profile, 'husband_name')
+    || null;
+}
+
+/**
+ * T8 — changed_name_only_if_set: do not fill "changed name" with full name unless profile has it.
+ */
+function changedNameOnlyIfSet(inputs, profile) {
+  const key = inputs[0] || 'changed_name';
+  const v = getProfileValue(profile, key)
+    || getProfileValue(profile, 'name_change')
+    || getProfileValue(profile, 'previous_name');
+  return v || null;
+}
+
 // ── Transformation Registry ─────────────────────────────────────────
 
 /**
@@ -583,6 +692,12 @@ const TRANSFORMATIONS = {
 
   // Education
   highest_education: highestEducation,
+
+  // T8 common-sense pack
+  gender_from_name: genderFromName,
+  salutation_from_gender: salutationFromGender,
+  skip_if_unmarried: skipIfUnmarried,
+  changed_name_only_if_set: changedNameOnlyIfSet,
 };
 
 // ── Main Engine ─────────────────────────────────────────────────────
@@ -657,8 +772,17 @@ export function computeDerivedValues(profile, rules) {
         continue;
       }
 
-      // Check if at least one input has a value (for non-lookup rules)
-      if (logic !== 'lookup' && inputs.length > 0) {
+      // Check if at least one input has a value (for non-lookup rules).
+      // T8 common-sense rules may scan multiple profile keys internally.
+      const softInputLogics = new Set([
+        'lookup',
+        'gender_from_name',
+        'salutation_from_gender',
+        'skip_if_unmarried',
+        'changed_name_only_if_set',
+        'highest_education',
+      ]);
+      if (!softInputLogics.has(logic) && inputs.length > 0) {
         const hasAnyInput = inputs.some(key => getProfileValue(profile, key) !== null);
         if (!hasAnyInput) {
           skipped.push(ruleId);

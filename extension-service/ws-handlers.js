@@ -220,9 +220,48 @@ handlers.set('teach_observation', (session, message, ctx) => {
 
 /**
  * ping — Client-initiated ping (in addition to WebSocket-level ping/pong).
+ * T4: auth presence / heartbeat — respond immediately (fail-fast).
  */
 handlers.set('ping', (session, message) => {
-  send(session.sessionId, { type: 'pong', serverTime: Date.now(), ref: message.id });
+  send(session.sessionId, {
+    type: 'pong',
+    serverTime: Date.now(),
+    purpose: message.purpose || null,
+    ref: message.id,
+  });
+});
+
+/**
+ * fill_debug_event — T5 live field.start / wait / done / fail stream.
+ * Durable end-state remains HTTPS session / execution_observation.
+ */
+handlers.set('fill_debug_event', (session, message, ctx) => {
+  const event = message.event || message.payload?.event || 'unknown';
+  // Lightweight ack so client can measure RTT
+  send(session.sessionId, {
+    type: 'fill_debug_ack',
+    event,
+    serverTime: Date.now(),
+    ref: message.id,
+  });
+  if (typeof ctx.recordFillDebug === 'function') {
+    try {
+      ctx.recordFillDebug(session.workspaceId, {
+        sessionId: session.sessionId,
+        event,
+        ts: message.ts || Date.now(),
+        ...message,
+      });
+    } catch (err) {
+      console.error('[ws] recordFillDebug error:', err.message);
+    }
+  } else {
+    // Default: debug log only (no durable store required for v1)
+    console.log(
+      `[ws] fill_debug ${session.sessionId.slice(0, 8)} ${event}`,
+      message.label || message.selector || message.step_id || ''
+    );
+  }
 });
 
 /**

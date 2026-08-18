@@ -7,13 +7,54 @@ const router = Router();
 // POST /api/sessions — extension reports a completed fill session
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { hostname, semanticFormKey, runtimeVersion, totalFilled, totalFailed, records } = req.body;
+    const {
+      hostname,
+      semanticFormKey,
+      runtimeVersion,
+      totalFilled,
+      totalFailed,
+      totalSkipped,
+      totalUnmapped,
+      records,
+      url,
+      origin,
+    } = req.body;
+
+    // T16 — always store hostname when possible (product/newer posts used to leave empty)
+    let host = (hostname && String(hostname).trim()) || '';
+    if (!host) {
+      const tryUrl = url || origin || '';
+      if (tryUrl) {
+        try { host = new URL(tryUrl).hostname; } catch { /* ignore */ }
+      }
+    }
+    if (!host && Array.isArray(records)) {
+      for (const r of records) {
+        if (r?.hostname) { host = String(r.hostname); break; }
+      }
+    }
+
+    const filled = totalFilled || 0;
+    const failed = totalFailed || 0;
+    // Honest totals live on records JSON; columns keep filled/failed for compat
+    const recs = Array.isArray(records) ? records : [];
+    const enriched = {
+      _metrics: {
+        filled,
+        failed,
+        skipped: totalSkipped ?? recs.filter((r) => r?.result === 'skipped').length,
+        unmapped: totalUnmapped ?? recs.filter((r) => r?.result === 'unmapped').length,
+        waiting_human: recs.filter((r) => r?.result === 'waiting_human').length,
+      },
+      records: recs,
+    };
+
     const { rows } = await pool.query(
       `INSERT INTO sessions (workspace_id, user_id, hostname, semantic_form_key, runtime_version, schema_version, total_filled, total_failed, records)
        VALUES ($1,$2,$3,$4,$5,'1.0',$6,$7,$8) RETURNING id`,
-      [req.user.workspaceId, req.user.userId, hostname, semanticFormKey || null, runtimeVersion, totalFilled || 0, totalFailed || 0, JSON.stringify(records || [])]
+      [req.user.workspaceId, req.user.userId, host || null, semanticFormKey || null, runtimeVersion, filled, failed, JSON.stringify(enriched)]
     );
-    res.json({ ok: true, id: rows[0].id });
+    res.json({ ok: true, id: rows[0].id, hostname: host || null });
   } catch (e) {
     console.error('[ext/sessions] post:', e.message);
     res.status(500).json({ error: e.message });
@@ -79,7 +120,15 @@ router.get('/:id', authMiddleware, async (req, res) => {
       [req.params.id, req.user.workspaceId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json(rows[0]);
+    const row = rows[0];
+    // T16 — unwrap { _metrics, records } envelope for admin UI (expects array)
+    let metrics = null;
+    if (row.records && !Array.isArray(row.records) && Array.isArray(row.records.records)) {
+      metrics = row.records._metrics || null;
+      row.records = row.records.records;
+    }
+    if (metrics) row.metrics = metrics;
+    res.json(row);
   } catch (e) {
     console.error('[ext/sessions] get:', e.message);
     res.status(500).json({ error: e.message });

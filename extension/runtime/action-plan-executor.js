@@ -308,6 +308,36 @@ async function execute(plan) {
   const steps = [];
   const diagnostics = [];
   let stopped = false;
+  // T1 sequential settle budget — dead AJAX must not burn multi-minute wall time
+  let ajaxWaitBudgetMs = 45000;
+
+  async function settleAfterAct(kind) {
+    const kick = kind === 'select_option' ? 200 : kind === 'toggle' ? 180 : kind === 'activate' ? 250 : 80;
+    await new Promise((r) => setTimeout(r, kick));
+    if (kind === 'type_text' || kind === 'clear') {
+      return { waitedMs: kick };
+    }
+    const maxNet = Math.min(
+      kind === 'select_option' ? 4500 : kind === 'activate' ? 5000 : 3500,
+      Math.max(300, ajaxWaitBudgetMs)
+    );
+    const quiet = kind === 'select_option' ? 150 : 120;
+    const t0 = Date.now();
+    // Prefer shared network-idle when injected; else fixed settle
+    const idleFn = globalThis.ccWaitForNetworkIdle
+      || globalThis.waitForNetworkIdle
+      || (typeof window !== 'undefined' && window.ccWaitForNetworkIdle);
+    if (typeof idleFn === 'function') {
+      try {
+        await idleFn(quiet, maxNet);
+      } catch { /* ignore */ }
+    } else {
+      await new Promise((r) => setTimeout(r, Math.min(maxNet, 400)));
+    }
+    const used = Date.now() - t0;
+    ajaxWaitBudgetMs = Math.max(0, ajaxWaitBudgetMs - used);
+    return { waitedMs: used };
+  }
 
   for (const step of plan.steps) {
     if (stopped) {
@@ -475,15 +505,14 @@ async function execute(plan) {
                 }
               }
               if (!failureCode) {
-                const settleMs = 120;
-                await new Promise(resolve => setTimeout(resolve, settleMs));
+                await settleAfterAct(step.action.op || 'activate');
                 postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
                 if (!postcondition.met) failureCode = 'postcondition_failed';
               }
             }
           } else {
-            const settleMs = step.action.op === 'select_option' ? 500 : (step.action.op === 'toggle' ? 160 : 120);
-            await new Promise(resolve => setTimeout(resolve, settleMs));
+            // T1: sequential settle after every act (radio↔select AJAX)
+            await settleAfterAct(step.action.op || 'type_text');
             postcondition = verifyPostcondition(step.postcondition, target.element, step.action, optionTarget?.element || null);
             if (!postcondition.met) failureCode = 'postcondition_failed';
           }
@@ -497,7 +526,16 @@ async function execute(plan) {
       steps.push({ step_id: step.step_id, status: 'failed', failure_code: code, postcondition_met: false, observed_value_state: postcondition.valueState, duration_ms: duration });
       const diagCode = authDiagnostic || code;
       diagnostics.push(diagnostic(diagCode, 'error', step.step_id, `Mechanical execution failed: ${diagCode}`));
-      stopped = true;
+      // Hard stop only for plan/document integrity failures; soft-continue on field fails (legacy sequential)
+      const hardStop = new Set([
+        'plan_expired', 'document_replaced', 'correlation_replayed', 'authorization_denied', 'stale_snapshot',
+      ]);
+      if (hardStop.has(code)) {
+        stopped = true;
+      } else {
+        // continue remaining steps after settle budget trim
+        await settleAfterAct('toggle');
+      }
     } else {
       steps.push({ step_id: step.step_id, status: 'succeeded', failure_code: null, postcondition_met: true, observed_value_state: postcondition.valueState, duration_ms: duration });
       // Phase 4.2: notify evidence emitter that this step completed (advances planned targets)

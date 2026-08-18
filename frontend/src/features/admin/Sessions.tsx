@@ -24,6 +24,25 @@ const resultDot = (r: string) => {
   return 'text-red-400';
 };
 
+/** Planned value the extension intended to type/select */
+function plannedOf(r: any): string {
+  if (r?.value != null && String(r.value) !== '') return String(r.value);
+  if (r?.plannedValue != null && String(r.plannedValue) !== '') return String(r.plannedValue);
+  return '';
+}
+
+/** What was read back from the control after fill (if recorded) */
+function actualOf(r: any): string | null {
+  if (r?.actualValue != null) return String(r.actualValue);
+  if (r?.actual_value != null) return String(r.actual_value);
+  return null;
+}
+
+function trunc(s: string, n = 80) {
+  const t = String(s || '');
+  return t.length > n ? t.slice(0, n) + '…' : t;
+}
+
 export default function Sessions() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [selected, setSelected] = useState<Session | null>(null);
@@ -73,18 +92,92 @@ export default function Sessions() {
         </div>
 
         {loadingDetail && records.length === 0 && <div className="h-16 bg-white/[0.03] animate-pulse rounded-xl" />}
+
+        {/* Column legend */}
+        <div className="hidden sm:grid grid-cols-12 gap-2 px-3 py-1.5 text-[10px] uppercase tracking-wide text-gray-600 border-b border-white/[0.04]">
+          <div className="col-span-3">Label</div>
+          <div className="col-span-1">Type</div>
+          <div className="col-span-3">Planned (meant to fill)</div>
+          <div className="col-span-3">Actual (on page)</div>
+          <div className="col-span-2 text-right">Result / ms</div>
+        </div>
+
         <div className="divide-y divide-white/[0.04]">
-          {records.map((r: any, i: number) => (
-            <div key={i} className="px-1 sm:px-3 py-2 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 text-xs">
-              <span className={`${resultDot(r.result)} shrink-0`}>●</span>
-              <span className="text-gray-300 w-[calc(100%-2rem)] sm:w-44 truncate font-mono" title={r.selector}>{r.selector}</span>
-              <span className="text-gray-400 w-20 sm:w-24 truncate" title={r.type}>{r.type}</span>
-              <span className="text-white flex-1 min-w-0 truncate" title={r.value || ''}>{r.value || (r.label ? <span className="text-gray-600">{r.label}</span> : '—')}</span>
-              {r.source && <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${sourceColor(r.source)}`}>{r.source}</span>}
-              {r.failReason && <span className="text-red-400 text-[10px] shrink-0" title={r.failReason}>{r.failReason}</span>}
-              <span className="text-gray-600 w-12 text-right tabular-nums font-mono shrink-0">{r.durationMs ?? 0}ms</span>
-            </div>
-          ))}
+          {records.map((r: any, i: number) => {
+            const planned = plannedOf(r);
+            const actual = actualOf(r);
+            const label = r.label || r.selector || `field ${i + 1}`;
+            const actualMissing = r.result === 'filled' && (actual === null || actual === undefined);
+            const mismatch =
+              planned &&
+              actual != null &&
+              actual !== '' &&
+              planned.toLowerCase().replace(/[^a-z0-9]/g, '') !== actual.toLowerCase().replace(/[^a-z0-9]/g, '') &&
+              !actual.toLowerCase().includes(planned.toLowerCase().slice(0, 6));
+            return (
+              <div key={i} className="px-1 sm:px-3 py-2.5 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-1 sm:gap-2 items-start">
+                  <div className="sm:col-span-3 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`${resultDot(r.result)} shrink-0 text-[10px]`}>●</span>
+                      <span className="text-white font-medium truncate" title={label}>{trunc(label, 48)}</span>
+                    </div>
+                    {r.selector && (
+                      <div className="text-[10px] text-gray-600 font-mono truncate pl-3.5" title={r.selector}>
+                        {r.selector}
+                      </div>
+                    )}
+                  </div>
+                  <div className="sm:col-span-1 text-gray-400 truncate pl-3.5 sm:pl-0" title={r.type || r.strategy || ''}>
+                    {r.type || r.strategy || '—'}
+                  </div>
+                  <div className="sm:col-span-3 min-w-0 pl-3.5 sm:pl-0">
+                    <span className="sm:hidden text-[10px] text-gray-600 mr-1">Planned:</span>
+                    <span
+                      className={`font-mono break-all ${planned ? 'text-sky-300' : 'text-gray-600'}`}
+                      title={planned || '(none)'}
+                    >
+                      {planned ? trunc(planned, 100) : '—'}
+                    </span>
+                  </div>
+                  <div className="sm:col-span-3 min-w-0 pl-3.5 sm:pl-0">
+                    <span className="sm:hidden text-[10px] text-gray-600 mr-1">Actual:</span>
+                    {actualMissing ? (
+                      <span className="text-amber-400/90 font-mono" title="Extension did not record DOM value">
+                        (not recorded)
+                      </span>
+                    ) : actual === '' ? (
+                      <span className="text-amber-400/90 font-mono">(empty)</span>
+                    ) : actual != null ? (
+                      <span
+                        className={`font-mono break-all ${mismatch ? 'text-red-300' : 'text-emerald-300'}`}
+                        title={actual}
+                      >
+                        {trunc(actual, 100)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">—</span>
+                    )}
+                    {mismatch && (
+                      <span className="ml-1 text-[10px] text-red-400">mismatch</span>
+                    )}
+                  </div>
+                  <div className="sm:col-span-2 flex flex-wrap sm:flex-col items-start sm:items-end gap-1 pl-3.5 sm:pl-0">
+                    <span className={`${resultDot(r.result)} font-medium`}>{r.result || '?'}</span>
+                    {r.failReason && (
+                      <span className="text-red-400 text-[10px] max-w-full truncate" title={r.failReason}>
+                        {r.failReason}
+                      </span>
+                    )}
+                    {r.source && (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${sourceColor(r.source)}`}>{r.source}</span>
+                    )}
+                    <span className="text-gray-600 tabular-nums font-mono text-[10px]">{r.durationMs ?? 0}ms</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
           {!loadingDetail && records.length === 0 && <p className="text-gray-600 text-sm py-4">No records</p>}
         </div>
       </div>

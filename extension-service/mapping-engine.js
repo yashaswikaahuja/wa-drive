@@ -28,6 +28,10 @@ import * as knowledgeStore from './knowledge-store.js';
 export const FieldClassification = Object.freeze({
   PROFILE_DATA: 'PROFILE_DATA',
   DERIVED_DATA: 'DERIVED_DATA',
+  /** Radio/checkbox decisions — not free-text profile strings (T6). */
+  CONDITIONAL: 'CONDITIONAL',
+  /** Consent / I Agree / terms. */
+  CONSENT: 'CONSENT',
   SYSTEM_CONTROL: 'SYSTEM_CONTROL',
   USER_CONFIRMATION: 'USER_CONFIRMATION',
   SENSITIVE: 'SENSITIVE',
@@ -39,6 +43,8 @@ export const FieldClassification = Object.freeze({
 const FILLABLE_CLASSIFICATIONS = new Set([
   FieldClassification.PROFILE_DATA,
   FieldClassification.DERIVED_DATA,
+  FieldClassification.CONDITIONAL,
+  FieldClassification.CONSENT,
 ]);
 
 /**
@@ -73,8 +79,74 @@ const FILLABLE_CLASSIFICATIONS = new Set([
  * @param {object} node — A node from the PageSnapshot
  * @returns {string} — FieldClassification value
  */
+/**
+ * Visible/active gate (T9): skip non-visual / hidden ServicePlus shells.
+ * Prefer explicit state; fall back to geometry when present.
+ */
+export function isNodeVisibleActive(node) {
+  if (!node) return false;
+  if (node.state) {
+    if (node.state.hidden === true || node.state.visible === false) return false;
+    if (node.state.enabled === false) return false;
+    if (node.state.readonly === true) return false;
+  }
+  const geom = node.geometry || node.observed?.geometry;
+  if (geom) {
+    if (geom.width === 0 && geom.height === 0) return false;
+    if (geom.opacity === 0) return false;
+  }
+  // off-screen heuristic
+  if (geom && typeof geom.top === 'number' && typeof geom.left === 'number') {
+    if (geom.top < -5000 || geom.left < -5000) return false;
+  }
+  return true;
+}
+
+/** Label / name text used for conditional heuristics. */
+function nodeLabelText(node) {
+  const parts = [
+    node?.observed?.accessible_name,
+    node?.observed?.description,
+    node?.observed?.label,
+    node?.name,
+  ];
+  return parts.filter(Boolean).join(' ').toLowerCase();
+}
+
+/**
+ * T6 — radio/checkbox/toggle are CONDITIONAL (or CONSENT), never free-text DATA by default.
+ */
+export function classifyChoiceField(node) {
+  const affordances = node.affordances || [];
+  const widget = node.widget || {};
+  const role = String(widget.role || widget.input_type || widget.control_type || '').toLowerCase();
+  const isToggle =
+    affordances.includes('toggle') ||
+    /radio|checkbox|switch/.test(role) ||
+    widget.behavior_kind === 'toggle' ||
+    widget.behavior_kind === 'choice';
+
+  if (!isToggle) return null;
+
+  const label = nodeLabelText(node);
+  // Consent / terms
+  if (/\b(i\s*agree|accept|terms|privacy|consent|declaration|undertake)\b/i.test(label)) {
+    return FieldClassification.CONSENT;
+  }
+  // Explicit human-only (captcha already handled as challenge)
+  if (/\b(otp|captcha|verification code)\b/i.test(label)) {
+    return FieldClassification.USER_CONFIRMATION;
+  }
+  return FieldClassification.CONDITIONAL;
+}
+
 export function classifyField(node) {
   if (!node) return FieldClassification.UNKNOWN;
+
+  // T9 — non-visible / inactive never planned as DATA
+  if (!isNodeVisibleActive(node)) {
+    return FieldClassification.SYSTEM_CONTROL;
+  }
 
   // Check widget status
   const widget = node.widget;
@@ -103,6 +175,10 @@ export function classifyField(node) {
     ['type_text', 'select_one', 'select_many', 'toggle', 'upload'].includes(a)
   );
   if (!hasFillAffordance) return FieldClassification.SYSTEM_CONTROL;
+
+  // T6 — classify choice fields before defaulting to PROFILE_DATA
+  const choiceClass = classifyChoiceField(node);
+  if (choiceClass) return choiceClass;
 
   // Check state
   if (node.state) {
@@ -253,49 +329,201 @@ function parseDate(dateStr) {
  * @param {object} profile — User's profile data
  * @returns {MappingResult|null}
  */
+/**
+ * T2 — label is semantic authority. Score matches; DOM id/name alone never wins.
+ * Returns score >= 0 (0 = no match). Higher = better label affinity.
+ */
+function scoreLabelMatch(nodeName, nodeDesc, payload, nodeIdHint) {
+  let score = 0;
+  const label = (payload.field_label || '').toLowerCase().trim();
+  // Strong: accessible name contains taught field_label
+  if (label && nodeName && (nodeName.includes(label) || label.includes(nodeName))) {
+    score += 100;
+  } else if (label && nodeDesc && nodeDesc.includes(label)) {
+    score += 70;
+  }
+
+  if (Array.isArray(payload.match_patterns)) {
+    for (const pattern of payload.match_patterns) {
+      const p = pattern.toLowerCase().trim();
+      if (!p) continue;
+      if (nodeName && (nodeName.includes(p) || p.includes(nodeName))) score += 90;
+      else if (nodeDesc && nodeDesc.includes(p)) score += 50;
+    }
+  }
+
+  const semKey = (payload.semantic_key || '').toLowerCase().replace(/_/g, ' ');
+  if (semKey && nodeName && nodeName.includes(semKey)) score += 60;
+
+  // Weak: id/name hint only — never sole authority if label is empty
+  // (prevents email←address, husband←father from id-only steal)
+  if (score === 0 && nodeIdHint && payload.profile_key) {
+    const idNorm = String(nodeIdHint).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const pk = String(payload.profile_key).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (pk.length >= 4 && idNorm.includes(pk)) {
+      // Require label presence for DATA maps; id-only is too weak
+      return 0;
+    }
+  }
+
+  return score;
+}
+
+/**
+ * T7 — resolve Yes/No/option for CONDITIONAL / CONSENT from profile flags.
+ */
+export function resolveConditionalValue(node, profile, mappingPayload) {
+  const label = nodeLabelText(node);
+  const profileKey = mappingPayload?.profile_key;
+
+  // Direct mapping to a profile flag if taught
+  if (profileKey && profile) {
+    const entry = profile[profileKey];
+    if (entry != null) {
+      const raw = String(entry.value ?? entry ?? '').trim();
+      if (raw) return normalizeYesNoOption(raw, label);
+    }
+  }
+
+  // Consent: default Yes when profile has no flag (operator can correct)
+  if (/\b(i\s*agree|accept|terms|consent|declaration)\b/i.test(label)) {
+    return 'Yes';
+  }
+
+  // Disability / PwD
+  if (/disabilit|pwd|divyang|handicapped/i.test(label)) {
+    const d = profileValue(profile, ['disability', 'pwd', 'is_disabled', 'divyang']);
+    if (d != null) return normalizeYesNoOption(d, label);
+    return 'No';
+  }
+
+  // Ex-serviceman
+  if (/ex[-\s]?serviceman|ex[-\s]?service/i.test(label)) {
+    const v = profileValue(profile, ['ex_serviceman', 'exserviceman', 'is_ex_serviceman']);
+    if (v != null) return normalizeYesNoOption(v, label);
+    return 'No';
+  }
+
+  // Gender radio group
+  if (/\b(gender|sex|पुरुष|महिला)\b/i.test(label) || /male|female|other/i.test(label)) {
+    const g = profileValue(profile, ['gender', 'sex']);
+    if (g) return String(g);
+  }
+
+  // Marital
+  if (/\b(marital|married|unmarried|widow)\b/i.test(label)) {
+    const m = profileValue(profile, ['marital_status', 'marital', 'married']);
+    if (m != null) return String(m);
+  }
+
+  // General / Tatkal etc. — only if taught
+  return null;
+}
+
+function profileValue(profile, keys) {
+  if (!profile) return null;
+  for (const k of keys) {
+    const entry = profile[k];
+    if (entry == null) continue;
+    const v = String(entry.value ?? entry ?? '').trim();
+    if (v) return v;
+  }
+  return null;
+}
+
+function normalizeYesNoOption(raw, label) {
+  const s = String(raw).trim().toLowerCase();
+  const truthy = ['yes', 'y', 'true', '1', 'haan', 'हां', 'ha'];
+  const falsy = ['no', 'n', 'false', '0', 'nahi', 'नहीं', 'na'];
+  if (truthy.includes(s)) return /no|नहीं/i.test(label) && !/yes|हां/i.test(label) ? 'No' : 'Yes';
+  if (falsy.includes(s)) return 'No';
+  // Already an option string (e.g. "Male")
+  return String(raw).trim();
+}
+
 export function resolveNodeMapping(node, mappings, derivationRules, profile) {
   const classification = classifyField(node);
   if (!isEligibleForFill(classification)) return null;
 
-  const nodeName = node.observed?.accessible_name?.toLowerCase()?.trim() || '';
+  // T2 — label is primary signal (accessible_name); description secondary; never id-only
+  const nodeName = node.observed?.accessible_name?.toLowerCase()?.trim()
+    || node.observed?.label?.toLowerCase()?.trim()
+    || '';
   const nodeDesc = node.observed?.description?.toLowerCase()?.trim() || '';
+  const nodeIdHint = node.observed?.dom_id || node.observed?.name || node.node_id || '';
 
-  // Find matching field_mapping record
+  // Find matching field_mapping record by label score
   let bestMapping = null;
-  let bestPriority = -1;
+  let bestScore = 0;
 
   for (const record of mappings) {
     const payload = record.payload;
     if (!payload) continue;
 
-    const labelMatch = matchesLabel(nodeName, nodeDesc, payload);
-    if (labelMatch && (payload.priority ?? 0) > bestPriority) {
+    const score = scoreLabelMatch(nodeName, nodeDesc, payload, nodeIdHint)
+      + ((payload.priority ?? 0) * 0.01);
+    if (score > bestScore) {
       bestMapping = record;
-      bestPriority = payload.priority ?? 0;
+      bestScore = score;
     }
   }
 
-  if (!bestMapping) return null;
+  // T6/T7 — CONDITIONAL / CONSENT may resolve without a taught DATA mapping
+  if (
+    (classification === FieldClassification.CONDITIONAL
+      || classification === FieldClassification.CONSENT)
+    && (!bestMapping || bestScore < 50)
+  ) {
+    const value = resolveConditionalValue(node, profile, bestMapping?.payload || null);
+    if (value == null) {
+      // No decision — leave unmapped (skip / human), never dump free profile text
+      return null;
+    }
+    return {
+      node_id: node.node_id,
+      context_id: node.context_id,
+      semantic_key: bestMapping?.payload?.semantic_key || 'conditional',
+      profile_key: bestMapping?.payload?.profile_key || null,
+      value,
+      classification,
+      transformation: 'conditional_decision',
+      mapping_record: bestMapping,
+    };
+  }
+
+  if (!bestMapping || bestScore < 50) return null;
 
   const payload = bestMapping.payload;
   let value = null;
   let transformation = 'direct';
-  let resolvedClassification = FieldClassification.PROFILE_DATA;
+  let resolvedClassification = classification === FieldClassification.CONDITIONAL
+    || classification === FieldClassification.CONSENT
+    ? classification
+    : FieldClassification.PROFILE_DATA;
 
-  // Check if this is a derivation target
-  const derivation = derivationRules.find(
-    r => r.payload?.output_key === payload.profile_key
-  );
-
-  if (derivation) {
-    resolvedClassification = FieldClassification.DERIVED_DATA;
-    value = computeDerivedValue(derivation, profile);
-    transformation = derivation.payload.logic || 'derived';
+  // Conditional with taught map
+  if (
+    resolvedClassification === FieldClassification.CONDITIONAL
+    || resolvedClassification === FieldClassification.CONSENT
+  ) {
+    value = resolveConditionalValue(node, profile, payload);
+    transformation = 'conditional_decision';
   } else {
-    // Direct profile lookup
-    const entry = profile[payload.profile_key];
-    if (entry) {
-      value = String(entry.value ?? entry ?? '').trim() || null;
+    // Check if this is a derivation target
+    const derivation = derivationRules.find(
+      r => r.payload?.output_key === payload.profile_key
+    );
+
+    if (derivation) {
+      resolvedClassification = FieldClassification.DERIVED_DATA;
+      value = computeDerivedValue(derivation, profile);
+      transformation = derivation.payload.logic || 'derived';
+    } else {
+      // Direct profile lookup
+      const entry = profile[payload.profile_key];
+      if (entry) {
+        value = String(entry.value ?? entry ?? '').trim() || null;
+      }
     }
   }
 
@@ -309,40 +537,6 @@ export function resolveNodeMapping(node, mappings, derivationRules, profile) {
     transformation,
     mapping_record: bestMapping,
   };
-}
-
-/**
- * Check if a node label matches a mapping record.
- *
- * @param {string} nodeName — Normalized accessible_name
- * @param {string} nodeDesc — Normalized description
- * @param {object} payload — field_mapping payload
- * @returns {boolean}
- */
-function matchesLabel(nodeName, nodeDesc, payload) {
-  // Direct match on field_label
-  const label = (payload.field_label || '').toLowerCase().trim();
-  if (label && (nodeName.includes(label) || nodeDesc.includes(label))) {
-    return true;
-  }
-
-  // Match patterns
-  if (Array.isArray(payload.match_patterns)) {
-    for (const pattern of payload.match_patterns) {
-      const p = pattern.toLowerCase().trim();
-      if (p && (nodeName.includes(p) || nodeDesc.includes(p))) {
-        return true;
-      }
-    }
-  }
-
-  // Semantic key as fallback
-  const semKey = (payload.semantic_key || '').toLowerCase().replace(/_/g, ' ');
-  if (semKey && nodeName.includes(semKey)) {
-    return true;
-  }
-
-  return false;
 }
 
 /**

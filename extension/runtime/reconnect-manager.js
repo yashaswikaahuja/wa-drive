@@ -16,14 +16,14 @@
 
 /** Default configuration. */
 const DEFAULTS = {
-  /** Initial delay before first reconnect attempt (ms). */
-  baseDelayMs: 1000,
-  /** Maximum delay between attempts (ms). */
-  maxDelayMs: 30_000,
+  /** Initial delay before first reconnect attempt (ms). T4: fail-fast, not 20–30s dead air. */
+  baseDelayMs: 400,
+  /** Maximum delay between attempts (ms). Cap short so reconnect feels live. */
+  maxDelayMs: 8_000,
   /** Backoff multiplier per attempt. */
-  multiplier: 2,
+  multiplier: 1.6,
   /** Random jitter factor (0–1). Applied as ± jitter * delay. */
-  jitter: 0.3,
+  jitter: 0.2,
   /** Maximum number of attempts before giving up (0 = unlimited). */
   maxAttempts: 0,
 };

@@ -36,15 +36,47 @@
   }
   try { globalThis.__ccBridgeAccept = ccBridgeAccept; } catch (_) {}
 
+  // Soft guard: after extension reload/update, old content scripts stay but
+  // chrome.runtime is an invalidated context — any API throws (operator noise).
+  function runtimeAlive() {
+    try {
+      return !!(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function safeSend(msg, cb) {
+    if (!runtimeAlive()) {
+      if (typeof cb === 'function') {
+        cb(null, 'Extension context invalidated. Reload this page after updating the extension.');
+      }
+      return;
+    }
+    try {
+      chrome.runtime.sendMessage(msg, (response) => {
+        var err = null;
+        try {
+          err = chrome.runtime.lastError ? chrome.runtime.lastError.message : null;
+        } catch (_) {
+          err = 'Extension context invalidated.';
+        }
+        if (typeof cb === 'function') cb(response, err);
+      });
+    } catch (e) {
+      if (typeof cb === 'function') cb(null, (e && e.message) || String(e));
+    }
+  }
+
   window.addEventListener('message', (e) => {
     if (!ccBridgeAccept(e)) return;
     const replyTo = e.origin;
     const { _cc, _cc_to_cs, _reqId, ...msg } = e.data;
     const reqId = _reqId || e.data._reqId;
 
-    chrome.runtime.sendMessage(msg, (response) => {
-      if (chrome.runtime.lastError) {
-        window.postMessage({ _cc_from_cs: true, _cc_reply: true, _reqId: reqId, response: null, err: chrome.runtime.lastError.message }, replyTo);
+    safeSend(msg, (response, err) => {
+      if (err) {
+        window.postMessage({ _cc_from_cs: true, _cc_reply: true, _reqId: reqId, response: null, err: err }, replyTo);
         return;
       }
       window.postMessage({ _cc_from_cs: true, _cc_reply: true, _reqId: reqId, response }, replyTo);

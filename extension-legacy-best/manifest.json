@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CyberControl AutoFill",
-  "version": "5.92.1",
-  "description": "Auto-fill govt forms — sequential kernel default (5.92.1 transform T1–T17); DYNAMIC = ActionPlan opt-in",
+  "name": "CyberControl LEGACY BEST (5.91)",
+  "version": "5.91.8",
+  "description": "Sequential fill + label-primary. AI soft-timeout (no Chrome Errors spam). No file-dialog click. Open hosts.",
   "permissions": [
     "storage",
     "activeTab",
@@ -12,15 +12,13 @@
     "sidePanel"
   ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*",
-    "file://*/*"
+    "<all_urls>"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "CyberControl AutoFill",
+    "default_title": "CC LEGACY BEST 5.91.8",
     "default_icon": "icon.png"
   },
   "side_panel": {
