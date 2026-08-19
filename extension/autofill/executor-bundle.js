@@ -511,6 +511,79 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
+/* ==== resolve-cc-selector.js ==== */
+/**
+ * resolve-cc-selector — CC-Style Selector Resolver
+ *
+ * Resolves a CyberControl selector string to a DOM element.
+ * Handles three formats:
+ *   form-field-N    → Nth visible form control (input/select/textarea)
+ *   ng-dropdown-N   → Nth div.ng-dropdown
+ *   <css selector>  → document.querySelector(selector)
+ *
+ * The document is injectable for testing (jsdom) and cross-frame use.
+ * No Chrome API, no CcExecParts, no kernel, no fill state.
+ *
+ * Public API (on globalThis.CcResolveCcSelector):
+ *   resolveCcSelector(selector, doc?) => Element | null
+ *
+ * See resolve-cc-selector.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Query string for form-field-N resolution.
+   * Covers all visible form control types used on government forms.
+   * Excludes input[type=hidden] intentionally.
+   */
+  var FORM_FIELD_QUERY = [
+    'input[type="text"]',
+    'input[type="email"]',
+    'input[type="tel"]',
+    'input[type="number"]',
+    'input[type="date"]',
+    'input[type="radio"]',
+    'input[type="checkbox"]',
+    'input:not([type])',
+    'textarea',
+    'select',
+  ].join(',');
+
+  /**
+   * Resolve a cc-style selector to a DOM element.
+   *
+   * @param {string} selector
+   * @param {Document} [doc] - document to query against (defaults to global document)
+   * @returns {Element|null}
+   */
+  function resolveCcSelector(selector, doc) {
+    var d = doc || (typeof document !== 'undefined' ? document : null);
+    if (!d) return null;
+
+    if (selector.startsWith('form-field-')) {
+      var idx = parseInt(selector.slice('form-field-'.length), 10);
+      var all = d.querySelectorAll(FORM_FIELD_QUERY);
+      return all[idx] || null;
+    }
+
+    if (selector.startsWith('ng-dropdown-')) {
+      var ngIdx = parseInt(selector.slice('ng-dropdown-'.length), 10);
+      var dropdowns = d.querySelectorAll('div.ng-dropdown');
+      return dropdowns[ngIdx] || null;
+    }
+
+    return d.querySelector(selector);
+  }
+
+  root.CcResolveCcSelector = {
+    resolveCcSelector: resolveCcSelector,
+    /** Exposed for consumers that need to build compatible form-field selectors. */
+    FORM_FIELD_QUERY: FORM_FIELD_QUERY,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
 /* ==== dom-order.js ==== */
 /**
  * getEl + PRIORITY_KEYS + DOM-order entries
@@ -521,13 +594,14 @@
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installDomOrder = function (k) {
 
+    // resolve-cc-selector.js is the single owner of cc-style selector resolution.
+    // It must be loaded before dom-order.js (see build-executor-bundle.mjs ORDER).
+    var _resolve = root.CcResolveCcSelector
+      ? root.CcResolveCcSelector.resolveCcSelector
+      : function (sel) { return document.querySelector(sel); }; // safe fallback
+
     function getEl(sel) {
-      if (sel.startsWith('form-field-')) {
-        const all = document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],input[type=radio],input[type=checkbox],input:not([type]),textarea,select');
-        return all[parseInt(sel.split('-')[2])];
-      }
-      if (sel.startsWith('ng-dropdown-')) return document.querySelectorAll('div.ng-dropdown')[parseInt(sel.split('-')[2])];
-      return document.querySelector(sel);
+      return _resolve(sel);
     }
     k.getEl = getEl;
     // PRIORITY_KEYS: keywords used to detect cascade-geography fields during DOM sort.
@@ -1587,15 +1661,13 @@
   root.CcExecParts.installFillOne = function (k) {
     k.fillOneHandlers = k.fillOneHandlers || [];
 
+    // resolve-cc-selector.js is the single owner of cc-style selector resolution.
+    var _resolve = root.CcResolveCcSelector
+      ? root.CcResolveCcSelector.resolveCcSelector
+      : function (sel) { return document.querySelector(sel); }; // safe fallback
+
     function resolveEl(selector) {
-      if (selector.startsWith('form-field-')) {
-        const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
-        return all[parseInt(selector.split('-')[2], 10)];
-      }
-      if (selector.startsWith('ng-dropdown-')) {
-        return document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2], 10)];
-      }
-      return document.querySelector(selector);
+      return _resolve(selector);
     }
 
     function detectElType(el, type) {
@@ -1695,15 +1767,10 @@
             });
             const _selectLike = /^(select|dropdown|ng-dropdown|mat-select)$/.test(type || '');
             const isDependent = _selectLike && PRIORITY_KEYS.some((pk) => fieldLabel.includes(pk) || selector.toLowerCase().includes(pk));
-            let el;
-            if (selector.startsWith('form-field-')) {
-              const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
-              el = all[parseInt(selector.split('-')[2])];
-            } else if (selector.startsWith('ng-dropdown-')) {
-              el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
-            } else {
-              el = document.querySelector(selector);
-            }
+            // resolve-cc-selector.js is the single owner of selector resolution.
+            let el = (typeof root !== 'undefined' && root.CcResolveCcSelector)
+              ? root.CcResolveCcSelector.resolveCcSelector(selector)
+              : document.querySelector(selector); // safe fallback
             if (!isNgDropdown && el) {
               const _tag = el.tagName.toLowerCase();
               if (_tag === 'ng-select' || (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown')))) {

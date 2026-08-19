@@ -8,15 +8,13 @@
   root.CcExecParts.installFillOne = function (k) {
     k.fillOneHandlers = k.fillOneHandlers || [];
 
+    // resolve-cc-selector.js is the single owner of cc-style selector resolution.
+    var _resolve = root.CcResolveCcSelector
+      ? root.CcResolveCcSelector.resolveCcSelector
+      : function (sel) { return document.querySelector(sel); }; // safe fallback
+
     function resolveEl(selector) {
-      if (selector.startsWith('form-field-')) {
-        const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
-        return all[parseInt(selector.split('-')[2], 10)];
-      }
-      if (selector.startsWith('ng-dropdown-')) {
-        return document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2], 10)];
-      }
-      return document.querySelector(selector);
+      return _resolve(selector);
     }
 
     function detectElType(el, type) {

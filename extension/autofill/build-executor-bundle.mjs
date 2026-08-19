@@ -17,6 +17,7 @@ const ORDER = [
   'cascade-field-level.js',   // cascade geography — no deps, loaded first
   'select-helpers.js',
   'settle.js',
+  'resolve-cc-selector.js',   // selector resolution — no deps
   'dom-order.js',
   'strategy.js',
   'fill-one-ng-helpers.js',

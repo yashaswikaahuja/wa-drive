@@ -63,15 +63,10 @@
             });
             const _selectLike = /^(select|dropdown|ng-dropdown|mat-select)$/.test(type || '');
             const isDependent = _selectLike && PRIORITY_KEYS.some((pk) => fieldLabel.includes(pk) || selector.toLowerCase().includes(pk));
-            let el;
-            if (selector.startsWith('form-field-')) {
-              const all = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select');
-              el = all[parseInt(selector.split('-')[2])];
-            } else if (selector.startsWith('ng-dropdown-')) {
-              el = document.querySelectorAll('div.ng-dropdown')[parseInt(selector.split('-')[2])];
-            } else {
-              el = document.querySelector(selector);
-            }
+            // resolve-cc-selector.js is the single owner of selector resolution.
+            let el = (typeof root !== 'undefined' && root.CcResolveCcSelector)
+              ? root.CcResolveCcSelector.resolveCcSelector(selector)
+              : document.querySelector(selector); // safe fallback
             if (!isNgDropdown && el) {
               const _tag = el.tagName.toLowerCase();
               if (_tag === 'ng-select' || (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown')))) {

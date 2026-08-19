@@ -7,13 +7,14 @@
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installDomOrder = function (k) {
 
+    // resolve-cc-selector.js is the single owner of cc-style selector resolution.
+    // It must be loaded before dom-order.js (see build-executor-bundle.mjs ORDER).
+    var _resolve = root.CcResolveCcSelector
+      ? root.CcResolveCcSelector.resolveCcSelector
+      : function (sel) { return document.querySelector(sel); }; // safe fallback
+
     function getEl(sel) {
-      if (sel.startsWith('form-field-')) {
-        const all = document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number],input[type=date],input[type=radio],input[type=checkbox],input:not([type]),textarea,select');
-        return all[parseInt(sel.split('-')[2])];
-      }
-      if (sel.startsWith('ng-dropdown-')) return document.querySelectorAll('div.ng-dropdown')[parseInt(sel.split('-')[2])];
-      return document.querySelector(sel);
+      return _resolve(sel);
     }
     k.getEl = getEl;
     // PRIORITY_KEYS: keywords used to detect cascade-geography fields during DOM sort.
