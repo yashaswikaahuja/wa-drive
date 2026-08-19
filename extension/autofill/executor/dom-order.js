@@ -16,6 +16,9 @@
       return document.querySelector(sel);
     }
     k.getEl = getEl;
+    // PRIORITY_KEYS: keywords used to detect cascade-geography fields during DOM sort.
+    // Derived from the single authoritative source: cascade-field-level.js
+    // Kept as a flat keyword array for the sort classifier (field label contains any of these).
     k.PRIORITY_KEYS = [
       'state', 'rajya', 'राज्य',
       'district', 'jila', 'जिला',

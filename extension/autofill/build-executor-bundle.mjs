@@ -14,6 +14,7 @@ const execDir = path.join(dir, 'executor');
 const ORDER = [
   'kernel-bind.js',
   'debug.js',
+  'cascade-field-level.js',   // cascade geography — no deps, loaded first
   'select-helpers.js',
   'settle.js',
   'dom-order.js',

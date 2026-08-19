@@ -41,29 +41,16 @@
     if (!el || el.tagName !== 'SELECT') return 'unknown';
     return realOptions(el).length > 0 ? 'static' : 'ajax';
   }
+  // cascade-field-level.js is the single source of truth for cascade geography.
+  // It must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
+  var _cascadeGeo = root.CcCascadeFieldLevel;
   function cascadeSemanticKey(label, profileKey, selector) {
-    const s = ((profileKey || '') + ' ' + (label || '') + ' ' + (selector || '')).toLowerCase();
-    if (/state|rajya|राज्य/.test(s) && !/sub/.test(s)) return 'state';
-    if (/sub[_\s-]*div|अनुमंडल|subdivision/.test(s)) return 'sub_division';
-    if (/district|jila|जिला/.test(s)) return 'district';
-    if (/block|prakhand|प्रखंड|tehsil|taluka/.test(s)) return 'block';
-    if (/panchayat|पंचायत/.test(s)) return 'panchayat';
-    if (/village|gram|ग्राम|mohalla/.test(s)) return 'village';
-    if (/police|thana|थाना/.test(s)) return 'police_station';
-    if (/post|डाक/.test(s)) return 'post_office';
-    if (/pin|पिन/.test(s)) return 'pin_code';
-    return '';
+    return _cascadeGeo
+      ? _cascadeGeo.cascadeFieldLevel(label, profileKey, selector)
+      : ''; // safe fallback if loaded out of order
   }
   /** Parent keys that must be settled before this cascade key. */
-  k.CASCADE_PARENTS = {
-    district: ['state'],
-    sub_division: ['district', 'state'],
-    block: ['district', 'sub_division', 'state'],
-    panchayat: ['block', 'district'],
-    village: ['block', 'district'],
-    police_station: ['district', 'block'],
-    post_office: ['block', 'village', 'district'],
-  };
+  k.CASCADE_PARENTS = _cascadeGeo ? _cascadeGeo.CASCADE_PARENTS : {};
   // Last successful cascade parent values (semanticKey → { selector, actualValue, value })
   // Budget: dead secondary AJAX selects used to burn ~10s each → multi-minute hangs after real cascade done
     function isPlaceholderPlanned(v) {
