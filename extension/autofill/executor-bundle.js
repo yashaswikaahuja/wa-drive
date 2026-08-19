@@ -212,7 +212,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== cascade-field-level.js ==== */
+/* ==== capabilities/cascade-field-level.js ==== */
 /**
  * cascade-field-level — Cascade Geography Level Identifier
  *
@@ -511,7 +511,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== resolve-cc-selector.js ==== */
+/* ==== capabilities/resolve-cc-selector.js ==== */
 /**
  * resolve-cc-selector — CC-Style Selector Resolver
  *

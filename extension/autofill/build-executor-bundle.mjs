@@ -14,10 +14,10 @@ const execDir = path.join(dir, 'executor');
 const ORDER = [
   'kernel-bind.js',
   'debug.js',
-  'cascade-field-level.js',   // cascade geography — no deps, loaded first
+  'capabilities/cascade-field-level.js',   // cascade geography — no deps, loaded first
   'select-helpers.js',
   'settle.js',
-  'resolve-cc-selector.js',   // selector resolution — no deps
+  'capabilities/resolve-cc-selector.js',   // selector resolution — no deps
   'dom-order.js',
   'strategy.js',
   'fill-one-ng-helpers.js',
