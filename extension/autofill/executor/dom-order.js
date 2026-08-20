@@ -33,15 +33,16 @@
       'pin_code', 'pincode', 'पिन',
       'municipal', 'नगर',
     ];
+    // sort-fields-by-dom-order.js is the single owner of DOM order sorting.
+    // Must be loaded before dom-order.js (see build-executor-bundle.mjs ORDER).
     k.entries = Object.entries(k.mapping || {});
-    k.entries.sort(([sa], [sb]) => {
-      const a = getEl(sa), b = getEl(sb);
-      if (!a || !b) return 0;
-      if (a === b) return 0;
-      if (typeof a.compareDocumentPosition !== 'function') return 0;
-      const following = (typeof Node !== 'undefined' && Node.DOCUMENT_POSITION_FOLLOWING) || 4;
-      return a.compareDocumentPosition(b) & following ? -1 : 1;
-    });
+    var _sort = root.CcSortFieldsByDomOrder;
+    if (_sort) {
+      _sort.sortFieldsByDomOrder(k.entries, _resolve);
+    } else {
+      // safe fallback: preserve insertion order if capability not loaded
+      console.warn('[CC] CcSortFieldsByDomOrder not loaded — skipping DOM order sort');
+    }
 
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

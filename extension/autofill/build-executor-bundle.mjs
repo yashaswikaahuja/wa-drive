@@ -19,6 +19,7 @@ const ORDER = [
   'select-helpers.js',
   'settle.js',
   'capabilities/resolve-cc-selector.js',   // selector resolution — no deps
+  'capabilities/sort-fields-by-dom-order.js', // DOM order sort — depends on resolver only
   'dom-order.js',
   'strategy.js',
   'fill-one-ng-helpers.js',
