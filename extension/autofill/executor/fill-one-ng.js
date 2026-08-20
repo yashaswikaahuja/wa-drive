@@ -4,11 +4,17 @@
   // Minimal fallback if fill-one-ng-helpers.js did not inject
   root.CcExecParts.installFillOneNgHelpers = root.CcExecParts.installFillOneNgHelpers || function (k) {
     k._ngCancelSession = function (label) {
-      const old = window._ccReplaySessions && window._ccReplaySessions.get(label);
+      var _nsm = root.CcNgSessionManager;
+      if (_nsm && _nsm.cancelSession) {
+        _nsm.cancelSession(label, window._ccReplaySessions || null);
+        return;
+      }
+      // Fallback
+      var old = window._ccReplaySessions && window._ccReplaySessions.get(label);
       if (!old) return;
       old.cancelled = true; try { clearInterval(old.pollTimer); } catch (e) {}
-      (old.timeoutIds || []).forEach(function (id) { clearTimeout(id); });
-      if (old.observer) old.observer.disconnect();
+      (old.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch(e) {} });
+      if (old.observer) { old.observer.disconnect(); old.observer = null; }
       window._ccReplaySessions.delete(label);
     };
   };

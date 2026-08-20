@@ -37,13 +37,21 @@
       return 0;
     };
 
+  // ng-session-manager.js is the single source for session lifecycle.
+  // Must be loaded before fill-one-ng-helpers.js (see build-executor-bundle.mjs ORDER).
+  var _nsm = root.CcNgSessionManager || {};
     k._ngCancelSession = function (_label) {
+      if (_nsm.cancelSession) {
+        _nsm.cancelSession(_label, window._ccReplaySessions || null);
+        return;
+      }
+      // Fallback
       if (!window._ccReplaySessions || !window._ccReplaySessions.has(_label)) return;
-      const old = window._ccReplaySessions.get(_label);
+      var old = window._ccReplaySessions.get(_label);
       old.cancelled = true;
-      clearInterval(old.pollTimer);
-      old.timeoutIds.forEach((id) => clearTimeout(id));
-      if (old.observer) old.observer.disconnect();
+      try { clearInterval(old.pollTimer); } catch(e) {}
+      (old.timeoutIds || []).forEach(function(id) { try { clearTimeout(id); } catch(e) {} });
+      if (old.observer) { old.observer.disconnect(); old.observer = null; }
       window._ccReplaySessions.delete(_label);
     };
 
