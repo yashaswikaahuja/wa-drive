@@ -19,6 +19,7 @@ const ORDER = [
   'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',
   'settle.js',
+  'capabilities/detect-fill-strategy.js',  // strategy detection — no deps
   'capabilities/resolve-cc-selector.js',   // selector resolution — no deps
   'capabilities/sort-fields-by-dom-order.js', // DOM order sort — depends on resolver only
   'dom-order.js',

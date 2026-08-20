@@ -7,91 +7,15 @@
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installStrategy = function (k) {
     const getEl = function () { return k.getEl.apply(k, arguments); };
-  // ── Strategy Registry — named strategies with VerificationContracts ────────
-  // Phase 2: strategies coexist with existing if/else logic (migration-safe)
-  // Each strategy: { name, applies(el, type), verify(el, value), description }
-  const STRATEGY_REGISTRY = {
-    'ng-dropdown-click': {
-      name: 'ng-dropdown-click',
-      description: 'Angular custom ng-dropdown: click trigger, wait for li options, click match',
-      applies: (el, type) => type === 'ng-dropdown' || (el && el.classList?.contains('ng-dropdown')),
-      verify: {
-        method: 'visual_text',
-        check: (el, expected) => {
-          const displayed = el.querySelector('.select-type,.value-area,.ng-value-label');
-          return displayed ? displayed.textContent.trim().toLowerCase().includes(expected.toLowerCase().slice(0,6)) : false;
-        },
-        timeout: 1000,
-      },
-    },
-    'mat-select-click': {
-      name: 'mat-select-click',
-      description: 'Angular Material mat-select: click trigger, wait for panel, click option',
-      applies: (el, type) => type === 'mat-select' || el?.tagName === 'MAT-SELECT',
-      verify: {
-        method: 'visual_text',
-        check: (el, expected) => {
-          const v = el.querySelector('.mat-select-value-text,.mat-mdc-select-value-text');
-          return v ? v.textContent.trim().toLowerCase().includes(expected.toLowerCase().slice(0,4)) : false;
-        },
-        timeout: 500,
-      },
-    },
-    'native-select': {
-      name: 'native-select',
-      description: 'Native <select>: set value via nativeSetter, dispatch change',
-      applies: (el, type) => type === 'select' || el?.tagName === 'SELECT',
-      verify: {
-        method: 'dom_value',
-        check: (el, expected) => {
-          const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
-          return norm(el.value) === norm(expected) ||
-                 norm(el.options[el.selectedIndex]?.text||'').includes(norm(expected).slice(0,6));
-        },
-        timeout: 300,
-      },
-    },
-    'dwr-cascade-select': {
-      name: 'dwr-cascade-select',
-      description: 'ServicePlus DWR cascade: waitForOptions then set value, re-apply after DWR reset',
-      applies: (el, type) => type === 'select' && el?.getAttribute('data-datatype') === 'custLGDHierarchy',
-      verify: {
-        method: 'dom_value',
-        check: (el, expected) => {
-          const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim();
-          return norm(el.options[el.selectedIndex]?.text||'').includes(norm(expected).slice(0,4));
-        },
-        timeout: 500,
-      },
-    },
-    'text-input': {
-      name: 'text-input',
-      description: 'Text/email/tel input: nativeInputValueSetter + input/change events',
-      applies: (el, type) => !['select','ng-dropdown','mat-select','mat-radio','mat-checkbox','radio','checkbox','radio-group','radio-click','checkbox-group','checkbox-agreement'].includes(type),
-      verify: {
-        method: 'dom_value',
-        check: (el, expected) => el.value === expected || el.value.includes(expected.slice(0,8)),
-        timeout: 200,
-      },
-    },
-    'radio-click': {
-      name: 'radio-click',
-      description: 'Click a specific radio option (resolved by planner)',
-      applies: (el, type) => type === 'radio-click' || type === 'radio' || type === 'radio-group' || (el && el.type === 'radio'),
-      verify: {
-        method: 'dom_value',
-        check: (el) => !!(el && (el.checked || (el.querySelector && el.querySelector('input[type=radio]:checked')))),
-        timeout: 200,
-      },
-    },
-  };
+  // ── detect-fill-strategy.js is the single source for strategy registry ────
+  // Must be loaded before strategy.js (see build-executor-bundle.mjs ORDER).
+  var _dfs = root.CcDetectFillStrategy || {};
+  var STRATEGY_REGISTRY = _dfs.STRATEGY_REGISTRY || {};
 
   // Detect which strategy applies to a field (for ReplayRecord tagging)
   function detectStrategy(el, type) {
-    for (const [key, s] of Object.entries(STRATEGY_REGISTRY)) {
-      try { if (s.applies(el, type)) return key; } catch {}
-    }
-    return type || 'unknown';
+    if (_dfs.detectFillStrategy) return _dfs.detectFillStrategy(el, type);
+    return type || 'unknown'; // safe fallback
   }
 
   // Verify a field's actual current value matches what we tried to fill.
