@@ -15,6 +15,7 @@ const ORDER = [
   'kernel-bind.js',
   'debug.js',
   'capabilities/cascade-field-level.js',   // cascade geography — no deps, loaded first
+  'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',
   'settle.js',
   'capabilities/resolve-cc-selector.js',   // selector resolution — no deps
