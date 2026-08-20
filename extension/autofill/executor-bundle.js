@@ -125,6 +125,9 @@
 /**
  * Live fill_debug emit (port + batch queue)
  * Part of sequential kernel — load before autofill/executor.js
+ *
+ * fill-debug-emitter.js owns the pure event queue + batch logic.
+ * This file owns the Chrome transport and wires it to the kernel.
  */
 (function (root) {
   'use strict';
@@ -133,6 +136,11 @@
     k._debugPort = null;
     k._debugQueue = [];
     k._debugFlushTimer = null;
+
+  // ── fill-debug-emitter.js is the single source for queue + event assembly ──
+  // Must be loaded before debug.js (see build-executor-bundle.mjs ORDER).
+  var _fde = root.CcFillDebugEmitter || {};
+
   function ensureDebugPort() {
     if (k._debugPort) return k._debugPort;
     try {
@@ -146,66 +154,46 @@
     }
     return k._debugPort;
   }
-  function flushDebugQueue() {
-    if (!k._debugQueue.length) return;
-    const batch = k._debugQueue.splice(0, 40);
+
+  function chromeSend(batch) {
     try {
-      const port = ensureDebugPort();
+      var port = ensureDebugPort();
       if (port) {
         port.postMessage({ type: 'FILL_DEBUG_BATCH', events: batch });
-        if (k._debugQueue.length) scheduleDebugFlush();
         return;
       }
     } catch (e) {
       k._debugPort = null;
     }
     // Fallback: one-by-one sendMessage (best-effort)
-    for (let i = 0; i < batch.length; i++) {
+    for (var i = 0; i < batch.length; i++) {
       try {
         chrome.runtime.sendMessage(Object.assign({ type: 'FILL_DEBUG' }, batch[i]), function () {
           void chrome.runtime.lastError;
         });
-      } catch (e2) {
-        /* ignore */
-      }
+      } catch (e2) { /* ignore */ }
     }
-    if (k._debugQueue.length) scheduleDebugFlush();
   }
-  function scheduleDebugFlush() {
-    if (k._debugFlushTimer) return;
-    k._debugFlushTimer = setTimeout(function () {
-      k._debugFlushTimer = null;
-      flushDebugQueue();
-    }, 40);
+
+  var _emitter;
+  if (_fde.createEmitter) {
+    _emitter = _fde.createEmitter({
+      getRunId:    function () { return k.fillRunId || ''; },
+      getRv:       function () { return k.RUNTIME_VERSION || ''; },
+      send:        chromeSend,
+    });
   }
+
   function emitFillDebug(event, payload) {
-    const evt = Object.assign(
-      {
-        event: event,
-        fillRunId: k.fillRunId,
-        hostname: typeof location !== 'undefined' ? location.hostname : '',
-        ts: Date.now(),
-        rv: k.RUNTIME_VERSION,
-      },
-      payload || {}
-    );
-    // Rename field widget type so it doesn't clash with message type
-    if (evt.type && evt.type !== 'FILL_DEBUG') {
-      evt.fieldType = evt.type;
-      delete evt.type;
-    }
-    k._debugQueue.push(evt);
-    // Start/end and large batches flush immediately; field.* coalesce ~40ms
-    if (event === 'fill.start' || event === 'fill.end' || k._debugQueue.length >= 6) {
-      if (k._debugFlushTimer) {
-        clearTimeout(k._debugFlushTimer);
-        k._debugFlushTimer = null;
-      }
-      flushDebugQueue();
-    } else {
-      scheduleDebugFlush();
-    }
+    if (_emitter) { _emitter.emit(event, payload); return; }
+    // Safe fallback if emitter not loaded
+    console.warn('[CC] fill-debug-emitter not loaded, event dropped:', event);
   }
+
+  function flushDebugQueue() {
+    if (_emitter) _emitter.flush();
+  }
+
     k.emitFillDebug = emitFillDebug;
     k.flushDebugQueue = flushDebugQueue;
 
@@ -724,6 +712,112 @@
     k.waitForNetworkIdle = waitForNetworkIdle;
 
   };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/fill-debug-emitter.js ==== */
+/**
+ * fill-debug-emitter — Debug Event Queue + Emitter
+ *
+ * Assembles fill debug events, batches them in a queue, and flushes them
+ * to an injected sender (Chrome port or sendMessage). The sender is injected
+ * so this capability is fully testable without a browser.
+ *
+ * Events are coalesced with a 40ms timer. High-priority events
+ * (fill.start, fill.end, queue >= 6) flush immediately.
+ *
+ * Public API (on globalThis.CcFillDebugEmitter):
+ *   createEmitter(opts) => emitter
+ *
+ * emitter:
+ *   emit(event, payload)   — enqueue and possibly flush
+ *   flush()                — flush immediately
+ *   queue                  — read-only access to pending queue (for tests)
+ *
+ * See fill-debug-emitter.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Create a fill debug emitter.
+   *
+   * @param {object} opts
+   * @param {function(): string} opts.getRunId       — returns current fillRunId
+   * @param {function(): string} opts.getRv           — returns RUNTIME_VERSION
+   * @param {function(): string} [opts.getHostname]  — returns hostname (default: location.hostname)
+   * @param {function(Array): void} opts.send         — batch sender (receives array of event objects)
+   * @returns {{ emit, flush, queue }}
+   */
+  function createEmitter(opts) {
+    opts = opts || {};
+    var getRunId   = opts.getRunId   || function () { return ''; };
+    var getRv      = opts.getRv      || function () { return ''; };
+    var getHostname = opts.getHostname || function () {
+      return (typeof location !== 'undefined') ? location.hostname : '';
+    };
+    var send = opts.send || function () {};
+
+    var _queue = [];
+    var _timer = null;
+
+    function _flush() {
+      if (!_queue.length) return;
+      var batch = _queue.splice(0, 40);
+      send(batch);
+      if (_queue.length) _schedule();
+    }
+
+    function _schedule() {
+      if (_timer) return;
+      _timer = setTimeout(function () {
+        _timer = null;
+        _flush();
+      }, 40);
+    }
+
+    function emit(event, payload) {
+      var evt = Object.assign(
+        {
+          event: event,
+          fillRunId: getRunId(),
+          hostname: getHostname(),
+          ts: Date.now(),
+          rv: getRv(),
+        },
+        payload || {}
+      );
+      // Rename widget type so it doesn't clash with message envelope type
+      if (evt.type && evt.type !== 'FILL_DEBUG') {
+        evt.fieldType = evt.type;
+        delete evt.type;
+      }
+      _queue.push(evt);
+      // fill.start / fill.end + large batches flush immediately
+      var immediate = event === 'fill.start' || event === 'fill.end' || _queue.length >= 6;
+      if (immediate) {
+        if (_timer) { clearTimeout(_timer); _timer = null; }
+        _flush();
+      } else {
+        _schedule();
+      }
+    }
+
+    function flush() {
+      if (_timer) { clearTimeout(_timer); _timer = null; }
+      _flush();
+    }
+
+    return {
+      emit: emit,
+      flush: flush,
+      get queue() { return _queue; },
+    };
+  }
+
+  root.CcFillDebugEmitter = {
+    createEmitter: createEmitter,
+  };
+
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* ==== capabilities/verify-fill-value.js ==== */

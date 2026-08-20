@@ -19,6 +19,7 @@ const ORDER = [
   'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',
   'settle.js',
+  'capabilities/fill-debug-emitter.js',    // debug event queue — no deps
   'capabilities/verify-fill-value.js',     // fill value verifier — needs resolveEl
   'capabilities/detect-fill-strategy.js',  // strategy detection — no deps
   'capabilities/resolve-cc-selector.js',   // selector resolution — no deps
