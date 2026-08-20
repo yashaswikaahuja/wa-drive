@@ -726,6 +726,153 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
+/* ==== capabilities/verify-fill-value.js ==== */
+/**
+ * verify-fill-value — Fill Value Verifier
+ *
+ * After a fill attempt, reads the actual current DOM value and compares it
+ * to the planned value to determine whether the fill succeeded.
+ *
+ * Handles: checkbox checked state, radio group selected label, <select>
+ * option text, text input value, masked inputs (e.g. Aadhaar last-4),
+ * and normalised alphanumeric comparison.
+ *
+ * The element resolver is injected so this capability is testable without
+ * a real browser document.
+ *
+ * Public API (on globalThis.CcVerifyFillValue):
+ *   verifyFillValue(selector, expected, resolveEl, settleMs?) => Promise<VerifyResult>
+ *
+ * VerifyResult: { ok, actualValue, normExpected, normActual, reason?, partial?, masked? }
+ *
+ * See verify-fill-value.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Verify that a fill attempt produced the expected value in the DOM.
+   *
+   * Waits `settleMs` milliseconds first (default 150ms) to allow framework
+   * validators, formatters, and ControlValueAccessors to react.
+   *
+   * @param {string} selector       The cc-style selector for the field
+   * @param {string|null} expected  The value that was planned/filled
+   * @param {function(string): Element|null} resolveEl  Element resolver (injected)
+   * @param {number} [settleMs=150]  How long to wait before reading DOM
+   *
+   * @returns {Promise<{ok, actualValue, normExpected, normActual, reason?, partial?, masked?}>}
+   */
+  async function verifyFillValue(selector, expected, resolveEl, settleMs) {
+    settleMs = (typeof settleMs === 'number') ? settleMs : 150;
+
+    // Wait for framework to react
+    if (settleMs > 0) await new Promise(function (r) { setTimeout(r, settleMs); });
+
+    // Resolve element
+    var liveEl;
+    if (selector && selector.startsWith && selector.startsWith('ng-dropdown-')) {
+      liveEl = null; // ng-dropdown verify handled by the handler's own verify
+    } else {
+      liveEl = resolveEl(selector);
+    }
+
+    if (!liveEl) {
+      return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'no-element-on-verify' };
+    }
+
+    var tag = (liveEl.tagName || '').toLowerCase();
+
+    // ── Checkbox ──────────────────────────────────────────────────────────────
+    if (liveEl.type === 'checkbox') {
+      return {
+        ok: !!liveEl.checked,
+        actualValue: liveEl.checked ? 'true' : 'false',
+        normExpected: String(expected || ''),
+        normActual: liveEl.checked ? 'true' : 'false',
+      };
+    }
+
+    // ── Radio ─────────────────────────────────────────────────────────────────
+    if (liveEl.type === 'radio') {
+      var groupName = liveEl.name;
+      var selected = liveEl.checked ? liveEl : null;
+      if (groupName) {
+        var checked = document.querySelector('input[type="radio"][name="' + groupName + '"]:checked');
+        if (checked) selected = checked;
+      }
+      if (!selected) {
+        return { ok: false, actualValue: '', normExpected: String(expected || ''), normActual: '', reason: 'radio-none-checked' };
+      }
+      var lbl = selected.id ? document.querySelector('label[for="' + selected.id + '"]') : null;
+      var actualLabel = (lbl && lbl.textContent.trim()) || selected.value || 'true';
+      var normFn = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+      var normExp0 = normFn(expected);
+      var normAct0 = normFn(actualLabel);
+      var ok0 = !expected ||
+        normAct0.includes(normExp0.slice(0, 4)) ||
+        normExp0.includes(normAct0.slice(0, 4)) ||
+        selected.checked;
+      return { ok: !!ok0, actualValue: actualLabel, normExpected: normExp0, normActual: normAct0 };
+    }
+
+    // ── Select ────────────────────────────────────────────────────────────────
+    if (tag === 'select') {
+      var opt = liveEl.options[liveEl.selectedIndex];
+      var actualVal = (opt ? (opt.text || opt.value) : '') || '';
+      var normExpS = String(expected || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      var normActS = actualVal.toLowerCase().replace(/[^a-z0-9]/g, '');
+      var okS = normExpS.length > 0 && (normActS === normExpS || normActS.includes(normExpS) || normExpS.includes(normActS));
+      return { ok: okS, actualValue: actualVal, normExpected: normExpS, normActual: normActS };
+    }
+
+    // ── Text input / textarea ─────────────────────────────────────────────────
+    var actual = liveEl.value || '';
+    var expStr = String(expected || '');
+
+    if (!expStr) {
+      return { ok: false, actualValue: actual, normExpected: '', normActual: actual, reason: 'empty-expected' };
+    }
+
+    var normExp = expStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+    var normAct = actual.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Exact match (after normalisation)
+    if (normExp === normAct) {
+      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct };
+    }
+
+    // Partial match — framework may reformat (e.g. phone number groups)
+    if (normAct.length > 0 &&
+        (normAct.startsWith(normExp.slice(0, Math.max(8, normExp.length - 2))) ||
+         normExp.startsWith(normAct.slice(0, 8)))) {
+      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, partial: true };
+    }
+
+    // Masked-input pattern (UIDAI Aadhaar: shows '****6597' but was filled with full number)
+    // Same length + last 4 chars match → accept
+    if (actual.length >= 8 && actual.length === expStr.length) {
+      var tail = expStr.slice(-4).toLowerCase();
+      if (actual.toLowerCase().endsWith(tail)) {
+        return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, masked: true };
+      }
+    }
+
+    return {
+      ok: false,
+      actualValue: actual,
+      normExpected: normExp,
+      normActual: normAct,
+      reason: actual === '' ? 'value-rejected-empty' : 'value-mismatch',
+    };
+  }
+
+  root.CcVerifyFillValue = {
+    verifyFillValue: verifyFillValue,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
 /* ==== capabilities/detect-fill-strategy.js ==== */
 /**
  * detect-fill-strategy — Fill Strategy Detector
@@ -1093,80 +1240,16 @@
     return type || 'unknown'; // safe fallback
   }
 
-  // Verify a field's actual current value matches what we tried to fill.
-  // Tolerates masked-input reformatting (e.g. '9155049176188766' becomes
-  // '9155 0491 7618 8766' on UIDAI). Compares the alphanumeric core of both.
-  // Returns { ok, actualValue, normExpected, normActual }
+  // verify-fill-value.js is the single source for fill value verification.
+  // Must be loaded before strategy.js (see build-executor-bundle.mjs ORDER).
+  var _vfv = root.CcVerifyFillValue || {};
+  var _resolveEl = root.CcResolveCcSelector ? root.CcResolveCcSelector.resolveCcSelector : function(sel) { return document.querySelector(sel); };
   async function verifyValue(selector, expected, settleMs) {
-    settleMs = (typeof settleMs === 'number') ? settleMs : 150;
-    // Wait for framework to react (validators, formatters, ControlValueAccessor)
-    if (settleMs > 0) await new Promise(r => setTimeout(r, settleMs));
-    // Resolve element — index-based selectors use the same getEl() helper
-    let liveEl;
-    if (selector && selector.startsWith && selector.startsWith('form-field-')) {
-      liveEl = getEl(selector);
-    } else if (selector && selector.startsWith && selector.startsWith('ng-dropdown-')) {
-      liveEl = null; // ng-dropdown verify handled by plugin's own verify
-    } else {
-      liveEl = document.querySelector(selector);
-    }
-    if (!liveEl) return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'no-element-on-verify' };
-    const tag = (liveEl.tagName || '').toLowerCase();
-    // Checkbox: verify by .checked state, not .value
-    if (liveEl.type === 'checkbox') {
-      return {
-        ok: !!liveEl.checked,
-        actualValue: liveEl.checked ? 'true' : 'false',
-        normExpected: String(expected || ''),
-        normActual: liveEl.checked ? 'true' : 'false',
-      };
-    }
-    if (liveEl.type === 'radio') {
-      // Report selected option label in the name group (not bare checked boolean)
-      const groupName = liveEl.name;
-      let selected = liveEl.checked ? liveEl : null;
-      if (groupName) {
-        const checked = document.querySelector('input[type="radio"][name="' + groupName + '"]:checked');
-        if (checked) selected = checked;
-      }
-      if (!selected) {
-        return { ok: false, actualValue: '', normExpected: String(expected || ''), normActual: '', reason: 'radio-none-checked' };
-      }
-      const lbl = selected.id ? document.querySelector('label[for="' + selected.id + '"]') : null;
-      const actualLabel = (lbl && lbl.textContent.trim()) || selected.value || 'true';
-      const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const ok = !expected || norm(actualLabel).includes(norm(expected).slice(0, 4))
-        || norm(expected).includes(norm(actualLabel).slice(0, 4))
-        || selected.checked;
-      return { ok: !!ok, actualValue: actualLabel, normExpected: norm(expected), normActual: norm(actualLabel) };
-    }
-    if (tag === 'select') {
-      // For selects: compare selected option's text or value
-      const opt = liveEl.options[liveEl.selectedIndex];
-      const actualVal = (opt ? (opt.text || opt.value) : '') || '';
-      const normExp = String(expected || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const normAct = actualVal.toLowerCase().replace(/[^a-z0-9]/g, '');
-      return { ok: normExp.length > 0 && (normAct === normExp || normAct.includes(normExp) || normExp.includes(normAct)), actualValue: actualVal, normExpected: normExp, normActual: normAct };
-    }
-    const actual = liveEl.value || '';
-    const expStr = String(expected || '');
-    if (!expStr) return { ok: false, actualValue: actual, normExpected: '', normActual: actual, reason: 'empty-expected' };
-    // Normalise: lowercase + strip non-alphanumeric (handles masked formatting and case)
-    const normExp = expStr.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const normAct = actual.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (normExp === normAct) return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct };
-    if (normAct.length > 0 && (normAct.startsWith(normExp.slice(0, Math.max(8, normExp.length - 2))) || normExp.startsWith(normAct.slice(0, 8)))) {
-      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, partial: true };
-    }
-    // Masked-input pattern (UIDAI, banks): actual shows '********6597' but real value is full 12 digits.
-    if (actual.length >= 8 && actual.length === expStr.length) {
-      const tail = expStr.slice(-4).toLowerCase();
-      if (actual.toLowerCase().endsWith(tail)) {
-        return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, masked: true };
-      }
-    }
-    return { ok: false, actualValue: actual, normExpected: normExp, normActual: normAct, reason: actual === '' ? 'value-rejected-empty' : 'value-mismatch' };
+    if (_vfv.verifyFillValue) return _vfv.verifyFillValue(selector, expected, _resolveEl, settleMs);
+    // Safe fallback: unknown result
+    return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'verifier-not-loaded' };
   }
+
     k.STRATEGY_REGISTRY = STRATEGY_REGISTRY;
     k.detectStrategy = detectStrategy;
     k.verifyValue = verifyValue;
