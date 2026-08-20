@@ -7,21 +7,15 @@
  *   rv        — RUNTIME_VERSION string
  *   fillMode  — always 'sequential' for the sequential fill loop
  *
- * Also provides typed builder helpers for each record variant
- * (filled, skipped, error, waiting_human) so callers produce
- * consistent shapes without repeating the same literal fields.
+ * This pattern was previously repeated inline at every _ccRecords.push(...)
+ * call site. This is the single canonical implementation.
  *
- * Pure JS — no DOM, no Chrome, no kernel. Deterministic (ts is injected
- * in tests via opts.now).
+ * Pure JS — no DOM, no Chrome, no kernel. Deterministic (ts injected via opts.now).
  *
  * Public API (on globalThis.CcBuildFillRecord):
  *   buildFillRecord(base, opts?) => CcRecord
- *   buildFilledRecord(fields, opts?)        => CcRecord  result='filled'
- *   buildSkippedRecord(fields, opts?)       => CcRecord  result='skipped'
- *   buildErrorRecord(fields, opts?)         => CcRecord  result='error'
- *   buildWaitingHumanRecord(fields, opts?)  => CcRecord  result='waiting_human'
  *
- * opts: { rv?, fillMode?, now? }  — all optional, used for testing
+ * opts: { rv?, fillMode?, now? }  — all optional, primarily used for testing
  *
  * See build-fill-record.md for full documentation.
  */
@@ -49,32 +43,8 @@
     );
   }
 
-  /** result='filled' helper — shortcut with required field validation */
-  function buildFilledRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'filled' }, fields), opts);
-  }
-
-  /** result='skipped' helper */
-  function buildSkippedRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'skipped' }, fields), opts);
-  }
-
-  /** result='error' helper */
-  function buildErrorRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'error' }, fields), opts);
-  }
-
-  /** result='waiting_human' helper */
-  function buildWaitingHumanRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'waiting_human' }, fields), opts);
-  }
-
   root.CcBuildFillRecord = {
     buildFillRecord: buildFillRecord,
-    buildFilledRecord: buildFilledRecord,
-    buildSkippedRecord: buildSkippedRecord,
-    buildErrorRecord: buildErrorRecord,
-    buildWaitingHumanRecord: buildWaitingHumanRecord,
   };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);

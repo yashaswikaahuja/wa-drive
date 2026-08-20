@@ -722,21 +722,15 @@
  *   rv        — RUNTIME_VERSION string
  *   fillMode  — always 'sequential' for the sequential fill loop
  *
- * Also provides typed builder helpers for each record variant
- * (filled, skipped, error, waiting_human) so callers produce
- * consistent shapes without repeating the same literal fields.
+ * This pattern was previously repeated inline at every _ccRecords.push(...)
+ * call site. This is the single canonical implementation.
  *
- * Pure JS — no DOM, no Chrome, no kernel. Deterministic (ts is injected
- * in tests via opts.now).
+ * Pure JS — no DOM, no Chrome, no kernel. Deterministic (ts injected via opts.now).
  *
  * Public API (on globalThis.CcBuildFillRecord):
  *   buildFillRecord(base, opts?) => CcRecord
- *   buildFilledRecord(fields, opts?)        => CcRecord  result='filled'
- *   buildSkippedRecord(fields, opts?)       => CcRecord  result='skipped'
- *   buildErrorRecord(fields, opts?)         => CcRecord  result='error'
- *   buildWaitingHumanRecord(fields, opts?)  => CcRecord  result='waiting_human'
  *
- * opts: { rv?, fillMode?, now? }  — all optional, used for testing
+ * opts: { rv?, fillMode?, now? }  — all optional, primarily used for testing
  *
  * See build-fill-record.md for full documentation.
  */
@@ -764,32 +758,8 @@
     );
   }
 
-  /** result='filled' helper — shortcut with required field validation */
-  function buildFilledRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'filled' }, fields), opts);
-  }
-
-  /** result='skipped' helper */
-  function buildSkippedRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'skipped' }, fields), opts);
-  }
-
-  /** result='error' helper */
-  function buildErrorRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'error' }, fields), opts);
-  }
-
-  /** result='waiting_human' helper */
-  function buildWaitingHumanRecord(fields, opts) {
-    return buildFillRecord(Object.assign({ result: 'waiting_human' }, fields), opts);
-  }
-
   root.CcBuildFillRecord = {
     buildFillRecord: buildFillRecord,
-    buildFilledRecord: buildFilledRecord,
-    buildSkippedRecord: buildSkippedRecord,
-    buildErrorRecord: buildErrorRecord,
-    buildWaitingHumanRecord: buildWaitingHumanRecord,
   };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -1549,7 +1519,7 @@
             _replayResults[_label] = result;
             sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
             const _isOk = result === 'ok';
-            _ccRecords.push({ selector, value, type: 'ng-dropdown', result: _isOk ? 'filled' : 'skipped', failReason: _isOk ? null : result, strategy: 'ng-dropdown-click', durationMs: Date.now()-session.startedAt, ts: Date.now(), rv: RUNTIME_VERSION });
+            _ccRecords.push((root.CcBuildFillRecord ? root.CcBuildFillRecord.buildFillRecord : function(b){return Object.assign({ts:Date.now(),rv:RUNTIME_VERSION,fillMode:'sequential'},b);})({ selector, value, type: 'ng-dropdown', result: _isOk ? 'filled' : 'skipped', failReason: _isOk ? null : result, strategy: 'ng-dropdown-click', durationMs: Date.now()-session.startedAt }, { rv: RUNTIME_VERSION }));
             _flushRecords();
           }
           const OVERLAY_TAGS = ['app-dropdown','ul','ng-dropdown-panel','cdk-overlay-container',
@@ -2342,6 +2312,8 @@
         ? window.ccWaitForNetworkIdle(q || 200, m || 8000)
         : Promise.resolve({ idle: true, waitedMs: 0 }));
     };
+    const _buildFillRecord = (root.CcBuildFillRecord && root.CcBuildFillRecord.buildFillRecord)
+      || function(base) { return Object.assign({ ts: Date.now(), rv: RUNTIME_VERSION, fillMode: 'sequential' }, base); };
     const detectStrategy = b.detectStrategy;
     const verifyValue = b.verifyValue;
     const _isPlaceholderOption = b._isPlaceholderOption;
@@ -2410,7 +2382,7 @@
                 await waitForDOMQuiet(800);
                 const newFields = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select,div.ng-dropdown');
                 const newFieldCount = newFields.length;
-                _ccRecords.push({ selector, value, type: 'button', result: 'filled', strategy: 'plugin:button-click', plugin: 'button-click', role: fieldData.role || 'navigation', newFieldCount, transitionOutcome: newFieldCount > _preCount ? "transition_success" : newFieldCount === _preCount ? "transition_no_change" : "transition_partial", durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, fillMode: 'sequential' }); _flushRecords();
+                _ccRecords.push(_buildFillRecord({ selector, value, type: 'button', result: 'filled', strategy: 'plugin:button-click', plugin: 'button-click', role: fieldData.role || 'navigation', newFieldCount, transitionOutcome: newFieldCount > _preCount ? "transition_success" : newFieldCount === _preCount ? "transition_no_change" : "transition_partial", durationMs: Date.now()-_t0 }, { rv: RUNTIME_VERSION })); _flushRecords();
                 console.debug('[CC][plugin] button-click', selector, 'newFields:', newFieldCount);
               } else {
                 if (el) el.click();
@@ -2418,7 +2390,7 @@
               }
               await settleAfterAct('button');
             } else if (isNgDropdown) {
-              if (!el) { _ccRecords.push({ selector, value, type, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown', ts: Date.now(), rv: RUNTIME_VERSION }); _flushRecords(); continue; }
+              if (!el) { _ccRecords.push(_buildFillRecord({ selector, value, type, result: 'skipped', failReason: 'no-element', strategy: 'ng-dropdown' }, { rv: RUNTIME_VERSION })); _flushRecords(); continue; }
               if (_realOptions(el).length === 0 && el.tagName === 'SELECT') {
                 el = (await waitForSelectOptionsSequential(selector, 5000)) || el;
               }
@@ -2429,7 +2401,7 @@
                   const _pResult = await _ngPlugin.fill(el, value, _ctx);
                   const _r = _pResult.success ? 1 : 0;
                   k.filled += _r;
-                  _ccRecords.push({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, durationMs: Date.now()-_t0, ts: Date.now(), rv: RUNTIME_VERSION, fillMode: 'sequential' }); _flushRecords();
+                  _ccRecords.push(_buildFillRecord({ selector, value, type, result: _r ? 'filled' : 'skipped', failReason: _r ? null : _pResult.reason, strategy: 'plugin:' + _ngPlugin.id, plugin: _ngPlugin.id, durationMs: Date.now()-_t0 }, { rv: RUNTIME_VERSION })); _flushRecords();
                 } catch(e) {
                   fillOne(selector, value, type);
                 }
@@ -2578,7 +2550,7 @@
                     el.dispatchEvent(new Event('change', { bubbles: true }));
                     k.filled += 1;
                     console.debug('[CC] file URL assigned:', selector, fileName, file.size, 'bytes');
-                    _ccRecords.push({
+                    _ccRecords.push(_buildFillRecord({
                       selector,
                       value,
                       type: 'file',
@@ -2587,14 +2559,11 @@
                       strategy: 'file-url-fetch',
                       fileName,
                       fileSize: file.size,
-                      fillMode: 'sequential',
                       durationMs: Date.now() - _t0,
-                      ts: Date.now(),
-                      rv: RUNTIME_VERSION,
-                    });
+                    }, { rv: RUNTIME_VERSION }));
                     _flushRecords();
                   } else {
-                    _ccRecords.push({
+                    _ccRecords.push(_buildFillRecord({
                       selector,
                       value,
                       type: 'file',
@@ -2602,15 +2571,12 @@
                       result: 'waiting_human',
                       failReason: 'fetch-' + resp.status,
                       strategy: 'file-needs-human',
-                      fillMode: 'sequential',
                       durationMs: Date.now() - _t0,
-                      ts: Date.now(),
-                      rv: RUNTIME_VERSION,
-                    });
+                    }, { rv: RUNTIME_VERSION }));
                     _flushRecords();
                   }
                 } catch (e) {
-                  _ccRecords.push({
+                  _ccRecords.push(_buildFillRecord({
                     selector,
                     value,
                     type: 'file',
@@ -2618,15 +2584,12 @@
                     result: 'waiting_human',
                     failReason: e.message || 'fetch-error',
                     strategy: 'file-needs-human',
-                    fillMode: 'sequential',
                     durationMs: Date.now() - _t0,
-                    ts: Date.now(),
-                    rv: RUNTIME_VERSION,
-                  });
+                  }, { rv: RUNTIME_VERSION }));
                   _flushRecords();
                 }
               } else {
-                _ccRecords.push({
+                _ccRecords.push(_buildFillRecord({
                   selector,
                   value: value || null,
                   type: 'file',
@@ -2634,11 +2597,8 @@
                   result: 'waiting_human',
                   failReason: value ? 'filename_only_no_url' : 'no_file_value',
                   strategy: 'file-needs-human',
-                  fillMode: 'sequential',
                   durationMs: Date.now() - _t0,
-                  ts: Date.now(),
-                  rv: RUNTIME_VERSION,
-                });
+                }, { rv: RUNTIME_VERSION }));
                 _flushRecords();
               }
               await settleAfterAct('text');
@@ -2670,7 +2630,7 @@
                   _trulyFilled = _r === 1 && _ver.ok;
                 }
                 if (_trulyFilled) k.filled += 1;
-                const _recChoice = {
+                const _recChoice = _buildFillRecord({
                   selector,
                   value,
                   type,
@@ -2688,11 +2648,8 @@
                   verified: _trulyFilled,
                   strategy: _strategy,
                   matchBy: _fieldCtx.matchBy,
-                  fillMode: 'sequential',
                   durationMs: Date.now() - _t0,
-                  ts: Date.now(),
-                  rv: RUNTIME_VERSION,
-                };
+                }, { rv: RUNTIME_VERSION });
                 _ccRecords.push(_recChoice);
                 _flushRecords();
                 _emitFillDebug(_trulyFilled ? 'field.done' : 'field.fail', {
@@ -2705,16 +2662,13 @@
                   strategy: _strategy,
                 });
               } catch (e) {
-                _ccRecords.push({
+                _ccRecords.push(_buildFillRecord({
                   selector,
                   value,
                   type,
                   result: 'error',
                   error: e.message,
-                  fillMode: 'sequential',
-                  ts: Date.now(),
-                  rv: RUNTIME_VERSION,
-                });
+                }, { rv: RUNTIME_VERSION }));
                 _flushRecords();
                 _emitFillDebug('field.fail', {
                   selector,
@@ -2995,7 +2949,7 @@
       var niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
       if (niv) niv.set.call(el, primary.value); else el.value = primary.value;
       ['input','change','blur'].forEach(function(ev) { el.dispatchEvent(new Event(ev, {bubbles:true})); });
-      _ccRecords.push({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0, ts: Date.now(), rv: RUNTIME_VERSION });
+      _ccRecords.push((root.CcBuildFillRecord ? root.CcBuildFillRecord.buildFillRecord : function(b){return Object.assign({ts:Date.now(),rv:RUNTIME_VERSION,fillMode:'sequential'},b);})({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0 }, { rv: RUNTIME_VERSION }));
       _flushRecords();
     });
   }, 4000);

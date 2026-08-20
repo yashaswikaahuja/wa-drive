@@ -8,7 +8,7 @@ Every field fill result is stored as a `CcRecord` object in `_ccRecords` (the fi
 { ts: Date.now(), rv: RUNTIME_VERSION, fillMode: 'sequential' }
 ```
 
-These three fields were previously repeated as literal object properties at every `_ccRecords.push(...)` call site — 20+ times across `sequential.js`, `select-helpers.js`, `post-fill-confirm.js`, and `fill-one-ng.js`. This capability centralises that stamping logic.
+These three fields were previously repeated as literal object properties at every `_ccRecords.push(...)` call site — across `sequential.js` (9 sites), `select-helpers.js` (1), `fill-one-ng.js` (1), and `post-fill-confirm.js` (1). This capability is the single canonical implementation of that stamping.
 
 ---
 
@@ -17,11 +17,7 @@ These three fields were previously repeated as literal object properties at ever
 Registered on `globalThis.CcBuildFillRecord`:
 
 ```js
-buildFillRecord(base, opts?)             => CcRecord
-buildFilledRecord(fields, opts?)         => CcRecord   result='filled'
-buildSkippedRecord(fields, opts?)        => CcRecord   result='skipped'
-buildErrorRecord(fields, opts?)          => CcRecord   result='error'
-buildWaitingHumanRecord(fields, opts?)   => CcRecord   result='waiting_human'
+buildFillRecord(base, opts?) => CcRecord
 ```
 
 ### opts (all optional)
@@ -40,6 +36,11 @@ The caller provides all domain fields; this capability adds the envelope:
 
 ```js
 {
+  // — stamped by buildFillRecord (applied first, caller fields override) —
+  ts:         number,    // opts.now() at record creation
+  rv:         string,    // opts.rv
+  fillMode:   string,    // opts.fillMode ('sequential')
+
   // — caller-provided —
   selector:   string,
   value:      string | null,
@@ -49,24 +50,24 @@ The caller provides all domain fields; this capability adds the envelope:
   strategy:   string,
   durationMs: number,
   // ... any other call-site fields
-
-  // — stamped by buildFillRecord —
-  ts:         number,    // Date.now() at record creation
-  rv:         string,    // RUNTIME_VERSION
-  fillMode:   string,    // 'sequential'
 }
 ```
 
-### Field ordering note
+### Field ordering: caller wins
 
-`Object.assign({ ts, rv, fillMode }, base)` means caller fields in `base` override the envelope defaults. This allows callers to supply their own `ts` if needed (e.g. for retry records with a corrected timestamp).
+`Object.assign({ ts, rv, fillMode }, base)` — caller fields in `base` override the envelope defaults. A caller can supply its own `ts` if needed.
+
+---
+
+## Behavioral fix documented
+
+One original push site (`sequential.js`: ng-dropdown no-element skip) was **missing `fillMode`** in the original code. After migration to `buildFillRecord`, it now receives `fillMode: 'sequential'` by default. This is an intentional correction. Documented in tests.
 
 ---
 
 ## What This Capability Owns
 
 - Stamping `ts`, `rv`, `fillMode` onto a record
-- Typed helpers for each result variant
 
 ## What This Capability Does NOT Own
 
@@ -76,28 +77,26 @@ The caller provides all domain fields; this capability adds the envelope:
 
 ---
 
-## Consumer
+## Consumers
 
-All `_ccRecords.push(...)` call sites in:
-- `sequential.js` (9 inline pushes)
-- `select-helpers.js` (`pushSelectRecord`)
-- `fill-one-ng.js`
-- `post-fill-confirm.js`
-
-The integration wires `k.buildFillRecord = CcBuildFillRecord.buildFillRecord` so existing consumers can adopt it incrementally.
+All `_ccRecords.push(...)` call sites migrated:
+- `sequential.js` — 9 sites (button, ng-dropdown, plugin, file×4, choice, error)
+- `select-helpers.js` — `pushSelectRecord` (1 site)
+- `fill-one-ng.js` — 1 site
+- `post-fill-confirm.js` — 1 site
 
 ---
 
 ## Example
 
 ```js
-const { buildFilledRecord, buildSkippedRecord, buildErrorRecord } = CcBuildFillRecord;
-
-const opts = { rv: '5.70' };
+const { buildFillRecord } = CcBuildFillRecord;
 
 // Before:
-_ccRecords.push({ selector, value, type, result: 'filled', strategy, durationMs, ts: Date.now(), rv: RUNTIME_VERSION, fillMode: 'sequential' });
+_ccRecords.push({ selector, value, type, result: 'filled', strategy, durationMs,
+  ts: Date.now(), rv: RUNTIME_VERSION, fillMode: 'sequential' });
 
 // After:
-_ccRecords.push(buildFilledRecord({ selector, value, type, strategy, durationMs }, opts));
+_ccRecords.push(buildFillRecord({ selector, value, type, result: 'filled', strategy, durationMs },
+  { rv: RUNTIME_VERSION }));
 ```

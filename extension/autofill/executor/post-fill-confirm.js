@@ -51,7 +51,7 @@
       var niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
       if (niv) niv.set.call(el, primary.value); else el.value = primary.value;
       ['input','change','blur'].forEach(function(ev) { el.dispatchEvent(new Event(ev, {bubbles:true})); });
-      _ccRecords.push({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0, ts: Date.now(), rv: RUNTIME_VERSION });
+      _ccRecords.push((root.CcBuildFillRecord ? root.CcBuildFillRecord.buildFillRecord : function(b){return Object.assign({ts:Date.now(),rv:RUNTIME_VERSION,fillMode:'sequential'},b);})({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0 }, { rv: RUNTIME_VERSION }));
       _flushRecords();
     });
   }, 4000);
