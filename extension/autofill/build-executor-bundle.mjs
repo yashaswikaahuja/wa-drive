@@ -14,6 +14,7 @@ const execDir = path.join(dir, 'executor');
 const ORDER = [
   'kernel-bind.js',
   'debug.js',
+  'capabilities/parse-date-value.js',      // date string parser — no deps
   'capabilities/cascade-field-level.js',   // cascade geography — no deps, loaded first
   'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',

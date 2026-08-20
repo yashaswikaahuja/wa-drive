@@ -212,6 +212,93 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
+/* ==== capabilities/parse-date-value.js ==== */
+/**
+ * parse-date-value — Profile Date String Parser
+ *
+ * Parses a raw date string from a profile (which may be in DD/MM/YYYY,
+ * DD-MM-YYYY, DD.MM.YYYY, YYYY-MM-DD, YYYY/MM/DD, or other formats) and
+ * converts it to the format a specific date widget needs.
+ *
+ * Used by fill-one-date.js for flatpickr, jQuery UI datepicker, Angular
+ * Material mat-datepicker, and native <input type="date"> handling.
+ * Previously duplicated 3× inline in the same file.
+ *
+ * No DOM, no kernel, no Chrome APIs. Pure JS date parsing.
+ *
+ * Public API (on globalThis.CcParseDateValue):
+ *   parseDateValue(value) => { dateObj, isoDate, isoMonth, isoDatetime }
+ *
+ * See parse-date-value.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Parse a raw date string from a profile into multiple output formats.
+   *
+   * Recognized input formats:
+   *   DD/MM/YYYY  DD-MM-YYYY  DD.MM.YYYY   (Indian/European day-first)
+   *   YYYY/MM/DD  YYYY-MM-DD  YYYY.MM.DD   (ISO-ish year-first)
+   *   Any string parseable by new Date(value) as fallback
+   *
+   * Returns an object with:
+   *   dateObj   {Date|null}   — a JS Date (null if parsing failed)
+   *   isoDate   {string}      — 'YYYY-MM-DD' or '' on failure
+   *   isoMonth  {string}      — 'YYYY-MM' or '' on failure
+   *   isoDatetime {string}    — 'YYYY-MM-DDTHH:MM' (appends T00:00) or ''
+   *
+   * Never throws. Returns all-empty result on null/invalid input.
+   *
+   * @param {string|null|undefined} value
+   * @returns {{ dateObj: Date|null, isoDate: string, isoMonth: string, isoDatetime: string }}
+   */
+  function parseDateValue(value) {
+    var empty = { dateObj: null, isoDate: '', isoMonth: '', isoDatetime: '' };
+    if (value == null || value === '') return empty;
+
+    var str = String(value).trim();
+    if (!str) return empty;
+
+    var dateObj = null;
+
+    // DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY (day-first, Indian/European format)
+    var ddmmyyyy = str.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    if (ddmmyyyy) {
+      dateObj = new Date(+ddmmyyyy[3], +ddmmyyyy[2] - 1, +ddmmyyyy[1]);
+    }
+
+    // YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD (ISO-ish, year-first)
+    var yyyymmdd = str.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (!dateObj && yyyymmdd) {
+      dateObj = new Date(+yyyymmdd[1], +yyyymmdd[2] - 1, +yyyymmdd[3]);
+    }
+
+    // Fallback: let JS Date constructor try
+    if (!dateObj) {
+      var d = new Date(str);
+      if (!isNaN(d.getTime())) dateObj = d;
+    }
+
+    if (!dateObj || isNaN(dateObj.getTime())) return empty;
+
+    var year  = dateObj.getFullYear();
+    var month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    var day   = String(dateObj.getDate()).padStart(2, '0');
+
+    var isoDate     = year + '-' + month + '-' + day;
+    var isoMonth    = year + '-' + month;
+    var isoDatetime = isoDate + 'T00:00';
+
+    return { dateObj: dateObj, isoDate: isoDate, isoMonth: isoMonth, isoDatetime: isoDatetime };
+  }
+
+  root.CcParseDateValue = {
+    parseDateValue: parseDateValue,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
 /* ==== capabilities/cascade-field-level.js ==== */
 /**
  * cascade-field-level — Cascade Geography Level Identifier
@@ -1658,13 +1745,9 @@
                 // ── flatpickr datepicker ─────────────────────────────────────────────
                 // flatpickr attaches _flatpickr instance to the input. Use its API.
                 const fp = el._flatpickr;
-                // Parse the date value: convert DD/MM/YYYY or DD-MM-YYYY to Date object
-                let dateObj = null;
-                const ddmmyyyy = value.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-                if (ddmmyyyy) { dateObj = new Date(+ddmmyyyy[3], +ddmmyyyy[2]-1, +ddmmyyyy[1]); }
-                const yyyymmdd = value.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
-                if (!dateObj && yyyymmdd) { dateObj = new Date(+yyyymmdd[1], +yyyymmdd[2]-1, +yyyymmdd[3]); }
-                if (!dateObj) dateObj = new Date(value);
+                // parse-date-value.js is the single source for date string parsing.
+                var _parsed = (root.CcParseDateValue || {}).parseDateValue ? root.CcParseDateValue.parseDateValue(value) : { dateObj: new Date(value) };
+                var dateObj = _parsed.dateObj;
 
                 if (fp && !isNaN(dateObj)) {
                   fp.setDate(dateObj, true); // true = trigger onChange
@@ -1681,12 +1764,9 @@
                 return el.value ? 1 : 0;
               } else if (el.classList.contains('hasDatepicker') || (typeof $ !== 'undefined' && typeof $.fn !== 'undefined' && typeof $.fn.datepicker !== 'undefined' && $(el).data('datepicker'))) {
                 // ── jQuery UI Datepicker ─────────────────────────────────────────────
-                let dateObj = null;
-                const ddmmyyyy = value.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-                if (ddmmyyyy) { dateObj = new Date(+ddmmyyyy[3], +ddmmyyyy[2]-1, +ddmmyyyy[1]); }
-                const yyyymmdd = value.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
-                if (!dateObj && yyyymmdd) { dateObj = new Date(+yyyymmdd[1], +yyyymmdd[2]-1, +yyyymmdd[3]); }
-                if (!dateObj) dateObj = new Date(value);
+                // parse-date-value.js is the single source for date string parsing.
+                var _parsed = (root.CcParseDateValue || {}).parseDateValue ? root.CcParseDateValue.parseDateValue(value) : { dateObj: new Date(value) };
+                var dateObj = _parsed.dateObj;
 
                 if (!isNaN(dateObj)) {
                   $(el).datepicker('setDate', dateObj);
@@ -1722,25 +1802,13 @@
                 // These require ISO format: YYYY-MM-DD for date, YYYY-MM-DDTHH:MM for
                 // datetime-local, YYYY-MM for month. Profile data is usually in Indian
                 // format (DD/MM/YYYY or DD-MM-YYYY). Convert before setting.
-                let isoValue = value;
-                // Detect DD/MM/YYYY or DD-MM-YYYY and convert to YYYY-MM-DD
-                const ddmmyyyy = value.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-                if (ddmmyyyy) {
-                  const [, day, month, year] = ddmmyyyy;
-                  if (el.type === 'month') {
-                    isoValue = `${year}-${month.padStart(2, '0')}`;
-                  } else {
-                    isoValue = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                  }
-                }
-                // Detect YYYY/MM/DD or YYYY-MM-DD (already ISO-ish)
-                const yyyymmdd = value.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
-                if (yyyymmdd && !ddmmyyyy) {
-                  const [, year, month, day] = yyyymmdd;
-                  isoValue = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                }
+                // parse-date-value.js provides ISO conversion for all date formats.
+                var _parsed2 = (root.CcParseDateValue || {}).parseDateValue ? root.CcParseDateValue.parseDateValue(value) : null;
+                var isoValue = _parsed2 && _parsed2.isoDate ? (el.type === 'month' ? _parsed2.isoMonth : _parsed2.isoDate) : value;
                 // For datetime-local: if only date provided, append T00:00
                 if (el.type === 'datetime-local' && !isoValue.includes('T')) {
+                  isoValue += 'T00:00';
+                }
                   isoValue += 'T00:00';
                 }
                 // Set via native setter (keystroke doesn't work on date inputs)
