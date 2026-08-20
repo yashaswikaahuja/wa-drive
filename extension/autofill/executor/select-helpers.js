@@ -21,6 +21,10 @@
   var selectLoadMode       = _sos.selectLoadMode       || function () { return 'unknown'; };
   var selectIsActive       = _sos.selectIsActive       || function () { return false; };
   var isPlaceholderPlanned = _sos.isPlaceholderPlanned || function () { return true; };
+  // ── build-fill-record.js is the single source for record stamping ─────────
+  var _bfr = root.CcBuildFillRecord || {};
+  var _buildFillRecord = _bfr.buildFillRecord || function (base) { return Object.assign({ ts: Date.now(), rv: k.RUNTIME_VERSION, fillMode: 'sequential' }, base); };
+
   // cascade-field-level.js is the single source of truth for cascade geography.
   // It must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
   var _cascadeGeo = root.CcCascadeFieldLevel;
@@ -34,14 +38,7 @@
   // ── Cascade geography (delegated to capabilities/cascade-field-level.js) ─
 
   function pushSelectRecord(base) {
-    const rec = Object.assign(
-      {
-        ts: Date.now(),
-        rv: k.RUNTIME_VERSION,
-        fillMode: 'sequential',
-      },
-      base
-    );
+    const rec = _buildFillRecord(base, { rv: k.RUNTIME_VERSION });
     k.records.push(rec);
     k.flushRecords();
     const result = String(rec.result || '');
@@ -67,6 +64,7 @@
     }
     return rec;
   }
+    k.buildFillRecord = _buildFillRecord;
     k.isPlaceholderOption = isPlaceholderOption;
     k.realOptions = realOptions;
     k.sampleOptions = sampleOptions;
