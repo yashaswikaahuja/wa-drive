@@ -120,32 +120,18 @@
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
-              function _matchScore(optText) {
-                const ot = optText.toLowerCase().trim();
+              // ng-option-scorer.js is the single source for option text scoring.
+              var _nos = root.CcNgOptionScorer;
+              var _scoreOption = _nos ? _nos.scoreOption : function(ot) {
+                ot = String(ot||'').toLowerCase().trim();
                 if (ot === v) return 100;
                 if (ot.includes(v)) return 80;
                 if (v.includes(ot) && ot.length > 3) return 70;
-                const vToks = v.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
-                const oToks = ot.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
-                const overlap = vToks.filter(t => oToks.some(o => o.includes(t) || t.includes(o))).length;
-                if (overlap >= 2) return 60;
-                if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
-                const eduSynonyms = [
-          ['intermediate','higher secondary','10+2','12th','hsc','senior secondary'],
-          ['matriculation','10th','sslc','secondary','high school','class 10','class x'],
-          ['graduation','graduate','degree','bachelor','ug'],
-          ['post graduation','post graduate','masters','pg','m.a','m.sc','m.com'],
-                ];
-                for (const group of eduSynonyms) {
-          const vIn = group.some(s => v.includes(s));
-          const oIn = group.some(s => ot.includes(s));
-          if (vIn && oIn) return 55;
-                }
                 return 0;
-              }
+              };
               let bestOpt = null, bestScore = 0;
               for (const o of opts) {
-                const score = _matchScore(o.textContent.trim());
+                const score = _scoreOption(o.textContent.trim(), v);
                 if (score > bestScore) { bestScore = score; bestOpt = o; }
               }
               const opt = bestScore >= 50 ? bestOpt : null;

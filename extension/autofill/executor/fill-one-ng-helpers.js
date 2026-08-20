@@ -24,19 +24,16 @@
     };
 
     /** Score option text against planned value (higher = better). */
-    k._ngScoreOption = function (optText, planned) {
-      const ot = String(optText || '').trim().toLowerCase();
-      const v = String(planned || '').trim().toLowerCase();
+  // ng-option-scorer.js is the single source for option text scoring.
+  // Must be loaded before fill-one-ng-helpers.js (see build-executor-bundle.mjs ORDER).
+  var _nos = root.CcNgOptionScorer || {};
+    k._ngScoreOption = _nos.scoreOption || function (optText, planned) {
+      // fallback: basic contains check
+      var ot = String(optText || '').toLowerCase().trim();
+      var v  = String(planned  || '').toLowerCase().trim();
       if (!ot || !v) return 0;
       if (ot === v) return 100;
-      if (ot.startsWith(v) || v.startsWith(ot)) return 80;
       if (ot.includes(v) || v.includes(ot)) return 60;
-      const otTok = ot.split(/[^a-z0-9]+/).filter(Boolean);
-      const vTok = v.split(/[^a-z0-9]+/).filter(Boolean);
-      let hit = 0;
-      for (let i = 0; i < vTok.length; i++) if (otTok.includes(vTok[i])) hit++;
-      if (hit && hit === vTok.length) return 50;
-      if (hit) return 30 + hit;
       return 0;
     };
 
@@ -51,15 +48,21 @@
     };
 
     k._ngPickOption = function (opts, planned) {
-      let best = null;
-      let bestScore = 0;
-      for (let i = 0; i < opts.length; i++) {
-        const text = (opts[i].textContent || opts[i].innerText || '').trim();
-        const sc = k._ngScoreOption(text, planned);
-        if (sc > bestScore) {
-          bestScore = sc;
-          best = opts[i];
-        }
+      // Wrap DOM nodes in {text, node} shape for scoreAndPick.
+      // minScore:30 preserves the original threshold.
+      if (_nos.scoreAndPick) {
+        var wrapped = Array.from(opts).map(function (n) {
+          return { text: (n.textContent || n.innerText || '').trim(), node: n };
+        });
+        var result = _nos.scoreAndPick(wrapped, planned, 30);
+        return result ? result.node : null;
+      }
+      // Fallback
+      var best = null, bestScore = 0;
+      for (var i = 0; i < opts.length; i++) {
+        var text = (opts[i].textContent || opts[i].innerText || '').trim();
+        var sc = k._ngScoreOption(text, planned);
+        if (sc > bestScore) { bestScore = sc; best = opts[i]; }
       }
       return bestScore >= 30 ? best : null;
     };

@@ -19,6 +19,7 @@ const ORDER = [
   'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',
   'settle.js',
+  'capabilities/ng-option-scorer.js',      // ng option scorer — no deps
   'capabilities/build-fill-record.js',     // fill record assembler — no deps
   'capabilities/fill-debug-emitter.js',    // debug event queue — no deps
   'capabilities/verify-fill-value.js',     // fill value verifier — needs resolveEl

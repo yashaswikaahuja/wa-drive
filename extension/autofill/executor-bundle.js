@@ -712,6 +712,107 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
+/* ==== capabilities/ng-option-scorer.js ==== */
+/**
+ * ng-option-scorer — Angular Dropdown Option Scorer
+ *
+ * Scores a dropdown option's text against a planned fill value to determine
+ * how well they match. Returns a numeric score (0–100); higher is better.
+ * Used when selecting the best option from an ng-dropdown / ng-select list.
+ *
+ * Also provides scoreAndPick(opts, planned) for picking the best option
+ * from a list of {text, node} entries.
+ *
+ * Pure JS — no DOM, no Chrome, no kernel. Deterministic.
+ *
+ * Public API (on globalThis.CcNgOptionScorer):
+ *   scoreOption(optText, planned) => number    (0–100)
+ *   scoreAndPick(opts, planned, minScore?) => opt | null
+ *
+ * See ng-option-scorer.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Score how well `optText` matches `planned`.
+   *
+   * Scoring cascade (higher = better match):
+   *   100 — exact match (case-insensitive)
+   *    80 — one string contains the other
+   *    70 — reverse-contains (optText in planned) with >3 chars
+   *    60 — token overlap ≥2
+   *    55 — education-level synonym match
+   *    50 — single-token overlap when either string is short (≤2 tokens)
+   *     0 — no match
+   *
+   * @param {string} optText  — option label text
+   * @param {string} planned  — planned fill value
+   * @returns {number} 0–100
+   */
+  function scoreOption(optText, planned) {
+    var ot = String(optText || '').toLowerCase().trim();
+    var v  = String(planned  || '').toLowerCase().trim();
+    if (!ot || !v) return 0;
+    if (ot === v) return 100;
+    if (ot.includes(v)) return 80;
+    if (v.includes(ot) && ot.length > 3) return 70;
+    // Token overlap: split on common separators, require tokens > 2 chars
+    var vToks = v.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
+    var oToks = ot.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
+    var overlap = vToks.filter(function (t) {
+      return oToks.some(function (o) { return o.includes(t) || t.includes(o); });
+    }).length;
+    if (overlap >= 2) return 60;
+    if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
+    // Education-level synonyms (common Indian government form variants)
+    var EDU_SYNONYMS = [
+      ['intermediate', 'higher secondary', '10+2', '12th', 'hsc', 'senior secondary'],
+      ['matriculation', '10th', 'sslc', 'secondary', 'high school', 'class 10', 'class x'],
+      ['graduation', 'graduate', 'degree', 'bachelor', 'ug'],
+      ['post graduation', 'post graduate', 'masters', 'master', 'pg', 'm.a', 'm.sc', 'm.com'],
+    ];
+    for (var i = 0; i < EDU_SYNONYMS.length; i++) {
+      var group = EDU_SYNONYMS[i];
+      var vIn = group.some(function (s) { return v.includes(s); });
+      var oIn = group.some(function (s) { return ot.includes(s); });
+      if (vIn && oIn) return 55;
+    }
+    return 0;
+  }
+
+  /**
+   * Pick the best option from a list.
+   *
+   * @param {Array<{text: string, node: *}>} opts  — list of candidates
+   * @param {string} planned                        — planned fill value
+   * @param {number} [minScore=50]                  — minimum score to accept
+   * @returns {{text, node, score} | null}
+   */
+  function scoreAndPick(opts, planned, minScore) {
+    minScore = (typeof minScore === 'number') ? minScore : 50;
+    var best = null;
+    var bestScore = 0;
+    for (var i = 0; i < opts.length; i++) {
+      var score = scoreOption(opts[i].text, planned);
+      if (score > bestScore) {
+        bestScore = score;
+        best = opts[i];
+      }
+    }
+    if (bestScore >= minScore) {
+      return Object.assign({ score: bestScore }, best);
+    }
+    return null;
+  }
+
+  root.CcNgOptionScorer = {
+    scoreOption: scoreOption,
+    scoreAndPick: scoreAndPick,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
 /* ==== capabilities/build-fill-record.js ==== */
 /**
  * build-fill-record — Fill Record Assembler
@@ -1428,19 +1529,16 @@
     };
 
     /** Score option text against planned value (higher = better). */
-    k._ngScoreOption = function (optText, planned) {
-      const ot = String(optText || '').trim().toLowerCase();
-      const v = String(planned || '').trim().toLowerCase();
+  // ng-option-scorer.js is the single source for option text scoring.
+  // Must be loaded before fill-one-ng-helpers.js (see build-executor-bundle.mjs ORDER).
+  var _nos = root.CcNgOptionScorer || {};
+    k._ngScoreOption = _nos.scoreOption || function (optText, planned) {
+      // fallback: basic contains check
+      var ot = String(optText || '').toLowerCase().trim();
+      var v  = String(planned  || '').toLowerCase().trim();
       if (!ot || !v) return 0;
       if (ot === v) return 100;
-      if (ot.startsWith(v) || v.startsWith(ot)) return 80;
       if (ot.includes(v) || v.includes(ot)) return 60;
-      const otTok = ot.split(/[^a-z0-9]+/).filter(Boolean);
-      const vTok = v.split(/[^a-z0-9]+/).filter(Boolean);
-      let hit = 0;
-      for (let i = 0; i < vTok.length; i++) if (otTok.includes(vTok[i])) hit++;
-      if (hit && hit === vTok.length) return 50;
-      if (hit) return 30 + hit;
       return 0;
     };
 
@@ -1455,15 +1553,21 @@
     };
 
     k._ngPickOption = function (opts, planned) {
-      let best = null;
-      let bestScore = 0;
-      for (let i = 0; i < opts.length; i++) {
-        const text = (opts[i].textContent || opts[i].innerText || '').trim();
-        const sc = k._ngScoreOption(text, planned);
-        if (sc > bestScore) {
-          bestScore = sc;
-          best = opts[i];
-        }
+      // Wrap DOM nodes in {text, node} shape for scoreAndPick.
+      // minScore:30 preserves the original threshold.
+      if (_nos.scoreAndPick) {
+        var wrapped = Array.from(opts).map(function (n) {
+          return { text: (n.textContent || n.innerText || '').trim(), node: n };
+        });
+        var result = _nos.scoreAndPick(wrapped, planned, 30);
+        return result ? result.node : null;
+      }
+      // Fallback
+      var best = null, bestScore = 0;
+      for (var i = 0; i < opts.length; i++) {
+        var text = (opts[i].textContent || opts[i].innerText || '').trim();
+        var sc = k._ngScoreOption(text, planned);
+        if (sc > bestScore) { bestScore = sc; best = opts[i]; }
       }
       return bestScore >= 30 ? best : null;
     };
@@ -1593,32 +1697,18 @@
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
-              function _matchScore(optText) {
-                const ot = optText.toLowerCase().trim();
+              // ng-option-scorer.js is the single source for option text scoring.
+              var _nos = root.CcNgOptionScorer;
+              var _scoreOption = _nos ? _nos.scoreOption : function(ot) {
+                ot = String(ot||'').toLowerCase().trim();
                 if (ot === v) return 100;
                 if (ot.includes(v)) return 80;
                 if (v.includes(ot) && ot.length > 3) return 70;
-                const vToks = v.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
-                const oToks = ot.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
-                const overlap = vToks.filter(t => oToks.some(o => o.includes(t) || t.includes(o))).length;
-                if (overlap >= 2) return 60;
-                if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
-                const eduSynonyms = [
-          ['intermediate','higher secondary','10+2','12th','hsc','senior secondary'],
-          ['matriculation','10th','sslc','secondary','high school','class 10','class x'],
-          ['graduation','graduate','degree','bachelor','ug'],
-          ['post graduation','post graduate','masters','pg','m.a','m.sc','m.com'],
-                ];
-                for (const group of eduSynonyms) {
-          const vIn = group.some(s => v.includes(s));
-          const oIn = group.some(s => ot.includes(s));
-          if (vIn && oIn) return 55;
-                }
                 return 0;
-              }
+              };
               let bestOpt = null, bestScore = 0;
               for (const o of opts) {
-                const score = _matchScore(o.textContent.trim());
+                const score = _scoreOption(o.textContent.trim(), v);
                 if (score > bestScore) { bestScore = score; bestOpt = o; }
               }
               const opt = bestScore >= 50 ? bestOpt : null;
