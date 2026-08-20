@@ -84,11 +84,17 @@
                 // format (DD/MM/YYYY or DD-MM-YYYY). Convert before setting.
                 // parse-date-value.js provides ISO conversion for all date formats.
                 var _parsed2 = (root.CcParseDateValue || {}).parseDateValue ? root.CcParseDateValue.parseDateValue(value) : null;
-                var isoValue = _parsed2 && _parsed2.isoDate ? (el.type === 'month' ? _parsed2.isoMonth : _parsed2.isoDate) : value;
+                // For datetime-local: preserve original if it already has a time component
+                var isoValue;
+                if (el.type === 'datetime-local' && String(value || '').includes('T')) {
+                  isoValue = String(value); // already has datetime — pass through
+                } else if (_parsed2 && _parsed2.isoDate) {
+                  isoValue = (el.type === 'month') ? _parsed2.isoMonth : _parsed2.isoDate;
+                } else {
+                  isoValue = value; // fallback: pass through original
+                }
                 // For datetime-local: if only date provided, append T00:00
                 if (el.type === 'datetime-local' && !isoValue.includes('T')) {
-                  isoValue += 'T00:00';
-                }
                   isoValue += 'T00:00';
                 }
                 // Set via native setter (keystroke doesn't work on date inputs)
