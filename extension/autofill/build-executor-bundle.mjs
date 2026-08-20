@@ -33,6 +33,7 @@ const ORDER = [
   'fill-one.js',
   // solid sequential (real closure) — chunk-*.js are legacy, not injected
   'sequential.js',
+  'capabilities/confirm-field-pattern.js', // confirm field pattern — no deps
   'post-fill-corrections.js',
   'post-fill-confirm.js',
   'post-fill-mirror.js',

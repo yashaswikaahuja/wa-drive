@@ -19,7 +19,10 @@
 
 // ── Mirror Observer: sync derived fields when operator fills primary manually ──
   setTimeout(function() {
-    var confirmPatterns = /^c(?=[a-z])|^confirm|^retype|^re_?type|^re_?enter|^verify/i;
+    // confirm-field-pattern.js is the single source of truth for confirm/retype detection.
+    var _cfp = root.CcConfirmFieldPattern || {};
+    var _isConfirmField = _cfp.isConfirmField || function() { return false; };
+    var _getBaseId      = _cfp.getBaseId     || function(id) { return id; };
     var allInputs = Array.from(document.querySelectorAll('input[type=text],input[type=email],input[type=tel]'));
     allInputs.forEach(function(el) {
       if (!el.id) return;
@@ -30,8 +33,8 @@
       allInputs.forEach(function(other) {
         if (!other.id || other === el) return;
         var oid = other.id.toLowerCase();
-        if (confirmPatterns.test(oid)) {
-          var baseId = oid.replace(/^c(?=[a-z])/,'').replace(/^confirm_?/i,'').replace(/^retype_?/i,'').replace(/^re_?type_?/i,'').replace(/^re_?enter_?/i,'').replace(/^verify_?/i,'');
+        if (_isConfirmField(oid)) {
+          var baseId = _getBaseId(oid);
           if (baseId === id || id.includes(baseId) || baseId.includes(id)) confirmId = other.id;
         }
       });

@@ -20,17 +20,20 @@
 // ── Confirm/Retype propagation pass ─────────────────────────────────────────
   // After primary fills settle, mirror DOM values into confirm/retype fields
   setTimeout(function() {
-    var confirmPatterns = /^c(?=[a-z])|^confirm|^retype|^re_?type|^re_?enter|^verify/i;
+    // confirm-field-pattern.js is the single source of truth for confirm/retype detection.
+    var _cfp = root.CcConfirmFieldPattern || {};
+    var _isConfirmField = _cfp.isConfirmField || function() { return false; };
+    var _getBaseId      = _cfp.getBaseId     || function(id) { return id; };
     var allInputs = Array.from(document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number]'));
     allInputs.forEach(function(el) {
       if (!el.id && !el.name) return;
       var id = (el.id || el.name || '').toLowerCase();
       var label = (function() { if(el.id){var l=document.querySelector('label[for="'+el.id+'"]');if(l)return l.textContent.toLowerCase();} return ''; })();
-      var isConfirm = confirmPatterns.test(id) || /confirm|retype|re.type|re.enter|verify/i.test(label);
+      var isConfirm = _isConfirmField(id, label);
       if (!isConfirm) return;
       if (el.value) return; // already filled, skip
       // Find primary field by stripping confirm prefix from ID
-      var baseId = id.replace(/^c(?=[a-z])/,'').replace(/^confirm_?/i,'').replace(/^retype_?/i,'').replace(/^re_?type_?/i,'').replace(/^re_?enter_?/i,'').replace(/^verify_?/i,'');
+      var baseId = _getBaseId(id);
       var primary = document.getElementById(baseId) || document.querySelector('[id$="'+baseId+'"]') || document.querySelector('[name="'+baseId+'"]');
       // Also try matching by placeholder pattern (both DOB fields have DD/MM)
       if (!primary || !primary.value) {
