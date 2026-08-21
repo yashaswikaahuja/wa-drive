@@ -19,6 +19,7 @@ const ORDER = [
   'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',
   'settle.js',
+  'capabilities/wait-for-options.js',      // select option poller — no deps
   'capabilities/ng-session-manager.js',    // ng session lifecycle — no deps
   'capabilities/ng-option-scorer.js',      // ng option scorer — no deps
   'capabilities/build-fill-record.js',     // fill record assembler — no deps

@@ -38,7 +38,14 @@
     return el;
   }
 
+  // wait-for-options.js is the single source for select option polling.
+  var _wfo = root.CcWaitForOptions || {};
   function waitForOptions(selector, minCount, timeout) {
+    if (_wfo.waitForOptions) {
+      return _wfo.waitForOptions(selector, minCount, timeout,
+        document.querySelector.bind(document), document.body);
+    }
+    // Fallback
     minCount = minCount || 1; timeout = timeout || 8000;
     return new Promise(function(resolve) {
       var deadline = Date.now() + timeout;
