@@ -42,7 +42,7 @@ const ccKnowledgeSync = {
     }
 
     try {
-      const res = await fetch(backendUrl + '/api/sync/bootstrap', {
+      const res = await fetch(backendUrl + '/sync/bootstrap', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -94,7 +94,7 @@ const ccKnowledgeSync = {
     }
 
     try {
-      const res = await fetch(backendUrl + '/api/sync/delta', {
+      const res = await fetch(backendUrl + '/sync/delta', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -149,7 +149,7 @@ const ccKnowledgeSync = {
     if (!cache?.manifest_version) return { fresh: false, recommendation: 'bootstrap' };
 
     try {
-      const res = await fetch(backendUrl + '/api/sync/check', {
+      const res = await fetch(backendUrl + '/sync/check', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
