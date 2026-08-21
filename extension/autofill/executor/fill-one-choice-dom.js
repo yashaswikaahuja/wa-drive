@@ -18,9 +18,11 @@
     } = b;
 
     k.fillOneHandlers = k.fillOneHandlers || [];
+    var _for = root.CcFillOneRadio || {};
     k.fillOneHandlers.push({
       id: 'choice-dom',
       try(el, selector, value, type, elType) {
+        if (_for.fillRadio) return _for.fillRadio(el, selector, value, type, elType, filledBySource);
         if (elType === 'radio') {
                 const normR = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
                 const vR = normR(value);

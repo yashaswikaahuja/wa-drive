@@ -18,9 +18,11 @@
     } = b;
 
     k.fillOneHandlers = k.fillOneHandlers || [];
+    var _for2 = root.CcFillOneRadio || {};
     k.fillOneHandlers.push({
       id: 'radio-planned',
       try(el, selector, value, type, elType) {
+        if (_for2.fillRadio) return _for2.fillRadio(el, selector, value, type, elType, filledBySource);
         if (type === 'radio-click') {
                 const target = (el.type === 'radio') ? el : (el.querySelector && el.querySelector('input[type="radio"]')) || el;
                 target.focus();
