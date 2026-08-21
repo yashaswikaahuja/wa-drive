@@ -12,30 +12,34 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const execDir = path.join(dir, 'executor');
 
 const ORDER = [
+  // ── Pure capability modules (no deps on kernel) ───────────────────────────
+  'capabilities/parse-date-value.js',          // no deps
+  'capabilities/cascade-field-level.js',       // no deps
+  'capabilities/select-option-state.js',       // no deps
+  'capabilities/confirm-field-pattern.js',     // no deps
+  'capabilities/ng-option-scorer.js',          // no deps
+  'capabilities/ng-session-manager.js',        // no deps
+  'capabilities/build-fill-record.js',         // no deps
+  'capabilities/fill-debug-emitter.js',        // no deps
+  'capabilities/wait-for-options.js',          // no deps
+  'capabilities/settle-after-act.js',          // needs waitForNetworkIdle (injected)
+  'capabilities/resolve-cc-selector.js',       // no deps
+  'capabilities/sort-fields-by-dom-order.js',  // needs resolve-cc-selector
+  'capabilities/verify-fill-value.js',         // needs resolve-cc-selector
+  'capabilities/detect-fill-strategy.js',      // no deps
+  'capabilities/post-fill-corrections.js',     // correction observer
+  'capabilities/fill-one-ng.js',               // ng-dropdown fill logic
+  'capabilities/fill-one-select.js',           // native select fill logic
+  'capabilities/fill-one-date.js',             // date fill logic
+  'capabilities/fill-one-radio.js',            // radio/checkbox/file logic
+  'capabilities/fill-one-mat.js',              // mat fill logic
+  'capabilities/fill-one-text.js',             // text fill logic
+
+  // ── Kernel wiring (install- files — depend on capabilities above) ─────────
   'capabilities/install-kernel-bind.js',
   'capabilities/install-debug.js',
-  'capabilities/parse-date-value.js',      // date string parser — no deps
-  'capabilities/cascade-field-level.js',   // cascade geography — no deps, loaded first
-  'capabilities/select-option-state.js',   // select state readers — no deps
   'capabilities/install-select-helpers.js',
   'capabilities/install-settle.js',
-  'capabilities/post-fill-corrections.js', // correction observer — browser only
-  'capabilities/fill-one-ng.js',           // ng-dropdown fill handler — browser only
-  'capabilities/fill-one-select.js',       // native select fill handler — browser only
-  'capabilities/fill-one-date.js',         // date fill handler — browser only
-  'capabilities/fill-one-radio.js',        // radio/checkbox/file handler — browser only
-  'capabilities/fill-one-mat.js',          // mat fill handler — browser only
-  'capabilities/fill-one-text.js',         // text fill handler — browser only
-  'capabilities/settle-after-act.js',      // post-action settle engine — no DOM
-  'capabilities/wait-for-options.js',      // select option poller — no deps
-  'capabilities/ng-session-manager.js',    // ng session lifecycle — no deps
-  'capabilities/ng-option-scorer.js',      // ng option scorer — no deps
-  'capabilities/build-fill-record.js',     // fill record assembler — no deps
-  'capabilities/fill-debug-emitter.js',    // debug event queue — no deps
-  'capabilities/verify-fill-value.js',     // fill value verifier — needs resolveEl
-  'capabilities/detect-fill-strategy.js',  // strategy detection — no deps
-  'capabilities/resolve-cc-selector.js',   // selector resolution — no deps
-  'capabilities/sort-fields-by-dom-order.js', // DOM order sort — depends on resolver only
   'capabilities/install-dom-order.js',
   'capabilities/install-strategy.js',
   'capabilities/install-fill-one-ng-helpers.js',
@@ -47,9 +51,7 @@ const ORDER = [
   'capabilities/install-fill-one-date.js',
   'capabilities/install-fill-one-text.js',
   'capabilities/install-fill-one.js',
-  // solid sequential (real closure) — chunk-*.js are legacy, not injected
   'capabilities/install-sequential.js',
-  'capabilities/confirm-field-pattern.js', // confirm field pattern — no deps
   'capabilities/install-post-fill-corrections.js',
   'capabilities/install-post-fill-confirm.js',
   'capabilities/install-post-fill-mirror.js',

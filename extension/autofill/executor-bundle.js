@@ -4,202 +4,6 @@
  * Rebuild: node extension/autofill/build-executor-bundle.mjs
  */
 
-/* ==== capabilities/install-kernel-bind.js ==== */
-/**
- * Shared kernel locals for executor task modules.
- * Avoids repeating 35-line alias blocks in every file (keeps parts ≤200 lines).
- */
-(function (root) {
-  'use strict';
-  root.CcExecParts = root.CcExecParts || {};
-
-  /**
-   * @param {object} k — fill kernel
-   * @returns {object} local aliases matching the old closure names
-   */
-  root.CcExecParts.bindKernelLocals = function bindKernelLocals(k) {
-    return {
-      portalAdapters: k.portalAdapters,
-      filledBySource: k.filledBySource,
-      mapping: k.mapping,
-      allFields: k.allFields,
-      _replayResults: k.replayResults,
-      _ccRecords: k.records,
-      RUNTIME_VERSION: k.RUNTIME_VERSION,
-      STRATEGY_VERSION: k.STRATEGY_VERSION,
-      WAIT_ENGINE_VERSION: k.WAIT_ENGINE_VERSION,
-      _CC_USE_PLUGINS: k.CC_USE_PLUGINS,
-      _CC_LEGACY_COMPARE: k.CC_LEGACY_COMPARE,
-      PRIORITY_KEYS: k.PRIORITY_KEYS,
-      entries: k.entries,
-      getEl: function () { return k.getEl.apply(k, arguments); },
-      _emitFillDebug: function () { return k.emitFillDebug.apply(k, arguments); },
-      _flushRecords: function () { return k.flushRecords(); },
-      _pushSelectRecord: function () { return k.pushSelectRecord.apply(k, arguments); },
-      settleAfterAct: function () {
-        if (typeof k.settleAfterAct !== 'function') {
-          return Promise.resolve({ idle: true, waitedMs: 0, kind: 'text' });
-        }
-        return k.settleAfterAct.apply(k, arguments);
-      },
-      waitForSelectOptionsSequential: function () {
-        if (typeof k.waitForSelectOptionsSequential !== 'function') {
-          return Promise.resolve(null);
-        }
-        return k.waitForSelectOptionsSequential.apply(k, arguments);
-      },
-      waitForOptions: function () {
-        if (typeof k.waitForOptions !== 'function') return Promise.resolve(null);
-        return k.waitForOptions.apply(k, arguments);
-      },
-      waitForDOMQuiet: function (ms) {
-        if (typeof k.waitForDOMQuiet === 'function') {
-          return k.waitForDOMQuiet.apply(k, arguments);
-        }
-        // Fallback — must never throw "waitForDOMQuiet is not defined"
-        return new Promise(function (r) { setTimeout(r, ms || 300); });
-      },
-      waitForNetworkIdle: function (q, m) {
-        if (typeof k.waitForNetworkIdle === 'function') {
-          return k.waitForNetworkIdle.apply(k, arguments);
-        }
-        if (typeof window !== 'undefined' && window.ccWaitForNetworkIdle) {
-          return window.ccWaitForNetworkIdle(q || 200, m || 8000);
-        }
-        return Promise.resolve({ idle: true, waitedMs: 0 });
-      },
-      detectStrategy: function () {
-        if (typeof k.detectStrategy !== 'function') return 'unknown';
-        return k.detectStrategy.apply(k, arguments);
-      },
-      verifyValue: function () {
-        if (typeof k.verifyValue !== 'function') {
-          return Promise.resolve({ ok: false, actualValue: '', reason: 'no-verify' });
-        }
-        return k.verifyValue.apply(k, arguments);
-      },
-      _isPlaceholderOption: function () {
-        return typeof k.isPlaceholderOption === 'function'
-          ? k.isPlaceholderOption.apply(k, arguments)
-          : false;
-      },
-      _realOptions: function () {
-        return typeof k.realOptions === 'function' ? k.realOptions.apply(k, arguments) : [];
-      },
-      _sampleOptions: function () {
-        return typeof k.sampleOptions === 'function' ? k.sampleOptions.apply(k, arguments) : [];
-      },
-      _readSelectActual: function () {
-        return typeof k.readSelectActual === 'function'
-          ? k.readSelectActual.apply(k, arguments)
-          : { actualValue: null, actualOptionValue: null };
-      },
-      _selectLoadMode: function () {
-        return typeof k.selectLoadMode === 'function' ? k.selectLoadMode.apply(k, arguments) : 'unknown';
-      },
-      _cascadeSemanticKey: function () {
-        return typeof k.cascadeSemanticKey === 'function'
-          ? k.cascadeSemanticKey.apply(k, arguments)
-          : '';
-      },
-      _CASCADE_PARENTS: k.CASCADE_PARENTS,
-      _cascadeSettled: k.cascadeSettled,
-      _isPlaceholderPlanned: function () {
-        return typeof k.isPlaceholderPlanned === 'function'
-          ? k.isPlaceholderPlanned.apply(k, arguments)
-          : false;
-      },
-      _selectIsActive: function () {
-        return typeof k.selectIsActive === 'function' ? k.selectIsActive.apply(k, arguments) : true;
-      },
-      fillOne: function () {
-        if (typeof k.fillOne !== 'function') return 0;
-        return k.fillOne.apply(k, arguments);
-      },
-      k: k,
-    };
-  };
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/install-debug.js ==== */
-/**
- * Live fill_debug emit (port + batch queue)
- * Part of sequential kernel — load before autofill/executor.js
- *
- * fill-debug-emitter.js owns the pure event queue + batch logic.
- * This file owns the Chrome transport and wires it to the kernel.
- */
-(function (root) {
-  'use strict';
-  root.CcExecParts = root.CcExecParts || {};
-  root.CcExecParts.installDebug = function (k) {
-    k._debugPort = null;
-    k._debugQueue = [];
-    k._debugFlushTimer = null;
-
-  // ── fill-debug-emitter.js is the single source for queue + event assembly ──
-  // Must be loaded before debug.js (see build-executor-bundle.mjs ORDER).
-  var _fde = root.CcFillDebugEmitter || {};
-
-  function ensureDebugPort() {
-    if (k._debugPort) return k._debugPort;
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.connect) return null;
-      k._debugPort = chrome.runtime.connect({ name: 'cc_fill_debug' });
-      k._debugPort.onDisconnect.addListener(function () {
-        k._debugPort = null;
-      });
-    } catch (e) {
-      k._debugPort = null;
-    }
-    return k._debugPort;
-  }
-
-  function chromeSend(batch) {
-    try {
-      var port = ensureDebugPort();
-      if (port) {
-        port.postMessage({ type: 'FILL_DEBUG_BATCH', events: batch });
-        return;
-      }
-    } catch (e) {
-      k._debugPort = null;
-    }
-    // Fallback: one-by-one sendMessage (best-effort)
-    for (var i = 0; i < batch.length; i++) {
-      try {
-        chrome.runtime.sendMessage(Object.assign({ type: 'FILL_DEBUG' }, batch[i]), function () {
-          void chrome.runtime.lastError;
-        });
-      } catch (e2) { /* ignore */ }
-    }
-  }
-
-  var _emitter;
-  if (_fde.createEmitter) {
-    _emitter = _fde.createEmitter({
-      getRunId:    function () { return k.fillRunId || ''; },
-      getRv:       function () { return k.RUNTIME_VERSION || ''; },
-      send:        chromeSend,
-    });
-  }
-
-  function emitFillDebug(event, payload) {
-    if (_emitter) { _emitter.emit(event, payload); return; }
-    // Safe fallback if emitter not loaded
-    console.warn('[CC] fill-debug-emitter not loaded, event dropped:', event);
-  }
-
-  function flushDebugQueue() {
-    if (_emitter) _emitter.flush();
-  }
-
-    k.emitFillDebug = emitFillDebug;
-    k.flushDebugQueue = flushDebugQueue;
-
-  };
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
 /* ==== capabilities/parse-date-value.js ==== */
 /**
  * parse-date-value — Profile Date String Parser
@@ -529,151 +333,485 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-select-helpers.js ==== */
+/* ==== capabilities/confirm-field-pattern.js ==== */
 /**
- * Select/cascade helpers + pushSelectRecord
- * Part of sequential kernel — load before autofill/executor.js
+ * confirm-field-pattern — Confirm/Retype Field Identifier
  *
- * select-option-state.js is the single source of truth for the 7 pure select
- * state functions. This file re-exposes them on the kernel (k) for existing
- * consumers that access them via bindKernelLocals(k).
+ * Identifies whether an input field is a confirm/retype field, and derives
+ * the base field ID that it confirms.
+ *
+ * Used by post-fill-confirm.js (static propagation) and post-fill-mirror.js
+ * (live mirror). Previously duplicated identically in both files.
+ *
+ * No DOM, no kernel, no Chrome APIs. Pure string/pattern matching.
+ *
+ * Public API (on globalThis.CcConfirmFieldPattern):
+ *   isConfirmField(id, label?) => boolean
+ *   getBaseId(id) => string
+ *
+ * See confirm-field-pattern.md for full documentation.
  */
 (function (root) {
   'use strict';
-  root.CcExecParts = root.CcExecParts || {};
-  root.CcExecParts.installSelectHelpers = function (k) {
 
-  // ── Delegate to capabilities/select-option-state.js ──────────────────────
-  // Must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
-  var _sos = root.CcSelectOptionState || {};
-  var isPlaceholderOption  = _sos.isPlaceholderOption  || function () { return true; };
-  var realOptions          = _sos.realOptions          || function () { return []; };
-  var sampleOptions        = _sos.sampleOptions        || function () { return []; };
-  var readSelectActual     = _sos.readSelectActual     || function () { return { actualValue: null, actualOptionValue: null }; };
-  var selectLoadMode       = _sos.selectLoadMode       || function () { return 'unknown'; };
-  var selectIsActive       = _sos.selectIsActive       || function () { return false; };
-  var isPlaceholderPlanned = _sos.isPlaceholderPlanned || function () { return true; };
-  // ── build-fill-record.js is the single source for record stamping ─────────
-  var _bfr = root.CcBuildFillRecord || {};
-  var _buildFillRecord = _bfr.buildFillRecord || function (base) { return Object.assign({ ts: Date.now(), rv: k.RUNTIME_VERSION, fillMode: 'sequential' }, base); };
+  /**
+   * Matches confirm/retype field ID prefixes (case-insensitive):
+   *   c{letter}  — e.g. cPassword, cEmail
+   *   confirm    — e.g. confirmPassword, confirm_email
+   *   retype     — e.g. retypePassword
+   *   re_type    — e.g. re_type_password
+   *   re_enter   — e.g. re_enter_mobile
+   *   verify     — e.g. verifyEmail
+   */
+  var CONFIRM_PREFIX_PATTERN = /^c(?=[a-z])|^confirm|^retype|^re_?type|^re_?enter|^verify/i;
 
-  // cascade-field-level.js is the single source of truth for cascade geography.
-  // It must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
-  var _cascadeGeo = root.CcCascadeFieldLevel;
-  function cascadeSemanticKey(label, profileKey, selector) {
-    return _cascadeGeo
-      ? _cascadeGeo.cascadeFieldLevel(label, profileKey, selector)
-      : ''; // safe fallback if loaded out of order
+  /**
+   * Matches confirm/retype keywords in label text (case-insensitive).
+   */
+  var CONFIRM_LABEL_PATTERN = /confirm|retype|re.type|re.enter|verify/i;
+
+  /**
+   * Returns true if the field appears to be a confirm/retype field.
+   *
+   * @param {string} id     The element's id or name attribute
+   * @param {string} [label]  Optional label text
+   * @returns {boolean}
+   */
+  function isConfirmField(id, label) {
+    var idStr = String(id || '').toLowerCase();
+    if (!idStr) return false;
+    if (CONFIRM_PREFIX_PATTERN.test(idStr)) return true;
+    if (label && CONFIRM_LABEL_PATTERN.test(String(label))) return true;
+    return false;
   }
-  /** Parent keys that must be settled before this cascade key. */
-  k.CASCADE_PARENTS = _cascadeGeo ? _cascadeGeo.CASCADE_PARENTS : {};
-  // ── Cascade geography (delegated to capabilities/cascade-field-level.js) ─
 
-  function pushSelectRecord(base) {
-    const rec = _buildFillRecord(base, { rv: k.RUNTIME_VERSION });
-    k.records.push(rec);
-    k.flushRecords();
-    const result = String(rec.result || '');
-    if (result === 'filled' || result === 'succeeded') {
-      k.emitFillDebug('field.done', {
-        selector: rec.selector,
-        label: rec.label,
-        type: rec.type,
-        planned: rec.value,
-        actual: rec.actualValue,
-        strategy: rec.strategy,
-      });
-    } else if (result === 'skipped' || result === 'failed' || result === 'error' || result === 'waiting_human') {
-      k.emitFillDebug(result === 'waiting_human' ? 'field.wait' : 'field.fail', {
-        selector: rec.selector,
-        label: rec.label,
-        type: rec.type,
-        planned: rec.value,
-        actual: rec.actualValue,
-        failReason: rec.failReason || rec.error || result,
-        strategy: rec.strategy,
-      });
-    }
-    return rec;
+  /**
+   * Derives the base field ID by stripping the confirm prefix.
+   * Returns the original string if no prefix matched.
+   *
+   * NOTE — legacy behavior: the ^c(?=[a-z]) rule fires first. This means
+   * 'confirmPassword' → 'onfirmPassword' (the 'c' followed by lowercase 'o'
+   * is stripped, not the full 'confirm'). This is the original behavior and
+   * is preserved exactly. Use IDs like 'cPassword' (with uppercase base) if
+   * you want the c-prefix stripping to work as intended.
+   *
+   * @param {string} id
+   * @returns {string}
+   */
+  function getBaseId(id) {
+    return String(id || '')
+      .replace(/^c(?=[a-z])/, '')
+      .replace(/^confirm_?/i, '')
+      .replace(/^retype_?/i, '')
+      .replace(/^re_?type_?/i, '')
+      .replace(/^re_?enter_?/i, '')
+      .replace(/^verify_?/i, '');
   }
-    k.buildFillRecord = _buildFillRecord;
-    k.isPlaceholderOption = isPlaceholderOption;
-    k.realOptions = realOptions;
-    k.sampleOptions = sampleOptions;
-    k.readSelectActual = readSelectActual;
-    k.selectLoadMode = selectLoadMode;
-    k.cascadeSemanticKey = cascadeSemanticKey;
-    k.isPlaceholderPlanned = isPlaceholderPlanned;
-    k.selectIsActive = selectIsActive;
-    k.pushSelectRecord = pushSelectRecord;
 
+  root.CcConfirmFieldPattern = {
+    isConfirmField: isConfirmField,
+    getBaseId: getBaseId,
+    CONFIRM_PREFIX_PATTERN: CONFIRM_PREFIX_PATTERN,
+    CONFIRM_LABEL_PATTERN: CONFIRM_LABEL_PATTERN,
   };
+
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-settle.js ==== */
+/* ==== capabilities/ng-option-scorer.js ==== */
 /**
- * settleAfterAct + WaitEngine
- * Part of sequential kernel — load before autofill/executor.js
+ * ng-option-scorer — Angular Dropdown Option Scorer
+ *
+ * Scores a dropdown option's text against a planned fill value to determine
+ * how well they match. Returns a numeric score (0–100); higher is better.
+ * Used when selecting the best option from an ng-dropdown / ng-select list.
+ *
+ * Also provides scoreAndPick(opts, planned) for picking the best option
+ * from a list of {text, node} entries.
+ *
+ * Pure JS — no DOM, no Chrome, no kernel. Deterministic.
+ *
+ * Public API (on globalThis.CcNgOptionScorer):
+ *   scoreOption(optText, planned) => number    (0–100)
+ *   scoreAndPick(opts, planned, minScore?) => opt | null
+ *
+ * See ng-option-scorer.md for full documentation.
  */
 (function (root) {
   'use strict';
-  root.CcExecParts = root.CcExecParts || {};
-  root.CcExecParts.installSettle = function (k) {
-  // settle-after-act.js is the single source for post-action settle logic.
-  var _saa = root.CcSettleAfterAct;
-  var _settleEngine = _saa ? _saa.createSettleEngine({
-    waitForNetworkIdle: waitForNetworkIdle,
-    waitForOptions: waitForOptions,
-    getBudget: function() { return k.ajaxWaitBudgetMs; },
-    setBudget: function(n) { k.ajaxWaitBudgetMs = n; },
-  }) : null;
 
-  async function settleAfterAct(kind, opts) {
-    if (_settleEngine) return _settleEngine.settleAfterAct(kind, opts);
-    // Fallback (CcSettleAfterAct not loaded)
+  /**
+   * Score how well `optText` matches `planned`.
+   *
+   * Scoring cascade (higher = better match):
+   *   100 — exact match (case-insensitive)
+   *    80 — one string contains the other
+   *    70 — reverse-contains (optText in planned) with >3 chars
+   *    60 — token overlap ≥2
+   *    55 — education-level synonym match
+   *    50 — single-token overlap when either string is short (≤2 tokens)
+   *     0 — no match
+   *
+   * @param {string} optText  — option label text
+   * @param {string} planned  — planned fill value
+   * @returns {number} 0–100
+   */
+  function scoreOption(optText, planned) {
+    var ot = String(optText || '').toLowerCase().trim();
+    var v  = String(planned  || '').toLowerCase().trim();
+    if (!ot || !v) return 0;
+    if (ot === v) return 100;
+    if (ot.includes(v)) return 80;
+    if (v.includes(ot) && ot.length > 3) return 70;
+    // Token overlap: split on common separators, require tokens > 2 chars
+    var vToks = v.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
+    var oToks = ot.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
+    var overlap = vToks.filter(function (t) {
+      return oToks.some(function (o) { return o.includes(t) || t.includes(o); });
+    }).length;
+    if (overlap >= 2) return 60;
+    if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
+    // Education-level synonyms (common Indian government form variants)
+    var EDU_SYNONYMS = [
+      ['intermediate', 'higher secondary', '10+2', '12th', 'hsc', 'senior secondary'],
+      ['matriculation', '10th', 'sslc', 'secondary', 'high school', 'class 10', 'class x'],
+      ['graduation', 'graduate', 'degree', 'bachelor', 'ug'],
+      ['post graduation', 'post graduate', 'masters', 'master', 'pg', 'm.a', 'm.sc', 'm.com'],
+    ];
+    for (var i = 0; i < EDU_SYNONYMS.length; i++) {
+      var group = EDU_SYNONYMS[i];
+      var vIn = group.some(function (s) { return v.includes(s); });
+      var oIn = group.some(function (s) { return ot.includes(s); });
+      if (vIn && oIn) return 55;
+    }
+    return 0;
+  }
+
+  /**
+   * Pick the best option from a list.
+   *
+   * @param {Array<{text: string, node: *}>} opts  — list of candidates
+   * @param {string} planned                        — planned fill value
+   * @param {number} [minScore=50]                  — minimum score to accept
+   * @returns {{text, node, score} | null}
+   */
+  function scoreAndPick(opts, planned, minScore) {
+    minScore = (typeof minScore === 'number') ? minScore : 50;
+    var best = null;
+    var bestScore = 0;
+    for (var i = 0; i < opts.length; i++) {
+      var score = scoreOption(opts[i].text, planned);
+      if (score > bestScore) {
+        bestScore = score;
+        best = opts[i];
+      }
+    }
+    if (bestScore >= minScore) {
+      return Object.assign({ score: bestScore }, best);
+    }
+    return null;
+  }
+
+  root.CcNgOptionScorer = {
+    scoreOption: scoreOption,
+    scoreAndPick: scoreAndPick,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/ng-session-manager.js ==== */
+/**
+ * ng-session-manager — ng-dropdown Replay Session Manager
+ *
+ * Manages the lifecycle of ng-dropdown fill sessions stored in a Map.
+ * Each session tracks poll timers, timeout IDs, and a MutationObserver
+ * that must all be cleaned up when a session is cancelled or superseded.
+ *
+ * The session store is injected so this capability is testable without
+ * a real browser window.
+ *
+ * Public API (on globalThis.CcNgSessionManager):
+ *   cancelSession(label, sessions)  — cancel + cleanup a named session
+ *   createSession(label, sessions)  — register a new blank session
+ *   cleanupSession(session, sessions, label)  — cleanup without deleting from store
+ *
+ * sessions: Map<string, NgSession>   — injected store (window._ccReplaySessions in production)
+ *
+ * NgSession shape:
+ *   { id, fieldKey, resolved, cancelled, pollTimer, timeoutIds, observer, startedAt, _result? }
+ *
+ * See ng-session-manager.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Cancel an active session by label.
+   * Clears poll timer, all timeout IDs, disconnects MutationObserver,
+   * and removes the session from the store.
+   *
+   * No-op if sessions is null/undefined or label not present.
+   *
+   * @param {string} label       — field key / session label
+   * @param {Map}    sessions    — session store (window._ccReplaySessions)
+   */
+  function cancelSession(label, sessions) {
+    if (!sessions || !sessions.has(label)) return;
+    var old = sessions.get(label);
+    old.cancelled = true;
+    try { clearInterval(old.pollTimer); } catch (e) {}
+    (old.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch (e) {} });
+    if (old.observer) { try { old.observer.disconnect(); } catch (e) {} old.observer = null; }
+    sessions.delete(label);
+  }
+
+  /**
+   * Create and register a new blank session.
+   *
+   * @param {string} label    — field key / session label
+   * @param {Map}    sessions — session store
+   * @returns {NgSession}
+   */
+  function createSession(label, sessions) {
+    var session = {
+      id: Math.random().toString(36).slice(2, 8),
+      fieldKey: label,
+      resolved: false,
+      cancelled: false,
+      pollTimer: null,
+      timeoutIds: [],
+      observer: null,
+      startedAt: Date.now(),
+    };
+    sessions.set(label, session);
+    return session;
+  }
+
+  /**
+   * Clean up a session's resources without deleting it from the store.
+   * Used by the session itself when it resolves normally.
+   *
+   * @param {NgSession} session
+   * @param {Map}       sessions
+   * @param {string}    label
+   */
+  function cleanupSession(session, sessions, label) {
+    try { clearInterval(session.pollTimer); } catch (e) {}
+    (session.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch (e) {} });
+    if (session.observer) { try { session.observer.disconnect(); } catch (e) {} session.observer = null; }
+    if (sessions && label !== undefined) sessions.delete(label);
+  }
+
+  root.CcNgSessionManager = {
+    cancelSession: cancelSession,
+    createSession: createSession,
+    cleanupSession: cleanupSession,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/build-fill-record.js ==== */
+/**
+ * build-fill-record — Fill Record Assembler
+ *
+ * Pure function that stamps a base field-result object with the three
+ * common envelope fields that every CcRecord must carry:
+ *   ts        — Date.now() at record creation time
+ *   rv        — RUNTIME_VERSION string
+ *   fillMode  — always 'sequential' for the sequential fill loop
+ *
+ * This pattern was previously repeated inline at every _ccRecords.push(...)
+ * call site. This is the single canonical implementation.
+ *
+ * Pure JS — no DOM, no Chrome, no kernel. Deterministic (ts injected via opts.now).
+ *
+ * Public API (on globalThis.CcBuildFillRecord):
+ *   buildFillRecord(base, opts?) => CcRecord
+ *
+ * opts: { rv?, fillMode?, now? }  — all optional, primarily used for testing
+ *
+ * See build-fill-record.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Stamp a base object with envelope fields.
+   *
+   * @param {object} base     — caller-provided fields (selector, value, type, result, …)
+   * @param {object} [opts]
+   * @param {string} [opts.rv]       — RUNTIME_VERSION (default: '')
+   * @param {string} [opts.fillMode] — fill mode label (default: 'sequential')
+   * @param {function(): number} [opts.now] — timestamp fn (default: Date.now)
+   * @returns {object} stamped record
+   */
+  function buildFillRecord(base, opts) {
     opts = opts || {};
-    const budget = typeof opts.budgetMs === 'number' ? opts.budgetMs : k.ajaxWaitBudgetMs;
-    if (kind === 'text') {
-      await new Promise((r) => setTimeout(r, 100));
-      return { idle: true, waitedMs: 100, kind: 'text' };
-    }
-    const kick = kind === 'button' ? 300 : 200;
-    await new Promise((r) => setTimeout(r, kick));
-    let maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
-    maxNet = Math.min(maxNet, Math.max(300, budget > 0 ? budget : 400));
-    const quiet = kind === 'select' ? 150 : 120;
-    const t0 = Date.now();
-    const net = await waitForNetworkIdle(quiet, maxNet);
-    const used = Date.now() - t0;
-    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - used);
-    return Object.assign({ kind: kind }, net);
+    var rv       = (opts.rv !== undefined)       ? opts.rv       : '';
+    var fillMode = (opts.fillMode !== undefined) ? opts.fillMode : 'sequential';
+    var now      = (typeof opts.now === 'function') ? opts.now : Date.now;
+    return Object.assign(
+      { ts: now(), rv: rv, fillMode: fillMode },
+      base
+    );
   }
 
-  async function waitForSelectOptionsSequential(selector, maxMs) {
-    if (_settleEngine) return _settleEngine.waitForSelectOptionsSequential(selector, maxMs);
-    // Fallback
-    maxMs = Math.min(maxMs || 6000, Math.max(400, k.ajaxWaitBudgetMs || 400));
-    const t0 = Date.now();
-    await settleAfterAct('choice', { budgetMs: Math.min(2000, maxMs) });
-    const left = Math.max(300, maxMs - (Date.now() - t0));
-    const el = await waitForOptions(selector, 1, left);
-    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - (Date.now() - t0));
-    return el;
+  root.CcBuildFillRecord = {
+    buildFillRecord: buildFillRecord,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/fill-debug-emitter.js ==== */
+/**
+ * fill-debug-emitter — Debug Event Queue + Emitter
+ *
+ * Assembles fill debug events, batches them in a queue, and flushes them
+ * to an injected sender (Chrome port or sendMessage). The sender is injected
+ * so this capability is fully testable without a browser.
+ *
+ * Events are coalesced with a 40ms timer. High-priority events
+ * (fill.start, fill.end, queue >= 6) flush immediately.
+ *
+ * Public API (on globalThis.CcFillDebugEmitter):
+ *   createEmitter(opts) => emitter
+ *
+ * emitter:
+ *   emit(event, payload)   — enqueue and possibly flush
+ *   flush()                — flush immediately
+ *   queue                  — read-only access to pending queue (for tests)
+ *
+ * See fill-debug-emitter.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Create a fill debug emitter.
+   *
+   * @param {object} opts
+   * @param {function(): string} opts.getRunId       — returns current fillRunId
+   * @param {function(): string} opts.getRv           — returns RUNTIME_VERSION
+   * @param {function(): string} [opts.getHostname]  — returns hostname (default: location.hostname)
+   * @param {function(Array): void} opts.send         — batch sender (receives array of event objects)
+   * @returns {{ emit, flush, queue }}
+   */
+  function createEmitter(opts) {
+    opts = opts || {};
+    var getRunId   = opts.getRunId   || function () { return ''; };
+    var getRv      = opts.getRv      || function () { return ''; };
+    var getHostname = opts.getHostname || function () {
+      return (typeof location !== 'undefined') ? location.hostname : '';
+    };
+    var send = opts.send || function () {};
+
+    var _queue = [];
+    var _timer = null;
+
+    function _flush() {
+      if (!_queue.length) return;
+      var batch = _queue.splice(0, 40);
+      send(batch);
+      if (_queue.length) _schedule();
+    }
+
+    function _schedule() {
+      if (_timer) return;
+      _timer = setTimeout(function () {
+        _timer = null;
+        _flush();
+      }, 40);
+    }
+
+    function emit(event, payload) {
+      var evt = Object.assign(
+        {
+          event: event,
+          fillRunId: getRunId(),
+          hostname: getHostname(),
+          ts: Date.now(),
+          rv: getRv(),
+        },
+        payload || {}
+      );
+      // Rename widget type so it doesn't clash with message envelope type
+      if (evt.type && evt.type !== 'FILL_DEBUG') {
+        evt.fieldType = evt.type;
+        delete evt.type;
+      }
+      _queue.push(evt);
+      // fill.start / fill.end + large batches flush immediately
+      var immediate = event === 'fill.start' || event === 'fill.end' || _queue.length >= 6;
+      if (immediate) {
+        if (_timer) { clearTimeout(_timer); _timer = null; }
+        _flush();
+      } else {
+        _schedule();
+      }
+    }
+
+    function flush() {
+      if (_timer) { clearTimeout(_timer); _timer = null; }
+      _flush();
+    }
+
+    return {
+      emit: emit,
+      flush: flush,
+      get queue() { return _queue; },
+    };
   }
 
-  // wait-for-options.js is the single source for select option polling.
-  var _wfo = root.CcWaitForOptions || {};
-  function waitForOptions(selector, minCount, timeout) {
-    if (_wfo.waitForOptions) {
-      return _wfo.waitForOptions(selector, minCount, timeout,
-        document.querySelector.bind(document), document.body);
-    }
-    // Fallback
-    minCount = minCount || 1; timeout = timeout || 8000;
-    return new Promise(function(resolve) {
+  root.CcFillDebugEmitter = {
+    createEmitter: createEmitter,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/wait-for-options.js ==== */
+/**
+ * wait-for-options — Select Options DOM Poller
+ *
+ * Waits for a <select> element to have at least minCount real (non-placeholder)
+ * options by combining a MutationObserver on document.body with a 200ms poll
+ * interval. Resolves with the element on success, null on timeout.
+ *
+ * "Real" options: value is non-empty, not '0', not '-1'.
+ *
+ * The querySelector function is injected so this capability is testable
+ * without a real browser document.
+ *
+ * Public API (on globalThis.CcWaitForOptions):
+ *   waitForOptions(selector, minCount, timeout, querySelector?, observeTarget?) => Promise<Element|null>
+ *
+ * querySelector  — defaults to document.querySelector
+ * observeTarget  — defaults to document.body (the node to observe for mutations)
+ *
+ * See wait-for-options.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Wait for a <select> to have real options.
+   *
+   * @param {string}   selector       — CSS selector for the <select>
+   * @param {number}   [minCount=1]   — minimum number of real options required
+   * @param {number}   [timeout=8000] — max wait in ms
+   * @param {function} [qs]           — querySelector function (injected for tests)
+   * @param {Element}  [observeTarget] — MutationObserver target (injected for tests)
+   * @returns {Promise<Element|null>}
+   */
+  function waitForOptions(selector, minCount, timeout, qs, observeTarget) {
+    minCount = minCount || 1;
+    timeout  = timeout  || 8000;
+    qs = qs || (typeof document !== 'undefined' ? document.querySelector.bind(document) : function () { return null; });
+    observeTarget = observeTarget || (typeof document !== 'undefined' ? document.body : null);
+
+    return new Promise(function (resolve) {
       var deadline = Date.now() + timeout;
       var resolved = false;
       var poll, mo;
+
       function cleanup(val) {
         if (resolved) return;
         resolved = true;
@@ -681,53 +819,579 @@
         if (mo) mo.disconnect();
         resolve(val);
       }
+
+      function isRealOption(o) {
+        return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
+      }
+
       function check() {
         if (resolved) return;
-        var el = document.querySelector(selector);
-        var real = Array.from(el ? el.options || [] : []).filter(function(o) {
-          return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
-        });
+        var el = qs(selector);
+        var real = Array.from(el ? el.options || [] : []).filter(isRealOption);
         if (real.length >= minCount) { cleanup(el); return; }
         if (Date.now() > deadline) { cleanup(null); return; }
       }
-      mo = new MutationObserver(check);
-      mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class'] });
+
+      if (observeTarget) {
+        mo = new MutationObserver(check);
+        mo.observe(observeTarget, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ['disabled', 'class'],
+        });
+      }
+
       check();
-      poll = setInterval(function() {
+
+      poll = setInterval(function () {
         if (Date.now() > deadline) cleanup(null);
         else check();
       }, 200);
     });
   }
 
-  function waitForDOMQuiet(ms) {
-    ms = ms || 300;
-    return new Promise(function(resolve) {
-      var last = Date.now();
-      var mo = new MutationObserver(function() { last = Date.now(); });
-      mo.observe(document.body, { childList: true, subtree: true });
-      var check = setInterval(function() {
-        if (Date.now() - last >= ms) { clearInterval(check); mo.disconnect(); resolve(); }
-      }, 50);
-      setTimeout(function() { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
-    });
-  }
-
-  function waitForNetworkIdle(quietMs, maxMs) {
-    if (typeof window !== 'undefined' && typeof window.ccWaitForNetworkIdle === 'function') {
-      return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
-    }
-    // Safe fallback if ccWaitForNetworkIdle not loaded
-    return new Promise(function(r) { setTimeout(r, quietMs || 200, { idle: true, waitedMs: quietMs || 200 }); });
-  }
-
-    k.settleAfterAct = settleAfterAct;
-    k.waitForSelectOptionsSequential = waitForSelectOptionsSequential;
-    k.waitForOptions = waitForOptions;
-    k.waitForDOMQuiet = waitForDOMQuiet;
-    k.waitForNetworkIdle = waitForNetworkIdle;
-
+  root.CcWaitForOptions = {
+    waitForOptions: waitForOptions,
   };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/settle-after-act.js ==== */
+/**
+ * settle-after-act — Post-Action Settle Engine
+ *
+ * After a fill action (text input, select change, button click), waits for
+ * the page to reach a quiet network state before proceeding. Manages an
+ * ajax wait budget so long-running pages don't wait forever.
+ *
+ * Also provides waitForSelectOptionsSequential: waits for a dependent
+ * cascade select to load options after a preceding field is filled.
+ *
+ * Both network-idle and option-polling are injected for testability.
+ *
+ * Public API (on globalThis.CcSettleAfterAct):
+ *   createSettleEngine(opts) => { settleAfterAct, waitForSelectOptionsSequential }
+ *
+ * opts:
+ *   waitForNetworkIdle(quietMs, maxMs) => Promise<{idle, waitedMs}>
+ *   waitForOptions(selector, minCount, timeout) => Promise<Element|null>
+ *   getBudget() => number        — read current ajaxWaitBudgetMs
+ *   setBudget(n)                 — write current ajaxWaitBudgetMs
+ *
+ * See settle-after-act.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * @param {object} opts
+   * @param {function} opts.waitForNetworkIdle
+   * @param {function} opts.waitForOptions
+   * @param {function} opts.getBudget
+   * @param {function} opts.setBudget
+   */
+  function createSettleEngine(opts) {
+    opts = opts || {};
+    var waitForNetworkIdle = opts.waitForNetworkIdle || function (q, m) {
+      return Promise.resolve({ idle: true, waitedMs: 0 });
+    };
+    var waitForOptions = opts.waitForOptions || function () {
+      return Promise.resolve(null);
+    };
+    var getBudget = opts.getBudget || function () { return 0; };
+    var setBudget = opts.setBudget || function () {};
+
+    async function settleAfterAct(kind, actOpts) {
+      actOpts = actOpts || {};
+      var budget = typeof actOpts.budgetMs === 'number' ? actOpts.budgetMs : getBudget();
+
+      // Text inputs: flat 100ms wait, no network polling needed
+      if (kind === 'text') {
+        await new Promise(function (r) { setTimeout(r, 100); });
+        return { idle: true, waitedMs: 100, kind: 'text' };
+      }
+
+      // Let DWR/XHR kick off after change/click before network polling starts
+      var kick = kind === 'button' ? 300 : 200;
+      await new Promise(function (r) { setTimeout(r, kick); });
+
+      var maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
+      maxNet = Math.min(maxNet, Math.max(300, budget > 0 ? budget : 400));
+
+      var quiet = kind === 'select' ? 150 : 120;
+      var t0 = Date.now();
+      var net = await waitForNetworkIdle(quiet, maxNet);
+      var used = Date.now() - t0;
+      setBudget(Math.max(0, getBudget() - used));
+
+      return Object.assign({ kind: kind }, net);
+    }
+
+    async function waitForSelectOptionsSequential(selector, maxMs) {
+      maxMs = Math.min(maxMs || 6000, Math.max(400, getBudget() || 400));
+      var t0 = Date.now();
+      // First a general settle (covers radio→ajax-select pattern)
+      await settleAfterAct('choice', { budgetMs: Math.min(2000, maxMs) });
+      var left = Math.max(300, maxMs - (Date.now() - t0));
+      var el = await waitForOptions(selector, 1, left);
+      setBudget(Math.max(0, getBudget() - (Date.now() - t0)));
+      return el;
+    }
+
+    return {
+      settleAfterAct: settleAfterAct,
+      waitForSelectOptionsSequential: waitForSelectOptionsSequential,
+    };
+  }
+
+  root.CcSettleAfterAct = {
+    createSettleEngine: createSettleEngine,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/resolve-cc-selector.js ==== */
+/**
+ * resolve-cc-selector — CC-Style Selector Resolver
+ *
+ * Resolves a CyberControl selector string to a DOM element.
+ * Handles three formats:
+ *   form-field-N    → Nth visible form control (input/select/textarea)
+ *   ng-dropdown-N   → Nth div.ng-dropdown
+ *   <css selector>  → document.querySelector(selector)
+ *
+ * The document is injectable for testing (jsdom) and cross-frame use.
+ * No Chrome API, no CcExecParts, no kernel, no fill state.
+ *
+ * Public API (on globalThis.CcResolveCcSelector):
+ *   resolveCcSelector(selector, doc?) => Element | null
+ *
+ * See resolve-cc-selector.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Query string for form-field-N resolution.
+   * Covers all visible form control types used on government forms.
+   * Excludes input[type=hidden] intentionally.
+   */
+  var FORM_FIELD_QUERY = [
+    'input[type="text"]',
+    'input[type="email"]',
+    'input[type="tel"]',
+    'input[type="number"]',
+    'input[type="date"]',
+    'input[type="radio"]',
+    'input[type="checkbox"]',
+    'input:not([type])',
+    'textarea',
+    'select',
+  ].join(',');
+
+  /**
+   * Resolve a cc-style selector to a DOM element.
+   *
+   * @param {string} selector
+   * @param {Document} [doc] - document to query against (defaults to global document)
+   * @returns {Element|null}
+   */
+  function resolveCcSelector(selector, doc) {
+    var d = doc || (typeof document !== 'undefined' ? document : null);
+    if (!d) return null;
+
+    if (selector.startsWith('form-field-')) {
+      var idx = parseInt(selector.slice('form-field-'.length), 10);
+      var all = d.querySelectorAll(FORM_FIELD_QUERY);
+      return all[idx] || null;
+    }
+
+    if (selector.startsWith('ng-dropdown-')) {
+      var ngIdx = parseInt(selector.slice('ng-dropdown-'.length), 10);
+      var dropdowns = d.querySelectorAll('div.ng-dropdown');
+      return dropdowns[ngIdx] || null;
+    }
+
+    return d.querySelector(selector);
+  }
+
+  root.CcResolveCcSelector = {
+    resolveCcSelector: resolveCcSelector,
+    /** Exposed for consumers that need to build compatible form-field selectors. */
+    FORM_FIELD_QUERY: FORM_FIELD_QUERY,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/sort-fields-by-dom-order.js ==== */
+/**
+ * sort-fields-by-dom-order — Fill Entry DOM Order Sorter
+ *
+ * Sorts an array of [selector, fieldData] fill entries into the visual
+ * top-to-bottom order they appear in the page.
+ *
+ * This ensures fields are filled in the order the form's own validation
+ * expects — typically top to bottom as laid out in the DOM.
+ *
+ * No kernel, no CcExecParts, no Chrome APIs, no cascade knowledge.
+ * The resolver function is injected so this capability is testable without a
+ * real browser document.
+ *
+ * Public API (on globalThis.CcSortFieldsByDomOrder):
+ *   sortFieldsByDomOrder(entries, resolveEl) => entries (sorted in place)
+ *
+ * See sort-fields-by-dom-order.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Sort fill entries in DOM top-to-bottom order.
+   *
+   * Uses compareDocumentPosition to determine which of two elements appears
+   * earlier in the document. Entries whose selectors resolve to null (element
+   * not present) are sorted to the end with their relative order preserved.
+   *
+   * Sorts the array in place and also returns it.
+   *
+   * @param {Array<[string, object]>} entries
+   *   Array of [selector, fieldData] pairs from the fill mapping.
+   *
+   * @param {function(string): Element|null} resolveEl
+   *   Function that turns a selector string into a DOM element.
+   *   Should be CcResolveCcSelector.resolveCcSelector or equivalent.
+   *
+   * @returns {Array<[string, object]>} The same array, sorted in place.
+   */
+  function sortFieldsByDomOrder(entries, resolveEl) {
+    if (!Array.isArray(entries) || entries.length < 2) return entries;
+    var FOLLOWING = (typeof Node !== 'undefined' && Node.DOCUMENT_POSITION_FOLLOWING) || 4;
+    entries.sort(function (pairA, pairB) {
+      var a = resolveEl(pairA[0]);
+      var b = resolveEl(pairB[0]);
+      if (!a || !b) return 0;        // one or both not in DOM — preserve order
+      if (a === b) return 0;          // same element
+      if (typeof a.compareDocumentPosition !== 'function') return 0;
+      return a.compareDocumentPosition(b) & FOLLOWING ? -1 : 1;
+    });
+    return entries;
+  }
+
+  root.CcSortFieldsByDomOrder = {
+    sortFieldsByDomOrder: sortFieldsByDomOrder,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/verify-fill-value.js ==== */
+/**
+ * verify-fill-value — Fill Value Verifier
+ *
+ * After a fill attempt, reads the actual current DOM value and compares it
+ * to the planned value to determine whether the fill succeeded.
+ *
+ * Handles: checkbox checked state, radio group selected label, <select>
+ * option text, text input value, masked inputs (e.g. Aadhaar last-4),
+ * and normalised alphanumeric comparison.
+ *
+ * The element resolver is injected so this capability is testable without
+ * a real browser document.
+ *
+ * Public API (on globalThis.CcVerifyFillValue):
+ *   verifyFillValue(selector, expected, resolveEl, settleMs?) => Promise<VerifyResult>
+ *
+ * VerifyResult: { ok, actualValue, normExpected, normActual, reason?, partial?, masked? }
+ *
+ * See verify-fill-value.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Verify that a fill attempt produced the expected value in the DOM.
+   *
+   * Waits `settleMs` milliseconds first (default 150ms) to allow framework
+   * validators, formatters, and ControlValueAccessors to react.
+   *
+   * @param {string} selector       The cc-style selector for the field
+   * @param {string|null} expected  The value that was planned/filled
+   * @param {function(string): Element|null} resolveEl  Element resolver (injected)
+   * @param {number} [settleMs=150]  How long to wait before reading DOM
+   *
+   * @returns {Promise<{ok, actualValue, normExpected, normActual, reason?, partial?, masked?}>}
+   */
+  async function verifyFillValue(selector, expected, resolveEl, settleMs) {
+    settleMs = (typeof settleMs === 'number') ? settleMs : 150;
+
+    // Wait for framework to react
+    if (settleMs > 0) await new Promise(function (r) { setTimeout(r, settleMs); });
+
+    // Resolve element
+    var liveEl;
+    if (selector && selector.startsWith && selector.startsWith('ng-dropdown-')) {
+      liveEl = null; // ng-dropdown verify handled by the handler's own verify
+    } else {
+      liveEl = resolveEl(selector);
+    }
+
+    if (!liveEl) {
+      return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'no-element-on-verify' };
+    }
+
+    var tag = (liveEl.tagName || '').toLowerCase();
+
+    // ── Checkbox ──────────────────────────────────────────────────────────────
+    if (liveEl.type === 'checkbox') {
+      return {
+        ok: !!liveEl.checked,
+        actualValue: liveEl.checked ? 'true' : 'false',
+        normExpected: String(expected || ''),
+        normActual: liveEl.checked ? 'true' : 'false',
+      };
+    }
+
+    // ── Radio ─────────────────────────────────────────────────────────────────
+    if (liveEl.type === 'radio') {
+      var groupName = liveEl.name;
+      var selected = liveEl.checked ? liveEl : null;
+      if (groupName) {
+        var checked = document.querySelector('input[type="radio"][name="' + groupName + '"]:checked');
+        if (checked) selected = checked;
+      }
+      if (!selected) {
+        return { ok: false, actualValue: '', normExpected: String(expected || ''), normActual: '', reason: 'radio-none-checked' };
+      }
+      var lbl = selected.id ? document.querySelector('label[for="' + selected.id + '"]') : null;
+      var actualLabel = (lbl && lbl.textContent.trim()) || selected.value || 'true';
+      var normFn = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+      var normExp0 = normFn(expected);
+      var normAct0 = normFn(actualLabel);
+      var ok0 = !expected ||
+        normAct0.includes(normExp0.slice(0, 4)) ||
+        normExp0.includes(normAct0.slice(0, 4)) ||
+        selected.checked;
+      return { ok: !!ok0, actualValue: actualLabel, normExpected: normExp0, normActual: normAct0 };
+    }
+
+    // ── Select ────────────────────────────────────────────────────────────────
+    if (tag === 'select') {
+      var opt = liveEl.options[liveEl.selectedIndex];
+      var actualVal = (opt ? (opt.text || opt.value) : '') || '';
+      var normExpS = String(expected || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      var normActS = actualVal.toLowerCase().replace(/[^a-z0-9]/g, '');
+      var okS = normExpS.length > 0 && (normActS === normExpS || normActS.includes(normExpS) || normExpS.includes(normActS));
+      return { ok: okS, actualValue: actualVal, normExpected: normExpS, normActual: normActS };
+    }
+
+    // ── Text input / textarea ─────────────────────────────────────────────────
+    var actual = liveEl.value || '';
+    var expStr = String(expected || '');
+
+    if (!expStr) {
+      return { ok: false, actualValue: actual, normExpected: '', normActual: actual, reason: 'empty-expected' };
+    }
+
+    var normExp = expStr.toLowerCase().replace(/[^a-z0-9]/g, '');
+    var normAct = actual.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // Exact match (after normalisation)
+    if (normExp === normAct) {
+      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct };
+    }
+
+    // Partial match — framework may reformat (e.g. phone number groups)
+    if (normAct.length > 0 &&
+        (normAct.startsWith(normExp.slice(0, Math.max(8, normExp.length - 2))) ||
+         normExp.startsWith(normAct.slice(0, 8)))) {
+      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, partial: true };
+    }
+
+    // Masked-input pattern (UIDAI Aadhaar: shows '****6597' but was filled with full number)
+    // Same length + last 4 chars match → accept
+    if (actual.length >= 8 && actual.length === expStr.length) {
+      var tail = expStr.slice(-4).toLowerCase();
+      if (actual.toLowerCase().endsWith(tail)) {
+        return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, masked: true };
+      }
+    }
+
+    return {
+      ok: false,
+      actualValue: actual,
+      normExpected: normExp,
+      normActual: normAct,
+      reason: actual === '' ? 'value-rejected-empty' : 'value-mismatch',
+    };
+  }
+
+  root.CcVerifyFillValue = {
+    verifyFillValue: verifyFillValue,
+  };
+
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/detect-fill-strategy.js ==== */
+/**
+ * detect-fill-strategy — Fill Strategy Detector
+ *
+ * Given a DOM element and a type hint, returns the name of the fill strategy
+ * that applies to that element. Used to tag fill records and debug events.
+ *
+ * The strategy registry defines which strategy applies to each widget type
+ * and what verification contract it carries.
+ *
+ * No kernel, no CcExecParts, no Chrome APIs, no async behavior.
+ * Strategy detection is pure synchronous DOM property inspection.
+ *
+ * Public API (on globalThis.CcDetectFillStrategy):
+ *   detectFillStrategy(el, type) => string
+ *   STRATEGY_REGISTRY: Record<string, StrategyEntry>
+ *
+ * See detect-fill-strategy.md for full documentation.
+ */
+(function (root) {
+  'use strict';
+
+  /**
+   * Named fill strategies with applies predicates and verification contracts.
+   *
+   * Each strategy:
+   *   name        — the strategy identifier (matches the key)
+   *   description — human-readable explanation
+   *   applies     — function(el, type) => boolean: does this strategy apply?
+   *   verify      — verification contract used after filling:
+   *                   method: 'visual_text' | 'dom_value'
+   *                   check:  function(el, expected) => boolean
+   *                   timeout: ms to wait before checking
+   *
+   * Strategies are tested in registration order. First match wins.
+   *
+   * @type {Object}
+   */
+  var STRATEGY_REGISTRY = {
+    'ng-dropdown-click': {
+      name: 'ng-dropdown-click',
+      description: 'Angular custom ng-dropdown: click trigger, wait for li options, click match',
+      applies: function (el, type) {
+        return type === 'ng-dropdown' || (el && el.classList && el.classList.contains('ng-dropdown'));
+      },
+      verify: {
+        method: 'visual_text',
+        check: function (el, expected) {
+          var displayed = el.querySelector('.select-type,.value-area,.ng-value-label');
+          return displayed ? displayed.textContent.trim().toLowerCase().includes(expected.toLowerCase().slice(0, 6)) : false;
+        },
+        timeout: 1000,
+      },
+    },
+    'mat-select-click': {
+      name: 'mat-select-click',
+      description: 'Angular Material mat-select: click trigger, wait for panel, click option',
+      applies: function (el, type) {
+        return type === 'mat-select' || (el && el.tagName === 'MAT-SELECT');
+      },
+      verify: {
+        method: 'visual_text',
+        check: function (el, expected) {
+          var v = el.querySelector('.mat-select-value-text,.mat-mdc-select-value-text');
+          return v ? v.textContent.trim().toLowerCase().includes(expected.toLowerCase().slice(0, 4)) : false;
+        },
+        timeout: 500,
+      },
+    },
+    'native-select': {
+      name: 'native-select',
+      description: 'Native <select>: set value via nativeSetter, dispatch change',
+      applies: function (el, type) {
+        return type === 'select' || (el && el.tagName === 'SELECT');
+      },
+      verify: {
+        method: 'dom_value',
+        check: function (el, expected) {
+          var norm = function (s) { return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim(); };
+          return norm(el.value) === norm(expected) ||
+            norm((el.options && el.options[el.selectedIndex] && el.options[el.selectedIndex].text) || '').includes(norm(expected).slice(0, 6));
+        },
+        timeout: 300,
+      },
+    },
+    'dwr-cascade-select': {
+      name: 'dwr-cascade-select',
+      description: 'ServicePlus DWR cascade: waitForOptions then set value, re-apply after DWR reset',
+      applies: function (el, type) {
+        return type === 'select' && el && el.getAttribute && el.getAttribute('data-datatype') === 'custLGDHierarchy';
+      },
+      verify: {
+        method: 'dom_value',
+        check: function (el, expected) {
+          var norm = function (s) { return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim(); };
+          return norm((el.options && el.options[el.selectedIndex] && el.options[el.selectedIndex].text) || '').includes(norm(expected).slice(0, 4));
+        },
+        timeout: 500,
+      },
+    },
+    'text-input': {
+      name: 'text-input',
+      description: 'Text/email/tel input: nativeInputValueSetter + input/change events',
+      applies: function (el, type) {
+        var EXCLUDED = ['select', 'ng-dropdown', 'mat-select', 'mat-radio', 'mat-checkbox',
+          'radio', 'checkbox', 'radio-group', 'radio-click', 'checkbox-group', 'checkbox-agreement'];
+        return EXCLUDED.indexOf(type) === -1;
+      },
+      verify: {
+        method: 'dom_value',
+        check: function (el, expected) {
+          return el.value === expected || el.value.includes(expected.slice(0, 8));
+        },
+        timeout: 200,
+      },
+    },
+    'radio-click': {
+      name: 'radio-click',
+      description: 'Click a specific radio option (resolved by planner)',
+      applies: function (el, type) {
+        return type === 'radio-click' || type === 'radio' || type === 'radio-group' ||
+          (el && el.type === 'radio');
+      },
+      verify: {
+        method: 'dom_value',
+        check: function (el) {
+          return !!(el && (el.checked || (el.querySelector && el.querySelector('input[type=radio]:checked'))));
+        },
+        timeout: 200,
+      },
+    },
+  };
+
+  /**
+   * Returns the name of the first strategy whose applies() predicate matches
+   * the given element and type hint.
+   *
+   * Returns the type hint unchanged if it is not empty and no strategy matched,
+   * or 'unknown' if both are empty/null.
+   *
+   * Never throws — each applies() call is wrapped in try/catch.
+   *
+   * @param {Element|null} el   The resolved DOM element
+   * @param {string} type       Type hint from the fill mapping
+   * @returns {string}          Strategy name
+   */
+  function detectFillStrategy(el, type) {
+    var keys = Object.keys(STRATEGY_REGISTRY);
+    for (var i = 0; i < keys.length; i++) {
+      try {
+        if (STRATEGY_REGISTRY[keys[i]].applies(el, type)) return keys[i];
+      } catch (e) { /* ignore — defensive against null element in applies */ }
+    }
+    return type || 'unknown';
+  }
+
+  root.CcDetectFillStrategy = {
+    detectFillStrategy: detectFillStrategy,
+    STRATEGY_REGISTRY: STRATEGY_REGISTRY,
+  };
+
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* ==== capabilities/post-fill-corrections.js ==== */
@@ -1630,145 +2294,347 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/settle-after-act.js ==== */
+/* ==== capabilities/install-kernel-bind.js ==== */
 /**
- * settle-after-act — Post-Action Settle Engine
- *
- * After a fill action (text input, select change, button click), waits for
- * the page to reach a quiet network state before proceeding. Manages an
- * ajax wait budget so long-running pages don't wait forever.
- *
- * Also provides waitForSelectOptionsSequential: waits for a dependent
- * cascade select to load options after a preceding field is filled.
- *
- * Both network-idle and option-polling are injected for testability.
- *
- * Public API (on globalThis.CcSettleAfterAct):
- *   createSettleEngine(opts) => { settleAfterAct, waitForSelectOptionsSequential }
- *
- * opts:
- *   waitForNetworkIdle(quietMs, maxMs) => Promise<{idle, waitedMs}>
- *   waitForOptions(selector, minCount, timeout) => Promise<Element|null>
- *   getBudget() => number        — read current ajaxWaitBudgetMs
- *   setBudget(n)                 — write current ajaxWaitBudgetMs
- *
- * See settle-after-act.md for full documentation.
+ * Shared kernel locals for executor task modules.
+ * Avoids repeating 35-line alias blocks in every file (keeps parts ≤200 lines).
  */
 (function (root) {
   'use strict';
+  root.CcExecParts = root.CcExecParts || {};
 
   /**
-   * @param {object} opts
-   * @param {function} opts.waitForNetworkIdle
-   * @param {function} opts.waitForOptions
-   * @param {function} opts.getBudget
-   * @param {function} opts.setBudget
+   * @param {object} k — fill kernel
+   * @returns {object} local aliases matching the old closure names
    */
-  function createSettleEngine(opts) {
-    opts = opts || {};
-    var waitForNetworkIdle = opts.waitForNetworkIdle || function (q, m) {
-      return Promise.resolve({ idle: true, waitedMs: 0 });
-    };
-    var waitForOptions = opts.waitForOptions || function () {
-      return Promise.resolve(null);
-    };
-    var getBudget = opts.getBudget || function () { return 0; };
-    var setBudget = opts.setBudget || function () {};
-
-    async function settleAfterAct(kind, actOpts) {
-      actOpts = actOpts || {};
-      var budget = typeof actOpts.budgetMs === 'number' ? actOpts.budgetMs : getBudget();
-
-      // Text inputs: flat 100ms wait, no network polling needed
-      if (kind === 'text') {
-        await new Promise(function (r) { setTimeout(r, 100); });
-        return { idle: true, waitedMs: 100, kind: 'text' };
-      }
-
-      // Let DWR/XHR kick off after change/click before network polling starts
-      var kick = kind === 'button' ? 300 : 200;
-      await new Promise(function (r) { setTimeout(r, kick); });
-
-      var maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
-      maxNet = Math.min(maxNet, Math.max(300, budget > 0 ? budget : 400));
-
-      var quiet = kind === 'select' ? 150 : 120;
-      var t0 = Date.now();
-      var net = await waitForNetworkIdle(quiet, maxNet);
-      var used = Date.now() - t0;
-      setBudget(Math.max(0, getBudget() - used));
-
-      return Object.assign({ kind: kind }, net);
-    }
-
-    async function waitForSelectOptionsSequential(selector, maxMs) {
-      maxMs = Math.min(maxMs || 6000, Math.max(400, getBudget() || 400));
-      var t0 = Date.now();
-      // First a general settle (covers radio→ajax-select pattern)
-      await settleAfterAct('choice', { budgetMs: Math.min(2000, maxMs) });
-      var left = Math.max(300, maxMs - (Date.now() - t0));
-      var el = await waitForOptions(selector, 1, left);
-      setBudget(Math.max(0, getBudget() - (Date.now() - t0)));
-      return el;
-    }
-
+  root.CcExecParts.bindKernelLocals = function bindKernelLocals(k) {
     return {
-      settleAfterAct: settleAfterAct,
-      waitForSelectOptionsSequential: waitForSelectOptionsSequential,
+      portalAdapters: k.portalAdapters,
+      filledBySource: k.filledBySource,
+      mapping: k.mapping,
+      allFields: k.allFields,
+      _replayResults: k.replayResults,
+      _ccRecords: k.records,
+      RUNTIME_VERSION: k.RUNTIME_VERSION,
+      STRATEGY_VERSION: k.STRATEGY_VERSION,
+      WAIT_ENGINE_VERSION: k.WAIT_ENGINE_VERSION,
+      _CC_USE_PLUGINS: k.CC_USE_PLUGINS,
+      _CC_LEGACY_COMPARE: k.CC_LEGACY_COMPARE,
+      PRIORITY_KEYS: k.PRIORITY_KEYS,
+      entries: k.entries,
+      getEl: function () { return k.getEl.apply(k, arguments); },
+      _emitFillDebug: function () { return k.emitFillDebug.apply(k, arguments); },
+      _flushRecords: function () { return k.flushRecords(); },
+      _pushSelectRecord: function () { return k.pushSelectRecord.apply(k, arguments); },
+      settleAfterAct: function () {
+        if (typeof k.settleAfterAct !== 'function') {
+          return Promise.resolve({ idle: true, waitedMs: 0, kind: 'text' });
+        }
+        return k.settleAfterAct.apply(k, arguments);
+      },
+      waitForSelectOptionsSequential: function () {
+        if (typeof k.waitForSelectOptionsSequential !== 'function') {
+          return Promise.resolve(null);
+        }
+        return k.waitForSelectOptionsSequential.apply(k, arguments);
+      },
+      waitForOptions: function () {
+        if (typeof k.waitForOptions !== 'function') return Promise.resolve(null);
+        return k.waitForOptions.apply(k, arguments);
+      },
+      waitForDOMQuiet: function (ms) {
+        if (typeof k.waitForDOMQuiet === 'function') {
+          return k.waitForDOMQuiet.apply(k, arguments);
+        }
+        // Fallback — must never throw "waitForDOMQuiet is not defined"
+        return new Promise(function (r) { setTimeout(r, ms || 300); });
+      },
+      waitForNetworkIdle: function (q, m) {
+        if (typeof k.waitForNetworkIdle === 'function') {
+          return k.waitForNetworkIdle.apply(k, arguments);
+        }
+        if (typeof window !== 'undefined' && window.ccWaitForNetworkIdle) {
+          return window.ccWaitForNetworkIdle(q || 200, m || 8000);
+        }
+        return Promise.resolve({ idle: true, waitedMs: 0 });
+      },
+      detectStrategy: function () {
+        if (typeof k.detectStrategy !== 'function') return 'unknown';
+        return k.detectStrategy.apply(k, arguments);
+      },
+      verifyValue: function () {
+        if (typeof k.verifyValue !== 'function') {
+          return Promise.resolve({ ok: false, actualValue: '', reason: 'no-verify' });
+        }
+        return k.verifyValue.apply(k, arguments);
+      },
+      _isPlaceholderOption: function () {
+        return typeof k.isPlaceholderOption === 'function'
+          ? k.isPlaceholderOption.apply(k, arguments)
+          : false;
+      },
+      _realOptions: function () {
+        return typeof k.realOptions === 'function' ? k.realOptions.apply(k, arguments) : [];
+      },
+      _sampleOptions: function () {
+        return typeof k.sampleOptions === 'function' ? k.sampleOptions.apply(k, arguments) : [];
+      },
+      _readSelectActual: function () {
+        return typeof k.readSelectActual === 'function'
+          ? k.readSelectActual.apply(k, arguments)
+          : { actualValue: null, actualOptionValue: null };
+      },
+      _selectLoadMode: function () {
+        return typeof k.selectLoadMode === 'function' ? k.selectLoadMode.apply(k, arguments) : 'unknown';
+      },
+      _cascadeSemanticKey: function () {
+        return typeof k.cascadeSemanticKey === 'function'
+          ? k.cascadeSemanticKey.apply(k, arguments)
+          : '';
+      },
+      _CASCADE_PARENTS: k.CASCADE_PARENTS,
+      _cascadeSettled: k.cascadeSettled,
+      _isPlaceholderPlanned: function () {
+        return typeof k.isPlaceholderPlanned === 'function'
+          ? k.isPlaceholderPlanned.apply(k, arguments)
+          : false;
+      },
+      _selectIsActive: function () {
+        return typeof k.selectIsActive === 'function' ? k.selectIsActive.apply(k, arguments) : true;
+      },
+      fillOne: function () {
+        if (typeof k.fillOne !== 'function') return 0;
+        return k.fillOne.apply(k, arguments);
+      },
+      k: k,
     };
-  }
-
-  root.CcSettleAfterAct = {
-    createSettleEngine: createSettleEngine,
   };
-
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/wait-for-options.js ==== */
+/* ==== capabilities/install-debug.js ==== */
 /**
- * wait-for-options — Select Options DOM Poller
+ * Live fill_debug emit (port + batch queue)
+ * Part of sequential kernel — load before autofill/executor.js
  *
- * Waits for a <select> element to have at least minCount real (non-placeholder)
- * options by combining a MutationObserver on document.body with a 200ms poll
- * interval. Resolves with the element on success, null on timeout.
- *
- * "Real" options: value is non-empty, not '0', not '-1'.
- *
- * The querySelector function is injected so this capability is testable
- * without a real browser document.
- *
- * Public API (on globalThis.CcWaitForOptions):
- *   waitForOptions(selector, minCount, timeout, querySelector?, observeTarget?) => Promise<Element|null>
- *
- * querySelector  — defaults to document.querySelector
- * observeTarget  — defaults to document.body (the node to observe for mutations)
- *
- * See wait-for-options.md for full documentation.
+ * fill-debug-emitter.js owns the pure event queue + batch logic.
+ * This file owns the Chrome transport and wires it to the kernel.
  */
 (function (root) {
   'use strict';
+  root.CcExecParts = root.CcExecParts || {};
+  root.CcExecParts.installDebug = function (k) {
+    k._debugPort = null;
+    k._debugQueue = [];
+    k._debugFlushTimer = null;
 
-  /**
-   * Wait for a <select> to have real options.
-   *
-   * @param {string}   selector       — CSS selector for the <select>
-   * @param {number}   [minCount=1]   — minimum number of real options required
-   * @param {number}   [timeout=8000] — max wait in ms
-   * @param {function} [qs]           — querySelector function (injected for tests)
-   * @param {Element}  [observeTarget] — MutationObserver target (injected for tests)
-   * @returns {Promise<Element|null>}
-   */
-  function waitForOptions(selector, minCount, timeout, qs, observeTarget) {
-    minCount = minCount || 1;
-    timeout  = timeout  || 8000;
-    qs = qs || (typeof document !== 'undefined' ? document.querySelector.bind(document) : function () { return null; });
-    observeTarget = observeTarget || (typeof document !== 'undefined' ? document.body : null);
+  // ── fill-debug-emitter.js is the single source for queue + event assembly ──
+  // Must be loaded before debug.js (see build-executor-bundle.mjs ORDER).
+  var _fde = root.CcFillDebugEmitter || {};
 
-    return new Promise(function (resolve) {
+  function ensureDebugPort() {
+    if (k._debugPort) return k._debugPort;
+    try {
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.connect) return null;
+      k._debugPort = chrome.runtime.connect({ name: 'cc_fill_debug' });
+      k._debugPort.onDisconnect.addListener(function () {
+        k._debugPort = null;
+      });
+    } catch (e) {
+      k._debugPort = null;
+    }
+    return k._debugPort;
+  }
+
+  function chromeSend(batch) {
+    try {
+      var port = ensureDebugPort();
+      if (port) {
+        port.postMessage({ type: 'FILL_DEBUG_BATCH', events: batch });
+        return;
+      }
+    } catch (e) {
+      k._debugPort = null;
+    }
+    // Fallback: one-by-one sendMessage (best-effort)
+    for (var i = 0; i < batch.length; i++) {
+      try {
+        chrome.runtime.sendMessage(Object.assign({ type: 'FILL_DEBUG' }, batch[i]), function () {
+          void chrome.runtime.lastError;
+        });
+      } catch (e2) { /* ignore */ }
+    }
+  }
+
+  var _emitter;
+  if (_fde.createEmitter) {
+    _emitter = _fde.createEmitter({
+      getRunId:    function () { return k.fillRunId || ''; },
+      getRv:       function () { return k.RUNTIME_VERSION || ''; },
+      send:        chromeSend,
+    });
+  }
+
+  function emitFillDebug(event, payload) {
+    if (_emitter) { _emitter.emit(event, payload); return; }
+    // Safe fallback if emitter not loaded
+    console.warn('[CC] fill-debug-emitter not loaded, event dropped:', event);
+  }
+
+  function flushDebugQueue() {
+    if (_emitter) _emitter.flush();
+  }
+
+    k.emitFillDebug = emitFillDebug;
+    k.flushDebugQueue = flushDebugQueue;
+
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/install-select-helpers.js ==== */
+/**
+ * Select/cascade helpers + pushSelectRecord
+ * Part of sequential kernel — load before autofill/executor.js
+ *
+ * select-option-state.js is the single source of truth for the 7 pure select
+ * state functions. This file re-exposes them on the kernel (k) for existing
+ * consumers that access them via bindKernelLocals(k).
+ */
+(function (root) {
+  'use strict';
+  root.CcExecParts = root.CcExecParts || {};
+  root.CcExecParts.installSelectHelpers = function (k) {
+
+  // ── Delegate to capabilities/select-option-state.js ──────────────────────
+  // Must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
+  var _sos = root.CcSelectOptionState || {};
+  var isPlaceholderOption  = _sos.isPlaceholderOption  || function () { return true; };
+  var realOptions          = _sos.realOptions          || function () { return []; };
+  var sampleOptions        = _sos.sampleOptions        || function () { return []; };
+  var readSelectActual     = _sos.readSelectActual     || function () { return { actualValue: null, actualOptionValue: null }; };
+  var selectLoadMode       = _sos.selectLoadMode       || function () { return 'unknown'; };
+  var selectIsActive       = _sos.selectIsActive       || function () { return false; };
+  var isPlaceholderPlanned = _sos.isPlaceholderPlanned || function () { return true; };
+  // ── build-fill-record.js is the single source for record stamping ─────────
+  var _bfr = root.CcBuildFillRecord || {};
+  var _buildFillRecord = _bfr.buildFillRecord || function (base) { return Object.assign({ ts: Date.now(), rv: k.RUNTIME_VERSION, fillMode: 'sequential' }, base); };
+
+  // cascade-field-level.js is the single source of truth for cascade geography.
+  // It must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
+  var _cascadeGeo = root.CcCascadeFieldLevel;
+  function cascadeSemanticKey(label, profileKey, selector) {
+    return _cascadeGeo
+      ? _cascadeGeo.cascadeFieldLevel(label, profileKey, selector)
+      : ''; // safe fallback if loaded out of order
+  }
+  /** Parent keys that must be settled before this cascade key. */
+  k.CASCADE_PARENTS = _cascadeGeo ? _cascadeGeo.CASCADE_PARENTS : {};
+  // ── Cascade geography (delegated to capabilities/cascade-field-level.js) ─
+
+  function pushSelectRecord(base) {
+    const rec = _buildFillRecord(base, { rv: k.RUNTIME_VERSION });
+    k.records.push(rec);
+    k.flushRecords();
+    const result = String(rec.result || '');
+    if (result === 'filled' || result === 'succeeded') {
+      k.emitFillDebug('field.done', {
+        selector: rec.selector,
+        label: rec.label,
+        type: rec.type,
+        planned: rec.value,
+        actual: rec.actualValue,
+        strategy: rec.strategy,
+      });
+    } else if (result === 'skipped' || result === 'failed' || result === 'error' || result === 'waiting_human') {
+      k.emitFillDebug(result === 'waiting_human' ? 'field.wait' : 'field.fail', {
+        selector: rec.selector,
+        label: rec.label,
+        type: rec.type,
+        planned: rec.value,
+        actual: rec.actualValue,
+        failReason: rec.failReason || rec.error || result,
+        strategy: rec.strategy,
+      });
+    }
+    return rec;
+  }
+    k.buildFillRecord = _buildFillRecord;
+    k.isPlaceholderOption = isPlaceholderOption;
+    k.realOptions = realOptions;
+    k.sampleOptions = sampleOptions;
+    k.readSelectActual = readSelectActual;
+    k.selectLoadMode = selectLoadMode;
+    k.cascadeSemanticKey = cascadeSemanticKey;
+    k.isPlaceholderPlanned = isPlaceholderPlanned;
+    k.selectIsActive = selectIsActive;
+    k.pushSelectRecord = pushSelectRecord;
+
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ==== capabilities/install-settle.js ==== */
+/**
+ * settleAfterAct + WaitEngine
+ * Part of sequential kernel — load before autofill/executor.js
+ */
+(function (root) {
+  'use strict';
+  root.CcExecParts = root.CcExecParts || {};
+  root.CcExecParts.installSettle = function (k) {
+  // settle-after-act.js is the single source for post-action settle logic.
+  var _saa = root.CcSettleAfterAct;
+  var _settleEngine = _saa ? _saa.createSettleEngine({
+    waitForNetworkIdle: waitForNetworkIdle,
+    waitForOptions: waitForOptions,
+    getBudget: function() { return k.ajaxWaitBudgetMs; },
+    setBudget: function(n) { k.ajaxWaitBudgetMs = n; },
+  }) : null;
+
+  async function settleAfterAct(kind, opts) {
+    if (_settleEngine) return _settleEngine.settleAfterAct(kind, opts);
+    // Fallback (CcSettleAfterAct not loaded)
+    opts = opts || {};
+    const budget = typeof opts.budgetMs === 'number' ? opts.budgetMs : k.ajaxWaitBudgetMs;
+    if (kind === 'text') {
+      await new Promise((r) => setTimeout(r, 100));
+      return { idle: true, waitedMs: 100, kind: 'text' };
+    }
+    const kick = kind === 'button' ? 300 : 200;
+    await new Promise((r) => setTimeout(r, kick));
+    let maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
+    maxNet = Math.min(maxNet, Math.max(300, budget > 0 ? budget : 400));
+    const quiet = kind === 'select' ? 150 : 120;
+    const t0 = Date.now();
+    const net = await waitForNetworkIdle(quiet, maxNet);
+    const used = Date.now() - t0;
+    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - used);
+    return Object.assign({ kind: kind }, net);
+  }
+
+  async function waitForSelectOptionsSequential(selector, maxMs) {
+    if (_settleEngine) return _settleEngine.waitForSelectOptionsSequential(selector, maxMs);
+    // Fallback
+    maxMs = Math.min(maxMs || 6000, Math.max(400, k.ajaxWaitBudgetMs || 400));
+    const t0 = Date.now();
+    await settleAfterAct('choice', { budgetMs: Math.min(2000, maxMs) });
+    const left = Math.max(300, maxMs - (Date.now() - t0));
+    const el = await waitForOptions(selector, 1, left);
+    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - (Date.now() - t0));
+    return el;
+  }
+
+  // wait-for-options.js is the single source for select option polling.
+  var _wfo = root.CcWaitForOptions || {};
+  function waitForOptions(selector, minCount, timeout) {
+    if (_wfo.waitForOptions) {
+      return _wfo.waitForOptions(selector, minCount, timeout,
+        document.querySelector.bind(document), document.body);
+    }
+    // Fallback
+    minCount = minCount || 1; timeout = timeout || 8000;
+    return new Promise(function(resolve) {
       var deadline = Date.now() + timeout;
       var resolved = false;
       var poll, mo;
-
       function cleanup(val) {
         if (resolved) return;
         resolved = true;
@@ -1776,835 +2642,53 @@
         if (mo) mo.disconnect();
         resolve(val);
       }
-
-      function isRealOption(o) {
-        return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
-      }
-
       function check() {
         if (resolved) return;
-        var el = qs(selector);
-        var real = Array.from(el ? el.options || [] : []).filter(isRealOption);
+        var el = document.querySelector(selector);
+        var real = Array.from(el ? el.options || [] : []).filter(function(o) {
+          return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
+        });
         if (real.length >= minCount) { cleanup(el); return; }
         if (Date.now() > deadline) { cleanup(null); return; }
       }
-
-      if (observeTarget) {
-        mo = new MutationObserver(check);
-        mo.observe(observeTarget, {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: ['disabled', 'class'],
-        });
-      }
-
+      mo = new MutationObserver(check);
+      mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class'] });
       check();
-
-      poll = setInterval(function () {
+      poll = setInterval(function() {
         if (Date.now() > deadline) cleanup(null);
         else check();
       }, 200);
     });
   }
 
-  root.CcWaitForOptions = {
-    waitForOptions: waitForOptions,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/ng-session-manager.js ==== */
-/**
- * ng-session-manager — ng-dropdown Replay Session Manager
- *
- * Manages the lifecycle of ng-dropdown fill sessions stored in a Map.
- * Each session tracks poll timers, timeout IDs, and a MutationObserver
- * that must all be cleaned up when a session is cancelled or superseded.
- *
- * The session store is injected so this capability is testable without
- * a real browser window.
- *
- * Public API (on globalThis.CcNgSessionManager):
- *   cancelSession(label, sessions)  — cancel + cleanup a named session
- *   createSession(label, sessions)  — register a new blank session
- *   cleanupSession(session, sessions, label)  — cleanup without deleting from store
- *
- * sessions: Map<string, NgSession>   — injected store (window._ccReplaySessions in production)
- *
- * NgSession shape:
- *   { id, fieldKey, resolved, cancelled, pollTimer, timeoutIds, observer, startedAt, _result? }
- *
- * See ng-session-manager.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Cancel an active session by label.
-   * Clears poll timer, all timeout IDs, disconnects MutationObserver,
-   * and removes the session from the store.
-   *
-   * No-op if sessions is null/undefined or label not present.
-   *
-   * @param {string} label       — field key / session label
-   * @param {Map}    sessions    — session store (window._ccReplaySessions)
-   */
-  function cancelSession(label, sessions) {
-    if (!sessions || !sessions.has(label)) return;
-    var old = sessions.get(label);
-    old.cancelled = true;
-    try { clearInterval(old.pollTimer); } catch (e) {}
-    (old.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch (e) {} });
-    if (old.observer) { try { old.observer.disconnect(); } catch (e) {} old.observer = null; }
-    sessions.delete(label);
-  }
-
-  /**
-   * Create and register a new blank session.
-   *
-   * @param {string} label    — field key / session label
-   * @param {Map}    sessions — session store
-   * @returns {NgSession}
-   */
-  function createSession(label, sessions) {
-    var session = {
-      id: Math.random().toString(36).slice(2, 8),
-      fieldKey: label,
-      resolved: false,
-      cancelled: false,
-      pollTimer: null,
-      timeoutIds: [],
-      observer: null,
-      startedAt: Date.now(),
-    };
-    sessions.set(label, session);
-    return session;
-  }
-
-  /**
-   * Clean up a session's resources without deleting it from the store.
-   * Used by the session itself when it resolves normally.
-   *
-   * @param {NgSession} session
-   * @param {Map}       sessions
-   * @param {string}    label
-   */
-  function cleanupSession(session, sessions, label) {
-    try { clearInterval(session.pollTimer); } catch (e) {}
-    (session.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch (e) {} });
-    if (session.observer) { try { session.observer.disconnect(); } catch (e) {} session.observer = null; }
-    if (sessions && label !== undefined) sessions.delete(label);
-  }
-
-  root.CcNgSessionManager = {
-    cancelSession: cancelSession,
-    createSession: createSession,
-    cleanupSession: cleanupSession,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/ng-option-scorer.js ==== */
-/**
- * ng-option-scorer — Angular Dropdown Option Scorer
- *
- * Scores a dropdown option's text against a planned fill value to determine
- * how well they match. Returns a numeric score (0–100); higher is better.
- * Used when selecting the best option from an ng-dropdown / ng-select list.
- *
- * Also provides scoreAndPick(opts, planned) for picking the best option
- * from a list of {text, node} entries.
- *
- * Pure JS — no DOM, no Chrome, no kernel. Deterministic.
- *
- * Public API (on globalThis.CcNgOptionScorer):
- *   scoreOption(optText, planned) => number    (0–100)
- *   scoreAndPick(opts, planned, minScore?) => opt | null
- *
- * See ng-option-scorer.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Score how well `optText` matches `planned`.
-   *
-   * Scoring cascade (higher = better match):
-   *   100 — exact match (case-insensitive)
-   *    80 — one string contains the other
-   *    70 — reverse-contains (optText in planned) with >3 chars
-   *    60 — token overlap ≥2
-   *    55 — education-level synonym match
-   *    50 — single-token overlap when either string is short (≤2 tokens)
-   *     0 — no match
-   *
-   * @param {string} optText  — option label text
-   * @param {string} planned  — planned fill value
-   * @returns {number} 0–100
-   */
-  function scoreOption(optText, planned) {
-    var ot = String(optText || '').toLowerCase().trim();
-    var v  = String(planned  || '').toLowerCase().trim();
-    if (!ot || !v) return 0;
-    if (ot === v) return 100;
-    if (ot.includes(v)) return 80;
-    if (v.includes(ot) && ot.length > 3) return 70;
-    // Token overlap: split on common separators, require tokens > 2 chars
-    var vToks = v.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
-    var oToks = ot.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
-    var overlap = vToks.filter(function (t) {
-      return oToks.some(function (o) { return o.includes(t) || t.includes(o); });
-    }).length;
-    if (overlap >= 2) return 60;
-    if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
-    // Education-level synonyms (common Indian government form variants)
-    var EDU_SYNONYMS = [
-      ['intermediate', 'higher secondary', '10+2', '12th', 'hsc', 'senior secondary'],
-      ['matriculation', '10th', 'sslc', 'secondary', 'high school', 'class 10', 'class x'],
-      ['graduation', 'graduate', 'degree', 'bachelor', 'ug'],
-      ['post graduation', 'post graduate', 'masters', 'master', 'pg', 'm.a', 'm.sc', 'm.com'],
-    ];
-    for (var i = 0; i < EDU_SYNONYMS.length; i++) {
-      var group = EDU_SYNONYMS[i];
-      var vIn = group.some(function (s) { return v.includes(s); });
-      var oIn = group.some(function (s) { return ot.includes(s); });
-      if (vIn && oIn) return 55;
-    }
-    return 0;
-  }
-
-  /**
-   * Pick the best option from a list.
-   *
-   * @param {Array<{text: string, node: *}>} opts  — list of candidates
-   * @param {string} planned                        — planned fill value
-   * @param {number} [minScore=50]                  — minimum score to accept
-   * @returns {{text, node, score} | null}
-   */
-  function scoreAndPick(opts, planned, minScore) {
-    minScore = (typeof minScore === 'number') ? minScore : 50;
-    var best = null;
-    var bestScore = 0;
-    for (var i = 0; i < opts.length; i++) {
-      var score = scoreOption(opts[i].text, planned);
-      if (score > bestScore) {
-        bestScore = score;
-        best = opts[i];
-      }
-    }
-    if (bestScore >= minScore) {
-      return Object.assign({ score: bestScore }, best);
-    }
-    return null;
-  }
-
-  root.CcNgOptionScorer = {
-    scoreOption: scoreOption,
-    scoreAndPick: scoreAndPick,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/build-fill-record.js ==== */
-/**
- * build-fill-record — Fill Record Assembler
- *
- * Pure function that stamps a base field-result object with the three
- * common envelope fields that every CcRecord must carry:
- *   ts        — Date.now() at record creation time
- *   rv        — RUNTIME_VERSION string
- *   fillMode  — always 'sequential' for the sequential fill loop
- *
- * This pattern was previously repeated inline at every _ccRecords.push(...)
- * call site. This is the single canonical implementation.
- *
- * Pure JS — no DOM, no Chrome, no kernel. Deterministic (ts injected via opts.now).
- *
- * Public API (on globalThis.CcBuildFillRecord):
- *   buildFillRecord(base, opts?) => CcRecord
- *
- * opts: { rv?, fillMode?, now? }  — all optional, primarily used for testing
- *
- * See build-fill-record.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Stamp a base object with envelope fields.
-   *
-   * @param {object} base     — caller-provided fields (selector, value, type, result, …)
-   * @param {object} [opts]
-   * @param {string} [opts.rv]       — RUNTIME_VERSION (default: '')
-   * @param {string} [opts.fillMode] — fill mode label (default: 'sequential')
-   * @param {function(): number} [opts.now] — timestamp fn (default: Date.now)
-   * @returns {object} stamped record
-   */
-  function buildFillRecord(base, opts) {
-    opts = opts || {};
-    var rv       = (opts.rv !== undefined)       ? opts.rv       : '';
-    var fillMode = (opts.fillMode !== undefined) ? opts.fillMode : 'sequential';
-    var now      = (typeof opts.now === 'function') ? opts.now : Date.now;
-    return Object.assign(
-      { ts: now(), rv: rv, fillMode: fillMode },
-      base
-    );
-  }
-
-  root.CcBuildFillRecord = {
-    buildFillRecord: buildFillRecord,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/fill-debug-emitter.js ==== */
-/**
- * fill-debug-emitter — Debug Event Queue + Emitter
- *
- * Assembles fill debug events, batches them in a queue, and flushes them
- * to an injected sender (Chrome port or sendMessage). The sender is injected
- * so this capability is fully testable without a browser.
- *
- * Events are coalesced with a 40ms timer. High-priority events
- * (fill.start, fill.end, queue >= 6) flush immediately.
- *
- * Public API (on globalThis.CcFillDebugEmitter):
- *   createEmitter(opts) => emitter
- *
- * emitter:
- *   emit(event, payload)   — enqueue and possibly flush
- *   flush()                — flush immediately
- *   queue                  — read-only access to pending queue (for tests)
- *
- * See fill-debug-emitter.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Create a fill debug emitter.
-   *
-   * @param {object} opts
-   * @param {function(): string} opts.getRunId       — returns current fillRunId
-   * @param {function(): string} opts.getRv           — returns RUNTIME_VERSION
-   * @param {function(): string} [opts.getHostname]  — returns hostname (default: location.hostname)
-   * @param {function(Array): void} opts.send         — batch sender (receives array of event objects)
-   * @returns {{ emit, flush, queue }}
-   */
-  function createEmitter(opts) {
-    opts = opts || {};
-    var getRunId   = opts.getRunId   || function () { return ''; };
-    var getRv      = opts.getRv      || function () { return ''; };
-    var getHostname = opts.getHostname || function () {
-      return (typeof location !== 'undefined') ? location.hostname : '';
-    };
-    var send = opts.send || function () {};
-
-    var _queue = [];
-    var _timer = null;
-
-    function _flush() {
-      if (!_queue.length) return;
-      var batch = _queue.splice(0, 40);
-      send(batch);
-      if (_queue.length) _schedule();
-    }
-
-    function _schedule() {
-      if (_timer) return;
-      _timer = setTimeout(function () {
-        _timer = null;
-        _flush();
-      }, 40);
-    }
-
-    function emit(event, payload) {
-      var evt = Object.assign(
-        {
-          event: event,
-          fillRunId: getRunId(),
-          hostname: getHostname(),
-          ts: Date.now(),
-          rv: getRv(),
-        },
-        payload || {}
-      );
-      // Rename widget type so it doesn't clash with message envelope type
-      if (evt.type && evt.type !== 'FILL_DEBUG') {
-        evt.fieldType = evt.type;
-        delete evt.type;
-      }
-      _queue.push(evt);
-      // fill.start / fill.end + large batches flush immediately
-      var immediate = event === 'fill.start' || event === 'fill.end' || _queue.length >= 6;
-      if (immediate) {
-        if (_timer) { clearTimeout(_timer); _timer = null; }
-        _flush();
-      } else {
-        _schedule();
-      }
-    }
-
-    function flush() {
-      if (_timer) { clearTimeout(_timer); _timer = null; }
-      _flush();
-    }
-
-    return {
-      emit: emit,
-      flush: flush,
-      get queue() { return _queue; },
-    };
-  }
-
-  root.CcFillDebugEmitter = {
-    createEmitter: createEmitter,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/verify-fill-value.js ==== */
-/**
- * verify-fill-value — Fill Value Verifier
- *
- * After a fill attempt, reads the actual current DOM value and compares it
- * to the planned value to determine whether the fill succeeded.
- *
- * Handles: checkbox checked state, radio group selected label, <select>
- * option text, text input value, masked inputs (e.g. Aadhaar last-4),
- * and normalised alphanumeric comparison.
- *
- * The element resolver is injected so this capability is testable without
- * a real browser document.
- *
- * Public API (on globalThis.CcVerifyFillValue):
- *   verifyFillValue(selector, expected, resolveEl, settleMs?) => Promise<VerifyResult>
- *
- * VerifyResult: { ok, actualValue, normExpected, normActual, reason?, partial?, masked? }
- *
- * See verify-fill-value.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Verify that a fill attempt produced the expected value in the DOM.
-   *
-   * Waits `settleMs` milliseconds first (default 150ms) to allow framework
-   * validators, formatters, and ControlValueAccessors to react.
-   *
-   * @param {string} selector       The cc-style selector for the field
-   * @param {string|null} expected  The value that was planned/filled
-   * @param {function(string): Element|null} resolveEl  Element resolver (injected)
-   * @param {number} [settleMs=150]  How long to wait before reading DOM
-   *
-   * @returns {Promise<{ok, actualValue, normExpected, normActual, reason?, partial?, masked?}>}
-   */
-  async function verifyFillValue(selector, expected, resolveEl, settleMs) {
-    settleMs = (typeof settleMs === 'number') ? settleMs : 150;
-
-    // Wait for framework to react
-    if (settleMs > 0) await new Promise(function (r) { setTimeout(r, settleMs); });
-
-    // Resolve element
-    var liveEl;
-    if (selector && selector.startsWith && selector.startsWith('ng-dropdown-')) {
-      liveEl = null; // ng-dropdown verify handled by the handler's own verify
-    } else {
-      liveEl = resolveEl(selector);
-    }
-
-    if (!liveEl) {
-      return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'no-element-on-verify' };
-    }
-
-    var tag = (liveEl.tagName || '').toLowerCase();
-
-    // ── Checkbox ──────────────────────────────────────────────────────────────
-    if (liveEl.type === 'checkbox') {
-      return {
-        ok: !!liveEl.checked,
-        actualValue: liveEl.checked ? 'true' : 'false',
-        normExpected: String(expected || ''),
-        normActual: liveEl.checked ? 'true' : 'false',
-      };
-    }
-
-    // ── Radio ─────────────────────────────────────────────────────────────────
-    if (liveEl.type === 'radio') {
-      var groupName = liveEl.name;
-      var selected = liveEl.checked ? liveEl : null;
-      if (groupName) {
-        var checked = document.querySelector('input[type="radio"][name="' + groupName + '"]:checked');
-        if (checked) selected = checked;
-      }
-      if (!selected) {
-        return { ok: false, actualValue: '', normExpected: String(expected || ''), normActual: '', reason: 'radio-none-checked' };
-      }
-      var lbl = selected.id ? document.querySelector('label[for="' + selected.id + '"]') : null;
-      var actualLabel = (lbl && lbl.textContent.trim()) || selected.value || 'true';
-      var normFn = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
-      var normExp0 = normFn(expected);
-      var normAct0 = normFn(actualLabel);
-      var ok0 = !expected ||
-        normAct0.includes(normExp0.slice(0, 4)) ||
-        normExp0.includes(normAct0.slice(0, 4)) ||
-        selected.checked;
-      return { ok: !!ok0, actualValue: actualLabel, normExpected: normExp0, normActual: normAct0 };
-    }
-
-    // ── Select ────────────────────────────────────────────────────────────────
-    if (tag === 'select') {
-      var opt = liveEl.options[liveEl.selectedIndex];
-      var actualVal = (opt ? (opt.text || opt.value) : '') || '';
-      var normExpS = String(expected || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      var normActS = actualVal.toLowerCase().replace(/[^a-z0-9]/g, '');
-      var okS = normExpS.length > 0 && (normActS === normExpS || normActS.includes(normExpS) || normExpS.includes(normActS));
-      return { ok: okS, actualValue: actualVal, normExpected: normExpS, normActual: normActS };
-    }
-
-    // ── Text input / textarea ─────────────────────────────────────────────────
-    var actual = liveEl.value || '';
-    var expStr = String(expected || '');
-
-    if (!expStr) {
-      return { ok: false, actualValue: actual, normExpected: '', normActual: actual, reason: 'empty-expected' };
-    }
-
-    var normExp = expStr.toLowerCase().replace(/[^a-z0-9]/g, '');
-    var normAct = actual.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    // Exact match (after normalisation)
-    if (normExp === normAct) {
-      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct };
-    }
-
-    // Partial match — framework may reformat (e.g. phone number groups)
-    if (normAct.length > 0 &&
-        (normAct.startsWith(normExp.slice(0, Math.max(8, normExp.length - 2))) ||
-         normExp.startsWith(normAct.slice(0, 8)))) {
-      return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, partial: true };
-    }
-
-    // Masked-input pattern (UIDAI Aadhaar: shows '****6597' but was filled with full number)
-    // Same length + last 4 chars match → accept
-    if (actual.length >= 8 && actual.length === expStr.length) {
-      var tail = expStr.slice(-4).toLowerCase();
-      if (actual.toLowerCase().endsWith(tail)) {
-        return { ok: true, actualValue: actual, normExpected: normExp, normActual: normAct, masked: true };
-      }
-    }
-
-    return {
-      ok: false,
-      actualValue: actual,
-      normExpected: normExp,
-      normActual: normAct,
-      reason: actual === '' ? 'value-rejected-empty' : 'value-mismatch',
-    };
-  }
-
-  root.CcVerifyFillValue = {
-    verifyFillValue: verifyFillValue,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/detect-fill-strategy.js ==== */
-/**
- * detect-fill-strategy — Fill Strategy Detector
- *
- * Given a DOM element and a type hint, returns the name of the fill strategy
- * that applies to that element. Used to tag fill records and debug events.
- *
- * The strategy registry defines which strategy applies to each widget type
- * and what verification contract it carries.
- *
- * No kernel, no CcExecParts, no Chrome APIs, no async behavior.
- * Strategy detection is pure synchronous DOM property inspection.
- *
- * Public API (on globalThis.CcDetectFillStrategy):
- *   detectFillStrategy(el, type) => string
- *   STRATEGY_REGISTRY: Record<string, StrategyEntry>
- *
- * See detect-fill-strategy.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Named fill strategies with applies predicates and verification contracts.
-   *
-   * Each strategy:
-   *   name        — the strategy identifier (matches the key)
-   *   description — human-readable explanation
-   *   applies     — function(el, type) => boolean: does this strategy apply?
-   *   verify      — verification contract used after filling:
-   *                   method: 'visual_text' | 'dom_value'
-   *                   check:  function(el, expected) => boolean
-   *                   timeout: ms to wait before checking
-   *
-   * Strategies are tested in registration order. First match wins.
-   *
-   * @type {Object}
-   */
-  var STRATEGY_REGISTRY = {
-    'ng-dropdown-click': {
-      name: 'ng-dropdown-click',
-      description: 'Angular custom ng-dropdown: click trigger, wait for li options, click match',
-      applies: function (el, type) {
-        return type === 'ng-dropdown' || (el && el.classList && el.classList.contains('ng-dropdown'));
-      },
-      verify: {
-        method: 'visual_text',
-        check: function (el, expected) {
-          var displayed = el.querySelector('.select-type,.value-area,.ng-value-label');
-          return displayed ? displayed.textContent.trim().toLowerCase().includes(expected.toLowerCase().slice(0, 6)) : false;
-        },
-        timeout: 1000,
-      },
-    },
-    'mat-select-click': {
-      name: 'mat-select-click',
-      description: 'Angular Material mat-select: click trigger, wait for panel, click option',
-      applies: function (el, type) {
-        return type === 'mat-select' || (el && el.tagName === 'MAT-SELECT');
-      },
-      verify: {
-        method: 'visual_text',
-        check: function (el, expected) {
-          var v = el.querySelector('.mat-select-value-text,.mat-mdc-select-value-text');
-          return v ? v.textContent.trim().toLowerCase().includes(expected.toLowerCase().slice(0, 4)) : false;
-        },
-        timeout: 500,
-      },
-    },
-    'native-select': {
-      name: 'native-select',
-      description: 'Native <select>: set value via nativeSetter, dispatch change',
-      applies: function (el, type) {
-        return type === 'select' || (el && el.tagName === 'SELECT');
-      },
-      verify: {
-        method: 'dom_value',
-        check: function (el, expected) {
-          var norm = function (s) { return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim(); };
-          return norm(el.value) === norm(expected) ||
-            norm((el.options && el.options[el.selectedIndex] && el.options[el.selectedIndex].text) || '').includes(norm(expected).slice(0, 6));
-        },
-        timeout: 300,
-      },
-    },
-    'dwr-cascade-select': {
-      name: 'dwr-cascade-select',
-      description: 'ServicePlus DWR cascade: waitForOptions then set value, re-apply after DWR reset',
-      applies: function (el, type) {
-        return type === 'select' && el && el.getAttribute && el.getAttribute('data-datatype') === 'custLGDHierarchy';
-      },
-      verify: {
-        method: 'dom_value',
-        check: function (el, expected) {
-          var norm = function (s) { return s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim(); };
-          return norm((el.options && el.options[el.selectedIndex] && el.options[el.selectedIndex].text) || '').includes(norm(expected).slice(0, 4));
-        },
-        timeout: 500,
-      },
-    },
-    'text-input': {
-      name: 'text-input',
-      description: 'Text/email/tel input: nativeInputValueSetter + input/change events',
-      applies: function (el, type) {
-        var EXCLUDED = ['select', 'ng-dropdown', 'mat-select', 'mat-radio', 'mat-checkbox',
-          'radio', 'checkbox', 'radio-group', 'radio-click', 'checkbox-group', 'checkbox-agreement'];
-        return EXCLUDED.indexOf(type) === -1;
-      },
-      verify: {
-        method: 'dom_value',
-        check: function (el, expected) {
-          return el.value === expected || el.value.includes(expected.slice(0, 8));
-        },
-        timeout: 200,
-      },
-    },
-    'radio-click': {
-      name: 'radio-click',
-      description: 'Click a specific radio option (resolved by planner)',
-      applies: function (el, type) {
-        return type === 'radio-click' || type === 'radio' || type === 'radio-group' ||
-          (el && el.type === 'radio');
-      },
-      verify: {
-        method: 'dom_value',
-        check: function (el) {
-          return !!(el && (el.checked || (el.querySelector && el.querySelector('input[type=radio]:checked'))));
-        },
-        timeout: 200,
-      },
-    },
-  };
-
-  /**
-   * Returns the name of the first strategy whose applies() predicate matches
-   * the given element and type hint.
-   *
-   * Returns the type hint unchanged if it is not empty and no strategy matched,
-   * or 'unknown' if both are empty/null.
-   *
-   * Never throws — each applies() call is wrapped in try/catch.
-   *
-   * @param {Element|null} el   The resolved DOM element
-   * @param {string} type       Type hint from the fill mapping
-   * @returns {string}          Strategy name
-   */
-  function detectFillStrategy(el, type) {
-    var keys = Object.keys(STRATEGY_REGISTRY);
-    for (var i = 0; i < keys.length; i++) {
-      try {
-        if (STRATEGY_REGISTRY[keys[i]].applies(el, type)) return keys[i];
-      } catch (e) { /* ignore — defensive against null element in applies */ }
-    }
-    return type || 'unknown';
-  }
-
-  root.CcDetectFillStrategy = {
-    detectFillStrategy: detectFillStrategy,
-    STRATEGY_REGISTRY: STRATEGY_REGISTRY,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/resolve-cc-selector.js ==== */
-/**
- * resolve-cc-selector — CC-Style Selector Resolver
- *
- * Resolves a CyberControl selector string to a DOM element.
- * Handles three formats:
- *   form-field-N    → Nth visible form control (input/select/textarea)
- *   ng-dropdown-N   → Nth div.ng-dropdown
- *   <css selector>  → document.querySelector(selector)
- *
- * The document is injectable for testing (jsdom) and cross-frame use.
- * No Chrome API, no CcExecParts, no kernel, no fill state.
- *
- * Public API (on globalThis.CcResolveCcSelector):
- *   resolveCcSelector(selector, doc?) => Element | null
- *
- * See resolve-cc-selector.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Query string for form-field-N resolution.
-   * Covers all visible form control types used on government forms.
-   * Excludes input[type=hidden] intentionally.
-   */
-  var FORM_FIELD_QUERY = [
-    'input[type="text"]',
-    'input[type="email"]',
-    'input[type="tel"]',
-    'input[type="number"]',
-    'input[type="date"]',
-    'input[type="radio"]',
-    'input[type="checkbox"]',
-    'input:not([type])',
-    'textarea',
-    'select',
-  ].join(',');
-
-  /**
-   * Resolve a cc-style selector to a DOM element.
-   *
-   * @param {string} selector
-   * @param {Document} [doc] - document to query against (defaults to global document)
-   * @returns {Element|null}
-   */
-  function resolveCcSelector(selector, doc) {
-    var d = doc || (typeof document !== 'undefined' ? document : null);
-    if (!d) return null;
-
-    if (selector.startsWith('form-field-')) {
-      var idx = parseInt(selector.slice('form-field-'.length), 10);
-      var all = d.querySelectorAll(FORM_FIELD_QUERY);
-      return all[idx] || null;
-    }
-
-    if (selector.startsWith('ng-dropdown-')) {
-      var ngIdx = parseInt(selector.slice('ng-dropdown-'.length), 10);
-      var dropdowns = d.querySelectorAll('div.ng-dropdown');
-      return dropdowns[ngIdx] || null;
-    }
-
-    return d.querySelector(selector);
-  }
-
-  root.CcResolveCcSelector = {
-    resolveCcSelector: resolveCcSelector,
-    /** Exposed for consumers that need to build compatible form-field selectors. */
-    FORM_FIELD_QUERY: FORM_FIELD_QUERY,
-  };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/sort-fields-by-dom-order.js ==== */
-/**
- * sort-fields-by-dom-order — Fill Entry DOM Order Sorter
- *
- * Sorts an array of [selector, fieldData] fill entries into the visual
- * top-to-bottom order they appear in the page.
- *
- * This ensures fields are filled in the order the form's own validation
- * expects — typically top to bottom as laid out in the DOM.
- *
- * No kernel, no CcExecParts, no Chrome APIs, no cascade knowledge.
- * The resolver function is injected so this capability is testable without a
- * real browser document.
- *
- * Public API (on globalThis.CcSortFieldsByDomOrder):
- *   sortFieldsByDomOrder(entries, resolveEl) => entries (sorted in place)
- *
- * See sort-fields-by-dom-order.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Sort fill entries in DOM top-to-bottom order.
-   *
-   * Uses compareDocumentPosition to determine which of two elements appears
-   * earlier in the document. Entries whose selectors resolve to null (element
-   * not present) are sorted to the end with their relative order preserved.
-   *
-   * Sorts the array in place and also returns it.
-   *
-   * @param {Array<[string, object]>} entries
-   *   Array of [selector, fieldData] pairs from the fill mapping.
-   *
-   * @param {function(string): Element|null} resolveEl
-   *   Function that turns a selector string into a DOM element.
-   *   Should be CcResolveCcSelector.resolveCcSelector or equivalent.
-   *
-   * @returns {Array<[string, object]>} The same array, sorted in place.
-   */
-  function sortFieldsByDomOrder(entries, resolveEl) {
-    if (!Array.isArray(entries) || entries.length < 2) return entries;
-    var FOLLOWING = (typeof Node !== 'undefined' && Node.DOCUMENT_POSITION_FOLLOWING) || 4;
-    entries.sort(function (pairA, pairB) {
-      var a = resolveEl(pairA[0]);
-      var b = resolveEl(pairB[0]);
-      if (!a || !b) return 0;        // one or both not in DOM — preserve order
-      if (a === b) return 0;          // same element
-      if (typeof a.compareDocumentPosition !== 'function') return 0;
-      return a.compareDocumentPosition(b) & FOLLOWING ? -1 : 1;
+  function waitForDOMQuiet(ms) {
+    ms = ms || 300;
+    return new Promise(function(resolve) {
+      var last = Date.now();
+      var mo = new MutationObserver(function() { last = Date.now(); });
+      mo.observe(document.body, { childList: true, subtree: true });
+      var check = setInterval(function() {
+        if (Date.now() - last >= ms) { clearInterval(check); mo.disconnect(); resolve(); }
+      }, 50);
+      setTimeout(function() { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
     });
-    return entries;
   }
 
-  root.CcSortFieldsByDomOrder = {
-    sortFieldsByDomOrder: sortFieldsByDomOrder,
-  };
+  function waitForNetworkIdle(quietMs, maxMs) {
+    if (typeof window !== 'undefined' && typeof window.ccWaitForNetworkIdle === 'function') {
+      return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
+    }
+    // Safe fallback if ccWaitForNetworkIdle not loaded
+    return new Promise(function(r) { setTimeout(r, quietMs || 200, { idle: true, waitedMs: quietMs || 200 }); });
+  }
 
+    k.settleAfterAct = settleAfterAct;
+    k.waitForSelectOptionsSequential = waitForSelectOptionsSequential;
+    k.waitForOptions = waitForOptions;
+    k.waitForDOMQuiet = waitForDOMQuiet;
+    k.waitForNetworkIdle = waitForNetworkIdle;
+
+  };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* ==== capabilities/install-dom-order.js ==== */
@@ -3996,90 +4080,6 @@
           }
     };
   };
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ==== capabilities/confirm-field-pattern.js ==== */
-/**
- * confirm-field-pattern — Confirm/Retype Field Identifier
- *
- * Identifies whether an input field is a confirm/retype field, and derives
- * the base field ID that it confirms.
- *
- * Used by post-fill-confirm.js (static propagation) and post-fill-mirror.js
- * (live mirror). Previously duplicated identically in both files.
- *
- * No DOM, no kernel, no Chrome APIs. Pure string/pattern matching.
- *
- * Public API (on globalThis.CcConfirmFieldPattern):
- *   isConfirmField(id, label?) => boolean
- *   getBaseId(id) => string
- *
- * See confirm-field-pattern.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * Matches confirm/retype field ID prefixes (case-insensitive):
-   *   c{letter}  — e.g. cPassword, cEmail
-   *   confirm    — e.g. confirmPassword, confirm_email
-   *   retype     — e.g. retypePassword
-   *   re_type    — e.g. re_type_password
-   *   re_enter   — e.g. re_enter_mobile
-   *   verify     — e.g. verifyEmail
-   */
-  var CONFIRM_PREFIX_PATTERN = /^c(?=[a-z])|^confirm|^retype|^re_?type|^re_?enter|^verify/i;
-
-  /**
-   * Matches confirm/retype keywords in label text (case-insensitive).
-   */
-  var CONFIRM_LABEL_PATTERN = /confirm|retype|re.type|re.enter|verify/i;
-
-  /**
-   * Returns true if the field appears to be a confirm/retype field.
-   *
-   * @param {string} id     The element's id or name attribute
-   * @param {string} [label]  Optional label text
-   * @returns {boolean}
-   */
-  function isConfirmField(id, label) {
-    var idStr = String(id || '').toLowerCase();
-    if (!idStr) return false;
-    if (CONFIRM_PREFIX_PATTERN.test(idStr)) return true;
-    if (label && CONFIRM_LABEL_PATTERN.test(String(label))) return true;
-    return false;
-  }
-
-  /**
-   * Derives the base field ID by stripping the confirm prefix.
-   * Returns the original string if no prefix matched.
-   *
-   * NOTE — legacy behavior: the ^c(?=[a-z]) rule fires first. This means
-   * 'confirmPassword' → 'onfirmPassword' (the 'c' followed by lowercase 'o'
-   * is stripped, not the full 'confirm'). This is the original behavior and
-   * is preserved exactly. Use IDs like 'cPassword' (with uppercase base) if
-   * you want the c-prefix stripping to work as intended.
-   *
-   * @param {string} id
-   * @returns {string}
-   */
-  function getBaseId(id) {
-    return String(id || '')
-      .replace(/^c(?=[a-z])/, '')
-      .replace(/^confirm_?/i, '')
-      .replace(/^retype_?/i, '')
-      .replace(/^re_?type_?/i, '')
-      .replace(/^re_?enter_?/i, '')
-      .replace(/^verify_?/i, '');
-  }
-
-  root.CcConfirmFieldPattern = {
-    isConfirmField: isConfirmField,
-    getBaseId: getBaseId,
-    CONFIRM_PREFIX_PATTERN: CONFIRM_PREFIX_PATTERN,
-    CONFIRM_LABEL_PATTERN: CONFIRM_LABEL_PATTERN,
-  };
-
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 /* ==== capabilities/install-post-fill-corrections.js ==== */
