@@ -6,6 +6,8 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneChoiceDom = function (k) {
+    var b = root.CcExecParts.bindKernelLocals(k);
+    var filledBySource = b.filledBySource;
 
 
     k.fillOneHandlers = k.fillOneHandlers || [];
