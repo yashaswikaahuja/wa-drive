@@ -10,12 +10,12 @@ autofill/
 ├── executor-bundle.js           ← AUTO-GENERATED. Do not edit. Injected into pages.
 ├── build-executor-bundle.mjs    ← Build script. Run: node build-executor-bundle.mjs
 └── executor/
-    └── capabilities/
-        ├── Cc*.js               ← Pure capability modules (21 files)
-        ├── Cc*.test.mjs         ← Tests (plain Node .mjs, no framework)
-        ├── Cc*.md               ← Documentation
-        ├── install-*.js         ← Kernel wiring installers (20 files)
-        └── install-*.md         ← Documentation
+    ├── docs/                    ← Documentation (.md) for all capabilities and wiring files
+    ├── capabilities/
+    │   ├── Cc*.js               ← Pure capability modules (21 files)
+    │   ├── Cc*.test.mjs         ← Tests (plain Node .mjs, no framework)
+    │   └── install-*.js         ← Kernel wiring installers (20 files)
+    └── README.md                ← This file
 ```
 
 ## Naming convention
@@ -23,7 +23,7 @@ autofill/
 | Prefix | Role |
 |--------|------|
 | `Cc*` | Pure capability — sets `globalThis.CcXxx`, no kernel dependency, fully testable |
-| `install-*` | Kernel wiring — calls `CcExecParts.installXxx(k)`, picks up `CcXxx` globals and wires them onto the kernel object `k` |
+| `install-*` | Kernel wiring — calls `CcExecParts.installXxx(k)`, picks up `CcXxx` globals and wires onto the kernel object `k` |
 
 ## Bundle load order
 
@@ -38,54 +38,54 @@ This guarantees `globalThis.CcXxx` exists when each installer runs.
 
 ## Capabilities (Cc* — 21 total)
 
-| File | Global | Purpose |
-|------|--------|---------|
-| `parse-date-value.js` | `CcParseDateValue` | Date string parser |
-| `cascade-field-level.js` | `CcCascadeFieldLevel` | Cascade geography semantics |
-| `select-option-state.js` | `CcSelectOptionState` | Select option state readers |
-| `confirm-field-pattern.js` | `CcConfirmFieldPattern` | Confirm/retype field detection |
-| `ng-option-scorer.js` | `CcNgOptionScorer` | ng-dropdown option scoring |
-| `ng-session-manager.js` | `CcNgSessionManager` | ng-dropdown session lifecycle |
-| `build-fill-record.js` | `CcBuildFillRecord` | Fill record assembler |
-| `fill-debug-emitter.js` | `CcFillDebugEmitter` | Debug event queue + batching |
-| `wait-for-options.js` | `CcWaitForOptions` | Select option poller |
-| `settle-after-act.js` | `CcSettleAfterAct` | Post-action settle engine |
-| `resolve-cc-selector.js` | `CcResolveCcSelector` | CSS selector resolution |
-| `sort-fields-by-dom-order.js` | `CcSortFieldsByDomOrder` | DOM order sort |
-| `verify-fill-value.js` | `CcVerifyFillValue` | Fill value verifier |
-| `detect-fill-strategy.js` | `CcDetectFillStrategy` | Fill strategy detection |
-| `post-fill-corrections.js` | `CcPostFillCorrections` | Post-fill correction observer |
-| `fill-one-ng.js` | `CcFillOneNg` | ng-dropdown fill logic |
-| `fill-one-select.js` | `CcFillOneSelect` | Native select fill logic |
-| `fill-one-date.js` | `CcFillOneDate` | Date field fill logic |
-| `fill-one-radio.js` | `CcFillOneRadio` | Radio/checkbox/file fill logic |
-| `fill-one-mat.js` | `CcFillOneMat` | Angular Material fill logic |
-| `fill-one-text.js` | `CcFillOneText` | Text/keystroke fill logic |
+| File | Global | Docs |
+|------|--------|------|
+| `parse-date-value.js` | `CcParseDateValue` | [docs](docs/parse-date-value.md) |
+| `cascade-field-level.js` | `CcCascadeFieldLevel` | [docs](docs/cascade-field-level.md) |
+| `select-option-state.js` | `CcSelectOptionState` | [docs](docs/select-option-state.md) |
+| `confirm-field-pattern.js` | `CcConfirmFieldPattern` | [docs](docs/confirm-field-pattern.md) |
+| `ng-option-scorer.js` | `CcNgOptionScorer` | [docs](docs/ng-option-scorer.md) |
+| `ng-session-manager.js` | `CcNgSessionManager` | [docs](docs/ng-session-manager.md) |
+| `build-fill-record.js` | `CcBuildFillRecord` | [docs](docs/build-fill-record.md) |
+| `fill-debug-emitter.js` | `CcFillDebugEmitter` | [docs](docs/fill-debug-emitter.md) |
+| `wait-for-options.js` | `CcWaitForOptions` | [docs](docs/wait-for-options.md) |
+| `settle-after-act.js` | `CcSettleAfterAct` | [docs](docs/settle-after-act.md) |
+| `resolve-cc-selector.js` | `CcResolveCcSelector` | [docs](docs/resolve-cc-selector.md) |
+| `sort-fields-by-dom-order.js` | `CcSortFieldsByDomOrder` | [docs](docs/sort-fields-by-dom-order.md) |
+| `verify-fill-value.js` | `CcVerifyFillValue` | [docs](docs/verify-fill-value.md) |
+| `detect-fill-strategy.js` | `CcDetectFillStrategy` | [docs](docs/detect-fill-strategy.md) |
+| `post-fill-corrections.js` | `CcPostFillCorrections` | [docs](docs/post-fill-corrections.md) |
+| `fill-one-ng.js` | `CcFillOneNg` | [docs](docs/fill-one-ng.md) |
+| `fill-one-select.js` | `CcFillOneSelect` | [docs](docs/fill-one-select.md) |
+| `fill-one-date.js` | `CcFillOneDate` | [docs](docs/fill-one-date.md) |
+| `fill-one-radio.js` | `CcFillOneRadio` | [docs](docs/fill-one-radio.md) |
+| `fill-one-mat.js` | `CcFillOneMat` | [docs](docs/fill-one-mat.md) |
+| `fill-one-text.js` | `CcFillOneText` | [docs](docs/fill-one-text.md) |
 
 ## Kernel wiring (install-* — 20 total)
 
-| File | Installs | Notes |
-|------|----------|-------|
-| `install-kernel-bind.js` | `bindKernelLocals(k)` | Alias mapper for all wiring files |
-| `install-debug.js` | `k.emitFillDebug`, `k.flushDebugQueue` | Chrome port transport |
-| `install-select-helpers.js` | `k.pushSelectRecord`, cascade + state aliases | Delegates to CcSelectOptionState, CcCascadeFieldLevel |
-| `install-settle.js` | `k.settleAfterAct`, `k.waitForOptions`, `k.waitForDOMQuiet`, `k.waitForNetworkIdle` | Delegates to CcSettleAfterAct, CcWaitForOptions |
-| `install-dom-order.js` | `k.getEl`, `k.PRIORITY_KEYS`, `k.entries` | Delegates to CcResolveCcSelector, CcSortFieldsByDomOrder |
-| `install-strategy.js` | `k.detectStrategy`, `k.verifyValue`, `k.STRATEGY_REGISTRY` | Delegates to CcDetectFillStrategy, CcVerifyFillValue |
-| `install-fill-one-ng-helpers.js` | `k._ngIsVisible`, `k._ngScoreOption`, `k._ngCancelSession`, `k._ngPickOption` | Delegates to CcNgOptionScorer, CcNgSessionManager |
-| `install-fill-one-ng.js` | Handler id=`ng-dropdown` | Delegates to CcFillOneNg |
-| `install-fill-one-mat.js` | Handler id=`mat` | Delegates to CcFillOneMat |
-| `install-fill-one-radio-planned.js` | Handler id=`radio-planned` | Delegates to CcFillOneRadio |
-| `install-fill-one-select.js` | Handler id=`select` | Delegates to CcFillOneSelect |
-| `install-fill-one-choice-dom.js` | Handler id=`choice-dom` | Delegates to CcFillOneRadio |
-| `install-fill-one-date.js` | Handler id=`date` | Delegates to CcFillOneDate |
-| `install-fill-one-text.js` | Handler id=`text` | Delegates to CcFillOneText |
-| `install-fill-one.js` | `k.fillOne`, `detectElType` | Handler chain dispatcher |
-| `install-sequential.js` | `k.fillSequential` | Main fill loop |
-| `install-post-fill-corrections.js` | Correction observer | Delegates to CcPostFillCorrections |
-| `install-post-fill-confirm.js` | Confirm/retype mirror | Delegates to CcConfirmFieldPattern |
-| `install-post-fill-mirror.js` | DOM mirror observer | Delegates to CcConfirmFieldPattern |
-| `install-post-fill.js` | Post-fill orchestrator | Calls confirm + corrections + mirror |
+| File | Installs | Docs |
+|------|----------|------|
+| `install-kernel-bind.js` | `bindKernelLocals(k)` | [docs](docs/install-kernel-bind.md) |
+| `install-debug.js` | `k.emitFillDebug`, `k.flushDebugQueue` | [docs](docs/install-debug.md) |
+| `install-select-helpers.js` | `k.pushSelectRecord`, cascade + state aliases | [docs](docs/install-select-helpers.md) |
+| `install-settle.js` | `k.settleAfterAct`, `k.waitForOptions`, `k.waitForDOMQuiet`, `k.waitForNetworkIdle` | [docs](docs/install-settle.md) |
+| `install-dom-order.js` | `k.getEl`, `k.PRIORITY_KEYS`, `k.entries` | [docs](docs/install-dom-order.md) |
+| `install-strategy.js` | `k.detectStrategy`, `k.verifyValue`, `k.STRATEGY_REGISTRY` | [docs](docs/install-strategy.md) |
+| `install-fill-one-ng-helpers.js` | `k._ngIsVisible`, `k._ngScoreOption`, `k._ngCancelSession`, `k._ngPickOption` | [docs](docs/install-fill-one-ng-helpers.md) |
+| `install-fill-one-ng.js` | Handler id=`ng-dropdown` | [docs](docs/install-fill-one-ng.md) |
+| `install-fill-one-mat.js` | Handler id=`mat` | [docs](docs/install-fill-one-mat.md) |
+| `install-fill-one-radio-planned.js` | Handler id=`radio-planned` | [docs](docs/install-fill-one-radio-planned.md) |
+| `install-fill-one-select.js` | Handler id=`select` | [docs](docs/install-fill-one-select.md) |
+| `install-fill-one-choice-dom.js` | Handler id=`choice-dom` | [docs](docs/install-fill-one-choice-dom.md) |
+| `install-fill-one-date.js` | Handler id=`date` | [docs](docs/install-fill-one-date.md) |
+| `install-fill-one-text.js` | Handler id=`text` | [docs](docs/install-fill-one-text.md) |
+| `install-fill-one.js` | `k.fillOne`, `detectElType` | [docs](docs/install-fill-one.md) |
+| `install-sequential.js` | `k.fillSequential` | [docs](docs/install-sequential.md) |
+| `install-post-fill-corrections.js` | Correction observer | [docs](docs/install-post-fill-corrections.md) |
+| `install-post-fill-confirm.js` | Confirm/retype mirror | [docs](docs/install-post-fill-confirm.md) |
+| `install-post-fill-mirror.js` | DOM mirror observer | [docs](docs/install-post-fill-mirror.md) |
+| `install-post-fill.js` | Post-fill orchestrator | [docs](docs/install-post-fill.md) |
 
 ## Running tests
 
