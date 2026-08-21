@@ -2580,114 +2580,51 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installSettle = function (k) {
-  // settle-after-act.js is the single source for post-action settle logic.
-  var _saa = root.CcSettleAfterAct;
-  var _settleEngine = _saa ? _saa.createSettleEngine({
-    waitForNetworkIdle: waitForNetworkIdle,
-    waitForOptions: waitForOptions,
-    getBudget: function() { return k.ajaxWaitBudgetMs; },
-    setBudget: function(n) { k.ajaxWaitBudgetMs = n; },
-  }) : null;
 
-  async function settleAfterAct(kind, opts) {
-    if (_settleEngine) return _settleEngine.settleAfterAct(kind, opts);
-    // Fallback (CcSettleAfterAct not loaded)
-    opts = opts || {};
-    const budget = typeof opts.budgetMs === 'number' ? opts.budgetMs : k.ajaxWaitBudgetMs;
-    if (kind === 'text') {
-      await new Promise((r) => setTimeout(r, 100));
-      return { idle: true, waitedMs: 100, kind: 'text' };
+    // CcSettleAfterAct and CcWaitForOptions are guaranteed to be loaded
+    // before this installer runs (see build-executor-bundle.mjs ORDER).
+    var _saa = root.CcSettleAfterAct;
+    var _wfo = root.CcWaitForOptions;
+
+    function waitForNetworkIdle(quietMs, maxMs) {
+      if (typeof window !== 'undefined' && typeof window.ccWaitForNetworkIdle === 'function') {
+        return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
+      }
+      return new Promise(function (r) {
+        setTimeout(r, quietMs || 200, { idle: true, waitedMs: quietMs || 200 });
+      });
     }
-    const kick = kind === 'button' ? 300 : 200;
-    await new Promise((r) => setTimeout(r, kick));
-    let maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
-    maxNet = Math.min(maxNet, Math.max(300, budget > 0 ? budget : 400));
-    const quiet = kind === 'select' ? 150 : 120;
-    const t0 = Date.now();
-    const net = await waitForNetworkIdle(quiet, maxNet);
-    const used = Date.now() - t0;
-    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - used);
-    return Object.assign({ kind: kind }, net);
-  }
 
-  async function waitForSelectOptionsSequential(selector, maxMs) {
-    if (_settleEngine) return _settleEngine.waitForSelectOptionsSequential(selector, maxMs);
-    // Fallback
-    maxMs = Math.min(maxMs || 6000, Math.max(400, k.ajaxWaitBudgetMs || 400));
-    const t0 = Date.now();
-    await settleAfterAct('choice', { budgetMs: Math.min(2000, maxMs) });
-    const left = Math.max(300, maxMs - (Date.now() - t0));
-    const el = await waitForOptions(selector, 1, left);
-    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - (Date.now() - t0));
-    return el;
-  }
-
-  // wait-for-options.js is the single source for select option polling.
-  var _wfo = root.CcWaitForOptions || {};
-  function waitForOptions(selector, minCount, timeout) {
-    if (_wfo.waitForOptions) {
+    function waitForOptions(selector, minCount, timeout) {
       return _wfo.waitForOptions(selector, minCount, timeout,
         document.querySelector.bind(document), document.body);
     }
-    // Fallback
-    minCount = minCount || 1; timeout = timeout || 8000;
-    return new Promise(function(resolve) {
-      var deadline = Date.now() + timeout;
-      var resolved = false;
-      var poll, mo;
-      function cleanup(val) {
-        if (resolved) return;
-        resolved = true;
-        if (poll) clearInterval(poll);
-        if (mo) mo.disconnect();
-        resolve(val);
-      }
-      function check() {
-        if (resolved) return;
-        var el = document.querySelector(selector);
-        var real = Array.from(el ? el.options || [] : []).filter(function(o) {
-          return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
-        });
-        if (real.length >= minCount) { cleanup(el); return; }
-        if (Date.now() > deadline) { cleanup(null); return; }
-      }
-      mo = new MutationObserver(check);
-      mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class'] });
-      check();
-      poll = setInterval(function() {
-        if (Date.now() > deadline) cleanup(null);
-        else check();
-      }, 200);
-    });
-  }
 
-  function waitForDOMQuiet(ms) {
-    ms = ms || 300;
-    return new Promise(function(resolve) {
-      var last = Date.now();
-      var mo = new MutationObserver(function() { last = Date.now(); });
-      mo.observe(document.body, { childList: true, subtree: true });
-      var check = setInterval(function() {
-        if (Date.now() - last >= ms) { clearInterval(check); mo.disconnect(); resolve(); }
-      }, 50);
-      setTimeout(function() { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
+    var _settleEngine = _saa.createSettleEngine({
+      waitForNetworkIdle: waitForNetworkIdle,
+      waitForOptions: waitForOptions,
+      getBudget: function () { return k.ajaxWaitBudgetMs; },
+      setBudget: function (n) { k.ajaxWaitBudgetMs = n; },
     });
-  }
 
-  function waitForNetworkIdle(quietMs, maxMs) {
-    if (typeof window !== 'undefined' && typeof window.ccWaitForNetworkIdle === 'function') {
-      return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
+    function waitForDOMQuiet(ms) {
+      ms = ms || 300;
+      return new Promise(function (resolve) {
+        var last = Date.now();
+        var mo = new MutationObserver(function () { last = Date.now(); });
+        mo.observe(document.body, { childList: true, subtree: true });
+        var check = setInterval(function () {
+          if (Date.now() - last >= ms) { clearInterval(check); mo.disconnect(); resolve(); }
+        }, 50);
+        setTimeout(function () { clearInterval(check); mo.disconnect(); resolve(); }, 5000);
+      });
     }
-    // Safe fallback if ccWaitForNetworkIdle not loaded
-    return new Promise(function(r) { setTimeout(r, quietMs || 200, { idle: true, waitedMs: quietMs || 200 }); });
-  }
 
-    k.settleAfterAct = settleAfterAct;
-    k.waitForSelectOptionsSequential = waitForSelectOptionsSequential;
+    k.settleAfterAct = function (kind, opts) { return _settleEngine.settleAfterAct(kind, opts); };
+    k.waitForSelectOptionsSequential = function (sel, maxMs) { return _settleEngine.waitForSelectOptionsSequential(sel, maxMs); };
     k.waitForOptions = waitForOptions;
     k.waitForDOMQuiet = waitForDOMQuiet;
     k.waitForNetworkIdle = waitForNetworkIdle;
-
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
@@ -2799,62 +2736,31 @@
       _isPlaceholderPlanned, _selectIsActive, fillOne,
     } = b;
 
+    // CcNgOptionScorer and CcNgSessionManager are guaranteed loaded before
+    // this installer runs (see build-executor-bundle.mjs ORDER).
+    var _nos = root.CcNgOptionScorer;
+    var _nsm = root.CcNgSessionManager;
+
     k._ngIsVisible = function (node) {
       return window.ccDomUtils && window.ccDomUtils.isVisible
         ? window.ccDomUtils.isVisible(node)
         : !!(node && node.offsetParent !== null);
     };
 
-    /** Score option text against planned value (higher = better). */
-  // ng-option-scorer.js is the single source for option text scoring.
-  // Must be loaded before fill-one-ng-helpers.js (see build-executor-bundle.mjs ORDER).
-  var _nos = root.CcNgOptionScorer || {};
-    k._ngScoreOption = _nos.scoreOption || function (optText, planned) {
-      // fallback: basic contains check
-      var ot = String(optText || '').toLowerCase().trim();
-      var v  = String(planned  || '').toLowerCase().trim();
-      if (!ot || !v) return 0;
-      if (ot === v) return 100;
-      if (ot.includes(v) || v.includes(ot)) return 60;
-      return 0;
+    k._ngScoreOption = function (optText, planned) {
+      return _nos.scoreOption(optText, planned);
     };
 
-  // ng-session-manager.js is the single source for session lifecycle.
-  // Must be loaded before fill-one-ng-helpers.js (see build-executor-bundle.mjs ORDER).
-  var _nsm = root.CcNgSessionManager || {};
     k._ngCancelSession = function (_label) {
-      if (_nsm.cancelSession) {
-        _nsm.cancelSession(_label, window._ccReplaySessions || null);
-        return;
-      }
-      // Fallback
-      if (!window._ccReplaySessions || !window._ccReplaySessions.has(_label)) return;
-      var old = window._ccReplaySessions.get(_label);
-      old.cancelled = true;
-      try { clearInterval(old.pollTimer); } catch(e) {}
-      (old.timeoutIds || []).forEach(function(id) { try { clearTimeout(id); } catch(e) {} });
-      if (old.observer) { old.observer.disconnect(); old.observer = null; }
-      window._ccReplaySessions.delete(_label);
+      _nsm.cancelSession(_label, window._ccReplaySessions || null);
     };
 
     k._ngPickOption = function (opts, planned) {
-      // Wrap DOM nodes in {text, node} shape for scoreAndPick.
-      // minScore:30 preserves the original threshold.
-      if (_nos.scoreAndPick) {
-        var wrapped = Array.from(opts).map(function (n) {
-          return { text: (n.textContent || n.innerText || '').trim(), node: n };
-        });
-        var result = _nos.scoreAndPick(wrapped, planned, 30);
-        return result ? result.node : null;
-      }
-      // Fallback
-      var best = null, bestScore = 0;
-      for (var i = 0; i < opts.length; i++) {
-        var text = (opts[i].textContent || opts[i].innerText || '').trim();
-        var sc = k._ngScoreOption(text, planned);
-        if (sc > bestScore) { bestScore = sc; best = opts[i]; }
-      }
-      return bestScore >= 30 ? best : null;
+      var wrapped = Array.from(opts).map(function (n) {
+        return { text: (n.textContent || n.innerText || '').trim(), node: n };
+      });
+      var result = _nos.scoreAndPick(wrapped, planned, 30);
+      return result ? result.node : null;
     };
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -2863,23 +2769,6 @@
 (function (root) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
-  // Minimal fallback if fill-one-ng-helpers.js did not inject
-  root.CcExecParts.installFillOneNgHelpers = root.CcExecParts.installFillOneNgHelpers || function (k) {
-    k._ngCancelSession = function (label) {
-      var _nsm = root.CcNgSessionManager;
-      if (_nsm && _nsm.cancelSession) {
-        _nsm.cancelSession(label, window._ccReplaySessions || null);
-        return;
-      }
-      // Fallback
-      var old = window._ccReplaySessions && window._ccReplaySessions.get(label);
-      if (!old) return;
-      old.cancelled = true; try { clearInterval(old.pollTimer); } catch (e) {}
-      (old.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch(e) {} });
-      if (old.observer) { old.observer.disconnect(); old.observer = null; }
-      window._ccReplaySessions.delete(label);
-    };
-  };
   root.CcExecParts.installFillOneNg = function (k) {
     root.CcExecParts.installFillOneNgHelpers(k);
     const b = root.CcExecParts.bindKernelLocals(k);
@@ -2909,7 +2798,7 @@
             return window.ccDomUtils.isVisible(node);
           }
           function cleanupSession(result) {
-            if (session.resolved && result !== session._result) return; // already resolved, don't overwrite
+            if (session.resolved && result !== session._result) return;
             session.resolved = true;
             session._result = result;
             clearInterval(session.pollTimer);
@@ -2993,18 +2882,10 @@
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
-              // ng-option-scorer.js is the single source for option text scoring.
               var _nos = root.CcNgOptionScorer;
-              var _scoreOption = _nos ? _nos.scoreOption : function(ot) {
-                ot = String(ot||'').toLowerCase().trim();
-                if (ot === v) return 100;
-                if (ot.includes(v)) return 80;
-                if (v.includes(ot) && ot.length > 3) return 70;
-                return 0;
-              };
               let bestOpt = null, bestScore = 0;
               for (const o of opts) {
-                const score = _scoreOption(o.textContent.trim(), v);
+                const score = _nos.scoreOption(o.textContent.trim(), v);
                 if (score > bestScore) { bestScore = score; bestOpt = o; }
               }
               const opt = bestScore >= 50 ? bestOpt : null;
@@ -3034,7 +2915,6 @@
             cleanupSession(_trace.verifyStatus);
           }
                 }, 200);
-                session.timeoutIds.push(setInterval(() => {}, 0)); // placeholder — verifyPoll managed separately
               } else if (attempts >= 10) {
                 clearInterval(session.pollTimer);
                 if (session.resolved) return;
@@ -3049,7 +2929,6 @@
         const _noAdapterLabel = filledBySource[selector]?.label || selector;
         _replayResults[_noAdapterLabel] = 'no-adapter';
         sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
-        return 0;
         return 0;
       },
     });

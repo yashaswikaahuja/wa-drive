@@ -1,23 +1,6 @@
 (function (root) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
-  // Minimal fallback if fill-one-ng-helpers.js did not inject
-  root.CcExecParts.installFillOneNgHelpers = root.CcExecParts.installFillOneNgHelpers || function (k) {
-    k._ngCancelSession = function (label) {
-      var _nsm = root.CcNgSessionManager;
-      if (_nsm && _nsm.cancelSession) {
-        _nsm.cancelSession(label, window._ccReplaySessions || null);
-        return;
-      }
-      // Fallback
-      var old = window._ccReplaySessions && window._ccReplaySessions.get(label);
-      if (!old) return;
-      old.cancelled = true; try { clearInterval(old.pollTimer); } catch (e) {}
-      (old.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch(e) {} });
-      if (old.observer) { old.observer.disconnect(); old.observer = null; }
-      window._ccReplaySessions.delete(label);
-    };
-  };
   root.CcExecParts.installFillOneNg = function (k) {
     root.CcExecParts.installFillOneNgHelpers(k);
     const b = root.CcExecParts.bindKernelLocals(k);
@@ -47,7 +30,7 @@
             return window.ccDomUtils.isVisible(node);
           }
           function cleanupSession(result) {
-            if (session.resolved && result !== session._result) return; // already resolved, don't overwrite
+            if (session.resolved && result !== session._result) return;
             session.resolved = true;
             session._result = result;
             clearInterval(session.pollTimer);
@@ -131,18 +114,10 @@
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
-              // ng-option-scorer.js is the single source for option text scoring.
               var _nos = root.CcNgOptionScorer;
-              var _scoreOption = _nos ? _nos.scoreOption : function(ot) {
-                ot = String(ot||'').toLowerCase().trim();
-                if (ot === v) return 100;
-                if (ot.includes(v)) return 80;
-                if (v.includes(ot) && ot.length > 3) return 70;
-                return 0;
-              };
               let bestOpt = null, bestScore = 0;
               for (const o of opts) {
-                const score = _scoreOption(o.textContent.trim(), v);
+                const score = _nos.scoreOption(o.textContent.trim(), v);
                 if (score > bestScore) { bestScore = score; bestOpt = o; }
               }
               const opt = bestScore >= 50 ? bestOpt : null;
@@ -172,7 +147,6 @@
             cleanupSession(_trace.verifyStatus);
           }
                 }, 200);
-                session.timeoutIds.push(setInterval(() => {}, 0)); // placeholder — verifyPoll managed separately
               } else if (attempts >= 10) {
                 clearInterval(session.pollTimer);
                 if (session.resolved) return;
@@ -187,7 +161,6 @@
         const _noAdapterLabel = filledBySource[selector]?.label || selector;
         _replayResults[_noAdapterLabel] = 'no-adapter';
         sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
-        return 0;
         return 0;
       },
     });
