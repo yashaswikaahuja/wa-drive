@@ -1,0 +1,20 @@
+{
+  "name": "@cc/plugins",
+  "version": "1.0.0",
+  "description": "CyberControl autofill plugins — keystroke, cascade-select, ng-dropdown, button-click",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./interface": "./src/interface.js",
+    "./keystroke-input": "./src/keystroke-input.js",
+    "./cascade-select": "./src/cascade-select.js",
+    "./ng-dropdown": "./src/ng-dropdown.js",
+    "./button-click": "./src/button-click.js",
+    "./network-monitor": "./src/network-monitor.js"
+  },
+  "scripts": {
+    "test": "echo 'No unit tests (browser DOM required)'"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

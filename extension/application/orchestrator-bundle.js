@@ -25,7 +25,7 @@
     'runtime/gateway/interaction.js',
     'runtime/dom-gateway.js',
     'runtime/navigation-contract.js',
-    'shared/network-idle.js',
+    'shared-bundle.js',               // @cc/shared — network-idle + dom-utils + llm-client
     'perception/visual-context.js',
     'perception/binding-registry.js',
     'perception/revision-manager.js',
@@ -45,28 +45,15 @@
   ]);
 
   var SEQUENTIAL_KERNEL_SCRIPTS = Object.freeze([
-    'shared/network-idle.js',
-    'shared/dom-utils.js',
-    'shared/label-utils.js',
-    'shared/option-match.js',
-    'shared/select-apply.js',
-    'shared/llm-client.js',
-    'autofill/plugins/interface.js',
-    'autofill/plugins/cascade-select.js',
-    'autofill/plugins/ng-dropdown.js',
-    'autofill/plugins/button-click.js',
-    'autofill/plugins/keystroke-input.js',
-    'drivers/dispatch.js',
-    'drivers/dom.js',
-    'drivers/input.js',
-    'drivers/select.js',
-    'drivers/interaction.js',
-    'autofill/extractor-bundle.js',
-    'autofill/mapper-bundle.js',
-    'autofill/derive-bundle.js',
-    'autofill/rule-engine-bundle.js',
-    'autofill/ai-resolve-bundle.js',
-    'autofill/executor-bundle.js',
+    'shared-bundle.js',               // @cc/shared — dom-utils, llm-client, option-match, network-idle
+    'autofill/plugins-bundle.js',     // @cc/plugins — interface, cascade-select, ng-dropdown, keystroke
+    'drivers-bundle.js',              // @cc/drivers — dispatch, dom, input, select, interaction
+    'autofill/extractor-bundle.js',   // @cc/extractor
+    'autofill/mapper-bundle.js',      // @cc/mapper
+    'autofill/derive-bundle.js',      // @cc/derive
+    'autofill/rule-engine-bundle.js', // @cc/rule-engine
+    'autofill/ai-resolve-bundle.js',  // @cc/ai-resolve
+    'autofill/executor-bundle.js',    // @cc/executor
   ]);
 
   root.CcScriptManifests = {

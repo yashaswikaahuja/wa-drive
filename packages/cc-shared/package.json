@@ -1,0 +1,22 @@
+{
+  "name": "@cc/shared",
+  "version": "1.0.0",
+  "description": "CyberControl shared utilities — DOM utils, LLM client, option match, network idle",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./dom-utils": "./src/dom-utils.js",
+    "./label-utils": "./src/label-utils.js",
+    "./llm-client": "./src/llm-client.js",
+    "./option-match": "./src/option-match.js",
+    "./network-idle": "./src/network-idle.js",
+    "./select-apply": "./src/select-apply.js",
+    "./semantic-aliases": "./src/semantic-aliases.js",
+    "./legacy-fill-gate": "./src/legacy-fill-gate.js"
+  },
+  "scripts": {
+    "test": "echo 'No unit tests (browser DOM required)'"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

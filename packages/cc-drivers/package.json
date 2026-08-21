@@ -1,0 +1,19 @@
+{
+  "name": "@cc/drivers",
+  "version": "1.0.0",
+  "description": "CyberControl browser action drivers — dispatch, DOM, input, select, interaction",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./dispatch": "./src/dispatch.js",
+    "./dom": "./src/dom.js",
+    "./input": "./src/input.js",
+    "./interaction": "./src/interaction.js",
+    "./select": "./src/select.js"
+  },
+  "scripts": {
+    "test": "echo 'No unit tests (browser DOM required)'"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}
