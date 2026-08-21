@@ -19,6 +19,7 @@ const ORDER = [
   'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',
   'settle.js',
+  'capabilities/fill-one-mat.js',          // mat fill handler — browser only
   'capabilities/fill-one-text.js',         // text fill handler — browser only
   'capabilities/settle-after-act.js',      // post-action settle engine — no DOM
   'capabilities/wait-for-options.js',      // select option poller — no deps

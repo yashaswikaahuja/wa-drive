@@ -18,9 +18,11 @@
     } = b;
 
     k.fillOneHandlers = k.fillOneHandlers || [];
+    var _fom = root.CcFillOneMat || {};
     k.fillOneHandlers.push({
       id: 'mat',
       try(el, selector, value, type, elType) {
+        if (_fom.fillMat) return _fom.fillMat(el, value, elType);
         if (elType !== 'mat-select' && elType !== 'mat-checkbox' && elType !== 'mat-radio') return null;
         if (elType === 'mat-select') {
                 const trigger = el.querySelector('.mat-select-trigger,.mat-mdc-select-trigger') || el;
