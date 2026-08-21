@@ -18,9 +18,12 @@
     } = b;
 
     k.fillOneHandlers = k.fillOneHandlers || [];
+    // fill-one-text.js capability is the single source for text fill logic.
+    var _fot = root.CcFillOneText || {};
     k.fillOneHandlers.push({
       id: 'text',
       try(el, selector, value, type, elType) {
+        if (_fot.fillText) return _fot.fillText(el, value);
 
                 // Angular/React compatible input filling
                 const isTextarea = el.tagName === 'TEXTAREA';
