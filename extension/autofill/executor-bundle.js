@@ -1,6 +1,6 @@
 /**
  * AUTO-GENERATED — do not edit.
- * Source: autofill/executor/*.js + executor.js
+ * Source: autofill/executor/capabilities/*.js + executor.js
  * Rebuild: node extension/autofill/build-executor-bundle.mjs
  */
 
