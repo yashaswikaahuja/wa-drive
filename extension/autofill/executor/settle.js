@@ -6,14 +6,24 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installSettle = function (k) {
+  // settle-after-act.js is the single source for post-action settle logic.
+  var _saa = root.CcSettleAfterAct;
+  var _settleEngine = _saa ? _saa.createSettleEngine({
+    waitForNetworkIdle: waitForNetworkIdle,
+    waitForOptions: waitForOptions,
+    getBudget: function() { return k.ajaxWaitBudgetMs; },
+    setBudget: function(n) { k.ajaxWaitBudgetMs = n; },
+  }) : null;
+
   async function settleAfterAct(kind, opts) {
+    if (_settleEngine) return _settleEngine.settleAfterAct(kind, opts);
+    // Fallback
     opts = opts || {};
     const budget = typeof opts.budgetMs === 'number' ? opts.budgetMs : k.ajaxWaitBudgetMs;
     if (kind === 'text') {
       await new Promise((r) => setTimeout(r, 100));
       return { idle: true, waitedMs: 100, kind: 'text' };
     }
-    // Let DWR/XHR kick off after change/click
     const kick = kind === 'button' ? 300 : 200;
     await new Promise((r) => setTimeout(r, kick));
     let maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
@@ -26,11 +36,11 @@
     return Object.assign({ kind: kind }, net);
   }
 
-  /** Before acting on a select with no options yet: wait (previous field may have been radio). */
   async function waitForSelectOptionsSequential(selector, maxMs) {
+    if (_settleEngine) return _settleEngine.waitForSelectOptionsSequential(selector, maxMs);
+    // Fallback
     maxMs = Math.min(maxMs || 6000, Math.max(400, k.ajaxWaitBudgetMs || 400));
     const t0 = Date.now();
-    // First a general settle (covers radio→ajax-select)
     await settleAfterAct('choice', { budgetMs: Math.min(2000, maxMs) });
     const left = Math.max(300, maxMs - (Date.now() - t0));
     const el = await waitForOptions(selector, 1, left);
