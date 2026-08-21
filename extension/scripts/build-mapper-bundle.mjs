@@ -7,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const mapDir = path.join(dir, '../packages/cc-mapper/src');
+const mapDir = path.join(dir, '../../packages/cc-mapper/src');
 
 const ORDER = [
   'field-aliases.js',
@@ -30,12 +30,12 @@ for (const name of ORDER) {
   if (!src.endsWith('\n')) parts.push('\n');
 }
 
-const facade = fs.readFileSync(path.join(dir, '../extension/autofill/mapper.js'), 'utf8');
+const facade = fs.readFileSync(path.join(dir, '../autofill/mapper.js'), 'utf8');
 parts.push(`\n/* ==== mapper.js (facade) ==== */\n`);
 parts.push(facade);
 if (!facade.endsWith('\n')) parts.push('\n');
 
-const out = path.join(dir, '../extension/autofill/mapper-bundle.js');
+const out = path.join(dir, '../autofill/mapper-bundle.js');
 fs.writeFileSync(out, parts.join(''));
 const n = parts.join('').split(/\n/).length;
 console.log('Wrote', out, n, 'lines');

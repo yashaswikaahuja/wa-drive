@@ -9,7 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const extDir = path.join(dir, '../packages/cc-extractor/src');
+const extDir = path.join(dir, '../../packages/cc-extractor/src');
 
 const ORDER = [
   // ── Pure capability modules (no kernel deps) ──────────────────────────────
@@ -39,12 +39,12 @@ for (const name of ORDER) {
 }
 
 // Facade last — assigns globalThis.extractFormFieldsWithFingerprint + injectCorrectionObserver
-const facade = fs.readFileSync(path.join(dir, '../extension/autofill/extractor.js'), 'utf8');
+const facade = fs.readFileSync(path.join(dir, '../autofill/extractor.js'), 'utf8');
 parts.push(`\n/* ==== extractor.js (facade) ==== */\n`);
 parts.push(facade);
 if (!facade.endsWith('\n')) parts.push('\n');
 
-const out = path.join(dir, '../extension/autofill/extractor-bundle.js');
+const out = path.join(dir, '../autofill/extractor-bundle.js');
 fs.writeFileSync(out, parts.join(''));
 const n = parts.join('').split(/\n/).length;
 console.log('Wrote', out, n, 'lines');
