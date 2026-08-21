@@ -1,11 +1,9 @@
 ﻿// Load knowledge sync client (must be first â€” other code references ccKnowledgeSync)
 try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.js load failed:', e.message); }
 // Phase 0 (CYB-85): cafÃ© default blocks DISPATCH_JOB / Agent client mapping path
-try { importScripts('shared/legacy-fill-gate.js'); } catch (e) { console.warn('[CC] legacy-fill-gate.js load failed:', e.message); }
+try { importScripts('shared-bundle.js'); } catch (e) { console.warn('[CC] shared-bundle load failed:', e.message); }
 // T4 Stage A â€” WSS presence (auth after token mint)
-try { importScripts('runtime/reconnect-manager.js'); } catch (e) { console.warn('[CC] reconnect-manager load failed:', e.message); }
-try { importScripts('runtime/ws-client.js'); } catch (e) { console.warn('[CC] ws-client load failed:', e.message); }
-try { importScripts('runtime/wss-session.js'); } catch (e) { console.warn('[CC] wss-session load failed:', e.message); }
+try { importScripts('sw/wss-bundle.js'); } catch (e) { console.warn('[CC] wss-bundle load failed:', e.message); }
 // SW facades (MIG-BG-01 lite) â€” keep background.js as thin composer
 try { importScripts('sw/wss-bridge.js'); } catch (e) { console.warn('[CC] sw/wss-bridge load failed:', e.message); }
 try { importScripts('sw/auth-refresh.js'); } catch (e) { console.warn('[CC] sw/auth-refresh load failed:', e.message); }
