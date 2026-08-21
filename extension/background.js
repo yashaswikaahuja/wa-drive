@@ -342,7 +342,7 @@ async function runJobDispatch(envelope, tabId) {
         });
       }
     }
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor-bundle.js', 'autofill/mapper.js', 'autofill/executor-bundle.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor-bundle.js', 'autofill/mapper-bundle.js', 'autofill/executor-bundle.js'] });
 
     const result = await chrome.scripting.executeScript({
       target: { tabId },

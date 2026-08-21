@@ -56,7 +56,7 @@ const SEQUENTIAL_KERNEL_SCRIPTS = Object.freeze([
   'drivers/interaction.js',
   // One bundle (source still split under autofill/extractor/ for editing).
   'autofill/extractor-bundle.js',
-  'autofill/mapper.js',
+  'autofill/mapper-bundle.js',
   'autofill/derive.js',
   'autofill/rule-engine.js',
   'autofill/ai-resolve.js',
