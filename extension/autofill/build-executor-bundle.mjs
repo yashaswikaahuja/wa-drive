@@ -12,13 +12,13 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 const execDir = path.join(dir, 'executor');
 
 const ORDER = [
-  'kernel-bind.js',
-  'debug.js',
+  'capabilities/install-kernel-bind.js',
+  'capabilities/install-debug.js',
   'capabilities/parse-date-value.js',      // date string parser — no deps
   'capabilities/cascade-field-level.js',   // cascade geography — no deps, loaded first
   'capabilities/select-option-state.js',   // select state readers — no deps
-  'select-helpers.js',
-  'settle.js',
+  'capabilities/install-select-helpers.js',
+  'capabilities/install-settle.js',
   'capabilities/post-fill-corrections.js', // correction observer — browser only
   'capabilities/fill-one-ng.js',           // ng-dropdown fill handler — browser only
   'capabilities/fill-one-select.js',       // native select fill handler — browser only
@@ -36,24 +36,24 @@ const ORDER = [
   'capabilities/detect-fill-strategy.js',  // strategy detection — no deps
   'capabilities/resolve-cc-selector.js',   // selector resolution — no deps
   'capabilities/sort-fields-by-dom-order.js', // DOM order sort — depends on resolver only
-  'dom-order.js',
-  'strategy.js',
-  'fill-one-ng-helpers.js',
-  'fill-one-ng.js',
-  'fill-one-mat.js',
-  'fill-one-radio-planned.js',
-  'fill-one-select.js',
-  'fill-one-choice-dom.js',
-  'fill-one-date.js',
-  'fill-one-text.js',
-  'fill-one.js',
+  'capabilities/install-dom-order.js',
+  'capabilities/install-strategy.js',
+  'capabilities/install-fill-one-ng-helpers.js',
+  'capabilities/install-fill-one-ng.js',
+  'capabilities/install-fill-one-mat.js',
+  'capabilities/install-fill-one-radio-planned.js',
+  'capabilities/install-fill-one-select.js',
+  'capabilities/install-fill-one-choice-dom.js',
+  'capabilities/install-fill-one-date.js',
+  'capabilities/install-fill-one-text.js',
+  'capabilities/install-fill-one.js',
   // solid sequential (real closure) — chunk-*.js are legacy, not injected
-  'sequential.js',
+  'capabilities/install-sequential.js',
   'capabilities/confirm-field-pattern.js', // confirm field pattern — no deps
-  'post-fill-corrections.js',
-  'post-fill-confirm.js',
-  'post-fill-mirror.js',
-  'post-fill.js',
+  'capabilities/install-post-fill-corrections.js',
+  'capabilities/install-post-fill-confirm.js',
+  'capabilities/install-post-fill-mirror.js',
+  'capabilities/install-post-fill.js',
 ];
 
 const parts = [];
