@@ -18,10 +18,12 @@
     } = b;
 
     k.fillOneHandlers = k.fillOneHandlers || [];
+    var _fos = root.CcFillOneSelect || {};
     k.fillOneHandlers.push({
       id: 'select',
       try(el, selector, value, type, elType) {
         if (elType !== 'select') return null;
+        if (_fos.fillSelect) return _fos.fillSelect(el, selector, value, mapping);
         if (elType === 'select') {
                 const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
                 const v = norm(value);
