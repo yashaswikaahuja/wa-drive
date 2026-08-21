@@ -9,7 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const execDir = path.join(dir, '../../packages/cc-executor/src');
+const execDir = path.join(dir, '../packages/cc-executor/src');
 
 const ORDER = [
   // ── Pure capability modules (no deps on kernel) ───────────────────────────
@@ -77,12 +77,12 @@ for (const name of ORDER) {
 }
 
 // Facade last — assigns globalThis.fillFormFieldsSequential
-const facade = fs.readFileSync(path.join(dir, 'executor.js'), 'utf8');
+const facade = fs.readFileSync(path.join(dir, '../extension/autofill/executor.js'), 'utf8');
 parts.push(`\n/* ==== executor.js (facade) ==== */\n`);
 parts.push(facade);
 if (!facade.endsWith('\n')) parts.push('\n');
 
-const out = path.join(dir, 'executor-bundle.js');
+const out = path.join(dir, '../extension/autofill/executor-bundle.js');
 fs.writeFileSync(out, parts.join(''));
 const n = parts.join('').split(/\n/).length;
 console.log('Wrote', out, n, 'lines');

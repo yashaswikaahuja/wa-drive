@@ -7,8 +7,8 @@ for (const name of ORDER) {
   const src = fs.readFileSync(p, 'utf8');
   parts.push('\n/* ==== ' + name + ' ==== */\n'); parts.push(src); if (!src.endsWith('\n')) parts.push('\n');
 }
-const facade = fs.readFileSync(path.join(dir, 'ai-resolve.js'), 'utf8');
+const facade = fs.readFileSync(path.join(dir, '../extension/autofill/ai-resolve.js'), 'utf8');
 parts.push('\n/* ==== ai-resolve.js (facade) ==== */\n'); parts.push(facade); if (!facade.endsWith('\n')) parts.push('\n');
-const out = path.join(dir, 'ai-resolve-bundle.js');
+const out = path.join(dir, '../extension/autofill/ai-resolve-bundle.js');
 fs.writeFileSync(out, parts.join(''));
 console.log('Wrote', out, parts.join('').split(/\n/).length, 'lines');

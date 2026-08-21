@@ -7,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const orchDir = path.join(dir, '../../packages/cc-orchestrator/src');
+const orchDir = path.join(dir, '../packages/cc-orchestrator/src');
 
 const ORDER = [
   'script-manifests.js',
@@ -28,12 +28,12 @@ for (const name of ORDER) {
   if (!src.endsWith('\n')) parts.push('\n');
 }
 
-const facade = fs.readFileSync(path.join(dir, 'fill-orchestrator.js'), 'utf8');
+const facade = fs.readFileSync(path.join(dir, '../extension/application/fill-orchestrator.js'), 'utf8');
 parts.push(`\n/* ==== fill-orchestrator.js (facade) ==== */\n`);
 parts.push(facade);
 if (!facade.endsWith('\n')) parts.push('\n');
 
-const out = path.join(dir, 'orchestrator-bundle.js');
+const out = path.join(dir, '../extension/application/orchestrator-bundle.js');
 fs.writeFileSync(out, parts.join(''));
 const n = parts.join('').split(/\n/).length;
 console.log('Wrote', out, n, 'lines');
