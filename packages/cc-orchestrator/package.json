@@ -1,0 +1,19 @@
+{
+  "name": "@cc/orchestrator",
+  "version": "1.0.0",
+  "description": "CyberControl fill orchestrator — sequential kernel + ActionPlan paths",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./script-manifests": "./src/script-manifests.js",
+    "./flatten-profile": "./src/flatten-profile.js",
+    "./sequential-kernel-fill": "./src/sequential-kernel-fill.js",
+    "./action-plan-fill": "./src/action-plan-fill.js"
+  },
+  "scripts": {
+    "test": "node orchestrator-capabilities.test.mjs"
+  },
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true
+}

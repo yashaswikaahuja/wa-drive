@@ -1,0 +1,21 @@
+{
+  "name": "@cc/mapper",
+  "version": "1.0.0",
+  "description": "CyberControl field mapper — fuzzy match, rule engine wiring, AI match",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./field-aliases": "./src/field-aliases.js",
+    "./field-ident": "./src/field-ident.js",
+    "./resolve-choice": "./src/resolve-choice.js",
+    "./decide-conditional": "./src/decide-conditional.js",
+    "./fuzzy-match": "./src/fuzzy-match.js",
+    "./ai-match": "./src/ai-match.js"
+  },
+  "scripts": {
+    "test": "for f in *.test.mjs; do node \"$f\" || exit 1; done"
+  },
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true
+}

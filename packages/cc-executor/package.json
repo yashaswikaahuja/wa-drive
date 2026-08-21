@@ -1,0 +1,36 @@
+{
+  "name": "@cc/executor",
+  "version": "1.0.0",
+  "description": "CyberControl fill executor — sequential kernel + capability modules",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./settle-after-act": "./src/settle-after-act.js",
+    "./wait-for-options": "./src/wait-for-options.js",
+    "./fill-one-ng": "./src/fill-one-ng.js",
+    "./fill-one-select": "./src/fill-one-select.js",
+    "./fill-one-text": "./src/fill-one-text.js",
+    "./fill-one-date": "./src/fill-one-date.js",
+    "./fill-one-mat": "./src/fill-one-mat.js",
+    "./fill-one-radio": "./src/fill-one-radio.js",
+    "./ng-option-scorer": "./src/ng-option-scorer.js",
+    "./ng-session-manager": "./src/ng-session-manager.js",
+    "./build-fill-record": "./src/build-fill-record.js",
+    "./fill-debug-emitter": "./src/fill-debug-emitter.js",
+    "./verify-fill-value": "./src/verify-fill-value.js",
+    "./detect-fill-strategy": "./src/detect-fill-strategy.js",
+    "./resolve-cc-selector": "./src/resolve-cc-selector.js",
+    "./sort-fields-by-dom-order": "./src/sort-fields-by-dom-order.js",
+    "./cascade-field-level": "./src/cascade-field-level.js",
+    "./select-option-state": "./src/select-option-state.js",
+    "./confirm-field-pattern": "./src/confirm-field-pattern.js",
+    "./parse-date-value": "./src/parse-date-value.js",
+    "./post-fill-corrections": "./src/post-fill-corrections.js"
+  },
+  "scripts": {
+    "test": "for f in *.test.mjs; do node \"$f\" || exit 1; done"
+  },
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true
+}

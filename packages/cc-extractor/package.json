@@ -1,0 +1,22 @@
+{
+  "name": "@cc/extractor",
+  "version": "1.0.0",
+  "description": "CyberControl form extractor — DOM scan, fingerprint, correction observer",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./form-context": "./src/form-context.js",
+    "./scan-standard-fields": "./src/scan-standard-fields.js",
+    "./scan-mat-widgets": "./src/scan-mat-widgets.js",
+    "./scan-ng-dropdowns": "./src/scan-ng-dropdowns.js",
+    "./sort-fields-visual": "./src/sort-fields-visual.js",
+    "./fingerprint-form": "./src/fingerprint-form.js",
+    "./correction-observer": "./src/correction-observer.js"
+  },
+  "scripts": {
+    "test": "for f in *.test.mjs; do node \"$f\" || exit 1; done"
+  },
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true
+}

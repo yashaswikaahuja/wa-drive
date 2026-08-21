@@ -1,0 +1,14 @@
+{
+  "name": "wa-drive",
+  "private": true,
+  "version": "0.0.0",
+  "description": "CyberControl monorepo — extension capability packages",
+  "scripts": {
+    "test": "pnpm -r test",
+    "build": "pnpm -r build"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  }
+}

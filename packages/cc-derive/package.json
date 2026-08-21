@@ -1,0 +1,15 @@
+{
+  "name": "@cc/derive",
+  "version": "1.0.0",
+  "description": "CyberControl profile derivation — deterministic common-sense enrichment",
+  "main": "src/derive-profile.js",
+  "exports": {
+    ".": "./src/derive-profile.js"
+  },
+  "scripts": {
+    "test": "node derive-profile.test.mjs"
+  },
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true
+}
