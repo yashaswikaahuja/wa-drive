@@ -63,9 +63,9 @@
     'drivers/interaction.js',
     'autofill/extractor-bundle.js',
     'autofill/mapper-bundle.js',
-    'autofill/derive.js',
-    'autofill/rule-engine.js',
-    'autofill/ai-resolve.js',
+    'autofill/derive-bundle.js',
+    'autofill/rule-engine-bundle.js',
+    'autofill/ai-resolve-bundle.js',
     'autofill/executor-bundle.js',
   ]);
 
