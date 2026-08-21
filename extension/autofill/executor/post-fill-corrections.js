@@ -17,7 +17,20 @@
       _isPlaceholderPlanned, _selectIsActive, fillOne,
     } = b;
 
-// ── Operator Correction Observer ─────────────────────────────────────────
+// CcPostFillCorrections is the single source for correction observer logic.
+  var _pfc = root.CcPostFillCorrections || {};
+  if (_pfc.installCorrectionsObserver) {
+    _pfc.installCorrectionsObserver({
+      entries: Array.from(entries),
+      filledBySource: filledBySource,
+      allFields: allFields,
+      getEl: getEl,
+      records: k.records || [],
+      RUNTIME_VERSION: RUNTIME_VERSION,
+    });
+    return;
+  }
+  // ── Operator Correction Observer ─────────────────────────────────────────
   // After runtime settles, snapshot filled values.
   // On form submit or page unload, capture final state and POST corrections.
   setTimeout(() => {

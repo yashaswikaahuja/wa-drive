@@ -19,6 +19,7 @@ const ORDER = [
   'capabilities/select-option-state.js',   // select state readers — no deps
   'select-helpers.js',
   'settle.js',
+  'capabilities/post-fill-corrections.js', // correction observer — browser only
   'capabilities/fill-one-ng.js',           // ng-dropdown fill handler — browser only
   'capabilities/fill-one-select.js',       // native select fill handler — browser only
   'capabilities/fill-one-date.js',         // date fill handler — browser only
