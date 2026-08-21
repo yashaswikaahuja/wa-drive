@@ -1,6 +1,6 @@
 import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url';
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const ORDER = ['derive/capabilities/derive-profile.js'];
+const ORDER = ['../../packages/cc-derive/src/derive-profile.js'];
 const parts = ['/**\n * AUTO-GENERATED\n * Source: autofill/derive/capabilities/*.js + derive.js\n * Rebuild: node extension/autofill/build-derive-bundle.mjs\n */\n'];
 for (const name of ORDER) {
   const p = path.join(dir, name); if (!fs.existsSync(p)) throw new Error('missing ' + name);

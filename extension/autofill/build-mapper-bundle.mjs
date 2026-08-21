@@ -7,15 +7,15 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const mapDir = path.join(dir, 'mapper');
+const mapDir = path.join(dir, '../../packages/cc-mapper/src');
 
 const ORDER = [
-  'capabilities/field-aliases.js',
-  'capabilities/field-ident.js',
-  'capabilities/resolve-choice.js',
-  'capabilities/decide-conditional.js',
-  'capabilities/fuzzy-match.js',
-  'capabilities/ai-match.js',
+  'field-aliases.js',
+  'field-ident.js',
+  'resolve-choice.js',
+  'decide-conditional.js',
+  'fuzzy-match.js',
+  'ai-match.js',
 ];
 
 const parts = [];

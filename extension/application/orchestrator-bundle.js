@@ -4,7 +4,7 @@
  * Rebuild: node extension/application/build-orchestrator-bundle.mjs
  */
 
-/* ==== capabilities/script-manifests.js ==== */
+/* ==== script-manifests.js ==== */
 /**
  * script-manifests — Injection script lists for both fill paths
  *
@@ -76,7 +76,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/flatten-profile.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcScriptManifests;
+
+/* ==== flatten-profile.js ==== */
 /**
  * flatten-profile — Profile data flattener
  *
@@ -111,7 +113,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/sequential-kernel-fill.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
+
+/* ==== sequential-kernel-fill.js ==== */
 /**
  * sequential-kernel-fill — Sequential kernel fill path
  *
@@ -358,7 +362,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/action-plan-fill.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcSequentialKernelFill;
+
+/* ==== action-plan-fill.js ==== */
 /**
  * action-plan-fill — ActionPlan (APE) fill path
  *
@@ -586,6 +592,8 @@
   root.CcActionPlanFill = { run: run };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = root.CcActionPlanFill;
 
 /* ==== fill-orchestrator.js (facade) ==== */
 /* Product-path fill orchestration (MIG-POPUP-01 / #166).

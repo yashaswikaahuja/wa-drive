@@ -4,7 +4,7 @@
  * Rebuild: node extension/autofill/build-executor-bundle.mjs
  */
 
-/* ==== capabilities/parse-date-value.js ==== */
+/* ==== parse-date-value.js ==== */
 /**
  * parse-date-value — Profile Date String Parser
  *
@@ -91,7 +91,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/cascade-field-level.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcParseDateValue;
+
+/* ==== cascade-field-level.js ==== */
 /**
  * cascade-field-level — Cascade Geography Level Identifier
  *
@@ -172,7 +174,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/select-option-state.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcCascadeFieldLevel;
+
+/* ==== select-option-state.js ==== */
 /**
  * select-option-state — Native Select Element State Reader
  *
@@ -333,7 +337,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/confirm-field-pattern.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcSelectOptionState;
+
+/* ==== confirm-field-pattern.js ==== */
 /**
  * confirm-field-pattern — Confirm/Retype Field Identifier
  *
@@ -417,7 +423,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/ng-option-scorer.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcConfirmFieldPattern;
+
+/* ==== ng-option-scorer.js ==== */
 /**
  * ng-option-scorer — Angular Dropdown Option Scorer
  *
@@ -518,7 +526,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/ng-session-manager.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcNgOptionScorer;
+
+/* ==== ng-session-manager.js ==== */
 /**
  * ng-session-manager — ng-dropdown Replay Session Manager
  *
@@ -609,7 +619,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/build-fill-record.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcNgSessionManager;
+
+/* ==== build-fill-record.js ==== */
 /**
  * build-fill-record — Fill Record Assembler
  *
@@ -661,7 +673,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fill-debug-emitter.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcBuildFillRecord;
+
+/* ==== fill-debug-emitter.js ==== */
 /**
  * fill-debug-emitter — Debug Event Queue + Emitter
  *
@@ -767,7 +781,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/wait-for-options.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFillDebugEmitter;
+
+/* ==== wait-for-options.js ==== */
 /**
  * wait-for-options — Select Options DOM Poller
  *
@@ -857,7 +873,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/settle-after-act.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcWaitForOptions;
+
+/* ==== settle-after-act.js ==== */
 /**
  * settle-after-act — Post-Action Settle Engine
  *
@@ -951,7 +969,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/resolve-cc-selector.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcSettleAfterAct;
+
+/* ==== resolve-cc-selector.js ==== */
 /**
  * resolve-cc-selector — CC-Style Selector Resolver
  *
@@ -1024,7 +1044,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/sort-fields-by-dom-order.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcResolveCcSelector;
+
+/* ==== sort-fields-by-dom-order.js ==== */
 /**
  * sort-fields-by-dom-order — Fill Entry DOM Order Sorter
  *
@@ -1084,7 +1106,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/verify-fill-value.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcSortFieldsByDomOrder;
+
+/* ==== verify-fill-value.js ==== */
 /**
  * verify-fill-value — Fill Value Verifier
  *
@@ -1231,7 +1255,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/detect-fill-strategy.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcVerifyFillValue;
+
+/* ==== detect-fill-strategy.js ==== */
 /**
  * detect-fill-strategy — Fill Strategy Detector
  *
@@ -1394,7 +1420,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/post-fill-corrections.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcDetectFillStrategy;
+
+/* ==== post-fill-corrections.js ==== */
 /**
  * post-fill-corrections — Operator Correction Observer
  *
@@ -1521,7 +1549,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fill-one-ng.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcPostFillCorrections;
+
+/* ==== fill-one-ng.js ==== */
 /**
  * fill-one-ng — ng-dropdown Fill Handler
  *
@@ -1767,7 +1797,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fill-one-select.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFillOneNg;
+
+/* ==== fill-one-select.js ==== */
 /**
  * fill-one-select — Native Select Fill Handler
  *
@@ -1891,7 +1923,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fill-one-date.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFillOneSelect;
+
+/* ==== fill-one-date.js ==== */
 /**
  * fill-one-date — Date Field Fill Handler
  *
@@ -2001,7 +2035,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fill-one-radio.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFillOneDate;
+
+/* ==== fill-one-radio.js ==== */
 /**
  * fill-one-radio — Radio, Checkbox, and File Fill Handlers
  *
@@ -2133,7 +2169,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fill-one-mat.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFillOneRadio;
+
+/* ==== fill-one-mat.js ==== */
 /**
  * fill-one-mat — Angular Material Fill Handler
  *
@@ -2211,7 +2249,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fill-one-text.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFillOneMat;
+
+/* ==== fill-one-text.js ==== */
 /**
  * fill-one-text — Text / Keystroke Fill Handler
  *
@@ -2294,7 +2334,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-kernel-bind.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFillOneText;
+
+/* ==== install-kernel-bind.js ==== */
 /**
  * Shared kernel locals for executor task modules.
  * Avoids repeating 35-line alias blocks in every file (keeps parts ≤200 lines).
@@ -2411,7 +2453,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-debug.js ==== */
+/* ==== install-debug.js ==== */
 /**
  * Live fill_debug emit (port + batch queue)
  * Part of sequential kernel — load before autofill/executor.js
@@ -2490,7 +2532,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-select-helpers.js ==== */
+/* ==== install-select-helpers.js ==== */
 /**
  * Select/cascade helpers + pushSelectRecord
  * Part of sequential kernel — load before autofill/executor.js
@@ -2571,7 +2613,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-settle.js ==== */
+/* ==== install-settle.js ==== */
 /**
  * settleAfterAct + WaitEngine
  * Part of sequential kernel — load before autofill/executor.js
@@ -2628,7 +2670,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-dom-order.js ==== */
+/* ==== install-dom-order.js ==== */
 /**
  * getEl + PRIORITY_KEYS + DOM-order entries
  * Part of sequential kernel — load before autofill/executor.js
@@ -2678,7 +2720,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-strategy.js ==== */
+/* ==== install-strategy.js ==== */
 /**
  * STRATEGY_REGISTRY + detectStrategy + verifyValue
  * Part of sequential kernel — load before autofill/executor.js
@@ -2716,7 +2758,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-ng-helpers.js ==== */
+/* ==== install-fill-one-ng-helpers.js ==== */
 /**
  * ng-dropdown shared helpers (score/pick/visible)
  * Part of sequential kernel — load before autofill/executor.js
@@ -2765,7 +2807,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-ng.js ==== */
+/* ==== install-fill-one-ng.js ==== */
 (function (root) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
@@ -2935,7 +2977,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-mat.js ==== */
+/* ==== install-fill-one-mat.js ==== */
 /**
  * mat-select/checkbox/radio
  * Part of sequential kernel — load before autofill/executor.js
@@ -2999,7 +3041,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-radio-planned.js ==== */
+/* ==== install-fill-one-radio-planned.js ==== */
 /**
  * radio-click / radio-group
  * Part of sequential kernel — load before autofill/executor.js
@@ -3063,7 +3105,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-select.js ==== */
+/* ==== install-fill-one-select.js ==== */
 /**
  * native select
  * Part of sequential kernel — load before autofill/executor.js
@@ -3209,7 +3251,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-choice-dom.js ==== */
+/* ==== install-fill-one-choice-dom.js ==== */
 /**
  * DOM radio / checkbox / file
  * Part of sequential kernel — load before autofill/executor.js
@@ -3304,7 +3346,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-date.js ==== */
+/* ==== install-fill-one-date.js ==== */
 /**
  * date pickers
  * Part of sequential kernel — load before autofill/executor.js
@@ -3422,7 +3464,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one-text.js ==== */
+/* ==== install-fill-one-text.js ==== */
 /**
  * text / keystroke fill
  * Part of sequential kernel — load before autofill/executor.js
@@ -3505,7 +3547,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-fill-one.js ==== */
+/* ==== install-fill-one.js ==== */
 /**
  * fillOne dispatcher — resolve el/elType, run handlers in order.
  * Part of sequential kernel — load before autofill/executor.js
@@ -3556,7 +3598,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-sequential.js ==== */
+/* ==== install-sequential.js ==== */
 /**
  * sequential fill â€” solid closure (no AsyncFunction).
  * AUTO-generated by _rebuild-sequential-solid.mjs from _source_snapshot.js
@@ -3961,7 +4003,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-post-fill-corrections.js ==== */
+/* ==== install-post-fill-corrections.js ==== */
 /**
  * correction observer
  * Part of sequential kernel — load before autofill/executor.js
@@ -4102,7 +4144,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-post-fill-confirm.js ==== */
+/* ==== install-post-fill-confirm.js ==== */
 /**
  * confirm/retype pass
  * Part of sequential kernel — load before autofill/executor.js
@@ -4165,7 +4207,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-post-fill-mirror.js ==== */
+/* ==== install-post-fill-mirror.js ==== */
 /**
  * mirror observer
  * Part of sequential kernel — load before autofill/executor.js
@@ -4226,7 +4268,7 @@
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/install-post-fill.js ==== */
+/* ==== install-post-fill.js ==== */
 /**
  * Post-fill — compose corrections / confirm / mirror.
  * Part of sequential kernel — load before autofill/executor.js

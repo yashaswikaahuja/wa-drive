@@ -4,7 +4,7 @@
  * Rebuild: node extension/autofill/build-derive-bundle.mjs
  */
 
-/* ==== derive/capabilities/derive-profile.js ==== */
+/* ==== ../../packages/cc-derive/src/derive-profile.js ==== */
 /**
  * derive-profile — Deterministic profile enrichment
  *
@@ -136,6 +136,8 @@
   };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = root.CcDeriveProfile;
 
 /* ==== derive.js (facade) ==== */
 // derive.js — thin facade over CcDeriveProfile capability

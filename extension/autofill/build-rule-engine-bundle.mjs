@@ -1,6 +1,6 @@
 import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url';
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const ORDER = ['rule-engine/capabilities/rule-engine.js'];
+const ORDER = ['../../packages/cc-rule-engine/src/rule-engine.js'];
 const parts = ['/**\n * AUTO-GENERATED\n * Source: autofill/rule-engine/capabilities/*.js + rule-engine.js\n * Rebuild: node extension/autofill/build-rule-engine-bundle.mjs\n */\n'];
 for (const name of ORDER) {
   const p = path.join(dir, name); if (!fs.existsSync(p)) throw new Error('missing ' + name);

@@ -9,17 +9,17 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const extDir = path.join(dir, 'extractor');
+const extDir = path.join(dir, '../../packages/cc-extractor/src');
 
 const ORDER = [
   // ── Pure capability modules (no kernel deps) ──────────────────────────────
-  'capabilities/form-context.js',          // skip context + label helpers + form guard
-  'capabilities/scan-standard-fields.js',  // input/select/radio/checkbox scan
-  'capabilities/scan-mat-widgets.js',      // mat-select / mat-checkbox / mat-radio
-  'capabilities/scan-ng-dropdowns.js',     // ng-select / combobox / custom dropdowns
-  'capabilities/sort-fields-visual.js',    // getBoundingClientRect sort
-  'capabilities/fingerprint-form.js',      // formKey + semanticFormKey + pageModel
-  'capabilities/correction-observer.js',   // correction + enrichment listeners
+  'form-context.js',          // skip context + label helpers + form guard
+  'scan-standard-fields.js',  // input/select/radio/checkbox scan
+  'scan-mat-widgets.js',      // mat-select / mat-checkbox / mat-radio
+  'scan-ng-dropdowns.js',     // ng-select / combobox / custom dropdowns
+  'sort-fields-visual.js',    // getBoundingClientRect sort
+  'fingerprint-form.js',      // formKey + semanticFormKey + pageModel
+  'correction-observer.js',   // correction + enrichment listeners
 ];
 
 const parts = [];

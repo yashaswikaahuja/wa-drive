@@ -4,7 +4,7 @@
  * Rebuild: node extension/autofill/build-ai-resolve-bundle.mjs
  */
 
-/* ==== ai-resolve/capabilities/ai-resolve.js ==== */
+/* ==== ../../packages/cc-ai-resolve/src/ai-resolve.js ==== */
 /**
  * ai-resolve — LLM residual field resolver
  *
@@ -90,6 +90,8 @@
   root.CcAiResolve = { resolveValues: resolveValues };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = root.CcAiResolve;
 
 /* ==== ai-resolve.js (facade) ==== */
 // ai-resolve.js — thin facade over CcAiResolve capability

@@ -9,53 +9,53 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const execDir = path.join(dir, 'executor');
+const execDir = path.join(dir, '../../packages/cc-executor/src');
 
 const ORDER = [
   // ── Pure capability modules (no deps on kernel) ───────────────────────────
-  'capabilities/parse-date-value.js',          // no deps
-  'capabilities/cascade-field-level.js',       // no deps
-  'capabilities/select-option-state.js',       // no deps
-  'capabilities/confirm-field-pattern.js',     // no deps
-  'capabilities/ng-option-scorer.js',          // no deps
-  'capabilities/ng-session-manager.js',        // no deps
-  'capabilities/build-fill-record.js',         // no deps
-  'capabilities/fill-debug-emitter.js',        // no deps
-  'capabilities/wait-for-options.js',          // no deps
-  'capabilities/settle-after-act.js',          // needs waitForNetworkIdle (injected)
-  'capabilities/resolve-cc-selector.js',       // no deps
-  'capabilities/sort-fields-by-dom-order.js',  // needs resolve-cc-selector
-  'capabilities/verify-fill-value.js',         // needs resolve-cc-selector
-  'capabilities/detect-fill-strategy.js',      // no deps
-  'capabilities/post-fill-corrections.js',     // correction observer
-  'capabilities/fill-one-ng.js',               // ng-dropdown fill logic
-  'capabilities/fill-one-select.js',           // native select fill logic
-  'capabilities/fill-one-date.js',             // date fill logic
-  'capabilities/fill-one-radio.js',            // radio/checkbox/file logic
-  'capabilities/fill-one-mat.js',              // mat fill logic
-  'capabilities/fill-one-text.js',             // text fill logic
+  'parse-date-value.js',          // no deps
+  'cascade-field-level.js',       // no deps
+  'select-option-state.js',       // no deps
+  'confirm-field-pattern.js',     // no deps
+  'ng-option-scorer.js',          // no deps
+  'ng-session-manager.js',        // no deps
+  'build-fill-record.js',         // no deps
+  'fill-debug-emitter.js',        // no deps
+  'wait-for-options.js',          // no deps
+  'settle-after-act.js',          // needs waitForNetworkIdle (injected)
+  'resolve-cc-selector.js',       // no deps
+  'sort-fields-by-dom-order.js',  // needs resolve-cc-selector
+  'verify-fill-value.js',         // needs resolve-cc-selector
+  'detect-fill-strategy.js',      // no deps
+  'post-fill-corrections.js',     // correction observer
+  'fill-one-ng.js',               // ng-dropdown fill logic
+  'fill-one-select.js',           // native select fill logic
+  'fill-one-date.js',             // date fill logic
+  'fill-one-radio.js',            // radio/checkbox/file logic
+  'fill-one-mat.js',              // mat fill logic
+  'fill-one-text.js',             // text fill logic
 
   // ── Kernel wiring (install- files — depend on capabilities above) ─────────
-  'capabilities/install-kernel-bind.js',
-  'capabilities/install-debug.js',
-  'capabilities/install-select-helpers.js',
-  'capabilities/install-settle.js',
-  'capabilities/install-dom-order.js',
-  'capabilities/install-strategy.js',
-  'capabilities/install-fill-one-ng-helpers.js',
-  'capabilities/install-fill-one-ng.js',
-  'capabilities/install-fill-one-mat.js',
-  'capabilities/install-fill-one-radio-planned.js',
-  'capabilities/install-fill-one-select.js',
-  'capabilities/install-fill-one-choice-dom.js',
-  'capabilities/install-fill-one-date.js',
-  'capabilities/install-fill-one-text.js',
-  'capabilities/install-fill-one.js',
-  'capabilities/install-sequential.js',
-  'capabilities/install-post-fill-corrections.js',
-  'capabilities/install-post-fill-confirm.js',
-  'capabilities/install-post-fill-mirror.js',
-  'capabilities/install-post-fill.js',
+  'install-kernel-bind.js',
+  'install-debug.js',
+  'install-select-helpers.js',
+  'install-settle.js',
+  'install-dom-order.js',
+  'install-strategy.js',
+  'install-fill-one-ng-helpers.js',
+  'install-fill-one-ng.js',
+  'install-fill-one-mat.js',
+  'install-fill-one-radio-planned.js',
+  'install-fill-one-select.js',
+  'install-fill-one-choice-dom.js',
+  'install-fill-one-date.js',
+  'install-fill-one-text.js',
+  'install-fill-one.js',
+  'install-sequential.js',
+  'install-post-fill-corrections.js',
+  'install-post-fill-confirm.js',
+  'install-post-fill-mirror.js',
+  'install-post-fill.js',
 ];
 
 const parts = [];

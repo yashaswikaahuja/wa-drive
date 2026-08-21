@@ -1,6 +1,6 @@
 import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url';
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const ORDER = ['ai-resolve/capabilities/ai-resolve.js'];
+const ORDER = ['../../packages/cc-ai-resolve/src/ai-resolve.js'];
 const parts = ['/**\n * AUTO-GENERATED\n * Source: autofill/ai-resolve/capabilities/*.js + ai-resolve.js\n * Rebuild: node extension/autofill/build-ai-resolve-bundle.mjs\n */\n'];
 for (const name of ORDER) {
   const p = path.join(dir, name); if (!fs.existsSync(p)) throw new Error('missing ' + name);

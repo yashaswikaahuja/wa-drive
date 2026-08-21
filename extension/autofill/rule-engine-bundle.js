@@ -4,7 +4,7 @@
  * Rebuild: node extension/autofill/build-rule-engine-bundle.mjs
  */
 
-/* ==== rule-engine/capabilities/rule-engine.js ==== */
+/* ==== ../../packages/cc-rule-engine/src/rule-engine.js ==== */
 /**
  * rule-engine — Saved field-mapping rule evaluator
  *
@@ -154,6 +154,8 @@
   };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = root.CcRuleEngine;
 
 /* ==== rule-engine.js (facade) ==== */
 // rule-engine.js — thin facade over CcRuleEngine capability

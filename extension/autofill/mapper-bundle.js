@@ -4,7 +4,7 @@
  * Rebuild: node extension/autofill/build-mapper-bundle.mjs
  */
 
-/* ==== capabilities/field-aliases.js ==== */
+/* ==== field-aliases.js ==== */
 /**
  * field-aliases — FIELD_ALIASES dict + server merge
  *
@@ -101,7 +101,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/field-ident.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFieldAliases;
+
+/* ==== field-ident.js ==== */
 /**
  * field-ident — Field identity normalisation helpers
  *
@@ -190,7 +192,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/resolve-choice.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFieldIdent;
+
+/* ==== resolve-choice.js ==== */
 /**
  * resolve-choice — Map planned value onto radio/checkbox option selector
  *
@@ -327,7 +331,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/decide-conditional.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcResolveChoice;
+
+/* ==== decide-conditional.js ==== */
 /**
  * decide-conditional — Decide Yes/No for conditional radio/checkbox fields
  *
@@ -404,7 +410,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fuzzy-match.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcDecideConditional;
+
+/* ==== fuzzy-match.js ==== */
 /**
  * fuzzy-match — Label-primary alias matching loop
  *
@@ -707,7 +715,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/ai-match.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFuzzyMatch;
+
+/* ==== ai-match.js ==== */
 /**
  * ai-match — LLM-based fallback field mapper
  *
@@ -792,6 +802,8 @@
   root.CcAiMatch = { aiMatch: aiMatch };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = root.CcAiMatch;
 
 /* ==== mapper.js (facade) ==== */
 /**

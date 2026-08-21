@@ -7,13 +7,13 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
-const orchDir = path.join(dir, 'orchestrator');
+const orchDir = path.join(dir, '../../packages/cc-orchestrator/src');
 
 const ORDER = [
-  'capabilities/script-manifests.js',
-  'capabilities/flatten-profile.js',
-  'capabilities/sequential-kernel-fill.js',
-  'capabilities/action-plan-fill.js',
+  'script-manifests.js',
+  'flatten-profile.js',
+  'sequential-kernel-fill.js',
+  'action-plan-fill.js',
 ];
 
 const parts = [];

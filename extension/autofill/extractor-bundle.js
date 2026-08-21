@@ -4,7 +4,7 @@
  * Rebuild: node extension/autofill/build-extractor-bundle.mjs
  */
 
-/* ==== capabilities/form-context.js ==== */
+/* ==== form-context.js ==== */
 /**
  * form-context — Form guard + element skip + label helpers
  *
@@ -86,7 +86,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/scan-standard-fields.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFormContext;
+
+/* ==== scan-standard-fields.js ==== */
 /**
  * scan-standard-fields — Standard input/select/radio/checkbox scanner
  *
@@ -279,7 +281,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/scan-mat-widgets.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcScanStandardFields;
+
+/* ==== scan-mat-widgets.js ==== */
 /**
  * scan-mat-widgets — Angular Material widget scanner
  *
@@ -380,7 +384,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/scan-ng-dropdowns.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcScanMatWidgets;
+
+/* ==== scan-ng-dropdowns.js ==== */
 /**
  * scan-ng-dropdowns — ng-select / combobox / custom dropdown scanner
  *
@@ -507,7 +513,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/sort-fields-visual.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcScanNgDropdowns;
+
+/* ==== sort-fields-visual.js ==== */
 /**
  * sort-fields-visual — Visual position sort for form fields
  *
@@ -563,7 +571,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/fingerprint-form.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcSortFieldsVisual;
+
+/* ==== fingerprint-form.js ==== */
 /**
  * fingerprint-form — Form fingerprinting + pageModel assembly
  *
@@ -645,7 +655,9 @@
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-/* ==== capabilities/correction-observer.js ==== */
+if (typeof module !== 'undefined') module.exports = root.CcFingerprintForm;
+
+/* ==== correction-observer.js ==== */
 /**
  * correction-observer — Post-fill correction + enrichment listeners
  *
@@ -811,6 +823,8 @@
   };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = root.CcCorrectionObserver;
 
 /* ==== extractor.js (facade) ==== */
 /**
