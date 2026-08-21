@@ -25,9 +25,14 @@
     const _replayResults = b._replayResults, _ccRecords = b._ccRecords;
     const RUNTIME_VERSION = b.RUNTIME_VERSION, _flushRecords = b._flushRecords;
     k.fillOneHandlers = k.fillOneHandlers || [];
+    var _fong = root.CcFillOneNg || {};
     k.fillOneHandlers.push({
       id: 'ng-dropdown',
       try(el, selector, value, type, elType) {
+        if (_fong.fillNg) return _fong.fillNg(el, selector, value, type, elType, {
+          portalAdapters, filledBySource, _replayResults, _ccRecords,
+          RUNTIME_VERSION, _flushRecords,
+        });
         if (!(elType === 'ng-dropdown' || type === 'ng-dropdown')) return null;
         const rootClass = el.className ? el.className.trim().split(/\s+/)[0] : 'ng-dropdown';
         const adapter = portalAdapters[rootClass] || portalAdapters['ng-dropdown'];
