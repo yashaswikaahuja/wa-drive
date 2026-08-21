@@ -18,9 +18,11 @@
     } = b;
 
     k.fillOneHandlers = k.fillOneHandlers || [];
+    var _fod = root.CcFillOneDate || {};
     k.fillOneHandlers.push({
       id: 'date',
       try(el, selector, value, type, elType) {
+        if (_fod.fillDate) return _fod.fillDate(el, selector, value);
         if (el._flatpickr || el.classList.contains('flatpickr-input')) {
                 // ── flatpickr datepicker ─────────────────────────────────────────────
                 // flatpickr attaches _flatpickr instance to the input. Use its API.
