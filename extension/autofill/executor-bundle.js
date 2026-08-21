@@ -630,35 +630,12 @@
 
   async function settleAfterAct(kind, opts) {
     if (_settleEngine) return _settleEngine.settleAfterAct(kind, opts);
-    // Fallback
-    opts = opts || {};
-    const budget = typeof opts.budgetMs === 'number' ? opts.budgetMs : k.ajaxWaitBudgetMs;
-    if (kind === 'text') {
-      await new Promise((r) => setTimeout(r, 100));
-      return { idle: true, waitedMs: 100, kind: 'text' };
-    }
-    const kick = kind === 'button' ? 300 : 200;
-    await new Promise((r) => setTimeout(r, kick));
-    let maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
-    maxNet = Math.min(maxNet, Math.max(300, budget > 0 ? budget : 400));
-    const quiet = kind === 'select' ? 150 : 120;
-    const t0 = Date.now();
-    const net = await waitForNetworkIdle(quiet, maxNet);
-    const used = Date.now() - t0;
-    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - used);
-    return Object.assign({ kind: kind }, net);
+    return Promise.resolve({ idle: true, waitedMs: 0, kind: kind });
   }
 
   async function waitForSelectOptionsSequential(selector, maxMs) {
     if (_settleEngine) return _settleEngine.waitForSelectOptionsSequential(selector, maxMs);
-    // Fallback
-    maxMs = Math.min(maxMs || 6000, Math.max(400, k.ajaxWaitBudgetMs || 400));
-    const t0 = Date.now();
-    await settleAfterAct('choice', { budgetMs: Math.min(2000, maxMs) });
-    const left = Math.max(300, maxMs - (Date.now() - t0));
-    const el = await waitForOptions(selector, 1, left);
-    k.ajaxWaitBudgetMs = Math.max(0, k.ajaxWaitBudgetMs - (Date.now() - t0));
-    return el;
+    return Promise.resolve(null);
   }
 
   // wait-for-options.js is the single source for select option polling.
@@ -668,36 +645,7 @@
       return _wfo.waitForOptions(selector, minCount, timeout,
         document.querySelector.bind(document), document.body);
     }
-    // Fallback
-    minCount = minCount || 1; timeout = timeout || 8000;
-    return new Promise(function(resolve) {
-      var deadline = Date.now() + timeout;
-      var resolved = false;
-      var poll, mo;
-      function cleanup(val) {
-        if (resolved) return;
-        resolved = true;
-        if (poll) clearInterval(poll);
-        if (mo) mo.disconnect();
-        resolve(val);
-      }
-      function check() {
-        if (resolved) return;
-        var el = document.querySelector(selector);
-        var real = Array.from(el ? el.options || [] : []).filter(function(o) {
-          return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
-        });
-        if (real.length >= minCount) { cleanup(el); return; }
-        if (Date.now() > deadline) { cleanup(null); return; }
-      }
-      mo = new MutationObserver(check);
-      mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class'] });
-      check();
-      poll = setInterval(function() {
-        if (Date.now() > deadline) cleanup(null);
-        else check();
-      }, 200);
-    });
+    return Promise.resolve(null);
   }
 
   function waitForDOMQuiet(ms) {
@@ -2797,10 +2745,7 @@
   };
   root.CcExecParts.installFillOneNg = function (k) {
     root.CcExecParts.installFillOneNgHelpers(k);
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const portalAdapters = b.portalAdapters, filledBySource = b.filledBySource;
-    const _replayResults = b._replayResults, _ccRecords = b._ccRecords;
-    const RUNTIME_VERSION = b.RUNTIME_VERSION, _flushRecords = b._flushRecords;
+
     k.fillOneHandlers = k.fillOneHandlers || [];
     var _fong = root.CcFillOneNg || {};
     k.fillOneHandlers.push({
@@ -2825,16 +2770,7 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneMat = function (k) {
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const {
-      portalAdapters, filledBySource, mapping, _replayResults, _ccRecords,
-      RUNTIME_VERSION, _CC_USE_PLUGINS, PRIORITY_KEYS, entries, getEl,
-      _emitFillDebug, _flushRecords, _pushSelectRecord, settleAfterAct,
-      waitForSelectOptionsSequential, waitForOptions, detectStrategy, verifyValue,
-      _isPlaceholderOption, _realOptions, _sampleOptions, _readSelectActual,
-      _selectLoadMode, _cascadeSemanticKey, _CASCADE_PARENTS, _cascadeSettled,
-      _isPlaceholderPlanned, _selectIsActive, fillOne,
-    } = b;
+
 
     k.fillOneHandlers = k.fillOneHandlers || [];
     var _fom = root.CcFillOneMat || {};
@@ -2857,16 +2793,7 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneRadioPlanned = function (k) {
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const {
-      portalAdapters, filledBySource, mapping, _replayResults, _ccRecords,
-      RUNTIME_VERSION, _CC_USE_PLUGINS, PRIORITY_KEYS, entries, getEl,
-      _emitFillDebug, _flushRecords, _pushSelectRecord, settleAfterAct,
-      waitForSelectOptionsSequential, waitForOptions, detectStrategy, verifyValue,
-      _isPlaceholderOption, _realOptions, _sampleOptions, _readSelectActual,
-      _selectLoadMode, _cascadeSemanticKey, _CASCADE_PARENTS, _cascadeSettled,
-      _isPlaceholderPlanned, _selectIsActive, fillOne,
-    } = b;
+
 
     k.fillOneHandlers = k.fillOneHandlers || [];
     var _for2 = root.CcFillOneRadio || {};
@@ -2889,16 +2816,7 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneSelect = function (k) {
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const {
-      portalAdapters, filledBySource, mapping, _replayResults, _ccRecords,
-      RUNTIME_VERSION, _CC_USE_PLUGINS, PRIORITY_KEYS, entries, getEl,
-      _emitFillDebug, _flushRecords, _pushSelectRecord, settleAfterAct,
-      waitForSelectOptionsSequential, waitForOptions, detectStrategy, verifyValue,
-      _isPlaceholderOption, _realOptions, _sampleOptions, _readSelectActual,
-      _selectLoadMode, _cascadeSemanticKey, _CASCADE_PARENTS, _cascadeSettled,
-      _isPlaceholderPlanned, _selectIsActive, fillOne,
-    } = b;
+
 
     k.fillOneHandlers = k.fillOneHandlers || [];
     var _fos = root.CcFillOneSelect || {};
@@ -2922,16 +2840,7 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneChoiceDom = function (k) {
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const {
-      portalAdapters, filledBySource, mapping, _replayResults, _ccRecords,
-      RUNTIME_VERSION, _CC_USE_PLUGINS, PRIORITY_KEYS, entries, getEl,
-      _emitFillDebug, _flushRecords, _pushSelectRecord, settleAfterAct,
-      waitForSelectOptionsSequential, waitForOptions, detectStrategy, verifyValue,
-      _isPlaceholderOption, _realOptions, _sampleOptions, _readSelectActual,
-      _selectLoadMode, _cascadeSemanticKey, _CASCADE_PARENTS, _cascadeSettled,
-      _isPlaceholderPlanned, _selectIsActive, fillOne,
-    } = b;
+
 
     k.fillOneHandlers = k.fillOneHandlers || [];
     var _for = root.CcFillOneRadio || {};
@@ -2954,16 +2863,7 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneDate = function (k) {
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const {
-      portalAdapters, filledBySource, mapping, _replayResults, _ccRecords,
-      RUNTIME_VERSION, _CC_USE_PLUGINS, PRIORITY_KEYS, entries, getEl,
-      _emitFillDebug, _flushRecords, _pushSelectRecord, settleAfterAct,
-      waitForSelectOptionsSequential, waitForOptions, detectStrategy, verifyValue,
-      _isPlaceholderOption, _realOptions, _sampleOptions, _readSelectActual,
-      _selectLoadMode, _cascadeSemanticKey, _CASCADE_PARENTS, _cascadeSettled,
-      _isPlaceholderPlanned, _selectIsActive, fillOne,
-    } = b;
+
 
     k.fillOneHandlers = k.fillOneHandlers || [];
     var _fod = root.CcFillOneDate || {};
@@ -2986,16 +2886,7 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneText = function (k) {
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const {
-      portalAdapters, filledBySource, mapping, _replayResults, _ccRecords,
-      RUNTIME_VERSION, _CC_USE_PLUGINS, PRIORITY_KEYS, entries, getEl,
-      _emitFillDebug, _flushRecords, _pushSelectRecord, settleAfterAct,
-      waitForSelectOptionsSequential, waitForOptions, detectStrategy, verifyValue,
-      _isPlaceholderOption, _realOptions, _sampleOptions, _readSelectActual,
-      _selectLoadMode, _cascadeSemanticKey, _CASCADE_PARENTS, _cascadeSettled,
-      _isPlaceholderPlanned, _selectIsActive, fillOne,
-    } = b;
+
 
     k.fillOneHandlers = k.fillOneHandlers || [];
     // fill-one-text.js capability is the single source for text fill logic.
@@ -3559,16 +3450,7 @@
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installPostFillCorrections = function (k) {
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const {
-      portalAdapters, filledBySource, mapping, allFields, _replayResults, _ccRecords,
-      RUNTIME_VERSION, _CC_USE_PLUGINS, PRIORITY_KEYS, entries, getEl,
-      _emitFillDebug, _flushRecords, _pushSelectRecord, settleAfterAct,
-      waitForSelectOptionsSequential, waitForOptions, detectStrategy, verifyValue,
-      _isPlaceholderOption, _realOptions, _sampleOptions, _readSelectActual,
-      _selectLoadMode, _cascadeSemanticKey, _CASCADE_PARENTS, _cascadeSettled,
-      _isPlaceholderPlanned, _selectIsActive, fillOne,
-    } = b;
+
 
 // CcPostFillCorrections is the single source for correction observer logic.
   var _pfc = root.CcPostFillCorrections || {};

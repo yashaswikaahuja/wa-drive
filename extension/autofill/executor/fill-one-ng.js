@@ -20,10 +20,7 @@
   };
   root.CcExecParts.installFillOneNg = function (k) {
     root.CcExecParts.installFillOneNgHelpers(k);
-    const b = root.CcExecParts.bindKernelLocals(k);
-    const portalAdapters = b.portalAdapters, filledBySource = b.filledBySource;
-    const _replayResults = b._replayResults, _ccRecords = b._ccRecords;
-    const RUNTIME_VERSION = b.RUNTIME_VERSION, _flushRecords = b._flushRecords;
+
     k.fillOneHandlers = k.fillOneHandlers || [];
     var _fong = root.CcFillOneNg || {};
     k.fillOneHandlers.push({
