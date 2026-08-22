@@ -1,4 +1,586 @@
-/** AUTO-GENERATED — source: packages/cc-background/teach/src/teach.js */
+/**
+ * AUTO-GENERATED — do not edit.
+ * Source: packages/cc-background/
+ * Rebuild: node extension-dev/scripts/build-bg-bundle.mjs
+ */
+
+/* ==== auth/src/auth.js ==== */
+/**
+ * cc-background/auth — Authentication and trust guards for the service worker.
+ *
+ * Public API (on globalThis):
+ *   isLegacyClientFillAllowed()  => Promise<boolean>
+ *   legacyClientFillDenied(pathName) => { ok, code, error }
+ *   ccSenderOrigin(sender)       => string
+ *   ccIsTrustedFrontend(sender)  => boolean
+ *   CC_TRUSTED_FRONTEND_ORIGINS  => string[]
+ *   CC_TRUSTED_ONLY_TYPES        => object
+ */
+
+const CC_TRUSTED_FRONTEND_ORIGINS = ['https://app.cybercontrol.fun'];
+
+const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
+
+/** Phase 4.1: always false — legacy paths permanently disabled. */
+async function isLegacyClientFillAllowed() {
+  return false;
+}
+
+function legacyClientFillDenied(pathName) {
+  if (typeof CcLegacyFillGate !== 'undefined' && CcLegacyFillGate.legacyClientFillDenied) {
+    return CcLegacyFillGate.legacyClientFillDenied(pathName);
+  }
+  return {
+    ok: false,
+    code: 'legacy_client_fill_disabled',
+    error: (pathName || 'legacy client fill') + ' is disabled (Phase 0). Use side-panel Fill.',
+  };
+}
+
+function ccSenderOrigin(sender) {
+  if (!sender) return '';
+  if (sender.origin) return sender.origin;
+  try { return sender.url ? new URL(sender.url).origin : ''; } catch (e) { return ''; }
+}
+
+function ccIsTrustedFrontend(sender) {
+  return CC_TRUSTED_FRONTEND_ORIGINS.indexOf(ccSenderOrigin(sender)) !== -1;
+}
+
+// Expose as globals for service worker scope
+globalThis.CC_TRUSTED_FRONTEND_ORIGINS = CC_TRUSTED_FRONTEND_ORIGINS;
+globalThis.CC_TRUSTED_ONLY_TYPES       = CC_TRUSTED_ONLY_TYPES;
+globalThis.isLegacyClientFillAllowed   = isLegacyClientFillAllowed;
+globalThis.legacyClientFillDenied      = legacyClientFillDenied;
+globalThis.ccSenderOrigin              = ccSenderOrigin;
+globalThis.ccIsTrustedFrontend         = ccIsTrustedFrontend;
+
+/* ==== label-utils/src/label-utils.js ==== */
+/**
+ * cc-background/label-utils — Label normalisation and semantic alias resolution
+ * for the service worker (background.js).
+ *
+ * NOTE: Keep in sync with packages/cc-shared/src/label-utils.js
+ * (page-context version). The SW cannot importScripts page-context
+ * scripts so this is a separate copy.
+ *
+ * Public API (on globalThis):
+ *   SEMANTIC_ALIASES          — object
+ *   normalizeLabel(label)     => string
+ *   getSemanticKey(label)     => string
+ *   getSemanticKeyResolved(label) => Promise<string>
+ *   calcConfidence(fills, corrections) => number
+ */
+
+const SEMANTIC_ALIASES = {
+  'full name': 'name', 'candidate name': 'name', 'applicant name': 'name',
+  'student name': 'name', 'name of candidate': 'name', 'name of applicant': 'name',
+  'candidates name': 'name', 'applicants name': 'name',
+  'date of birth': 'dob', 'birth date': 'dob', 'dob': 'dob', 'date of birth ddmmyyyy': 'dob',
+  "fathers name": 'father_name', 'father name': 'father_name', "fathers husbands name": 'father_name',
+  "mothers name": 'mother_name', 'mother name': 'mother_name',
+  'aadhaar no': 'aadhaar_number', 'aadhaar number': 'aadhaar_number', 'aadhar no': 'aadhaar_number',
+  'pan no': 'pan_number', 'pan number': 'pan_number', 'pan card': 'pan_number',
+  'mobile no': 'mobile', 'mobile number': 'mobile', 'phone no': 'mobile', 'contact no': 'mobile',
+  'email id': 'email', 'email address': 'email',
+  'permanent address': 'address', 'residential address': 'address', 'correspondence address': 'address',
+  'pin code': 'pincode', 'postal code': 'pincode', 'pincode': 'pincode',
+  'state name': 'state', 'district name': 'district',
+};
+
+function normalizeLabel(label) {
+  return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function getSemanticKey(label) {
+  const n = normalizeLabel(label);
+  return SEMANTIC_ALIASES[n] || n;
+}
+
+async function getSemanticKeyResolved(label) {
+  const n = normalizeLabel(label);
+  if (SEMANTIC_ALIASES[n]) return SEMANTIC_ALIASES[n];
+  // Check cached server aliases (variant→canonical lookup)
+  if (typeof ccKnowledgeSync !== 'undefined') {
+    const aliases = await ccKnowledgeSync.getCachedAliases();
+    for (const [canonical, variants] of Object.entries(aliases)) {
+      if (variants.includes(n) || variants.includes(label)) return canonical;
+    }
+  }
+  return n;
+}
+
+function calcConfidence(fills, corrections) {
+  if (fills + corrections === 0) return 0.5;
+  return fills / (fills + corrections * 3);
+}
+
+// Expose as globals for service worker scope
+globalThis.SEMANTIC_ALIASES         = SEMANTIC_ALIASES;
+globalThis.normalizeLabel           = normalizeLabel;
+globalThis.getSemanticKey           = getSemanticKey;
+globalThis.getSemanticKeyResolved   = getSemanticKeyResolved;
+globalThis.calcConfidence           = calcConfidence;
+
+/* ==== wss-manager/src/wss-manager.js ==== */
+/**
+ * cc-background/wss-manager — WSS message handler dispatcher for the service worker.
+ *
+ * Handles: GET_WSS_STATE, ENSURE_WSS, FILL_DEBUG,
+ *          WSS_FILL_REQUEST, WSS_FILL_SESSION, WSS_PROFILES_LIST
+ *
+ * Public API (on globalThis):
+ *   handleWssMessage(msg, sendResponse) => boolean  (true = async)
+ */
+
+function handleWssMessage(msg, sendResponse) {
+  if (msg.type === 'GET_WSS_STATE') {
+    if (typeof CcWssSession !== 'undefined' && CcWssSession.getState) {
+      CcWssSession.getState()
+        .then((st) => sendResponse({ ok: true, wss: st }))
+        .catch((e) => sendResponse({ ok: false, error: e.message }));
+      return true;
+    }
+    sendResponse({ ok: false, error: 'wss_session_missing' });
+    return true;
+  }
+
+  if (msg.type === 'ENSURE_WSS') {
+    ccEnsureWss('ENSURE_WSS')
+      .then((r) => sendResponse(r))
+      .catch((e) => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
+
+  if (msg.type === 'FILL_DEBUG') {
+    forwardFillDebug(msg);
+    sendResponse({ ok: true, forwarded: true });
+    return true;
+  }
+
+  if (msg.type === 'WSS_FILL_REQUEST') {
+    (async () => {
+      try {
+        await ccEnsureWss('WSS_FILL_REQUEST');
+        const deadline = Date.now() + 8000;
+        while (Date.now() < deadline) {
+          const st = CcWssSession?.getClient?.()?.state;
+          if (st === 'connected') break;
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        if (!CcWssSession?.requestFillPlan) throw new Error('wss_session_missing');
+        if (CcWssSession.getClient?.()?.state !== 'connected') throw new Error('wss_not_connected');
+        const resp = await CcWssSession.requestFillPlan({
+          formKey: msg.formKey,
+          semanticFormKey: msg.semanticFormKey || msg.formKey,
+          hostname: msg.hostname,
+          fields: msg.fields || [],
+          profile: msg.profile || {},
+          profileId: msg.profileId || null,
+        }, 25000);
+        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'fill_request_error');
+        sendResponse({ ok: true, plan: resp, transport: 'wss' });
+      } catch (e) {
+        console.warn('[CC] WSS_FILL_REQUEST failed:', e.message);
+        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'WSS_FILL_SESSION') {
+    (async () => {
+      try {
+        await ccEnsureWss('WSS_FILL_SESSION');
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          if (CcWssSession?.getClient?.()?.state === 'connected') break;
+          await new Promise((r) => setTimeout(r, 200));
+        }
+        if (!CcWssSession?.postFillSession) throw new Error('wss_session_missing');
+        const resp = await CcWssSession.postFillSession({
+          hostname: msg.hostname,
+          url: msg.url,
+          semanticFormKey: msg.semanticFormKey || msg.formKey,
+          formKey: msg.formKey,
+          runtimeVersion: msg.runtimeVersion,
+          totalFilled: msg.totalFilled,
+          totalFailed: msg.totalFailed,
+          totalSkipped: msg.totalSkipped,
+          records: msg.records || [],
+        }, 20000);
+        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'fill_session_error');
+        sendResponse({ ok: true, id: resp.id, transport: 'wss' });
+      } catch (e) {
+        console.warn('[CC] WSS_FILL_SESSION failed:', e.message);
+        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'WSS_PROFILES_LIST') {
+    (async () => {
+      try {
+        await ccEnsureWss('WSS_PROFILES_LIST');
+        if (!CcWssSession?.requestProfilesList) throw new Error('wss_session_missing');
+        const resp = await CcWssSession.requestProfilesList(15000);
+        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'profiles_list_error');
+        const profiles = Array.isArray(resp.profiles) ? resp.profiles : [];
+        sendResponse({ ok: true, profiles, transport: 'wss', count: profiles.length });
+      } catch (e) {
+        console.warn('[CC] WSS_PROFILES_LIST failed:', e.message);
+        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
+      }
+    })();
+    return true;
+  }
+
+  return false; // not a WSS message
+}
+
+globalThis.handleWssMessage = handleWssMessage;
+
+/* ==== bridge/src/bridge.js ==== */
+/**
+ * cc-background/bridge — Frontend bridge: port handler, handleBridgeMessage,
+ * and onMessageExternal for the service worker.
+ *
+ * Depends on globals from cc-background/auth: CC_TRUSTED_ONLY_TYPES,
+ * ccIsTrustedFrontend, isLegacyClientFillAllowed, legacyClientFillDenied.
+ * Calls: ccEnsureWss, runJobDispatch (must be loaded before this).
+ */
+
+// â”€â”€ Long-lived port â€” keeps SW alive and bridges postMessage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Content script connects a port on load. This keeps SW alive (no 30s timeout).
+// Messages from the page are forwarded through the port.
+const _pendingPortMessages = new Map(); // reqId -> resolve
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'cc_bridge') return;
+  let connected = true;
+  const portTrusted = ccIsTrustedFrontend(port.sender);
+  port.onDisconnect.addListener(() => { connected = false; });
+  port.onMessage.addListener((msg) => {
+    const { _reqId, ...payload } = msg;
+    handleBridgeMessage(payload, (response) => {
+      if (connected) {
+        try { port.postMessage({ _cc_reply: true, _reqId, response }); }
+        catch (e) { /* port already disconnected */ }
+      }
+    }, portTrusted);
+  });
+});
+
+function handleBridgeMessage(msg, sendResponse, trusted) {
+  // SEC-003: defense-in-depth â€” auth/state-mutating messages require a trusted sender.
+  if (CC_TRUSTED_ONLY_TYPES[msg.type] && !trusted) {
+    sendResponse({ ok: false, error: 'untrusted sender' });
+    return;
+  }
+  if (msg.type === 'CONNECT') {
+    const { token, refreshToken, user, backendUrl } = msg;
+    if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
+    chrome.storage.local.set({ accessToken: token, refreshToken: refreshToken || null, user: user || null, backendUrl }, () => {
+      ccEnsureWss('CONNECT');
+      sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
+    return;
+  }
+  if (msg.type === 'PING') {
+    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    return;
+  }
+  if (msg.type === 'OPEN_AND_DISPATCH') {
+    const { envelope, formUrl } = msg;
+    if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
+    // Phase 0 (CYB-85): gated â€” async so port handler can reply after storage check.
+    isLegacyClientFillAllowed().then((allowed) => {
+      if (!allowed) {
+        sendResponse(legacyClientFillDenied('OPEN_AND_DISPATCH'));
+        return;
+      }
+      chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
+        if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
+        chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
+        sendResponse({ ok: true, tabId: tab.id });
+      });
+    }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
+    return;
+  }
+  sendResponse({ ok: false, error: 'unknown type: ' + msg.type });
+}
+
+// â”€â”€ Frontend Bridge: zero-config auth handshake â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Frontend sends { type: 'CONNECT', token, refreshToken, user, backendUrl }
+// Extension stores credentials so it can act on behalf of the operator without popup config.
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  // SEC-003: auth/state-mutating external messages require a trusted origin.
+  if (CC_TRUSTED_ONLY_TYPES[msg.type] && !ccIsTrustedFrontend(sender)) {
+    sendResponse({ ok: false, error: 'untrusted sender' });
+    return true;
+  }
+  if (msg.type === 'CONNECT') {
+    const { token, refreshToken, user, backendUrl } = msg;
+    if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
+    chrome.storage.local.set({
+      accessToken: token,
+      refreshToken: refreshToken || null,
+      user: user || null,
+      backendUrl,
+    }, () => {
+      ccEnsureWss('CONNECT_EXTERNAL');
+      sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
+    return true;
+  }
+  if (msg.type === 'PING') {
+    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    return true;
+  }
+  if (msg.type === 'DISPATCH_JOB_DIRECT') {
+    // Frontend sends dispatch envelope directly + tabId (the form tab to operate on)
+    // Phase 0 (CYB-85): gated â€” not cafÃ© product path.
+    const { envelope, tabId } = msg;
+    if (!envelope || !tabId) { sendResponse({ ok: false, error: 'missing envelope or tabId' }); return true; }
+    isLegacyClientFillAllowed().then((allowed) => {
+      if (!allowed) {
+        const denied = legacyClientFillDenied('DISPATCH_JOB_DIRECT');
+        console.warn('[CC]', denied.error);
+        sendResponse(denied);
+        return;
+      }
+      sendResponse({ ok: true, accepted: true });
+      runJobDispatch(envelope, tabId).catch(e => console.error('[CC] direct dispatch error:', e));
+    }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
+    return true;
+  }
+  if (msg.type === 'OPEN_AND_DISPATCH') {
+    // Persist job to storage BEFORE opening tab so it survives SW termination.
+    // content.js sends CONTENT_READY when the page is ready; background picks up
+    // the pending job from storage and dispatches it then.
+    // Phase 0 (CYB-85): gated.
+    const { envelope, formUrl } = msg;
+    if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return true; }
+    isLegacyClientFillAllowed().then((allowed) => {
+      if (!allowed) {
+        sendResponse(legacyClientFillDenied('OPEN_AND_DISPATCH'));
+        return;
+      }
+      chrome.tabs.create({ url: formUrl, active: true }, (tab) => {
+        if (!tab?.id) { sendResponse({ ok: false, error: 'failed to open tab' }); return; }
+        // Persist â€” survives SW death between tab.create and page load
+        chrome.storage.local.set({ _cc_pending_job: { envelope, tabId: tab.id, ts: Date.now() } });
+        sendResponse({ ok: true, tabId: tab.id });
+      });
+    }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
+    return true;
+  }
+  if (msg.type === 'CONTENT_READY') {
+    // content.js fires this when it's injected and ready to receive DISPATCH_JOB.
+    // Pick up any pending job for this tab and dispatch it now.
+    const tabId = sender?.tab?.id;
+    if (!tabId) { sendResponse({ ok: true }); return true; }
+    chrome.storage.local.get('_cc_pending_job', ({ _cc_pending_job: job }) => {
+      if (!job || job.tabId !== tabId) { sendResponse({ ok: true }); return; }
+      // Job is for this tab â€” clear it; only dispatch if legacy path allowed.
+      chrome.storage.local.remove('_cc_pending_job');
+      isLegacyClientFillAllowed().then((allowed) => {
+        if (!allowed) {
+          console.warn('[CC] CONTENT_READY: dropping pending job â€” legacy client fill disabled');
+          sendResponse(legacyClientFillDenied('CONTENT_READY pending job'));
+          return;
+        }
+        console.log('[CC] CONTENT_READY: dispatching pending job to tab', tabId);
+        runJobDispatch(job.envelope, tabId).catch(e => console.error('[CC] pending dispatch error:', e));
+        sendResponse({ ok: true, dispatching: true });
+      }).catch((e) => sendResponse({ ok: false, error: e.message || 'legacy gate failed' }));
+    });
+    return true;
+  }
+    sendResponse({ ok: false, error: 'unknown message type' });
+  return true;
+});
+
+/* ==== job-dispatch/src/job-dispatch.js ==== */
+/**
+ * cc-background/job-dispatch — Job dispatch runner for the service worker.
+ *
+ * Depends on: ccKnowledgeSync, CC_TRUSTED_ONLY_TYPES, isLegacyClientFillAllowed,
+ *             legacyClientFillDenied (from cc-background/auth)
+ *
+ * Public API (on globalThis):
+ *   runJobDispatch(envelope, tabId) => Promise<void>
+ */
+
+// â”€â”€ Phase A: Job Dispatch Runner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Extension stays dumb: receives envelope, runs deterministic runtime, reports terminal result.
+// No knowledge of jobs/customers/mappings/tenancy.
+async function runJobDispatch(envelope, tabId) {
+  // Defense in depth: even if a caller bypasses message handlers, refuse unless opted in.
+  if (!(await isLegacyClientFillAllowed())) {
+    const denied = legacyClientFillDenied('runJobDispatch');
+    console.warn('[CC]', denied.error);
+    return;
+  }
+  const { jobId, sessionId, payload } = envelope;
+  const profile = payload?.profile || {};
+  const { backendUrl, accessToken } = await chrome.storage.local.get(['backendUrl', 'accessToken']);
+  if (!backendUrl || !accessToken) { console.error('[CC] DISPATCH_JOB: not authenticated'); return; }
+
+  // Helper: report progress to backend
+  async function reportProgress(body) {
+    try {
+      await fetch(backendUrl + '/jobs/' + jobId + '/progress', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+        body: JSON.stringify({ sessionId, ...body }),
+      });
+    } catch (e) { console.warn('[CC] progress report failed:', e.message); }
+  }
+
+  // Inject runtime + run autofill pipeline (reuse existing executor)
+  try {
+    // Inject cached server field mappings into page for mapper.js to pick up
+    if (typeof ccKnowledgeSync !== 'undefined') {
+      const cachedMappings = await ccKnowledgeSync.getCachedFieldMappings();
+      const cachedDerivRules = await ccKnowledgeSync.getCachedDerivationRules();
+      if (cachedMappings.length > 0 || cachedDerivRules.length > 0) {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (mappings, derivRules) => {
+            if (mappings.length) window._ccServerFieldMappings = mappings;
+            if (derivRules.length) window._ccServerDerivationRules = derivRules;
+          },
+          args: [cachedMappings, cachedDerivRules],
+        });
+      }
+    }
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['shared-bundle.js', 'autofill/plugins-bundle.js', 'drivers-bundle.js', 'autofill/extractor-bundle.js', 'autofill/mapper-bundle.js', 'autofill/executor-bundle.js'] });
+
+    const result = await chrome.scripting.executeScript({
+      target: { tabId },
+      args: [profile, backendUrl, accessToken],
+      func: async (prof, bUrl, aToken) => {
+        const headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + aToken };
+        const { formFields, formKey, semanticFormKey } = extractFormFieldsWithFingerprint();
+        if (!formFields.length) return { ok: false, error: 'no fields detected' };
+        const pk = semanticFormKey || formKey;
+        // Try saved mappings first
+        let saved = null;
+        try { const r = await fetch(bUrl + '/mappings/' + pk, { headers }); const d = await r.json(); if (d && typeof d === 'object' && Object.keys(d).length > 0) saved = d; } catch {}
+        let mapping = {}, fbs = {};
+        const gsk = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        if (saved) {
+          for (const f of formFields) {
+            const sk = gsk(f.label); const s = saved[sk];
+            if (s && s.profileKey && prof[s.profileKey]) {
+              mapping[f.selector] = { value: prof[s.profileKey], type: f.type };
+              fbs[f.selector] = { label: f.label, semanticKey: sk, profileKey: s.profileKey, source: 'saved' };
+            }
+          }
+        }
+        // Fuzzy fill remaining
+        const um = formFields.filter(f => !mapping[f.selector]);
+        if (um.length > 0) {
+          const fz = fuzzyMatch(um, prof);
+          for (const [s, v] of Object.entries(fz)) { mapping[s] = v; const ff = formFields.find(x => x.selector === s); if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' }; }
+        }
+        // Adapters
+        let adp = {};
+        try { const r = await fetch(bUrl + '/adapters/' + location.hostname, { headers }); adp = await r.json(); } catch {}
+        // Run executor (returns total filled)
+        const filled = await fillFormFieldsSequential(mapping, fbs, adp);
+        const records = Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : [];
+        const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
+        // Sync mappings â€” labels, types, order, options (same as popup path)
+        try {
+          const updates = {};
+          for (let i = 0; i < formFields.length; i++) {
+            const f = formFields[i];
+            const sk = gsk(f.label);
+            if (!sk || sk.length < 2) continue;
+            const info = fbs[f.selector];
+            const profileKey = info?.profileKey || (mapping[f.selector] ? Object.entries(prof).find(([,v]) => v === mapping[f.selector].value)?.[0] : null) || null;
+            const wasFilled = records.some(r => r.selector === f.selector && r.result === 'filled');
+            updates[sk] = { profileKey, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+          }
+          if (Object.keys(updates).length > 0) {
+            await fetch(bUrl + '/mappings/' + pk, {
+              method: 'POST', headers,
+              body: JSON.stringify({ updates, meta: { hostname: location.hostname, title: document.title.slice(0, 80), lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
+            });
+          }
+        } catch (e) { console.warn('[CC] bg mapping sync failed:', e.message); }
+        return { ok: true, filled: filled || 0, failed, fields: Object.keys(mapping).length, records, primaryKey: pk };
+      },
+    });
+
+    const r = result?.[0]?.result || { ok: false };
+    if (r.ok) {
+      // Report final state â€” runtime done, transition to needs_review
+      await reportProgress({
+        totalFilled: r.filled,
+        totalFailed: r.failed,
+        records: r.records || [],
+        status: 'needs_review',
+      });
+      console.log('[CC] DISPATCH_JOB completed: filled=' + r.filled + ' failed=' + r.failed);
+    } else {
+      await reportProgress({ status: 'failed', failReason: r.error || 'execution failed' });
+      console.error('[CC] DISPATCH_JOB failed:', r.error);
+    }
+  } catch (e) {
+    await reportProgress({ status: 'failed', failReason: e.message });
+    console.error('[CC] DISPATCH_JOB exception:', e);
+  }
+}
+
+
+
+
+try { importScripts('sw/bg-bridge.js'); } catch (e) { console.warn('[CC] bg-bridge load failed:', e.message); }
+
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  // T4: (re)open WSS when credentials appear or rotate
+  if (changes.accessToken || changes.backendUrl) {
+    if (changes.accessToken?.newValue === undefined && changes.backendUrl?.newValue === undefined) {
+      // both cleared
+    }
+    const tokenGone = changes.accessToken && changes.accessToken.newValue == null;
+    if (tokenGone && typeof CcWssSession !== 'undefined') {
+      CcWssSession.disconnectWss('logout');
+    } else {
+      ccEnsureWss('storage_credentials');
+    }
+  }
+  if (!changes._cc_teach_job?.newValue) return;
+  const job = changes._cc_teach_job.newValue;
+  // Deduplicate: same timestamp = same job, ignore
+  if (job.ts === _lastTeachTs) return;
+  if (_teachRunning) return;
+  _lastTeachTs = job.ts;
+  console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields, tabId:', job.tabId);
+  chrome.storage.local.set({_cc_teach_debug: 'received:' + job.hostname + ':' + job.fields?.length + ':tab:' + job.tabId});
+  // If tabId is missing, find the tab by hostname (resolved inside runTeachSession which is async)
+  chrome.storage.local.remove('_cc_teach_job');
+  runTeachSession(job).catch(console.error);
+});
+
+// Keep service worker alive during long teach sessions (SW dies after 30s idle)
+let _keepaliveInterval = null;
+function startKeepalive() {
+  if (_keepaliveInterval) return;
+  _keepaliveInterval = setInterval(() => chrome.storage.local.set({ _sw_ping: Date.now() }), 20000);
+}
+function stopKeepalive() {
+  clearInterval(_keepaliveInterval);
+  _keepaliveInterval = null;
+}
+
+/* ==== teach/src/teach.js ==== */
 /**
  * cc-background/teach — Teach session orchestrator for the service worker.
  *

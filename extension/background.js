@@ -7,12 +7,7 @@ try { importScripts('shared-bundle.js');         } catch (e) { console.warn('[CC
 try { importScripts('sw/wss-bundle.js');         } catch (e) { console.warn('[CC] wss-bundle load failed:', e.message); }
 try { importScripts('sw/wss-bridge.js');         } catch (e) { console.warn('[CC] wss-bridge load failed:', e.message); }
 try { importScripts('sw/auth-refresh.js');       } catch (e) { console.warn('[CC] auth-refresh load failed:', e.message); }
-try { importScripts('sw/background/bg-auth.js');            } catch (e) { console.warn('[CC] bg-auth load failed:', e.message); }
-try { importScripts('sw/background/bg-label-utils.js');     } catch (e) { console.warn('[CC] bg-label-utils load failed:', e.message); }
-try { importScripts('sw/background/bg-wss-manager.js');     } catch (e) { console.warn('[CC] bg-wss-manager load failed:', e.message); }
-try { importScripts('sw/background/bg-bridge.js');          } catch (e) { console.warn('[CC] bg-bridge load failed:', e.message); }
-try { importScripts('sw/background/bg-job-dispatch.js');    } catch (e) { console.warn('[CC] bg-job-dispatch load failed:', e.message); }
-try { importScripts('sw/background/bg-teach.js');           } catch (e) { console.warn('[CC] bg-teach load failed:', e.message); }
+try { importScripts('sw/bg-bundle.js'); } catch (e) { console.warn('[CC] bg-bundle load failed:', e.message); }
 
 console.log('[CC] background.js loaded v' + (chrome.runtime.getManifest?.().version || '?'));
 
