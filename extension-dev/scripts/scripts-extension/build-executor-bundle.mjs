@@ -56,6 +56,7 @@ const ORDER = [
   'install-post-fill-confirm.js',
   'install-post-fill-mirror.js',
   'install-post-fill.js',
+  'fill-form-fields-sequential.js', // globalThis.fillFormFieldsSequential — public API
 ];
 
 const parts = [];
