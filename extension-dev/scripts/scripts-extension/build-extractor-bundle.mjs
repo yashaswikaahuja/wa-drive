@@ -20,6 +20,7 @@ const ORDER = [
   'sort-fields-visual.js',    // getBoundingClientRect sort
   'fingerprint-form.js',      // formKey + semanticFormKey + pageModel
   'correction-observer.js',   // correction + enrichment listeners
+  'extract-form-fields.js',  // extractFormFieldsWithFingerprint + injectCorrectionObserver
 ];
 
 const parts = [];
