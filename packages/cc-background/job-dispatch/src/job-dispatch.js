@@ -134,7 +134,6 @@ async function runJobDispatch(envelope, tabId) {
 
 
 
-try { importScripts('sw/bg-bridge.js'); } catch (e) { console.warn('[CC] bg-bridge load failed:', e.message); }
 
 
 chrome.storage.onChanged.addListener((changes, area) => {

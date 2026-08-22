@@ -8,6 +8,7 @@ const bgDir = path.join(dir, '../../packages/cc-background');
 
 // Load order matters — auth first, teach last
 const ORDER = [
+  'bootstrap/src/bootstrap.js',
   'auth/src/auth.js',
   'label-utils/src/label-utils.js',
   'wss-manager/src/wss-manager.js',
