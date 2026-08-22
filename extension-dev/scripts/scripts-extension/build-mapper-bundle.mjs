@@ -16,6 +16,7 @@ const ORDER = [
   'decide-conditional.js',
   'fuzzy-match.js',
   'ai-match.js',
+  'mapper-api.js',         // global fuzzyMatch, aiMatch, window.ccResolveChoiceToOption
 ];
 
 const parts = [];
