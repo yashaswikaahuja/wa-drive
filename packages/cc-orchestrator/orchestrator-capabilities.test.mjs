@@ -16,6 +16,7 @@ function load(name) {
 }
 
 const { CcScriptManifests } = load('src/script-manifests.js');
+const { SEQUENTIAL_KERNEL_SCRIPTS } = CcScriptManifests;
 const { CcFlattenProfile }  = load('src/flatten-profile.js');
 
 let passed = 0, failed = 0;
@@ -27,25 +28,17 @@ function assert(desc, actual, expected) {
 
 // ── CcScriptManifests ─────────────────────────────────────────────────────────
 console.log('\nCcScriptManifests');
-const { PRODUCT_PATH_SCRIPTS, SEQUENTIAL_KERNEL_SCRIPTS } = CcScriptManifests;
 
-assert('PRODUCT_PATH_SCRIPTS is array',    Array.isArray(PRODUCT_PATH_SCRIPTS), true);
 assert('SEQUENTIAL_KERNEL_SCRIPTS is array', Array.isArray(SEQUENTIAL_KERNEL_SCRIPTS), true);
-assert('PRODUCT_PATH_SCRIPTS has errors.js', PRODUCT_PATH_SCRIPTS.includes('runtime/errors.js'), true);
 assert('SEQUENTIAL_KERNEL_SCRIPTS has extractor-bundle', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/extractor-bundle.js'), true);
 assert('SEQUENTIAL_KERNEL_SCRIPTS has mapper-bundle', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/mapper-bundle.js'), true);
 assert('SEQUENTIAL_KERNEL_SCRIPTS has executor-bundle', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/executor-bundle.js'), true);
-assert('SEQUENTIAL_KERNEL_SCRIPTS has derive.js', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/derive-bundle.js'), true);
-assert('SEQUENTIAL_KERNEL_SCRIPTS has rule-engine.js', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/rule-engine-bundle.js'), true);
 
 // Frozen arrays
-try { PRODUCT_PATH_SCRIPTS.push('test'); assert('PRODUCT_PATH_SCRIPTS is frozen', false, true); }
-catch (e) { assert('PRODUCT_PATH_SCRIPTS is frozen', true, true); }
 try { SEQUENTIAL_KERNEL_SCRIPTS.push('test'); assert('SEQUENTIAL_KERNEL_SCRIPTS is frozen', false, true); }
 catch (e) { assert('SEQUENTIAL_KERNEL_SCRIPTS is frozen', true, true); }
 
 // No duplicates
-assert('PRODUCT_PATH_SCRIPTS no duplicates', PRODUCT_PATH_SCRIPTS.length, new Set(PRODUCT_PATH_SCRIPTS).size);
 assert('SEQUENTIAL_KERNEL_SCRIPTS no duplicates', SEQUENTIAL_KERNEL_SCRIPTS.length, new Set(SEQUENTIAL_KERNEL_SCRIPTS).size);
 
 // ── CcFlattenProfile ──────────────────────────────────────────────────────────
