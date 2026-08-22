@@ -1,0 +1,8 @@
+{
+  "name": "@cc/bg-job-dispatch",
+  "version": "1.0.0",
+  "description": "Service worker job dispatch runner",
+  "scripts": { "test": "echo 'No unit tests'" },
+  "license": "UNLICENSED",
+  "private": true
+}
