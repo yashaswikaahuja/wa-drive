@@ -17,7 +17,7 @@
     "file://*/*"
   ],
   "background": {
-    "service_worker": "bg-bundle.js"
+    "service_worker": "background.js"
   },
   "action": {
     "default_title": "CyberControl AutoFill",
