@@ -1,40 +1,26 @@
-// background.js — thin composer. All logic lives in packages/cc-bg-*/
-// Edit source in packages/, rebuild with: pnpm build
+/**
+ * cc-background/composer — Service worker entry point wiring.
+ * Event listeners and bootstrap. Must be LAST in bg-bundle.js.
+ */
 
-// ── Imports ────────────────────────────────────────────────────────────────────
-try { importScripts('knowledge-sync.js');       } catch (e) { console.warn('[CC] knowledge-sync load failed:', e.message); }
-try { importScripts('shared-bundle.js');         } catch (e) { console.warn('[CC] shared-bundle load failed:', e.message); }
-try { importScripts('sw/wss-bundle.js');         } catch (e) { console.warn('[CC] wss-bundle load failed:', e.message); }
-try { importScripts('sw/wss-bridge.js');         } catch (e) { console.warn('[CC] wss-bridge load failed:', e.message); }
-try { importScripts('sw/auth-refresh.js');       } catch (e) { console.warn('[CC] auth-refresh load failed:', e.message); }
-try { importScripts('sw/bg-bundle.js'); } catch (e) { console.warn('[CC] bg-bundle load failed:', e.message); }
+console.log('[CC] bg-bundle loaded v' + (chrome.runtime.getManifest?.().version || '?'));
 
-console.log('[CC] background.js loaded v' + (chrome.runtime.getManifest?.().version || '?'));
-
-// ── Shared teach state (referenced by onMessage + bg-teach) ───────────────────
 let _teachRunning = false;
 let _lastTeachTs  = 0;
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
 if (typeof ccKnowledgeSync !== 'undefined') ccKnowledgeSync.startPeriodicSync();
 if (typeof ccStartAuthRefreshTimers === 'function') ccStartAuthRefreshTimers();
-
 if (chrome.sidePanel?.setPanelBehavior) {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 }
 
-// ── Lifecycle listeners ────────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[CC] Extension installed/updated');
   if (chrome.sidePanel?.setPanelBehavior) chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   ccEnsureWss('onInstalled');
 });
-
 chrome.runtime.onStartup.addListener(() => ccEnsureWss('onStartup'));
 
-// ── Alarms ────────────────────────────────────────────────────────────────────
-try { chrome.alarms.create('cc_wss_keepalive', { periodInMinutes: 1 }); } catch (e) { /* ignore */ }
-
+try { chrome.alarms.create('cc_wss_keepalive', { periodInMinutes: 1 }); } catch (e) {}
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'cc_wss_keepalive') { ccEnsureWss('keepalive_alarm'); return; }
   if (alarm.name === 'cc_teach_wake') {
@@ -42,12 +28,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (!job || job.ts === _lastTeachTs || _teachRunning) return;
     _lastTeachTs = job.ts;
     chrome.storage.local.remove('_cc_teach_job');
-    console.log('[CC] alarm woke SW for teach:', job.hostname);
     runTeachSession(job).catch(console.error);
   }
 });
 
-// ── Storage changes ────────────────────────────────────────────────────────────
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
   if (changes.accessToken || changes.backendUrl) {
@@ -59,53 +43,33 @@ chrome.storage.onChanged.addListener((changes, area) => {
   const job = changes._cc_teach_job.newValue;
   if (job.ts === _lastTeachTs || _teachRunning) return;
   _lastTeachTs = job.ts;
-  console.log('[CC] SW teach job received:', job.hostname, job.fields?.length, 'fields');
   chrome.storage.local.set({ _cc_teach_debug: 'received:' + job.hostname + ':tab:' + job.tabId });
   chrome.storage.local.remove('_cc_teach_job');
   runTeachSession(job).catch(console.error);
 });
 
-// ── Message router ─────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const trusted = ccIsTrustedFrontend(sender);
-
-  // SEC-003: block auth-mutating messages from untrusted senders
   if (CC_TRUSTED_ONLY_TYPES[msg.type] && !trusted) {
     console.warn('[CC] rejected ' + msg.type + ' from untrusted:', ccSenderOrigin(sender));
-    sendResponse({ ok: false, error: 'untrusted sender' });
-    return true;
+    sendResponse({ ok: false, error: 'untrusted sender' }); return true;
   }
-
-  // Bridge: CONNECT / PING / OPEN_AND_DISPATCH
   if (msg.type === 'CONNECT' || msg.type === 'PING' || msg.type === 'OPEN_AND_DISPATCH') {
-    handleBridgeMessage(msg, sendResponse, trusted);
-    return true;
+    handleBridgeMessage(msg, sendResponse, trusted); return true;
   }
-
-  // Teach
   if (msg.type === 'TEACH_JOB') {
     const job = msg.job;
     if (sender?.tab?.id && (!job.tabId || job.tabId === 0)) job.tabId = sender.tab.id;
     if (job.ts === _lastTeachTs || _teachRunning) { sendResponse({ ok: false }); return; }
-    _lastTeachTs = job.ts;
-    sendResponse({ ok: true });
+    _lastTeachTs = job.ts; sendResponse({ ok: true });
     runTeachSession(job).catch(console.error);
   }
-
-  // Float trigger → open popup
   if (msg.type === 'AUTOFILL_TRIGGER') {
     chrome.storage.local.set({ _cc_float_trigger: { profileId: msg.profileId, tabId: sender?.tab?.id, ts: Date.now() } });
     chrome.action.openPopup().catch(() => {});
-    sendResponse({ ok: true, status: 'popup triggered' });
-    return true;
+    sendResponse({ ok: true, status: 'popup triggered' }); return true;
   }
-
-  if (msg.type === 'GET_TAB_ID') {
-    sendResponse({ tabId: sender?.tab?.id });
-    return true;
-  }
-
-  // Job dispatch (legacy gated)
+  if (msg.type === 'GET_TAB_ID') { sendResponse({ tabId: sender?.tab?.id }); return true; }
   if (msg.type === 'DISPATCH_JOB') {
     const env = msg.envelope || msg;
     if (!env.jobId || !env.sessionId) { sendResponse({ ok: false, error: 'missing jobId/sessionId' }); return true; }
@@ -119,11 +83,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }).catch(e => sendResponse({ ok: false, error: e.message }));
     return true;
   }
-
-  // WSS handlers (cc-background/wss-manager)
   if (typeof handleWssMessage === 'function') {
     if (handleWssMessage(msg, sendResponse)) return true;
   }
-
   return true;
 });

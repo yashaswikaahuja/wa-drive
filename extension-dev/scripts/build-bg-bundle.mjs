@@ -14,6 +14,7 @@ const ORDER = [
   'bridge/src/bridge.js',
   'job-dispatch/src/job-dispatch.js',
   'teach/src/teach.js',
+  'composer/src/composer.js',
 ];
 
 const parts = ['/**\n * AUTO-GENERATED — do not edit.\n * Source: packages/cc-background/\n * Rebuild: node extension-dev/scripts/build-bg-bundle.mjs\n */\n'];
