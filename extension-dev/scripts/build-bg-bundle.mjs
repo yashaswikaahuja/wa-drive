@@ -28,6 +28,6 @@ for (const name of ORDER) {
   if (!src.endsWith('\n')) parts.push('\n');
 }
 
-const out = path.join(dir, '../../extension/sw/bg-bundle.js');
+const out = path.join(dir, '../../extension/bg-bundle.js');
 fs.writeFileSync(out, parts.join(''));
 console.log('Wrote', out, parts.join('').split(/\n/).length, 'lines');
