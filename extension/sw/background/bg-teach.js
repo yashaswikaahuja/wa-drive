@@ -1,6 +1,6 @@
-/** AUTO-GENERATED — source: packages/cc-bg-teach/src/teach.js */
+/** AUTO-GENERATED — source: packages/cc-background/teach/src/teach.js */
 /**
- * cc-bg-teach — Teach session orchestrator for the service worker.
+ * cc-background/teach — Teach session orchestrator for the service worker.
  *
  * Depends on: chrome.scripting, chrome.tabs, chrome.storage
  * Calls: notifyPopup (internal), ccEnsureWss (from wss-bridge)

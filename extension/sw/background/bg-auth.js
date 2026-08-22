@@ -1,6 +1,6 @@
-/** AUTO-GENERATED — source: packages/cc-bg-auth/src/auth.js */
+/** AUTO-GENERATED — source: packages/cc-background/auth/src/auth.js */
 /**
- * cc-bg-auth — Authentication and trust guards for the service worker.
+ * cc-background/auth — Authentication and trust guards for the service worker.
  *
  * Public API (on globalThis):
  *   isLegacyClientFillAllowed()  => Promise<boolean>

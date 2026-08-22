@@ -1,8 +1,8 @@
 /**
- * cc-bg-job-dispatch — Job dispatch runner for the service worker.
+ * cc-background/job-dispatch — Job dispatch runner for the service worker.
  *
  * Depends on: ccKnowledgeSync, CC_TRUSTED_ONLY_TYPES, isLegacyClientFillAllowed,
- *             legacyClientFillDenied (from cc-bg-auth)
+ *             legacyClientFillDenied (from cc-background/auth)
  *
  * Public API (on globalThis):
  *   runJobDispatch(envelope, tabId) => Promise<void>
@@ -134,7 +134,6 @@ async function runJobDispatch(envelope, tabId) {
 
 
 
-// #273 cc-bg-bridge — port handler, handleBridgeMessage, onMessageExternal
 try { importScripts('sw/bg-bridge.js'); } catch (e) { console.warn('[CC] bg-bridge load failed:', e.message); }
 
 

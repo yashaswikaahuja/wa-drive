@@ -1,5 +1,5 @@
 /**
- * cc-bg-teach — Teach session orchestrator for the service worker.
+ * cc-background/teach — Teach session orchestrator for the service worker.
  *
  * Depends on: chrome.scripting, chrome.tabs, chrome.storage
  * Calls: notifyPopup (internal), ccEnsureWss (from wss-bridge)

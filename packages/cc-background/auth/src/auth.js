@@ -1,5 +1,5 @@
 /**
- * cc-bg-auth — Authentication and trust guards for the service worker.
+ * cc-background/auth — Authentication and trust guards for the service worker.
  *
  * Public API (on globalThis):
  *   isLegacyClientFillAllowed()  => Promise<boolean>

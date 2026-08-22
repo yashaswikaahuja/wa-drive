@@ -1,9 +1,9 @@
-/** AUTO-GENERATED — source: packages/cc-bg-bridge/src/bridge.js */
+/** AUTO-GENERATED — source: packages/cc-background/bridge/src/bridge.js */
 /**
- * cc-bg-bridge — Frontend bridge: port handler, handleBridgeMessage,
+ * cc-background/bridge — Frontend bridge: port handler, handleBridgeMessage,
  * and onMessageExternal for the service worker.
  *
- * Depends on globals from cc-bg-auth: CC_TRUSTED_ONLY_TYPES,
+ * Depends on globals from cc-background/auth: CC_TRUSTED_ONLY_TYPES,
  * ccIsTrustedFrontend, isLegacyClientFillAllowed, legacyClientFillDenied.
  * Calls: ccEnsureWss, runJobDispatch (must be loaded before this).
  */

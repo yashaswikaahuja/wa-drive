@@ -1,6 +1,6 @@
-/** AUTO-GENERATED — source: packages/cc-bg-label-utils/src/label-utils.js */
+/** AUTO-GENERATED — source: packages/cc-background/label-utils/src/label-utils.js */
 /**
- * cc-bg-label-utils — Label normalisation and semantic alias resolution
+ * cc-background/label-utils — Label normalisation and semantic alias resolution
  * for the service worker (background.js).
  *
  * NOTE: Keep in sync with packages/cc-shared/src/label-utils.js

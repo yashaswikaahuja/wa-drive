@@ -1,5 +1,5 @@
 /**
- * cc-bg-label-utils — Label normalisation and semantic alias resolution
+ * cc-background/label-utils — Label normalisation and semantic alias resolution
  * for the service worker (background.js).
  *
  * NOTE: Keep in sync with packages/cc-shared/src/label-utils.js

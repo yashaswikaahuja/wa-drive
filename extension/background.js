@@ -125,7 +125,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  // WSS handlers (cc-bg-wss-manager)
+  // WSS handlers (cc-background/wss-manager)
   if (typeof handleWssMessage === 'function') {
     if (handleWssMessage(msg, sendResponse)) return true;
   }

@@ -1,5 +1,5 @@
 /**
- * cc-bg-wss-manager — WSS message handler dispatcher for the service worker.
+ * cc-background/wss-manager — WSS message handler dispatcher for the service worker.
  *
  * Handles: GET_WSS_STATE, ENSURE_WSS, FILL_DEBUG,
  *          WSS_FILL_REQUEST, WSS_FILL_SESSION, WSS_PROFILES_LIST

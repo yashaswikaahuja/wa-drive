@@ -1,0 +1,23 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+
+  packages/cc-ai-resolve: {}
+
+  packages/cc-derive: {}
+
+  packages/cc-executor: {}
+
+  packages/cc-extractor: {}
+
+  packages/cc-mapper: {}
+
+  packages/cc-orchestrator: {}
+
+  packages/cc-rule-engine: {}
