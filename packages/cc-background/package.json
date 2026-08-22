@@ -1,7 +1,7 @@
 {
-  "name": "@cc/bg-auth",
+  "name": "@cc/background",
   "version": "1.0.0",
-  "description": "Service worker auth and trust guards",
+  "description": "CyberControl service worker modules — all background.js logic",
   "scripts": { "test": "echo 'No unit tests'" },
   "license": "UNLICENSED",
   "private": true

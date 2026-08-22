@@ -1,8 +1,0 @@
-{
-  "name": "@cc/bg-bridge",
-  "version": "1.0.0",
-  "description": "Service worker frontend bridge — port handler, handleBridgeMessage, onMessageExternal",
-  "scripts": { "test": "echo 'No unit tests'" },
-  "license": "UNLICENSED",
-  "private": true
-}

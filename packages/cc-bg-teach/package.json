@@ -1,8 +1,0 @@
-{
-  "name": "@cc/bg-teach",
-  "version": "1.0.0",
-  "description": "Service worker teach session — runTeachSession, groqAutoTeach, teachOneField",
-  "scripts": { "test": "echo 'No unit tests'" },
-  "license": "UNLICENSED",
-  "private": true
-}

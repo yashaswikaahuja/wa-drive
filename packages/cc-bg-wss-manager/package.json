@@ -1,8 +1,0 @@
-{
-  "name": "@cc/bg-wss-manager",
-  "version": "1.0.0",
-  "description": "Service worker WSS message handler dispatcher",
-  "scripts": { "test": "echo 'No unit tests'" },
-  "license": "UNLICENSED",
-  "private": true
-}

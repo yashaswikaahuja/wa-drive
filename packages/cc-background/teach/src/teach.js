@@ -10,9 +10,7 @@
  *   stopKeepalive()         => void
  */
 
-let _keepaliveInterval = null;
-let _teachRunning = false;
-let _lastTeachTs = 0;
+let _keepaliveInterval = null; // keepalive interval — local to teach
 
 
 async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, llmBaseUrl, llmModel }) {
