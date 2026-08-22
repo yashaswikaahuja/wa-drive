@@ -340,7 +340,7 @@ async function runJobDispatch(envelope, tabId) {
         });
       }
     }
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['shared-bundle.js', 'autofill/plugins-bundle.js', 'drivers-bundle.js', 'autofill/extractor-bundle.js', 'autofill/mapper-bundle.js', 'autofill/executor-bundle.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['shared-bundle.js', 'autofill/plugins-bundle.js', 'drivers-bundle.js', 'autofill/extractor-bundle.js', 'autofill/mapper-bundle.js', 'autofill/derive-bundle.js', 'autofill/rule-engine-bundle.js', 'autofill/ai-resolve-bundle.js', 'autofill/executor-bundle.js'] });
 
     const result = await chrome.scripting.executeScript({
       target: { tabId },
