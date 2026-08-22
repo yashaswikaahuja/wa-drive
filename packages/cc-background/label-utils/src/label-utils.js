@@ -7,7 +7,7 @@
  * scripts so this is a separate copy.
  *
  * Public API (on globalThis):
- *   SEMANTIC_ALIASES          — object
+ * BG_SEMANTIC_ALIASES   — object
  *   normalizeLabel(label)     => string
  *   getSemanticKey(label)     => string
  *   getSemanticKeyResolved(label) => Promise<string>
@@ -58,7 +58,7 @@ function calcConfidence(fills, corrections) {
 }
 
 // Expose as globals for service worker scope
-globalThis.BG_SEMANTIC_ALIASES = SEMANTIC_ALIASES;
+globalThis.BG_SEMANTIC_ALIASES = BG_SEMANTIC_ALIASES;
 globalThis.normalizeLabel           = normalizeLabel;
 globalThis.getSemanticKey           = getSemanticKey;
 globalThis.getSemanticKeyResolved   = getSemanticKeyResolved;
