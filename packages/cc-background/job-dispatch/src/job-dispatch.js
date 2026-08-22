@@ -164,7 +164,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // Keep service worker alive during long teach sessions (SW dies after 30s idle)
-let _keepaliveInterval = null;
 function startKeepalive() {
   if (_keepaliveInterval) return;
   _keepaliveInterval = setInterval(() => chrome.storage.local.set({ _sw_ping: Date.now() }), 20000);
