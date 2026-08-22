@@ -8,74 +8,9 @@ try { importScripts('sw/wss-bundle.js'); } catch (e) { console.warn('[CC] wss-bu
 try { importScripts('sw/wss-bridge.js'); } catch (e) { console.warn('[CC] sw/wss-bridge load failed:', e.message); }
 try { importScripts('sw/auth-refresh.js'); } catch (e) { console.warn('[CC] sw/auth-refresh load failed:', e.message); }
 
-/** @returns {Promise<boolean>} Phase 4.1: always false â€” legacy paths permanently disabled. */
-async function isLegacyClientFillAllowed() {
-  return false;
-}
+// #270 cc-bg-auth — auth guards (isLegacyClientFillAllowed, ccIsTrustedFrontend, etc.)
+try { importScripts('sw/bg-auth.js'); } catch (e) { console.warn('[CC] bg-auth load failed:', e.message); }
 
-function legacyClientFillDenied(pathName) {
-  if (typeof CcLegacyFillGate !== 'undefined' && CcLegacyFillGate.legacyClientFillDenied) {
-    return CcLegacyFillGate.legacyClientFillDenied(pathName);
-  }
-  return {
-    ok: false,
-    code: 'legacy_client_fill_disabled',
-    error: (pathName || 'legacy client fill') + ' is disabled (Phase 0). Use side-panel Fill.',
-  };
-}
-
-// Helper functions â€” use shared/label-utils.js as canonical source.
-// These are thin wrappers because background.js (service worker) cannot import
-// page-context scripts directly. Kept in sync with shared/label-utils.js.
-const SEMANTIC_ALIASES = {
-  'full name': 'name', 'candidate name': 'name', 'applicant name': 'name',
-  'student name': 'name', 'name of candidate': 'name', 'name of applicant': 'name',
-  'candidates name': 'name', 'applicants name': 'name',
-  'date of birth': 'dob', 'birth date': 'dob', 'dob': 'dob', 'date of birth ddmmyyyy': 'dob',
-  "fathers name": 'father_name', 'father name': 'father_name', "fathers husbands name": 'father_name',
-  "mothers name": 'mother_name', 'mother name': 'mother_name',
-  'aadhaar no': 'aadhaar_number', 'aadhaar number': 'aadhaar_number', 'aadhar no': 'aadhaar_number',
-  'pan no': 'pan_number', 'pan number': 'pan_number', 'pan card': 'pan_number',
-  'mobile no': 'mobile', 'mobile number': 'mobile', 'phone no': 'mobile', 'contact no': 'mobile',
-  'email id': 'email', 'email address': 'email',
-  'permanent address': 'address', 'residential address': 'address', 'correspondence address': 'address',
-  'pin code': 'pincode', 'postal code': 'pincode', 'pincode': 'pincode',
-  'state name': 'state', 'district name': 'district',
-};
-function getSemanticKey(label) { const n = normalizeLabel(label); return SEMANTIC_ALIASES[n] || n; }
-// Async version â€” checks server-synced aliases first, falls back to inline SEMANTIC_ALIASES
-async function getSemanticKeyResolved(label) {
-  const n = normalizeLabel(label);
-  if (SEMANTIC_ALIASES[n]) return SEMANTIC_ALIASES[n];
-  // Check cached server aliases (variantâ†’canonical lookup)
-  if (typeof ccKnowledgeSync !== 'undefined') {
-    const aliases = await ccKnowledgeSync.getCachedAliases();
-    for (const [canonical, variants] of Object.entries(aliases)) {
-      if (variants.includes(n) || variants.includes(label)) return canonical;
-    }
-  }
-  return n;
-}
-function calcConfidence(fills, corrections) { if (fills + corrections === 0) return 0.5; return fills / (fills + corrections * 3); }
-function normalizeLabel(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
-
-console.log("[CC] background.js loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
-
-// â”€â”€ SEC-003: trusted frontend origin for auth/state-mutating bridge messages â”€â”€
-// Only the CyberControl frontend may CONNECT (set tokens/backend) or open+dispatch
-// jobs. A content script on any other matched origin (e.g. a government portal)
-// must not be able to overwrite stored auth state through the bridge.
-const CC_TRUSTED_FRONTEND_ORIGINS = ['https://app.cybercontrol.fun'];
-function ccSenderOrigin(sender) {
-  if (!sender) return '';
-  if (sender.origin) return sender.origin;
-  try { return sender.url ? new URL(sender.url).origin : ''; } catch (e) { return ''; }
-}
-function ccIsTrustedFrontend(sender) {
-  return CC_TRUSTED_FRONTEND_ORIGINS.indexOf(ccSenderOrigin(sender)) !== -1;
-}
-// Bridge message types that mutate auth/backend state or spawn privileged actions.
-const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 
 // â”€â”€ Knowledge Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Start periodic knowledge sync (bootstrap on first run, delta after that).
