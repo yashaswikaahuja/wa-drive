@@ -10,6 +10,8 @@ try { importScripts('sw/auth-refresh.js'); } catch (e) { console.warn('[CC] sw/a
 
 // #270 cc-bg-auth — auth guards (isLegacyClientFillAllowed, ccIsTrustedFrontend, etc.)
 try { importScripts('sw/bg-auth.js'); } catch (e) { console.warn('[CC] bg-auth load failed:', e.message); }
+// #271 cc-bg-label-utils — normalizeLabel, getSemanticKey, calcConfidence
+try { importScripts('sw/bg-label-utils.js'); } catch (e) { console.warn('[CC] bg-label-utils load failed:', e.message); }
 
 
 // â”€â”€ Knowledge Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
