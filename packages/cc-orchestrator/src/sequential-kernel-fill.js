@@ -176,7 +176,7 @@
         var skipped = records.filter(function (r) { return r.result === 'skipped' || r.result === 'waiting_human'; }).length;
         var filled  = records.filter(function (r) { return r.result === 'filled'; }).length || filledCount || 0;
         records = records.map(function (r) { return Object.assign({}, r, { hostname: r.hostname || location.hostname, plannedValue: r.plannedValue != null ? r.plannedValue : r.value, actualValue: r.actualValue != null ? r.actualValue : r.actual, transport: fillTransport }); });
-        return { ok: true, filled: filled, failed: failed, skipped: skipped, fields: Object.keys(mapping).length, records: records, hostname: location.hostname, url: location.href };
+        return { ok: true, filled: filled, failed: failed, skipped: skipped, fields: Object.keys(mapping).length, records: records, hostname: location.hostname, url: location.href, _mapping: mapping, _fbs: fbs, _fields: fields };
       },
     });
 
@@ -184,6 +184,35 @@
     if (!r.ok) {
       return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', r.error || 'Sequential fill failed'), error: r.error || 'sequential_failed' };
     }
+
+    // ── Stage 3b: Sync mappings to backend ───────────────────────────────────
+    // Post form field metadata + profileKey mappings so the backend learns
+    // new forms. This is what makes new forms appear in the mapping portal.
+    try {
+      var pk = extracted.semanticFormKey || extracted.formKey;
+      var syncMapping = r._mapping || {};
+      var syncFbs     = r._fbs     || {};
+      var syncFields  = r._fields  || [];
+      var syncRecords = r.records  || [];
+      var updates = {};
+      var gsk2 = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
+      for (var i = 0; i < syncFields.length; i++) {
+        var f = syncFields[i];
+        var sk = gsk2(f.label);
+        if (!sk || sk.length < 2) continue;
+        var info = syncFbs[f.selector];
+        var profileKey = (info && info.profileKey) || (syncMapping[f.selector] && syncMapping[f.selector].profileKey) || null;
+        var wasFilled = syncRecords.some(function (rec) { return rec.selector === f.selector && rec.result === 'filled'; });
+        updates[sk] = { profileKey: profileKey, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+      }
+      if (Object.keys(updates).length > 0 && backendUrl && accessToken && pk) {
+        await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
+          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
+        });
+      }
+    } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }
 
     // ── Stage 4: Save session ─────────────────────────────────────────────────
     progress('Saving session over WSS...', 92);
