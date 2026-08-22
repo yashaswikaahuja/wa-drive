@@ -4,7 +4,7 @@
  * Rebuild: node extension/autofill/build-rule-engine-bundle.mjs
  */
 
-/* ==== ../../packages/cc-rule-engine/src/rule-engine.js ==== */
+/* ==== ../../../packages/cc-rule-engine/src/rule-engine.js ==== */
 /**
  * rule-engine — Saved field-mapping rule evaluator
  *
@@ -156,19 +156,3 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 if (typeof module !== 'undefined') module.exports = root.CcRuleEngine;
-
-/* ==== rule-engine.js (facade) ==== */
-// rule-engine.js — thin facade over CcRuleEngine capability
-function ccNormVal(v) {
-  var _re = globalThis.CcRuleEngine || {};
-  return _re._normVal ? _re._normVal(v) : (v == null ? '' : String(v)).trim().toLowerCase();
-}
-function ccTypeGroup(t) {
-  var _re = globalThis.CcRuleEngine || {};
-  return _re._typeGroup ? _re._typeGroup(t) : 'text';
-}
-function ccEvaluateField(entry, field, profile, translations) {
-  var _re = globalThis.CcRuleEngine || {};
-  if (_re.evaluateField) return _re.evaluateField(entry, field, profile, translations);
-  return { kind: 'skip' };
-}
