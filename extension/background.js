@@ -12,6 +12,8 @@ try { importScripts('sw/auth-refresh.js'); } catch (e) { console.warn('[CC] sw/a
 try { importScripts('sw/bg-auth.js'); } catch (e) { console.warn('[CC] bg-auth load failed:', e.message); }
 // #271 cc-bg-label-utils — normalizeLabel, getSemanticKey, calcConfidence
 try { importScripts('sw/bg-label-utils.js'); } catch (e) { console.warn('[CC] bg-label-utils load failed:', e.message); }
+// #272 cc-bg-wss-manager — WSS message handler dispatcher
+try { importScripts('sw/bg-wss-manager.js'); } catch (e) { console.warn('[CC] bg-wss-manager load failed:', e.message); }
 
 
 // â”€â”€ Knowledge Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -134,101 +136,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  // â”€â”€ WSS presence / fill (popup + page) â€” must be on main listener, not bridge-only â”€â”€
-  if (msg.type === 'GET_WSS_STATE') {
-    if (typeof CcWssSession !== 'undefined' && CcWssSession.getState) {
-      CcWssSession.getState().then((st) => sendResponse({ ok: true, wss: st })).catch((e) => sendResponse({ ok: false, error: e.message }));
-      return true;
-    }
-    sendResponse({ ok: false, error: 'wss_session_missing' });
-    return true;
+  // #272 cc-bg-wss-manager — WSS message handlers delegated to package
+  if (typeof handleWssMessage === 'function') {
+    const handled = handleWssMessage(msg, sendResponse);
+    if (handled) return true;
   }
-  if (msg.type === 'ENSURE_WSS') {
-    ccEnsureWss('ENSURE_WSS').then((r) => sendResponse(r)).catch((e) => sendResponse({ ok: false, error: e.message }));
-    return true;
-  }
-  if (msg.type === 'FILL_DEBUG') {
-    forwardFillDebug(msg);
-    sendResponse({ ok: true, forwarded: true });
-    return true;
-  }
-  if (msg.type === 'WSS_FILL_REQUEST') {
-    (async () => {
-      try {
-        await ccEnsureWss('WSS_FILL_REQUEST');
-        // Wait briefly for CONNECTED after ensure (connect is async)
-        const deadline = Date.now() + 8000;
-        while (Date.now() < deadline) {
-          const st = CcWssSession?.getClient?.()?.state;
-          if (st === 'connected') break;
-          await new Promise((r) => setTimeout(r, 200));
-        }
-        if (!CcWssSession?.requestFillPlan) throw new Error('wss_session_missing');
-        if (CcWssSession.getClient?.()?.state !== 'connected') {
-          throw new Error('wss_not_connected');
-        }
-        const resp = await CcWssSession.requestFillPlan({
-          formKey: msg.formKey,
-          semanticFormKey: msg.semanticFormKey || msg.formKey,
-          hostname: msg.hostname,
-          fields: msg.fields || [],
-          profile: msg.profile || {},
-          profileId: msg.profileId || null,
-        }, 25000);
-        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'fill_request_error');
-        sendResponse({ ok: true, plan: resp, transport: 'wss' });
-      } catch (e) {
-        console.warn('[CC] WSS_FILL_REQUEST failed:', e.message);
-        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
-      }
-    })();
-    return true;
-  }
-  if (msg.type === 'WSS_FILL_SESSION') {
-    (async () => {
-      try {
-        await ccEnsureWss('WSS_FILL_SESSION');
-        const deadline = Date.now() + 5000;
-        while (Date.now() < deadline) {
-          if (CcWssSession?.getClient?.()?.state === 'connected') break;
-          await new Promise((r) => setTimeout(r, 200));
-        }
-        if (!CcWssSession?.postFillSession) throw new Error('wss_session_missing');
-        const resp = await CcWssSession.postFillSession({
-          hostname: msg.hostname,
-          url: msg.url,
-          semanticFormKey: msg.semanticFormKey || msg.formKey,
-          formKey: msg.formKey,
-          runtimeVersion: msg.runtimeVersion,
-          totalFilled: msg.totalFilled,
-          totalFailed: msg.totalFailed,
-          totalSkipped: msg.totalSkipped,
-          records: msg.records || [],
-        }, 20000);
-        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'fill_session_error');
-        sendResponse({ ok: true, id: resp.id, transport: 'wss' });
-      } catch (e) {
-        console.warn('[CC] WSS_FILL_SESSION failed:', e.message);
-        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
-      }
-    })();
-    return true;
-  }
-  if (msg.type === 'WSS_PROFILES_LIST') {
-    (async () => {
-      try {
-        await ccEnsureWss('WSS_PROFILES_LIST');
-        if (!CcWssSession?.requestProfilesList) throw new Error('wss_session_missing');
-        const resp = await CcWssSession.requestProfilesList(15000);
-        if (resp?.type === 'error') throw new Error(resp.message || resp.code || 'profiles_list_error');
-        const profiles = Array.isArray(resp.profiles) ? resp.profiles : [];
-        sendResponse({ ok: true, profiles, transport: 'wss', count: profiles.length });
-      } catch (e) {
-        console.warn('[CC] WSS_PROFILES_LIST failed:', e.message);
-        sendResponse({ ok: false, error: e.message || String(e), transport: 'wss_failed' });
-      }
-    })();
-    return true;
   }
 
   return true;
