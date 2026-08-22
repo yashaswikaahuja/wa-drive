@@ -72,7 +72,7 @@ globalThis.ccIsTrustedFrontend         = ccIsTrustedFrontend;
  *   calcConfidence(fills, corrections) => number
  */
 
-const SEMANTIC_ALIASES = {
+const BG_SEMANTIC_ALIASES = {
   'full name': 'name', 'candidate name': 'name', 'applicant name': 'name',
   'student name': 'name', 'name of candidate': 'name', 'name of applicant': 'name',
   'candidates name': 'name', 'applicants name': 'name',
@@ -94,12 +94,12 @@ function normalizeLabel(label) {
 
 function getSemanticKey(label) {
   const n = normalizeLabel(label);
-  return SEMANTIC_ALIASES[n] || n;
+  return BG_SEMANTIC_ALIASES[n] || n;
 }
 
 async function getSemanticKeyResolved(label) {
   const n = normalizeLabel(label);
-  if (SEMANTIC_ALIASES[n]) return SEMANTIC_ALIASES[n];
+  if (BG_SEMANTIC_ALIASES[n]) return BG_SEMANTIC_ALIASES[n];
   // Check cached server aliases (variant→canonical lookup)
   if (typeof ccKnowledgeSync !== 'undefined') {
     const aliases = await ccKnowledgeSync.getCachedAliases();
@@ -116,7 +116,7 @@ function calcConfidence(fills, corrections) {
 }
 
 // Expose as globals for service worker scope
-globalThis.SEMANTIC_ALIASES         = SEMANTIC_ALIASES;
+globalThis.BG_SEMANTIC_ALIASES = SEMANTIC_ALIASES;
 globalThis.normalizeLabel           = normalizeLabel;
 globalThis.getSemanticKey           = getSemanticKey;
 globalThis.getSemanticKeyResolved   = getSemanticKeyResolved;
