@@ -21,7 +21,7 @@ import {
   publish, promote, deprecate,
   createSnapshot, listSnapshots, restoreSnapshot,
   checkCompatibility, planMigration, getLineageHistory,
-} from '../../engines/knowledge-versioning.js';
+} from '../../../../packages/svc-knowledge/src/knowledge-versioning.js';
 
 const router = Router();
 

@@ -5,7 +5,8 @@ Standalone API service that powers the Chrome AutoFill extension. Runs separatel
 **Layout (after safe reorg):**
 
 ```text
-index.js                 # process entry (Docker CMD: node index.js)
+index.js                 # source process entry
+dist/                    # generated deployable service bundle (npm run build)
 src/
   http/                  # auth middleware + Express routes
   ws/                    # WSS server, handlers, fill over socket
@@ -15,7 +16,7 @@ scripts/                 # migrators / seed (one-shots)
 migrations/              # SQL
 ```
 
-Root `auth.js`, `db.js`, `ws-*.js` are **compatibility shims** → prefer `src/…`.  
+The root compatibility shims are retained only for legacy consumers; service code imports `src/` directly.
 Repo map: `docs/REPO-MAP.md`.
 
 ## What it serves

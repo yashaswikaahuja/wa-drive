@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '../../engines/fill-planner.js';
-import { mapUnknownFields } from '../../engines/semantic-mapper.js';
-import { persistExecutionEvidence } from '../../engines/execution-evidence.js';
-import { classifyFormBehavior, isHardEvidenceType } from '../../engines/behavior-classifier.js';
-import { mergeExecutionMode } from '../../engines/execution-mode.js';
+import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '../../../../packages/svc-fill-planner/src/fill-planner.js';
+import { mapUnknownFields } from '../../../../packages/svc-ai-mapper/src/semantic-mapper.js';
+import { persistExecutionEvidence } from '../../../../packages/svc-session/src/execution-evidence.js';
+import { classifyFormBehavior, isHardEvidenceType } from '../../../../packages/svc-runtime/src/behavior-classifier.js';
+import { mergeExecutionMode } from '../../../../packages/svc-session/src/execution-mode.js';
 
 const router = Router();
 
@@ -131,7 +131,7 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       const behaviorKey = `${scope.portal_id || ''}:${scope.form_key || ''}`;
       let priorKnowledge = null;
       try {
-        const { loadDoc, KEYS } = await import('../store.js');
+        const { loadDoc, KEYS } = await import('../../db/store.js');
         const allMappings = await loadDoc(KEYS.MAPPINGS);
         const formEntry = allMappings[behaviorKey] || allMappings[scope.form_key] || {};
         if (formEntry._behavior) {
@@ -292,7 +292,7 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
     let behaviorUpdated = false;
     if (hardCount > 0) {
       try {
-        const { mutateDoc, KEYS } = await import('../store.js');
+        const { mutateDoc, KEYS } = await import('../../db/store.js');
         // Use stable form scope key: portal_id:form_key from correlation context
         const portalId = req.query.portal_id || '';
         const formKey = req.query.form_key || req.query.correlation_id || req.query.plan_id || '';

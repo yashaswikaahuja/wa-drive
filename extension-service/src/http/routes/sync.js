@@ -14,7 +14,7 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../../db/db.js';
-import { ensureKnowledgeSchema } from '../../engines/knowledge-store.js';
+import { ensureKnowledgeSchema } from '../../../../packages/svc-knowledge/src/knowledge-store.js';
 import { createHash } from 'node:crypto';
 
 const router = Router();

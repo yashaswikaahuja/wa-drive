@@ -13,7 +13,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import { validate, detectConflicts, validateTransition } from '../../engines/validation-engine.js';
+import { validate, detectConflicts, validateTransition } from '../../../../packages/svc-knowledge/src/validation-engine.js';
 
 const router = Router();
 

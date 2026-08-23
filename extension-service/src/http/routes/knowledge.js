@@ -16,7 +16,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import * as store from '../../engines/knowledge-store.js';
+import * as store from '../../../../packages/svc-knowledge/src/knowledge-store.js';
 
 const router = Router();
 

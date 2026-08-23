@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../../db/db.js';
 import { authMiddleware } from '../auth.js';
-import { deriveProfile } from '../../engines/deriveProfile.js';
+import { deriveProfile } from '../../../../packages/svc-fill-planner/src/deriveProfile.js';
 
 const router = Router();
 
