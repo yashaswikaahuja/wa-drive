@@ -10,18 +10,18 @@ CyberControl is a cyber cafe automation tool for Indian government forms. Operat
 
 ### End-to-End Flow
 
-```
-WhatsApp messages → Worker extraction → Backend profiles
-                                              ↓
-Operator opens form → Extension extracts fields → Planner maps fields to profile
-                                              ↓
-                              Deterministic Runtime fills form
-                                              ↓
-                              Verification detects resets/failures
-                                              ↓
-                              Session + ReplayRecords posted to backend
-                                              ↓
-                              Learning engine updates mappings
+```mermaid
+flowchart TD
+  Messages[WhatsApp messages] --> Worker[Worker extraction]
+  Worker --> Profiles[Backend profiles]
+  Operator[Operator opens form] --> Extractor[Extension extracts fields]
+  Extractor --> Planner[Planner maps fields to profile]
+  Profiles --> Planner
+  Planner --> Runtime[Deterministic runtime fills form]
+  Runtime --> Verify[Verification detects resets and failures]
+  Verify --> Records[Session and ReplayRecords]
+  Records --> Learning[Learning engine updates mappings]
+  Learning --> Profiles
 ```
 
 ---
@@ -76,48 +76,26 @@ Operator opens form → Extension extracts fields → Planner maps fields to pro
 
 ## Extension Pipeline
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        PLANNER                               │
-│                                                              │
-│  1. Extractor: DOM → formFields[] + semanticFormKey          │
-│  2. Load saved mappings (semanticFormKey primary, formKey     │
-│     fallback)                                                │
-│  3. Fuzzy match: FIELD_ALIASES + label normalization         │
-│  4. Groq AI: only for unmapped non-verify fields             │
-│  5. ng-dropdown mapping: adapter-based custom dropdowns      │
-│  6. Output: mapping{} + filledBySource{} = FillPlan          │
-│                                                              │
-├──────────────── PLANNER/RUNTIME BOUNDARY ────────────────────┤
-│                                                              │
-│                    DETERMINISTIC RUNTIME                      │
-│                                                              │
-│  executor.js: fillFormFieldsSequential(mapping, ...)         │
-│  - STRATEGY_REGISTRY (5 named strategies)                    │
-│  - WaitEngine (state-based waits for cascades)               │
-│  - Post-fill verification (detects framework resets)         │
-│  - ReplayRecord emission (DOM attribute bridge)              │
-│                                                              │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│                    VERIFICATION LAYER                         │
-│                                                              │
-│  - 500ms post-fill check (el.value === expected)             │
-│  - 6s delayed verification (detects Angular resets)          │
-│  - failReason taxonomy: no-element, no-option,               │
-│    custom-input-rejected, framework-reset                    │
-│                                                              │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│                    OBSERVABILITY                              │
-│                                                              │
-│  - FormSession POST to /api/sessions                         │
-│  - ReplayRecords with strategy, intent, source, confidence   │
-│  - Version tagging (rv, sv, wv)                              │
-│  - semanticFormKey + structural formKey                      │
-│  - planSize metric                                           │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+  Extractor[Extractor: DOM to formFields and semanticFormKey]
+  Mappings[Saved mappings and aliases]
+  Planner[Planner: produce FillPlan]
+  Runtime[Deterministic runtime: execute fill plan]
+  Verify[Verification: immediate and delayed checks]
+  Observe[Observability: sessions and ReplayRecords]
+
+  Extractor --> Planner
+  Mappings --> Planner
+  Planner --> Runtime
+  Runtime --> Verify
+  Verify --> Observe
+  Observe --> Mappings
+
+  subgraph Boundary[Planner / runtime boundary]
+    Planner
+    Runtime
+  end
 ```
 
 ---

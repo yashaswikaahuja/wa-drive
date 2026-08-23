@@ -41,16 +41,34 @@
 ```
 
 ## Dependency Graph
-```
-Form Directory ──┬──→ Photo Presets
-                 ├──→ Customer Readiness
-                 ├──→ Form Search (home screen)
-                 └──→ Extension confidence badge
+```mermaid
+flowchart LR
+    subgraph Foundation[Foundation]
+        Forms[Form Directory]
+        Mappings[Global Mappings]
+    end
 
-Global Mappings ──→ Conservative First-Fill
-                 └──→ "Filled 234 times" badge
+    subgraph Experience[User Experience]
+        Home[Home Screen / Work Queue]
+        Readiness[Customer Readiness]
+        Presets[Photo Tool Presets]
+        Badge[Extension Confidence Badge]
+        Summary[Post-Fill Field Summary]
+    end
 
-Auto-Extract ──→ Work Queue (pending → ready)
+    subgraph Automation[Automation]
+        Extract[Auto-Extract on WhatsApp Arrival]
+        Fill[Conservative First-Fill]
+    end
+
+    Forms --> Presets
+    Forms --> Readiness
+    Forms --> Home
+    Forms --> Badge
+    Mappings --> Fill
+    Mappings --> Badge
+    Extract --> Home
+    Fill --> Summary
 ```
 
 ## Start: Form Directory (#1)

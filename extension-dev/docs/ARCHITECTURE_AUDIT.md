@@ -11,119 +11,50 @@
 
 The system is split into two layers with a clear boundary.
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ EXTENSION (Chrome, runs in browser)                              │
-│                                                                  │
-│ Responsibilities:                                                │
-│   • Perception  — scan DOM, extract fields, detect components    │
-│   • Execution   — fill inputs, click buttons, dispatch events    │
-│   • Observation — watch for corrections, capture session results │
-│                                                                  │
-│ Principles:                                                      │
-│   • Stateless (no long-term memory, only session-scoped state)   │
-│   • Deterministic (same plan → same execution)                   │
-│   • No AI calls (LLM is a planning concern)                      │
-│   • No business rules (mapping logic is judgment)                │
-│   • Thin orchestrator (popup.js dispatches, doesn't decide)      │
-├─────────────────────────────────────────────────────────────────┤
-│ BOUNDARY: HTTP API + chrome.storage (config/auth only)           │
-├─────────────────────────────────────────────────────────────────┤
-│ EXTENSION-SERVICE (Backend, runs on server)                      │
-│                                                                  │
-│ Responsibilities:                                                │
-│   • Planning    — decide fill order, cascade dependencies        │
-│   • Knowledge   — field mappings, portal adapters, semantic keys │
-│   • Memory      — session history, correction patterns, cache    │
-│   • Judgment    — confidence scoring, conflict resolution        │
-│   • AI/LLM     — field mapping via AI, value resolution          │
-│                                                                  │
-│ Principles:                                                      │
-│   • Owns ALL intelligence (mapping rules, AI prompts, scoring)   │
-│   • Serves pre-computed fill plans to extension                  │
-│   • Learns from observations (corrections improve mappings)      │
-│   • Portable (extension is replaceable; intelligence is not)     │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+	subgraph Extension[Chrome Extension]
+		Perception[Perception: scan DOM and extract fields]
+		Execution[Execution: fill inputs and dispatch events]
+		Observation[Observation: capture corrections and results]
+	end
+
+	Boundary[HTTP API and chrome.storage for config/auth]
+
+	subgraph Service[Extension Service]
+		Planning[Planning: order and cascade dependencies]
+		Knowledge[Knowledge: mappings, adapters, semantic keys]
+		Memory[Memory: sessions, corrections, cache]
+		Judgment[Judgment: confidence and conflicts]
+		AI[AI and LLM value resolution]
+	end
+
+	Perception --> Boundary
+	Boundary --> Planning
+	Planning --> Execution
+	Execution --> Observation
+	Observation --> Boundary
+	Knowledge --> Planning
+	Memory --> Knowledge
+	Judgment --> Planning
+	AI --> Planning
 ```
 
 ### Responsibility Assignment Matrix
+```mermaid
+flowchart TD
+	Load[1. Load extension] --> Perception[2. Perception]
+	Perception --> Planning[3. Planning and mapping]
+	Planning --> Execution[4. Deterministic execution]
+	Execution --> Observation[5. Observation]
+	Observation -->|sessions and corrections| Service[Extension service]
+	Service -->|fill plan and mappings| Planning
 
-| Capability | Owner | Current Location | Target Location | Status |
-|-----------|-------|-----------------|----------------|--------|
-| DOM scanning | Extension | extractor.js | extractor.js | ✅ Correct |
-| Label resolution | Extension | shared/dom-utils.js | shared/dom-utils.js | ✅ Correct |
-| Component detection | Extension | interface.js + plugins | interface.js + plugins | ✅ Correct |
-| Text input fill | Extension | executor.js, drivers/input.js | drivers/input.js | ⚠️ Dual path |
-| Select option apply | Extension | shared/select-apply.js, executor.js | shared/select-apply.js | ✅ Consolidated |
-| Network idle wait | Extension | shared/network-idle.js | shared/network-idle.js | ✅ Consolidated |
-| Correction observation | Extension | executor.js post-fill | executor.js post-fill | ✅ Correct |
-| Field→profile mapping | Service | mapper.js (in extension) | extension-service API | ❌ Wrong layer |
-| AI field matching | Service | mapper.js::aiMatch | extension-service API | ❌ Wrong layer |
-| AI value resolution | Service | ai-resolve.js | extension-service API | ❌ Wrong layer |
-| Confidence scoring | Service | background.js, label-utils.js | extension-service API | ❌ Wrong layer |
-| Semantic key mapping | Service | background.js, label-utils.js | extension-service API | ❌ Wrong layer |
-| Fill planning/ordering | Service | popup.js inline | extension-service API | ❌ Wrong layer |
-| Teach/auto-teach | Service | background.js | extension-service API | ❌ Wrong layer |
-| Portal adapter learning | Service | background.js | extension-service API | ❌ Wrong layer |
-| Session history | Service | backend /sessions | backend /sessions | ✅ Correct |
-| Mapping cache | Service | backend /mappings | backend /mappings | ✅ Correct |
-
----
-
-## 1. CURRENT RUNTIME FLOW
-
+	Perception -.-> Extractor[extractFormFields]
+	Planning -.-> Mapper[mapper.js and semantic aliases]
+	Execution -.-> Executor[executor.js and shared drivers]
+	Observation -.-> Monitor[MutationObserver and verification]
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│ PHASE 1: LOAD                                                         │
-├──────────────────────────────────────────────────────────────────────┤
-│ manifest.json                                                         │
-│  → registers background.js as service worker                          │
-│  → declares content_scripts (extractor, keystroke-input, interface)   │
-│                                                                       │
-│ background.js                                                         │
-│  → chrome.runtime.onInstalled (setup alarms, open onboarding)        │
-│  → chrome.tabs.onUpdated (detect portal URLs → badge/state update)   │
-│  → chrome.runtime.onMessage (auth validation, teach session mgmt)    │
-└──────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────┐
-│ PHASE 2: PERCEPTION (Extension — correct layer)                       │
-├──────────────────────────────────────────────────────────────────────┤
-│ popup.js → chrome.scripting.executeScript(extractor.js)               │
-│                                                                       │
-│ extractor.js :: extractFormFields()                                    │
-│  → scans DOM: input, select, textarea, [role=combobox], mat-select   │
-│  → getLabel(el) via shared/dom-utils.js                               │
-│  → detects type: text|select|radio|checkbox|file|date|custom          │
-│  → extracts options[] for selects/radios                              │
-│  → returns [{label, selector, type, value, options, domIndex}]        │
-└──────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────┐
-│ PHASE 3: PLANNING + MAPPING (⚠️ Currently in extension, should be    │
-│           in extension-service)                                        │
-├──────────────────────────────────────────────────────────────────────┤
-│ mapper.js :: fuzzyMatch + aiMatch                                      │
-│  → field label normalization (shared/label-utils.js)                  │
-│  → semantic key resolution (SEMANTIC_ALIASES)                         │
-│  → rule-based alias matching (FIELD_ALIASES table)                    │
-│  → AI fallback (shared/llm-client.js → OpenRouter/Groq)              │
-│                                                                       │
-│ popup.js inline planning                                               │
-│  → constructs fill plan: [{selector, value, type, strategy}]          │
-│  → determines fill order (text first, selects, cascades last)        │
-│  → marks dependent fields (state→district→block)                      │
-└──────────────────────────────────────────────────────────────────────┘
-
-┌──────────────────────────────────────────────────────────────────────┐
-│ PHASE 4: EXECUTION (Extension — correct layer)                        │
-├──────────────────────────────────────────────────────────────────────┤
-│ popup.js → chrome.scripting.executeScript(executor.js + shared/*)     │
-│                                                                       │
-│ Shared modules injected FIRST (guaranteed available):                 │
-│  shared/option-match.js  → window.ccMatchOption                       │
-│  shared/dom-utils.js     → window.ccDomUtils                          │
-│  shared/network-idle.js  → window.ccWaitForNetworkIdle                │
 │  shared/llm-client.js    → window.ccLLM                               │
 │  shared/select-apply.js  → window.ccApplySelect                       │
 │                                                                       │

@@ -4,9 +4,16 @@ How code reaches production. See [`GHCR.md`](GHCR.md) for the overall architectu
 tailnet, decoupled DB). **Status: live and verified.**
 
 ## Pipeline at a glance
-```
-push to master ──► build image ──► push to GHCR (:latest + :<sha>)          (automatic CI)
-you ──► Deploy (manual): pick service + version ──► VM: pull → recreate ──► health check ──► (auto-rollback on fail)   (manual CD)
+```mermaid
+flowchart LR
+  Push[Push to master] --> Build[Build image]
+  Build --> GHCR[Push to GHCR: latest and commit SHA]
+  Deploy[Manual deploy: service and version] --> Pull[VM pulls image]
+  Pull --> Recreate[Recreate service]
+  Recreate --> Health[Health check]
+  Health -->|Pass| Live[Service live]
+  Health -->|Fail| Rollback[Automatic rollback]
+  GHCR --> Deploy
 ```
 - **CI** (automatic): `docker-publish*.yml` build each service image and push to GHCR on push to master,
   tagged `:latest` **and** `:<commit-sha>`.

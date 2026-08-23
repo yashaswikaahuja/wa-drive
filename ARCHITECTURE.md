@@ -39,51 +39,37 @@ Key principles:
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Vercel)                         │
-│                    app.cybercontrol.fun                          │
-│                                                                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐      │
-│  │  Home /  │  │ Customer │  │  Photo   │  │  Form    │      │
-│  │  Queue   │  │  Detail  │  │  Tool    │  │ Directory│      │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘      │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                     │
-│  │ WhatsApp │  │ Settings │  │  Admin   │                     │
-│  │  Inbox   │  │          │  │  Panel   │                     │
-│  └──────────┘  └──────────┘  └──────────┘                     │
-└─────────────────────────────────────────────────────────────────┘
-         │                              │
-         │ REST API + WebSocket         │
-         ▼                              ▼
-┌─────────────────────────┐   ┌─────────────────────────┐
-│   BACKEND (GCP #1)      │   │  WHATSAPP (GCP #2)      │
-│   api.cybercontrol.fun  │   │  cybercontrol-wa        │
-│                         │   │                         │
-│  • Auth (JWT)           │   │  • Baileys (port 3100)  │
-│  • Customers/Profiles   │   │  • wwebjs resolver      │
-│  • Form Directory       │   │    (port 3200)          │
-│  • Extraction (Groq)    │   │  • File upload to Drive │
-│  • Global Mappings      │   │  • Message dedup        │
-│  • Sessions/Corrections │   │  • LID→Phone resolve    │
-│  • Drive integration    │   │                         │
-│  • Photo processing     │   │                         │
-│                         │   │                         │
-│  PostgreSQL             │   │  Session files          │
-└─────────────────────────┘   └─────────────────────────┘
-         │
-         │
-         ▼
-┌─────────────────────────┐
-│  CHROME EXTENSION       │
-│                         │
-│  • Form field detection │
-│  • Profile → Field map  │
-│  • Auto-fill execution  │
-│  • Session recording    │
-│  • Correction tracking  │
-│  • Global mapping sync  │
-└─────────────────────────┘
+```mermaid
+flowchart TD
+  subgraph Frontend[Frontend on Vercel]
+    Home[Home and work queue]
+    Customer[Customer detail]
+    Photo[Photo tool]
+    Directory[Form directory]
+    Inbox[WhatsApp inbox]
+    Settings[Settings and admin]
+  end
+
+  subgraph Services[Backend services]
+    API[Backend API and WebSocket]
+    WA[WhatsApp service]
+    Resolver[WhatsApp resolver]
+    Drive[Google Drive]
+  end
+
+  subgraph Storage[Persistent storage]
+    Postgres[(PostgreSQL)]
+    Sessions[(WhatsApp session files)]
+  end
+
+  Extension[Chrome extension]
+  Frontend -->|REST API and WebSocket| API
+  WA --> Resolver
+  WA --> Drive
+  API --> Postgres
+  WA --> Sessions
+  API --> Extension
+  Extension -->|form detection, fill, corrections| API
 ```
 
 ---

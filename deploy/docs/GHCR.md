@@ -29,22 +29,18 @@ Everything talks to everything else over a **private Tailscale network (tailnet)
 **MagicDNS hostnames** (never public IPs). So when you replace a VM, the new one just joins the
 tailnet under the **same hostname** and all connections re-establish automatically.
 
-```
-                         Tailscale tailnet  (suffix: taild72c71.ts.net)
-   ┌───────────────────────────────────────────────────────────────────────────┐
-   │                                                                             │
-   │   cybercontrol-app            cybercontrol-wa            cybercontrol-db     │
-   │   (backend :3000)             (whatsapp :3100            (Postgres :5432)    │
-   │                                + resolver :3200)                            │
-   │        │  ──────► cybercontrol-wa:3100 (WA_SERVICE)        ▲                 │
-   │        │  ──────────────────────────────► cybercontrol-db:5432 (DATABASE_URL)│
-   │        ▲                                                                     │
-   │        └────────── cybercontrol-app:3000 (PARENT_URL) ◄── whatsapp-service   │
-   │                                          whatsapp-service ──► localhost:3200 │
-   └───────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+  Frontend[Frontend on Vercel or nginx] -->|HTTPS API| LB[Public HTTPS load balancers]
 
-   Frontend (Vercel today, or GHCR nginx image) ──► https://api.cybercontrol.fun/api
-                                                      (public domain → backend)
+  subgraph Tailnet[Tailscale private network]
+    LB --> Backend[Backend :3000]
+    LB --> Extension[Extension service :3300]
+    Backend -->|WA_SERVICE| WhatsApp[WhatsApp service :3100]
+    Backend -->|DATABASE_URL| Database[(Postgres :5432)]
+    WhatsApp -->|RESOLVER_URL| Resolver[WhatsApp resolver :3200]
+    WhatsApp -->|PARENT_URL| Backend
+  end
 ```
 
 ---
