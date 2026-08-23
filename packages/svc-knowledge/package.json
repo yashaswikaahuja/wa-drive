@@ -1,0 +1,8 @@
+{
+  "name": "@cybercontrol/svc-knowledge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "exports": { ".": "./src/index.js", "./db-adapter": "./src/db-adapter.js", "./store-adapter": "./src/store-adapter.js" }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@cybercontrol/svc-ai-mapper",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": { "@cybercontrol/svc-knowledge": "workspace:*", "@cybercontrol/svc-fill-planner": "workspace:*" }
+}

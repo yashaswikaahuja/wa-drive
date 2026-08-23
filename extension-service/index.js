@@ -31,7 +31,13 @@ import versionsRouter from './src/http/routes/versions.js';
 import syncRouter from './src/http/routes/sync.js';
 import fillRouter from './src/http/routes/fill.js';
 import { ensureSchema } from './src/db/store.js';
+import { pool } from './src/db/db.js';
+import { mutateDoc, KEYS } from './src/db/store.js';
+import { setPool, setStoreAdapter } from '../packages/svc-knowledge/src/index.js';
 import { ensureKnowledgeSchema } from './src/engines/knowledge-store.js';
+
+setPool(pool);
+setStoreAdapter({ mutateDoc, KEYS });
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();

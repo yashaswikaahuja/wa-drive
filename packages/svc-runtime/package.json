@@ -1,0 +1,8 @@
+{
+  "name": "@cybercontrol/svc-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": { "@cybercontrol/svc-ai-mapper": "workspace:*", "@cybercontrol/svc-fill-planner": "workspace:*", "@cybercontrol/svc-learning": "workspace:*", "@cybercontrol/svc-knowledge": "workspace:*" }
+}
