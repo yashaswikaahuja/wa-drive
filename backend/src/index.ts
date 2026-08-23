@@ -1,12 +1,12 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import compression from 'compression';
 import { createServer } from 'http';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
-import { PORT, OWNER_PORT, OWNER_BIND } from './config.js';
-import { pool } from './db.js';
+import { PORT, OWNER_PORT, OWNER_BIND } from '@cybercontrol/backend-core';
+import { createPool, initializeDatabase, pool, setPool } from '@cybercontrol/backend-core';
 
 // Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
 // Non-blocking, fail-silent. Logs a warning if forbidden deps are installed.
@@ -19,26 +19,30 @@ setTimeout(() => {
     if (found.length) console.error('[ARCHITECTURE] forbidden deps installed:', found.join(', '), '— see /ARCHITECTURE.md §5');
   } catch {}
 }, 1000);
-import { authMiddleware } from './middleware/auth.js';
-import { setupSocket } from './socket/index.js';
-import { loadDriveTokenFromDB } from './modules/drive/service.js';
-import { startExtractionRecovery } from './services/extraction.js';
-import { scheduleHealthMonitor } from './services/healthMonitor.js';
-import { scheduleWaFailover } from './services/waFailover.js';
+import { authMiddleware } from '@cybercontrol/backend-core';
+import { setupSocket } from '@cybercontrol/backend-realtime';
+import { loadDriveTokenFromDB } from '@cybercontrol/backend-drive';
+import { startExtractionRecovery } from '@cybercontrol/backend-documents';
+import { scheduleHealthMonitor, scheduleWaFailover } from '@cybercontrol/backend-operations';
 
-import authRoutes from './modules/auth/routes.js';
-import processRoutes from './modules/process/routes.js';
-import driveRoutes from './modules/drive/routes.js';
-import uploadRoutes from './modules/upload/routes.js';
-import whatsappRoutes from './modules/whatsapp/routes.js';
-import customersRoutes from './modules/customers/routes.js';
-import jobsRoutes from './modules/jobs/routes.js';
-import dashboardRoutes from './modules/dashboard/routes.js';
-import formsRoutes from './modules/forms/routes.js';
-import usersRoutes from './modules/users/routes.js';
-import ownerRoutes from './modules/owner/routes.js';
+import authRoutes from '@cybercontrol/backend-auth';
+import processRoutes from '@cybercontrol/backend-process';
+import driveRoutes from '@cybercontrol/backend-drive';
+import uploadRoutes from '@cybercontrol/backend-upload';
+import whatsappRoutes from '@cybercontrol/backend-whatsapp';
+import customersRoutes from '@cybercontrol/backend-customers';
+import jobsRoutes from '@cybercontrol/backend-jobs';
+import dashboardRoutes from '@cybercontrol/backend-dashboard';
+import formsRoutes from '@cybercontrol/backend-forms';
+import usersRoutes from '@cybercontrol/backend-users';
+import ownerRoutes from '@cybercontrol/backend-owner';
 
-const app = express();
+const app: Express = express();
+setPool(createPool());
+void initializeDatabase().catch(err => {
+  console.error('[DB FATAL]', err.message);
+  process.exit(1);
+});
 app.set('trust proxy', 1);
 app.use(compression());
 
