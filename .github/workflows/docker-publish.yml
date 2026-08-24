@@ -4,8 +4,9 @@ on:
   push:
     branches: [master]
     paths:
-      - 'backend/**'
-      - 'owner-panel/**'
+      - 'apps/backend/**'
+      - 'apps/owner-panel/**'
+      - 'packages/backend-*/**'
       - '.github/workflows/docker-publish.yml'
   workflow_dispatch:
 
@@ -42,10 +43,10 @@ jobs:
           node-version: 20
       - name: Build owner panel into backend context
         run: |
-          (cd owner-panel && npm install --no-audit --no-fund && npm run build)
-          rm -rf backend/owner-panel-dist
-          cp -r owner-panel/dist backend/owner-panel-dist
-          echo "panel bundle:" && ls backend/owner-panel-dist
+          (cd apps/owner-panel && npm install --no-audit --no-fund && npm run build)
+          rm -rf apps/backend/owner-panel-dist
+          cp -r apps/owner-panel/dist apps/backend/owner-panel-dist
+          echo "panel bundle:" && ls apps/backend/owner-panel-dist
 
       - uses: docker/login-action@v3
         with:
@@ -56,8 +57,8 @@ jobs:
       # 1. Build the image and load it locally (do NOT push yet).
       - uses: docker/build-push-action@v6
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: ./apps/backend
+          file: ./apps/backend/Dockerfile
           platforms: linux/amd64
           load: true
           push: false
@@ -90,8 +91,8 @@ jobs:
       # 3. Only now (smoke-test passed) push to GHCR.
       - uses: docker/build-push-action@v6
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: ./apps/backend
+          file: ./apps/backend/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |

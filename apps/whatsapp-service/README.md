@@ -16,7 +16,7 @@ Docker image build expects a vendored `dist/` first:
 
 ```bash
 pnpm --filter cybercontrol-whatsapp-service build
-docker build -f whatsapp-service/Dockerfile whatsapp-service
+docker build -f apps/whatsapp-service/Dockerfile apps/whatsapp-service
 ```
 
 ## Services

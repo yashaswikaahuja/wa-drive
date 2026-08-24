@@ -18,56 +18,56 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  backend:
+  apps/backend:
     dependencies:
       '@cybercontrol/backend-auth':
         specifier: workspace:*
-        version: link:../packages/backend-auth
+        version: link:../../packages/backend-auth
       '@cybercontrol/backend-communications':
         specifier: workspace:*
-        version: link:../packages/backend-communications
+        version: link:../../packages/backend-communications
       '@cybercontrol/backend-core':
         specifier: workspace:*
-        version: link:../packages/backend-core
+        version: link:../../packages/backend-core
       '@cybercontrol/backend-customers':
         specifier: workspace:*
-        version: link:../packages/backend-customers
+        version: link:../../packages/backend-customers
       '@cybercontrol/backend-dashboard':
         specifier: workspace:*
-        version: link:../packages/backend-dashboard
+        version: link:../../packages/backend-dashboard
       '@cybercontrol/backend-documents':
         specifier: workspace:*
-        version: link:../packages/backend-documents
+        version: link:../../packages/backend-documents
       '@cybercontrol/backend-drive':
         specifier: workspace:*
-        version: link:../packages/backend-drive
+        version: link:../../packages/backend-drive
       '@cybercontrol/backend-forms':
         specifier: workspace:*
-        version: link:../packages/backend-forms
+        version: link:../../packages/backend-forms
       '@cybercontrol/backend-jobs':
         specifier: workspace:*
-        version: link:../packages/backend-jobs
+        version: link:../../packages/backend-jobs
       '@cybercontrol/backend-operations':
         specifier: workspace:*
-        version: link:../packages/backend-operations
+        version: link:../../packages/backend-operations
       '@cybercontrol/backend-owner':
         specifier: workspace:*
-        version: link:../packages/backend-owner
+        version: link:../../packages/backend-owner
       '@cybercontrol/backend-process':
         specifier: workspace:*
-        version: link:../packages/backend-process
+        version: link:../../packages/backend-process
       '@cybercontrol/backend-realtime':
         specifier: workspace:*
-        version: link:../packages/backend-realtime
+        version: link:../../packages/backend-realtime
       '@cybercontrol/backend-upload':
         specifier: workspace:*
-        version: link:../packages/backend-upload
+        version: link:../../packages/backend-upload
       '@cybercontrol/backend-users':
         specifier: workspace:*
-        version: link:../packages/backend-users
+        version: link:../../packages/backend-users
       '@cybercontrol/backend-whatsapp':
         specifier: workspace:*
-        version: link:../packages/backend-whatsapp
+        version: link:../../packages/backend-whatsapp
       '@types/node':
         specifier: ^20.19.39
         version: 20.19.43
@@ -91,69 +91,69 @@ importers:
         specifier: ^4.21.0
         version: 4.23.12
 
-  cyb-cli:
+  apps/cyb-cli:
     dependencies:
       ws:
         specifier: ^8.21.3
         version: 8.21.3
 
-  extension:
+  apps/extension:
     dependencies:
       '@cc/background':
         specifier: workspace:*
-        version: link:../packages/cc-background
+        version: link:../../packages/cc-background
       '@cc/drivers':
         specifier: workspace:*
-        version: link:../packages/cc-drivers
+        version: link:../../packages/cc-drivers
       '@cc/executor':
         specifier: workspace:*
-        version: link:../packages/cc-executor
+        version: link:../../packages/cc-executor
       '@cc/extractor':
         specifier: workspace:*
-        version: link:../packages/cc-extractor
+        version: link:../../packages/cc-extractor
       '@cc/mapper':
         specifier: workspace:*
-        version: link:../packages/cc-mapper
+        version: link:../../packages/cc-mapper
       '@cc/orchestrator':
         specifier: workspace:*
-        version: link:../packages/cc-orchestrator
+        version: link:../../packages/cc-orchestrator
       '@cc/plugins':
         specifier: workspace:*
-        version: link:../packages/cc-plugins
+        version: link:../../packages/cc-plugins
       '@cc/shared':
         specifier: workspace:*
-        version: link:../packages/cc-shared
+        version: link:../../packages/cc-shared
       '@cc/wss':
         specifier: workspace:*
-        version: link:../packages/cc-wss
+        version: link:../../packages/cc-wss
     devDependencies:
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
 
-  extension-service:
+  apps/extension-service:
     dependencies:
       '@cybercontrol/svc-ai-mapper':
         specifier: workspace:*
-        version: link:../packages/svc-ai-mapper
+        version: link:../../packages/svc-ai-mapper
       '@cybercontrol/svc-fill-planner':
         specifier: workspace:*
-        version: link:../packages/svc-fill-planner
+        version: link:../../packages/svc-fill-planner
       '@cybercontrol/svc-knowledge':
         specifier: workspace:*
-        version: link:../packages/svc-knowledge
+        version: link:../../packages/svc-knowledge
       '@cybercontrol/svc-learning':
         specifier: workspace:*
-        version: link:../packages/svc-learning
+        version: link:../../packages/svc-learning
       '@cybercontrol/svc-runtime':
         specifier: workspace:*
-        version: link:../packages/svc-runtime
+        version: link:../../packages/svc-runtime
       '@cybercontrol/svc-session':
         specifier: workspace:*
-        version: link:../packages/svc-session
+        version: link:../../packages/svc-session
       '@cybercontrol/svc-teach':
         specifier: workspace:*
-        version: link:../packages/svc-teach
+        version: link:../../packages/svc-teach
       dotenv:
         specifier: ^17.0.1
         version: 17.4.2
@@ -170,7 +170,7 @@ importers:
         specifier: ^8.18.0
         version: 8.21.3
 
-  frontend:
+  apps/frontend:
     dependencies:
       '@phosphor-icons/react':
         specifier: ^2.1.10
@@ -258,7 +258,7 @@ importers:
         specifier: ^5.0.7
         version: 5.4.21(@types/node@22.20.1)(lightningcss@1.32.0)
 
-  landing:
+  apps/landing:
     dependencies:
       '@hookform/resolvers':
         specifier: ^3.10.0
@@ -475,7 +475,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)(jsdom@20.0.3)(lightningcss@1.32.0)
 
-  owner-panel:
+  apps/owner-panel:
     dependencies:
       react:
         specifier: ^18.3.1
@@ -499,6 +499,51 @@ importers:
       vite:
         specifier: ^5.4.11
         version: 5.4.21(@types/node@22.20.1)(lightningcss@1.32.0)
+
+  apps/whatsapp-resolver:
+    dependencies:
+      '@cybercontrol/wa-resolver':
+        specifier: workspace:*
+        version: link:../../packages/wa-resolver
+      express:
+        specifier: ^4.18.2
+        version: 4.22.2
+      qrcode-terminal:
+        specifier: ^0.12.0
+        version: 0.12.0
+      whatsapp-web.js:
+        specifier: ^1.34.7
+        version: 1.34.7(typescript@5.9.3)
+
+  apps/whatsapp-service:
+    dependencies:
+      '@cybercontrol/wa-auth':
+        specifier: workspace:*
+        version: link:../../packages/wa-auth
+      '@cybercontrol/wa-service':
+        specifier: workspace:*
+        version: link:../../packages/wa-service
+      '@hapi/boom':
+        specifier: ^10.0.1
+        version: 10.0.1
+      baileys:
+        specifier: ^6.7.16
+        version: 6.17.16(eslint@9.39.5(jiti@2.7.0))(qrcode-terminal@0.12.0)(typescript@5.9.3)
+      express:
+        specifier: ^4.18.2
+        version: 4.22.2
+      form-data:
+        specifier: ^4.0.0
+        version: 4.0.6
+      pg:
+        specifier: ^8.13.1
+        version: 8.23.0
+      pino:
+        specifier: ^8.17.2
+        version: 8.21.0
+      ws:
+        specifier: ^8.16.0
+        version: 8.21.3
 
   packages/backend-auth:
     dependencies:
@@ -1024,51 +1069,6 @@ importers:
       '@cybercontrol/wa-auth':
         specifier: workspace:*
         version: link:../wa-auth
-      '@hapi/boom':
-        specifier: ^10.0.1
-        version: 10.0.1
-      baileys:
-        specifier: ^6.7.16
-        version: 6.17.16(eslint@9.39.5(jiti@2.7.0))(qrcode-terminal@0.12.0)(typescript@5.9.3)
-      express:
-        specifier: ^4.18.2
-        version: 4.22.2
-      form-data:
-        specifier: ^4.0.0
-        version: 4.0.6
-      pg:
-        specifier: ^8.13.1
-        version: 8.23.0
-      pino:
-        specifier: ^8.17.2
-        version: 8.21.0
-      ws:
-        specifier: ^8.16.0
-        version: 8.21.3
-
-  whatsapp-resolver:
-    dependencies:
-      '@cybercontrol/wa-resolver':
-        specifier: workspace:*
-        version: link:../packages/wa-resolver
-      express:
-        specifier: ^4.18.2
-        version: 4.22.2
-      qrcode-terminal:
-        specifier: ^0.12.0
-        version: 0.12.0
-      whatsapp-web.js:
-        specifier: ^1.34.7
-        version: 1.34.7(typescript@5.9.3)
-
-  whatsapp-service:
-    dependencies:
-      '@cybercontrol/wa-auth':
-        specifier: workspace:*
-        version: link:../packages/wa-auth
-      '@cybercontrol/wa-service':
-        specifier: workspace:*
-        version: link:../packages/wa-service
       '@hapi/boom':
         specifier: ^10.0.1
         version: 10.0.1
@@ -8522,12 +8522,12 @@ snapshots:
 
   '@types/bcrypt@6.0.0':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/chai@5.2.3':
     dependencies:
@@ -8537,15 +8537,15 @@ snapshots:
   '@types/compression@1.8.1':
     dependencies:
       '@types/express': 5.0.6
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/cors@2.8.19':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/d3-array@3.2.2': {}
 
@@ -8577,7 +8577,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.3':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -8595,7 +8595,7 @@ snapshots:
   '@types/jsonwebtoken@9.0.10':
     dependencies:
       '@types/ms': 2.1.0
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/ms@2.1.0': {}
 
@@ -8613,7 +8613,7 @@ snapshots:
 
   '@types/pg@8.23.1':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
       pg-protocol: 1.16.0
       pg-types: 2.2.0
 
@@ -8634,16 +8634,16 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
 
   '@types/yauzl@2.10.3':
     dependencies:
@@ -9572,7 +9572,7 @@ snapshots:
   engine.io@6.6.9:
     dependencies:
       '@types/cors': 2.8.19
-      '@types/node': 20.19.43
+      '@types/node': 22.20.1
       '@types/ws': 8.18.1
       accepts: 1.3.8
       base64id: 2.0.0

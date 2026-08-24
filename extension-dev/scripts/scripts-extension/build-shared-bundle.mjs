@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const target = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../../extension/scripts/build-shared-bundle.mjs',
+  '../../../apps/extension/scripts/build-shared-bundle.mjs',
 );
 const r = spawnSync(process.execPath, [target], { stdio: 'inherit' });
 process.exit(r.status ?? 1);

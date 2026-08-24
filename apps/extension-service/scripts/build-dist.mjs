@@ -11,9 +11,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { findRepoRoot } from '../../../tooling/find-repo-root.mjs';
 
 const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const repositoryRoot = path.resolve(serviceRoot, '..');
+const repositoryRoot = findRepoRoot(serviceRoot);
 const distRoot = path.join(serviceRoot, 'dist');
 
 const serviceDirectories = ['src', 'migrations'];

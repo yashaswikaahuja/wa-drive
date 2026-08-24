@@ -7,7 +7,7 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const gate = require(join(__dirname, '../../extension/shared/legacy-fill-gate.js'));
+const gate = require(join(__dirname, '../../apps/extension/shared/legacy-fill-gate.js'));
 
 let passed = 0;
 let failed = 0;

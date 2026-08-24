@@ -1,16 +1,8 @@
 packages:
   # Libraries
   - 'packages/*'
-  # Product surfaces (in-place for PR1; move under apps/ in PR2)
-  - 'backend'
-  - 'extension-service'
-  - 'extension'
-  - 'frontend'
-  - 'cyb-cli'
-  - 'landing'
-  - 'owner-panel'
-  - 'whatsapp-service'
-  - 'whatsapp-resolver'
+  # Product surfaces (Turborepo apps/)
+  - 'apps/*'
 onlyBuiltDependencies:
   - esbuild
   - sharp

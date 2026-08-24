@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'frontend/**'
+      - 'apps/frontend/**'
       - '.github/workflows/docker-publish-frontend.yml'
   workflow_dispatch:
 
@@ -25,8 +25,8 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: ./apps/frontend
+          file: ./apps/frontend/Dockerfile
           platforms: linux/amd64
           push: true
           build-args: |

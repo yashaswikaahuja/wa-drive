@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 const filterSite = args[args.indexOf('--site') + 1] || null;
 
 const sitesDir = resolve(import.meta.dirname, 'sites');
-const extractorSrc = await readFile(resolve(import.meta.dirname, '../extension/autofill/extractor.js'), 'utf8');
+const extractorSrc = await readFile(resolve(import.meta.dirname, '../apps/extension/autofill/extractor.js'), 'utf8');
 
 let totalFailed = 0;
 let totalRun = 0;

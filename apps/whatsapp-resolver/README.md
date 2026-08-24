@@ -11,7 +11,7 @@ pnpm --filter cybercontrol-whatsapp-resolver start
 
 # Docker image (vendors package into dist/ first)
 pnpm --filter cybercontrol-whatsapp-resolver build
-docker build -f whatsapp-resolver/Dockerfile whatsapp-resolver
+docker build -f apps/whatsapp-resolver/Dockerfile apps/whatsapp-resolver
 ```
 
 See `whatsapp-service/WHATSAPP_SERVICE.md` for architecture and env vars.

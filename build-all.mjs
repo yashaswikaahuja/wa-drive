@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
-const extensionBuild = path.join(root, 'extension/scripts/build-all.mjs');
+const extensionBuild = path.join(root, 'apps/extension/scripts/build-all.mjs');
 
 console.log('Delegating to cybercontrol-extension package build (resolves @cc/* by name)...\n');
 execSync(`node "${extensionBuild}"`, { stdio: 'inherit', cwd: root });

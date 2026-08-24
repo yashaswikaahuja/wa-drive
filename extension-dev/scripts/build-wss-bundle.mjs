@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const target = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../../extension/scripts/build-wss-bundle.mjs',
+  '../../apps/extension/scripts/build-wss-bundle.mjs',
 );
 const r = spawnSync(process.execPath, [target], { stdio: 'inherit' });
 process.exit(r.status ?? 1);

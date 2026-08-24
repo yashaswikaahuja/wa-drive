@@ -1,6 +1,6 @@
 name: Package extension
 
-# Whenever anything under extension/ changes on master, repackage it into the
+# Whenever anything under apps/extension/ changes on master, repackage it into the
 # landing site's public/ folder and commit it back. The landing Vercel project
 # is git-connected, so it redeploys automatically and the "Download extension"
 # button on cybercontrol.fun always serves the latest build.
@@ -12,7 +12,8 @@ on:
   push:
     branches: [master]
     paths:
-      - 'extension/**'
+      - 'apps/extension/**'
+      - 'packages/cc-*/**'
   workflow_dispatch: {}
 
 permissions:
@@ -28,11 +29,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Package extension → landing/public/cybercontrol-extension.zip
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install + rebuild extension bundles
         run: |
-          mkdir -p landing/public
-          rm -f landing/public/cybercontrol-extension.zip
-          cd extension
+          pnpm install --frozen-lockfile
+          pnpm --filter cybercontrol-extension build
+
+      - name: Package extension → apps/landing/public/cybercontrol-extension.zip
+        run: |
+          mkdir -p apps/landing/public
+          rm -f apps/landing/public/cybercontrol-extension.zip
+          cd apps/extension
           # -r recurse, -X drop extra OS attributes; exclude the internal design doc
           zip -r -X ../landing/public/cybercontrol-extension.zip . -x 'EXTENSION_DESIGN.md'
 
@@ -40,7 +55,7 @@ jobs:
         run: |
           git config user.name "cybercontrol-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f landing/public/cybercontrol-extension.zip
+          git add -f apps/landing/public/cybercontrol-extension.zip
           if git diff --cached --quiet; then
             echo "Extension package unchanged — nothing to commit."
           else

@@ -1,8 +1,8 @@
-﻿/**
- * Phase 1.3 â€” Browser Test Harness
+/**
+ * Phase 1.3 — Browser Test Harness
  *
  * Loads the CyberControl extension UNPACKED in Chromium via Playwright,
- * then exercises real extraction â†’ mapping â†’ execution flows against
+ * then exercises real extraction → mapping → execution flows against
  * fixture HTML pages.
  *
  * Run: node extension-dev/tests/browser/run.mjs
@@ -15,16 +15,16 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const EXT_DIR = resolve(__dirname, '../../../extension');
+const EXT_DIR = resolve(__dirname, '../../../apps/extension');
 const FIXTURES = resolve(__dirname, '../fixtures');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => {
-  if (cond) { pass++; console.log(`  âœ“ ${name}`); }
-  else { fail++; console.error(`  âœ— ${name}${extra ? ' â€” ' + extra : ''}`); }
+  if (cond) { pass++; console.log(`  ✓ ${name}`); }
+  else { fail++; console.error(`  ✗ ${name}${extra ? ' — ' + extra : ''}`); }
 };
 
-// â”€â”€ Locate Chromium â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Locate Chromium ─────────────────────────────────────────────────
 // Try system Chrome first, then Playwright's bundled Chromium
 const CHROME_PATHS = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -34,7 +34,7 @@ const CHROME_PATHS = [
 
 let executablePath = CHROME_PATHS.find(p => existsSync(p)) || undefined;
 
-// â”€â”€ Build script injection list (mirrors popup.js order) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Build script injection list (mirrors popup.js order) ────────────
 const SHARED_SCRIPTS = [
   'shared/option-match.js',
   'shared/dom-utils.js',
@@ -89,12 +89,12 @@ async function injectExtension(page) {
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════
 // TEST SUITES
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════
 
 async function testExtraction(browser) {
-  console.log('\nâ•â•â• Suite: Extraction (govt-form.html) â•â•â•');
+  console.log('\n═══ Suite: Extraction (govt-form.html) ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/govt-form.html`);
   await injectExtension(page);
@@ -131,7 +131,7 @@ async function testExtraction(browser) {
 }
 
 async function testCapabilityDispatch(browser) {
-  console.log('\nâ•â•â• Suite: Capability Dispatch (govt-form.html) â•â•â•');
+  console.log('\n═══ Suite: Capability Dispatch (govt-form.html) ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/govt-form.html`);
   await injectExtension(page);
@@ -203,12 +203,12 @@ async function testCapabilityDispatch(browser) {
 }
 
 async function testCascadeDropdown(browser) {
-  console.log('\nâ•â•â• Suite: Cascade Select (cascade-form.html) â•â•â•');
+  console.log('\n═══ Suite: Cascade Select (cascade-form.html) ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/cascade-form.html`);
   await injectExtension(page);
 
-  // Select state â†’ should populate districts after delay
+  // Select state → should populate districts after delay
   await page.evaluate(async () => {
     const el = document.getElementById('state');
     await window.ccCapabilities.dispatch(
@@ -232,7 +232,7 @@ async function testCascadeDropdown(browser) {
   );
   ok('Districts include Patna', districtOptions.includes('Patna'));
 
-  // Now select district â†’ should populate blocks
+  // Now select district → should populate blocks
   await page.evaluate(async () => {
     const el = document.getElementById('district');
     await window.ccCapabilities.dispatch(
@@ -254,7 +254,7 @@ async function testCascadeDropdown(browser) {
 }
 
 async function testMultiStep(browser) {
-  console.log('\nâ•â•â• Suite: Multi-Step Form â•â•â•');
+  console.log('\n═══ Suite: Multi-Step Form ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/multi-step-form.html`);
   await injectExtension(page);
@@ -301,12 +301,12 @@ async function testMultiStep(browser) {
 }
 
 async function testAngularWidgets(browser) {
-  console.log('\nâ•â•â• Suite: Simulated Angular Widgets (CSS mockup â€” NOT real Angular) â•â•â•');
+  console.log('\n═══ Suite: Simulated Angular Widgets (CSS mockup — NOT real Angular) ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/simulated-angular-form.html`);
   await injectExtension(page);
 
-  // â”€â”€ Extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Extraction ──────────────────────────────────────────────────
   const extraction = await page.evaluate(() => {
     const r = extractFormFieldsWithFingerprint();
     return {
@@ -326,7 +326,7 @@ async function testAngularWidgets(browser) {
     extraction.pageModel && extraction.pageModel.frameworks &&
     extraction.pageModel.frameworks.includes('angular-material'));
 
-  // â”€â”€ fill_text on mat-input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── fill_text on mat-input ──────────────────────────────────────
   const fillName = await page.evaluate(async () => {
     const el = document.getElementById('applicantName');
     return await window.ccCapabilities.dispatch(
@@ -338,7 +338,7 @@ async function testAngularWidgets(browser) {
   const nameVal = await page.$eval('#applicantName', el => el.value);
   ok('mat-input actually has value', nameVal === 'Sudhir Prasad');
 
-  // â”€â”€ fill_text on datepicker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── fill_text on datepicker ─────────────────────────────────────
   const fillDob = await page.evaluate(async () => {
     const el = document.getElementById('dob');
     return await window.ccCapabilities.dispatch(
@@ -350,7 +350,7 @@ async function testAngularWidgets(browser) {
   const dobVal = await page.$eval('#dob', el => el.value);
   ok('Datepicker has date value', dobVal === '15-03-1990');
 
-  // â”€â”€ fill_text on tel input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── fill_text on tel input ──────────────────────────────────────
   const fillMobile = await page.evaluate(async () => {
     const el = document.getElementById('mobile');
     return await window.ccCapabilities.dispatch(
@@ -362,7 +362,7 @@ async function testAngularWidgets(browser) {
   const mobileVal = await page.$eval('#mobile', el => el.value);
   ok('Tel input has value', mobileVal === '9876543210');
 
-  // â”€â”€ mat-select interaction (click to open, click option) â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── mat-select interaction (click to open, click option) ────────
   await page.click('mat-select#genderSelect');
   await page.click('mat-option[value="male"]');
   const genderVal = await page.$eval('#genderSelect', el => el.getAttribute('data-value'));
@@ -370,7 +370,7 @@ async function testAngularWidgets(browser) {
   const genderText = await page.$eval('#genderSelect .mat-select-value', el => el.textContent);
   ok('mat-select shows selected text', genderText.trim() === 'Male');
 
-  // â”€â”€ ng-select interaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── ng-select interaction ───────────────────────────────────────
   await page.click('#stateNgSelect .ng-select-container');
   await page.click('#stateNgSelect .ng-option[data-value="bihar"]');
   const stateVal = await page.$eval('#stateNgSelect', el => el.getAttribute('data-value'));
@@ -388,12 +388,12 @@ async function testAngularWidgets(browser) {
   const distVal = await page.$eval('#districtNgSelect', el => el.getAttribute('data-value'));
   ok('ng-select selects district', distVal && distVal.length > 0);
 
-  // â”€â”€ mat-checkbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── mat-checkbox ────────────────────────────────────────────────
   await page.click('mat-checkbox#declarationCheck');
   const cbChecked = await page.$eval('#declarationCheck', el => el.classList.contains('mat-checkbox-checked'));
   ok('mat-checkbox toggles checked', cbChecked === true);
 
-  // â”€â”€ Angular button click â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Angular button click ────────────────────────────────────────
   const btnResult = await page.evaluate(async () => {
     const el = document.getElementById('saveDraft');
     return await window.ccCapabilities.dispatch(
@@ -403,7 +403,7 @@ async function testAngularWidgets(browser) {
   });
   ok('Angular button click dispatches', btnResult.status === 'success');
 
-  // â”€â”€ Aadhaar field with aria-describedby â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Aadhaar field with aria-describedby ─────────────────────────
   const aadhaarModel = await page.evaluate(() => {
     const r = extractFormFieldsWithFingerprint();
     if (!r.pageModel) return null;
@@ -416,7 +416,7 @@ async function testAngularWidgets(browser) {
 }
 
 async function testPageModel(browser) {
-  console.log('\nâ•â•â• Suite: PageModel IR â•â•â•');
+  console.log('\n═══ Suite: PageModel IR ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/govt-form.html`);
   await injectExtension(page);
@@ -450,7 +450,7 @@ async function testPageModel(browser) {
 }
 
 async function testActionPlanRunner(browser) {
-  console.log('\nâ•â•â• Suite: ActionPlan Runner (govt-form.html) â•â•â•');
+  console.log('\n═══ Suite: ActionPlan Runner (govt-form.html) ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/govt-form.html`);
   await injectExtension(page);
@@ -533,12 +533,12 @@ async function testActionPlanRunner(browser) {
 }
 
 async function testRunnerPrimary(browser) {
-  console.log('\nâ•â•â• Suite: Runner as Primary Execution Path â•â•â•');
+  console.log('\n═══ Suite: Runner as Primary Execution Path ═══');
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/govt-form.html`);
   await injectExtension(page);
 
-  // Simulate the production flow: extract â†’ build ActionPlan â†’ run â†’ check fallback
+  // Simulate the production flow: extract → build ActionPlan → run → check fallback
   const result = await page.evaluate(async () => {
     // Extract fields (mimics popup.js production flow)
     const { formFields, pageModel } = extractFormFieldsWithFingerprint();
@@ -627,9 +627,9 @@ async function testRunnerPrimary(browser) {
   await page.close();
 }
 
-// â•â•â• Issue #81 Regression: Dropdowns must SELECT options, not just click â•â•â•
+// ═══ Issue #81 Regression: Dropdowns must SELECT options, not just click ═══
 async function testDropdownSelection(browser) {
-  console.log('\nâ•â•â• Suite: Dropdown Selection (Issue #81 regression) â•â•â•');
+  console.log('\n═══ Suite: Dropdown Selection (Issue #81 regression) ═══');
 
   // Test 1: ng-select on simulated-angular-form.html
   const page1 = await browser.newPage();
@@ -694,9 +694,9 @@ async function testDropdownSelection(browser) {
 }
 
 async function testPhase1Completeness(browser) {
-  console.log('\nâ•â•â• Suite: Phase 1 Completeness (ng-select, mat-select, upload, human) â•â•â•');
+  console.log('\n═══ Suite: Phase 1 Completeness (ng-select, mat-select, upload, human) ═══');
 
-  // â”€â”€ ng-select via capability dispatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── ng-select via capability dispatch ───────────────────────────
   const page = await browser.newPage();
   await page.goto(`file://${FIXTURES}/simulated-angular-form.html`);
   await injectExtension(page);
@@ -711,7 +711,7 @@ async function testPhase1Completeness(browser) {
   ok('ng-select: select_option succeeds', ngResult.status === 'success');
   ok('ng-select: correct value selected', ngResult.dataValue === 'bihar');
 
-  // â”€â”€ mat-select via capability dispatch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── mat-select via capability dispatch ──────────────────────────
   const matResult = await page.evaluate(async () => {
     const el = document.querySelector('#genderSelect');
     const wt = window.ccCapabilities.resolveWidgetType(el);
@@ -722,7 +722,7 @@ async function testPhase1Completeness(browser) {
   ok('mat-select: select_option succeeds', matResult.status === 'success');
   ok('mat-select: correct value selected', matResult.dataValue === 'female');
 
-  // â”€â”€ fill_text keystroke simulation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── fill_text keystroke simulation ──────────────────────────────
   const keystrokeResult = await page.evaluate(async () => {
     const el = document.getElementById('applicantName');
     const events = [];
@@ -739,7 +739,7 @@ async function testPhase1Completeness(browser) {
   ok('fill_text: blur event fired', keystrokeResult.events.includes('bl'));
   ok('fill_text: value set correctly', keystrokeResult.value === 'AB');
 
-  // â”€â”€ upload_file capability â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── upload_file capability ──────────────────────────────────────
   const uploadResult = await page.evaluate(async () => {
     const el = document.querySelector('input[type="file"]');
     if (!el) return { error: 'no file input' };
@@ -749,14 +749,14 @@ async function testPhase1Completeness(browser) {
   });
   ok('upload_file: capability exists and executes', uploadResult.status === 'success' || uploadResult.status === 'waiting_human');
 
-  // â”€â”€ waiting_human handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── waiting_human handling ──────────────────────────────────────
   const humanResult = await page.evaluate(async () => {
     const r = await window.ccCapabilities.dispatch({ action: 'request_human', reason: 'otp', prompt: 'Enter OTP', timeout_ms: 3000 }, {});
     return { status: r.status, actual: r.actual_value };
   });
   ok('request_human: returns waiting_human', humanResult.status === 'waiting_human');
 
-  // â”€â”€ Runner handles waiting_human correctly â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Runner handles waiting_human correctly ──────────────────────
   const humanPlanResult = await page.evaluate(async () => {
     const obs = await window.ccRunner.executeLinear({
       plan_id: 'human_test',
@@ -775,9 +775,9 @@ async function testPhase1Completeness(browser) {
   await page.close();
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════
 // RUNNER
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════════
 
 console.log('CyberControl Browser Tests');
 console.log('Extension:', EXT_DIR);
@@ -801,18 +801,18 @@ try {
   await testPageModel(browser);
   await testActionPlanRunner(browser);
   await testRunnerPrimary(browser);
-  // Phase 4.1: testDropdownSelection skipped â€” depends on deleted mapper.js fuzzyMatch
+  // Phase 4.1: testDropdownSelection skipped — depends on deleted mapper.js fuzzyMatch
   // Legacy dropdown selection is tested via ActionPlanExecutor product path instead.
   await testPhase1Completeness(browser);
 
 } catch (e) {
-  console.error('\nðŸ”´ Browser launch failed:', e.message);
+  console.error('\n🔴 Browser launch failed:', e.message);
   console.error('   Install Chromium: npx playwright install chromium');
   process.exit(1);
 } finally {
   if (browser) await browser.close();
 }
 
-console.log('\nâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
+console.log('\n═════════════════════════════════════');
 console.log(`Browser Tests: ${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

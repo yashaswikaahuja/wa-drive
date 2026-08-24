@@ -2,7 +2,7 @@
   "name": "wa-drive",
   "private": true,
   "version": "0.0.0",
-  "description": "CyberControl monorepo — apps + packages (Turborepo)",
+  "description": "CyberControl Turborepo — apps/* product surfaces + packages/* libraries",
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",

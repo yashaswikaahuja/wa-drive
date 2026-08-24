@@ -25,8 +25,8 @@ function findExtensionMapperBuild() {
     /* not linked as a dependency of @cc/mapper */
   }
 
-  // Monorepo sibling: packages/cc-mapper → ../../extension
-  const sibling = path.join(dir, '../../extension/scripts/build-mapper-bundle.mjs');
+  // Monorepo layout: packages/cc-mapper → ../../apps/extension
+  const sibling = path.join(dir, '../../apps/extension/scripts/build-mapper-bundle.mjs');
   if (fs.existsSync(sibling)) return sibling;
 
   return null;

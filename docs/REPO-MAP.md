@@ -2,37 +2,44 @@
 
 One-page guide to what lives where. Normative contracts stay in `architecture/`; this file is navigation only.
 
-## Monorepo status (PR1 tooling)
+## Monorepo status (Turborepo)
 
-This repo is a **pnpm + Turborepo** workspace. Product surfaces are **workspace members in place** today; the next step (PR2) moves them under `apps/` without renaming Chrome inject filenames.
+This repo is a **pnpm + Turborepo** workspace with product surfaces under **`apps/`** and shared libraries under **`packages/`**.
 
 | Command | Meaning |
 |---------|---------|
 | `pnpm build` | `turbo run build` across workspace |
 | `pnpm test` | `turbo run test` |
 | `pnpm typecheck` | `turbo run typecheck` (JS-only packages skip until TS) |
-| `pnpm build:bundles` | Direct concat rebuild of extension `*-bundle.js` via `build-all.mjs` |
-| `pnpm --filter cybercontrol-whatsapp-service build` | Vendor `@cybercontrol/wa-*` into `whatsapp-service/dist/` for Docker |
-| `pnpm --filter cybercontrol-whatsapp-resolver build` | Vendor `@cybercontrol/wa-resolver` into `whatsapp-resolver/dist/` for Docker |
+| `pnpm build:bundles` | Rebuild extension `*-bundle.js` via `apps/extension` |
+| `pnpm --filter cybercontrol-whatsapp-service build` | Vendor `@cybercontrol/wa-*` into `apps/whatsapp-service/dist/` for Docker |
+| `pnpm --filter cybercontrol-whatsapp-resolver build` | Vendor `@cybercontrol/wa-resolver` into `apps/whatsapp-resolver/dist/` for Docker |
+| `pnpm --filter cybercontrol-extension-service build` | Vendor `@cybercontrol/svc-*` into `apps/extension-service/dist/` for Docker |
 
 Shared TS baseline (for later migration): `tooling/tsconfig.base.json`.
 
-**Target layout (PR2+):** `apps/{extension,extension-service,backend,frontend,cyb-cli,…}` + `packages/{cc-*,backend-*,svc-*}`.
+**Layout:**
+
+```text
+apps/{backend,extension,extension-service,frontend,cyb-cli,landing,owner-panel,whatsapp-service,whatsapp-resolver}
+packages/{cc-*,backend-*,svc-*,wa-*}
+extension-dev/   # tests & tooling (not an app)
+```
 
 ## Eyes / hands / brain
 
 | Role | Path | Notes |
 |------|------|--------|
-| **Eyes + hands + thin UI** | `extension/` | Chrome MV3. No business planning. Workspace package `cybercontrol-extension`. |
-| **Brain + memory** | `extension-service/` | Fill plan, knowledge, WSS server, mappings. |
-| **Hub API** | `backend/` | Auth mint/refresh, profiles CRUD source of truth, WhatsApp orchestration. |
-| **WA Baileys worker** | `whatsapp-service/` | Multi-tenant sessions on WA VMs (`:3100`). Thin entry; logic in `@cybercontrol/wa-service` + `wa-auth`. |
-| **WA LID resolver** | `whatsapp-resolver/` | Singleton wwebjs oracle (`:3200`). Thin entry; logic in `@cybercontrol/wa-resolver`. |
-| **Operator dashboard** | `frontend/` | Café UI. |
-| **CLI** | `cyb-cli/` | `cyb live`, sessions, login (HTTPS mint → WSS watch). |
-| **Capability libs** | `packages/cc-*` (`@cc/*`) | Sources for extension bundles. Extension depends on them by package name; `extension/scripts` concat/esbuild into inject `*-bundle.js`. |
+| **Eyes + hands + thin UI** | `apps/extension/` | Chrome MV3. No business planning. Workspace package `cybercontrol-extension`. |
+| **Brain + memory** | `apps/extension-service/` | Fill plan, knowledge, WSS server, mappings. |
+| **Hub API** | `apps/backend/` | Auth mint/refresh, profiles CRUD source of truth, WhatsApp orchestration. |
+| **WA Baileys worker** | `apps/whatsapp-service/` | Multi-tenant sessions on WA VMs (`:3100`). Thin entry; logic in `@cybercontrol/wa-service` + `wa-auth`. |
+| **WA LID resolver** | `apps/whatsapp-resolver/` | Singleton wwebjs oracle (`:3200`). Thin entry; logic in `@cybercontrol/wa-resolver`. |
+| **Operator dashboard** | `apps/frontend/` | Café UI. |
+| **CLI** | `apps/cyb-cli/` | `cyb live`, sessions, login (HTTPS mint → WSS watch). |
+| **Capability libs** | `packages/cc-*` (`@cc/*`) | Sources for extension bundles. Extension depends on them by package name; `apps/extension/scripts` concat/esbuild into inject `*-bundle.js`. |
 | **WA libs** | `packages/wa-*` (`@cybercontrol/wa-*`) | Baileys/wwebjs runtime packages imported by name (same pattern as `@cybercontrol/svc-*`). Hub routing stays in `@cybercontrol/backend-whatsapp`. |
-| **Brain libs** | `packages/svc-*` (`@cybercontrol/svc-*`) | Fill planner, knowledge, learning, AI mapper, runtime, teach, session. Import by package name only (no `../../svc-*` or app `ws/server` imports — WSS send is injected via `setWsSend`). |
+| **Brain libs** | `packages/svc-*` (`@cybercontrol/svc-*`) | Fill planner, knowledge, learning, AI mapper, runtime, teach, session. Import by package name only (WSS send injected via `setWsSend`). |
 
 ## HTTPS vs WSS (product truth)
 
@@ -44,7 +51,7 @@ Shared TS baseline (for later migration): `tooling/tsconfig.base.json`.
 | Fill plan, fill session, live field debug | **WSS-first** (HTTPS rare fallback) |
 | Mid-fill AI / dynamic replan | **WSS** (planned; not fully shipped) |
 
-## Extension layout (`extension/`)
+## Extension layout (`apps/extension/`)
 
 | Folder | Role |
 |--------|------|
@@ -64,14 +71,13 @@ Frozen reference copy: `extension-legacy-best/` (read-only snapshot ~5.91.5).
 ## extension-service layout
 
 ```text
-extension-service/
+apps/extension-service/
   index.js                 # process entry (Docker CMD)
   src/
     http/                  # Express auth + routes
     ws/                    # WSS server, handlers, fill over socket
     db/                    # pool + JSON/KV store helpers
-    engines/               # planning, mapping, learning, HIM, …
-  scripts/                 # one-off migrators / seed
+  scripts/                 # build-dist + migrators
   migrations/              # SQL
 ```
 
@@ -84,20 +90,3 @@ extension-service/
 | `architecture/` | Normative YAML, ADRs, fixtures — source of truth for contracts |
 | `docs/` | Human narrative (this map, performance, schemas) |
 | `deploy/` | **Prod** compose, CD, LB, networking (`deploy/docs/`) |
-| Root `docker-compose*.yml` | **Local/dev** stacks |
-| `nginx/` | Local/dev nginx snippets (prod LB under `deploy/loadbalancer/`) |
-| `extension-dev/` | Tests + debug CLI; `cli/out/` is local artifacts only (gitignored) |
-| `extension-dev/docs/` | Historical phase review notes |
-
-## Secrets / artifacts (never commit)
-
-- `*.pem`, `*.crx` — Chrome pack/signing  
-- `*.jwt`, `extension-dev/cli/out/**` — debug dumps  
-
-See root `.gitignore`.
-
-## Related
-
-- ADR-0012: facades over big-bang moves  
-- `architecture/hardening-repository.yml` — target boundaries  
-- `deploy/docs/GHCR.md`, `deploy/docs/NETWORKING.md` — live topology  

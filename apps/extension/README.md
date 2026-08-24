@@ -2,9 +2,9 @@
 
 Chrome MV3 package. **Does not own business planning** — that lives in `extension-service`.
 
-Workspace package: `cybercontrol-extension`. It depends on `@cc/*` workspace packages by **name** (same pattern as extension-service → `@cybercontrol/svc-*`), not `../packages/...` paths.
+Workspace package: `cybercontrol-extension` (lives at `apps/extension`). It depends on `@cc/*` workspace packages by **name** (same pattern as extension-service → `@cybercontrol/svc-*`), not relative `packages/` paths.
 
-Rebuild bundles: `pnpm --filter cybercontrol-extension build` (or root `pnpm build:bundles`). Scripts under `extension/scripts/` resolve `@cc/*` via `node_modules` and write path-stable `*-bundle.js` inject files here. Next monorepo step moves this tree to `apps/extension` (inject filenames stay the same).
+Rebuild bundles: `pnpm --filter cybercontrol-extension build` (or root `pnpm build:bundles`). Scripts under `scripts/` resolve `@cc/*` via `node_modules` and write path-stable `*-bundle.js` inject files here.
 
 ## Layout
 

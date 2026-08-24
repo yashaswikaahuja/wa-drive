@@ -4,7 +4,7 @@
  */
 "use strict";
 (() => {
-  // packages/cc-mapper/src/field-aliases.ts
+  // ../../packages/cc-mapper/src/field-aliases.ts
   var FIELD_ALIASES = {
     name: ["candidate_name", "candidates_name", "applicant_name", "applicants_name", "student_name", "full_name", "fullname", "naam", "name", "applicant_name_english", "name_english", "name_in_english", "txt_candidate_name", "txt_name", "txtcandidatename", "txtname", "pratyashi_ka_naam", "your_name", "enter_name"],
     first_name: ["first_name", "firstname", "fname", "given_name", "givenname", "txt_firstname", "txt_first_name"],
@@ -78,7 +78,7 @@
     FIELD_ALIASES
   };
 
-  // packages/cc-mapper/src/field-ident.ts
+  // ../../packages/cc-mapper/src/field-ident.ts
   function normalizeIdent(s) {
     return String(s || "").toLowerCase().replace(/[-\s:*()'./\\]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
   }
@@ -117,7 +117,7 @@
     normChoice
   };
 
-  // packages/cc-mapper/src/resolve-choice.ts
+  // ../../packages/cc-mapper/src/resolve-choice.ts
   function looksLikeYesNo(opts) {
     return opts.length > 0 && opts.every((o) => {
       const n = normChoice(o);
@@ -257,7 +257,7 @@
     resolveChoiceToOption
   };
 
-  // packages/cc-mapper/src/decide-conditional.ts
+  // ../../packages/cc-mapper/src/decide-conditional.ts
   function normalizeIdent2(s) {
     return String(s || "").toLowerCase().replace(/[-\s:*()'./\\]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
   }
@@ -302,7 +302,7 @@
     decideConditionalChoice
   };
 
-  // packages/cc-mapper/src/match-special-fields.ts
+  // ../../packages/cc-mapper/src/match-special-fields.ts
   var FILE_ALIASES = {
     photo: ["photo", "photograph", "passport photo", "applicant photo", "image", "profile photo", "customer photograph"],
     signature: ["signature", "sign", "applicant signature", "digital signature"],
@@ -404,7 +404,7 @@
     isEducationRow
   };
 
-  // packages/cc-mapper/src/match-profile-fields.ts
+  // ../../packages/cc-mapper/src/match-profile-fields.ts
   function tryMatchNameParts(field, ident, matchBy, nameParts, mapping) {
     const isFatherMother = ident.includes("father") || ident.includes("mother") || ident.includes("pita") || ident.includes("mata");
     if (isFatherMother) return false;
@@ -527,7 +527,7 @@
     tryMatchDob
   };
 
-  // packages/cc-mapper/src/fuzzy-post-passes.ts
+  // ../../packages/cc-mapper/src/fuzzy-post-passes.ts
   var TWIN_PREFIX_RE = /^(?:[a-z]\.|\d+\.|\(\w\)|[i-x]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b[\s:_-]*/i;
   function choiceAlreadyMapped(mapping, f) {
     if (mapping[f.selector]) return true;
@@ -614,7 +614,7 @@
     applySplitDob
   };
 
-  // packages/cc-mapper/src/fuzzy-match.ts
+  // ../../packages/cc-mapper/src/fuzzy-match.ts
   function fuzzyMatch(formFields, profile) {
     const fieldAliases = getFieldAliases();
     const helpers = {
@@ -645,7 +645,7 @@
   }
   var CcFuzzyMatch = { fuzzyMatch };
 
-  // packages/cc-mapper/src/ai-match.ts
+  // ../../packages/cc-mapper/src/ai-match.ts
   async function aiMatch(formFields, profile, groqKey, llmBaseUrl, llmModel) {
     const fieldDescriptions = formFields.map(
       (f, i) => i + ': label="' + (f.label || "") + '" id="' + (f.id || "") + '" name="' + (f.name || "") + '" placeholder="' + (f.placeholder || "") + '"'
@@ -702,7 +702,7 @@
   }
   var CcAiMatch = { aiMatch };
 
-  // packages/cc-mapper/src/inject.ts
+  // ../../packages/cc-mapper/src/inject.ts
   var root = globalThis;
   root.CcFieldAliases = CcFieldAliases;
   root.CcFieldIdent = CcFieldIdent;

@@ -4,8 +4,8 @@ on:
   push:
     branches: [master]
     paths:
-      - 'whatsapp-service/**'
-      - 'whatsapp-resolver/**'
+      - 'apps/whatsapp-service/**'
+      - 'apps/whatsapp-resolver/**'
       - 'packages/wa-*/**'
       - '.github/workflows/docker-publish-whatsapp.yml'
   workflow_dispatch:
@@ -45,8 +45,8 @@ jobs:
       - name: Build and push whatsapp-service
         uses: docker/build-push-action@v6
         with:
-          context: ./whatsapp-service
-          file: ./whatsapp-service/Dockerfile
+          context: ./apps/whatsapp-service
+          file: ./apps/whatsapp-service/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
@@ -56,8 +56,8 @@ jobs:
       - name: Build and push whatsapp-resolver
         uses: docker/build-push-action@v6
         with:
-          context: ./whatsapp-resolver
-          file: ./whatsapp-resolver/Dockerfile
+          context: ./apps/whatsapp-resolver
+          file: ./apps/whatsapp-resolver/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |

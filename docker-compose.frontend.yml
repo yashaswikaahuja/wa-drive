@@ -1,7 +1,7 @@
 services:
   frontend:
     build:
-      context: ./frontend
+      context: ./apps/frontend
       args:
         VITE_API_URL: https://${API_DOMAIN:-api.cybercontrol.fun}/api
         VITE_SOCKET_URL: https://${API_DOMAIN:-api.cybercontrol.fun}

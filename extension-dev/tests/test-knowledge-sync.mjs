@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const EXT = resolve(__dirname, '../../extension');
+const EXT = resolve(__dirname, '../../apps/extension');
 
 let passed = 0;
 let failed = 0;

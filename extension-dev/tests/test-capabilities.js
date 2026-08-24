@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const EXT = path.join(__dirname, '../../extension');
+const EXT = path.join(__dirname, '../../apps/extension');
 
 // Simulated browser context
 const context = vm.createContext({

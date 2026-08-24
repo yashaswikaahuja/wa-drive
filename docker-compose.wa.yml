@@ -1,6 +1,6 @@
 services:
   whatsapp-service:
-    build: ./whatsapp-service
+    build: ./apps/whatsapp-service
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -16,7 +16,7 @@ services:
       - "3100:3100"
 
   whatsapp-resolver:
-    build: ./whatsapp-resolver
+    build: ./apps/whatsapp-resolver
     restart: unless-stopped
     environment:
       NODE_ENV: production
