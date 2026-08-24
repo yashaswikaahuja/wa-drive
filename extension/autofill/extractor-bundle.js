@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED — do not edit.
- * Source: autofill/extractor/capabilities/*.js + extractor.js (facade)
- * Rebuild: node extension/autofill/build-extractor-bundle.mjs
+ * Source: @cc/extractor
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== form-context.js ==== */
@@ -913,5 +913,3 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
     _co.inject(mapping, filledBySource, profile, backendUrl, formKey, document);
   }
 }
-
-/* ==== extractor.js (facade) ==== */

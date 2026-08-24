@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED
- * Source: packages/cc-shared/src/
- * Rebuild: node extension/build-shared-bundle.mjs
+ * Source: @cc/shared
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== network-idle.js ==== */

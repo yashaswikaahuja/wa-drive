@@ -1,32 +1,14 @@
 /**
- * Build extension/sw/bg-bundle.js from packages/cc-background/
- * Run: node extension-dev/scripts/build-bg-bundle.mjs
+ * Thin wrapper — real build lives in extension/scripts (resolves @cc/background).
+ * Run: pnpm --filter cybercontrol-extension build
  */
-import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url';
-const dir = path.dirname(fileURLToPath(import.meta.url));
-const root = path.join(dir, '../..');
-const bgDir = path.join(root, 'packages/cc-background');
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ORDER = [
-  'auth/src/auth.js',
-  'label-utils/src/label-utils.js',
-  'wss-manager/src/wss-manager.js',
-  'bridge/src/bridge.js',
-  'job-dispatch/src/job-dispatch.js',
-  'teach/src/teach.js',
-  'composer/src/composer.js',
-];
-
-const parts = ['/**\n * AUTO-GENERATED — do not edit.\n * Source: packages/cc-background/\n * Rebuild: node extension-dev/scripts/build-bg-bundle.mjs\n */\n'];
-for (const name of ORDER) {
-  const p = path.join(bgDir, name);
-  if (!fs.existsSync(p)) throw new Error('missing: ' + p);
-  const src = fs.readFileSync(p, 'utf8');
-  parts.push('\n/* ==== ' + name + ' ==== */\n');
-  parts.push(src);
-  if (!src.endsWith('\n')) parts.push('\n');
-}
-
-const out = path.join(root, 'extension/sw/bg-bundle.js');
-fs.writeFileSync(out, parts.join(''));
-console.log('Wrote', out, parts.join('').split(/\n/).length, 'lines');
+const target = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../extension/scripts/build-bg-bundle.mjs',
+);
+const r = spawnSync(process.execPath, [target], { stdio: 'inherit' });
+process.exit(r.status ?? 1);

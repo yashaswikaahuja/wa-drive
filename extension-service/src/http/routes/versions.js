@@ -21,7 +21,7 @@ import {
   publish, promote, deprecate,
   createSnapshot, listSnapshots, restoreSnapshot,
   checkCompatibility, planMigration, getLineageHistory,
-} from '../../../../packages/svc-knowledge/src/knowledge-versioning.js';
+} from '@cybercontrol/svc-knowledge';
 
 const router = Router();
 

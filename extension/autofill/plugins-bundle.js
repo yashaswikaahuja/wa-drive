@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED
- * Source: packages/cc-plugins/src/
- * Rebuild: node extension/autofill/build-plugins-bundle.mjs
+ * Source: @cc/plugins
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== interface.js ==== */

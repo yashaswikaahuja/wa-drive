@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED — do not edit.
- * Source: application/orchestrator/capabilities/*.js + fill-orchestrator.js (facade)
- * Rebuild: node extension/application/build-orchestrator-bundle.mjs
+ * Source: @cc/orchestrator
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== script-manifests.js ==== */
@@ -578,5 +578,3 @@ if (typeof module !== 'undefined') module.exports = root.CcSequentialKernelFill;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 if (typeof module !== 'undefined') module.exports = root.CcActionPlanFill;
-
-/* ==== fill-orchestrator.js (facade) ==== */

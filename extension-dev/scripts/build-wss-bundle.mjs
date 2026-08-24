@@ -1,13 +1,13 @@
-import fs from 'fs'; import path from 'path'; import { fileURLToPath } from 'url';
-const dir = path.dirname(fileURLToPath(import.meta.url));
-const srcDir = path.join(dir, '../../packages/cc-wss/src');
-const ORDER = ['reconnect-manager.js', 'ws-client.js', 'wss-session.js'];
-const parts = ['/**\n * AUTO-GENERATED\n * Source: packages/cc-wss/src/\n * Rebuild: node extension-dev/scripts/build-wss-bundle.mjs\n */\n'];
-for (const name of ORDER) {
-  const p = path.join(srcDir, name); if (!fs.existsSync(p)) throw new Error('missing '+name);
-  const src = fs.readFileSync(p,'utf8');
-  parts.push('\n/* ==== '+name+' ==== */\n'); parts.push(src); if (!src.endsWith('\n')) parts.push('\n');
-}
-const out = path.join(dir, '../../extension/sw/wss-bundle.js');
-fs.writeFileSync(out, parts.join(''));
-console.log('Wrote', out, parts.join('').split(/\n/).length, 'lines');
+/**
+ * Thin wrapper — real build lives in extension/scripts (resolves @cc/wss).
+ */
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const target = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../extension/scripts/build-wss-bundle.mjs',
+);
+const r = spawnSync(process.execPath, [target], { stdio: 'inherit' });
+process.exit(r.status ?? 1);

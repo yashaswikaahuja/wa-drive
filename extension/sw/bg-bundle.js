@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED — do not edit.
- * Source: packages/cc-background/
- * Rebuild: node extension-dev/scripts/build-bg-bundle.mjs
+ * Source: @cc/background
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== auth/src/auth.js ==== */

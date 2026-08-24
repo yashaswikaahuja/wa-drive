@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '../../../../packages/svc-fill-planner/src/fill-planner.js';
-import { mapUnknownFields } from '../../../../packages/svc-ai-mapper/src/semantic-mapper.js';
-import { persistExecutionEvidence } from '../../../../packages/svc-session/src/execution-evidence.js';
-import { classifyFormBehavior, isHardEvidenceType } from '../../../../packages/svc-runtime/src/behavior-classifier.js';
-import { mergeExecutionMode } from '../../../../packages/svc-session/src/execution-mode.js';
+import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '@cybercontrol/svc-fill-planner';
+import { mapUnknownFields } from '@cybercontrol/svc-ai-mapper';
+import { persistExecutionEvidence, mergeExecutionMode } from '@cybercontrol/svc-session';
+import { classifyFormBehavior, isHardEvidenceType } from '@cybercontrol/svc-runtime';
 
 const router = Router();
 

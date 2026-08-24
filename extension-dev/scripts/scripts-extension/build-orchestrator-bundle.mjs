@@ -1,35 +1,10 @@
-/**
- * Concatenate application/orchestrator/capabilities/*.js (+ facade) into one file.
- * Run: node extension/application/build-orchestrator-bundle.mjs
- */
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const dir = path.dirname(fileURLToPath(import.meta.url));
-const orchDir = path.join(dir, '../../../packages/cc-orchestrator/src');
-
-const ORDER = [
-  'script-manifests.js',
-  'flatten-profile.js',
-  'sequential-kernel-fill.js',
-  'action-plan-fill.js',
-];
-
-const parts = [];
-parts.push(`/**\n * AUTO-GENERATED — do not edit.\n * Source: application/orchestrator/capabilities/*.js + fill-orchestrator.js (facade)\n * Rebuild: node extension/application/build-orchestrator-bundle.mjs\n */\n`);
-
-for (const name of ORDER) {
-  const p = path.join(orchDir, name);
-  if (!fs.existsSync(p)) throw new Error('missing ' + name);
-  const src = fs.readFileSync(p, 'utf8');
-  parts.push(`\n/* ==== ${name} ==== */\n`);
-  parts.push(src);
-  if (!src.endsWith('\n')) parts.push('\n');
-}
-
-parts.push(`\n/* ==== fill-orchestrator.js (facade) ==== */\n`);
-const out = path.join(dir, '../../../extension/application/orchestrator-bundle.js');
-fs.writeFileSync(out, parts.join(''));
-const n = parts.join('').split(/\n/).length;
-console.log('Wrote', out, n, 'lines');
+const target = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../extension/scripts/build-orchestrator-bundle.mjs',
+);
+const r = spawnSync(process.execPath, [target], { stdio: 'inherit' });
+process.exit(r.status ?? 1);

@@ -2,11 +2,26 @@
   "name": "cybercontrol-extension",
   "version": "5.92.18",
   "private": true,
-  "description": "CyberControl Chrome MV3 extension (eyes + hands). Sources live in packages/cc-*; this package is the load root + bundle output.",
+  "type": "module",
+  "description": "CyberControl Chrome MV3 extension (eyes + hands). Depends on @cc/* workspace packages; this package is the load root + generated *-bundle.js output.",
   "scripts": {
-    "build": "node ../build-all.mjs",
+    "build": "node scripts/build-all.mjs",
     "typecheck": "node -e \"console.log('[extension] typecheck skipped until TS migration')\"",
     "test": "node -e \"console.log('[extension] tests live under extension-dev/; skipped in package test')\""
+  },
+  "dependencies": {
+    "@cc/background": "workspace:*",
+    "@cc/drivers": "workspace:*",
+    "@cc/executor": "workspace:*",
+    "@cc/extractor": "workspace:*",
+    "@cc/mapper": "workspace:*",
+    "@cc/orchestrator": "workspace:*",
+    "@cc/plugins": "workspace:*",
+    "@cc/shared": "workspace:*",
+    "@cc/wss": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   },
   "engines": {
     "node": ">=20"

@@ -4,5 +4,11 @@
   "private": true,
   "type": "module",
   "main": "src/index.js",
-  "dependencies": { "@cybercontrol/svc-knowledge": "workspace:*", "@cybercontrol/svc-session": "workspace:*" }
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "dependencies": {
+    "@cybercontrol/svc-knowledge": "workspace:*",
+    "@cybercontrol/svc-session": "workspace:*"
+  }
 }

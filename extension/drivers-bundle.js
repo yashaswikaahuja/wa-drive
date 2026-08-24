@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED
- * Source: packages/cc-drivers/src/
- * Rebuild: node extension/build-drivers-bundle.mjs
+ * Source: @cc/drivers
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== dispatch.js ==== */

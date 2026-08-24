@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED
- * Source: packages/cc-wss/src/
- * Rebuild: node extension-dev/scripts/build-wss-bundle.mjs
+ * Source: @cc/wss
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== reconnect-manager.js ==== */

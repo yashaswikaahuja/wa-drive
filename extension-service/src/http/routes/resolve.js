@@ -12,7 +12,7 @@
 
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
-import { resolveOne, resolveAll, resolveWithInheritance } from '../../../../packages/svc-knowledge/src/scope-resolver.js';
+import { resolveOne, resolveAll, resolveWithInheritance } from '@cybercontrol/svc-knowledge';
 
 const router = Router();
 

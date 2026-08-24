@@ -1,7 +1,7 @@
 /**
  * AUTO-GENERATED — do not edit.
- * Source: autofill/executor/capabilities/*.js + executor.js
- * Rebuild: node extension/autofill/build-executor-bundle.mjs
+ * Source: @cc/executor
+ * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
 /* ==== parse-date-value.js ==== */
@@ -4434,5 +4434,3 @@ globalThis.fillFormFieldsSequential = async function fillFormFieldsSequential(ma
 
   return k.filled;
 }
-
-/* ==== executor.js (facade) ==== */

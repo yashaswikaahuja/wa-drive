@@ -26,7 +26,7 @@ Shared TS baseline (for later migration): `tooling/tsconfig.base.json`.
 | **Hub API** | `backend/` | Auth mint/refresh, profiles CRUD source of truth, WhatsApp orchestration. |
 | **Operator dashboard** | `frontend/` | Café UI. |
 | **CLI** | `cyb-cli/` | `cyb live`, sessions, login (HTTPS mint → WSS watch). |
-| **Capability libs** | `packages/cc-*` | Sources for extension bundles (concat today; package `build` in PR3). |
+| **Capability libs** | `packages/cc-*` (`@cc/*`) | Sources for extension bundles. Extension depends on them by package name; `extension/scripts` concat/esbuild into inject `*-bundle.js`. |
 
 ## HTTPS vs WSS (product truth)
 

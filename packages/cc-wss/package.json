@@ -1,0 +1,18 @@
+{
+  "name": "@cc/wss",
+  "version": "1.0.0",
+  "description": "CyberControl service-worker WSS client — reconnect, session, ws-client",
+  "main": "src/ws-client.js",
+  "exports": {
+    ".": "./src/ws-client.js",
+    "./reconnect-manager": "./src/reconnect-manager.js",
+    "./ws-client": "./src/ws-client.js",
+    "./wss-session": "./src/wss-session.js"
+  },
+  "scripts": {
+    "test": "echo 'No unit tests (browser SW required)'"
+  },
+  "type": "module",
+  "license": "UNLICENSED",
+  "private": true
+}

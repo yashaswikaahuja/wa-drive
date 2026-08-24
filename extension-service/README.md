@@ -2,21 +2,20 @@
 
 Standalone API service that powers the Chrome AutoFill extension. Runs separately from the main hub so extension changes never risk breaking the dashboard.
 
-**Layout (after safe reorg):**
+**Layout:**
 
 ```text
-index.js                 # source process entry
-dist/                    # generated deployable service bundle (npm run build)
+index.js                 # process entry — imports engines via @cybercontrol/svc-* (location-independent)
+dist/                    # generated deployable bundle (pnpm build); vendors svc packages under node_modules
 src/
   http/                  # auth middleware + Express routes
   ws/                    # WSS server, handlers, fill over socket
   db/                    # Postgres pool + store helpers
-  engines/               # planning, mapping, learning, HIM, …
 scripts/                 # migrators / seed (one-shots)
 migrations/              # SQL
 ```
 
-The root compatibility shims are retained only for legacy consumers; service code imports `src/` directly.
+Engines live in workspace packages (`packages/svc-*`, published later as `@cybercontrol/svc-*`), same pattern as backend’s `@cybercontrol/backend-*` imports. Do **not** use relative `../packages/...` paths from this service.
 Repo map: `docs/REPO-MAP.md`.
 
 ## What it serves
