@@ -1,0 +1,24 @@
+{
+  "name": "@cybercontrol/wa-auth",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Postgres-backed Baileys auth state + file→DB session migration",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./postgres": "./src/postgres.js",
+    "./migrate-files-to-db": "./src/migrate-files-to-db.js"
+  },
+  "scripts": {
+    "test": "node -e \"console.log('[wa-auth] no package tests yet')\"",
+    "typecheck": "node -e \"console.log('[wa-auth] typecheck skipped (JS)')\""
+  },
+  "dependencies": {
+    "baileys": "^6.7.16",
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

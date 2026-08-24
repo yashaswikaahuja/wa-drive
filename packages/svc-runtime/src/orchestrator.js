@@ -27,11 +27,21 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 import { randomUUID } from 'node:crypto';
-import { generateFillPlan, handleObservation, deriveScope, validateSnapshot, enrichProfile } from '../../svc-fill-planner/src/index.js';
-import { mapUnknownFields } from '../../svc-ai-mapper/src/index.js';
-import { processCorrections, recordSuccessfulExecution, recordFailedExecution } from '../../svc-learning/src/index.js';
-import { send, getWorkspaceSessions as getWsSessions } from '../../../extension-service/src/ws/server.js';
-import * as knowledgeStore from '../../svc-knowledge/src/index.js';
+import {
+  generateFillPlan,
+  handleObservation,
+  deriveScope,
+  validateSnapshot,
+  enrichProfile,
+} from '@cybercontrol/svc-fill-planner';
+import { mapUnknownFields } from '@cybercontrol/svc-ai-mapper';
+import {
+  processCorrections,
+  recordSuccessfulExecution,
+  recordFailedExecution,
+} from '@cybercontrol/svc-learning';
+import * as knowledgeStore from '@cybercontrol/svc-knowledge';
+import { send } from './ws-bridge.js';
 
 // ── Configuration ───────────────────────────────────────────────────
 

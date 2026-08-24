@@ -12,6 +12,8 @@ This repo is a **pnpm + Turborepo** workspace. Product surfaces are **workspace 
 | `pnpm test` | `turbo run test` |
 | `pnpm typecheck` | `turbo run typecheck` (JS-only packages skip until TS) |
 | `pnpm build:bundles` | Direct concat rebuild of extension `*-bundle.js` via `build-all.mjs` |
+| `pnpm --filter cybercontrol-whatsapp-service build` | Vendor `@cybercontrol/wa-*` into `whatsapp-service/dist/` for Docker |
+| `pnpm --filter cybercontrol-whatsapp-resolver build` | Vendor `@cybercontrol/wa-resolver` into `whatsapp-resolver/dist/` for Docker |
 
 Shared TS baseline (for later migration): `tooling/tsconfig.base.json`.
 
@@ -24,9 +26,13 @@ Shared TS baseline (for later migration): `tooling/tsconfig.base.json`.
 | **Eyes + hands + thin UI** | `extension/` | Chrome MV3. No business planning. Workspace package `cybercontrol-extension`. |
 | **Brain + memory** | `extension-service/` | Fill plan, knowledge, WSS server, mappings. |
 | **Hub API** | `backend/` | Auth mint/refresh, profiles CRUD source of truth, WhatsApp orchestration. |
+| **WA Baileys worker** | `whatsapp-service/` | Multi-tenant sessions on WA VMs (`:3100`). Thin entry; logic in `@cybercontrol/wa-service` + `wa-auth`. |
+| **WA LID resolver** | `whatsapp-resolver/` | Singleton wwebjs oracle (`:3200`). Thin entry; logic in `@cybercontrol/wa-resolver`. |
 | **Operator dashboard** | `frontend/` | Café UI. |
 | **CLI** | `cyb-cli/` | `cyb live`, sessions, login (HTTPS mint → WSS watch). |
 | **Capability libs** | `packages/cc-*` (`@cc/*`) | Sources for extension bundles. Extension depends on them by package name; `extension/scripts` concat/esbuild into inject `*-bundle.js`. |
+| **WA libs** | `packages/wa-*` (`@cybercontrol/wa-*`) | Baileys/wwebjs runtime packages imported by name (same pattern as `@cybercontrol/svc-*`). Hub routing stays in `@cybercontrol/backend-whatsapp`. |
+| **Brain libs** | `packages/svc-*` (`@cybercontrol/svc-*`) | Fill planner, knowledge, learning, AI mapper, runtime, teach, session. Import by package name only (no `../../svc-*` or app `ws/server` imports — WSS send is injected via `setWsSend`). |
 
 ## HTTPS vs WSS (product truth)
 

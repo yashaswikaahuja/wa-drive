@@ -1,0 +1,29 @@
+{
+  "name": "@cybercontrol/wa-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Baileys multi-tenant WhatsApp service runtime (sessions, media, parent bridge, HTTP)",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./create-app": "./src/createApp.js"
+  },
+  "scripts": {
+    "test": "node -e \"console.log('[wa-service] no package tests yet')\"",
+    "typecheck": "node -e \"console.log('[wa-service] typecheck skipped (JS)')\""
+  },
+  "dependencies": {
+    "@cybercontrol/wa-auth": "workspace:*",
+    "@hapi/boom": "^10.0.1",
+    "baileys": "^6.7.16",
+    "express": "^4.18.2",
+    "form-data": "^4.0.0",
+    "pg": "^8.13.1",
+    "pino": "^8.17.2",
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

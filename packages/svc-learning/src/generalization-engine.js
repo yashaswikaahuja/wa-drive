@@ -22,7 +22,7 @@
 //   AI calls, fill execution.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import * as knowledgeStore from '../../svc-knowledge/src/index.js';
+import * as knowledgeStore from '@cybercontrol/svc-knowledge';
 import { getConfidenceState, checkBlockers } from './confidence-manager.js';
 
 // ── Configuration ───────────────────────────────────────────────────

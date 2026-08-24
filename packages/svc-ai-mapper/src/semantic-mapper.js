@@ -19,11 +19,11 @@
 // Does NOT own: fill planning, action plan construction, session tracking.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { classifyField, FieldClassification, isEligibleForFill } from '../../svc-fill-planner/src/index.js';
+import { classifyField, FieldClassification, isEligibleForFill } from '@cybercontrol/svc-fill-planner';
 import * as aiKeyManager from './ai-key-manager.js';
 import { buildMappingPrompt } from './prompt-builder.js';
 import { evaluateBatch, evaluateConfidence, canPromoteToActive, MIN_EXECUTIONS_FOR_PROMOTION } from './confidence-evaluator.js';
-import * as knowledgeStore from '../../svc-knowledge/src/index.js';
+import * as knowledgeStore from '@cybercontrol/svc-knowledge';
 
 /**
  * @typedef {object} SemanticMapRequest

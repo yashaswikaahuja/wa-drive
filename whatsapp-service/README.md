@@ -2,12 +2,21 @@
 
 Multi-tenant WhatsApp session manager using **Baileys** + **wwebjs Resolver** for LID→phone resolution.
 
+Workspace package: `cybercontrol-whatsapp-service`. Logic lives in `@cybercontrol/wa-service` and `@cybercontrol/wa-auth` (imported by package name). This folder is the thin entry + Docker/CD root (paths stay stable).
+
 ## Quick Start
 
 ```bash
-npm install
-cp .env.example .env
-node index.js
+# from monorepo root
+pnpm install
+pnpm --filter cybercontrol-whatsapp-service start
+```
+
+Docker image build expects a vendored `dist/` first:
+
+```bash
+pnpm --filter cybercontrol-whatsapp-service build
+docker build -f whatsapp-service/Dockerfile whatsapp-service
 ```
 
 ## Services

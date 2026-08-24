@@ -9,6 +9,8 @@ packages:
   - 'cyb-cli'
   - 'landing'
   - 'owner-panel'
+  - 'whatsapp-service'
+  - 'whatsapp-resolver'
 onlyBuiltDependencies:
   - esbuild
   - sharp

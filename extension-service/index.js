@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import http from 'http';
 import { createRequire } from 'module';
-import { attachWebSocket } from './src/ws/server.js';
+import { attachWebSocket, send as wsSend } from './src/ws/server.js';
 import { createHandlers } from './src/ws/handlers.js';
 
 // Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
@@ -38,6 +38,8 @@ import {
   setStoreAdapter,
   ensureKnowledgeSchema,
 } from '@cybercontrol/svc-knowledge';
+import { setWsSend as setRuntimeWsSend } from '@cybercontrol/svc-runtime';
+import { setWsSend as setTeachWsSend } from '@cybercontrol/svc-teach';
 
 setPool(pool);
 setStoreAdapter({ mutateDoc, KEYS });
@@ -105,6 +107,10 @@ const wsServer = attachWebSocket(server, {
   onMessage: wsHandlers.onMessage,
   onClose: wsHandlers.onClose,
 });
+
+// Inject WSS send into packages that must not import this app.
+setRuntimeWsSend(wsSend);
+setTeachWsSend(wsSend);
 
 export { server, wsServer };
 

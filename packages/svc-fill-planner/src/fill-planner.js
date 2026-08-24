@@ -34,7 +34,7 @@ import {
   markStepCompleted,
   markStepFailed,
   abortRemaining,
-} from '../../svc-session/src/index.js';
+} from '@cybercontrol/svc-session';
 import { deriveProfile } from './deriveProfile.js';
 
 /**

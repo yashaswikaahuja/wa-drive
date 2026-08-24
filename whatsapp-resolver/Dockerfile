@@ -1,3 +1,5 @@
+# Expects CI (or a local `pnpm --filter cybercontrol-whatsapp-resolver build`) to
+# produce dist/ with vendored @cybercontrol/wa-resolver before docker build.
 FROM node:20-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
   chromium \
@@ -6,10 +8,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY . .
-RUN mkdir -p /app/.wwebjs_auth
-VOLUME ["/app/.wwebjs_auth"]
+COPY dist/package.json ./
+RUN npm install --omit=dev
+COPY dist/ ./
+RUN mkdir -p /app/session /app/.wwebjs_auth
+VOLUME ["/app/session", "/app/.wwebjs_auth"]
 EXPOSE 3200
 CMD ["node", "index.js"]

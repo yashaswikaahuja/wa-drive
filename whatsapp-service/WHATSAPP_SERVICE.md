@@ -68,24 +68,25 @@ Multi-tenant WhatsApp session manager for CyberControl SaaS. Each workspace (cyb
 ## File Structure
 
 ```
-whatsapp-service/
-├── index.js              # Baileys multi-session service
-├── package.json          # Dependencies
-├── .env.example          # Environment config
-├── ecosystem.config.cjs  # PM2 config
-├── setup-gcp2.sh         # One-command deployment for new GCP instance
-├── WHATSAPP_SERVICE.md   # This file
-├── sessions/             # Auth data per workspace (gitignored)
-│   └── {workspaceId}/
-├── upload_queue/         # Failed uploads persisted to disk
-│   ├── {id}.json         # Metadata (phone, name, workspace)
-│   └── {id}.bin          # File binary
-└── failed_uploads/       # Legacy fallback directory
+packages/wa-auth/         # @cybercontrol/wa-auth — postgres Baileys auth + migrate
+packages/wa-service/      # @cybercontrol/wa-service — sessions, media, parent, HTTP
+packages/wa-resolver/     # @cybercontrol/wa-resolver — wwebjs createApp
 
-whatsapp-resolver/
-├── index.js              # wwebjs LID resolver service
-├── package.json          # Dependencies
-├── .env.example          # Environment config
+whatsapp-service/         # thin entry + Docker/CD root (path stable)
+├── index.js              # imports createApp from @cybercontrol/wa-service
+├── migrate-sessions-to-db.js  # CLI → @cybercontrol/wa-auth migrate
+├── scripts/build-dist.mjs
+├── package.json
+├── ecosystem.config.cjs
+├── setup-gcp2.sh
+├── WHATSAPP_SERVICE.md
+├── sessions/             # Auth data per workspace (gitignored)
+└── upload_queue/         # Failed uploads persisted to disk
+
+whatsapp-resolver/        # thin entry + Docker/CD root (path stable)
+├── index.js              # imports createApp from @cybercontrol/wa-resolver
+├── scripts/build-dist.mjs
+├── package.json
 └── session/              # wwebjs LocalAuth data (gitignored)
 ```
 

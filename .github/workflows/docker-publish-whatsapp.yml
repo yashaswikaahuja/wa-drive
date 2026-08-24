@@ -6,6 +6,7 @@ on:
     paths:
       - 'whatsapp-service/**'
       - 'whatsapp-resolver/**'
+      - 'packages/wa-*/**'
       - '.github/workflows/docker-publish-whatsapp.yml'
   workflow_dispatch:
 
@@ -17,6 +18,23 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Vendor WA packages into app dist/
+        run: |
+          pnpm --filter cybercontrol-whatsapp-service build
+          pnpm --filter cybercontrol-whatsapp-resolver build
 
       - uses: docker/login-action@v3
         with:

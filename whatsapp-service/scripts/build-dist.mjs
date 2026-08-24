@@ -1,12 +1,7 @@
 /**
- * Build a runnable dist/ for extension-service.
- *
- * Unlike the old path-rewriting approach (`../packages/svc-*`), the service
- * imports engines via package names (`@cybercontrol/svc-*`). This script:
- *   1. Copies the service entry + src + migrations
- *   2. Vendors workspace svc packages under dist/node_modules/@cybercontrol/
- * so `node dist/index.js` works without depending on monorepo folder layout
- * (same idea as publishing those packages to npm later).
+ * Build a runnable dist/ for whatsapp-service.
+ * Vendors @cybercontrol/wa-* into dist/node_modules so Docker can use
+ * context ./whatsapp-service without the monorepo tree (same idea as extension-service).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,18 +11,8 @@ const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const repositoryRoot = path.resolve(serviceRoot, '..');
 const distRoot = path.join(serviceRoot, 'dist');
 
-const serviceDirectories = ['src', 'migrations'];
-const serviceFiles = ['index.js', 'package.json'];
-
-const packageNames = [
-  'svc-ai-mapper',
-  'svc-fill-planner',
-  'svc-knowledge',
-  'svc-learning',
-  'svc-runtime',
-  'svc-session',
-  'svc-teach',
-];
+const serviceFiles = ['index.js', 'migrate-sessions-to-db.js', 'package.json'];
+const packageNames = ['wa-auth', 'wa-service'];
 
 const copyFilter = (source) => {
   const name = path.basename(source);
@@ -42,12 +27,6 @@ for (const file of serviceFiles) {
   if (fs.existsSync(src)) {
     fs.copyFileSync(src, path.join(distRoot, file));
   }
-}
-for (const directory of serviceDirectories) {
-  fs.cpSync(path.join(serviceRoot, directory), path.join(distRoot, directory), {
-    recursive: true,
-    filter: copyFilter,
-  });
 }
 
 const scopedRoot = path.join(distRoot, 'node_modules', '@cybercontrol');
@@ -65,11 +44,7 @@ for (const packageName of packageNames) {
   const nestedPkgPath = path.join(destination, 'package.json');
   const nestedPkg = JSON.parse(fs.readFileSync(nestedPkgPath, 'utf8'));
   for (const [name, version] of Object.entries(nestedPkg.dependencies || {})) {
-    if (
-      typeof version === 'string' &&
-      version.startsWith('workspace:') &&
-      name.startsWith('@cybercontrol/svc-')
-    ) {
+    if (typeof version === 'string' && version.startsWith('workspace:') && name.startsWith('@cybercontrol/wa-')) {
       const short = name.slice('@cybercontrol/'.length);
       nestedPkg.dependencies[name] = `file:../${short}`;
     }
@@ -77,29 +52,21 @@ for (const packageName of packageNames) {
   fs.writeFileSync(nestedPkgPath, JSON.stringify(nestedPkg, null, 2) + '\n');
 }
 
-// Ensure package.json in dist declares the same workspace package names
-// (resolved from the vendored node_modules above when not using pnpm).
 const distPkgPath = path.join(distRoot, 'package.json');
 const distPkg = JSON.parse(fs.readFileSync(distPkgPath, 'utf8'));
 distPkg.dependencies = {
   ...distPkg.dependencies,
-  '@cybercontrol/svc-ai-mapper': 'file:./node_modules/@cybercontrol/svc-ai-mapper',
-  '@cybercontrol/svc-fill-planner': 'file:./node_modules/@cybercontrol/svc-fill-planner',
-  '@cybercontrol/svc-knowledge': 'file:./node_modules/@cybercontrol/svc-knowledge',
-  '@cybercontrol/svc-learning': 'file:./node_modules/@cybercontrol/svc-learning',
-  '@cybercontrol/svc-runtime': 'file:./node_modules/@cybercontrol/svc-runtime',
-  '@cybercontrol/svc-session': 'file:./node_modules/@cybercontrol/svc-session',
-  '@cybercontrol/svc-teach': 'file:./node_modules/@cybercontrol/svc-teach',
+  '@cybercontrol/wa-auth': 'file:./node_modules/@cybercontrol/wa-auth',
+  '@cybercontrol/wa-service': 'file:./node_modules/@cybercontrol/wa-service',
 };
-// Strip workspace: protocol — not valid outside pnpm monorepo
 for (const [name, version] of Object.entries(distPkg.dependencies)) {
   if (typeof version === 'string' && version.startsWith('workspace:')) {
-    if (!name.startsWith('@cybercontrol/svc-')) {
+    if (!name.startsWith('@cybercontrol/wa-')) {
       delete distPkg.dependencies[name];
     }
   }
 }
 fs.writeFileSync(distPkgPath, JSON.stringify(distPkg, null, 2) + '\n');
 
-console.log(`Built extension-service dist: ${distRoot}`);
-console.log(`Vendored ${packageNames.length} @cybercontrol/svc-* packages into dist/node_modules`);
+console.log(`Built whatsapp-service dist: ${distRoot}`);
+console.log(`Vendored ${packageNames.length} @cybercontrol/wa-* packages into dist/node_modules`);

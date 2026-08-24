@@ -3,7 +3,9 @@
 // assigned/moved/failed-over across whatsapp-service instances without re-scanning the QR.
 //
 // Mirrors the { state: { creds, keys }, saveCreds } shape Baileys expects.
-import { initAuthCreds, BufferJSON, proto } from 'baileys';
+// baileys ESM: named exports omit `proto` (it lives on the default export).
+import baileys, { initAuthCreds, BufferJSON } from 'baileys';
+const { proto } = baileys;
 
 // BufferJSON handles Buffer <-> JSON so values round-trip losslessly through jsonb.
 const ser = (v) => JSON.parse(JSON.stringify(v, BufferJSON.replacer));

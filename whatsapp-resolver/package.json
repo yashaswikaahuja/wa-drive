@@ -1,14 +1,25 @@
 {
   "name": "cybercontrol-whatsapp-resolver",
   "version": "1.0.0",
-  "description": "WhatsApp LID→Phone resolver using wwebjs (runs on separate GCP)",
+  "private": true,
+  "type": "module",
+  "description": "CyberControl WhatsApp LID resolver (thin entry). Logic in @cybercontrol/wa-resolver.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "build": "node scripts/build-dist.mjs",
+    "start": "node index.js",
+    "start:dist": "node dist/index.js",
+    "dev": "node --watch index.js",
+    "typecheck": "node -e \"console.log('[whatsapp-resolver] typecheck skipped (JS)')\"",
+    "test": "node -e \"console.log('[whatsapp-resolver] no package tests yet')\""
   },
   "dependencies": {
+    "@cybercontrol/wa-resolver": "workspace:*",
     "express": "^4.18.2",
-    "whatsapp-web.js": "^1.34.7",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.34.7"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

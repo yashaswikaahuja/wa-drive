@@ -17,7 +17,7 @@
 // Does NOT own: plan construction, ordering, session tracking.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import * as knowledgeStore from '../../svc-knowledge/src/index.js';
+import * as knowledgeStore from '@cybercontrol/svc-knowledge';
 
 /**
  * Field classification enum — determines fill eligibility.

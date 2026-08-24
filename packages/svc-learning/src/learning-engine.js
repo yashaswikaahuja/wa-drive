@@ -20,7 +20,7 @@
 //   AI calls, fill planning.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import * as knowledgeStore from '../../svc-knowledge/src/index.js';
+import * as knowledgeStore from '@cybercontrol/svc-knowledge';
 import {
   recordCorrection,
   recordExecutionFailure,

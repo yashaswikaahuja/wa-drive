@@ -1,16 +1,30 @@
 {
   "name": "cybercontrol-whatsapp-service",
   "version": "1.0.0",
+  "private": true,
   "type": "module",
+  "description": "CyberControl WhatsApp Baileys worker (thin entry). Logic in @cybercontrol/wa-service + wa-auth.",
+  "main": "index.js",
   "scripts": {
+    "build": "node scripts/build-dist.mjs",
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start:dist": "node dist/index.js",
+    "dev": "node --watch index.js",
+    "typecheck": "node -e \"console.log('[whatsapp-service] typecheck skipped (JS)')\"",
+    "test": "node -e \"console.log('[whatsapp-service] no package tests yet')\""
   },
   "dependencies": {
+    "@cybercontrol/wa-auth": "workspace:*",
+    "@cybercontrol/wa-service": "workspace:*",
+    "@hapi/boom": "^10.0.1",
     "baileys": "^6.7.16",
     "express": "^4.18.2",
-    "ws": "^8.16.0",
+    "form-data": "^4.0.0",
+    "pg": "^8.13.1",
     "pino": "^8.17.2",
-    "pg": "^8.13.1"
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

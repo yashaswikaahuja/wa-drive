@@ -1,4 +1,4 @@
-import { pool } from '../../svc-knowledge/src/db-adapter.js';
+import { pool } from '@cybercontrol/svc-knowledge/db-adapter';
 
 // Ported from backend/src/services/deriveProfile.ts — KEEP IN SYNC with that file.
 //

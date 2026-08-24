@@ -23,9 +23,9 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { send, getWorkspaceSessions } from '../../../extension-service/src/ws/server.js';
+import { create as createKnowledgeRecord } from '@cybercontrol/svc-knowledge';
+import { send } from './ws-bridge.js';
 import { extractPattern } from './pattern-extractor.js';
-import { create as createKnowledgeRecord } from '../../svc-knowledge/src/index.js';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TYPES & CONSTANTS

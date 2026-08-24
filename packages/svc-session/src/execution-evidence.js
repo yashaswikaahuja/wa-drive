@@ -1,7 +1,7 @@
-import { pool } from '../../svc-knowledge/src/db-adapter.js';
+import { pool } from '@cybercontrol/svc-knowledge/db-adapter';
+import { persistMappingObservations } from '@cybercontrol/svc-knowledge';
+import { recordSuccessfulExecution, recordFailedExecution } from '@cybercontrol/svc-learning';
 import { getSession } from './fill-session.js';
-import { recordSuccessfulExecution, recordFailedExecution } from '../../svc-learning/src/index.js';
-import { persistMappingObservations } from '../../svc-knowledge/src/index.js';
 
 export function buildRecords(session, observation) {
   const progressById = new Map((session.steps || []).map(step => [step.step_id, step]));
