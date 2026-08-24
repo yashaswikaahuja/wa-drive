@@ -2,15 +2,31 @@
 
 One-page guide to what lives where. Normative contracts stay in `architecture/`; this file is navigation only.
 
+## Monorepo status (PR1 tooling)
+
+This repo is a **pnpm + Turborepo** workspace. Product surfaces are **workspace members in place** today; the next step (PR2) moves them under `apps/` without renaming Chrome inject filenames.
+
+| Command | Meaning |
+|---------|---------|
+| `pnpm build` | `turbo run build` across workspace |
+| `pnpm test` | `turbo run test` |
+| `pnpm typecheck` | `turbo run typecheck` (JS-only packages skip until TS) |
+| `pnpm build:bundles` | Direct concat rebuild of extension `*-bundle.js` via `build-all.mjs` |
+
+Shared TS baseline (for later migration): `tooling/tsconfig.base.json`.
+
+**Target layout (PR2+):** `apps/{extension,extension-service,backend,frontend,cyb-cli,…}` + `packages/{cc-*,backend-*,svc-*}`.
+
 ## Eyes / hands / brain
 
 | Role | Path | Notes |
 |------|------|--------|
-| **Eyes + hands + thin UI** | `extension/` | Chrome MV3. No business planning. |
+| **Eyes + hands + thin UI** | `extension/` | Chrome MV3. No business planning. Workspace package `cybercontrol-extension`. |
 | **Brain + memory** | `extension-service/` | Fill plan, knowledge, WSS server, mappings. |
 | **Hub API** | `backend/` | Auth mint/refresh, profiles CRUD source of truth, WhatsApp orchestration. |
 | **Operator dashboard** | `frontend/` | Café UI. |
 | **CLI** | `cyb-cli/` | `cyb live`, sessions, login (HTTPS mint → WSS watch). |
+| **Capability libs** | `packages/cc-*` | Sources for extension bundles (concat today; package `build` in PR3). |
 
 ## HTTPS vs WSS (product truth)
 

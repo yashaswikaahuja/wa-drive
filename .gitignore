@@ -85,3 +85,11 @@ extension.crx
 extension-dev/cli/out/
 *.jwt
 **/ramishwar-access.jwt
+
+# Turborepo
+.turbo/
+
+
+# Local issue scratch
+.tmp-issue*/
+

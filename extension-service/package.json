@@ -7,7 +7,9 @@
   "scripts": {
     "build": "node scripts/build-dist.mjs",
     "start": "node dist/index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "typecheck": "node -e \"console.log('[extension-service] typecheck skipped (JS)')\"",
+    "test": "node -e \"console.log('[extension-service] no package tests yet')\""
   },
   "dependencies": {
     "express": "^4.21.2",

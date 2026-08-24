@@ -2,6 +2,8 @@
 
 Chrome MV3 package. **Does not own business planning** — that lives in `extension-service`.
 
+Workspace package: `cybercontrol-extension`. Rebuild bundles: `pnpm --filter cybercontrol-extension build` (or root `pnpm build:bundles`). Sources live in `packages/cc-*`; this folder is the **load root** + generated `*-bundle.js` output. Next monorepo step moves this tree to `apps/extension` (inject filenames stay the same).
+
 ## Layout
 
 | Path | Role |

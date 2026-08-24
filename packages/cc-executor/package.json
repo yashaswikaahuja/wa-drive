@@ -28,7 +28,7 @@
     "./post-fill-corrections": "./src/post-fill-corrections.js"
   },
   "scripts": {
-    "test": "for f in *.test.mjs; do node \"$f\" || exit 1; done"
+    "test": "node ../../tooling/run-package-tests.mjs"
   },
   "type": "module",
   "license": "UNLICENSED",

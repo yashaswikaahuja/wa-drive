@@ -2,13 +2,21 @@
   "name": "wa-drive",
   "private": true,
   "version": "0.0.0",
-  "description": "CyberControl monorepo — extension capability packages",
+  "description": "CyberControl monorepo — apps + packages (Turborepo)",
   "scripts": {
-    "test": "pnpm -r test",
-    "build": "node build-all.mjs"
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "build:bundles": "node build-all.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=20",
     "pnpm": ">=10"
-  }
+  },
+  "packageManager": "pnpm@10.12.1"
 }

@@ -11,6 +11,11 @@
     "src",
     "README.md"
   ],
+  "scripts": {
+    "build": "node --check bin/cyb.js",
+    "test": "node src/report.test.mjs",
+    "typecheck": "node -e \"console.log('[cyb-cli] typecheck skipped (JS)')\""
+  },
   "engines": {
     "node": ">=18"
   },

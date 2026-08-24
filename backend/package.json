@@ -8,7 +8,8 @@
     "dev": "tsc && node dist/server.js",
     "watch": "tsc --watch",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@cybercontrol/backend-core": "workspace:*",

@@ -1,21 +1,27 @@
 {
   "name": "@cc/mapper",
   "version": "1.0.0",
-  "description": "CyberControl field mapper — fuzzy match, rule engine wiring, AI match",
-  "main": "src/index.js",
+  "description": "CyberControl field mapper — fuzzy match, rule engine wiring, AI match (TypeScript)",
+  "type": "module",
+  "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./field-aliases": "./src/field-aliases.js",
-    "./field-ident": "./src/field-ident.js",
-    "./resolve-choice": "./src/resolve-choice.js",
-    "./decide-conditional": "./src/decide-conditional.js",
-    "./fuzzy-match": "./src/fuzzy-match.js",
-    "./ai-match": "./src/ai-match.js"
+    ".": "./src/index.ts",
+    "./field-aliases": "./src/field-aliases.ts",
+    "./field-ident": "./src/field-ident.ts",
+    "./resolve-choice": "./src/resolve-choice.ts",
+    "./decide-conditional": "./src/decide-conditional.ts",
+    "./match-special-fields": "./src/match-special-fields.ts",
+    "./match-profile-fields": "./src/match-profile-fields.ts",
+    "./fuzzy-post-passes": "./src/fuzzy-post-passes.ts",
+    "./fuzzy-match": "./src/fuzzy-match.ts",
+    "./ai-match": "./src/ai-match.ts",
+    "./inject": "./src/inject.ts"
   },
   "scripts": {
-    "test": "for f in *.test.mjs; do node \"$f\" || exit 1; done"
+    "build": "node build.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --experimental-strip-types mapper-capabilities.test.mjs && node --experimental-strip-types fuzzy-match.test.mjs"
   },
-  "type": "module",
   "license": "UNLICENSED",
   "private": true
 }

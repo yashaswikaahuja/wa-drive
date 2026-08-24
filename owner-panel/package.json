@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node -e \"console.log('[owner-panel] no package tests yet')\"",
     "preview": "vite preview --host"
   },
   "dependencies": {

@@ -1,8 +1,15 @@
 packages:
+  # Libraries
   - 'packages/*'
-  - 'extension-service'
+  # Product surfaces (in-place for PR1; move under apps/ in PR2)
   - 'backend'
-allowBuilds:
-  bcrypt: true
-  esbuild: true
-  sharp: true
+  - 'extension-service'
+  - 'extension'
+  - 'frontend'
+  - 'cyb-cli'
+  - 'landing'
+  - 'owner-panel'
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - bcrypt
