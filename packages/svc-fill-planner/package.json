@@ -7,6 +7,9 @@
   "exports": {
     ".": "./src/index.js"
   },
+  "scripts": {
+    "test": "node ../../tooling/run-package-tests.mjs"
+  },
   "dependencies": {
     "@cybercontrol/svc-knowledge": "workspace:*",
     "@cybercontrol/svc-session": "workspace:*"

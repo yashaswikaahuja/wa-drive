@@ -68,6 +68,20 @@ Do **not** rename `autofill/` or `drivers/` without updating every `executeScrip
 
 Frozen reference copy: `extension-legacy-best/` (read-only snapshot ~5.91.5).
 
+## Testing layout
+
+| Location | Role |
+|----------|------|
+| `packages/<pkg>/tests/*.test.mjs` | Unit tests colocated with the library (`pnpm --filter <pkg> test`) |
+| `extension-dev/tests/unit/` | Extension/governance unit suites |
+| `extension-dev/tests/browser/` | Playwright / real-widget suites |
+| `extension-dev/tests/perception/` | Perception unit suites |
+| `extension-dev/tests/ratification/` | Schema conformance |
+| `extension-dev/tests/security/` | Boundary / security guards |
+| `extension-dev/tests/ci-unit.mjs` | CI entry for non-browser suites |
+
+Build `.mjs` scripts for Chrome bundles live only under `apps/extension/scripts/`.
+
 ## extension-service layout
 
 ```text

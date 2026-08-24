@@ -11,7 +11,7 @@
     "./action-plan-fill": "./src/action-plan-fill.js"
   },
   "scripts": {
-    "test": "node orchestrator-capabilities.test.mjs"
+    "test": "node ../../tooling/run-package-tests.mjs"
   },
   "type": "module",
   "license": "UNLICENSED",
