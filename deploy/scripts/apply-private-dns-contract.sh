@@ -9,10 +9,10 @@
 #   SKIP_ENV_NORMALIZE  1 = do not rewrite *.env DATABASE_URL / instance names
 #
 # Contract:
-#   - /etc/resolv.conf is systemd-resolved stub
-#   - Tailscale publishes MagicDNS into resolved (--accept-dns)
-#   - Private service hostnames use MagicDNS FQDNs (not raw 100.x, not GCP VPC IPs)
-#   - Logical instance identity stays short (never *.ts.net)
+# --- /etc/resolv.conf is systemd-resolved stub
+# --- Tailscale publishes MagicDNS into resolved (--accept-dns)
+# --- Private service hostnames use MagicDNS FQDNs (not raw 100.x, not GCP VPC IPs)
+# --- Logical instance identity stays short (never *.ts.net)
 #
 # See: https://github.com/yashaswikaahuja/wa-drive/issues/299
 set -euo pipefail
@@ -28,14 +28,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=== apply-private-dns-contract on $HOSTNAME_NOW (id=$LOGICAL_INSTANCE_ID) ==="
 
-# ── 0) CD deploy SSH access (required by connectivity CI + Deploy) ───────────
+# --- 0) CD deploy SSH access (required by connectivity CI + Deploy) ---
 if [ -f "$SCRIPT_DIR/ensure-deploy-ssh-access.sh" ]; then
   bash "$SCRIPT_DIR/ensure-deploy-ssh-access.sh" || true
 elif [ -x /opt/cybercontrol-docker/scripts/ensure-deploy-ssh-access.sh ]; then
   bash /opt/cybercontrol-docker/scripts/ensure-deploy-ssh-access.sh || true
 fi
 
-# ── 1) Boot guard: systemd-resolved stub ─────────────────────────────────────
+# --- 1) Boot guard: systemd-resolved stub ---
 if [ -f "$SCRIPT_DIR/cc-ensure-resolved-stub.sh" ]; then
   install -m 0755 "$SCRIPT_DIR/cc-ensure-resolved-stub.sh" /usr/local/sbin/cc-ensure-resolved-stub.sh
 fi
@@ -57,13 +57,13 @@ if [ -x /usr/local/sbin/cc-ensure-resolved-stub.sh ]; then
   /usr/local/sbin/cc-ensure-resolved-stub.sh
 fi
 
-# ── 2) Tailscale: MagicDNS via resolved; short hostname as identity ──────────
+# --- 2) Tailscale: MagicDNS via resolved; short hostname as identity ---
 if command -v tailscale >/dev/null 2>&1; then
   tailscale set --accept-dns=true 2>/dev/null || true
   tailscale set --hostname="$LOGICAL_INSTANCE_ID" 2>/dev/null || true
 fi
 
-# ── 3) Normalize private endpoints in any service env files ──────────────────
+# --- 3) Normalize private endpoints in any service env files ---
 if [ "${SKIP_ENV_NORMALIZE:-0}" != "1" ] && [ -d /opt/cybercontrol-docker ]; then
   for envf in /opt/cybercontrol-docker/*.env; do
     [ -f "$envf" ] || continue
@@ -98,7 +98,7 @@ PY
   done
 fi
 
-# ── 4) Verify host can resolve private DB MagicDNS (infra check) ─────────────
+# --- 4) Verify host can resolve private DB MagicDNS (infra check) ---
 echo "=== verify host MagicDNS ==="
 if getent hosts "$DB_FQDN" >/dev/null 2>&1; then
   echo "OK host resolves $DB_FQDN -> $(getent hosts "$DB_FQDN" | awk '{print $1; exit}')"

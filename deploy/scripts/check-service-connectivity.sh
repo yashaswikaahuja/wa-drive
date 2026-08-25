@@ -25,7 +25,7 @@ if [ -x /usr/local/sbin/cc-ensure-resolved-stub.sh ]; then
   /usr/local/sbin/cc-ensure-resolved-stub.sh >/dev/null 2>&1 || true
 fi
 
-# ── 1) Resolver contract ─────────────────────────────────────────────────────
+# --- 1) Resolver contract ---
 if [ -L /etc/resolv.conf ] && readlink -f /etc/resolv.conf 2>/dev/null | grep -q 'stub-resolv.conf'; then
   ok "resolv.conf -> systemd-resolved stub"
 else
@@ -38,7 +38,7 @@ else
   bad "cc-ensure-resolved-stub.service not enabled"
 fi
 
-# ── 2) Discover whether this host needs private DB ───────────────────────────
+# --- 2) Discover whether this host needs private DB ---
 needs_db=0
 if [ -d /opt/cybercontrol-docker ]; then
   if grep -lR '^DATABASE_URL=' /opt/cybercontrol-docker/*.env 2>/dev/null | grep -q .; then
@@ -64,7 +64,7 @@ tcp_check() {
   fi
 }
 
-# ── 3) Host MagicDNS + TCP for discovered deps ───────────────────────────────
+# --- 3) Host MagicDNS + TCP for discovered deps ---
 if [ "$needs_db" = "1" ]; then
   if getent hosts "$DB_FQDN" >/dev/null 2>&1; then
     ok "host MagicDNS $DB_FQDN -> $(getent hosts "$DB_FQDN" | awk '{print $1; exit}')"
@@ -91,7 +91,7 @@ if [ -n "${EXTRA_TCP_CHECKS:-}" ]; then
   done
 fi
 
-# ── 4) From each running container that declares private deps ────────────────
+# --- 4) From each running container that declares private deps ---
 if [ "${SKIP_CONTAINER_PROBES:-0}" != "1" ] && command -v docker >/dev/null 2>&1; then
   for cid in $(sudo docker ps -q 2>/dev/null || true); do
     name=$(sudo docker inspect -f '{{.Name}}' "$cid" 2>/dev/null | sed 's#^/##')
@@ -137,7 +137,7 @@ new Promise((res,rej)=>{const s=net.connect(5432,h,()=>{s.end();res();});
   done
 fi
 
-# ── 5) Best-effort local health endpoints (any service that publishes one) ───
+# --- 5) Best-effort local health endpoints (any service that publishes one) ---
 for url in \
   http://127.0.0.1:3000/api/health \
   http://127.0.0.1:3100/health \
@@ -149,7 +149,7 @@ for url in \
   fi
 done
 
-# ── 6) Registry hygiene hint (optional; needs psql/node+pg — skipped if unavailable)
+# --- 6) Registry hygiene hint (optional; needs psql/node+pg — skipped if unavailable)
 info "tip: ensure service registries do not persist *.ts.net as instance ids"
 
 if [ "$fail" -ne 0 ]; then
