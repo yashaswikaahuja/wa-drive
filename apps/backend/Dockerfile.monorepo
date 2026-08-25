@@ -2,6 +2,9 @@
 # docker compose: context: .  dockerfile: apps/backend/Dockerfile.monorepo
 FROM node:20-slim AS builder
 WORKDIR /repo
+# git required: baileys (transitive) fetches WhiskeySockets/libsignal-node via git+https
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@10.12.1 --activate
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY tooling ./tooling

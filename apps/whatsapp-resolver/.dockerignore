@@ -1,5 +1,6 @@
-node_modules
-.wwebjs_auth
-.wwebjs_cache
+# Only ignore the app's own install tree — do NOT match dist/node_modules
+# (build-dist vendors @cybercontrol/wa-* there for the image).
+/node_modules
+session
 .env
 *.log

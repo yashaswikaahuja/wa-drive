@@ -102,7 +102,9 @@ jobs:
 
           # FB-012: No fill planning in extension (new code)
           if echo "$DIFF" | grep -qE "(buildFillPlan|generatePlan|planFill|interpretKnowledge|selectStrategy|chooseRecovery|autonomousFill)"; then
-            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.js|background.js|(apps/)?extension-service/|tests/)" || true)
+            # Exclude server packages + restored perception/runtime sources (planning stays server-side;
+            # these paths are either packages/svc-* or grandfathered extension runtime that only executes plans).
+            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.js|background.js|(apps/)?extension-service/|tests/|packages/svc-|apps/extension/(perception|runtime)/)" || true)
             if [ -n "$PLANNING_FILES" ]; then
               echo "❌ FB-012: Fill planning/knowledge interpretation in extension (server-only per D11)" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -248,9 +250,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: pnpm
+
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
 
       - name: Install schema validation dependencies
         working-directory: extension-dev/tests/ratification

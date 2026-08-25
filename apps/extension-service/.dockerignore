@@ -1,3 +1,5 @@
-node_modules
+# Only ignore the app's own install tree — do NOT match dist/node_modules
+# (build-dist vendors @cybercontrol/svc-* there for the image).
+/node_modules
 .env
 *.log

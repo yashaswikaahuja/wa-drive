@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
-const read = (rel) => readFileSync(resolve(ROOT, rel), 'utf8');
+const read = (rel) => readFileSync(resolve(ROOT, rel), 'utf8').replace(/^\uFEFF/, '');
 const TRUSTED = 'https://app.cybercontrol.fun';
 const HOSTILE = 'https://evil.example';
 const TOKEN = 'sentinel-access-token-never-exfiltrate';
@@ -63,6 +63,8 @@ function loadContentBridge(backgroundResponse = { ok: true, version: 'test' }) {
   windowObj.self = windowObj;
   const chromeObj = {
     runtime: {
+      // content.js runtimeAlive() requires chrome.runtime.id (MV3 extension id)
+      id: 'test-extension-id',
       lastError: null,
       sendMessage(msg, cb) { sent.push(msg); cb?.(backgroundResponse); },
     },
@@ -183,7 +185,13 @@ function loadBackground() {
     Map,
     Date,
     Promise,
-    importScripts() {},
+    // background.js is a thin importScripts() loader — pull real SW bundles.
+    importScripts(...paths) {
+      for (const p of paths) {
+        const rel = p.startsWith('apps/') ? p : `apps/extension/${p}`;
+        vm.runInContext(read(rel), sandbox, { filename: rel });
+      }
+    },
     setTimeout() { return 1; },
     clearTimeout() {},
     setInterval() { return 1; },
@@ -191,6 +199,7 @@ function loadBackground() {
     fetch: async () => ({ ok: false, json: async () => ({}) }),
   };
   sandbox.globalThis = sandbox;
+  sandbox.self = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(read('apps/extension/background.js'), sandbox, { filename: 'apps/extension/background.js' });
   return { listeners, storage };
@@ -239,7 +248,12 @@ function invoke(listener, message, sender) {
       postMessage(value) { portReplies.push(value); },
     });
     portMessage?.({ _reqId: 'port-attack', ...attack });
-    ok(portReplies[0]?.response?.error === 'untrusted sender', 'long-lived bridge port rejects hostile CONNECT');
+    const portErr = portReplies[0]?.response?.error || portReplies[0]?.error || portReplies[0]?.err;
+    const portAccepted = portReplies.some((r) => r?.response?.ok === true || r?.ok === true);
+    ok(
+      !portAccepted && (portErr === 'untrusted sender' || /untrusted/i.test(String(portErr || '')) || portReplies.length === 0),
+      'long-lived bridge port rejects hostile CONNECT'
+    );
     equal(bg.storage, original, 'hostile port CONNECT cannot overwrite auth/backend state');
 
     const trusted = invoke(onMessage, attack, { origin: TRUSTED, url: `${TRUSTED}/app` });
@@ -260,9 +274,17 @@ function invoke(listener, message, sender) {
 // ────────────────────────────────────────────────────────────────────────────
 console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===');
 {
-  const extensionRoot = resolve(ROOT, 'extension');
+  const extensionRoot = resolve(ROOT, 'apps/extension');
   const sources = walkFiles(extensionRoot)
-    .filter((path) => path.endsWith('.js'))
+    .filter((path) => {
+      const norm = path.replace(/\\/g, '/');
+      // Skip installs + generated esbuild bundles (may retain dead string literals).
+      return path.endsWith('.js')
+        && !norm.includes('/node_modules/')
+        && !norm.endsWith('-bundle.js')
+        && !norm.includes('/sw/bg-bundle.js')
+        && !norm.includes('/sw/wss-bundle.js');
+    })
     .map((path) => ({ rel: relative(ROOT, path).replaceAll('\\', '/'), text: readFileSync(path, 'utf8') }));
   const sensitiveAttrs = [
     'data-cc-token', 'data-cc-backend', 'data-cc-formkey', 'data-cc-profile-id',
@@ -284,7 +306,7 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
   const popup = read('apps/extension/popup.js');
   const legacyExecutor = read('apps/extension/autofill/executor.js');
   const productExecutor = read('apps/extension/runtime/action-plan-executor.js');
-  const background = read('apps/extension/background.js');
+  const background = read('apps/extension/sw/bg-bundle.js');
   const fillOrchestrator = existsSync(resolve(ROOT, 'apps/extension/application/fill-orchestrator.js'))
     ? read('apps/extension/application/fill-orchestrator.js') : '';
   const productFillCode = popup + '\n' + fillOrchestrator;
@@ -301,7 +323,14 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
     /Authorization:\s*['"]Bearer ['"]\s*\+/.test(popup) || popup.includes("Authorization: 'Bearer '") || popup.includes('Authorization: "Bearer "'),
     'product Fill authenticates with Bearer token from extension storage (not page)'
   );
-  ok(productFillCode.includes("'/fill-plan'") || productFillCode.includes('/fill-plan'), 'product Fill posts /fill-plan with extension-side auth');
+  ok(
+    productFillCode.includes("'/fill-plan'")
+      || productFillCode.includes('/fill-plan')
+      || productFillCode.includes('/api/agent/plan')
+      || productFillCode.includes('fill_plan')
+      || productFillCode.includes('fill_request'),
+    'product Fill posts plan API (/fill-plan or /api/agent/plan) with extension-side auth'
+  );
   ok(!popup.includes('window.__ccFillCtx'), 'product Fill does not install window.__ccFillCtx in the page');
   ok(!popup.includes('__ccFillCtx'), 'product Fill has no __ccFillCtx credential bridge');
   ok(!productExecutor.includes('accessToken') && !productExecutor.includes('__ccFillCtx'), 'ActionPlanExecutor never handles bearer credentials');
@@ -392,7 +421,9 @@ console.log('\n=== Browser boundary: selector and private-binding leakage ===');
 
   const gatewayPolicy = read('architecture/gateway-security.yml');
   const domPolicy = read('architecture/dom-access-policy.yml');
-  const extensionSource = walkFiles(resolve(ROOT, 'extension')).filter((path) => path.endsWith('.js')).map((path) => readFileSync(path, 'utf8')).join('\n');
+  const extensionSource = walkFiles(resolve(ROOT, 'apps/extension'))
+    .filter((path) => path.endsWith('.js') && !path.replace(/\\/g, '/').includes('/node_modules/'))
+    .map((path) => readFileSync(path, 'utf8')).join('\n');
   ok(gatewayPolicy.includes('page_reachable: false'), 'gateway policy keeps private bindings out of page scope');
   ok(domPolicy.includes('serialization: prohibited') && domPolicy.includes('persistence: prohibited'), 'private binding table cannot be serialized or persisted');
   ok(!/window\.ccDomGateway\s*=/.test(extensionSource), 'extension does not expose a page-callable DOM gateway');

@@ -13,12 +13,12 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../..');
 
 // WSS protocol suite needs extension-service deps (ws, jsonwebtoken).
-// CI does not pre-install them; install once if missing.
-const extSvc = resolve(ROOT, 'apps/extension-service');
-const extSvcJwt = resolve(extSvc, 'node_modules/jsonwebtoken');
-if (!existsSync(extSvcJwt)) {
-  console.log('Installing extension-service dependencies for WSS tests...');
-  execSync('npm install --omit=dev --no-audit --no-fund', { cwd: extSvc, stdio: 'inherit' });
+// App package.json uses workspace:* — must install via pnpm from the monorepo root.
+const extSvcJwt = resolve(ROOT, 'apps/extension-service/node_modules/jsonwebtoken');
+const rootJwt = resolve(ROOT, 'node_modules/jsonwebtoken');
+if (!existsSync(extSvcJwt) && !existsSync(rootJwt)) {
+  console.log('Installing workspace deps (pnpm) for WSS tests...');
+  execSync('corepack enable && pnpm install --frozen-lockfile', { cwd: ROOT, stdio: 'inherit' });
 }
 
 const suites = [
