@@ -28,20 +28,49 @@ jobs:
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
+      - name: Mint Tailscale auth key via OAuth
+        id: mint
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TS_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TS_OAUTH_CLIENT_ID" ] || [ -z "$TS_OAUTH_SECRET" ]; then
+            echo "::error::TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET required to mint a node auth key"
+            exit 1
+          fi
+          TAGS_JSON='[]'
+          if [ -n "$TS_TAG" ]; then
+            TAGS_JSON=$(printf '%s' "$TS_TAG" | jq -Rc 'split(",")')
+          fi
+          BODY=$(jq -n --argjson tags "$TAGS_JSON" '{
+            capabilities: { devices: { create: {
+              reusable: false, ephemeral: false, preauthorized: true, tags: $tags
+            }}},
+            expirySeconds: 3600
+          }')
+          RESP=$(curl -fsS -u "${TS_OAUTH_CLIENT_ID}:${TS_OAUTH_SECRET}" \
+            -H 'Content-Type: application/json' \
+            -d "$BODY" \
+            'https://api.tailscale.com/api/v2/tailnet/-/keys')
+          KEY=$(printf '%s' "$RESP" | jq -r '.key // empty')
+          if [ -z "$KEY" ] || [ "$KEY" = "null" ]; then
+            echo "::error::failed to mint Tailscale auth key: $RESP"
+            exit 1
+          fi
+          echo "::add-mask::$KEY"
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+
       - name: Join Tailscale on VM
         env:
           HOST_IP: ${{ inputs.host_ip }}
           USER: ${{ secrets.DEPLOY_SSH_USER }}
-          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_AUTHKEY: ${{ steps.mint.outputs.key }}
           TS_HOSTNAME: ${{ inputs.hostname }}
           TS_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          if [ -z "$TS_AUTHKEY" ]; then
-            echo "::error::TS_AUTHKEY secret is empty"
-            exit 1
-          fi
-          # Wait for SSH (VM may still be booting after reset)
           for i in $(seq 1 30); do
             if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i ~/.ssh/id_ed25519 \
               "$USER@$HOST_IP" 'echo ssh-ok' 2>/dev/null; then
@@ -55,10 +84,9 @@ jobs:
           set -euo pipefail
           command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
           sudo systemctl enable --now tailscaled || true
-          # Give networking a moment after reboot
           sleep 5
           if [ -n "${TS_TAG}" ]; then
-            sudo tailscale up --auth-key="${TS_AUTHKEY}?ephemeral=false&preauthorized=true" \
+            sudo tailscale up --auth-key="${TS_AUTHKEY}" \
               --advertise-tags="${TS_TAG}" --hostname="${TS_HOSTNAME}" --reset
           else
             sudo tailscale up --auth-key="${TS_AUTHKEY}" --hostname="${TS_HOSTNAME}" --reset
