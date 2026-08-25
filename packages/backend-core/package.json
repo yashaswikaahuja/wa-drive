@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/**/*.test.js"
+    "test": "node ../../tooling/run-dist-node-tests.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

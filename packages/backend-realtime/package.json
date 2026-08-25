@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
-  "scripts": { "build": "tsc -p tsconfig.json", "test": "node --test dist/**/*.test.js" },
+  "scripts": { "build": "tsc -p tsconfig.json", "test": "node ../../tooling/run-dist-node-tests.mjs" },
   "dependencies": {
     "@cybercontrol/backend-core": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
