@@ -1,0 +1,68 @@
+name: Fix WA Tailscale (one-off)
+
+# One-off: join a WhatsApp VM to the tailnet using repo TS_AUTHKEY,
+# SSHing over the VM's public IP with DEPLOY_SSH_KEY (after gcloud installs that key).
+on:
+  workflow_dispatch:
+    inputs:
+      host_ip:
+        description: "Public IP of the WA VM (gcloud NAT IP)"
+        type: string
+        required: true
+      hostname:
+        description: "Tailscale hostname to advertise"
+        type: string
+        default: cybercontrol-wa-2
+      tag:
+        description: "Optional Tailscale tag (e.g. tag:cybercontrol). Empty = no tags."
+        type: string
+        default: tag:cybercontrol
+
+jobs:
+  join:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Join Tailscale on VM
+        env:
+          HOST_IP: ${{ inputs.host_ip }}
+          USER: ${{ secrets.DEPLOY_SSH_USER }}
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_HOSTNAME: ${{ inputs.hostname }}
+          TS_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TS_AUTHKEY" ]; then
+            echo "::error::TS_AUTHKEY secret is empty"
+            exit 1
+          fi
+          # Wait for SSH (VM may still be booting after reset)
+          for i in $(seq 1 30); do
+            if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i ~/.ssh/id_ed25519 \
+              "$USER@$HOST_IP" 'echo ssh-ok' 2>/dev/null; then
+              break
+            fi
+            echo "waiting for ssh ($i)..."
+            sleep 10
+          done
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST_IP" \
+            "TS_AUTHKEY=$(printf %q "$TS_AUTHKEY") TS_HOSTNAME=$(printf %q "$TS_HOSTNAME") TS_TAG=$(printf %q "$TS_TAG") bash -s" <<'REMOTE'
+          set -euo pipefail
+          command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
+          sudo systemctl enable --now tailscaled || true
+          # Give networking a moment after reboot
+          sleep 5
+          if [ -n "${TS_TAG}" ]; then
+            sudo tailscale up --auth-key="${TS_AUTHKEY}?ephemeral=false&preauthorized=true" \
+              --advertise-tags="${TS_TAG}" --hostname="${TS_HOSTNAME}" --reset
+          else
+            sudo tailscale up --auth-key="${TS_AUTHKEY}" --hostname="${TS_HOSTNAME}" --reset
+          fi
+          sudo tailscale status | head -20
+          echo "tailscale join OK as ${TS_HOSTNAME}"
+          REMOTE
