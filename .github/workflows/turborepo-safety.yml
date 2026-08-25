@@ -30,7 +30,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 22+: @cc/mapper tests use --experimental-strip-types
+          node-version: 22
 
       - name: Run turborepo safety check
         run: node tooling/turborepo-safety-check.mjs
@@ -47,7 +48,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install workspace
@@ -79,7 +80,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Install workspace
