@@ -71,7 +71,7 @@ jobs:
         run: |
           set -e
           docker run -d --name cc-smoke --network host \
-            -e DATABASE_URL="postgresql://cc:ccpass@localhost:5432/cybercontrol" \
+            -e DATABASE_URL="postgresql://cc:ccpass@127.0.0.1:5432/cybercontrol" \
             -e JWT_SECRET=ci -e JWT_REFRESH_SECRET=ci -e WA_SECRET=ci \
             -e PORT=3000 \
             cybercontrol-backend:ci

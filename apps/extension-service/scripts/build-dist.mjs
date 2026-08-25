@@ -1,12 +1,9 @@
 /**
  * Build a runnable dist/ for extension-service.
  *
- * Unlike the old path-rewriting approach (`../packages/svc-*`), the service
- * imports engines via package names (`@cybercontrol/svc-*`). This script:
- *   1. Copies the service entry + src + migrations
- *   2. Vendors workspace svc packages under dist/node_modules/@cybercontrol/
- * so `node dist/index.js` works without depending on monorepo folder layout
- * (same idea as publishing those packages to npm later).
+ * Vendors @cybercontrol/svc-* under dist/vendor/ (NOT dist/node_modules) so
+ * Docker COPY is not stripped by .dockerignore node_modules rules.
+ * package.json uses file:./vendor/<pkg> so `npm install` in the image resolves.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,6 +13,7 @@ import { findRepoRoot } from '../../../tooling/find-repo-root.mjs';
 const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repositoryRoot = findRepoRoot(serviceRoot);
 const distRoot = path.join(serviceRoot, 'dist');
+const vendorRoot = path.join(distRoot, 'vendor');
 
 const serviceDirectories = ['src', 'migrations'];
 const serviceFiles = ['index.js', 'package.json'];
@@ -36,7 +34,7 @@ const copyFilter = (source) => {
 };
 
 fs.rmSync(distRoot, { recursive: true, force: true });
-fs.mkdirSync(distRoot, { recursive: true });
+fs.mkdirSync(vendorRoot, { recursive: true });
 
 for (const file of serviceFiles) {
   const src = path.join(serviceRoot, file);
@@ -51,18 +49,15 @@ for (const directory of serviceDirectories) {
   });
 }
 
-const scopedRoot = path.join(distRoot, 'node_modules', '@cybercontrol');
-fs.mkdirSync(scopedRoot, { recursive: true });
-
 for (const packageName of packageNames) {
   const source = path.join(repositoryRoot, 'packages', packageName);
-  const destination = path.join(scopedRoot, packageName);
+  const destination = path.join(vendorRoot, packageName);
   if (!fs.existsSync(source)) {
     throw new Error(`missing workspace package: ${source}`);
   }
   fs.cpSync(source, destination, { recursive: true, filter: copyFilter });
 
-  // Rewrite workspace: deps inside vendored packages to sibling file: links
+  // Sibling file: links inside vendor/
   const nestedPkgPath = path.join(destination, 'package.json');
   const nestedPkg = JSON.parse(fs.readFileSync(nestedPkgPath, 'utf8'));
   for (const [name, version] of Object.entries(nestedPkg.dependencies || {})) {
@@ -78,29 +73,19 @@ for (const packageName of packageNames) {
   fs.writeFileSync(nestedPkgPath, JSON.stringify(nestedPkg, null, 2) + '\n');
 }
 
-// Ensure package.json in dist declares the same workspace package names
-// (resolved from the vendored node_modules above when not using pnpm).
 const distPkgPath = path.join(distRoot, 'package.json');
 const distPkg = JSON.parse(fs.readFileSync(distPkgPath, 'utf8'));
-distPkg.dependencies = {
-  ...distPkg.dependencies,
-  '@cybercontrol/svc-ai-mapper': 'file:./node_modules/@cybercontrol/svc-ai-mapper',
-  '@cybercontrol/svc-fill-planner': 'file:./node_modules/@cybercontrol/svc-fill-planner',
-  '@cybercontrol/svc-knowledge': 'file:./node_modules/@cybercontrol/svc-knowledge',
-  '@cybercontrol/svc-learning': 'file:./node_modules/@cybercontrol/svc-learning',
-  '@cybercontrol/svc-runtime': 'file:./node_modules/@cybercontrol/svc-runtime',
-  '@cybercontrol/svc-session': 'file:./node_modules/@cybercontrol/svc-session',
-  '@cybercontrol/svc-teach': 'file:./node_modules/@cybercontrol/svc-teach',
-};
-// Strip workspace: protocol — not valid outside pnpm monorepo
-for (const [name, version] of Object.entries(distPkg.dependencies)) {
+const nextDeps = { ...(distPkg.dependencies || {}) };
+for (const packageName of packageNames) {
+  nextDeps[`@cybercontrol/${packageName}`] = `file:./vendor/${packageName}`;
+}
+for (const [name, version] of Object.entries(nextDeps)) {
   if (typeof version === 'string' && version.startsWith('workspace:')) {
-    if (!name.startsWith('@cybercontrol/svc-')) {
-      delete distPkg.dependencies[name];
-    }
+    delete nextDeps[name];
   }
 }
+distPkg.dependencies = nextDeps;
 fs.writeFileSync(distPkgPath, JSON.stringify(distPkg, null, 2) + '\n');
 
 console.log(`Built extension-service dist: ${distRoot}`);
-console.log(`Vendored ${packageNames.length} @cybercontrol/svc-* packages into dist/node_modules`);
+console.log(`Vendored ${packageNames.length} packages into dist/vendor`);

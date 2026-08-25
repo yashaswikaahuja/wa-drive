@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 WORKDIR /app
-# Copy full dist first — package.json uses file:./wa-* workspace vendoring.
+# Copy full dist first — package.json uses file:./vendor/wa-* workspace vendoring.
 COPY dist/ ./
 RUN npm install --omit=dev
 RUN mkdir -p /app/session /app/.wwebjs_auth

@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
-const EXT = resolve(ROOT, 'extension');
+const EXT = resolve(ROOT, 'apps/extension');
 
 let passed = 0;
 let failed = 0;

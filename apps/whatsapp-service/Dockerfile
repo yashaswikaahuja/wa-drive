@@ -4,7 +4,7 @@ FROM node:20-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-# Copy full dist first — package.json uses file:./wa-* workspace vendoring.
+# Copy full dist first — package.json uses file:./vendor/wa-* workspace vendoring.
 COPY dist/ ./
 RUN npm install --omit=dev
 RUN mkdir -p /app/sessions /app/upload_queue

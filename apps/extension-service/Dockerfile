@@ -3,7 +3,7 @@
 FROM node:20-alpine
 RUN apk add --no-cache git
 WORKDIR /app
-# Copy full dist first — package.json uses file:./svc-* workspace vendoring.
+# Copy full dist first — package.json uses file:./vendor/svc-* workspace vendoring.
 COPY dist/ ./
 RUN npm install --omit=dev
 EXPOSE 3300
