@@ -7,7 +7,8 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "build:bundles": "node build-all.mjs"
+    "build:bundles": "node build-all.mjs",
+    "safety": "node tooling/turborepo-safety-check.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

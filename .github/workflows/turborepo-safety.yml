@@ -1,0 +1,92 @@
+name: Turborepo Safety
+
+# Keeps the monorepo honest: apps/* + packages/* layout, no CI-only discrete
+# restores under apps/extension, workflows point at apps/, and turbo still builds.
+#
+# Prefer fixing workflows/runners over copying old extension/ trees back.
+
+on:
+  push:
+    branches: [master, main, 'debug/**', 'feat/**']
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: turborepo-safety-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Fast layout / path guards (no install) ───────────────────────────────
+  layout-guards:
+    name: Layout & CI path guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run turborepo safety check
+        run: node tooling/turborepo-safety-check.mjs
+
+  # ── Turbo build smoke (filtered, after guards) ───────────────────────────
+  turbo-build:
+    name: Turbo build smoke
+    needs: layout-guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Turbo build (backend + extension-service + wa packages)
+        run: >
+          pnpm exec turbo run build
+          --filter=cybercontrol-backend...
+          --filter=cybercontrol-extension-service...
+          --filter=cybercontrol-whatsapp-service...
+          --filter=@cc/shared
+          --filter=@cc/background
+          --filter=@cybercontrol/svc-fill-planner
+          --filter=@cybercontrol/wa-service
+
+  # ── Full turbo build + test ──────────────────────────────────────────────
+  turbo-pipeline:
+    name: Turbo build + test (workspace)
+    needs: layout-guards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+
+      - name: Turbo build (all)
+        run: pnpm exec turbo run build
+
+      - name: Turbo test (all)
+        run: pnpm exec turbo run test
+        # Package test scripts are allowed to be no-ops; failures still block.
+        continue-on-error: false
+
+      - name: Turbo typecheck (all)
+        run: pnpm exec turbo run typecheck
+        continue-on-error: true
+        # typecheck is advisory until every package has a real typecheck script
