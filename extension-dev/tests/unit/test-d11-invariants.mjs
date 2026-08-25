@@ -3,7 +3,7 @@
  *
  * Enforces the finalized Discussion 11 fill architecture:
  * 1. No framework names in knowledge/perception code (D03/D11)
- * 2. AI credentials only in extension-service/ (D11 Phase 4.3)
+ * 2. AI credentials only in apps/extension-service/ (D11 Phase 4.3)
  * 3. No planning/strategy in extension runtime (D11 Suspended Mode)
  * 4. Server planner must not use browser-private bindings (D11 ADR)
  * 5. Knowledge promotion must be multi-dimensional (D11 ADR 10)
@@ -15,7 +15,7 @@ import { join, relative, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..', '..');
+const ROOT = join(__dirname, '..', '..', '..');
 let passed = 0;
 let failed = 0;
 
@@ -42,7 +42,7 @@ function walkJs(dir) {
   function recurse(d) {
     for (const entry of readdirSync(d, { withFileTypes: true })) {
       const path = join(d, entry.name);
-      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+      if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== 'dist') {
         recurse(path);
       } else if (entry.isFile() && entry.name.endsWith('.js')) {
         results.push(path);
@@ -64,18 +64,22 @@ const FRAMEWORK_PATTERN_LOOSE = /(react.?select|angular.?material|mat.?select|pr
 
 // These directories must be framework-free
 const FRAMEWORK_FREE_DIRS = [
-  'extension/perception',
-  'extension-service',
+  'apps/extension/perception',
+  'apps/extension-service',
+  'packages/svc-fill-planner',
+  'packages/svc-ai-mapper',
+  'packages/svc-knowledge',
 ];
 
 // Grandfathered exceptions (existing production code)
 const FRAMEWORK_GRANDFATHERED = [
-  'extension-service/routes/agent.js',    // Legacy selector-bearing AI (EXC-006)
-  'extension-service/routes/mappings.js', // Legacy mapping routes (pre-D11)
-  'extension-service/routes/training.js', // Legacy training routes (pre-D11)
-  'extension/perception/adapters/',       // Existing adapter detection (Phase 3.2 frozen)
-  'extension/perception/node-factory.js', // Widget tag detection (Phase 3.1)
-  'extension/perception/widget-classifier.js', // Phase 3.2 frozen — uses CSS class heuristics
+  'apps/extension-service/src/http/routes/agent.js',    // Legacy selector-bearing AI (EXC-006)
+  'apps/extension-service/src/http/routes/mappings.js', // Legacy mapping routes (pre-D11)
+  'apps/extension-service/src/http/routes/training.js', // Legacy training routes (pre-D11)
+  'apps/extension-service/dist/',                      // Build output mirrors src (skip)
+  'apps/extension/perception/adapters/',       // Existing adapter detection (Phase 3.2 frozen)
+  'apps/extension/perception/node-factory.js', // Widget tag detection (Phase 3.1)
+  'apps/extension/perception/widget-classifier.js', // Phase 3.2 frozen — uses CSS class heuristics
 ];
 
 for (const dir of FRAMEWORK_FREE_DIRS) {
@@ -103,23 +107,23 @@ for (const dir of FRAMEWORK_FREE_DIRS) {
 }
 
 // Positive: perception exists and is framework-free
-assert(existsSync(join(ROOT, 'extension/perception/widget-classifier.js')),
+assert(existsSync(join(ROOT, 'apps/extension/perception/widget-classifier.js')),
   'Widget classifier exists');
 
 // ═══════════════════════════════════════════════════════════════════════
-// INVARIANT 2: AI credentials only in extension-service/
+// INVARIANT 2: AI credentials only in apps/extension-service/
 // ═══════════════════════════════════════════════════════════════════════
 
-console.log('\n  Invariant 2: AI credentials only in extension-service/');
+console.log('\n  Invariant 2: AI credentials only in apps/extension-service/');
 
 const AI_KEY_PATTERNS = /(groq_key|groqKey|openai_key|anthropic_key|ai_key|llm_key|GROQ_API_KEY|OPENAI_API_KEY)/i;
 
 // Extension code must not reference AI key storage/retrieval
 // (llm-client.js is grandfathered — it receives the key but doesn't store it)
 const EXTENSION_DIRS_FOR_AI_CHECK = [
-  'extension/perception',
-  'extension/runtime',
-  'extension/capabilities',
+  'apps/extension/perception',
+  'apps/extension/runtime',
+  'apps/extension/capabilities',
 ];
 
 for (const dir of EXTENSION_DIRS_FOR_AI_CHECK) {
@@ -142,9 +146,9 @@ const PLANNING_PATTERNS = /\b(buildFillPlan|generatePlan|planFill|interpretKnowl
 
 // Extension runtime must not contain these (popup.js/background.js are grandfathered)
 const RUNTIME_DIRS = [
-  'extension/perception',
-  'extension/runtime',
-  'extension/capabilities',
+  'apps/extension/perception',
+  'apps/extension/runtime',
+  'apps/extension/capabilities',
 ];
 
 for (const dir of RUNTIME_DIRS) {
@@ -167,13 +171,13 @@ const PRIVATE_BINDING_PATTERNS = /\b(querySelector|querySelectorAll|css_selector
 
 // These server modules must be browser-free
 const SERVER_PLANNER_FILES = [
-  'extension-service/fill-planner.js',
-  'extension-service/mapping-engine.js',
-  'extension-service/plan-builder.js',
-  'extension-service/dependency-resolver.js',
-  'extension-service/semantic-mapper.js',
-  'extension-service/derivation-engine.js',
-  'extension-service/confidence-evaluator.js',
+  'packages/svc-fill-planner/src/fill-planner.js',
+  'packages/svc-fill-planner/src/mapping-engine.js',
+  'packages/svc-fill-planner/src/plan-builder.js',
+  'packages/svc-fill-planner/src/dependency-resolver.js',
+  'packages/svc-ai-mapper/src/semantic-mapper.js',
+  'packages/svc-fill-planner/src/derivation-engine.js',
+  'packages/svc-ai-mapper/src/confidence-evaluator.js',
 ];
 
 for (const file of SERVER_PLANNER_FILES) {
@@ -248,7 +252,7 @@ if (ownership) {
 
 console.log('\n  Invariant 6: Knowledge store alignment');
 
-const knowledgeStore = readFile('extension-service/knowledge-store.js');
+const knowledgeStore = readFile('packages/svc-knowledge/src/knowledge-store.js');
 assert(knowledgeStore !== null, 'knowledge-store.js exists');
 if (knowledgeStore) {
   // Must have field_mapping kind (D11 Cold-Start produces these)

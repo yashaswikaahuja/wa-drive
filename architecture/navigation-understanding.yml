@@ -409,7 +409,7 @@ design_answers:
     never: "retarget to a different node_id by heuristics"
 
   q16_fixtures_and_ci:
-    unit_contract: "extension-dev/tests/test-phase35-navigation-governance.mjs (CHECK-013)"
+    unit_contract: "extension-dev/tests/unit/test-phase35-navigation-governance.mjs (CHECK-013)"
     fixtures: "architecture/fixtures/navigation/"
     semantic_checks: "AJV ActionPlan validation, outcome table, classifier rules, origin policy, privacy path"
     browser_runtime: "out of scope until implementation issue after architecture re-review"

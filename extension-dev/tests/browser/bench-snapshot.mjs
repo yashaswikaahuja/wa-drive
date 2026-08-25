@@ -270,16 +270,16 @@ async function runNodeBenchmark() {
 
   const { createRequire } = await import('node:module');
   const require = createRequire(import.meta.url);
-  const { buildSnapshot } = require(resolve(ROOT, 'extension/perception/snapshot-builder.js'));
-  const { RevisionManager } = require(resolve(ROOT, 'extension/perception/revision-manager.js'));
-  const { BindingRegistry } = require(resolve(ROOT, 'extension/perception/binding-registry.js'));
-  const canonicalHash = require(resolve(ROOT, 'extension/perception/canonical-hash.js'));
-  const nodeFactory = require(resolve(ROOT, 'extension/perception/node-factory.js'));
-  const edgeFactory = require(resolve(ROOT, 'extension/perception/edge-factory.js'));
-  const contextDiscovery = require(resolve(ROOT, 'extension/perception/context-discovery.js'));
-  const privacyFilter = require(resolve(ROOT, 'extension/perception/privacy-filter.js'));
-  const widgetClassifier = require(resolve(ROOT, 'extension/perception/widget-classifier.js'));
-  const validator = require(resolve(ROOT, 'extension/perception/validator.js'));
+  const { buildSnapshot } = require(resolve(ROOT, 'apps/extension/perception/snapshot-builder.js'));
+  const { RevisionManager } = require(resolve(ROOT, 'apps/extension/perception/revision-manager.js'));
+  const { BindingRegistry } = require(resolve(ROOT, 'apps/extension/perception/binding-registry.js'));
+  const canonicalHash = require(resolve(ROOT, 'apps/extension/perception/canonical-hash.js'));
+  const nodeFactory = require(resolve(ROOT, 'apps/extension/perception/node-factory.js'));
+  const edgeFactory = require(resolve(ROOT, 'apps/extension/perception/edge-factory.js'));
+  const contextDiscovery = require(resolve(ROOT, 'apps/extension/perception/context-discovery.js'));
+  const privacyFilter = require(resolve(ROOT, 'apps/extension/perception/privacy-filter.js'));
+  const widgetClassifier = require(resolve(ROOT, 'apps/extension/perception/widget-classifier.js'));
+  const validator = require(resolve(ROOT, 'apps/extension/perception/validator.js'));
 
   await validator.initValidator({ schema: null });
 

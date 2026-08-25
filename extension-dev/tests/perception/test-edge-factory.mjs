@@ -12,8 +12,8 @@ const {
   deriveEdges,
   makeEdge,
   stableEdgeId,
-} = require(resolve(ROOT, 'extension/perception/edge-factory.js'));
-const { validateGraphInvariants } = require(resolve(ROOT, 'extension/perception/graph-invariants.js'));
+} = require(resolve(ROOT, 'apps/extension/perception/edge-factory.js'));
+const { validateGraphInvariants } = require(resolve(ROOT, 'apps/extension/perception/graph-invariants.js'));
 
 let passed = 0;
 let failed = 0;

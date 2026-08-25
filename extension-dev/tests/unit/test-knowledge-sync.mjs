@@ -362,14 +362,14 @@ console.log('\n── Seed Generation Tests ──');
 import { execSync } from 'node:child_process';
 
 test('seed-knowledge.js generates 124 records', () => {
-  const out = execSync('node extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../..'), encoding: 'utf8' });
+  const out = execSync('node apps/extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../../..'), encoding: 'utf8' });
   const data = JSON.parse(out);
   assert.equal(data.count, 124);
   assert(data.records.length === 124);
 });
 
 test('seed includes English semantic aliases (Phase 2.8)', () => {
-  const out = execSync('node extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../..'), encoding: 'utf8' });
+  const out = execSync('node apps/extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../../..'), encoding: 'utf8' });
   const data = JSON.parse(out);
   const engAliases = data.records.filter(r => r.kind === 'synonym' && r.tags.includes('english'));
   assert(engAliases.length === 12, `Expected 12 English synonym records, got ${engAliases.length}`);
@@ -379,7 +379,7 @@ test('seed includes English semantic aliases (Phase 2.8)', () => {
 });
 
 test('seed includes file upload mappings (Phase 2.8)', () => {
-  const out = execSync('node extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../..'), encoding: 'utf8' });
+  const out = execSync('node apps/extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../../..'), encoding: 'utf8' });
   const data = JSON.parse(out);
   const fileMaps = data.records.filter(r => r.kind === 'field_mapping' && r.tags.includes('file_upload'));
   assert.equal(fileMaps.length, 9);
@@ -389,7 +389,7 @@ test('seed includes file upload mappings (Phase 2.8)', () => {
 });
 
 test('seed includes education field aliases (Phase 2.8)', () => {
-  const out = execSync('node extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../..'), encoding: 'utf8' });
+  const out = execSync('node apps/extension-service/seed-knowledge.js', { cwd: resolve(__dirname, '../../..'), encoding: 'utf8' });
   const data = JSON.parse(out);
   const eduMaps = data.records.filter(r => r.kind === 'field_mapping' && r.tags.includes('education'));
   assert.equal(eduMaps.length, 16);

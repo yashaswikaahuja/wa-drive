@@ -6,7 +6,7 @@
  */
 import cron from 'node-cron';
 import { pool, OWNER_ALERT_PHONE } from '@cybercontrol/backend-core';
-import { computeHealth } from '@cybercontrol/backend-owner';
+import { computeHealth } from './cafeHealth.js';
 import { notifyWhatsApp } from '@cybercontrol/backend-communications';
 
 const ALERT_COOLDOWN_MS = 7 * 24 * 3600 * 1000; // don't re-alert the same café within a week

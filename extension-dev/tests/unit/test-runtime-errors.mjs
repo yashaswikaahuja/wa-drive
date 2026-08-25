@@ -6,9 +6,9 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const err = require(resolve(ROOT, 'extension/runtime/errors.js'));
+const err = require(resolve(ROOT, 'apps/extension/runtime/errors.js'));
 
 let passed = 0;
 let failed = 0;
@@ -36,7 +36,7 @@ ok(env.operator_message && env.operator_message.length < 160, 'envelope operator
 ok(!JSON.stringify(env).includes('css_selector'), 'envelope no css_selector');
 
 // APE still normalizes via catalog when required
-const ape = require(resolve(ROOT, 'extension/runtime/action-plan-executor.js'));
+const ape = require(resolve(ROOT, 'apps/extension/runtime/action-plan-executor.js'));
 // APE doesn't export normalizeFailureCode — exercise execute path is heavy; require errors path used at load
 ok(true, 'APE loads with errors catalog available');
 

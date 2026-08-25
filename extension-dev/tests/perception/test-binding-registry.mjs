@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for extension/perception/binding-registry.js
+ * Unit tests for apps/extension/perception/binding-registry.js
  */
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const { BindingRegistry } = require(resolve(ROOT, 'extension/perception/binding-registry.js'));
+const { BindingRegistry } = require(resolve(ROOT, 'apps/extension/perception/binding-registry.js'));
 
 let passed = 0;
 let failed = 0;

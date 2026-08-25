@@ -8,8 +8,8 @@ import { createRequire } from 'node:module';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const { applyPageDelta, validateComposedGraph } = require(resolve(ROOT, 'extension/perception/delta-apply.js'));
-const { validateGraphInvariants } = require(resolve(ROOT, 'extension/perception/graph-invariants.js'));
+const { applyPageDelta, validateComposedGraph } = require(resolve(ROOT, 'apps/extension/perception/delta-apply.js'));
+const { validateGraphInvariants } = require(resolve(ROOT, 'apps/extension/perception/graph-invariants.js'));
 
 let passed = 0;
 let failed = 0;

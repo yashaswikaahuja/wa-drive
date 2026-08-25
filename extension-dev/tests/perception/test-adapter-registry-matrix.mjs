@@ -13,12 +13,12 @@ import { readFileSync } from 'node:fs';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const { classifyWidget } = require(resolve(ROOT, 'extension/perception/widget-classifier.js'));
+const { classifyWidget } = require(resolve(ROOT, 'apps/extension/perception/widget-classifier.js'));
 const {
   ADAPTER_CONTRACTS,
   getAdapterContract,
   getAllAdapterIds,
-} = require(resolve(ROOT, 'extension/perception/adapters/index.js'));
+} = require(resolve(ROOT, 'apps/extension/perception/adapters/index.js'));
 
 let passed = 0;
 let failed = 0;

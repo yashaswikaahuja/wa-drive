@@ -8,7 +8,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
 const read = (rel) => readFileSync(resolve(ROOT, rel), 'utf8');
 const jread = (rel) => JSON.parse(read(rel));

@@ -8,7 +8,7 @@ import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { strict as assert } from 'node:assert';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const FIXTURES_DIR = resolve(ROOT, 'architecture/fixtures/him');
 
 let passed = 0;

@@ -405,7 +405,7 @@ adrs:
 
 verification:
   check_id: CHECK-015
-  suite: "extension-dev/tests/test-phase37-hardening-governance.mjs"
+  suite: "extension-dev/tests/unit/test-phase37-hardening-governance.mjs"
 
 design_answers:
   q_why: "Maintainability and ownership clarity as the repo grows"

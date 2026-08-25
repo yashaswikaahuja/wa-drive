@@ -11,8 +11,8 @@ import { createRequire } from 'node:module';
 import { createServer } from 'node:http';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-const require = createRequire(resolve(ROOT, 'extension-service/package.json'));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
+const require = createRequire(resolve(ROOT, 'apps/extension-service/package.json'));
 
 // Set JWT_SECRET for auth tests
 process.env.JWT_SECRET = 'test-secret-for-wss-phase-34';
@@ -22,10 +22,10 @@ const { WebSocket } = require('ws');
 
 // Dynamic import of ES modules
 import { pathToFileURL } from 'node:url';
-const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(pathToFileURL(resolve(ROOT, 'extension-service/ws-server.js')).href);
-const { createHandlers } = await import(pathToFileURL(resolve(ROOT, 'extension-service/ws-handlers.js')).href);
-const { ReconnectManager, DEFAULTS } = require(resolve(ROOT, 'extension/runtime/reconnect-manager.js'));
-const { WsClient, STATE } = require(resolve(ROOT, 'extension/runtime/ws-client.js'));
+const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/server.js')).href);
+const { createHandlers } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/handlers.js')).href);
+const { ReconnectManager, DEFAULTS } = require(resolve(ROOT, 'apps/extension/runtime/reconnect-manager.js'));
+const { WsClient, STATE } = require(resolve(ROOT, 'apps/extension/runtime/ws-client.js'));
 
 let passed = 0;
 let failed = 0;

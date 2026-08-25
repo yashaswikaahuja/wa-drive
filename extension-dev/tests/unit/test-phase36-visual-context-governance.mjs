@@ -8,7 +8,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const read = (rel) => readFileSync(resolve(ROOT, rel), 'utf8');
 const jread = (rel) => JSON.parse(read(rel));
 

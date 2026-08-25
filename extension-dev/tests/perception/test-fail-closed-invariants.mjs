@@ -20,8 +20,8 @@ function ok(cond, msg) {
 console.log('\n=== Fail-closed graph invariants (P1-01) ===');
 
 // Module must exist on disk
-ok(existsSync(resolve(ROOT, 'extension/perception/graph-invariants.js')), 'graph-invariants.js present');
-ok(existsSync(resolve(ROOT, 'extension/perception/delta-apply.js')), 'delta-apply.js present');
+ok(existsSync(resolve(ROOT, 'apps/extension/perception/graph-invariants.js')), 'graph-invariants.js present');
+ok(existsSync(resolve(ROOT, 'apps/extension/perception/delta-apply.js')), 'delta-apply.js present');
 
 // Bundle lists must include graph-invariants
 const browserLists = [
@@ -36,9 +36,9 @@ for (const rel of browserLists) {
 
 // Validator fail-closed when CcGraphInvariants missing and require path broken
 {
-  const validatorPath = resolve(ROOT, 'extension/perception/validator.js');
+  const validatorPath = resolve(ROOT, 'apps/extension/perception/validator.js');
   // Isolate: load validator in a fresh require cache after temporarily masking module
-  const giPath = resolve(ROOT, 'extension/perception/graph-invariants.js');
+  const giPath = resolve(ROOT, 'apps/extension/perception/graph-invariants.js');
   // Direct unit: call validateGraphInvariants with global stripped
   const { validateGraphInvariants, initValidator } = require(validatorPath);
   await initValidator({ schema: null });
@@ -71,7 +71,7 @@ for (const rel of browserLists) {
 
 // When module loads, normal validation works
 {
-  const { validateGraphInvariants } = require(resolve(ROOT, 'extension/perception/graph-invariants.js'));
+  const { validateGraphInvariants } = require(resolve(ROOT, 'apps/extension/perception/graph-invariants.js'));
   const r = validateGraphInvariants({
     contexts: [{ context_id: 'ctx.a', access: 'accessible' }],
     nodes: {

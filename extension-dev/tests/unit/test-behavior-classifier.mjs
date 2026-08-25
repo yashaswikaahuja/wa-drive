@@ -7,10 +7,10 @@
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 
 // Import the behavior classifier (ESM)
-const classifierPath = resolve(ROOT, 'extension-service/behavior-classifier.js');
+const classifierPath = resolve(ROOT, 'packages/svc-runtime/src/behavior-classifier.js');
 const { classifyFormBehavior, isHardEvidenceType } = await import(
   pathToFileURL(classifierPath).href
 );

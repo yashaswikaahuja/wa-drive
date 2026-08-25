@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 let passed = 0;
 let failed = 0;
 
@@ -238,10 +238,10 @@ ok(boundaries.includes('FB-008') && boundaries.includes('FB-009'), 'boundaries d
 ok(constitution.includes('phase_3_0_boundary:'), 'constitution contains the frozen Phase 3 boundary');
 ok(verification.includes('CHECK-008') && verification.includes('CHECK-009'), 'verification registers Phase 3 contract and DOM checks');
 ok(verification.includes('CHECK-010'), 'verification registers adversarial schema conformance');
-ok(verification.includes('CHECK-011'), 'verification registers permanent extension/browser security regressions');
+ok(verification.includes('CHECK-011'), 'verification registers permanent apps/extension/browser security regressions');
 ok(workflow.includes('run-conformance.mjs'), 'CI runs adversarial schema conformance');
 ok(workflow.includes('extension-security:'), 'CI defines a dedicated extension security job');
-ok(workflow.includes('extension-dev/tests/security/run.mjs'), 'CI runs the permanent extension/browser security suite');
+ok(workflow.includes('extension-dev/tests/security/run.mjs'), 'CI runs the permanent apps/extension/browser security suite');
 ok(gatewaySecurity.includes('security_regression_policy:'), 'gateway policy requires security regression coverage before issue closure');
 ok(protocol.includes('phase_3_compatibility:'), 'protocol reserves negotiated Page IR compatibility');
 ok(!workflow.includes('| Phase 2 | 🔄 Active |'), 'CI no longer reports Phase 2 as active');

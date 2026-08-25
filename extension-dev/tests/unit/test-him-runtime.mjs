@@ -11,21 +11,21 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
 
 // ─── Load modules ────────────────────────────────────────────────────────────
 // Server engine (ESM) — use file:// URL for Windows compatibility
-const himEngine = await import(pathToFileURL(resolve(ROOT, 'extension-service/him-engine.js')).href);
+const himEngine = await import(pathToFileURL(resolve(ROOT, 'packages/svc-runtime/src/him-engine.js')).href);
 
 // Extension state machine (IIFE/CJS wrapper)
-const stateMachine = require(resolve(ROOT, 'extension/runtime/him-state-machine.js'));
+const stateMachine = require(resolve(ROOT, 'apps/extension/runtime/him-state-machine.js'));
 
 // Extension sensitive field (IIFE/CJS wrapper)
-const sensitive = require(resolve(ROOT, 'extension/runtime/him-sensitive.js'));
+const sensitive = require(resolve(ROOT, 'apps/extension/runtime/him-sensitive.js'));
 
 // Extension bridge (CJS)
-const bridgeMod = require(resolve(ROOT, 'extension/runtime/him-bridge.js'));
+const bridgeMod = require(resolve(ROOT, 'apps/extension/runtime/him-bridge.js'));
 
 // ─── Test harness ────────────────────────────────────────────────────────────
 let passed = 0;

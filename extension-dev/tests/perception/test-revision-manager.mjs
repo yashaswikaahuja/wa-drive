@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for extension/perception/revision-manager.js
+ * Unit tests for apps/extension/perception/revision-manager.js
  */
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const { RevisionManager, generateId } = require(resolve(ROOT, 'extension/perception/revision-manager.js'));
+const { RevisionManager, generateId } = require(resolve(ROOT, 'apps/extension/perception/revision-manager.js'));
 
 let passed = 0;
 let failed = 0;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for extension/perception/widget-classifier.js
+ * Unit tests for apps/extension/perception/widget-classifier.js
  * Includes W-P1-01..05 remediations (#136)
  */
 import { resolve } from 'node:path';
@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
 const { classifyWidget, widgetAffordances, DETECTOR_PRIORITY } = require(
-  resolve(ROOT, 'extension/perception/widget-classifier.js')
+  resolve(ROOT, 'apps/extension/perception/widget-classifier.js')
 );
 
 let passed = 0;

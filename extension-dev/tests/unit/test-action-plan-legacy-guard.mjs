@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 let passed = 0;
 let failed = 0;
 function ok(c, m) {
@@ -16,9 +16,9 @@ function ok(c, m) {
 
 console.log('\n=== ActionPlan legacy path guard ===');
 
-const popup = readFileSync(resolve(ROOT, 'extension/popup.js'), 'utf8');
-const orchestrator = readFileSync(resolve(ROOT, 'extension/application/fill-orchestrator.js'), 'utf8');
-const exec = readFileSync(resolve(ROOT, 'extension/runtime/action-plan-executor.js'), 'utf8');
+const popup = readFileSync(resolve(ROOT, 'apps/extension/popup.js'), 'utf8');
+const orchestrator = readFileSync(resolve(ROOT, 'apps/extension/application/fill-orchestrator.js'), 'utf8');
+const exec = readFileSync(resolve(ROOT, 'apps/extension/runtime/action-plan-executor.js'), 'utf8');
 
 // Product fill inject list lives in fill-orchestrator (MIG-POPUP-01)
 const productStart = orchestrator.indexOf('PRODUCT_PATH_SCRIPTS');

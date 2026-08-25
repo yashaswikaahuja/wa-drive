@@ -790,9 +790,6 @@ importers:
       '@cybercontrol/backend-core':
         specifier: workspace:*
         version: link:../backend-core
-      '@cybercontrol/backend-owner':
-        specifier: workspace:*
-        version: link:../backend-owner
       node-cron:
         specifier: ^3.0.3
         version: 3.0.3

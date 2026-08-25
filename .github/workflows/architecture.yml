@@ -83,7 +83,7 @@ jobs:
           MATCHES_010=$(echo "$DIFF" | grep -iE "fetch\(.*(openrouter|groq|chat/completions|anthropic)" || true)
           if [ -n "$MATCHES_010" ]; then
             # Check if the violation is in an allowed file
-            FORBIDDEN_010=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.js" | grep -v "background.js" | grep -v "extension-service/" || true)
+            FORBIDDEN_010=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.js" | grep -v "background.js" | grep -vE "(apps/)?extension-service/" || true)
             if [ -n "$FORBIDDEN_010" ]; then
               echo "❌ FB-010: New AI/LLM call outside server or grandfathered files" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -102,7 +102,7 @@ jobs:
 
           # FB-012: No fill planning in extension (new code)
           if echo "$DIFF" | grep -qE "(buildFillPlan|generatePlan|planFill|interpretKnowledge|selectStrategy|chooseRecovery|autonomousFill)"; then
-            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.js|background.js|extension-service/|tests/)" || true)
+            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.js|background.js|(apps/)?extension-service/|tests/)" || true)
             if [ -n "$PLANNING_FILES" ]; then
               echo "❌ FB-012: Fill planning/knowledge interpretation in extension (server-only per D11)" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -165,20 +165,23 @@ jobs:
           echo "## Dependency Direction" >> $GITHUB_STEP_SUMMARY
           VIOLATIONS=0
 
-          # Check for actual code references (exclude comments)
-          for f in extension/shared/*.js; do
+          # Check for actual code references (exclude comments).
+          # Monorepo: shared/drivers live under apps/extension/ (and packages/cc-*).
+          shopt -s nullglob
+          for f in apps/extension/shared/*.js packages/cc-shared/src/*.js; do
             if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|drivers|popup)|import .*(autofill|drivers|popup)"; then
               echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
             fi
           done
 
-          for f in extension/drivers/*.js; do
+          for f in apps/extension/drivers/*.js packages/cc-drivers/src/*.js; do
             if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|popup)|import .*(autofill|popup)"; then
               echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
             fi
           done
+          shopt -u nullglob
 
           if [ $VIOLATIONS -eq 0 ]; then
             echo "✅ Dependency directions correct" >> $GITHUB_STEP_SUMMARY
@@ -190,7 +193,7 @@ jobs:
       # ── Phase 3.0 architecture contracts ──────────────────────────
       - name: "CHECK-008: Phase 3 architecture contracts"
         if: always()
-        run: node extension-dev/tests/test-phase3-governance.mjs
+        run: node extension-dev/tests/unit/test-phase3-governance.mjs
 
       # ── New structural DOM access boundary ────────────────────────
       - name: "CHECK-009: DOM access boundary"
@@ -207,7 +210,7 @@ jobs:
       # ── Discussion 11 architecture invariants ─────────────────────
       - name: "CHECK-012: D11 architecture invariants"
         if: always()
-        run: node extension-dev/tests/test-d11-invariants.mjs
+        run: node extension-dev/tests/unit/test-d11-invariants.mjs
 
       # ── Architecture health report ─────────────────────────────────
       - name: "CHECK-004: Architecture report"

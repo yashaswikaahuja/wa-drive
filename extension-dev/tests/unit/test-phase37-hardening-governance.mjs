@@ -8,7 +8,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const read = (rel) => readFileSync(resolve(ROOT, rel), 'utf8');
 const jread = (rel) => JSON.parse(read(rel));
 
@@ -96,7 +96,7 @@ ok(contract.includes('MUST NOT invent new public FailureCodes')
 ok(/Mass file moves|mass reorg|Does NOT implement mass/i.test(contract), 'explicitly no mass reorg in this issue');
 
 // Boundary diagram + freeze-file split procedure (#165 P1 rem)
-ok(/boundary_diagram:|BROWSER EXTENSION|eyes \+ hands|EXTENSION-SERVICE/i.test(contract),
+ok(/boundary_diagram:|BROWSER EXTENSION|eyes \+ hands|apps/extension-service/i.test(contract),
   'extension↔server boundary diagram present');
 ok(contract.includes('freeze_file_internal_split') || contract.includes('frozen_files path'),
   'freeze-file internal split procedure present');
@@ -166,10 +166,10 @@ const vis = read('architecture/visual-context.yml');
 ok(vis.includes('status: frozen'), 'visual-context contract frozen');
 
 // Perception product path must not import autofill mapper (current tree check)
-const percIndex = read('extension/perception/index.js');
+const percIndex = read('apps/extension/perception/index.js');
 ok(!percIndex.includes('autofill/mapper') && !percIndex.includes('autofill\\mapper'),
   'perception index does not import autofill mapper');
-const ape = read('extension/runtime/action-plan-executor.js');
+const ape = read('apps/extension/runtime/action-plan-executor.js');
 ok(!ape.includes('autofill/mapper'), 'APE does not import autofill mapper');
 
 console.log('\n=== Registry / ownership / verification ===');

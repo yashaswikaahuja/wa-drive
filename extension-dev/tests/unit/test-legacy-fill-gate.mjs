@@ -7,7 +7,8 @@ import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const gate = require(join(__dirname, '../../../apps/extension/shared/legacy-fill-gate.js'));
+// Prefer package source (CJS). apps/extension is "type":"module" so IIFE+module.exports won't load via require.
+const gate = require(join(__dirname, '../../../packages/cc-shared/src/legacy-fill-gate.js'));
 
 let passed = 0;
 let failed = 0;
@@ -41,13 +42,14 @@ assert(denied.error.includes('side-panel'), 'denied mentions product path');
 
 // Source wiring (Phase 0 must keep gates on production entry points)
 import { readFileSync, existsSync } from 'fs';
-const root = join(__dirname, '../..');
-const bg = readFileSync(join(root, 'extension/background.js'), 'utf8');
-const popup = readFileSync(join(root, 'extension/popup.js'), 'utf8');
-const svc = readFileSync(join(root, 'extension-service/index.js'), 'utf8');
-assert(bg.includes('legacy-fill-gate.js'), 'background imports legacy-fill-gate');
-assert(bg.includes('isLegacyClientFillAllowed'), 'background defines gate helper');
-assert(bg.includes('legacy_client_fill_disabled') || bg.includes('legacyClientFillDenied'), 'background uses deny path');
+const root = join(__dirname, '../../..');
+// SW entry is thin; gate lives in the bundled service worker (and @cc/shared).
+const bg = readFileSync(join(root, 'apps/extension/sw/bg-bundle.js'), 'utf8');
+const popup = readFileSync(join(root, 'apps/extension/popup.js'), 'utf8');
+const svc = readFileSync(join(root, 'apps/extension-service/index.js'), 'utf8');
+assert(bg.includes('isLegacyClientFillAllowed'), 'bg-bundle defines gate helper');
+assert(bg.includes('legacy_client_fill_disabled') || bg.includes('legacyClientFillDenied'), 'bg-bundle uses deny path');
+assert(existsSync(join(root, 'packages/cc-shared/src/legacy-fill-gate.js')), 'shared package has legacy-fill-gate');
 assert(popup.includes('allowLegacyClientFill'), 'popup reads allowLegacyClientFill');
 assert(popup.includes('applyAgentVisibility'), 'popup hides agent when gated');
 assert(popup.includes('/extension/health'), 'popup checks service health for deploy lock');

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests for extension/perception/delta-emitter.js
+ * Unit tests for apps/extension/perception/delta-emitter.js
  * Phase 3.3 — Perception Completion
  */
 import { resolve } from 'node:path';
@@ -10,9 +10,9 @@ import { setTimeout as sleep } from 'node:timers/promises';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const { DeltaEmitter, COMPACTION_THRESHOLD } = require(resolve(ROOT, 'extension/perception/delta-emitter.js'));
-const { RevisionManager } = require(resolve(ROOT, 'extension/perception/revision-manager.js'));
-const { BindingRegistry } = require(resolve(ROOT, 'extension/perception/binding-registry.js'));
+const { DeltaEmitter, COMPACTION_THRESHOLD } = require(resolve(ROOT, 'apps/extension/perception/delta-emitter.js'));
+const { RevisionManager } = require(resolve(ROOT, 'apps/extension/perception/revision-manager.js'));
+const { BindingRegistry } = require(resolve(ROOT, 'apps/extension/perception/binding-registry.js'));
 
 let passed = 0;
 let failed = 0;
@@ -69,7 +69,7 @@ const mockSnapshotBuilder = {
 const mockCanonicalHash = {
   computeCanonicalHash: async (s) => s.canonical_hash,
 };
-const { validateGraphInvariants } = require(resolve(ROOT, 'extension/perception/graph-invariants.js'));
+const { validateGraphInvariants } = require(resolve(ROOT, 'apps/extension/perception/graph-invariants.js'));
 const mockValidator = {
   validateDelta: (d) => ({ valid: true, errors: null }),
   validateSnapshot: (s) => ({ valid: true, errors: null }),

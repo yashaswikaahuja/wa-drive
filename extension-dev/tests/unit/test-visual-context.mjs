@@ -6,9 +6,9 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const vc = require(resolve(ROOT, 'extension/perception/visual-context.js'));
+const vc = require(resolve(ROOT, 'apps/extension/perception/visual-context.js'));
 
 let passed = 0;
 let failed = 0;

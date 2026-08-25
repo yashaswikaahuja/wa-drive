@@ -3,7 +3,7 @@
  * CHECK-011: Permanent Extension & Browser Boundary Security Regression Suite.
  *
  * This suite is intentionally independent from issue-specific verification and
- * must remain a required CI job. Every fixed extension/browser security defect
+ * must remain a required CI job. Every fixed apps/extension/browser security defect
  * should add a regression here (or in a child suite invoked here) before its
  * issue is closed.
  */
@@ -70,7 +70,7 @@ function loadContentBridge(backgroundResponse = { ok: true, version: 'test' }) {
   const sandbox = { window: windowObj, chrome: chromeObj, console };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(read('extension/content.js'), sandbox, { filename: 'extension/content.js' });
+  vm.runInContext(read('apps/extension/content.js'), sandbox, { filename: 'apps/extension/content.js' });
   return {
     fire(event) { messageHandler?.(event); },
     sent,
@@ -192,7 +192,7 @@ function loadBackground() {
   };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  vm.runInContext(read('extension/background.js'), sandbox, { filename: 'extension/background.js' });
+  vm.runInContext(read('apps/extension/background.js'), sandbox, { filename: 'apps/extension/background.js' });
   return { listeners, storage };
 }
 function invoke(listener, message, sender) {
@@ -281,12 +281,12 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
   const storageOffenders = sources.filter(({ text }) => pageStorageSecret.test(text)).map(({ rel }) => rel);
   ok(storageOffenders.length === 0, `credentials are never placed in page-readable local/session storage${storageOffenders.length ? ` (${storageOffenders.join(', ')})` : ''}`);
 
-  const popup = read('extension/popup.js');
-  const legacyExecutor = read('extension/autofill/executor.js');
-  const productExecutor = read('extension/runtime/action-plan-executor.js');
-  const background = read('extension/background.js');
-  const fillOrchestrator = existsSync(resolve(ROOT, 'extension/application/fill-orchestrator.js'))
-    ? read('extension/application/fill-orchestrator.js') : '';
+  const popup = read('apps/extension/popup.js');
+  const legacyExecutor = read('apps/extension/autofill/executor.js');
+  const productExecutor = read('apps/extension/runtime/action-plan-executor.js');
+  const background = read('apps/extension/background.js');
+  const fillOrchestrator = existsSync(resolve(ROOT, 'apps/extension/application/fill-orchestrator.js'))
+    ? read('apps/extension/application/fill-orchestrator.js') : '';
   const productFillCode = popup + '\n' + fillOrchestrator;
 
   // APE-IMPL-P1-04: product Fill credentials stay in extension storage / Bearer headers.
@@ -315,7 +315,7 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
   ok(popup.includes('window.__ccUndoSnapshot'), 'undo values stay in isolated-world memory via executeScript');
   ok(background.includes('window.__ccFillRecords') || background.includes('__ccFillRecords'), 'background reads fill records from isolated-world memory');
 
-  const manifest = JSON.parse(read('extension/manifest.json'));
+  const manifest = JSON.parse(read('apps/extension/manifest.json'));
   ok((manifest.content_scripts || []).every((entry) => !entry.world || entry.world === 'ISOLATED'), 'content scripts never run in MAIN world');
   ok(!/world\s*:\s*['"]MAIN['"][\s\S]{0,500}__ccFillCtx/.test(popup), 'credential context is never installed by a MAIN-world injection');
   ok(!/world\s*:\s*['"]MAIN['"][\s\S]{0,500}accessToken/.test(popup), 'accessToken is never installed by a MAIN-world injection');
@@ -331,7 +331,7 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
 // SEC-001/002/003 still protect the bridge and credentials regardless of host.
 console.log('\n=== SEC-004: host permissions allow fixture/dev access (owner-panel later) ===');
 {
-  const manifest = JSON.parse(read('extension/manifest.json'));
+  const manifest = JSON.parse(read('apps/extension/manifest.json'));
   const approved = [
     'http://*/*',
     'https://*/*',
