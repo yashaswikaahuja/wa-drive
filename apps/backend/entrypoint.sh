@@ -14,13 +14,14 @@ else
   retry_delay=2
 
   while [ $retry_count -lt $max_retries ]; do
-    # Use dynamic import so ESM package layouts from `pnpm deploy` still resolve.
-    if node --input-type=module -e "
-      import pg from 'pg';
+    # pnpm deploy may nest pg; createRequire from CWD package.json finds it.
+    if node --input-type=commonjs -e "
+      const { createRequire } = require('module');
+      const { pathToFileURL } = require('url');
+      const req = createRequire(pathToFileURL(process.cwd() + '/package.json').href);
+      const pg = req('pg');
       const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-      const client = await pool.connect();
-      client.release();
-      await pool.end();
+      pool.connect().then((c) => { c.release(); return pool.end(); }).then(() => process.exit(0)).catch((e) => { console.error('[DB Check]', e.message); process.exit(1); });
     "; then
       echo "[Entrypoint] ✓ Database is ready!"
       break
