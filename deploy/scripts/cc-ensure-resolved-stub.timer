@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically re-assert systemd-resolved stub (Tailscale race guard)
+Documentation=https://github.com/yashaswikaahuja/wa-drive/issues/299
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

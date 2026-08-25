@@ -71,10 +71,46 @@ TAGFLAG=""
 [ -n "$TS_TAG" ] && TAGFLAG="--advertise-tags=$TS_TAG"
 case "$TS_KEY" in
   tskey-client-*) echo "joining via OAuth client${TS_TAG:+ (tag $TS_TAG)}"
-                  tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$WA_NAME" ;;
+                  tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$WA_NAME" --accept-dns=true ;;
   *)              echo "joining via auth key${TS_TAG:+ (tag $TS_TAG)}"
-                  tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$WA_NAME" ;;
+                  tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$WA_NAME" --accept-dns=true ;;
 esac
+
+# 3b. Private DNS contract (#299): systemd-resolved stub + Tailscale MagicDNS via resolved.
+#     Prevents Tailscale from overwriting /etc/resolv.conf (foreign mode) which breaks
+#     container resolution of *.ts.net names (e.g. cybercontrol-db.<tailnet>.ts.net).
+if [ "$HAS_SYSTEMD" = "1" ]; then
+  systemctl enable --now systemd-resolved || true
+  ln -sfn /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+  cat > /usr/local/sbin/cc-ensure-resolved-stub.sh <<'STUB'
+#!/bin/bash
+set -euo pipefail
+TARGET=/run/systemd/resolve/stub-resolv.conf
+[ -e "$TARGET" ] || systemctl start systemd-resolved || true
+if [ ! -L /etc/resolv.conf ] || [ "$(readlink -f /etc/resolv.conf)" != "$(readlink -f "$TARGET")" ]; then
+  cp -a /etc/resolv.conf "/etc/resolv.conf.bak.$(date +%s)" 2>/dev/null || true
+  ln -sfn "$TARGET" /etc/resolv.conf
+  systemctl restart systemd-resolved || true
+fi
+command -v tailscale >/dev/null && tailscale set --accept-dns=true || true
+STUB
+  chmod 0755 /usr/local/sbin/cc-ensure-resolved-stub.sh
+  cat > /etc/systemd/system/cc-ensure-resolved-stub.service <<'UNIT'
+[Unit]
+Description=Ensure systemd-resolved stub resolv.conf (Tailscale MagicDNS via resolved)
+After=network-online.target systemd-resolved.service tailscaled.service
+Wants=systemd-resolved.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cc-ensure-resolved-stub.sh
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now cc-ensure-resolved-stub.service
+  /usr/local/sbin/cc-ensure-resolved-stub.sh || true
+fi
 
 # 4. deploy user (docker group) + CD public key
 id deploy >/dev/null 2>&1 || useradd -m -s /bin/bash deploy

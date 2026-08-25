@@ -1,0 +1,124 @@
+name: Service connectivity (private DNS)
+
+# Topology-driven regression gate for #299.
+# Discovers hosts from deployment variables (any *HOSTS / instance pool vars).
+# Applies the same private-DNS contract + runtime checks to every discovered host —
+# backend, extension, WA workers, or future server types.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+  push:
+    paths:
+      - 'deploy/scripts/cc-ensure-resolved-stub.*'
+      - 'deploy/scripts/apply-private-dns-contract.sh'
+      - 'deploy/scripts/check-service-connectivity.sh'
+      - 'deploy/scripts/provision-wa-instance.sh'
+      - 'deploy/scripts/add-wa-shard.sh'
+      - 'deploy/compose/**'
+      - '.github/workflows/service-connectivity.yml'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/_deploy.yml'
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      hosts: ${{ steps.parse.outputs.hosts }}
+    steps:
+      - id: parse
+        env:
+          # Pass through common topology vars; also accept a single CONNECTIVITY_HOSTS override.
+          CONNECTIVITY_HOSTS: ${{ vars.CONNECTIVITY_HOSTS }}
+          WA_HOSTS: ${{ vars.WA_HOSTS }}
+          WA_INSTANCES: ${{ vars.WA_INSTANCES }}
+          BACKEND_HOSTS: ${{ vars.BACKEND_HOSTS }}
+          EXT_HOSTS: ${{ vars.EXT_HOSTS }}
+          EXECUTION_HOSTS: ${{ vars.EXECUTION_HOSTS }}
+          SERVICE_HOSTS: ${{ vars.SERVICE_HOSTS }}
+        run: |
+          set -euo pipefail
+          # Union every non-empty host list. Prefer CONNECTIVITY_HOSTS if set as explicit topology.
+          raw=""
+          append() {
+            local v="$1"
+            [ -z "$v" ] && return 0
+            raw="${raw:+$raw,}$v"
+          }
+          if [ -n "${CONNECTIVITY_HOSTS:-}" ]; then
+            raw="$CONNECTIVITY_HOSTS"
+          else
+            append "${WA_HOSTS:-}"
+            append "${WA_INSTANCES:-}"
+            append "${BACKEND_HOSTS:-}"
+            append "${EXT_HOSTS:-}"
+            append "${EXECUTION_HOSTS:-}"
+            append "${SERVICE_HOSTS:-}"
+          fi
+          if [ -z "$raw" ]; then
+            echo "::error::No topology hosts configured. Set repo variable CONNECTIVITY_HOSTS (csv of tailnet names) or WA_HOSTS/BACKEND_HOSTS/…"
+            echo "hosts=[]" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          json=$(printf '%s' "$raw" | tr ',' '\n' | sed 's/[[:space:]]//g' | grep -v '^$' | sort -u | jq -R . | jq -cs .)
+          echo "hosts=$json" >> "$GITHUB_OUTPUT"
+          echo "Discovered hosts: $json"
+
+  check:
+    needs: discover
+    if: ${{ needs.discover.outputs.hosts != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJSON(needs.discover.outputs.hosts) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Join tailnet (ephemeral, OAuth)
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:cybercontrol
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Upload contract + check scripts
+        env:
+          HOST: ${{ matrix.host }}
+          USER: ${{ secrets.DEPLOY_SSH_USER }}
+        run: |
+          set -euo pipefail
+          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
+            deploy/scripts/cc-ensure-resolved-stub.sh \
+            deploy/scripts/cc-ensure-resolved-stub.service \
+            deploy/scripts/cc-ensure-resolved-stub.timer \
+            deploy/scripts/apply-private-dns-contract.sh \
+            deploy/scripts/check-service-connectivity.sh \
+            "$USER@$HOST:/tmp/"
+
+      - name: Apply private DNS contract + run connectivity checks
+        env:
+          HOST: ${{ matrix.host }}
+          USER: ${{ secrets.DEPLOY_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          sudo mkdir -p /usr/local/sbin /opt/cybercontrol-docker/scripts
+          sudo cp /tmp/cc-ensure-resolved-stub.sh /usr/local/sbin/cc-ensure-resolved-stub.sh
+          sudo chmod 0755 /usr/local/sbin/cc-ensure-resolved-stub.sh
+          sudo cp /tmp/cc-ensure-resolved-stub.service /tmp/cc-ensure-resolved-stub.timer /etc/systemd/system/
+          sudo cp /tmp/cc-ensure-resolved-stub.sh /tmp/cc-ensure-resolved-stub.service /tmp/cc-ensure-resolved-stub.timer \
+            /tmp/apply-private-dns-contract.sh /tmp/check-service-connectivity.sh \
+            /opt/cybercontrol-docker/scripts/
+          sudo chmod 0755 /opt/cybercontrol-docker/scripts/*.sh
+          # Logical id = short hostname (any future server type)
+          sudo LOGICAL_INSTANCE_ID="$(hostname -s)" bash /opt/cybercontrol-docker/scripts/apply-private-dns-contract.sh
+          sudo bash /opt/cybercontrol-docker/scripts/check-service-connectivity.sh
+          REMOTE

@@ -1,0 +1,13 @@
+[Unit]
+Description=Ensure systemd-resolved stub resolv.conf (Tailscale MagicDNS via resolved)
+Documentation=https://github.com/yashaswikaahuja/wa-drive/issues/299
+After=network-online.target systemd-resolved.service tailscaled.service
+Wants=systemd-resolved.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cc-ensure-resolved-stub.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
