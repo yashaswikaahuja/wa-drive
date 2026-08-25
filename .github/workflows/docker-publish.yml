@@ -16,9 +16,9 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Throwaway Postgres so the freshly-built image can actually BOOT in CI before we push it.
-    # Catches "compiles but crashes on start" failures (e.g. a new lib missing a system dep)
-    # at build time instead of on the VM at deploy time.
+    # Throwaway Postgres for IMAGE SMOKE ONLY — not production cybercontrol-db.
+    # Production DATABASE_URL comes from GitHub Environment secrets at deploy time
+    # (hostname cybercontrol-db on the tailnet). Never bake local/prod URLs into the image.
     services:
       postgres:
         image: postgres:15
