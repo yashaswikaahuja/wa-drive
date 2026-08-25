@@ -10,9 +10,10 @@
  *   CC_TRUSTED_ONLY_TYPES        => object
  */
 
-// Local Vite defaults. Prod app origin comes from injectable globals so this package
-// is not locked to one company domain:
+// Local Vite defaults + prod app origin. Default PUBLIC_DOMAIN matches
+// backend-core / frontend / landing. Override via:
 //   __CC_APP_ORIGIN / __CC_PUBLIC_DOMAIN / __CC_TRUSTED_FRONTEND_ORIGINS
+const DEFAULT_PUBLIC_DOMAIN = 'cybercontrol.fun';
 function resolveTrustedFrontendOrigins() {
   if (Array.isArray(globalThis.__CC_TRUSTED_FRONTEND_ORIGINS) && globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.length) {
     return globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.slice();
@@ -26,8 +27,11 @@ function resolveTrustedFrontendOrigins() {
   try {
     if (typeof globalThis.__CC_APP_ORIGIN === 'string' && globalThis.__CC_APP_ORIGIN) {
       origins.unshift(String(globalThis.__CC_APP_ORIGIN).replace(/\/$/, ''));
-    } else if (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN) {
-      origins.unshift('https://app.' + String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, ''));
+    } else {
+      const pubDomain = (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN)
+        ? String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, '')
+        : DEFAULT_PUBLIC_DOMAIN;
+      origins.unshift('https://app.' + pubDomain);
     }
   } catch (_) { /* ignore */ }
   return origins;
