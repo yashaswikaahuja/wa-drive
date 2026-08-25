@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
-const EXT_DIR = resolve(ROOT, 'extension');
+const EXT_DIR = resolve(ROOT, 'apps/extension');
 const FIXTURES = resolve(ROOT, 'extension-dev/tests/fixtures');
 
 let pass = 0, fail = 0;

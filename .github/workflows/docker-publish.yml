@@ -70,15 +70,18 @@ jobs:
       - name: Smoke-test the built image
         run: |
           set -e
-          docker run -d --name cc-smoke --network host \
-            -e DATABASE_URL="postgresql://cc:ccpass@127.0.0.1:5432/cybercontrol" \
+          # Attach to the job's default bridge network so the GHA Postgres service
+          # is reachable by hostname "postgres" (host networking is unreliable here).
+          docker run -d --name cc-smoke --network bridge \
+            -e DATABASE_URL="postgresql://cc:ccpass@172.17.0.1:5432/cybercontrol" \
             -e JWT_SECRET=ci -e JWT_REFRESH_SECRET=ci -e WA_SECRET=ci \
             -e PORT=3000 \
+            -p 3000:3000 \
             cybercontrol-backend:ci
           echo "waiting for /api/health…"
           ok=0
           for i in $(seq 1 24); do
-            if curl -fsS http://localhost:3000/api/health >/dev/null 2>&1; then ok=1; break; fi
+            if curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1; then ok=1; break; fi
             sleep 5
           done
           if [ "$ok" != "1" ]; then

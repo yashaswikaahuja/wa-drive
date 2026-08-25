@@ -16,7 +16,7 @@ import { createRequire } from 'node:module';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
-const EXT_DIR = resolve(ROOT, 'extension');
+const EXT_DIR = resolve(ROOT, 'apps/extension');
 const require = createRequire(import.meta.url);
 const { applyPageDelta, validateComposedGraph } = require(resolve(ROOT, 'apps/extension/perception/delta-apply.js'));
 const { validateGraphInvariants } = require(resolve(ROOT, 'apps/extension/perception/graph-invariants.js'));

@@ -4,37 +4,38 @@ set -e
 echo "[Entrypoint] Starting CyberControl Backend..."
 echo "[Entrypoint] DATABASE_URL: ${DATABASE_URL:-(not set)}"
 
-# Wait for database with retries
-echo "[Entrypoint] Waiting for database to be ready..."
-max_retries=30
-retry_count=0
-retry_delay=2
+# Wait for database with retries (skip in CI smoke with SKIP_DB_WAIT=1)
+if [ "${SKIP_DB_WAIT:-}" = "1" ]; then
+  echo "[Entrypoint] SKIP_DB_WAIT=1 — not waiting for database"
+else
+  echo "[Entrypoint] Waiting for database to be ready..."
+  max_retries=30
+  retry_count=0
+  retry_delay=2
 
-while [ $retry_count -lt $max_retries ]; do
-  if node -e "
-    const pg = require('pg');
-    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-    pool.connect().then(client => {
+  while [ $retry_count -lt $max_retries ]; do
+    # Use dynamic import so ESM package layouts from `pnpm deploy` still resolve.
+    if node --input-type=module -e "
+      import pg from 'pg';
+      const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+      const client = await pool.connect();
       client.release();
-      process.exit(0);
-    }).catch(err => {
-      console.error('[DB Check]', err.message);
-      process.exit(1);
-    });
-  " 2>/dev/null; then
-    echo "[Entrypoint] ✓ Database is ready!"
-    break
-  fi
-  
-  retry_count=$((retry_count + 1))
-  if [ $retry_count -eq $max_retries ]; then
-    echo "[Entrypoint] ✗ Database connection failed after $max_retries attempts"
-    exit 1
-  fi
-  
-  echo "[Entrypoint] Database not ready, retrying in ${retry_delay}s... ($retry_count/$max_retries)"
-  sleep $retry_delay
-done
+      await pool.end();
+    "; then
+      echo "[Entrypoint] ✓ Database is ready!"
+      break
+    fi
+
+    retry_count=$((retry_count + 1))
+    if [ $retry_count -eq $max_retries ]; then
+      echo "[Entrypoint] ✗ Database connection failed after $max_retries attempts"
+      exit 1
+    fi
+
+    echo "[Entrypoint] Database not ready, retrying in ${retry_delay}s... ($retry_count/$max_retries)"
+    sleep $retry_delay
+  done
+fi
 
 # Run migrations (if migration script exists)
 if [ -f "migrations/run.js" ]; then
