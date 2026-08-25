@@ -117,4 +117,4 @@ assertDateObj('2003/01/02 is YYYY/MM/DD → Jan 2', r11, 2003, 1, 2);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+process.exit(failed > 0 ? 1 : 0);

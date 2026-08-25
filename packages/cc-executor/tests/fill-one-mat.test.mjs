@@ -122,8 +122,9 @@ console.log('\nmat-radio:');
   ok('radio input clicked', clicks.length === 1);
 }
 {
+  // Avoid substring false-positives: 'female'.includes('male') is true under partial match.
   const el = makeEl({ textContent: 'Female', querySelector: () => ({ click: () => {} }) });
-  is('returns 0 on no label match', fillMat(el, 'Male', 'mat-radio'), 0);
+  is('returns 0 on no label match', fillMat(el, 'Other', 'mat-radio'), 0);
 }
 {
   // partial match: label.includes(v)
@@ -134,4 +135,4 @@ console.log('\nmat-radio:');
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+process.exit(failed > 0 ? 1 : 0);
