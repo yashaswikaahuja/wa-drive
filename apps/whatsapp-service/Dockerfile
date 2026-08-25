@@ -4,9 +4,9 @@ FROM node:20-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-COPY dist/package.json ./
-RUN npm install --omit=dev
+# Copy full dist first — package.json uses file:./wa-* workspace vendoring.
 COPY dist/ ./
+RUN npm install --omit=dev
 RUN mkdir -p /app/sessions /app/upload_queue
 VOLUME ["/app/sessions", "/app/upload_queue"]
 EXPOSE 3100
