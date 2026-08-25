@@ -33,16 +33,36 @@ jobs:
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TS_AUTHKEY_FALLBACK: ${{ secrets.TS_AUTHKEY }}
           TS_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           if [ -z "$TS_OAUTH_CLIENT_ID" ] || [ -z "$TS_OAUTH_SECRET" ]; then
-            echo "::error::TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET required to mint a node auth key"
+            echo "::error::TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET required"
             exit 1
           fi
+          # Exchange client credentials for an access token (required by Tailscale OAuth).
+          TOKEN_JSON=$(curl -fsS -X POST 'https://api.tailscale.com/api/v2/oauth/token' \
+            -d "client_id=${TS_OAUTH_CLIENT_ID}" \
+            -d "client_secret=${TS_OAUTH_SECRET}")
+          ACCESS=$(printf '%s' "$TOKEN_JSON" | jq -r '.access_token // empty')
+          if [ -z "$ACCESS" ]; then
+            echo "::error::OAuth token exchange failed: $TOKEN_JSON"
+            exit 1
+          fi
+          echo "::add-mask::$ACCESS"
+          mint() {
+            local body="$1"
+            curl -sS \
+              -H "Authorization: Bearer ${ACCESS}" \
+              -H 'Content-Type: application/json' \
+              -d "$body" \
+              -w '\n%{http_code}' \
+              'https://api.tailscale.com/api/v2/tailnet/-/keys'
+          }
           TAGS_JSON='[]'
           if [ -n "$TS_TAG" ]; then
-            TAGS_JSON=$(printf '%s' "$TS_TAG" | jq -Rc 'split(",")')
+            TAGS_JSON=$(jq -cn --arg t "$TS_TAG" '[ $t ]')
           fi
           BODY=$(jq -n --argjson tags "$TAGS_JSON" '{
             capabilities: { devices: { create: {
@@ -50,14 +70,30 @@ jobs:
             }}},
             expirySeconds: 3600
           }')
-          RESP=$(curl -fsS -u "${TS_OAUTH_CLIENT_ID}:${TS_OAUTH_SECRET}" \
-            -H 'Content-Type: application/json' \
-            -d "$BODY" \
-            'https://api.tailscale.com/api/v2/tailnet/-/keys')
+          OUT=$(mint "$BODY")
+          CODE=$(printf '%s' "$OUT" | tail -n1)
+          RESP=$(printf '%s' "$OUT" | sed '$d')
+          if [ "$CODE" != "200" ]; then
+            echo "tagged mint HTTP $CODE — retrying without tags"
+            BODY=$(jq -n '{
+              capabilities: { devices: { create: {
+                reusable: false, ephemeral: false, preauthorized: true, tags: []
+              }}},
+              expirySeconds: 3600
+            }')
+            OUT=$(mint "$BODY")
+            CODE=$(printf '%s' "$OUT" | tail -n1)
+            RESP=$(printf '%s' "$OUT" | sed '$d')
+          fi
           KEY=$(printf '%s' "$RESP" | jq -r '.key // empty')
           if [ -z "$KEY" ] || [ "$KEY" = "null" ]; then
-            echo "::error::failed to mint Tailscale auth key: $RESP"
-            exit 1
+            if [ -n "$TS_AUTHKEY_FALLBACK" ]; then
+              echo "OAuth mint failed (HTTP $CODE); falling back to TS_AUTHKEY secret"
+              KEY="$TS_AUTHKEY_FALLBACK"
+            else
+              echo "::error::failed to mint Tailscale auth key (HTTP $CODE): $RESP"
+              exit 1
+            fi
           fi
           echo "::add-mask::$KEY"
           echo "key=$KEY" >> "$GITHUB_OUTPUT"
