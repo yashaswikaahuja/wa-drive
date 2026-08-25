@@ -10,13 +10,17 @@
  *   CC_TRUSTED_ONLY_TYPES        => object
  */
 
-const CC_TRUSTED_FRONTEND_ORIGINS = [
-  'https://app.cybercontrol.fun',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-];
+// Defaults keep current product behavior; override via globalThis.__CC_TRUSTED_FRONTEND_ORIGINS
+// (injected at bundle time) so this package does not hard-require one company domain.
+const CC_TRUSTED_FRONTEND_ORIGINS = Array.isArray(globalThis.__CC_TRUSTED_FRONTEND_ORIGINS)
+  ? globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.slice()
+  : [
+      'https://app.cybercontrol.fun',
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+    ];
 
 const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 

@@ -3,16 +3,17 @@
  */
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response } from 'express';
-import { pool, auditLog, logActivity, signAccessToken, signRefreshToken } from '@cybercontrol/backend-core';
+import { pool, auditLog, logActivity, signAccessToken, signRefreshToken, COOKIE_DOMAIN } from '@cybercontrol/backend-core';
 
 // ── HttpOnly refresh cookie (web) ────────────────────────────────────────────
 // The web app moves its refresh token out of JS-readable localStorage into this cookie.
 // The extension is unaffected (keeps token-in-storage + body refresh). /refresh accepts the
 // token from EITHER the cookie (web) OR the body (extension). See deploy/docs/AUTH-COOKIE-MIGRATION.md.
 export const REFRESH_COOKIE = 'cc_refresh';
-// Prod: HttpOnly cookie on shared .cybercontrol.fun domain (app. → api.).
+// Prod: set COOKIE_DOMAIN (e.g. .cybercontrol.fun) for shared app.→api. cookies.
 // Local http://127.0.0.1:5173 → :3000 cannot use Secure + cross-site cookies; body refreshToken is used instead.
 const isLocalHttp = process.env.NODE_ENV !== 'production' || process.env.LOCAL_AUTH === '1';
+const cookieDomain = COOKIE_DOMAIN || process.env.COOKIE_DOMAIN || '';
 const COOKIE_OPTS = isLocalHttp
   ? {
       httpOnly: true,
@@ -25,7 +26,7 @@ const COOKIE_OPTS = isLocalHttp
       httpOnly: true,
       secure: true,
       sameSite: 'lax' as const,
-      domain: '.cybercontrol.fun',
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
       path: '/api/auth',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     };

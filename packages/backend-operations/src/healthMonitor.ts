@@ -5,7 +5,7 @@
  * leader election prevents duplicate alerts across the two backend instances.
  */
 import cron from 'node-cron';
-import { pool, OWNER_ALERT_PHONE } from '@cybercontrol/backend-core';
+import { pool, OWNER_ALERT_PHONE, BRAND_NAME } from '@cybercontrol/backend-core';
 import { computeHealth } from './cafeHealth.js';
 import { notifyWhatsApp } from '@cybercontrol/backend-communications';
 
@@ -37,7 +37,7 @@ function buildDigest(drops: { name: string; score: number; flags: string[] }[]):
   });
   const more = drops.length > 15 ? `\n…and ${drops.length - 15} more.` : '';
   return (
-    `⚡ *CyberControl — health alert*\n\n` +
+    `⚡ *${BRAND_NAME} — health alert*\n\n` +
     `${drops.length} café${drops.length > 1 ? 's' : ''} just dropped to *at-risk*:\n\n` +
     `${lines.join('\n')}${more}\n\n` +
     `Open the owner panel to review and reach out.`

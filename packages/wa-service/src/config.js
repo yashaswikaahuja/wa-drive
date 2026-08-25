@@ -15,7 +15,8 @@ export function loadConfig(env = process.env) {
 
   return {
     PORT: Number(env.WA_PORT || 3100),
-    PARENT_URL: env.PARENT_URL || 'https://api.cybercontrol.fun',
+    // Require PARENT_URL / API_ORIGIN in env — no baked-in prod host.
+    PARENT_URL: env.PARENT_URL || env.API_ORIGIN || '',
     SERVICE_SECRET,
     WA_SECRET: env.WA_SECRET || SERVICE_SECRET,
     AUTH_DIR: env.AUTH_DIR || './sessions',

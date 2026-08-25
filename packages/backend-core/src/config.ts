@@ -33,8 +33,16 @@ export const RESOLVER_URL = process.env.RESOLVER_URL || '';     // e.g. http://c
 // otherwise make an invalid HTTP Authorization header.
 export const RESEND_API_KEY = (process.env.RESEND_API_KEY || '').replace(/[^\x21-\x7E]/g, '');
 export const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || (RESEND_API_KEY ? 'resend' : (SES_FROM ? 'ses' : ''))).toLowerCase();
+// Brand / public origins — injectable so packages stay product-agnostic.
+// Defaults keep current CyberControl prod behavior when env is unset.
+export const BRAND_NAME = process.env.BRAND_NAME || 'CyberControl';
+export const APP_ORIGIN = (process.env.APP_ORIGIN || 'https://app.cybercontrol.fun').replace(/\/$/, '');
+export const API_ORIGIN = (process.env.API_ORIGIN || 'https://api.cybercontrol.fun').replace(/\/$/, '');
+// Overridable cookie domain for shared app.→api. cookies. Default keeps current prod.
+export const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || '.cybercontrol.fun';
+
 // From address used by whichever provider (Resend requires a verified-domain sender; SES a verified identity).
-export const EMAIL_FROM = SES_FROM || 'CyberControl <noreply@cybercontrol.fun>';
+export const EMAIL_FROM = SES_FROM || process.env.EMAIL_FROM || `${BRAND_NAME} <noreply@cybercontrol.fun>`;
 
 export const EMAIL_VERIFY = !!EMAIL_PROVIDER;
 export const PHONE_VERIFY = !!RESOLVER_URL;
@@ -42,41 +50,35 @@ export const OTP_TTL_MS = Number(process.env.OTP_TTL_MS ?? 10 * 60 * 1000);
 export const OTP_MAX_ATTEMPTS = Number(process.env.OTP_MAX_ATTEMPTS ?? 5);
 
 export const WORKER_SECRET = process.env.WORKER_SECRET ?? 'worker-secret';
-export const WA_SERVICE = process.env.WA_SERVICE || 'http://cybercontrol-wa.taild72c71.ts.net:3100';
+// No baked-in prod tailnet host — set WA_SERVICE (or WA_INSTANCES) in env.
+export const WA_SERVICE = process.env.WA_SERVICE || '';
 export const WA_SECRET = process.env.WA_SECRET || 'wa-service-secret-2024';
-// Comma-separated tailnet hostnames of whatsapp-service shards, e.g. "cybercontrol-wa-1,cybercontrol-wa-2".
-// Empty → single-instance mode (routing falls back to WA_SERVICE).
+// Comma-separated whatsapp-service shard hostnames. Empty → single-instance via WA_SERVICE.
 export const WA_INSTANCES = (process.env.WA_INSTANCES || '').split(',').map(s => s.trim()).filter(Boolean);
 // Sticky-shard ruleset tuning:
-//  WA_DEAD_AFTER_MS — an instance is considered dead (off the tailnet) if it hasn't heartbeat within this window.
-//    Failover for a workspace happens ONLY when its assigned instance is dead. Keep generous to avoid flapping.
-//  WA_MIN_HOLD_MS — minimum time a workspace stays pinned to its instance before any *voluntary* move (load
-//    rebalancing). Failover-on-death bypasses this. Default 24h: a logged-in session is not migrated for ≥24h.
+//  WA_DEAD_AFTER_MS — an instance is considered dead if it hasn't heartbeat within this window.
+//  WA_MIN_HOLD_MS — minimum pin time before voluntary rebalance (failover-on-death bypasses).
 export const WA_DEAD_AFTER_MS = Number(process.env.WA_DEAD_AFTER_MS ?? 90_000);
 export const WA_MIN_HOLD_MS = Number(process.env.WA_MIN_HOLD_MS ?? 86_400_000);
 
-export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+// Generic LLM key with vendor-named aliases for backward compatibility.
+export const AI_API_KEY =
+  process.env.AI_API_KEY ||
+  process.env.LLM_API_KEY ||
+  process.env.GROQ_API_KEY ||
+  '';
+export const AI_PROVIDER = (process.env.AI_PROVIDER || process.env.LLM_PROVIDER || 'groq').toLowerCase();
+/** @deprecated Prefer AI_API_KEY — kept as alias for existing imports. */
+export const GROQ_API_KEY = AI_API_KEY;
 
-// Server-side reverse-geocoding key (Google Geocoding API). Used to turn GPS lat/lng captured in the
-// browser into a human address on save — reliable + independent of the browser's referrer-restricted
-// key. Empty → server skips geocoding (stores coords as-is). Never exposed to clients.
+// Server-side reverse-geocoding key (Google Geocoding API). Empty → skip geocoding.
 export const GEOCODE_API_KEY = process.env.GEOCODE_API_KEY || '';
 
 // ── Owner control panel (tailnet-only) ──────────────────────────────────────────
-// The owner API runs on a SEPARATE listener that the public load-balancer does NOT proxy, so it is
-// physically absent from the internet-facing surface. Reach it only over the tailnet.
-//   OWNER_KEY   a shared secret credential (defense-in-depth on top of the tailnet). Sent by the
-//               panel as `x-owner-key`, a Bearer token, or an HTTP Basic password. Empty → API off.
-//   OWNER_PORT  port for the owner listener. 0 (default) DISABLES the owner API entirely.
-//   OWNER_BIND  'auto' (default) → auto-detect this VM's tailscale IP (100.64.0.0/10); or an explicit
-//               IP to override. Falls back to 127.0.0.1 if no tailnet interface is found. Never public.
 export const OWNER_KEY = process.env.OWNER_KEY || '';
 export const OWNER_PORT = Number(process.env.OWNER_PORT ?? 0);
 export const OWNER_BIND = process.env.OWNER_BIND || 'auto';
-// Owner's WhatsApp number for proactive health-drop alerts (daily digest via the resolver).
-// Empty → health monitoring still runs + records state, but sends no WhatsApp (no-op).
 export const OWNER_ALERT_PHONE = (process.env.OWNER_ALERT_PHONE || '').replace(/[^0-9]/g, '');
-// Optional: enables the socket.io Redis adapter so realtime events fan out across multiple backend
-// instances. Empty = single-instance (no adapter, current behavior). e.g. redis://cybercontrol-redis:6379
 export const REDIS_URL = process.env.REDIS_URL || '';
-export const REMOVE_BG_KEY = process.env.REMOVE_BG_API_KEY ?? 'd9f7QFfqAdFuEzt1dXNqvSxP';
+// Never ship a real key in source — empty disables remove.bg.
+export const REMOVE_BG_KEY = process.env.REMOVE_BG_API_KEY || '';

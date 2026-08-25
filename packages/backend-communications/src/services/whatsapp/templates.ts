@@ -1,13 +1,14 @@
 /**
- * WhatsApp message templates — plaintext with WhatsApp formatting (*bold*, _italic_, ```mono```)
- * and emojis, in the CyberControl brand voice. Mirrors services/email/templates.ts so the two
- * channels stay consistent. WhatsApp has no HTML — keep to its markdown + short, scannable lines.
+ * WhatsApp message templates — plaintext with WhatsApp formatting.
+ * Brand/origin from backend-core env (BRAND_NAME, APP_ORIGIN).
  */
+import { APP_ORIGIN, BRAND_NAME } from '@cybercontrol/backend-core';
 
-const BRAND = '⚡ *CyberControl*';
-const APP_URL = 'app.cybercontrol.fun';
+const BRAND = `⚡ *${BRAND_NAME}*`;
+const APP_URL = (() => {
+  try { return new URL(APP_ORIGIN).host; } catch { return APP_ORIGIN.replace(/^https?:\/\//, ''); }
+})();
 
-// One-time verification code (signup + post-login contact verification).
 export function otpMessage(code: string): string {
   return (
     `${BRAND}\n\n` +
@@ -19,7 +20,6 @@ export function otpMessage(code: string): string {
   );
 }
 
-// Greeting after a new account is set up (parity with the welcome email).
 export function welcomeMessage(name?: string | null): string {
   const who = name ? ` ${name.split(' ')[0]}` : '';
   return (
@@ -29,6 +29,6 @@ export function welcomeMessage(name?: string | null): string {
     `1️⃣  Connect your *WhatsApp* number\n` +
     `2️⃣  Link *Google Drive*\n` +
     `3️⃣  Add your *operators* and start processing jobs\n\n` +
-    `Open CyberControl 👉 ${APP_URL}`
+    `Open ${BRAND_NAME} 👉 ${APP_URL}`
   );
 }
