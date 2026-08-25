@@ -5,6 +5,7 @@ name: Turborepo Safety
 #   - NEW apps outside apps/ (or libs outside packages/) FAIL this workflow
 #   - no CI-only discrete restores under apps/extension
 #   - workflows point at apps/; turbo still builds
+#   - private DNS / MagicDNS contract (#299) present + live connectivity on master
 #
 # Prefer fixing workflows/runners over copying old extension/ trees back.
 
@@ -107,3 +108,14 @@ jobs:
           --filter=./apps/backend...
           --filter=./packages/backend-*
         continue-on-error: true
+
+  # ── Private DNS / MagicDNS live gate (#299) — all service hosts ────────────
+  # File-level contract is enforced in layout-guards (turborepo-safety-check.mjs).
+  # On master/main, also run the topology-driven SSH connectivity workflow so
+  # backend / extension / WA / future servers cannot silently lose MagicDNS.
+  private-dns-connectivity:
+    name: Private DNS connectivity (all hosts)
+    needs: layout-guards
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/service-connectivity.yml
+    secrets: inherit

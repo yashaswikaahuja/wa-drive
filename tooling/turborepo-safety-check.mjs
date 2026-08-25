@@ -312,5 +312,54 @@ for (const name of [
   ok(/apps\//.test(text), `${name} references apps/`);
 }
 
+// ── 6. Private DNS / MagicDNS contract (#299) — all service hosts ───────────
+// Role-agnostic: backend, extension, WA workers, future servers. Live SSH checks
+// run in service-connectivity.yml; this gate ensures the contract cannot be deleted.
+console.log('\nPrivate DNS / MagicDNS contract (#299)');
+const privateDnsFiles = [
+  'deploy/scripts/cc-ensure-resolved-stub.sh',
+  'deploy/scripts/cc-ensure-resolved-stub.service',
+  'deploy/scripts/cc-ensure-resolved-stub.timer',
+  'deploy/scripts/apply-private-dns-contract.sh',
+  'deploy/scripts/check-service-connectivity.sh',
+  '.github/workflows/service-connectivity.yml',
+];
+for (const rel of privateDnsFiles) {
+  ok(existsSync(join(ROOT, rel)), `${rel} exists`);
+}
+
+const applyScript = join(ROOT, 'deploy/scripts/apply-private-dns-contract.sh');
+const checkScript = join(ROOT, 'deploy/scripts/check-service-connectivity.sh');
+const connWf = join(ROOT, '.github/workflows/service-connectivity.yml');
+if (existsSync(applyScript)) {
+  const t = readFileSync(applyScript, 'utf8');
+  ok(/cc-ensure-resolved-stub/.test(t), 'apply-private-dns-contract.sh installs/runs resolved stub guard');
+  ok(/LOGICAL_INSTANCE_ID|INSTANCE_NAME/.test(t), 'apply-private-dns-contract.sh normalizes logical instance id');
+  ok(/taild72c71\.ts\.net|TS_TAILNET_SUFFIX/.test(t), 'apply-private-dns-contract.sh uses MagicDNS suffix');
+}
+const stubScript = join(ROOT, 'deploy/scripts/cc-ensure-resolved-stub.sh');
+if (existsSync(stubScript)) {
+  const t = readFileSync(stubScript, 'utf8');
+  ok(/stub-resolv\.conf/.test(t), 'cc-ensure-resolved-stub.sh asserts systemd-resolved stub');
+}
+if (existsSync(checkScript)) {
+  const t = readFileSync(checkScript, 'utf8');
+  ok(/DATABASE_URL/.test(t), 'check-service-connectivity.sh discovers DATABASE_URL deps (not role-hardcoded)');
+  ok(/stub-resolv\.conf/.test(t), 'check-service-connectivity.sh verifies resolv stub');
+}
+if (existsSync(connWf)) {
+  const t = readFileSync(connWf, 'utf8');
+  ok(/CONNECTIVITY_HOSTS|WA_INSTANCES|BACKEND_HOSTS/.test(t), 'service-connectivity.yml discovers hosts from topology vars');
+  ok(/apply-private-dns-contract\.sh/.test(t), 'service-connectivity.yml applies private DNS contract');
+  ok(/check-service-connectivity\.sh/.test(t), 'service-connectivity.yml runs connectivity checks');
+  ok(/workflow_call|workflow_dispatch|schedule/.test(t), 'service-connectivity.yml is invokable (call/dispatch/schedule)');
+}
+
+const provision = join(ROOT, 'deploy/scripts/provision-wa-instance.sh');
+if (existsSync(provision)) {
+  const t = readFileSync(provision, 'utf8');
+  ok(/cc-ensure-resolved-stub|stub-resolv\.conf/.test(t), 'provision-wa-instance.sh installs resolved stub contract');
+}
+
 console.log(`\n${failed === 0 ? '✅ Turborepo safety OK' : `❌ ${failed} turborepo safety violation(s)`}`);
 process.exit(failed === 0 ? 0 : 1);

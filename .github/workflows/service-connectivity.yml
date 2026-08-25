@@ -5,6 +5,7 @@ name: Service connectivity (private DNS)
 # Applies the same private-DNS contract + runtime checks to every discovered host —
 # backend, extension, WA workers, or future server types.
 on:
+  workflow_call:
   workflow_dispatch:
   schedule:
     - cron: '17 */6 * * *'
@@ -19,6 +20,8 @@ on:
       - '.github/workflows/service-connectivity.yml'
       - '.github/workflows/deploy.yml'
       - '.github/workflows/_deploy.yml'
+      - 'tooling/turborepo-safety-check.mjs'
+      - '.github/workflows/turborepo-safety.yml'
 
 jobs:
   discover:
