@@ -97,13 +97,16 @@ jobs:
           USER: ${{ secrets.DEPLOY_SSH_USER }}
         run: |
           set -euo pipefail
+          # Some hosts lock down /tmp for SSH users — stage under deploy home instead.
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST" \
+            'mkdir -p "$HOME/cc-connectivity-staging" && chmod 0755 "$HOME/cc-connectivity-staging"'
           scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 \
             deploy/scripts/cc-ensure-resolved-stub.sh \
             deploy/scripts/cc-ensure-resolved-stub.service \
             deploy/scripts/cc-ensure-resolved-stub.timer \
             deploy/scripts/apply-private-dns-contract.sh \
             deploy/scripts/check-service-connectivity.sh \
-            "$USER@$HOST:/tmp/"
+            "$USER@$HOST:~/cc-connectivity-staging/"
 
       - name: Apply private DNS contract + run connectivity checks
         env:
@@ -113,12 +116,13 @@ jobs:
           set -euo pipefail
           ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST" bash -s <<'REMOTE'
           set -euo pipefail
+          STAGE="$HOME/cc-connectivity-staging"
           sudo mkdir -p /usr/local/sbin /opt/cybercontrol-docker/scripts
-          sudo cp /tmp/cc-ensure-resolved-stub.sh /usr/local/sbin/cc-ensure-resolved-stub.sh
+          sudo cp "$STAGE/cc-ensure-resolved-stub.sh" /usr/local/sbin/cc-ensure-resolved-stub.sh
           sudo chmod 0755 /usr/local/sbin/cc-ensure-resolved-stub.sh
-          sudo cp /tmp/cc-ensure-resolved-stub.service /tmp/cc-ensure-resolved-stub.timer /etc/systemd/system/
-          sudo cp /tmp/cc-ensure-resolved-stub.sh /tmp/cc-ensure-resolved-stub.service /tmp/cc-ensure-resolved-stub.timer \
-            /tmp/apply-private-dns-contract.sh /tmp/check-service-connectivity.sh \
+          sudo cp "$STAGE/cc-ensure-resolved-stub.service" "$STAGE/cc-ensure-resolved-stub.timer" /etc/systemd/system/
+          sudo cp "$STAGE/cc-ensure-resolved-stub.sh" "$STAGE/cc-ensure-resolved-stub.service" "$STAGE/cc-ensure-resolved-stub.timer" \
+            "$STAGE/apply-private-dns-contract.sh" "$STAGE/check-service-connectivity.sh" \
             /opt/cybercontrol-docker/scripts/
           sudo chmod 0755 /opt/cybercontrol-docker/scripts/*.sh
           # Logical id = short hostname (any future server type)
