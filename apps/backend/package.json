@@ -2,13 +2,13 @@
   "name": "cybercontrol-backend",
   "version": "1.0.0",
   "description": "CyberControl API hub (no WhatsApp/Puppeteer)",
-  "main": "dist/server.js",
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "tsc && node dist/server.js",
+    "dev": "tsc && node dist/index.js",
     "watch": "tsc --watch",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
