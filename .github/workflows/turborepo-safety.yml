@@ -1,7 +1,10 @@
 name: Turborepo Safety
 
-# Keeps the monorepo honest: apps/* + packages/* layout, no CI-only discrete
-# restores under apps/extension, workflows point at apps/, and turbo still builds.
+# Keeps the monorepo honest:
+#   - apps/* for applications, packages/* for libraries
+#   - NEW apps outside apps/ (or libs outside packages/) FAIL this workflow
+#   - no CI-only discrete restores under apps/extension
+#   - workflows point at apps/; turbo still builds
 #
 # Prefer fixing workflows/runners over copying old extension/ trees back.
 

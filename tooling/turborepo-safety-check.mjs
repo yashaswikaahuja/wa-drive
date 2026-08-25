@@ -89,6 +89,149 @@ for (const dir of forbiddenRootDirs) {
   ok(!existsSync(join(ROOT, dir)), `root ${dir}/ must not exist (use apps/${dir}/)`);
 }
 
+// ── 3b. No new applications / packages outside apps/ + packages/ ───────────
+// If someone scaffolds a new app at the repo root (or anywhere except apps/),
+// this gate must fail. Libraries belong in packages/.
+console.log('\nApplications must live under apps/ (libraries under packages/)');
+
+/** Root dirs allowed to contain their own package.json (non-product). */
+const ALLOWED_ROOT_PACKAGE_DIRS = new Set([
+  'corpus', // fixture snapshots only — not a product app
+]);
+
+/** Nested tooling trees that may contain package.json (test harnesses, etc.). */
+const ALLOWED_NESTED_PKG_PREFIXES = [
+  'extension-dev/tests/',
+  'tools/',
+  'tooling/',
+  'scripts/',
+  'deploy/',
+];
+
+function readPkg(pkgPath) {
+  try {
+    return JSON.parse(readFileSync(pkgPath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function looksLikeApplication(pkg, dirPath) {
+  if (!pkg || typeof pkg !== 'object') return false;
+  const scripts = pkg.scripts || {};
+  if (scripts.dev || scripts.start || scripts.serve || scripts.preview) return true;
+  if (existsSync(join(dirPath, 'Dockerfile')) || existsSync(join(dirPath, 'Dockerfile.monorepo'))) return true;
+  if (existsSync(join(dirPath, 'index.html')) || existsSync(join(dirPath, 'public'))) return true;
+  const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+  if (deps.vite || deps.next || deps['react-scripts'] || deps['@angular/core'] || deps.express) {
+    // express alone is weak; require app scripts or Dockerfile already covered.
+    // Treat vite/next/CRA/angular as app frameworks.
+    if (deps.vite || deps.next || deps['react-scripts'] || deps['@angular/core']) return true;
+  }
+  return false;
+}
+
+function looksLikeLibrary(pkg) {
+  if (!pkg || typeof pkg !== 'object') return false;
+  const name = String(pkg.name || '');
+  // Scoped workspace libs
+  if (name.startsWith('@cc/') || name.startsWith('@cybercontrol/')) return true;
+  const scripts = pkg.scripts || {};
+  // Lib-only packages typically lack app runners
+  if (!scripts.dev && !scripts.start && !scripts.serve && !scripts.preview) return true;
+  return false;
+}
+
+// (a) Any depth-1 directory with package.json must be allowlisted or moved
+const rootDirs = readdirSync(ROOT).filter((name) => {
+  if (name.startsWith('.')) return false;
+  try {
+    return statSync(join(ROOT, name)).isDirectory();
+  } catch {
+    return false;
+  }
+});
+
+for (const name of rootDirs) {
+  if (name === 'apps' || name === 'packages' || name === 'node_modules') continue;
+  const dirPath = join(ROOT, name);
+  const pkgPath = join(dirPath, 'package.json');
+  if (!existsSync(pkgPath)) continue;
+
+  if (ALLOWED_ROOT_PACKAGE_DIRS.has(name)) {
+    ok(true, `root ${name}/package.json allowlisted (non-product)`);
+    continue;
+  }
+
+  const pkg = readPkg(pkgPath);
+  if (looksLikeApplication(pkg, dirPath)) {
+    ok(false, `root ${name}/ looks like an APPLICATION — move it to apps/${name}/`);
+  } else if (looksLikeLibrary(pkg)) {
+    ok(false, `root ${name}/ looks like a LIBRARY — move it to packages/${name}/`);
+  } else {
+    ok(false, `root ${name}/ has package.json outside apps/|packages/ — move it under apps/ or packages/`);
+  }
+}
+
+// (b) Any package.json anywhere outside apps/, packages/, and allowlisted tooling
+const strayPkgs = walkFiles(ROOT, (p) => /[\\/]package\.json$/.test(p) || /(^|[\\/])package\.json$/.test(p)).filter((abs) => {
+  const rel = relative(ROOT, abs).replace(/\\/g, '/');
+  if (rel === 'package.json') return false; // workspace root
+  if (rel.startsWith('apps/')) return false;
+  if (rel.startsWith('packages/')) return false;
+  if (rel.includes('/node_modules/')) return false;
+  if (ALLOWED_NESTED_PKG_PREFIXES.some((prefix) => rel.startsWith(prefix))) return false;
+  // allowlisted root package dirs (e.g. corpus/package.json)
+  const top = rel.split('/')[0];
+  if (ALLOWED_ROOT_PACKAGE_DIRS.has(top) && rel === `${top}/package.json`) return false;
+  return true;
+});
+
+if (strayPkgs.length === 0) {
+  ok(true, 'no stray package.json outside apps/|packages/|allowlisted tooling');
+} else {
+  for (const abs of strayPkgs) {
+    const rel = relative(ROOT, abs).replace(/\\/g, '/');
+    const dirPath = join(abs, '..');
+    const pkg = readPkg(abs);
+    if (looksLikeApplication(pkg, dirPath)) {
+      ok(false, `stray APPLICATION package at ${rel} — move under apps/`);
+    } else {
+      ok(false, `stray package.json at ${rel} — move under apps/ or packages/ (or allowlist if tooling)`);
+    }
+  }
+}
+
+// (c) pnpm-workspace must not silently add non-apps/packages globs for product code
+const wsLines = ws
+  .split(/\r?\n/)
+  .map((l) => l.replace(/#.*/, '').trim())
+  .filter(Boolean);
+const packageGlobs = [];
+let inPackages = false;
+for (const line of wsLines) {
+  if (line.startsWith('packages:')) {
+    inPackages = true;
+    continue;
+  }
+  if (inPackages && /^[a-zA-Z]/.test(line) && !line.startsWith('-')) {
+    inPackages = false;
+  }
+  if (inPackages && line.startsWith('-')) {
+    packageGlobs.push(line.replace(/^-+\s*/, '').replace(/['"]/g, ''));
+  }
+}
+const allowedGlobs = new Set(['apps/*', 'packages/*', 'packages/*/*']);
+for (const g of packageGlobs) {
+  if (allowedGlobs.has(g) || g === 'apps/*' || g === 'packages/*') {
+    ok(true, `workspace glob ok: ${g}`);
+  } else if (g.startsWith('apps/') || g.startsWith('packages/')) {
+    ok(true, `workspace glob ok (scoped): ${g}`);
+  } else {
+    ok(false, `workspace glob "${g}" is outside apps/*|packages/* — product code must not register here`);
+  }
+}
+
 // ── 4. Forbidden discrete restores under apps/extension ────────────────────
 console.log('\nForbidden discrete trees under apps/extension (packages/cc-* is source of truth)');
 const forbiddenExtTrees = [
