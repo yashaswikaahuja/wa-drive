@@ -35,7 +35,7 @@ function nextMsgId() {
 class WsClient {
   /**
    * @param {object} options
-   * @param {string} options.url — WSS endpoint (e.g. wss://api.cybercontrol.fun/ws)
+   * @param {string} options.url — WSS endpoint (e.g. wss://api.example.com/ws)
    * @param {string} options.token — JWT auth token
    * @param {function} [options.onMessage] — (message: object) => void
    * @param {function} [options.onStateChange] — (state: string) => void

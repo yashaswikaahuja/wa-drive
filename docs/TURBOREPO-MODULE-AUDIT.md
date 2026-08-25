@@ -36,19 +36,22 @@ Generated during monorepo hardening (2026-08-25).
 | Hardcoded remove.bg API key default | `backend-core` | Empty default (**done** — was a secret leak) |
 | Prod tailnet `WA_SERVICE` default | `backend-core` | Empty — require env (**done**) |
 | `PARENT_URL` → `api.cybercontrol.fun` | `wa-service` | Empty / `API_ORIGIN` (**done**) |
-| Trusted origin `app.cybercontrol.fun` | `cc-background/auth`, `content.js` | Injectable override (**auth done**; content already had `__CC_TRUSTED_ORIGINS`) |
-| `groqKey` / `_cc_groq_key` / `learnedBy: 'groq-ai'` | `cc-mapper`, `cc-executor`, teach | Still TODO — rename to `llmKey` / `llm` |
-| `/api/settings/groq-key` | `apps/backend` | Still TODO — alias to `/api/settings/llm` |
+| Trusted origin `app.cybercontrol.fun` | `cc-background/auth`, `content.js` | Injectable via `__CC_APP_ORIGIN` / `__CC_PUBLIC_DOMAIN` (**done**) |
+| `groqKey` / `_cc_groq_key` / `learnedBy: 'groq-ai'` | `cc-mapper`, `cc-executor`, teach | Renamed to `llmKey` / `_cc_llm_key` / `learnedBy: 'llm'` with aliases (**done**) |
+| `/api/settings/groq-key` | `apps/backend` | Alias of `/api/settings/llm` (**done**) |
+| Frontend/CLI/WA hardcoded `api.cybercontrol.fun` | frontend, cyb-cli, wa ecosystem, compose | Driven by `PUBLIC_DOMAIN` / `VITE_PUBLIC_DOMAIN` (**done**) |
 
-Product branding in `apps/frontend`, `apps/landing`, popup copy is expected.
+Product branding (`CyberControl` name) in `apps/frontend`, `apps/landing`, popup copy is expected — only domains are generic.
 
 ## 4. Env vars to set in prod (general terms)
 
 ```bash
 BRAND_NAME=CyberControl
-APP_ORIGIN=https://app.cybercontrol.fun
-API_ORIGIN=https://api.cybercontrol.fun
-COOKIE_DOMAIN=.cybercontrol.fun
+PUBLIC_DOMAIN=cybercontrol.fun   # drives app./api./cookie/email defaults
+# Optional overrides:
+# APP_ORIGIN=https://app.example.com
+# API_ORIGIN=https://api.example.com
+# COOKIE_DOMAIN=.example.com
 AI_API_KEY=...          # preferred; GROQ_API_KEY still works as alias
 AI_PROVIDER=groq        # optional
 WA_SERVICE=http://cybercontrol-wa:3100
@@ -56,9 +59,9 @@ PARENT_URL=https://api.cybercontrol.fun
 REMOVE_BG_API_KEY=...   # optional; no longer defaulted in source
 ```
 
-## 5. Follow-ups (not done in this pass)
+## 5. Follow-ups
 
-1. Rename extension LLM identifiers (`groqKey` → `llmKey`) with compat shims.
-2. Vision provider registry in `backend-documents/extraction.ts`.
+1. ~~Rename extension LLM identifiers (`groqKey` → `llmKey`)~~ — done with `/api/settings/llm` + compat `/groq-key`.
+2. Vision provider registry in `backend-documents/extraction.ts` (URLs still vendor-specific).
 3. Resolve workspace package roots by name in `build-dist.mjs`.
 4. Retarget `tools/forbidden-deps-check.mjs` + `corpus/validate.js` to `apps/` + `@cc/*`.

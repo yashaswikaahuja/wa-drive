@@ -37,8 +37,9 @@ import { toast } from "sonner";
    public repo. While it is unset, every WhatsApp CTA gracefully falls back
    to the on-page lead form (#cta) instead of a dead/fake wa.me link. */
 const WHATSAPP_NUMBER = String(import.meta.env.VITE_WHATSAPP_NUMBER ?? "").replace(/\D/g, "");
-const APP_URL = String(import.meta.env.VITE_APP_URL ?? "https://app.cybercontrol.fun");
-const SITE_URL = "https://cybercontrol.fun";
+const PUBLIC_DOMAIN = String(import.meta.env.VITE_PUBLIC_DOMAIN ?? "cybercontrol.fun").replace(/^\./, "");
+const APP_URL = String(import.meta.env.VITE_APP_URL ?? `https://app.${PUBLIC_DOMAIN}`);
+const SITE_URL = String(import.meta.env.VITE_SITE_URL ?? `https://${PUBLIC_DOMAIN}`);
 const EXTENSION_URL = "/cybercontrol-extension.zip";
 const EXTENSION_VERSION = "5.79";
 const waEnabled = WHATSAPP_NUMBER.length >= 10;

@@ -10,17 +10,29 @@
  *   CC_TRUSTED_ONLY_TYPES        => object
  */
 
-// Defaults keep current product behavior; override via globalThis.__CC_TRUSTED_FRONTEND_ORIGINS
-// (injected at bundle time) so this package does not hard-require one company domain.
-const CC_TRUSTED_FRONTEND_ORIGINS = Array.isArray(globalThis.__CC_TRUSTED_FRONTEND_ORIGINS)
-  ? globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.slice()
-  : [
-      'https://app.cybercontrol.fun',
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-    ];
+// Local Vite defaults. Prod app origin comes from injectable globals so this package
+// is not locked to one company domain:
+//   __CC_APP_ORIGIN / __CC_PUBLIC_DOMAIN / __CC_TRUSTED_FRONTEND_ORIGINS
+function resolveTrustedFrontendOrigins() {
+  if (Array.isArray(globalThis.__CC_TRUSTED_FRONTEND_ORIGINS) && globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.length) {
+    return globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.slice();
+  }
+  const origins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ];
+  try {
+    if (typeof globalThis.__CC_APP_ORIGIN === 'string' && globalThis.__CC_APP_ORIGIN) {
+      origins.unshift(String(globalThis.__CC_APP_ORIGIN).replace(/\/$/, ''));
+    } else if (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN) {
+      origins.unshift('https://app.' + String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, ''));
+    }
+  } catch (_) { /* ignore */ }
+  return origins;
+}
+const CC_TRUSTED_FRONTEND_ORIGINS = resolveTrustedFrontendOrigins();
 
 const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 

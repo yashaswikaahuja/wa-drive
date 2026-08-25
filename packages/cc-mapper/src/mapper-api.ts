@@ -14,11 +14,11 @@ export function fuzzyMatch(formFields: FormField[], profile: Profile): Mapping {
 export async function aiMatch(
   formFields: FormField[],
   profile: Profile,
-  groqKey: string,
+  llmKey: string,
   llmBaseUrl: string,
   llmModel: string,
 ): Promise<Mapping> {
-  return aiMatchImpl(formFields, profile, groqKey, llmBaseUrl, llmModel);
+  return aiMatchImpl(formFields, profile, llmKey, llmBaseUrl, llmModel);
 }
 
 export function resolveChoiceToOption(

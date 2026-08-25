@@ -31,7 +31,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false }),
     }),
     // Persist refreshToken too — local vite (http://127.0.0.1:5173 → :3000) cannot rely on the
-    // prod HttpOnly cookie (Secure + .cybercontrol.fun). API still returns refresh in the body.
+    // prod HttpOnly cookie (Secure + COOKIE_DOMAIN). API still returns refresh in the body.
     { name: 'cc-auth', partialize: (s) => ({ accessToken: s.accessToken, refreshToken: s.refreshToken, user: s.user, isAuthenticated: s.isAuthenticated }) }
   )
 );

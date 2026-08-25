@@ -5,7 +5,7 @@ import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { createRequire } from 'module';
-import { PORT, OWNER_PORT, OWNER_BIND } from '@cybercontrol/backend-core';
+import { PORT, OWNER_PORT, OWNER_BIND, APP_ORIGIN, PUBLIC_DOMAIN, AI_API_KEY, AI_PROVIDER } from '@cybercontrol/backend-core';
 import { createPool, initializeDatabase, pool, setPool } from '@cybercontrol/backend-core';
 
 // Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
@@ -51,8 +51,9 @@ app.use(compression());
 // chrome-extension:// origin uses Bearer tokens, not cookies, and server-to-server has no Origin).
 // NOTE: '*' together with Allow-Credentials is illegal — so credentials are only enabled for allowlisted origins.
 const ALLOWED_ORIGINS = new Set([
-  'https://app.cybercontrol.fun',
-  'https://cybercontrol.fun',
+  APP_ORIGIN,
+  `https://${PUBLIC_DOMAIN}`,
+  `https://www.${PUBLIC_DOMAIN}`,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
@@ -109,24 +110,30 @@ app.get('/api/services', authMiddleware, async (req: any, res) => {
 // Health check
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
-// LLM key for extension (OpenRouter for field mapping / form fill)
-// Uses workspace-level override if set, otherwise falls back to env vars
-app.get('/api/settings/groq-key', authMiddleware, async (req: any, res) => {
+// LLM key for extension (OpenRouter / configured provider for field mapping / form fill)
+// Workspace-level override if set, otherwise env (AI_API_KEY / OPENROUTER_API_KEY / GROQ_API_KEY alias).
+async function llmKeyHandler(req: any, res: any) {
   let wsSettings: any = {};
   try {
     const { rows } = await pool.query('SELECT settings FROM workspaces WHERE id = $1', [req.user.workspaceId]);
     wsSettings = rows[0]?.settings?.ai || {};
   } catch {}
   const orKey = wsSettings.openrouterKey || process.env.OPENROUTER_API_KEY || '';
-  const groqKey = wsSettings.groqKey || process.env.GROQ_API_KEY || '';
-  const key = orKey || groqKey;
+  const llmKey = wsSettings.llmKey || wsSettings.groqKey || AI_API_KEY || '';
+  const key = orKey || llmKey;
+  const provider = orKey ? 'openrouter' : (wsSettings.textProvider || AI_PROVIDER || 'groq');
   res.json({
     key,
-    provider: orKey ? 'openrouter' : 'groq',
-    baseUrl: orKey ? 'https://openrouter.ai/api/v1/chat/completions' : 'https://api.groq.com/openai/v1/chat/completions',
+    provider,
+    baseUrl: orKey
+      ? 'https://openrouter.ai/api/v1/chat/completions'
+      : (process.env.LLM_BASE_URL || 'https://api.groq.com/openai/v1/chat/completions'),
     model: wsSettings.textModel || (orKey ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile'),
   });
-});
+}
+app.get('/api/settings/llm', authMiddleware, llmKeyHandler);
+// Backward-compatible alias
+app.get('/api/settings/groq-key', authMiddleware, llmKeyHandler);
 
 // HTTP server + Socket.IO
 const httpServer = createServer(app);

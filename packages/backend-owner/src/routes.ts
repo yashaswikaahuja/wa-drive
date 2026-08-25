@@ -348,13 +348,16 @@ router.get('/ai-settings', async (req: any, res) => {
     textProvider: process.env.OPENROUTER_API_KEY ? 'openrouter' : 'groq',
     textModel: process.env.OPENROUTER_API_KEY ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile',
     openrouterKey: mask(process.env.OPENROUTER_API_KEY || ''),
-    groqKey: mask(process.env.GROQ_API_KEY || ''),
+    llmKey: mask(process.env.AI_API_KEY || process.env.LLM_API_KEY || process.env.GROQ_API_KEY || ''),
+    // Compat alias for older owner-panel clients
+    groqKey: mask(process.env.AI_API_KEY || process.env.LLM_API_KEY || process.env.GROQ_API_KEY || ''),
   });
 });
 
 // PATCH /owner/ai-settings — update AI keys (writes to all workspace settings as global override)
 router.patch('/ai-settings', async (req: any, res) => {
-  const { extractionProvider, extractionModel, mistralKey, textProvider, textModel, openrouterKey, groqKey } = req.body;
+  const { extractionProvider, extractionModel, mistralKey, textProvider, textModel, openrouterKey, llmKey, groqKey } = req.body;
+  const textKey = llmKey || groqKey;
   try {
     // Store globally in all workspaces (or we could just use a global table, but this reuses existing infra)
     const updates: string[] = [];
@@ -364,7 +367,10 @@ router.patch('/ai-settings', async (req: any, res) => {
     if (textModel) updates.push(`settings = jsonb_set(settings, '{ai,textModel}', '"${textModel}"'::jsonb)`);
     if (mistralKey && !mistralKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,mistralKey}', '"${mistralKey}"'::jsonb)`);
     if (openrouterKey && !openrouterKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,openrouterKey}', '"${openrouterKey}"'::jsonb)`);
-    if (groqKey && !groqKey.startsWith('•')) updates.push(`settings = jsonb_set(settings, '{ai,groqKey}', '"${groqKey}"'::jsonb)`);
+    if (textKey && !String(textKey).startsWith('•')) {
+      updates.push(`settings = jsonb_set(settings, '{ai,llmKey}', '"${textKey}"'::jsonb)`);
+      updates.push(`settings = jsonb_set(settings, '{ai,groqKey}', '"${textKey}"'::jsonb)`); // compat
+    }
     if (updates.length > 0) {
       // Ensure ai key exists first
       await req.pool.query(`UPDATE workspaces SET settings = jsonb_set(settings, '{ai}', COALESCE(settings->'ai', '{}'::jsonb)) WHERE settings->'ai' IS NULL`);

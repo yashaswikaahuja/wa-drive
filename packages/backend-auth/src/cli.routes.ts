@@ -75,7 +75,11 @@ function randomUserCode(): string {
 
 function publicApiBase(req: any): string {
   const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
-  const host = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'api.cybercontrol.fun';
+  const fromEnv = process.env.API_ORIGIN || process.env.PUBLIC_API_HOST || '';
+  const host =
+    (req.headers['x-forwarded-host'] as string) ||
+    req.headers.host ||
+    (fromEnv ? fromEnv.replace(/^https?:\/\//, '') : 'localhost:3000');
   return `${proto}://${host}/api`;
 }
 

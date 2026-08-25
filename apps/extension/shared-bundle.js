@@ -533,7 +533,7 @@ function normalizeFieldLabel(label) {
 // Exposes: window.ccLLM = { call, parseJSON }
 //
 // All callers (mapper.js aiMatch, ai-resolve.js, executor.js AI select,
-// background.js groqAutoTeach) should use this instead of inline fetch.
+// background.js llmAutoTeach) should use this instead of inline fetch.
 // ────────────────────────────────────────────────────────────────────────────
 
 ;(function () {

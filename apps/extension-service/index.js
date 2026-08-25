@@ -47,7 +47,7 @@ setStoreAdapter({ mutateDoc, KEYS });
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();
 
-// CORS — same as hub (extension hits this via api.cybercontrol.fun → nginx → here)
+// CORS — same as hub (extension hits this via public API host → nginx → here)
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
@@ -66,7 +66,7 @@ const healthPayload = () => ({
   commit: process.env.BUILD_SHA || 'development',
 });
 app.get('/health', (_req, res) => res.json(healthPayload()));
-// Public via api.cybercontrol.fun (nginx → extension-service). Used by side panel deploy lock (CYB-85).
+// Public via API host (nginx → extension-service). Used by side panel deploy lock (CYB-85).
 app.get('/api/extension/health', (_req, res) => res.json(healthPayload()));
 
 // Routes are mounted at the SAME paths the hub used to expose them at,

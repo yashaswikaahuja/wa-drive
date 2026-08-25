@@ -10,7 +10,7 @@ import { pool, auditLog, logActivity, signAccessToken, signRefreshToken, COOKIE_
 // The extension is unaffected (keeps token-in-storage + body refresh). /refresh accepts the
 // token from EITHER the cookie (web) OR the body (extension). See deploy/docs/AUTH-COOKIE-MIGRATION.md.
 export const REFRESH_COOKIE = 'cc_refresh';
-// Prod: set COOKIE_DOMAIN (e.g. .cybercontrol.fun) for shared app.→api. cookies.
+// Prod: set COOKIE_DOMAIN (e.g. .example.com) for shared app.→api. cookies.
 // Local http://127.0.0.1:5173 → :3000 cannot use Secure + cross-site cookies; body refreshToken is used instead.
 const isLocalHttp = process.env.NODE_ENV !== 'production' || process.env.LOCAL_AUTH === '1';
 const cookieDomain = COOKIE_DOMAIN || process.env.COOKIE_DOMAIN || '';

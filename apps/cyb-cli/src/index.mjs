@@ -57,7 +57,7 @@ Sessions (live operator fills):
   cyb live --poll-ms 3000   HTTPS poll interval if WSS unavailable
 
 Global flags:
-  --api <url>     API base (default https://api.cybercontrol.fun/api)
+  --api <url>     API base (default from PUBLIC_DOMAIN / CYB_API_URL, else https://api.<domain>/api)
   --token <jwt>   One-shot token (does not replace saved login for other cmds unless login --token)
 
 Credentials file: platform config dir / cybercontrol / credentials.json

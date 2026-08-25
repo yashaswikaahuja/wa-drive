@@ -25,8 +25,9 @@ import { mutateDoc, KEYS } from '../../db/store.js';
 const router = express.Router();
 router.use(authMiddleware);
 
-const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const DEFAULT_MODEL = process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
+const LLM_API_URL = process.env.LLM_BASE_URL || process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+const DEFAULT_MODEL = process.env.LLM_AGENT_MODEL || process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
+const LLM_API_KEY = process.env.AI_API_KEY || process.env.LLM_API_KEY || process.env.GROQ_API_KEY || '';
 
 // Compute semanticFormKey identically to extension/autofill/extractor.js
 // so the agent and the autofill flow share the same cache key.
@@ -313,11 +314,9 @@ router.post('/plan', async (req, res) => {
     });
   }
 
-  const groqKey = process.env.GROQ_API_KEY;
-  if (!groqKey) return res.status(500).json({ error: 'GROQ_API_KEY not configured on server' });
+  if (!LLM_API_KEY) return res.status(500).json({ error: 'AI_API_KEY / LLM_API_KEY not configured on server' });
 
-  // For Groq, only send the UNCOVERED fields — not the whole snapshot.
-  // Preserves token budget and lets Groq focus on novel fields.
+  // Only send UNCOVERED fields — preserves token budget for novel fields.
   const subSnapshot = {
     ...snapshot,
     elements: uncovered.length ? uncovered : (snapshot.elements || []),
@@ -329,9 +328,9 @@ router.post('/plan', async (req, res) => {
   const model = requestedModel || DEFAULT_MODEL;
 
   try {
-    const response = await fetch(GROQ_API_URL, {
+    const response = await fetch(LLM_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + groqKey },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + LLM_API_KEY },
       body: JSON.stringify({
         model,
         messages: [

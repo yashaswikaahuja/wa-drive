@@ -55,9 +55,14 @@ export function AiSettingsPanel({ cfg }: { cfg: Config }) {
           <div className="label" style={{ marginBottom: 4 }}>OpenRouter Key</div>
           <input value={ai.openrouterKey} onChange={e => setAi({ ...ai, openrouterKey: e.target.value })}
             className="input mono" placeholder="sk-or-v1-••••" style={{ width: '100%', marginBottom: 8 }} />
-          <div className="label" style={{ marginBottom: 4 }}>Groq Key (fallback)</div>
-          <input value={ai.groqKey} onChange={e => setAi({ ...ai, groqKey: e.target.value })}
-            className="input mono" placeholder="gsk_••••" style={{ width: '100%' }} />
+          <div className="label" style={{ marginBottom: 4 }}>LLM API Key (text fill)</div>
+          <input
+            value={ai.llmKey || ai.groqKey || ''}
+            onChange={e => setAi({ ...ai, llmKey: e.target.value, groqKey: e.target.value })}
+            className="input mono"
+            placeholder="provider API key"
+            style={{ width: '100%' }}
+          />
         </div>
       </div>
 

@@ -33,16 +33,16 @@ export const RESOLVER_URL = process.env.RESOLVER_URL || '';     // e.g. http://c
 // otherwise make an invalid HTTP Authorization header.
 export const RESEND_API_KEY = (process.env.RESEND_API_KEY || '').replace(/[^\x21-\x7E]/g, '');
 export const EMAIL_PROVIDER = (process.env.EMAIL_PROVIDER || (RESEND_API_KEY ? 'resend' : (SES_FROM ? 'ses' : ''))).toLowerCase();
-// Brand / public origins — injectable so packages stay product-agnostic.
-// Defaults keep current CyberControl prod behavior when env is unset.
+// Brand / public origins — one PUBLIC_DOMAIN drives app/api/cookie/email defaults.
+// Override any piece with APP_ORIGIN / API_ORIGIN / COOKIE_DOMAIN / EMAIL_FROM.
 export const BRAND_NAME = process.env.BRAND_NAME || 'CyberControl';
-export const APP_ORIGIN = (process.env.APP_ORIGIN || 'https://app.cybercontrol.fun').replace(/\/$/, '');
-export const API_ORIGIN = (process.env.API_ORIGIN || 'https://api.cybercontrol.fun').replace(/\/$/, '');
-// Overridable cookie domain for shared app.→api. cookies. Default keeps current prod.
-export const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || '.cybercontrol.fun';
+export const PUBLIC_DOMAIN = (process.env.PUBLIC_DOMAIN || 'cybercontrol.fun').replace(/^\./, '');
+export const APP_ORIGIN = (process.env.APP_ORIGIN || `https://app.${PUBLIC_DOMAIN}`).replace(/\/$/, '');
+export const API_ORIGIN = (process.env.API_ORIGIN || `https://api.${PUBLIC_DOMAIN}`).replace(/\/$/, '');
+export const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN || `.${PUBLIC_DOMAIN}`;
 
 // From address used by whichever provider (Resend requires a verified-domain sender; SES a verified identity).
-export const EMAIL_FROM = SES_FROM || process.env.EMAIL_FROM || `${BRAND_NAME} <noreply@cybercontrol.fun>`;
+export const EMAIL_FROM = SES_FROM || process.env.EMAIL_FROM || `${BRAND_NAME} <noreply@${PUBLIC_DOMAIN}>`;
 
 export const EMAIL_VERIFY = !!EMAIL_PROVIDER;
 export const PHONE_VERIFY = !!RESOLVER_URL;

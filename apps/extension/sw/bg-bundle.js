@@ -17,13 +17,29 @@
  *   CC_TRUSTED_ONLY_TYPES        => object
  */
 
-const CC_TRUSTED_FRONTEND_ORIGINS = [
-  'https://app.cybercontrol.fun',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-];
+// Local Vite defaults. Prod app origin comes from injectable globals so this package
+// is not locked to one company domain:
+//   __CC_APP_ORIGIN / __CC_PUBLIC_DOMAIN / __CC_TRUSTED_FRONTEND_ORIGINS
+function resolveTrustedFrontendOrigins() {
+  if (Array.isArray(globalThis.__CC_TRUSTED_FRONTEND_ORIGINS) && globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.length) {
+    return globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.slice();
+  }
+  const origins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ];
+  try {
+    if (typeof globalThis.__CC_APP_ORIGIN === 'string' && globalThis.__CC_APP_ORIGIN) {
+      origins.unshift(String(globalThis.__CC_APP_ORIGIN).replace(/\/$/, ''));
+    } else if (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN) {
+      origins.unshift('https://app.' + String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, ''));
+    }
+  } catch (_) { /* ignore */ }
+  return origins;
+}
+const CC_TRUSTED_FRONTEND_ORIGINS = resolveTrustedFrontendOrigins();
 
 const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 
@@ -600,7 +616,9 @@ function stopKeepalive() {
 var _keepaliveInterval = null; // keepalive interval — local to teach
 
 
-async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, llmBaseUrl, llmModel }) {
+async function runTeachSession({ tabId, fields, backendUrl, hostname, llmKey, groqKey, llmBaseUrl, llmModel }) {
+  // Prefer llmKey; groqKey kept as compat alias from older callers
+  llmKey = llmKey || groqKey || '';
   _teachRunning = true;
   startKeepalive();
   // Resolve tabId if missing
@@ -611,7 +629,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
     } catch(e) { console.warn('[CC] tab query failed:', e.message); }
   }
   if (!tabId) { console.error('[CC] no tabId, aborting teach'); _teachRunning = false; stopKeepalive(); return; }
-  // Native <select> and radio are handled by executor directly â€” only teach custom dropdowns
+  // Native <select> and radio are handled by executor directly — only teach custom dropdowns
   const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'mat-radio'];
   const teachable = fields.filter(f => TEACHABLE_TYPES.includes(f.type));
 
@@ -622,18 +640,18 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
 
   for (const field of teachable) {
     const label = normalizeFieldLabel(field.label);
-    notifyPopup({ type: 'TEACH_PROGRESS', status: `ðŸ¤– Auto-teaching "${label}" with AI...`, done: false });
+    notifyPopup({ type: 'TEACH_PROGRESS', status: `🤖 Auto-teaching "${label}" with AI...`, done: false });
 
-    // Try Groq auto-teach first
-    if (groqKey) {
+    // Try LLM auto-teach first
+    if (llmKey) {
       const profileValue = field.profileValue || '';
-      const autoSuccess = await groqAutoTeach(tabId, { ...field, profileValue }, groqKey, backendUrl, hostname, llmBaseUrl, llmModel);
+      const autoSuccess = await llmAutoTeach(tabId, { ...field, profileValue }, llmKey, backendUrl, hostname, llmBaseUrl, llmModel);
       if (autoSuccess) {
-        notifyPopup({ type: 'TEACH_PROGRESS', status: `âœ“ AI learned "${label}" automatically!`, done: false });
+        notifyPopup({ type: 'TEACH_PROGRESS', status: `✓ AI learned "${label}" automatically!`, done: false });
         await sleep(800);
         continue;
       }
-      console.log('[CC] Groq auto-teach failed, falling back to manual');
+      console.log('[CC] LLM auto-teach failed, falling back to manual');
     }
 
     notifyPopup({ type: 'TEACH_PROGRESS', status: `âš  Teach: "${label}" â€” click the dropdown, then select a value`, done: false });
@@ -645,9 +663,9 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
       func: () => { sessionStorage.removeItem('_cc_teach_result'); sessionStorage.removeItem('_cc_teach_active'); },
     }).catch(() => {});
 
-    // AI-assisted: if no known adapter, ask Groq to identify the dropdown component
+    // AI-assisted: if no known adapter, ask the LLM to identify the dropdown component
     let fieldWithHint = { ...field };
-    if (groqKey && !field.componentClass) {
+    if (llmKey && !field.componentClass) {
       try {
         const domSnap = await chrome.scripting.executeScript({
           target: { tabId },
@@ -669,7 +687,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
         if (domText) {
           const aiRes = await fetch(llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+            headers: { 'Authorization': 'Bearer ' + llmKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: llmModel || 'meta-llama/llama-3.3-70b-instruct',
               messages: [{ role: 'user', content: 'Identify the dropdown component class and trigger selector from these HTML snippets near field "' + field.label + '". Reply ONLY as JSON: {"componentClass":"...","triggerSelector":"..."}. Snippets: ' + domText }],
@@ -748,8 +766,8 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
 }
 
 
-// â”€â”€ groqAutoTeach â€” tries to fill a custom dropdown using Groq AI â”€â”€
-async function groqAutoTeach(tabId, field, groqKey, backendUrl, hostname, llmBaseUrl, llmModel) {
+// â”€â”€ llmAutoTeach â€” tries to fill a custom dropdown using Groq AI â”€â”€
+async function llmAutoTeach(tabId, field, llmKey, backendUrl, hostname, llmBaseUrl, llmModel) {
   try {
     // Step 1: Get DOM snapshot of the component (closed state)
     const snap1 = await chrome.scripting.executeScript({
@@ -779,7 +797,7 @@ Reply with ONLY valid JSON (no markdown):
 
     const r1 = await fetch(llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + llmKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: llmModel || 'meta-llama/llama-3.3-70b-instruct', messages: [{ role: 'user', content: prompt1 }], max_tokens: 100 }),
     }).then(r => r.json()).catch(() => null);
 
@@ -829,7 +847,7 @@ Reply with ONLY valid JSON:
 
     const r2 = await fetch(llmBaseUrl || 'https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + groqKey, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + llmKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: llmModel || 'meta-llama/llama-3.3-70b-instruct', messages: [{ role: 'user', content: prompt2 }], max_tokens: 150 }),
     }).then(r => r.json()).catch(() => null);
 
@@ -875,7 +893,7 @@ Reply with ONLY valid JSON:
       optionSelector: hint2.optionSelector || 'li',
       verifySelector: hint2.verifySelector || hint.triggerSelector,
       optionsContainer: '',
-      learnedBy: 'groq-ai',
+      learnedBy: 'llm',
     };
     await fetch(`${backendUrl}/adapters/${hostname}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -884,7 +902,7 @@ Reply with ONLY valid JSON:
     console.log('[CC] Groq auto-teach saved adapter for', hostname);
     return true;
   } catch(e) {
-    console.warn('[CC] groqAutoTeach error:', e.message);
+    console.warn('[CC] llmAutoTeach error:', e.message);
     return false;
   }
 }

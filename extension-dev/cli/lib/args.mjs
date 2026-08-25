@@ -75,10 +75,11 @@ PRIMARY WORKFLOW (live record)
   4. This CLI reads that live data and prints a detailed report
 
   # Auth (optional if file present):
-  #   auto backend: https://api.cybercontrol.fun/api
+  #   auto backend: https://api.<PUBLIC_DOMAIN>/api  (or CC_BACKEND_URL)
   #   auto token:   extension-dev/cli/out/ramishwar-access.jwt  (gitignored)
   # Or set explicitly:
-  #   $env:CC_BACKEND_URL = "https://api.cybercontrol.fun/api"
+  #   $env:PUBLIC_DOMAIN = "example.com"
+  #   $env:CC_BACKEND_URL = "https://api.example.com/api"
   #   $env:CC_ACCESS_TOKEN = (Get-Content extension-dev\\cli\\out\\ramishwar-access.jwt -Raw).Trim()
 
   # stream new sessions as the operator fills:

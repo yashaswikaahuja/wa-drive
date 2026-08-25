@@ -11,16 +11,20 @@
   //   3. it is a genuine bridge message ({ _cc: true }) and not our own reply,
   //   4. its type is in an explicit allowlist.
   // Replies are posted back to the sender's exact origin, never broadcast to '*'.
-  // Prod café UI + local Vite (either hostname).
+  // Local Vite defaults. Prod app origin via __CC_APP_ORIGIN / __CC_PUBLIC_DOMAIN /
+  // __CC_TRUSTED_ORIGINS — no baked-in company domain required.
   var TRUSTED_ORIGINS = [
-    'https://app.cybercontrol.fun',
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:3000',
     'http://127.0.0.1:3000'
   ];
-  // Optional override from page: window.__CC_TRUSTED_ORIGINS = ['http://…']
   try {
+    if (typeof globalThis.__CC_APP_ORIGIN === 'string' && globalThis.__CC_APP_ORIGIN) {
+      TRUSTED_ORIGINS.unshift(String(globalThis.__CC_APP_ORIGIN).replace(/\/$/, ''));
+    } else if (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN) {
+      TRUSTED_ORIGINS.unshift('https://app.' + String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, ''));
+    }
     if (Array.isArray(globalThis.__CC_TRUSTED_ORIGINS)) {
       for (var i = 0; i < globalThis.__CC_TRUSTED_ORIGINS.length; i++) {
         if (TRUSTED_ORIGINS.indexOf(globalThis.__CC_TRUSTED_ORIGINS[i]) === -1) {

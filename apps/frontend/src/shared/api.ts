@@ -2,8 +2,9 @@ import axios from 'axios';
 import { useAuthStore } from '../features/auth/store';
 import { toast } from './toast';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'https://api.cybercontrol.fun/api';
-export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://api.cybercontrol.fun';
+const PUBLIC_DOMAIN = String(import.meta.env.VITE_PUBLIC_DOMAIN || 'cybercontrol.fun').replace(/^\./, '');
+export const API_URL = import.meta.env.VITE_API_URL || `https://api.${PUBLIC_DOMAIN}/api`;
+export const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || `https://api.${PUBLIC_DOMAIN}`;
 
 const api = axios.create({ baseURL: API_URL });
 

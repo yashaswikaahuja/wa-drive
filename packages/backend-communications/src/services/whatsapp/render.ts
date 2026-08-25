@@ -29,7 +29,9 @@ function logo(x: number, y: number): string {
 }
 
 function footer(): string {
-  return `<text x="96" y="712" font-family="${SANS}" font-size="17" fill="${FAINT}">© CyberControl · cybercontrol.fun</text>`;
+  const brand = process.env.BRAND_NAME || 'CyberControl';
+  const domain = (process.env.PUBLIC_DOMAIN || 'cybercontrol.fun').replace(/^\./, '');
+  return `<text x="96" y="712" font-family="${SANS}" font-size="17" fill="${FAINT}">© ${brand} · ${domain}</text>`;
 }
 
 async function toPng(svg: string): Promise<string> {

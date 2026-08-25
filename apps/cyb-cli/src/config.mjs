@@ -1,7 +1,8 @@
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 
-export const DEFAULT_API = 'https://api.cybercontrol.fun/api';
+const PUBLIC_DOMAIN = (process.env.PUBLIC_DOMAIN || process.env.CYB_PUBLIC_DOMAIN || 'cybercontrol.fun').replace(/^\./, '');
+export const DEFAULT_API = process.env.CYB_API_URL || process.env.CC_BACKEND_URL || `https://api.${PUBLIC_DOMAIN}/api`;
 export const APP_NAME = 'cybercontrol';
 export const CLI_VERSION = '0.1.0';
 

@@ -1893,11 +1893,11 @@ if (typeof module !== 'undefined') module.exports = root.CcFillOneNg;
       if (opt2) { clearInterval(interval); applySelect(el, opt2); return; }
       if (++attempts >= 15) {
         clearInterval(interval);
-        var groqKey = window._cc_groq_key || (document.body.getAttribute('data-cc-llm-key') || '');
-        if (groqKey && realOpts.length > 0) {
+        var llmKey = window._cc_llm_key || (document.body.getAttribute('data-cc-llm-key') || '');
+        if (llmKey && realOpts.length > 0) {
           var optTexts = realOpts.map(function (o) { return o.text.trim(); }).join('\n');
           window.ccLLM && window.ccLLM.call({
-            apiKey: groqKey,
+            apiKey: llmKey,
             baseUrl: document.body.getAttribute('data-cc-llm-url') || undefined,
             model: document.body.getAttribute('data-cc-llm-model') || undefined,
             userPrompt: 'From these dropdown options, which best matches "' + value +
@@ -3222,11 +3222,11 @@ if (typeof module !== 'undefined') module.exports = root.CcFillOneText;
                   if (++attempts >= 15) {
                     clearInterval(interval);
                     // AI fallback — ask LLM to pick the best option
-                    const groqKey = window._cc_groq_key || (document.body.getAttribute('data-cc-llm-key') || '');
-                    if (groqKey && realOpts.length > 0) {
+                    const llmKey = window._cc_llm_key || (document.body.getAttribute('data-cc-llm-key') || '');
+                    if (llmKey && realOpts.length > 0) {
                       const optTexts = realOpts.map(o => o.text.trim()).join('\n');
                       window.ccLLM.call({
-                        apiKey: groqKey,
+                        apiKey: llmKey,
                         baseUrl: document.body.getAttribute('data-cc-llm-url') || undefined,
                         model: document.body.getAttribute('data-cc-llm-model') || undefined,
                         userPrompt: 'From these dropdown options, which best matches "' + value + '"? Reply with ONLY the exact option text, nothing else.\n\nOptions:\n' + optTexts,

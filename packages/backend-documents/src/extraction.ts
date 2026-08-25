@@ -76,11 +76,18 @@ async function pdfToImages(buffer: Buffer): Promise<Buffer[]> {
   return imgs.length ? imgs : [buffer];
 }
 
-/** All configured Groq keys (GROQ_API_KEY may be comma-separated; GROQ_API_KEY_2 also supported). */
-function groqKeys(): string[] {
-  const raw = [process.env['GROQ_API_KEY'], process.env['GROQ_API_KEY_2']].filter(Boolean).join(',');
+/** Vision/text LLM keys — prefer AI_API_KEY / LLM_API_KEY; GROQ_* kept as aliases (comma-separated ok). */
+function llmKeys(): string[] {
+  const raw = [
+    process.env['AI_API_KEY'],
+    process.env['LLM_API_KEY'],
+    process.env['GROQ_API_KEY'],
+    process.env['GROQ_API_KEY_2'],
+  ].filter(Boolean).join(',');
   return raw.split(',').map(k => k.trim()).filter(Boolean);
 }
+/** @deprecated use llmKeys */
+const groqKeys = llmKeys;
 
 /** Mistral API key. */
 function mistralKey(): string {
@@ -115,8 +122,8 @@ async function callVision(base64s: string | string[], prompt: string, maxTokens:
 
   // ── Fallback: Groq (Qwen 3.6-27B vision) ──
   const keys = groqKeys();
-  if (!keys.length && !mKey) throw new Error('No vision API key configured (MISTRAL_API_KEY or GROQ_API_KEY)');
-  if (!keys.length) throw new Error('Mistral call failed and no GROQ fallback key');
+  if (!keys.length && !mKey) throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY)');
+  if (!keys.length) throw new Error('Mistral call failed and no LLM fallback key');
   const content: any[] = [{ type: 'text', text: prompt },
     ...images.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } }))];
   for (let i = 0; i < keys.length; i++) {
@@ -206,7 +213,7 @@ function normalizeKeys(parsed: any, docType: string): any {
 }
 
 export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
-  if (!groqKeys().length) throw new Error('GROQ_API_KEY not configured');
+  if (!llmKeys().length) throw new Error('AI_API_KEY / LLM_API_KEY not configured');
   let base64s: string[];
   if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
     const pages = await pdfToImages(buffer); // marks may be on page 2+

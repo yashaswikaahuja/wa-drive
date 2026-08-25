@@ -646,7 +646,7 @@
   var CcFuzzyMatch = { fuzzyMatch };
 
   // ../../packages/cc-mapper/src/ai-match.ts
-  async function aiMatch(formFields, profile, groqKey, llmBaseUrl, llmModel) {
+  async function aiMatch(formFields, profile, llmKey, llmBaseUrl, llmModel) {
     const fieldDescriptions = formFields.map(
       (f, i) => i + ': label="' + (f.label || "") + '" id="' + (f.id || "") + '" name="' + (f.name || "") + '" placeholder="' + (f.placeholder || "") + '"'
     ).join("\n");
@@ -656,7 +656,7 @@
       const ccLLM = typeof window !== "undefined" ? window.ccLLM : void 0;
       if (!ccLLM) return {};
       const result = await ccLLM.call({
-        apiKey: groqKey,
+        apiKey: llmKey,
         baseUrl: llmBaseUrl,
         model: llmModel,
         systemPrompt: "You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.",

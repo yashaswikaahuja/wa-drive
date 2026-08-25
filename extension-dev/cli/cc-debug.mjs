@@ -84,11 +84,12 @@ function resolveToken() {
 }
 
 function resolveBackend() {
+  const domain = (process.env.PUBLIC_DOMAIN || 'cybercontrol.fun').replace(/^\./, '');
   return (
     flags.backendUrl ||
     process.env.CC_BACKEND_URL ||
     process.env.BACKEND_URL ||
-    'https://api.cybercontrol.fun/api'
+    `https://api.${domain}/api`
   );
 }
 

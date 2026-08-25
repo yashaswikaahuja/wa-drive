@@ -177,6 +177,9 @@ export interface AiSettings {
   textProvider: string;
   textModel: string;
   openrouterKey: string;
+  /** Preferred generic LLM API key */
+  llmKey: string;
+  /** @deprecated alias of llmKey */
   groqKey: string;
 }
 

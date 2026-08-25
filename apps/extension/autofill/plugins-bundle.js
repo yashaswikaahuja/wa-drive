@@ -507,7 +507,7 @@ registerPlugin(ButtonClickPlugin);
     const origOpen = window.XMLHttpRequest.prototype.open;
     const origSend = window.XMLHttpRequest.prototype.send;
     window.XMLHttpRequest.prototype.open = function (method, url) {
-      // Don't count cross-origin to extension's own backend (api.cybercontrol.fun)
+      // Don't count cross-origin to extension's own backend API host
       // — those aren't part of the form's AJAX
       this._ccTrack = !(url && /api\.cybercontrol\.fun/.test(String(url)));
       return origOpen.apply(this, arguments);

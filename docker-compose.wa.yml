@@ -5,7 +5,7 @@ services:
     environment:
       NODE_ENV: production
       WA_PORT: "3100"
-      PARENT_URL: https://${API_DOMAIN:-api.cybercontrol.fun}
+      PARENT_URL: ${PARENT_URL:-https://api.${PUBLIC_DOMAIN:-cybercontrol.fun}}
       RESOLVER_URL: http://whatsapp-resolver:3200
       SERVICE_SECRET: ${WA_SECRET}
       AUTH_DIR: /app/sessions

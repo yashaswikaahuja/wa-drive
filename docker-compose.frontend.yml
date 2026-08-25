@@ -3,8 +3,9 @@ services:
     build:
       context: ./apps/frontend
       args:
-        VITE_API_URL: https://${API_DOMAIN:-api.cybercontrol.fun}/api
-        VITE_SOCKET_URL: https://${API_DOMAIN:-api.cybercontrol.fun}
+        VITE_PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-cybercontrol.fun}
+        VITE_API_URL: https://api.${PUBLIC_DOMAIN:-cybercontrol.fun}/api
+        VITE_SOCKET_URL: https://api.${PUBLIC_DOMAIN:-cybercontrol.fun}
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     restart: unless-stopped
     ports:

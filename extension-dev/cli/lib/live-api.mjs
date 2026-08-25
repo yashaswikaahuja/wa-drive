@@ -24,7 +24,7 @@ export async function apiGet(backendUrl, token, path) {
     throw new Error(
       `Network error calling ${url}\n` +
         `  ${cause}\n` +
-        `  Check VPN/network, and that CC_BACKEND_URL is correct (default https://api.cybercontrol.fun/api).\n` +
+        `  Check VPN/network, and that CC_BACKEND_URL / PUBLIC_DOMAIN is correct.\n` +
         `  If token expired, re-mint JWT or log in again.`
     );
   }

@@ -12,6 +12,8 @@ const INK = 'hsl(var(--pt-ink))';
 const MARIGOLD = 'hsl(var(--pt-marigold))';
 const MARIGOLD_DEEP = 'hsl(var(--pt-marigold-deep))';
 const GREEN = 'hsl(158 60% 36%)';
+const PUBLIC_DOMAIN = String(import.meta.env.VITE_PUBLIC_DOMAIN || 'cybercontrol.fun').replace(/^\./, '');
+const SITE_URL = String(import.meta.env.VITE_SITE_URL || `https://${PUBLIC_DOMAIN}`).replace(/\/$/, '');
 
 interface QueueItem {
   phone: string; name: string; docCount: number;
@@ -175,7 +177,7 @@ function SetupChecklist() {
   }, []);
 
   const steps = [
-    { done: extOk === true, label: 'Install the browser extension', desc: 'Autofills government forms', action: () => window.open('https://cybercontrol.fun/#extension', '_blank') },
+    { done: extOk === true, label: 'Install the browser extension', desc: 'Autofills government forms', action: () => window.open(`${SITE_URL}/#extension`, '_blank') },
     { done: waOk === true, label: 'Connect WhatsApp', desc: 'Receive customer documents', action: () => navigate('/app/whatsapp') },
     { done: driveOk === true, label: 'Connect Google Drive', desc: 'Store received files', action: () => navigate('/app/settings') },
   ];

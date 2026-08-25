@@ -6,7 +6,7 @@ import type { FormField, Mapping, Profile } from './types.ts';
 export async function aiMatch(
   formFields: FormField[],
   profile: Profile,
-  groqKey: string,
+  llmKey: string,
   llmBaseUrl: string,
   llmModel: string,
 ): Promise<Mapping> {
@@ -24,7 +24,7 @@ export async function aiMatch(
     const ccLLM = typeof window !== 'undefined' ? window.ccLLM : undefined;
     if (!ccLLM) return {};
     const result = await ccLLM.call({
-      apiKey: groqKey,
+      apiKey: llmKey,
       baseUrl: llmBaseUrl,
       model: llmModel,
       systemPrompt: 'You are a JSON-only API. Return ONLY valid JSON objects. No explanations, no markdown, no text before or after the JSON.',
