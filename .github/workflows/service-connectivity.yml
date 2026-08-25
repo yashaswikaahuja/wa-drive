@@ -106,6 +106,7 @@ jobs:
             deploy/scripts/cc-ensure-resolved-stub.timer \
             deploy/scripts/apply-private-dns-contract.sh \
             deploy/scripts/check-service-connectivity.sh \
+            deploy/scripts/ensure-deploy-ssh-access.sh \
             "$USER@$HOST:~/cc-connectivity-staging/"
 
       - name: Apply private DNS contract + run connectivity checks
@@ -123,6 +124,7 @@ jobs:
           sudo cp "$STAGE/cc-ensure-resolved-stub.service" "$STAGE/cc-ensure-resolved-stub.timer" /etc/systemd/system/
           sudo cp "$STAGE/cc-ensure-resolved-stub.sh" "$STAGE/cc-ensure-resolved-stub.service" "$STAGE/cc-ensure-resolved-stub.timer" \
             "$STAGE/apply-private-dns-contract.sh" "$STAGE/check-service-connectivity.sh" \
+            "$STAGE/ensure-deploy-ssh-access.sh" \
             /opt/cybercontrol-docker/scripts/
           sudo chmod 0755 /opt/cybercontrol-docker/scripts/*.sh
           # Logical id = short hostname (any future server type)

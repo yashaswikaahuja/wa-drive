@@ -322,6 +322,7 @@ const privateDnsFiles = [
   'deploy/scripts/cc-ensure-resolved-stub.timer',
   'deploy/scripts/apply-private-dns-contract.sh',
   'deploy/scripts/check-service-connectivity.sh',
+  'deploy/scripts/ensure-deploy-ssh-access.sh',
   '.github/workflows/service-connectivity.yml',
 ];
 for (const rel of privateDnsFiles) {

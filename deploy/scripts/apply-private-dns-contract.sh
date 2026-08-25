@@ -28,6 +28,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=== apply-private-dns-contract on $HOSTNAME_NOW (id=$LOGICAL_INSTANCE_ID) ==="
 
+# ── 0) CD deploy SSH access (required by connectivity CI + Deploy) ───────────
+if [ -f "$SCRIPT_DIR/ensure-deploy-ssh-access.sh" ]; then
+  bash "$SCRIPT_DIR/ensure-deploy-ssh-access.sh" || true
+elif [ -x /opt/cybercontrol-docker/scripts/ensure-deploy-ssh-access.sh ]; then
+  bash /opt/cybercontrol-docker/scripts/ensure-deploy-ssh-access.sh || true
+fi
+
 # ── 1) Boot guard: systemd-resolved stub ─────────────────────────────────────
 if [ -f "$SCRIPT_DIR/cc-ensure-resolved-stub.sh" ]; then
   install -m 0755 "$SCRIPT_DIR/cc-ensure-resolved-stub.sh" /usr/local/sbin/cc-ensure-resolved-stub.sh
