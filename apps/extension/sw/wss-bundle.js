@@ -580,7 +580,8 @@ if (typeof module !== 'undefined' && module.exports) {
   function deriveWsUrl(backendUrl) {
     if (!backendUrl) return null;
     try {
-      // https://api.x/api → wss://api.x/ws
+      // https://api.x/api → wss://api.x/ws  (prod nginx terminates both)
+      // Local hybrid: hub :3000 HTTPS + extension-service :3300 WSS
       const trimmed = String(backendUrl).replace(/\/$/, '');
       const origin = trimmed.replace(/\/api$/i, '');
       const u = new URL(origin);
@@ -588,6 +589,11 @@ if (typeof module !== 'undefined' && module.exports) {
       u.pathname = '/ws';
       u.search = '';
       u.hash = '';
+      const host = u.hostname;
+      const port = u.port || (u.protocol === 'wss:' ? '443' : '80');
+      if ((host === 'localhost' || host === '127.0.0.1') && (port === '3000' || port === '80')) {
+        u.port = '3300';
+      }
       return u.toString();
     } catch {
       return null;

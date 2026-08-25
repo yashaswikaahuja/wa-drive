@@ -11,7 +11,24 @@
   //   3. it is a genuine bridge message ({ _cc: true }) and not our own reply,
   //   4. its type is in an explicit allowlist.
   // Replies are posted back to the sender's exact origin, never broadcast to '*'.
-  var TRUSTED_ORIGINS = ['https://app.cybercontrol.fun'];
+  // Prod café UI + local Vite (either hostname).
+  var TRUSTED_ORIGINS = [
+    'https://app.cybercontrol.fun',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000'
+  ];
+  // Optional override from page: window.__CC_TRUSTED_ORIGINS = ['http://…']
+  try {
+    if (Array.isArray(globalThis.__CC_TRUSTED_ORIGINS)) {
+      for (var i = 0; i < globalThis.__CC_TRUSTED_ORIGINS.length; i++) {
+        if (TRUSTED_ORIGINS.indexOf(globalThis.__CC_TRUSTED_ORIGINS[i]) === -1) {
+          TRUSTED_ORIGINS.push(globalThis.__CC_TRUSTED_ORIGINS[i]);
+        }
+      }
+    }
+  } catch (_) {}
   var ALLOWED_TYPES = [
     'CONNECT',
     'PING',

@@ -1,7 +1,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# Monorepo uses root pnpm-lock; app context may not have package-lock.json.
+RUN npm install --no-audit --no-fund
 COPY . .
 ARG VITE_API_URL=https://api.cybercontrol.fun/api
 ARG VITE_SOCKET_URL=https://api.cybercontrol.fun

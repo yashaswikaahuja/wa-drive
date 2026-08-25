@@ -1,10 +1,11 @@
-# Expects CI (or a local `pnpm --filter cybercontrol-whatsapp-resolver build`) to
+# Expects CI (or local `pnpm --filter cybercontrol-whatsapp-resolver build`) to
 # produce dist/ with vendored @cybercontrol/wa-resolver before docker build.
 FROM node:20-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
   chromium \
   ca-certificates \
   fonts-liberation \
+  git \
   && rm -rf /var/lib/apt/lists/*
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 WORKDIR /app

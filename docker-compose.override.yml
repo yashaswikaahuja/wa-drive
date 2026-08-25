@@ -1,0 +1,14 @@
+# Local overrides (optional). Backend monorepo build is in docker-compose.yml.
+# Postgres host port: set POSTGRES_HOST_PORT in .env (e.g. 5434).
+services:
+  backend:
+    ports:
+      - "3000:3000"
+
+  extension-service:
+    ports:
+      - "3300:3300"
+
+  frontend:
+    ports:
+      - "5174:80"

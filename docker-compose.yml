@@ -9,14 +9,17 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # Local Windows often already has Postgres on 5432 — override via POSTGRES_HOST_PORT=5433
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cybercontrol_app -d cybercontrol"]
       interval: 5s
       retries: 5
 
   backend:
-    build: ./apps/backend
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile.monorepo
     restart: unless-stopped
     depends_on:
       postgres:

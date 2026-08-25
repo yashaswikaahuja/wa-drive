@@ -10,20 +10,37 @@ import { pool, auditLog, logActivity, signAccessToken, signRefreshToken } from '
 // The extension is unaffected (keeps token-in-storage + body refresh). /refresh accepts the
 // token from EITHER the cookie (web) OR the body (extension). See deploy/docs/AUTH-COOKIE-MIGRATION.md.
 export const REFRESH_COOKIE = 'cc_refresh';
-const COOKIE_OPTS = {
-  httpOnly: true,
-  secure: true,
-  sameSite: 'lax' as const,
-  domain: '.cybercontrol.fun',   // shared registrable domain → sent on app.→api. XHR
-  path: '/api/auth',             // scope: only the auth endpoints ever receive it
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-};
+// Prod: HttpOnly cookie on shared .cybercontrol.fun domain (app. → api.).
+// Local http://127.0.0.1:5173 → :3000 cannot use Secure + cross-site cookies; body refreshToken is used instead.
+const isLocalHttp = process.env.NODE_ENV !== 'production' || process.env.LOCAL_AUTH === '1';
+const COOKIE_OPTS = isLocalHttp
+  ? {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax' as const,
+      path: '/api/auth',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    }
+  : {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax' as const,
+      domain: '.cybercontrol.fun',
+      path: '/api/auth',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    };
 
 export function setRefreshCookie(res: Response, token: string): void {
   try { res.cookie(REFRESH_COOKIE, token, COOKIE_OPTS); } catch { /* non-prod host: body token still works */ }
 }
 export function clearRefreshCookie(res: Response): void {
-  try { res.clearCookie(REFRESH_COOKIE, { domain: COOKIE_OPTS.domain, path: COOKIE_OPTS.path }); } catch { /* ignore */ }
+  try {
+    const opts: { path: string; domain?: string } = { path: COOKIE_OPTS.path };
+    if ('domain' in COOKIE_OPTS && (COOKIE_OPTS as { domain?: string }).domain) {
+      opts.domain = (COOKIE_OPTS as { domain?: string }).domain;
+    }
+    res.clearCookie(REFRESH_COOKIE, opts);
+  } catch { /* ignore */ }
 }
 // Manual Cookie-header parse (avoids a cookie-parser dependency).
 export function readRefreshCookie(req: Request): string | null {

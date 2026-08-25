@@ -1,6 +1,8 @@
-# Expects CI (or a local `pnpm --filter cybercontrol-whatsapp-service build`) to
+# Expects CI (or local `pnpm --filter cybercontrol-whatsapp-service build`) to
 # produce dist/ with vendored @cybercontrol/wa-* packages before docker build.
 FROM node:20-slim
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY dist/package.json ./
 RUN npm install --omit=dev

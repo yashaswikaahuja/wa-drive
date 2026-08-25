@@ -55,10 +55,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # 1. Build the image and load it locally (do NOT push yet).
+      # Monorepo: workspace packages live under packages/; context must be repo root.
       - uses: docker/build-push-action@v6
         with:
-          context: ./apps/backend
-          file: ./apps/backend/Dockerfile
+          context: .
+          file: ./apps/backend/Dockerfile.monorepo
           platforms: linux/amd64
           load: true
           push: false
@@ -91,8 +92,8 @@ jobs:
       # 3. Only now (smoke-test passed) push to GHCR.
       - uses: docker/build-push-action@v6
         with:
-          context: ./apps/backend
-          file: ./apps/backend/Dockerfile
+          context: .
+          file: ./apps/backend/Dockerfile.monorepo
           platforms: linux/amd64
           push: true
           tags: |

@@ -54,8 +54,14 @@ const ALLOWED_ORIGINS = new Set([
   'https://app.cybercontrol.fun',
   'https://cybercontrol.fun',
   'http://localhost:5173',
+  'http://127.0.0.1:5173',
   'http://localhost:3000',
+  'http://127.0.0.1:3000',
 ]);
+// Extra origins from env (comma-separated), e.g. CORS_ORIGINS=http://127.0.0.1:5173
+for (const o of String(process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean)) {
+  ALLOWED_ORIGINS.add(o);
+}
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.has(origin)) {
