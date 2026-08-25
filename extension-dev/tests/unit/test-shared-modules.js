@@ -21,7 +21,7 @@ function assert(condition, msg) {
 }
 
 // ── Load shared/option-match.js ──
-eval(require('fs').readFileSync(__dirname + '/../../../apps/extension/shared/option-match.js', 'utf8'));
+eval(require('fs').readFileSync(__dirname + '/../../../packages/cc-shared/src/option-match.js', 'utf8'));
 
 console.log('\n=== shared/option-match.js ===');
 
@@ -77,7 +77,7 @@ assert(extraResult && extraResult.value === '01', 'ExtraValues fallback');
 console.log('\n=== shared/label-utils.js ===');
 
 // Load label-utils
-eval(require('fs').readFileSync(__dirname + '/../../../apps/extension/shared/label-utils.js', 'utf8'));
+eval(require('fs').readFileSync(__dirname + '/../../../packages/cc-shared/src/label-utils.js', 'utf8'));
 
 // calcConfidence — canonical formula
 assert(calcConfidence(0, 0) === 0.5, 'New mapping confidence = 0.5');

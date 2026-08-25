@@ -7,15 +7,15 @@ on:
     branches: [master, main]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Job Matrix:
-#   1. architecture — governance checks (forbidden patterns, frozen files, ownership, deps)
-#   2. unit-and-knowledge — Phase 0/1/2 tests (no external deps)
-#   3. extension-security — permanent SEC-001..004 and browser-private boundary regressions
+# Turborepo-aware job matrix:
+#   1. architecture — governance (paths under packages/ + apps/)
+#   2. unit-and-knowledge — ci-unit.mjs (packages/* + architecture docs only)
+#   3. extension-security — SEC-001..004 against apps/extension bundles + packages
 #   4. schema-conformance — adversarial public-wire schema validation
-#   5. browser — Playwright-based capability tests (needs Chromium)
+#   5. browser — Playwright suites that do not need deleted discrete trees
 #
-# Jobs run in parallel. Frozen-file findings remain advisory; contract,
-# dependency, DOM-boundary, security, unit, schema, and browser failures block the build.
+# Do NOT restore old extension/perception|runtime files to make CI green —
+# remap harnesses to packages/cc-* instead.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 jobs:
@@ -102,9 +102,8 @@ jobs:
 
           # FB-012: No fill planning in extension (new code)
           if echo "$DIFF" | grep -qE "(buildFillPlan|generatePlan|planFill|interpretKnowledge|selectStrategy|chooseRecovery|autonomousFill)"; then
-            # Exclude server packages + restored perception/runtime sources (planning stays server-side;
-            # these paths are either packages/svc-* or grandfathered extension runtime that only executes plans).
-            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.js|background.js|(apps/)?extension-service/|tests/|packages/svc-|apps/extension/(perception|runtime)/)" || true)
+            # Exclude server packages + SW/bundles (planning is server-side in packages/svc-*).
+            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.js|background.js|(apps/)?extension-service/|tests/|packages/svc-|apps/extension/sw/|.*-bundle\.js)" || true)
             if [ -n "$PLANNING_FILES" ]; then
               echo "❌ FB-012: Fill planning/knowledge interpretation in extension (server-only per D11)" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -167,17 +166,16 @@ jobs:
           echo "## Dependency Direction" >> $GITHUB_STEP_SUMMARY
           VIOLATIONS=0
 
-          # Check for actual code references (exclude comments).
-          # Monorepo: shared/drivers live under apps/extension/ (and packages/cc-*).
+          # Turborepo: shared/drivers source of truth is packages/cc-*.
           shopt -s nullglob
-          for f in apps/extension/shared/*.js packages/cc-shared/src/*.js; do
+          for f in packages/cc-shared/src/*.js; do
             if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|drivers|popup)|import .*(autofill|drivers|popup)"; then
               echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
             fi
           done
 
-          for f in apps/extension/drivers/*.js packages/cc-drivers/src/*.js; do
+          for f in packages/cc-drivers/src/*.js; do
             if grep -v '^\s*//' "$f" 2>/dev/null | grep -v '^\s*\*' | grep -qE "require\(.*(autofill|popup)|import .*(autofill|popup)"; then
               echo "❌ \`$f\` imports from upper layer" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))

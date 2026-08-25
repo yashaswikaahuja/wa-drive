@@ -64,11 +64,12 @@ const FRAMEWORK_PATTERN_LOOSE = /(react.?select|angular.?material|mat.?select|pr
 
 // These directories must be framework-free
 const FRAMEWORK_FREE_DIRS = [
-  'apps/extension/perception',
+  // Turborepo: perception discrete tree removed; scan packages + service instead.
   'apps/extension-service',
   'packages/svc-fill-planner',
   'packages/svc-ai-mapper',
   'packages/svc-knowledge',
+  'packages/cc-orchestrator',
 ];
 
 // Grandfathered exceptions (existing production code)
@@ -77,9 +78,7 @@ const FRAMEWORK_GRANDFATHERED = [
   'apps/extension-service/src/http/routes/mappings.js', // Legacy mapping routes (pre-D11)
   'apps/extension-service/src/http/routes/training.js', // Legacy training routes (pre-D11)
   'apps/extension-service/dist/',                      // Build output mirrors src (skip)
-  'apps/extension/perception/adapters/',       // Existing adapter detection (Phase 3.2 frozen)
-  'apps/extension/perception/node-factory.js', // Widget tag detection (Phase 3.1)
-  'apps/extension/perception/widget-classifier.js', // Phase 3.2 frozen — uses CSS class heuristics
+  'packages/cc-orchestrator/src/script-manifests.js',  // fixture portal names, not knowledge identity
 ];
 
 for (const dir of FRAMEWORK_FREE_DIRS) {
@@ -106,9 +105,9 @@ for (const dir of FRAMEWORK_FREE_DIRS) {
   }
 }
 
-// Positive: perception exists and is framework-free
-assert(existsSync(join(ROOT, 'apps/extension/perception/widget-classifier.js')),
-  'Widget classifier exists');
+// Positive: AI mapper package owns cold-start semantics (turborepo)
+assert(existsSync(join(ROOT, 'packages/svc-ai-mapper/src/semantic-mapper.js')),
+  'semantic-mapper exists in packages/svc-ai-mapper');
 
 // ═══════════════════════════════════════════════════════════════════════
 // INVARIANT 2: AI credentials only in apps/extension-service/
@@ -118,12 +117,10 @@ console.log('\n  Invariant 2: AI credentials only in apps/extension-service/');
 
 const AI_KEY_PATTERNS = /(groq_key|groqKey|openai_key|anthropic_key|ai_key|llm_key|GROQ_API_KEY|OPENAI_API_KEY)/i;
 
-// Extension code must not reference AI key storage/retrieval
-// (llm-client.js is grandfathered — it receives the key but doesn't store it)
+// Extension product surface must not reference AI key storage/retrieval
+// Scan thin product sources only — generated *-bundle.js / bg-bundle may mention key *names*.
 const EXTENSION_DIRS_FOR_AI_CHECK = [
-  'apps/extension/perception',
-  'apps/extension/runtime',
-  'apps/extension/capabilities',
+  'apps/extension/application',
 ];
 
 for (const dir of EXTENSION_DIRS_FOR_AI_CHECK) {
@@ -146,9 +143,8 @@ const PLANNING_PATTERNS = /\b(buildFillPlan|generatePlan|planFill|interpretKnowl
 
 // Extension runtime must not contain these (popup.js/background.js are grandfathered)
 const RUNTIME_DIRS = [
-  'apps/extension/perception',
-  'apps/extension/runtime',
-  'apps/extension/capabilities',
+  'apps/extension/application',
+  'packages/cc-orchestrator/src',
 ];
 
 for (const dir of RUNTIME_DIRS) {
