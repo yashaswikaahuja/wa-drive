@@ -1,8 +1,8 @@
-﻿{
+{
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.19",
-  "description": "5.92.19 restore prod app trusted origin for CONNECT",
+  "version": "5.92.20",
+  "description": "5.92.20 fix SW double-eval const redeclaration (status 15)",
   "permissions": [
     "storage",
     "activeTab",
