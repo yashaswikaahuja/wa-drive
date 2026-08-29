@@ -21,13 +21,12 @@ import express from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../../db/db.js';
 import { mutateDoc, KEYS } from '../../db/store.js';
+import { getKeyForWorkspace } from '@cybercontrol/svc-ai-mapper';
 
 const router = express.Router();
 router.use(authMiddleware);
 
-const LLM_API_URL = process.env.LLM_BASE_URL || process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 const DEFAULT_MODEL = process.env.LLM_AGENT_MODEL || process.env.GROQ_AGENT_MODEL || 'llama-3.3-70b-versatile';
-const LLM_API_KEY = process.env.AI_API_KEY || process.env.LLM_API_KEY || process.env.GROQ_API_KEY || '';
 
 // Compute semanticFormKey identically to extension/autofill/extractor.js
 // so the agent and the autofill flow share the same cache key.
@@ -314,7 +313,11 @@ router.post('/plan', async (req, res) => {
     });
   }
 
-  if (!LLM_API_KEY) return res.status(500).json({ error: 'AI_API_KEY / LLM_API_KEY not configured on server' });
+  const wsKeys = await getKeyForWorkspace(req.user.workspaceId);
+  if (!wsKeys.apiKey) {
+    return res.status(500).json({ error: 'No AI key configured — set OpenRouter/text keys in owner panel' });
+  }
+  const apiUrl = wsKeys.endpoint || 'https://openrouter.ai/api/v1/chat/completions';
 
   // Only send UNCOVERED fields — preserves token budget for novel fields.
   const subSnapshot = {
@@ -325,12 +328,12 @@ router.post('/plan', async (req, res) => {
   const tools = driverSchemasToTools(drivers);
   const systemPrompt = buildSystemPrompt(profile, hostname, formContext);
   const userPrompt = buildUserPrompt(goal, subSnapshot);
-  const model = requestedModel || DEFAULT_MODEL;
+  const model = requestedModel || wsKeys.model || DEFAULT_MODEL;
 
   try {
-    const response = await fetch(LLM_API_URL, {
+    const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + LLM_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + wsKeys.apiKey },
       body: JSON.stringify({
         model,
         messages: [
@@ -346,7 +349,7 @@ router.post('/plan', async (req, res) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      return res.status(502).json({ error: 'groq-error', status: response.status, body: errText.slice(0, 500) });
+      return res.status(502).json({ error: 'llm-error', status: response.status, body: errText.slice(0, 500) });
     }
 
     const data = await response.json();

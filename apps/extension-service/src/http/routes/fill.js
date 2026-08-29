@@ -329,4 +329,111 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
   }
 });
 
+// ── POST /api/semantic-map ──────────────────────────────────────────────
+// Lightweight cold-start for AUTO/sequential fill: map unmapped extracted
+// fields → profile keys via OpenRouter (server-side only). Mistral is OCR-only.
+router.post('/semantic-map', authMiddleware, async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { fields, pageContext, hostname, formKey } = req.body || {};
+    if (!Array.isArray(fields) || fields.length === 0) {
+      return res.status(400).json({ error: 'fields array is required' });
+    }
+
+    const scope = {
+      portal_id: pageContext?.portal_id || hostname || '',
+      form_key: pageContext?.form_key || formKey || '',
+      organization_id: req.user.workspaceId,
+      country: pageContext?.country || null,
+    };
+
+    const pseudoNodes = fields.map((f, idx) => sequentialFieldToPseudoNode(f, idx));
+    const mapResult = await mapUnknownFields({
+      fields: pseudoNodes,
+      pageContext: {
+        page_title: pageContext?.page_title || '',
+        page_url: pageContext?.page_url || '',
+        form_heading: pageContext?.form_heading || '',
+        portal_id: scope.portal_id,
+        form_key: scope.form_key,
+        language: pageContext?.language || 'en',
+      },
+      scope,
+      requesterId: req.user.userId,
+    });
+
+    const byId = new Map(pseudoNodes.map((n) => [n.node_id, n]));
+    const mappings = (mapResult.mappings || [])
+      .filter((m) => m.profile_key && m.disposition !== 'reject')
+      .map((m) => {
+        const node = byId.get(m.node_id);
+        return {
+          selector: node?.observed?.selector || m.node_id,
+          node_id: m.node_id,
+          profile_key: m.profile_key,
+          semantic_key: m.semantic_key || null,
+          confidence: m.confidence,
+          disposition: m.disposition,
+          source: 'server-ai',
+        };
+      });
+
+    return res.json({
+      ok: mapResult.ok,
+      strategy: mapResult.strategy,
+      mappings,
+      excluded: mapResult.excluded || [],
+      diagnostics: {
+        ...(mapResult.diagnostics || {}),
+        latencyMs: Date.now() - startTime,
+      },
+    });
+  } catch (err) {
+    console.error('[semantic-map] error:', err.message);
+    return res.status(500).json({ error: err.message, strategy: 'error' });
+  }
+});
+
+/**
+ * Adapt sequential-kernel extracted fields into pseudo PageSnapshot nodes
+ * so mapUnknownFields / classifyField treat them as fillable.
+ */
+function sequentialFieldToPseudoNode(field, idx) {
+  const type = String(field.type || 'text').toLowerCase();
+  let affordances = ['type_text'];
+  if (/select|dropdown/.test(type)) affordances = ['select_one'];
+  else if (/radio/.test(type)) affordances = ['select_one', 'toggle'];
+  else if (/checkbox/.test(type)) affordances = ['toggle', 'select_many'];
+  else if (/file|upload/.test(type)) affordances = ['upload'];
+  else if (/textarea/.test(type)) affordances = ['type_text'];
+
+  const selector = field.selector || field.id || field.name || `field_${idx}`;
+  return {
+    node_id: selector,
+    kind: 'input',
+    label: field.label || field.placeholder || field.name || '',
+    semantic_label: field.label || '',
+    field_type: type,
+    options: field.options || null,
+    affordances,
+    state: {
+      visible: field.visible !== false,
+      hidden: field.hidden === true,
+      enabled: true,
+      readonly: false,
+    },
+    widget: {
+      input_type: type,
+      widget_class: type,
+    },
+    observed: {
+      selector,
+      label: field.label || '',
+      name: field.name || '',
+      dom_id: field.id || '',
+      accessible_name: field.label || '',
+    },
+  };
+}
+
 export default router;
