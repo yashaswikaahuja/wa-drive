@@ -1,8 +1,8 @@
-﻿{
+{
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.18",
-  "description": "5.92.18 split sources + solid sequential bundle",
+  "version": "5.92.21",
+  "description": "5.92.21 AUTO fill escalates unmapped fields to server OpenRouter AI",
   "permissions": [
     "storage",
     "activeTab",

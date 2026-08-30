@@ -3,6 +3,9 @@
  * Source: @cc/background
  * Rebuild: pnpm --filter cybercontrol-extension build
  */
+if (globalThis["__CC_BG_BUNDLE_LOADED"]) { /* already loaded */ }
+else {
+globalThis["__CC_BG_BUNDLE_LOADED"] = true;
 
 /* ==== auth/src/auth.js ==== */
 /**
@@ -17,14 +20,17 @@
  *   CC_TRUSTED_ONLY_TYPES        => object
  */
 
-// Local Vite defaults. Prod app origin comes from injectable globals so this package
-// is not locked to one company domain:
+// Local Vite defaults + prod app origin. Default PUBLIC_DOMAIN matches
+// backend-core / frontend / landing. Override via:
 //   __CC_APP_ORIGIN / __CC_PUBLIC_DOMAIN / __CC_TRUSTED_FRONTEND_ORIGINS
+// Use `var` (not `const`) for SW globals — importScripts shares one scope and
+// Chrome may re-evaluate bundles; const redeclaration → status code 15.
+var DEFAULT_PUBLIC_DOMAIN = 'cybercontrol.fun';
 function resolveTrustedFrontendOrigins() {
   if (Array.isArray(globalThis.__CC_TRUSTED_FRONTEND_ORIGINS) && globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.length) {
     return globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.slice();
   }
-  const origins = [
+  var origins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
     'http://localhost:3000',
@@ -33,15 +39,18 @@ function resolveTrustedFrontendOrigins() {
   try {
     if (typeof globalThis.__CC_APP_ORIGIN === 'string' && globalThis.__CC_APP_ORIGIN) {
       origins.unshift(String(globalThis.__CC_APP_ORIGIN).replace(/\/$/, ''));
-    } else if (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN) {
-      origins.unshift('https://app.' + String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, ''));
+    } else {
+      var pubDomain = (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN)
+        ? String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, '')
+        : DEFAULT_PUBLIC_DOMAIN;
+      origins.unshift('https://app.' + pubDomain);
     }
   } catch (_) { /* ignore */ }
   return origins;
 }
-const CC_TRUSTED_FRONTEND_ORIGINS = resolveTrustedFrontendOrigins();
+var CC_TRUSTED_FRONTEND_ORIGINS = resolveTrustedFrontendOrigins();
 
-const CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
+var CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 
 /** Phase 4.1: always false — legacy paths permanently disabled. */
 async function isLegacyClientFillAllowed() {
@@ -1267,3 +1276,5 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   return true;
 });
+
+}

@@ -125,6 +125,79 @@
       });
     } catch (e) {}
 
+    // ── Stage 2b: Server AI for fields not covered by WSS/saved plan ──────────
+    // OpenRouter (extension-service /semantic-map). Mistral is OCR-only on hub.
+    try {
+      var planned = wssPlan.mapping || {};
+      var savedMap = wssPlan.savedMappings || {};
+      var gskPre = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
+      var covered = {};
+      Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
+      if (savedMap && typeof savedMap === 'object') {
+        for (var si = 0; si < extracted.fields.length; si++) {
+          var sf = extracted.fields[si];
+          var sEntry = savedMap[gskPre(sf.label)] || savedMap[gskPre(sf.name)] || null;
+          if (sEntry && sEntry.profileKey) covered[sf.selector] = true;
+        }
+      }
+      var aiCandidates = extracted.fields.filter(function (f) { return !covered[f.selector]; });
+      if (aiCandidates.length > 0 && backendUrl && accessToken) {
+        progress('AI mapping ' + aiCandidates.length + ' unknown fields...', 58);
+        var aiRes = await fetch(backendUrl + '/semantic-map', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fields: aiCandidates,
+            hostname: extracted.hostname,
+            formKey: extracted.semanticFormKey || extracted.formKey,
+            pageContext: {
+              page_url: extracted.url || '',
+              page_title: '',
+              portal_id: extracted.hostname,
+              form_key: extracted.semanticFormKey || extracted.formKey,
+            },
+          }),
+        });
+        if (aiRes.ok) {
+          var aiData = await aiRes.json();
+          var aiMaps = (aiData && aiData.mappings) || [];
+          var flatProf = extracted.profile || {};
+          if (!wssPlan.mapping) wssPlan.mapping = {};
+          if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
+          for (var ai = 0; ai < aiMaps.length; ai++) {
+            var am = aiMaps[ai];
+            if (!am || !am.selector || !am.profile_key) continue;
+            if (am.disposition === 'reject') continue;
+            var pval = flatProf[am.profile_key];
+            if (pval == null || String(pval).trim() === '') continue;
+            if (typeof pval === 'object' && pval && 'value' in pval) pval = pval.value;
+            if (pval == null || String(pval).trim() === '') continue;
+            if (wssPlan.mapping[am.selector]) continue;
+            var fieldMeta = aiCandidates.find(function (f) { return f.selector === am.selector; }) || {};
+            wssPlan.mapping[am.selector] = {
+              value: pval,
+              type: fieldMeta.type || 'text',
+              label: fieldMeta.label || '',
+              profileKey: am.profile_key,
+            };
+            wssPlan.filledBySource[am.selector] = {
+              label: fieldMeta.label || '',
+              profileKey: am.profile_key,
+              source: 'server-ai',
+            };
+          }
+          console.log('[CC] semantic-map strategy=', aiData.strategy, 'applied=', Object.keys(wssPlan.filledBySource).filter(function (k) { return wssPlan.filledBySource[k].source === 'server-ai'; }).length);
+        } else {
+          console.warn('[CC] semantic-map HTTP', aiRes.status);
+        }
+      }
+    } catch (aiErr) {
+      console.warn('[CC] semantic-map skipped:', aiErr && aiErr.message ? aiErr.message : aiErr);
+    }
+
     // ── Stage 3: Execute in page ───────────────────────────────────────────────
     progress('Filling form (sequential)...', 70);
     var execResults = await chrome.scripting.executeScript({

@@ -342,19 +342,48 @@ router.delete('/workspaces/:id', async (req: any, res) => {
   } finally { client.release(); }
 });
 
-// GET /owner/ai-settings — current AI model configuration (env-level)
+// GET /owner/ai-settings — prefer DB (owner-panel saves) then env fallback
 router.get('/ai-settings', async (req: any, res) => {
   const mask = (k: string) => k ? '•'.repeat(Math.max(0, k.length - 8)) + k.slice(-8) : '';
+  let dbAi: any = {};
+  try {
+    // PATCH writes the same AI block onto all workspaces — read any non-empty one
+    const { rows } = await req.pool.query(
+      `SELECT settings->'ai' AS ai
+         FROM workspaces
+        WHERE settings->'ai' IS NOT NULL
+          AND (
+            COALESCE(settings->'ai'->>'openrouterKey','') <> ''
+            OR COALESCE(settings->'ai'->>'llmKey','') <> ''
+            OR COALESCE(settings->'ai'->>'groqKey','') <> ''
+            OR COALESCE(settings->'ai'->>'mistralKey','') <> ''
+          )
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 1`
+    );
+    dbAi = rows[0]?.ai || {};
+  } catch (e: any) {
+    console.warn('[owner/ai-settings] DB read failed:', e.message);
+  }
+
+  const openrouterKey = dbAi.openrouterKey || process.env.OPENROUTER_API_KEY || '';
+  const llmKey = dbAi.llmKey || dbAi.groqKey || process.env.AI_API_KEY || process.env.LLM_API_KEY || process.env.GROQ_API_KEY || '';
+  const mistralKey = dbAi.mistralKey || process.env.MISTRAL_API_KEY || '';
+  const textProvider = dbAi.textProvider || (openrouterKey ? 'openrouter' : 'groq');
+  const textModel = dbAi.textModel
+    || (textProvider === 'openrouter' ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile');
+
   res.json({
-    extractionProvider: 'mistral',
-    extractionModel: 'mistral-small-latest',
-    mistralKey: mask(process.env.MISTRAL_API_KEY || ''),
-    textProvider: process.env.OPENROUTER_API_KEY ? 'openrouter' : 'groq',
-    textModel: process.env.OPENROUTER_API_KEY ? 'meta-llama/llama-3.3-70b-instruct' : 'llama-3.3-70b-versatile',
-    openrouterKey: mask(process.env.OPENROUTER_API_KEY || ''),
-    llmKey: mask(process.env.AI_API_KEY || process.env.LLM_API_KEY || process.env.GROQ_API_KEY || ''),
+    extractionProvider: dbAi.extractionProvider || 'mistral',
+    extractionModel: dbAi.extractionModel || 'mistral-small-latest',
+    mistralKey: mask(mistralKey),
+    textProvider,
+    textModel,
+    openrouterKey: mask(openrouterKey),
+    llmKey: mask(llmKey),
     // Compat alias for older owner-panel clients
-    groqKey: mask(process.env.AI_API_KEY || process.env.LLM_API_KEY || process.env.GROQ_API_KEY || ''),
+    groqKey: mask(llmKey),
+    source: dbAi.openrouterKey || dbAi.llmKey || dbAi.groqKey || dbAi.mistralKey ? 'owner-panel-db' : 'env',
   });
 });
 
@@ -382,7 +411,8 @@ router.patch('/ai-settings', async (req: any, res) => {
         await req.pool.query(`UPDATE workspaces SET ${u}`);
       }
     }
-    res.json({ ok: true });
+    // Fill AI on extension-service caches keys for 5m — note for operators
+    res.json({ ok: true, note: 'Keys saved to workspaces.settings.ai (fill AI reads these; cache ≤5m)' });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

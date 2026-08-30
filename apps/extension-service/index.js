@@ -38,11 +38,13 @@ import {
   setStoreAdapter,
   ensureKnowledgeSchema,
 } from '@cybercontrol/svc-knowledge';
+import { setPool as setAiKeyPool } from '@cybercontrol/svc-ai-mapper';
 import { setWsSend as setRuntimeWsSend } from '@cybercontrol/svc-runtime';
 import { setWsSend as setTeachWsSend } from '@cybercontrol/svc-teach';
 
 setPool(pool);
 setStoreAdapter({ mutateDoc, KEYS });
+setAiKeyPool(pool); // owner-panel AI keys (workspaces.settings.ai)
 
 const PORT = Number(process.env.PORT) || 3300;
 const app = express();

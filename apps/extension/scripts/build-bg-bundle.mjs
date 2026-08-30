@@ -19,4 +19,7 @@ writeConcatBundle({
     'composer/src/composer.js',
   ],
   outfile: path.join(extensionRoot, 'sw/bg-bundle.js'),
+  // Prevent "Identifier has already been declared" (Chrome SW status 15) when
+  // importScripts re-evaluates this file in the same service-worker global.
+  idempotentKey: '__CC_BG_BUNDLE_LOADED',
 });

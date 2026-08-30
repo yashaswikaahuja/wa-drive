@@ -194,8 +194,10 @@ export async function mapUnknownFields(request) {
     };
   }
 
-  // ── Step 2: Check AI availability ─────────────────────────────────
-  if (!aiKeyManager.isAvailable()) {
+  // ── Step 2: Check AI availability (owner-panel workspace keys) ────
+  const workspaceId = scope.organization_id || null;
+  const wsAvailable = await aiKeyManager.isAvailableForWorkspace(workspaceId);
+  if (!wsAvailable) {
     return {
       ok: true,
       strategy: 'no_ai_key',
@@ -257,7 +259,7 @@ export async function mapUnknownFields(request) {
   globalRateLimiter.record('__global__');
   diagnostics.aiCallMade = true;
 
-  const aiResponse = await aiKeyManager.callAI({
+  const aiResponse = await aiKeyManager.callAIForWorkspace(workspaceId, {
     systemPrompt: prompt.systemPrompt,
     userPrompt: prompt.userPrompt,
   });
