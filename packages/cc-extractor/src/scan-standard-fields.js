@@ -133,6 +133,13 @@
       }
 
       var label = getLabel(el);
+      // Last-resort: humanize name/id so we never emit blank labels (sessions UI
+      // otherwise falls back to selector / semantic ids).
+      if (!label && helpers.humanizeAttr) {
+        label = helpers.humanizeAttr(el.name || el.id || '') || '';
+      } else if (!label && typeof window !== 'undefined' && window.ccDomUtils && window.ccDomUtils.humanizeAttr) {
+        label = window.ccDomUtils.humanizeAttr(el.name || el.id || '') || '';
+      }
       var selector = makeSelector(el) || 'form-field-' + idx;
 
       // ── Select ──

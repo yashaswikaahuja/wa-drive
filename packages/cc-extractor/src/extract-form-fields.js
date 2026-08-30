@@ -15,8 +15,18 @@ function extractFormFieldsWithFingerprint() {
       return _fc.isInSkipContext ? _fc.isInSkipContext(el) :
         !!(el.closest && el.closest('nav,header,footer,[role="navigation"],[role="search"],[role="banner"]'));
     },
+    humanizeAttr: function (raw) {
+      return ccDomUtils.humanizeAttr ? ccDomUtils.humanizeAttr(raw) : '';
+    },
     getLabel: function (el) {
-      return ccDomUtils.getLabel ? ccDomUtils.getLabel(el) : (el.placeholder || '');
+      // Prefer shared getLabel (aria/label/container/humanize). Never fall back to bare id.
+      if (ccDomUtils.getLabel) return ccDomUtils.getLabel(el) || '';
+      var ph = (el.placeholder || '').trim();
+      if (ph) return ph;
+      if (ccDomUtils.humanizeAttr) {
+        return ccDomUtils.humanizeAttr(el.name || el.id || el.getAttribute && el.getAttribute('formcontrolname') || '') || '';
+      }
+      return '';
     },
     isGoodLabel: function (s) {
       return _fc.isGoodLabel ? _fc.isGoodLabel(s, ccDomUtils) :
