@@ -2,11 +2,15 @@ import { Router, type Router as ExpressRouter } from 'express';
 import { tailnetOnly, requireOwner } from './gate.js';
 import { computeHealth } from './health.js';
 import { runHealthSweep } from '@cybercontrol/backend-operations';
+import ownerFormsRouter from './forms.js';
 
 const router: ExpressRouter = Router();
 
 // Every owner route: must come from the tailnet AND be an allowlisted owner identity.
 router.use(tailnetOnly, requireOwner);
+
+// Forms catalog editor (owner-panel Forms section)
+router.use('/forms', ownerFormsRouter);
 
 /**
  * GET /owner/metrics — the top-line Level-1 customer numbers.
