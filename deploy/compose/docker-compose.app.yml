@@ -51,6 +51,14 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}                  # MUST match backend
       DATA_DIR: /app/data
+      # Text / fill-mapping AI (OpenRouter preferred). Mistral stays on backend for OCR only.
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      AI_API_KEY: ${AI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-openrouter}
+      AI_MODEL: ${AI_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      BRAND_NAME: ${BRAND_NAME:-CyberControl}
     volumes:
       - ext_data:/app/data
 

@@ -93,3 +93,7 @@ extension-dev/cli/out/
 # Local issue scratch
 .tmp-issue*/
 
+
+# Local WA resolver browser session (never commit)
+apps/whatsapp-resolver/session/
+
