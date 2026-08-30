@@ -177,9 +177,9 @@ export interface AiSettings {
   textProvider: string;
   textModel: string;
   openrouterKey: string;
-  /** Preferred generic LLM API key */
-  llmKey: string;
-  /** @deprecated alias of llmKey */
+  /** Preferred generic LLM API key (text fill) */
+  llmKey?: string;
+  /** @deprecated alias of llmKey — kept for older saved settings */
   groqKey: string;
 }
 
@@ -196,4 +196,50 @@ export async function patchAiSettings(cfg: Config, data: Partial<AiSettings>): P
     try { msg = (await res.json()).error || msg; } catch {}
     throw new ApiError(res.status, msg);
   }
+}
+
+
+// ─── Forms catalog (Phase 2) ────────────────────────────────────────────────
+
+export interface CatalogForm {
+  id: string;
+  name: string;
+  short_name: string;
+  portal: string;
+  url: string;
+  lifecycle: 'open' | 'upcoming' | 'closed' | 'archived';
+  opens_at: string | null;
+  closes_at: string | null;
+  source_updated_at: string | null;
+  official_notice_url: string | null;
+  notice_summary: string | null;
+  status: string;
+  required_documents: string[];
+  fee: Record<string, number> | null;
+  photo_specs: unknown | null;
+  signature_specs: unknown | null;
+}
+
+export const fetchOwnerForms = (cfg: Config, q?: string, lifecycle?: string) => {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (lifecycle) params.set('lifecycle', lifecycle);
+  return get<CatalogForm[]>(cfg, `/owner/forms?${params.toString()}`);
+};
+
+export const fetchOwnerForm = (cfg: Config, id: string) =>
+  get<CatalogForm>(cfg, `/owner/forms/${id}`);
+
+export async function patchOwnerForm(cfg: Config, id: string, data: Partial<CatalogForm>): Promise<CatalogForm> {
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/owner/forms/${id}`, {
+    method: 'PATCH',
+    headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    let msg = 'Save failed';
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new ApiError(res.status, msg);
+  }
+  return res.json();
 }
