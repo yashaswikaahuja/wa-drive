@@ -309,10 +309,15 @@ export async function generateFillPlan(request) {
     });
   }
 
-  // Attach plan to session
+  // Attach plan to session (include human labels for Sessions UI)
   const stepIds = plan.steps.map(s => s.step_id);
   const nodeIds = plan.steps.map(s => s.target.node_id);
-  attachPlan(fillSession.session_id, plan.plan_id, plan.steps.length, stepIds, nodeIds);
+  const labels = plan.steps.map(s => s.target?.label || null);
+  const semanticKeys = plan.steps.map(s => s.target?.semantic_key || null);
+  attachPlan(fillSession.session_id, plan.plan_id, plan.steps.length, stepIds, nodeIds, {
+    labels,
+    semanticKeys,
+  });
 
   return {
     success: true,

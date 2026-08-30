@@ -34,7 +34,9 @@ export function buildRecords(session, observation) {
       stepId: result.step_id,
       contextId: progress.context_id || null,
       nodeId: progress.node_id || null,
-      label: progress.label || progress.semantic_key || progress.node_id || result.step_id,
+      // Prefer human label / semantic key — avoid raw node_id as the Sessions title.
+      label: progress.label || progress.semantic_key || 'Field',
+      selector: progress.node_id || null,
       type: progress.action_op || 'unknown',
       value: '',
       source: 'server-plan',

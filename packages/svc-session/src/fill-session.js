@@ -176,10 +176,13 @@ export function getWorkspaceSessions(workspace_id) {
  * @param {number} totalSteps — Number of steps in the plan
  * @param {string[]} stepIds — Step IDs from the plan
  * @param {string[]} nodeIds — Corresponding node IDs for each step
+ * @param {object} [meta]
+ * @param {(string|null)[]} [meta.labels] — human field labels parallel to stepIds
+ * @param {(string|null)[]} [meta.semanticKeys] — semantic keys parallel to stepIds
  * @returns {FillSession}
  * @throws {Error} If session not found or in invalid state
  */
-export function attachPlan(session_id, plan_id, totalSteps, stepIds, nodeIds) {
+export function attachPlan(session_id, plan_id, totalSteps, stepIds, nodeIds, meta = {}) {
   const session = sessions.get(session_id);
   if (!session) throw new Error(`Session not found: ${session_id}`);
   if (session.status !== 'pending' && session.status !== 'planning') {
@@ -191,10 +194,15 @@ export function attachPlan(session_id, plan_id, totalSteps, stepIds, nodeIds) {
   session.total_steps = totalSteps;
   session.updated_at = Date.now();
 
+  const labels = Array.isArray(meta.labels) ? meta.labels : [];
+  const semanticKeys = Array.isArray(meta.semanticKeys) ? meta.semanticKeys : [];
+
   // Initialize step progress
   session.steps = stepIds.map((step_id, i) => ({
     step_id,
     node_id: nodeIds[i] || 'unknown',
+    label: labels[i] || null,
+    semantic_key: semanticKeys[i] || null,
     status: 'pending',
     error_code: null,
     started_at: null,

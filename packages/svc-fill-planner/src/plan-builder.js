@@ -236,11 +236,20 @@ export function buildPlan(input) {
     const node = nodeMap[mapping.node_id];
     if (!node) continue;
 
+    // Human label for sessions/UI — never fall back to raw node_id here.
+    const humanLabel = node.observed?.accessible_name
+      || node.semantic_label
+      || node.label
+      || mapping.semantic_key
+      || null;
+
     const step = {
       step_id: generateId('step'),
       target: {
         context_id: mapping.context_id,
         node_id: mapping.node_id,
+        label: humanLabel,
+        semantic_key: mapping.semantic_key || null,
       },
       action: buildAction(mapping, node),
       risk: assessRisk(mapping, node),

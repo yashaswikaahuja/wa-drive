@@ -186,11 +186,43 @@
       try { var origin = (pageSnapshot.page && pageSnapshot.page.origin) || (pageSnapshot.page && pageSnapshot.page.url) || ''; return origin ? new URL(origin).hostname : ''; } catch (e) { return ''; }
     }());
 
+    // Prefer human-readable field labels over semantic DOM node ids.
+    var nodesById = (pageSnapshot && pageSnapshot.nodes) || {};
+    var humanLabelFor = function (step) {
+      var target = (step && step.target) || {};
+      var nodeId = target.node_id || null;
+      var node = (nodeId && nodesById[nodeId]) || null;
+      var observed = (node && node.observed) || {};
+      var label = target.label
+        || observed.accessible_name
+        || node && (node.semantic_label || node.label)
+        || target.semantic_key
+        || null;
+      // Never surface raw node_id / step_id as the primary Sessions UI label.
+      if (label && label !== nodeId && label !== (step && step.step_id)) return label;
+      if (target.semantic_key) return target.semantic_key;
+      return label || 'Field';
+    };
     var records = (plan.steps || []).map(function (step) {
       var result = resultByStep.get(step.step_id);
       var planned = (step.action && step.action.value != null) ? step.action.value : ((step.action && step.action.text != null) ? step.action.text : '');
       var actual = (result && result.observed_value_state) || (result && result.actual_value) || (result && result.actualValue) || null;
-      return { label: step.target && step.target.node_id || step.step_id, result: result && result.status === 'succeeded' ? 'filled' : ((result && result.status) || 'skipped'), value: planned, plannedValue: planned, actualValue: actual, failReason: (result && result.failure_code) || null, source: 'server-plan', fillMode: 'sequential-ape', hostname: hostFromSnap, verified: result && result.postcondition_met === true };
+      var target = (step && step.target) || {};
+      return {
+        label: humanLabelFor(step),
+        selector: target.node_id || null,
+        nodeId: target.node_id || null,
+        semanticKey: target.semantic_key || null,
+        result: result && result.status === 'succeeded' ? 'filled' : ((result && result.status) || 'skipped'),
+        value: planned,
+        plannedValue: planned,
+        actualValue: actual,
+        failReason: (result && result.failure_code) || null,
+        source: 'server-plan',
+        fillMode: 'sequential-ape',
+        hostname: hostFromSnap,
+        verified: result && result.postcondition_met === true,
+      };
     });
 
     // Session

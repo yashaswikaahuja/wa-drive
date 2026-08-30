@@ -106,7 +106,19 @@ export default function Sessions() {
           {records.map((r: any, i: number) => {
             const planned = plannedOf(r);
             const actual = actualOf(r);
-            const label = r.label || r.selector || `field ${i + 1}`;
+            // Prefer human labels; avoid showing raw semantic/DOM node ids as the title.
+            const rawLabel = r.label || r.semanticKey || r.profileKey || '';
+            const looksLikeNodeId = typeof rawLabel === 'string' && (
+              /^node[_:-]/i.test(rawLabel)
+              || /^n[_-]?[0-9a-f]{4,}$/i.test(rawLabel)
+              || (r.nodeId && rawLabel === r.nodeId)
+              || (r.selector && rawLabel === r.selector && /^(#|\.|node[_:-])/i.test(rawLabel))
+            );
+            const label = (!looksLikeNodeId && rawLabel)
+              || r.semanticKey
+              || r.profileKey
+              || r.selector
+              || `field ${i + 1}`;
             const actualMissing = r.result === 'filled' && (actual === null || actual === undefined);
             const mismatch =
               planned &&
