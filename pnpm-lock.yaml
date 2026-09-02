@@ -133,6 +133,9 @@ importers:
 
   apps/extension-service:
     dependencies:
+      '@cc/mapper':
+        specifier: workspace:*
+        version: link:../../packages/cc-mapper
       '@cybercontrol/svc-ai-mapper':
         specifier: workspace:*
         version: link:../../packages/svc-ai-mapper

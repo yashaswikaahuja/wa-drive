@@ -5,7 +5,8 @@ export { resolveChoiceToOption, CcResolveChoice } from './resolve-choice.ts';
 export { decideConditionalChoice, CcDecideConditional } from './decide-conditional.ts';
 export { tryMatch as tryMatchSpecial, isTwinField, isEducationRow, CcMatchSpecialFields } from './match-special-fields.ts';
 export { tryMatch as tryMatchProfile, tryMatchNameParts, tryMatchDob, CcMatchProfileFields } from './match-profile-fields.ts';
-export { applyAll, applyConditionalPost, applyTwinMirror, applySplitDob, CcFuzzyPostPasses } from './fuzzy-post-passes.ts';
+export { applyAll, applyConditionalPost, applyTwinMirror, CcFuzzyPostPasses } from './fuzzy-post-passes.ts';
+export { applySplitDob, parseDobParts } from './split-dob.js';
 export { fuzzyMatch, CcFuzzyMatch } from './fuzzy-match.ts';
 export { aiMatch, CcAiMatch } from './ai-match.ts';
 export {

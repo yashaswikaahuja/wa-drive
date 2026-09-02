@@ -2,6 +2,14 @@
  * fuzzy-post-passes — Post-loop mapping passes
  */
 import type { FormField, Mapping, MatchHelpers, Profile } from './types.ts';
+import { applySplitDob as applySplitDobJs, parseDobParts as parseDobPartsJs } from './split-dob.js';
+
+export const parseDobParts = parseDobPartsJs;
+export const applySplitDob = applySplitDobJs as (
+  formFields: FormField[],
+  profile: Profile,
+  mapping: Mapping,
+) => void;
 
 const TWIN_PREFIX_RE = /^(?:[a-z]\.|\d+\.|\(\w\)|[i-x]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b[\s:_-]*/i;
 
@@ -67,28 +75,6 @@ export function applyTwinMirror(formFields: FormField[], mapping: Mapping): void
     if (primaryField) {
       mapping[tf.selector] = { value: mapping[primaryField.selector].value, type: tf.type || '' };
     }
-  }
-}
-
-export function applySplitDob(formFields: FormField[], profile: Profile, mapping: Mapping): void {
-  if (!profile.dob) return;
-  const dobStr = String(profile.dob).trim();
-  const m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-  const m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
-  let dp: { day: string; month: string; year: string } | null = null;
-  if (m1) dp = { day: m1[1].padStart(2,'0'), month: m1[2].padStart(2,'0'), year: m1[3] };
-  else if (m2) dp = { day: m2[3].padStart(2,'0'), month: m2[2].padStart(2,'0'), year: m2[1] };
-  if (!dp) return;
-  for (let di = 0; di < formFields.length; di++) {
-    const df = formFields[di];
-    if (mapping[df.selector]) continue;
-    const lbl = (df.label||'').trim(), idn = (df.id||df.name||'').toLowerCase(), ph = (df.placeholder||'').trim();
-    const isDay   = /^dd$|^day$|day_of_birth|dob_day|birth_day/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth)(?:[^a-z]|$)/.test(idn);
-    const isMonth = /^mm$|^month$|month_of_birth|dob_month|birth_month/i.test(lbl) || /^mm$|^month$/i.test(ph) || /(?:^|[^a-z])(dob_?month|birth_?month|month_of_birth)(?:[^a-z]|$)/.test(idn);
-    const isYear  = /^yyyy$|^year$|year_of_birth|dob_year|birth_year/i.test(lbl) || /^yyyy$|^year$/i.test(ph) || /(?:^|[^a-z])(dob_?year|birth_?year|year_of_birth)(?:[^a-z]|$)/.test(idn);
-    if (isDay)   mapping[df.selector] = { value: dp.day,   type: df.type || '', profileKey: 'dob' };
-    else if (isMonth) mapping[df.selector] = { value: dp.month, type: df.type || '', profileKey: 'dob' };
-    else if (isYear)  mapping[df.selector] = { value: dp.year,  type: df.type || '', profileKey: 'dob' };
   }
 }
 

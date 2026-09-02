@@ -7,7 +7,7 @@ Post-loop cleanup for `fuzzyMatch` after every field has been visited once.
 - `applyAll(formFields, profile, helpers, mapping)` — runs all three passes
 - `applyConditionalPost(...)` — unmapped choice groups
 - `applyTwinMirror(...)` — verify/confirm/retype mirrors primary
-- `applySplitDob(...)` — DD / MM / YYYY short-label fields
+- `applySplitDob(...)` — DD / MM / YYYY short-label fields (root: `src/split-dob.js`, also used by WSS fill)
 
 ## Passes
 1. Unmapped conditional choice groups (`matchBy: 'conditional-post'`)

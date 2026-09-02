@@ -1,6 +1,6 @@
 {
   "name": "cybercontrol-extension",
-  "version": "5.92.23",
+  "version": "5.92.24",
   "private": true,
   "type": "module",
   "description": "CyberControl Chrome MV3 extension (eyes + hands). Depends on @cc/* workspace packages; this package is the load root + generated *-bundle.js output.",

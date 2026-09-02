@@ -12,6 +12,7 @@
     "test": "node -e \"console.log('[extension-service] no package tests yet')\""
   },
   "dependencies": {
+    "@cc/mapper": "workspace:*",
     "@cybercontrol/svc-ai-mapper": "workspace:*",
     "@cybercontrol/svc-fill-planner": "workspace:*",
     "@cybercontrol/svc-knowledge": "workspace:*",

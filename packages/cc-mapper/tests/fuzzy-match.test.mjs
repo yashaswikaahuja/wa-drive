@@ -66,5 +66,21 @@ assert('split dob day', mapping['#day']?.value, '15');
 assert('split dob month', mapping['#month']?.value, '08');
 assert('split dob year', mapping['#year']?.value, '1995');
 
+console.log('\nCcFuzzyMatch ISO dob + split');
+{
+  const isoProfile = { ...profile, dob: '1995-08-15' };
+  const isoFields = [
+    { selector: '#dob', label: 'Date of Birth', id: 'dob', name: 'dob', type: 'text', placeholder: '' },
+    { selector: '#day', label: 'DD', id: 'dob_day', name: 'dob_day', type: 'text', placeholder: 'dd' },
+    { selector: '#month', label: 'MM', id: 'dob_month', name: 'dob_month', type: 'text', placeholder: 'mm' },
+    { selector: '#year', label: 'YYYY', id: 'dob_year', name: 'dob_year', type: 'text', placeholder: 'yyyy' },
+  ];
+  const isoMap = fuzzyMatch(isoFields, isoProfile);
+  assert('iso combined dob', isoMap['#dob']?.value, '15/08/1995');
+  assert('iso split day', isoMap['#day']?.value, '15');
+  assert('iso split month', isoMap['#month']?.value, '08');
+  assert('iso split year', isoMap['#year']?.value, '1995');
+}
+
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

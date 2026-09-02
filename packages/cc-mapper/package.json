@@ -15,12 +15,13 @@
     "./fuzzy-post-passes": "./src/fuzzy-post-passes.ts",
     "./fuzzy-match": "./src/fuzzy-match.ts",
     "./ai-match": "./src/ai-match.ts",
+    "./split-dob": "./src/split-dob.js",
     "./inject": "./src/inject.ts"
   },
   "scripts": {
     "build": "node build.mjs",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --experimental-strip-types tests/mapper-capabilities.test.mjs && node --experimental-strip-types tests/fuzzy-match.test.mjs"
+    "test": "node tests/split-dob.test.mjs && node --experimental-strip-types tests/mapper-capabilities.test.mjs && node --experimental-strip-types tests/fuzzy-match.test.mjs"
   },
   "engines": {
     "node": ">=22"

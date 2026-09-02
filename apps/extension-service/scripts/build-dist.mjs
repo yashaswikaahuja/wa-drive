@@ -28,6 +28,9 @@ const packageNames = [
   'svc-teach',
 ];
 
+// Plain-JS @cc packages needed at runtime (date splitter for WSS fill).
+const ccPackageNames = ['cc-mapper'];
+
 const copyFilter = (source) => {
   const name = path.basename(source);
   return name !== 'node_modules' && name !== 'dist';
@@ -73,11 +76,25 @@ for (const packageName of packageNames) {
   fs.writeFileSync(nestedPkgPath, JSON.stringify(nestedPkg, null, 2) + '\n');
 }
 
+for (const packageName of ccPackageNames) {
+  const source = path.join(repositoryRoot, 'packages', packageName);
+  const destination = path.join(vendorRoot, packageName);
+  if (!fs.existsSync(source)) {
+    throw new Error(`missing workspace package: ${source}`);
+  }
+  fs.cpSync(source, destination, { recursive: true, filter: copyFilter });
+}
+
 const distPkgPath = path.join(distRoot, 'package.json');
 const distPkg = JSON.parse(fs.readFileSync(distPkgPath, 'utf8'));
 const nextDeps = { ...(distPkg.dependencies || {}) };
 for (const packageName of packageNames) {
   nextDeps[`@cybercontrol/${packageName}`] = `file:./vendor/${packageName}`;
+}
+for (const packageName of ccPackageNames) {
+  // @cc/mapper lives at packages/cc-mapper
+  const scopeName = packageName === 'cc-mapper' ? '@cc/mapper' : `@cc/${packageName.replace(/^cc-/, '')}`;
+  nextDeps[scopeName] = `file:./vendor/${packageName}`;
 }
 for (const [name, version] of Object.entries(nextDeps)) {
   if (typeof version === 'string' && version.startsWith('workspace:')) {
@@ -88,4 +105,4 @@ distPkg.dependencies = nextDeps;
 fs.writeFileSync(distPkgPath, JSON.stringify(distPkg, null, 2) + '\n');
 
 console.log(`Built extension-service dist: ${distRoot}`);
-console.log(`Vendored ${packageNames.length} packages into dist/vendor`);
+console.log(`Vendored ${packageNames.length + ccPackageNames.length} packages into dist/vendor`);

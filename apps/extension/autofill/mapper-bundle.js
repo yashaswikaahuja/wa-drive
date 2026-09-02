@@ -4,7 +4,7 @@
  */
 "use strict";
 (() => {
-  // ../../packages/cc-mapper/src/field-aliases.ts
+  // packages/cc-mapper/src/field-aliases.ts
   var FIELD_ALIASES = {
     name: ["candidate_name", "candidates_name", "applicant_name", "applicants_name", "student_name", "full_name", "fullname", "naam", "name", "applicant_name_english", "name_english", "name_in_english", "txt_candidate_name", "txt_name", "txtcandidatename", "txtname", "pratyashi_ka_naam", "your_name", "enter_name"],
     first_name: ["first_name", "firstname", "fname", "given_name", "givenname", "txt_firstname", "txt_first_name"],
@@ -78,7 +78,7 @@
     FIELD_ALIASES
   };
 
-  // ../../packages/cc-mapper/src/field-ident.ts
+  // packages/cc-mapper/src/field-ident.ts
   function normalizeIdent(s) {
     return String(s || "").toLowerCase().replace(/[-\s:*()'./\\]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
   }
@@ -117,7 +117,7 @@
     normChoice
   };
 
-  // ../../packages/cc-mapper/src/resolve-choice.ts
+  // packages/cc-mapper/src/resolve-choice.ts
   function looksLikeYesNo(opts) {
     return opts.length > 0 && opts.every((o) => {
       const n = normChoice(o);
@@ -257,7 +257,7 @@
     resolveChoiceToOption
   };
 
-  // ../../packages/cc-mapper/src/decide-conditional.ts
+  // packages/cc-mapper/src/decide-conditional.ts
   function normalizeIdent2(s) {
     return String(s || "").toLowerCase().replace(/[-\s:*()'./\\]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
   }
@@ -302,7 +302,7 @@
     decideConditionalChoice
   };
 
-  // ../../packages/cc-mapper/src/match-special-fields.ts
+  // packages/cc-mapper/src/match-special-fields.ts
   var FILE_ALIASES = {
     photo: ["photo", "photograph", "passport photo", "applicant photo", "image", "profile photo", "customer photograph"],
     signature: ["signature", "sign", "applicant signature", "digital signature"],
@@ -404,7 +404,68 @@
     isEducationRow
   };
 
-  // ../../packages/cc-mapper/src/match-profile-fields.ts
+  // packages/cc-mapper/src/split-dob.js
+  function parseDobParts(dob) {
+    if (dob == null) return null;
+    const dobStr = String(dob).trim();
+    if (!dobStr) return null;
+    const m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    const m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (m1) return { day: m1[1].padStart(2, "0"), month: m1[2].padStart(2, "0"), year: m1[3] };
+    if (m2) return { day: m2[3].padStart(2, "0"), month: m2[2].padStart(2, "0"), year: m2[1] };
+    return null;
+  }
+  function applySplitDob(formFields, profile, mapping) {
+    if (!profile || !profile.dob) return;
+    const dp = parseDobParts(profile.dob);
+    if (!dp) return;
+    const monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const monthShort = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthNum = parseInt(dp.month, 10) || 0;
+    for (let di = 0; di < formFields.length; di++) {
+      const df = formFields[di];
+      if (!df || !df.selector || mapping[df.selector]) continue;
+      const lbl = String(df.label || "").trim();
+      const idn = `${df.id || ""} ${df.name || ""}`.toLowerCase();
+      const ph = String(df.placeholder || "").trim();
+      const combined = `${lbl} ${ph} ${idn}`.toLowerCase();
+      const isDay = /^dd$|^day$|^(\(?day\)?)$|day_of_birth|dob_day|birth_day|birthday_dd/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth|birthday_?dd|ddl_?day)(?:[^a-z]|$)/i.test(idn) || /\bdd\b/.test(combined) && !/\bdd[\s_-]*mm/.test(combined);
+      const isMonth = /^mm$|^month$|^(\(?month\)?)$|month_of_birth|dob_month|birth_month/i.test(lbl) || /^mm$|^month$/i.test(ph) || /(?:^|[^a-z])(dob_?month|birth_?month|month_of_birth|ddl_?month)(?:[^a-z]|$)/i.test(idn) || /\bmm\b/.test(combined) && !/\bdd[\s_-]*mm[\s_-]*yyyy/.test(combined) && !isDay;
+      const isYear = /^yyyy$|^yyy$|^year$|^(\(?year\)?)$|year_of_birth|dob_year|birth_year/i.test(lbl) || /^yyyy$|^year$/i.test(ph) || /(?:^|[^a-z])(dob_?year|birth_?year|year_of_birth|ddl_?year)(?:[^a-z]|$)/i.test(idn);
+      if (isDay) {
+        const preferPadded = /^dd$/i.test(lbl) || /^dd$/i.test(ph) || (df.type || "") === "text";
+        mapping[df.selector] = {
+          value: preferPadded ? dp.day : String(parseInt(dp.day, 10)),
+          type: df.type || "",
+          label: df.label || null,
+          profileKey: "dob",
+          matchBy: "split-dob"
+        };
+      } else if (isMonth) {
+        const t = String(df.type || "").toLowerCase();
+        const monthVal = t === "select" || t === "dropdown" || t === "mat-select" || t === "ng-dropdown" ? monthNames[monthNum] || dp.month : dp.month;
+        mapping[df.selector] = {
+          value: monthVal,
+          type: df.type || "",
+          label: df.label || null,
+          profileKey: "dob",
+          matchBy: "split-dob",
+          monthNum,
+          monthShort: monthShort[monthNum]
+        };
+      } else if (isYear) {
+        mapping[df.selector] = {
+          value: dp.year,
+          type: df.type || "",
+          label: df.label || null,
+          profileKey: "dob",
+          matchBy: "split-dob"
+        };
+      }
+    }
+  }
+
+  // packages/cc-mapper/src/match-profile-fields.ts
   function tryMatchNameParts(field, ident, matchBy, nameParts, mapping) {
     const isFatherMother = ident.includes("father") || ident.includes("mother") || ident.includes("pita") || ident.includes("mata");
     if (isFatherMother) return false;
@@ -428,18 +489,20 @@
   }
   function tryMatchDob(field, ident, matchBy, profile, mapping) {
     if (!profile.dob) return false;
-    const dobParts = String(profile.dob).split("/");
-    const dobDay = dobParts[0], dobMonth = dobParts[1], dobYear = dobParts[2];
+    const dp = parseDobParts(profile.dob);
+    if (!dp) return false;
+    const dobDay = dp.day, dobMonth = dp.month, dobYear = dp.year;
     const monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const monthShort = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const monthNum = parseInt(dobMonth);
+    const monthNum = parseInt(dobMonth, 10) || 0;
     const selLower = matchBy === "dom-fallback" ? (field.selector || "").toLowerCase() : "";
+    const t = (field.type || "").toLowerCase();
     if (ident.includes("day") && (ident.includes("birth") || ident.includes("dob") || ident.includes("born") || ident.replace(/[_\s]/g, "") === "day" || selLower.includes("ddl_day") || selLower.includes("_day"))) {
-      mapping[field.selector] = { value: parseInt(dobDay).toString(), type: field.type || "", matchBy, profileKey: "dob" };
+      mapping[field.selector] = { value: parseInt(dobDay, 10).toString(), type: field.type || "", matchBy, profileKey: "dob" };
       return true;
     }
     if (ident.includes("month") && (ident.includes("birth") || ident.includes("dob") || ident.includes("born") || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1 || selLower.includes("ddl_month") || selLower.includes("_month"))) {
-      const monthVal = field.type === "select" ? monthNames[monthNum] : dobMonth;
+      const monthVal = t === "select" || t === "dropdown" || t === "mat-select" ? monthNames[monthNum] : dobMonth;
       mapping[field.selector] = { value: monthVal, type: field.type || "", monthNum, monthShort: monthShort[monthNum], matchBy, profileKey: "dob" };
       return true;
     }
@@ -448,7 +511,7 @@
       return true;
     }
     if (field.placeholder === "dd-mm-yyyy" || field.placeholder === "DD-MM-YYYY" || /^dd[-/]mm[-/]yyyy$/i.test(field.label || "")) {
-      mapping[field.selector] = { value: String(profile.dob).split("/").join("-"), type: field.type || "", matchBy: "label", profileKey: "dob" };
+      mapping[field.selector] = { value: `${dobDay}-${dobMonth}-${dobYear}`, type: field.type || "", matchBy: "label", profileKey: "dob" };
       return true;
     }
     if (ident.includes("dob") || ident.includes("date_of_birth") || ident.includes("dateofbirth") || ident.includes("birth_date") || ident.includes("date") && ident.includes("birth")) {
@@ -527,7 +590,8 @@
     tryMatchDob
   };
 
-  // ../../packages/cc-mapper/src/fuzzy-post-passes.ts
+  // packages/cc-mapper/src/fuzzy-post-passes.ts
+  var applySplitDob2 = applySplitDob;
   var TWIN_PREFIX_RE = /^(?:[a-z]\.|\d+\.|\(\w\)|[i-x]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b[\s:_-]*/i;
   function choiceAlreadyMapped(mapping, f) {
     if (mapping[f.selector]) return true;
@@ -581,40 +645,19 @@
       }
     }
   }
-  function applySplitDob(formFields, profile, mapping) {
-    if (!profile.dob) return;
-    const dobStr = String(profile.dob).trim();
-    const m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-    const m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
-    let dp = null;
-    if (m1) dp = { day: m1[1].padStart(2, "0"), month: m1[2].padStart(2, "0"), year: m1[3] };
-    else if (m2) dp = { day: m2[3].padStart(2, "0"), month: m2[2].padStart(2, "0"), year: m2[1] };
-    if (!dp) return;
-    for (let di = 0; di < formFields.length; di++) {
-      const df = formFields[di];
-      if (mapping[df.selector]) continue;
-      const lbl = (df.label || "").trim(), idn = (df.id || df.name || "").toLowerCase(), ph = (df.placeholder || "").trim();
-      const isDay = /^dd$|^day$|day_of_birth|dob_day|birth_day/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth)(?:[^a-z]|$)/.test(idn);
-      const isMonth = /^mm$|^month$|month_of_birth|dob_month|birth_month/i.test(lbl) || /^mm$|^month$/i.test(ph) || /(?:^|[^a-z])(dob_?month|birth_?month|month_of_birth)(?:[^a-z]|$)/.test(idn);
-      const isYear = /^yyyy$|^year$|year_of_birth|dob_year|birth_year/i.test(lbl) || /^yyyy$|^year$/i.test(ph) || /(?:^|[^a-z])(dob_?year|birth_?year|year_of_birth)(?:[^a-z]|$)/.test(idn);
-      if (isDay) mapping[df.selector] = { value: dp.day, type: df.type || "", profileKey: "dob" };
-      else if (isMonth) mapping[df.selector] = { value: dp.month, type: df.type || "", profileKey: "dob" };
-      else if (isYear) mapping[df.selector] = { value: dp.year, type: df.type || "", profileKey: "dob" };
-    }
-  }
   function applyAll(formFields, profile, helpers, mapping) {
     applyConditionalPost(formFields, profile, helpers, mapping);
     applyTwinMirror(formFields, mapping);
-    applySplitDob(formFields, profile, mapping);
+    applySplitDob2(formFields, profile, mapping);
   }
   var CcFuzzyPostPasses = {
     applyAll,
     applyConditionalPost,
     applyTwinMirror,
-    applySplitDob
+    applySplitDob: applySplitDob2
   };
 
-  // ../../packages/cc-mapper/src/fuzzy-match.ts
+  // packages/cc-mapper/src/fuzzy-match.ts
   function fuzzyMatch(formFields, profile) {
     const fieldAliases = getFieldAliases();
     const helpers = {
@@ -645,7 +688,7 @@
   }
   var CcFuzzyMatch = { fuzzyMatch };
 
-  // ../../packages/cc-mapper/src/ai-match.ts
+  // packages/cc-mapper/src/ai-match.ts
   async function aiMatch(formFields, profile, llmKey, llmBaseUrl, llmModel) {
     const fieldDescriptions = formFields.map(
       (f, i) => i + ': label="' + (f.label || "") + '" id="' + (f.id || "") + '" name="' + (f.name || "") + '" placeholder="' + (f.placeholder || "") + '"'
@@ -702,7 +745,7 @@
   }
   var CcAiMatch = { aiMatch };
 
-  // ../../packages/cc-mapper/src/inject.ts
+  // packages/cc-mapper/src/inject.ts
   var root = globalThis;
   root.CcFieldAliases = CcFieldAliases;
   root.CcFieldIdent = CcFieldIdent;

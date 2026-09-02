@@ -4,6 +4,7 @@
  */
 import { loadDoc, KEYS } from '../db/store.js';
 import { pool } from '../db/db.js';
+import { applySplitDob } from '@cc/mapper/split-dob';
 
 function gsk(l) {
   return String(l || '')
@@ -258,6 +259,24 @@ export async function buildFillMapping(msg, workspaceId) {
         }
       }
     }
+  }
+
+  // 3) Date splitter — DD / MM / YYYY (or Day/Month/Year) from profile.dob
+  // Was present in legacy mapper post-pass but skipped on the WSS path.
+  const beforeSplit = Object.keys(mapping).length;
+  applySplitDob(fields, profile, mapping);
+  for (const [sel, entry] of Object.entries(mapping)) {
+    if (entry && entry.matchBy === 'split-dob' && !filledBySource[sel]) {
+      filledBySource[sel] = {
+        label: entry.label || '',
+        profileKey: entry.profileKey || 'dob',
+        source: 'wss-split-dob',
+      };
+    }
+  }
+  const splitAdded = Object.keys(mapping).length - beforeSplit;
+  if (splitAdded > 0) {
+    console.log(`[wss-fill] applySplitDob mapped ${splitAdded} date-part field(s)`);
   }
 
   return {
