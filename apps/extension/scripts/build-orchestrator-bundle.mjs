@@ -12,6 +12,7 @@ writeConcatBundle({
   order: [
     'script-manifests.js',
     'flatten-profile.js',
+    'mapping-relation.js',
     'sequential-kernel-fill.js',
     'action-plan-fill.js',
   ],

@@ -70,6 +70,201 @@ if (typeof module !== 'undefined') module.exports = root.CcScriptManifests;
 
 if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
 
+/* ==== mapping-relation.js ==== */
+/**
+ * mapping-relation — browser/SW copy of @cc/mapper/mapping-relation (#302).
+ * Keep behavior aligned with packages/cc-mapper/src/mapping-relation.js
+ */
+(function (root) {
+  'use strict';
+
+  var MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  function parseDobParts(dob) {
+    if (dob == null) return null;
+    var dobStr = String(dob).trim();
+    if (!dobStr) return null;
+    var m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    var m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (m1) return { day: m1[1].padStart(2, '0'), month: m1[2].padStart(2, '0'), year: m1[3] };
+    if (m2) return { day: m2[3].padStart(2, '0'), month: m2[2].padStart(2, '0'), year: m2[1] };
+    return null;
+  }
+
+  function profileAtom(profile, key) {
+    if (!profile || key == null) return null;
+    var entry = profile[key];
+    if (entry == null) return null;
+    var v = typeof entry === 'object' && entry && 'value' in entry ? entry.value : entry;
+    if (v == null) return null;
+    var s = String(v).trim();
+    return s === '' ? null : s;
+  }
+
+  function normLoose(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function fieldBlob(field) {
+    if (!field || typeof field !== 'object') return '';
+    return (field.label || '') + ' ' + (field.name || '') + ' ' + (field.id || '') + ' ' + (field.placeholder || '');
+  }
+
+  function isCompoundAtom(profileKey) {
+    return /^(dob|date_of_birth|phone|mobile|email|email_id|name|full_name|aadhaar_number|aadhaar|pan_number)$/i.test(String(profileKey || ''));
+  }
+
+  function looksLikePartField(field) {
+    var blob = fieldBlob(field).toLowerCase();
+    var label = String(field && field.label || '').trim();
+    if (/^dd$|^day$|^mm$|^month$|^yyyy$|^yyy$|^year$/i.test(label)) return true;
+    if (/\b(dob_?day|birth_?day|day_of_birth|ddl_?day)\b/.test(blob)) return true;
+    if (/\b(dob_?month|birth_?month|month_of_birth|ddl_?month)\b/.test(blob)) return true;
+    if (/\b(dob_?year|birth_?year|year_of_birth|ddl_?year)\b/.test(blob)) return true;
+    if (/last\s*4|last\s*four|last\s*6|first\s*4|first\s*3|last\s*digits|otp|suffix/i.test(blob)) return true;
+    if (/email\s*(user|id|name)|username|local.?part/i.test(blob)) return true;
+    var maxLen = Number(field && (field.maxLength || field.maxlength) || 0);
+    if (maxLen > 0 && maxLen <= 4) return true;
+    return false;
+  }
+
+  function shapeCompatible(field, value) {
+    if (value == null) return false;
+    var s = String(value);
+    var maxLen = Number(field && (field.maxLength || field.maxlength) || 0);
+    if (maxLen > 0 && s.length > maxLen) return false;
+    return true;
+  }
+
+  function normalizeRelation(entry, field) {
+    if (entry && entry.relation && entry.relation.kind) return Object.assign({}, entry.relation);
+    var pk = entry && entry.profileKey;
+    if (!pk) return { kind: 'unknown' };
+    if (looksLikePartField(field) && isCompoundAtom(pk)) return { kind: 'unknown' };
+    return { kind: 'identity' };
+  }
+
+  function applyDatePart(atom, part, field) {
+    var dp = parseDobParts(atom);
+    if (!dp) return null;
+    var monthNum = parseInt(dp.month, 10) || 0;
+    if (part === 'day') {
+      var preferPadded = /^dd$/i.test(String(field && field.label || '')) || /^dd$/i.test(String(field && field.placeholder || '')) || (field && field.type || '') === 'text';
+      return preferPadded ? dp.day : String(parseInt(dp.day, 10));
+    }
+    if (part === 'month') {
+      var t = String(field && field.type || '').toLowerCase();
+      if (t === 'select' || t === 'dropdown' || t === 'mat-select' || t === 'ng-dropdown') return MONTH_NAMES[monthNum] || dp.month;
+      return dp.month;
+    }
+    if (part === 'year') return dp.year;
+    return null;
+  }
+
+  function applyRelation(relation, profile, profileKey, field) {
+    var kind = (relation && relation.kind) || 'unknown';
+    if (kind === 'unknown') return null;
+    var atom = profileAtom(profile, profileKey);
+    if (atom == null) return null;
+    var value = null;
+    if (kind === 'identity') value = atom;
+    else if (kind === 'last_n') {
+      var n1 = Math.max(1, Number(relation.n) || 0);
+      if (!n1 || atom.length < n1) return null;
+      value = atom.slice(-n1);
+    } else if (kind === 'first_n') {
+      var n2 = Math.max(1, Number(relation.n) || 0);
+      if (!n2 || atom.length < n2) return null;
+      value = atom.slice(0, n2);
+    } else if (kind === 'date_part') value = applyDatePart(atom, relation.part, field);
+    else if (kind === 'email_local') {
+      var at = atom.indexOf('@');
+      if (at <= 0) return null;
+      value = atom.slice(0, at);
+    } else if (kind === 'name_part') {
+      var parts = atom.split(/\s+/).filter(Boolean);
+      if (!parts.length) return null;
+      if (relation.part === 'first') value = parts[0];
+      else if (relation.part === 'last') value = parts[parts.length - 1];
+      else if (relation.part === 'middle') value = parts.length >= 3 ? parts.slice(1, -1).join(' ') : '';
+      else return null;
+    } else return null;
+    if (value == null || String(value).trim() === '') return null;
+    if (!shapeCompatible(field, value)) return null;
+    return String(value);
+  }
+
+  function induceRelation(profile, profileKey, actualOrPlanned, field) {
+    if (!profileKey) return { kind: 'unknown' };
+    var atom = profileAtom(profile, profileKey);
+    var sample = actualOrPlanned == null ? '' : String(actualOrPlanned).trim();
+    if (!atom || !sample) {
+      if (looksLikePartField(field) && isCompoundAtom(profileKey)) return { kind: 'unknown' };
+      return profileKey ? { kind: 'identity' } : { kind: 'unknown' };
+    }
+    if (normLoose(sample) === normLoose(atom) && shapeCompatible(field, atom)) return { kind: 'identity' };
+    var dp = parseDobParts(atom);
+    if (dp) {
+      var sn = normLoose(sample);
+      var dayN = String(parseInt(dp.day, 10));
+      var monthN = String(parseInt(dp.month, 10));
+      if (sn === normLoose(dp.day) || sn === normLoose(dayN)) return { kind: 'date_part', part: 'day', pad: dp.day.indexOf('0') === 0 ? 2 : undefined };
+      if (sn === normLoose(dp.month) || sn === normLoose(monthN) || sn === normLoose(MONTH_NAMES[parseInt(dp.month, 10)] || '')) return { kind: 'date_part', part: 'month' };
+      if (sn === normLoose(dp.year)) return { kind: 'date_part', part: 'year' };
+    }
+    if (atom.indexOf('@') > 0) {
+      var local = atom.slice(0, atom.indexOf('@'));
+      if (normLoose(sample) === normLoose(local)) return { kind: 'email_local' };
+    }
+    if (atom.lastIndexOf(sample) === atom.length - sample.length && sample.length < atom.length && sample.length <= 8) return { kind: 'last_n', n: sample.length };
+    if (atom.indexOf(sample) === 0 && sample.length < atom.length && sample.length <= 8) return { kind: 'first_n', n: sample.length };
+    var nameParts = atom.split(/\s+/).filter(Boolean);
+    if (nameParts.length >= 2) {
+      if (normLoose(sample) === normLoose(nameParts[0])) return { kind: 'name_part', part: 'first' };
+      if (normLoose(sample) === normLoose(nameParts[nameParts.length - 1])) return { kind: 'name_part', part: 'last' };
+    }
+    if (looksLikePartField(field) || sample.length < atom.length) return { kind: 'unknown' };
+    return { kind: 'unknown' };
+  }
+
+  function gsk(l) {
+    return String(l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
+    if (!savedMap || typeof savedMap !== 'object') return 0;
+    var added = 0;
+    var map = mapping || {};
+    var fbs = filledBySource || {};
+    for (var i = 0; i < (fields || []).length; i++) {
+      var f = fields[i];
+      if (!f || !f.selector || map[f.selector]) continue;
+      if (/radio|checkbox/i.test(String(f.type || ''))) continue;
+      var entry = savedMap[gsk(f.label)] || savedMap[gsk(f.name)] || null;
+      if (!entry || !entry.profileKey) continue;
+      var relation = normalizeRelation(entry, f);
+      var value = applyRelation(relation, profile, entry.profileKey, f);
+      if (value == null) continue;
+      map[f.selector] = { value: value, type: f.type, label: f.label, profileKey: entry.profileKey, relation: relation, matchBy: sourceTag || 'saved-relation' };
+      fbs[f.selector] = { label: f.label || '', profileKey: entry.profileKey, relation: relation, source: sourceTag || 'saved-relation' };
+      added++;
+    }
+    return added;
+  }
+
+  root.CcMappingRelation = {
+    profileAtom: profileAtom,
+    normalizeRelation: normalizeRelation,
+    applyRelation: applyRelation,
+    induceRelation: induceRelation,
+    looksLikePartField: looksLikePartField,
+    isCompoundAtom: isCompoundAtom,
+    materializeSavedRelations: materializeSavedRelations,
+  };
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
+if (typeof module !== 'undefined') module.exports = (typeof globalThis !== 'undefined' ? globalThis : this).CcMappingRelation;
+
 /* ==== sequential-kernel-fill.js ==== */
 /**
  * sequential-kernel-fill — Sequential kernel fill path
@@ -198,21 +393,33 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
       });
     } catch (e) {}
 
-    // ── Stage 2b: Server AI for fields not covered by WSS/saved plan ──────────
+    // ── Stage 2a: Materialize taught relations (#302) ─────────────────────────
+    // profileKey alone never covers a field. Only a successful relation→value does.
+    var relApi = root.CcMappingRelation || {};
+    try {
+      if (!wssPlan.mapping) wssPlan.mapping = {};
+      if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
+      if (typeof relApi.materializeSavedRelations === 'function') {
+        relApi.materializeSavedRelations(
+          extracted.fields,
+          extracted.profile,
+          wssPlan.savedMappings || {},
+          wssPlan.mapping,
+          wssPlan.filledBySource,
+          'client-saved-relation'
+        );
+      }
+    } catch (relErr) {
+      console.warn('[CC] saved-relation materialize skipped:', relErr && relErr.message ? relErr.message : relErr);
+    }
+
+    // ── Stage 2b: Server AI for fields not covered by a real planned value ────
     // OpenRouter (extension-service /semantic-map). Mistral is OCR-only on hub.
+    // #302: covered ONLY when planned[selector] exists — never because profileKey is saved.
     try {
       var planned = wssPlan.mapping || {};
-      var savedMap = wssPlan.savedMappings || {};
-      var gskPre = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
       var covered = {};
       Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
-      if (savedMap && typeof savedMap === 'object') {
-        for (var si = 0; si < extracted.fields.length; si++) {
-          var sf = extracted.fields[si];
-          var sEntry = savedMap[gskPre(sf.label)] || savedMap[gskPre(sf.name)] || null;
-          if (sEntry && sEntry.profileKey) covered[sf.selector] = true;
-        }
-      }
       var aiCandidates = extracted.fields.filter(function (f) { return !covered[f.selector]; });
       if (aiCandidates.length > 0 && backendUrl && accessToken) {
         progress('AI mapping ' + aiCandidates.length + ' unknown fields...', 58);
@@ -244,21 +451,45 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
             var am = aiMaps[ai];
             if (!am || !am.selector || !am.profile_key) continue;
             if (am.disposition === 'reject') continue;
-            var pval = flatProf[am.profile_key];
-            if (pval == null || String(pval).trim() === '') continue;
-            if (typeof pval === 'object' && pval && 'value' in pval) pval = pval.value;
-            if (pval == null || String(pval).trim() === '') continue;
             if (wssPlan.mapping[am.selector]) continue;
             var fieldMeta = aiCandidates.find(function (f) { return f.selector === am.selector; }) || {};
+            // #302: never raw-dump a compound atom onto a part-looking field.
+            // Prefer explicit AI projection keys (dob__day) or induce identity only when safe.
+            var aiKey = am.profile_key;
+            var aiRelation = { kind: 'identity' };
+            var pval = null;
+            if (aiKey === 'dob__day' || aiKey === 'dob__month' || aiKey === 'dob__year') {
+              aiRelation = { kind: 'date_part', part: aiKey.split('__')[1] };
+              aiKey = 'dob';
+              pval = typeof relApi.applyRelation === 'function'
+                ? relApi.applyRelation(aiRelation, flatProf, aiKey, fieldMeta)
+                : null;
+            } else if (typeof relApi.looksLikePartField === 'function' && typeof relApi.isCompoundAtom === 'function'
+              && relApi.looksLikePartField(fieldMeta) && relApi.isCompoundAtom(aiKey)) {
+              // Skip raw dump — leave for fuzzyMatch / split residual
+              continue;
+            } else {
+              pval = flatProf[aiKey];
+              if (pval != null && typeof pval === 'object' && 'value' in pval) pval = pval.value;
+              if (pval == null || String(pval).trim() === '') continue;
+              if (typeof relApi.applyRelation === 'function') {
+                var shaped = relApi.applyRelation(aiRelation, flatProf, aiKey, fieldMeta);
+                if (shaped == null) continue;
+                pval = shaped;
+              }
+            }
+            if (pval == null || String(pval).trim() === '') continue;
             wssPlan.mapping[am.selector] = {
               value: pval,
               type: fieldMeta.type || 'text',
               label: fieldMeta.label || '',
-              profileKey: am.profile_key,
+              profileKey: aiKey,
+              relation: aiRelation,
             };
             wssPlan.filledBySource[am.selector] = {
               label: fieldMeta.label || '',
-              profileKey: am.profile_key,
+              profileKey: aiKey,
+              relation: aiRelation,
               source: 'server-ai',
             };
           }
@@ -275,36 +506,19 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
     progress('Filling form (sequential)...', 70);
     var execResults = await chrome.scripting.executeScript({
       target: { tabId },
-      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, wssPlan.savedMappings || {}, (profile && profile.id) || null, transport],
-      func: async function (prof, fields, wssMapping, wssFbs, adapters, saved, profileId, fillTransport) {
+      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, (profile && profile.id) || null, transport],
+      func: async function (prof, fields, wssMapping, wssFbs, adapters, profileId, fillTransport) {
         if (typeof fillFormFieldsSequential !== 'function') return { ok: false, error: 'sequential_kernel_not_loaded' };
         try { window._ccProfileId = profileId; } catch (e) {}
         var mapping = Object.assign({}, wssMapping || {});
         var fbs = Object.assign({}, wssFbs || {});
-        var gsk = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
-        var isChoiceType = function (t) { return /radio|checkbox/i.test(String(t || '')); };
         function choiceCovered(f) {
           if (mapping[f.selector]) return true;
           if (f.optionSelectors) { for (var i = 0; i < f.optionSelectors.length; i++) { if (mapping[f.optionSelectors[i]]) return true; } }
           return false;
         }
-        if (saved && Object.keys(mapping).length === 0) {
-          for (var i = 0; i < fields.length; i++) {
-            var f = fields[i];
-            var sk = gsk(f.label);
-            var s = saved[sk] || saved[gsk(f.name)] || null;
-            if (!s) continue;
-            if (s.profileKey && prof[s.profileKey] != null && String(prof[s.profileKey]).trim() !== '') {
-              if (isChoiceType(f.type) && typeof resolveChoiceToOption === 'function') {
-                var resolved = resolveChoiceToOption(f, prof[s.profileKey], s.profileKey);
-                if (resolved) { mapping[resolved.selector] = resolved.entry; fbs[resolved.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' }; }
-              } else {
-                mapping[f.selector] = { value: prof[s.profileKey], type: f.type, label: f.label, profileKey: s.profileKey };
-                fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' };
-              }
-            }
-          }
-        }
+        // #302: taught relations are materialized on the SW before executeScript.
+        // Residual unmapped fields fall through to fuzzyMatch / skip — never raw-dump saved keys here.
         var unmapped = fields.filter(function (f) { return !choiceCovered(f); });
         if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
           var fz = fuzzyMatch(unmapped, prof);
@@ -332,14 +546,15 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
     }
 
     // ── Stage 3b: Sync mappings to backend ───────────────────────────────────
-    // Post form field metadata + profileKey mappings so the backend learns
-    // new forms. This is what makes new forms appear in the mapping portal.
+    // #302: learn profileKey + relation from successful fills (evidence → relation).
+    // Do not persist literal actualValue long-term — only the reusable relationship.
     try {
       var pk = extracted.semanticFormKey || extracted.formKey;
       var syncMapping = r._mapping || {};
       var syncFbs     = r._fbs     || {};
       var syncFields  = r._fields  || [];
       var syncRecords = r.records  || [];
+      var syncProfile = extracted.profile || {};
       var updates = {};
       var gsk2 = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
       for (var i = 0; i < syncFields.length; i++) {
@@ -347,15 +562,38 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
         var sk = gsk2(f.label);
         if (!sk || sk.length < 2) continue;
         var info = syncFbs[f.selector];
-        var profileKey = (info && info.profileKey) || (syncMapping[f.selector] && syncMapping[f.selector].profileKey) || null;
-        var wasFilled = syncRecords.some(function (rec) { return rec.selector === f.selector && rec.result === 'filled'; });
-        updates[sk] = { profileKey: profileKey, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+        var mapEntry = syncMapping[f.selector];
+        var profileKey = (info && info.profileKey) || (mapEntry && mapEntry.profileKey) || null;
+        var filledRec = syncRecords.find(function (rec) { return rec.selector === f.selector && rec.result === 'filled'; });
+        var wasFilled = !!filledRec;
+        var evidence = null;
+        if (filledRec) {
+          evidence = filledRec.actualValue != null ? filledRec.actualValue : (filledRec.actual != null ? filledRec.actual : filledRec.plannedValue != null ? filledRec.plannedValue : filledRec.value);
+        } else if (mapEntry && mapEntry.value != null) {
+          evidence = mapEntry.value;
+        }
+        var relation = (info && info.relation) || (mapEntry && mapEntry.relation) || null;
+        if ((!relation || !relation.kind) && profileKey && typeof relApi.induceRelation === 'function') {
+          relation = relApi.induceRelation(syncProfile, profileKey, evidence, f);
+        }
+        if (!relation || !relation.kind) {
+          relation = { kind: profileKey ? 'unknown' : 'unknown' };
+        }
+        updates[sk] = {
+          profileKey: profileKey,
+          relation: relation,
+          label: f.label,
+          type: f.type,
+          order: i,
+          options: f.options || null,
+          delta: { fills: wasFilled ? 1 : 0, corrections: 0 },
+        };
       }
       if (Object.keys(updates).length > 0 && backendUrl && accessToken && pk) {
         await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
+          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 3 } }),
         });
       }
     } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }

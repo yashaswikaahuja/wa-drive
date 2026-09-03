@@ -5,6 +5,11 @@
 import { loadDoc, KEYS } from '../db/store.js';
 import { pool } from '../db/db.js';
 import { applySplitDob } from '@cc/mapper/split-dob';
+import {
+  normalizeRelation,
+  applyRelation,
+  materializeSavedRelations,
+} from '@cc/mapper/mapping-relation';
 
 function gsk(l) {
   return String(l || '')
@@ -215,28 +220,22 @@ export async function buildFillMapping(msg, workspaceId) {
     };
   }
 
+  // 1) Taught maps via profileKey + relation (#302).
+  // Bare profileKey never raw-dumps: unknown / failed relation → leave for AI / split-dob.
+  materializeSavedRelations(fields, profile, saved, mapping, filledBySource, 'wss-saved');
+  // Choice widgets need resolveChoice — materialize only sets string values.
   for (const f of fields) {
     if (!f || !f.selector) continue;
+    if (mapping[f.selector]) continue;
     const sk = gsk(f.label) || gsk(f.name);
     const taught = (sk && saved[sk]) || null;
 
-    // 1) Taught map
-    if (taught && taught.profileKey) {
-      const raw = profileVal(profile, taught.profileKey);
-      if (raw != null) {
-        if (isChoiceType(f.type)) {
-          const resolved = resolveChoice(f, raw, taught.profileKey);
-          if (resolved) applyEntry({ ...resolved, source: 'wss-saved' });
-        } else {
-          applyEntry({
-            selector: f.selector,
-            value: raw,
-            type: f.type,
-            label: f.label,
-            profileKey: taught.profileKey,
-            source: 'wss-saved',
-          });
-        }
+    if (taught && taught.profileKey && isChoiceType(f.type)) {
+      const relation = normalizeRelation(taught, f);
+      const derived = applyRelation(relation, profile, taught.profileKey, f);
+      if (derived != null) {
+        const resolved = resolveChoice(f, derived, taught.profileKey);
+        if (resolved) applyEntry({ ...resolved, source: 'wss-saved' });
         continue;
       }
     }

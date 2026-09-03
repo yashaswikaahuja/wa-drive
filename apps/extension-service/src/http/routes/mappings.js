@@ -264,7 +264,7 @@ router.post('/:formKey', async (req, res) => {
       const PROTECTED = new Set(['manual', 'confirmed']);
       for (const [semanticKey, info] of Object.entries(updates)) {
         const { profileKey, delta = {}, label, type, order, options,
-                fillMode, rules, constantValue, fallback } = info;
+                fillMode, rules, constantValue, fallback, relation } = info;
         const existing = mappings[formKey][semanticKey];
         if (existing) {
           existing.fills = (existing.fills || 0) + (delta.fills || 0);
@@ -272,6 +272,8 @@ router.post('/:formKey', async (req, res) => {
           const locked = PROTECTED.has(existing.source);
           // profileKey + rule config are only overwritten when the field isn't locked
           if (profileKey !== undefined && !locked) existing.profileKey = profileKey;
+          // #302: persist relation (identity | derive | unknown). Locked manual keeps relation unless explicitly sent.
+          if (relation !== undefined && relation !== null && !locked) existing.relation = relation;
           if (fillMode !== undefined && !locked) existing.fillMode = fillMode;
           if (rules !== undefined && !locked) existing.rules = rules;
           if (constantValue !== undefined && !locked) existing.constantValue = constantValue;
@@ -285,6 +287,7 @@ router.post('/:formKey', async (req, res) => {
         } else {
           mappings[formKey][semanticKey] = {
             profileKey: profileKey || null,
+            relation: relation && typeof relation === 'object' ? relation : (profileKey ? { kind: 'unknown' } : null),
             label: label || null,
             type: type || 'text',
             order: order !== undefined ? order : null,
@@ -310,7 +313,7 @@ router.post('/:formKey', async (req, res) => {
 // (used by the admin UI's per-row edit + rule builder). Stored as source:'manual'
 // so the extension's background sync never overwrites it.
 router.patch('/:formKey/:label', authMiddleware, async (req, res) => {
-  const { profileKey, fillMode, rules, constantValue, fallback } = req.body || {};
+  const { profileKey, fillMode, rules, constantValue, fallback, relation } = req.body || {};
   const formKey = req.params.formKey;
   const label = req.params.label;
   const today = new Date().toISOString().slice(0, 10);
@@ -319,6 +322,12 @@ router.patch('/:formKey/:label', authMiddleware, async (req, res) => {
     if (!mappings[formKey]) { notFound = true; return mappings; }
     const cur = mappings[formKey][label] || { fills: 0, corrections: 0 };
     if (profileKey !== undefined) cur.profileKey = profileKey || null;
+    // Manual atom pick defaults to identity until operator/UI can set splits (#303).
+    if (relation !== undefined) {
+      cur.relation = relation;
+    } else if (profileKey !== undefined) {
+      cur.relation = profileKey ? { kind: 'identity' } : null;
+    }
     if (fillMode !== undefined) cur.fillMode = fillMode || null;
     if (rules !== undefined) cur.rules = rules || null;
     if (constantValue !== undefined) cur.constantValue = constantValue;

@@ -125,21 +125,33 @@
       });
     } catch (e) {}
 
-    // ── Stage 2b: Server AI for fields not covered by WSS/saved plan ──────────
+    // ── Stage 2a: Materialize taught relations (#302) ─────────────────────────
+    // profileKey alone never covers a field. Only a successful relation→value does.
+    var relApi = root.CcMappingRelation || {};
+    try {
+      if (!wssPlan.mapping) wssPlan.mapping = {};
+      if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
+      if (typeof relApi.materializeSavedRelations === 'function') {
+        relApi.materializeSavedRelations(
+          extracted.fields,
+          extracted.profile,
+          wssPlan.savedMappings || {},
+          wssPlan.mapping,
+          wssPlan.filledBySource,
+          'client-saved-relation'
+        );
+      }
+    } catch (relErr) {
+      console.warn('[CC] saved-relation materialize skipped:', relErr && relErr.message ? relErr.message : relErr);
+    }
+
+    // ── Stage 2b: Server AI for fields not covered by a real planned value ────
     // OpenRouter (extension-service /semantic-map). Mistral is OCR-only on hub.
+    // #302: covered ONLY when planned[selector] exists — never because profileKey is saved.
     try {
       var planned = wssPlan.mapping || {};
-      var savedMap = wssPlan.savedMappings || {};
-      var gskPre = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
       var covered = {};
       Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
-      if (savedMap && typeof savedMap === 'object') {
-        for (var si = 0; si < extracted.fields.length; si++) {
-          var sf = extracted.fields[si];
-          var sEntry = savedMap[gskPre(sf.label)] || savedMap[gskPre(sf.name)] || null;
-          if (sEntry && sEntry.profileKey) covered[sf.selector] = true;
-        }
-      }
       var aiCandidates = extracted.fields.filter(function (f) { return !covered[f.selector]; });
       if (aiCandidates.length > 0 && backendUrl && accessToken) {
         progress('AI mapping ' + aiCandidates.length + ' unknown fields...', 58);
@@ -171,21 +183,45 @@
             var am = aiMaps[ai];
             if (!am || !am.selector || !am.profile_key) continue;
             if (am.disposition === 'reject') continue;
-            var pval = flatProf[am.profile_key];
-            if (pval == null || String(pval).trim() === '') continue;
-            if (typeof pval === 'object' && pval && 'value' in pval) pval = pval.value;
-            if (pval == null || String(pval).trim() === '') continue;
             if (wssPlan.mapping[am.selector]) continue;
             var fieldMeta = aiCandidates.find(function (f) { return f.selector === am.selector; }) || {};
+            // #302: never raw-dump a compound atom onto a part-looking field.
+            // Prefer explicit AI projection keys (dob__day) or induce identity only when safe.
+            var aiKey = am.profile_key;
+            var aiRelation = { kind: 'identity' };
+            var pval = null;
+            if (aiKey === 'dob__day' || aiKey === 'dob__month' || aiKey === 'dob__year') {
+              aiRelation = { kind: 'date_part', part: aiKey.split('__')[1] };
+              aiKey = 'dob';
+              pval = typeof relApi.applyRelation === 'function'
+                ? relApi.applyRelation(aiRelation, flatProf, aiKey, fieldMeta)
+                : null;
+            } else if (typeof relApi.looksLikePartField === 'function' && typeof relApi.isCompoundAtom === 'function'
+              && relApi.looksLikePartField(fieldMeta) && relApi.isCompoundAtom(aiKey)) {
+              // Skip raw dump — leave for fuzzyMatch / split residual
+              continue;
+            } else {
+              pval = flatProf[aiKey];
+              if (pval != null && typeof pval === 'object' && 'value' in pval) pval = pval.value;
+              if (pval == null || String(pval).trim() === '') continue;
+              if (typeof relApi.applyRelation === 'function') {
+                var shaped = relApi.applyRelation(aiRelation, flatProf, aiKey, fieldMeta);
+                if (shaped == null) continue;
+                pval = shaped;
+              }
+            }
+            if (pval == null || String(pval).trim() === '') continue;
             wssPlan.mapping[am.selector] = {
               value: pval,
               type: fieldMeta.type || 'text',
               label: fieldMeta.label || '',
-              profileKey: am.profile_key,
+              profileKey: aiKey,
+              relation: aiRelation,
             };
             wssPlan.filledBySource[am.selector] = {
               label: fieldMeta.label || '',
-              profileKey: am.profile_key,
+              profileKey: aiKey,
+              relation: aiRelation,
               source: 'server-ai',
             };
           }
@@ -202,36 +238,19 @@
     progress('Filling form (sequential)...', 70);
     var execResults = await chrome.scripting.executeScript({
       target: { tabId },
-      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, wssPlan.savedMappings || {}, (profile && profile.id) || null, transport],
-      func: async function (prof, fields, wssMapping, wssFbs, adapters, saved, profileId, fillTransport) {
+      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, (profile && profile.id) || null, transport],
+      func: async function (prof, fields, wssMapping, wssFbs, adapters, profileId, fillTransport) {
         if (typeof fillFormFieldsSequential !== 'function') return { ok: false, error: 'sequential_kernel_not_loaded' };
         try { window._ccProfileId = profileId; } catch (e) {}
         var mapping = Object.assign({}, wssMapping || {});
         var fbs = Object.assign({}, wssFbs || {});
-        var gsk = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
-        var isChoiceType = function (t) { return /radio|checkbox/i.test(String(t || '')); };
         function choiceCovered(f) {
           if (mapping[f.selector]) return true;
           if (f.optionSelectors) { for (var i = 0; i < f.optionSelectors.length; i++) { if (mapping[f.optionSelectors[i]]) return true; } }
           return false;
         }
-        if (saved && Object.keys(mapping).length === 0) {
-          for (var i = 0; i < fields.length; i++) {
-            var f = fields[i];
-            var sk = gsk(f.label);
-            var s = saved[sk] || saved[gsk(f.name)] || null;
-            if (!s) continue;
-            if (s.profileKey && prof[s.profileKey] != null && String(prof[s.profileKey]).trim() !== '') {
-              if (isChoiceType(f.type) && typeof resolveChoiceToOption === 'function') {
-                var resolved = resolveChoiceToOption(f, prof[s.profileKey], s.profileKey);
-                if (resolved) { mapping[resolved.selector] = resolved.entry; fbs[resolved.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' }; }
-              } else {
-                mapping[f.selector] = { value: prof[s.profileKey], type: f.type, label: f.label, profileKey: s.profileKey };
-                fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' };
-              }
-            }
-          }
-        }
+        // #302: taught relations are materialized on the SW before executeScript.
+        // Residual unmapped fields fall through to fuzzyMatch / skip — never raw-dump saved keys here.
         var unmapped = fields.filter(function (f) { return !choiceCovered(f); });
         if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
           var fz = fuzzyMatch(unmapped, prof);
@@ -259,14 +278,15 @@
     }
 
     // ── Stage 3b: Sync mappings to backend ───────────────────────────────────
-    // Post form field metadata + profileKey mappings so the backend learns
-    // new forms. This is what makes new forms appear in the mapping portal.
+    // #302: learn profileKey + relation from successful fills (evidence → relation).
+    // Do not persist literal actualValue long-term — only the reusable relationship.
     try {
       var pk = extracted.semanticFormKey || extracted.formKey;
       var syncMapping = r._mapping || {};
       var syncFbs     = r._fbs     || {};
       var syncFields  = r._fields  || [];
       var syncRecords = r.records  || [];
+      var syncProfile = extracted.profile || {};
       var updates = {};
       var gsk2 = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
       for (var i = 0; i < syncFields.length; i++) {
@@ -274,15 +294,38 @@
         var sk = gsk2(f.label);
         if (!sk || sk.length < 2) continue;
         var info = syncFbs[f.selector];
-        var profileKey = (info && info.profileKey) || (syncMapping[f.selector] && syncMapping[f.selector].profileKey) || null;
-        var wasFilled = syncRecords.some(function (rec) { return rec.selector === f.selector && rec.result === 'filled'; });
-        updates[sk] = { profileKey: profileKey, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+        var mapEntry = syncMapping[f.selector];
+        var profileKey = (info && info.profileKey) || (mapEntry && mapEntry.profileKey) || null;
+        var filledRec = syncRecords.find(function (rec) { return rec.selector === f.selector && rec.result === 'filled'; });
+        var wasFilled = !!filledRec;
+        var evidence = null;
+        if (filledRec) {
+          evidence = filledRec.actualValue != null ? filledRec.actualValue : (filledRec.actual != null ? filledRec.actual : filledRec.plannedValue != null ? filledRec.plannedValue : filledRec.value);
+        } else if (mapEntry && mapEntry.value != null) {
+          evidence = mapEntry.value;
+        }
+        var relation = (info && info.relation) || (mapEntry && mapEntry.relation) || null;
+        if ((!relation || !relation.kind) && profileKey && typeof relApi.induceRelation === 'function') {
+          relation = relApi.induceRelation(syncProfile, profileKey, evidence, f);
+        }
+        if (!relation || !relation.kind) {
+          relation = { kind: profileKey ? 'unknown' : 'unknown' };
+        }
+        updates[sk] = {
+          profileKey: profileKey,
+          relation: relation,
+          label: f.label,
+          type: f.type,
+          order: i,
+          options: f.options || null,
+          delta: { fills: wasFilled ? 1 : 0, corrections: 0 },
+        };
       }
       if (Object.keys(updates).length > 0 && backendUrl && accessToken && pk) {
         await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
+          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 3 } }),
         });
       }
     } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }
