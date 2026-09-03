@@ -262,6 +262,11 @@ router.post('/:formKey', async (req, res) => {
     if (updates) {
       // Sources that a background sync must NOT overwrite (set by admin/owner review).
       const PROTECTED = new Set(['manual', 'confirmed']);
+      const relationStrength = (rel) => {
+        if (!rel || !rel.kind || rel.kind === 'unknown') return 0;
+        if (rel.kind === 'identity') return 2;
+        return 3;
+      };
       for (const [semanticKey, info] of Object.entries(updates)) {
         const { profileKey, delta = {}, label, type, order, options,
                 fillMode, rules, constantValue, fallback, relation } = info;
@@ -270,10 +275,16 @@ router.post('/:formKey', async (req, res) => {
           existing.fills = (existing.fills || 0) + (delta.fills || 0);
           existing.corrections = (existing.corrections || 0) + (delta.corrections || 0);
           const locked = PROTECTED.has(existing.source);
-          // profileKey + rule config are only overwritten when the field isn't locked
-          if (profileKey !== undefined && !locked) existing.profileKey = profileKey;
-          // #302: persist relation (identity | derive | unknown). Locked manual keeps relation unless explicitly sent.
-          if (relation !== undefined && relation !== null && !locked) existing.relation = relation;
+          // Never clear a learned profileKey with null from a weak fill sync.
+          if (profileKey !== undefined && !locked) {
+            if (profileKey || !existing.profileKey) existing.profileKey = profileKey;
+          }
+          // #302: persist relation, but do not downgrade identity/derive → unknown.
+          if (relation !== undefined && relation !== null && !locked) {
+            if (relationStrength(relation) >= relationStrength(existing.relation)) {
+              existing.relation = relation;
+            }
+          }
           if (fillMode !== undefined && !locked) existing.fillMode = fillMode;
           if (rules !== undefined && !locked) existing.rules = rules;
           if (constantValue !== undefined && !locked) existing.constantValue = constantValue;

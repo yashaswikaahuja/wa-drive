@@ -106,6 +106,16 @@ assert(
   induceRelation(profile, 'dob', '99', { label: 'Day' }),
   { kind: 'unknown' }
 );
+assert(
+  'nationality must NOT become dob day from evidence 05',
+  induceRelation(profile, 'dob', '05', { label: 'Country Of Nationality', type: 'text' }),
+  { kind: 'unknown' }
+);
+assert(
+  'looksLikePartField short maxLength alone is false',
+  looksLikePartField({ label: 'PIN', type: 'text', maxLength: 4 }),
+  false
+);
 
 console.log('\nmaterializeSavedRelations');
 {

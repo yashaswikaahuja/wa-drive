@@ -198,8 +198,22 @@
                 : null;
             } else if (typeof relApi.looksLikePartField === 'function' && typeof relApi.isCompoundAtom === 'function'
               && relApi.looksLikePartField(fieldMeta) && relApi.isCompoundAtom(aiKey)) {
-              // Skip raw dump — leave for fuzzyMatch / split residual
-              continue;
+              // Try label-based date_part when AI returned compound dob for a day/month/year widget.
+              var lbl = String(fieldMeta.label || '').trim();
+              var guessed = null;
+              if (/^(dob|date_of_birth)$/i.test(aiKey)) {
+                if (/^dd$|^day$/i.test(lbl) || /dob_?day|birth_?day/i.test(lbl)) guessed = { kind: 'date_part', part: 'day' };
+                else if (/^mm$|^month$/i.test(lbl) || /dob_?month|birth_?month/i.test(lbl)) guessed = { kind: 'date_part', part: 'month' };
+                else if (/^yyyy$|^year$/i.test(lbl) || /dob_?year|birth_?year/i.test(lbl)) guessed = { kind: 'date_part', part: 'year' };
+              }
+              if (guessed && typeof relApi.applyRelation === 'function') {
+                aiRelation = guessed;
+                pval = relApi.applyRelation(guessed, flatProf, aiKey === 'date_of_birth' ? 'dob' : aiKey, fieldMeta);
+                if (aiKey === 'date_of_birth') aiKey = 'dob';
+              } else {
+                // Leave for fuzzyMatch / applySplitDob — do not raw-dump
+                continue;
+              }
             } else {
               pval = flatProf[aiKey];
               if (pval != null && typeof pval === 'object' && 'value' in pval) pval = pval.value;
@@ -291,7 +305,10 @@
       var gsk2 = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
       for (var i = 0; i < syncFields.length; i++) {
         var f = syncFields[i];
+        // Catalog key: prefer label, fall back to name/id so fields still appear in Admin Mappings.
         var sk = gsk2(f.label);
+        if (!sk || sk.length < 2) sk = gsk2(f.name);
+        if (!sk || sk.length < 2) sk = gsk2(f.id);
         if (!sk || sk.length < 2) continue;
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
@@ -305,16 +322,19 @@
           evidence = mapEntry.value;
         }
         var relation = (info && info.relation) || (mapEntry && mapEntry.relation) || null;
-        if ((!relation || !relation.kind) && profileKey && typeof relApi.induceRelation === 'function') {
-          relation = relApi.induceRelation(syncProfile, profileKey, evidence, f);
+        if ((!relation || !relation.kind || relation.kind === 'unknown') && profileKey && typeof relApi.induceRelation === 'function') {
+          var induced = relApi.induceRelation(syncProfile, profileKey, evidence, f);
+          if (induced && induced.kind && induced.kind !== 'unknown') relation = induced;
+          else if (!relation || !relation.kind) relation = induced || { kind: 'unknown' };
         }
         if (!relation || !relation.kind) {
-          relation = { kind: profileKey ? 'unknown' : 'unknown' };
+          relation = { kind: 'unknown' };
         }
+        // Always seed catalog row (even with null profileKey) so Admin Mappings lists every seen field.
         updates[sk] = {
           profileKey: profileKey,
           relation: relation,
-          label: f.label,
+          label: f.label || f.name || f.id || sk,
           type: f.type,
           order: i,
           options: f.options || null,

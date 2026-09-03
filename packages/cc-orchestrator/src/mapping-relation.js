@@ -50,8 +50,6 @@
     if (/\b(dob_?year|birth_?year|year_of_birth|ddl_?year)\b/.test(blob)) return true;
     if (/last\s*4|last\s*four|last\s*6|first\s*4|first\s*3|last\s*digits|otp|suffix/i.test(blob)) return true;
     if (/email\s*(user|id|name)|username|local.?part/i.test(blob)) return true;
-    var maxLen = Number(field && (field.maxLength || field.maxlength) || 0);
-    if (maxLen > 0 && maxLen <= 4) return true;
     return false;
   }
 
@@ -130,8 +128,13 @@
       return profileKey ? { kind: 'identity' } : { kind: 'unknown' };
     }
     if (normLoose(sample) === normLoose(atom) && shapeCompatible(field, atom)) return { kind: 'identity' };
+    var blob = fieldBlob(field);
+    var partish = looksLikePartField(field);
+    var dateish = partish || /\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob);
+    var nameish = partish || /\b(name|first|middle|last|surname|fname|lname)\b/i.test(blob);
+    var sliceish = partish || /last\s*\d|first\s*\d|last\s*digit|suffix|prefix/i.test(blob);
     var dp = parseDobParts(atom);
-    if (dp) {
+    if (dp && dateish) {
       var sn = normLoose(sample);
       var dayN = String(parseInt(dp.day, 10));
       var monthN = String(parseInt(dp.month, 10));
@@ -139,18 +142,21 @@
       if (sn === normLoose(dp.month) || sn === normLoose(monthN) || sn === normLoose(MONTH_NAMES[parseInt(dp.month, 10)] || '')) return { kind: 'date_part', part: 'month' };
       if (sn === normLoose(dp.year)) return { kind: 'date_part', part: 'year' };
     }
-    if (atom.indexOf('@') > 0) {
+    if (atom.indexOf('@') > 0 && (partish || /email|user|local/i.test(blob))) {
       var local = atom.slice(0, atom.indexOf('@'));
       if (normLoose(sample) === normLoose(local)) return { kind: 'email_local' };
     }
-    if (atom.lastIndexOf(sample) === atom.length - sample.length && sample.length < atom.length && sample.length <= 8) return { kind: 'last_n', n: sample.length };
-    if (atom.indexOf(sample) === 0 && sample.length < atom.length && sample.length <= 8) return { kind: 'first_n', n: sample.length };
-    var nameParts = atom.split(/\s+/).filter(Boolean);
-    if (nameParts.length >= 2) {
-      if (normLoose(sample) === normLoose(nameParts[0])) return { kind: 'name_part', part: 'first' };
-      if (normLoose(sample) === normLoose(nameParts[nameParts.length - 1])) return { kind: 'name_part', part: 'last' };
+    if (sliceish) {
+      if (atom.lastIndexOf(sample) === atom.length - sample.length && sample.length < atom.length && sample.length <= 8) return { kind: 'last_n', n: sample.length };
+      if (atom.indexOf(sample) === 0 && sample.length < atom.length && sample.length <= 8) return { kind: 'first_n', n: sample.length };
     }
-    if (looksLikePartField(field) || sample.length < atom.length) return { kind: 'unknown' };
+    if (nameish) {
+      var nameParts = atom.split(/\s+/).filter(Boolean);
+      if (nameParts.length >= 2) {
+        if (normLoose(sample) === normLoose(nameParts[0])) return { kind: 'name_part', part: 'first' };
+        if (normLoose(sample) === normLoose(nameParts[nameParts.length - 1])) return { kind: 'name_part', part: 'last' };
+      }
+    }
     return { kind: 'unknown' };
   }
 

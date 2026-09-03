@@ -66,8 +66,7 @@ export function looksLikePartField(field) {
   if (/\b(dob_?year|birth_?year|year_of_birth|ddl_?year)\b/.test(blob)) return true;
   if (/last\s*4|last\s*four|last\s*6|first\s*4|first\s*3|last\s*digits|otp|suffix/i.test(blob)) return true;
   if (/email\s*(user|id|name)|username|local.?part/i.test(blob)) return true;
-  const maxLen = Number(field?.maxLength || field?.maxlength || 0);
-  if (maxLen > 0 && maxLen <= 4) return true;
+  // Do NOT treat maxLength alone as part-field — that skipped AI on many short full-value inputs.
   return false;
 }
 
@@ -99,10 +98,18 @@ export function normalizeRelation(entry, field) {
   }
   const pk = entry?.profileKey;
   if (!pk) return { kind: 'unknown' };
+  // Legacy bare profileKey on a part-looking widget → do not raw-dump.
   if (looksLikePartField(field) && isCompoundAtom(pk)) {
     return { kind: 'unknown' };
   }
   return { kind: 'identity' };
+}
+
+/** Higher = more specific / safer to keep when merging sync updates. */
+export function relationStrength(rel) {
+  if (!rel || !rel.kind || rel.kind === 'unknown') return 0;
+  if (rel.kind === 'identity') return 2;
+  return 3;
 }
 
 function applyDatePart(atom, part, field) {
@@ -187,9 +194,17 @@ export function induceRelation(profile, profileKey, actualOrPlanned, field) {
     return { kind: 'identity' };
   }
 
-  // date parts
+  const blob = fieldBlob(field);
+  const partish = looksLikePartField(field);
+  const dateish =
+    partish || /\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob);
+  const nameish = partish || /\b(name|first|middle|last|surname|fname|lname)\b/i.test(blob);
+  const sliceish =
+    partish || /last\s*\d|first\s*\d|last\s*digit|suffix|prefix/i.test(blob);
+
+  // date parts — ONLY when the field looks date-related (prevents nationality←dob day)
   const dp = parseDobParts(atom);
-  if (dp) {
+  if (dp && dateish) {
     const sn = normLoose(sample);
     const dayN = String(parseInt(dp.day, 10));
     const monthN = String(parseInt(dp.month, 10));
@@ -209,39 +224,39 @@ export function induceRelation(profile, profileKey, actualOrPlanned, field) {
   }
 
   // email local (before first_n — "john" is prefix of "john@…")
-  if (atom.includes('@')) {
+  if (atom.includes('@') && (partish || /email|user|local/i.test(blob))) {
     const local = atom.slice(0, atom.indexOf('@'));
     if (normLoose(sample) === normLoose(local)) {
       return { kind: 'email_local' };
     }
   }
 
-  // last_n / first_n
-  if (atom.endsWith(sample) && sample.length < atom.length && sample.length <= 8) {
-    return { kind: 'last_n', n: sample.length };
-  }
-  if (atom.startsWith(sample) && sample.length < atom.length && sample.length <= 8) {
-    return { kind: 'first_n', n: sample.length };
+  // last_n / first_n — only when field suggests a slice
+  if (sliceish) {
+    if (atom.endsWith(sample) && sample.length < atom.length && sample.length <= 8) {
+      return { kind: 'last_n', n: sample.length };
+    }
+    if (atom.startsWith(sample) && sample.length < atom.length && sample.length <= 8) {
+      return { kind: 'first_n', n: sample.length };
+    }
   }
 
   // name parts
-  const nameParts = atom.split(/\s+/).filter(Boolean);
-  if (nameParts.length >= 2) {
-    if (normLoose(sample) === normLoose(nameParts[0])) return { kind: 'name_part', part: 'first' };
-    if (normLoose(sample) === normLoose(nameParts[nameParts.length - 1])) {
-      return { kind: 'name_part', part: 'last' };
-    }
-    if (nameParts.length >= 3) {
-      const mid = nameParts.slice(1, -1).join(' ');
-      if (normLoose(sample) === normLoose(mid)) return { kind: 'name_part', part: 'middle' };
+  if (nameish) {
+    const nameParts = atom.split(/\s+/).filter(Boolean);
+    if (nameParts.length >= 2) {
+      if (normLoose(sample) === normLoose(nameParts[0])) return { kind: 'name_part', part: 'first' };
+      if (normLoose(sample) === normLoose(nameParts[nameParts.length - 1])) {
+        return { kind: 'name_part', part: 'last' };
+      }
+      if (nameParts.length >= 3) {
+        const mid = nameParts.slice(1, -1).join(' ');
+        if (normLoose(sample) === normLoose(mid)) return { kind: 'name_part', part: 'middle' };
+      }
     }
   }
 
-  // Partial sample that doesn't cleanly match → unknown (never teach raw dump)
-  if (looksLikePartField(field) || sample.length < atom.length) {
-    return { kind: 'unknown' };
-  }
-
+  // Unclear / partial evidence → unknown (caller must not overwrite a stronger existing relation).
   return { kind: 'unknown' };
 }
 
