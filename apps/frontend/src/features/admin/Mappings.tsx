@@ -3,6 +3,15 @@ import { ArrowLeft, Trash } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { useFocusTrap } from '../../shared/useFocusTrap';
+import {
+  MappingRelation,
+  RELATION_KIND_OPTIONS,
+  flattenProfileData,
+  formatRelation,
+  normalizeRelation,
+  previewRelation,
+  statusFromSource,
+} from './mappingRelation';
 
 interface FormSummary {
   formKey: string;
@@ -26,6 +35,7 @@ interface FieldMapping {
   order?: number;
   options?: string[] | null;
   profileKey: string | null;
+  relation?: MappingRelation | null;
   fillMode?: FillMode | null;
   rules?: Rule[] | null;
   constantValue?: string | null;
@@ -34,6 +44,13 @@ interface FieldMapping {
   corrections: number;
   lastSeen: string;
   source?: string;
+}
+
+interface PreviewProfileOption {
+  id: string;
+  name: string | null;
+  displayLabel?: string | null;
+  phone?: string | null;
 }
 
 const OPERATORS: { op: string; label: string; needsValue: boolean }[] = [
@@ -77,8 +94,38 @@ export default function MappingsPage() {
   const [newTransKey, setNewTransKey] = useState('');
   const [newTransVal, setNewTransVal] = useState('');
   const [confirmState, setConfirmState] = useState<{ message: string; danger?: boolean; confirmLabel?: string; onConfirm: () => void } | null>(null);
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [previewProfiles, setPreviewProfiles] = useState<PreviewProfileOption[]>([]);
+  const [previewProfileId, setPreviewProfileId] = useState<string>('');
+  const [previewFlat, setPreviewFlat] = useState<Record<string, string>>({});
 
-  useEffect(() => { loadList(); loadTranslations(); }, []);
+  useEffect(() => { loadList(); loadTranslations(); loadPreviewProfiles(); }, []);
+
+  async function loadPreviewProfiles() {
+    try {
+      const r = await api.get('/profiles');
+      const rows: PreviewProfileOption[] = Array.isArray(r.data) ? r.data : [];
+      setPreviewProfiles(rows);
+      if (rows[0]?.id) setPreviewProfileId(rows[0].id);
+    } catch {
+      /* preview is optional — mappings API may be on a host without /profiles */
+    }
+  }
+
+  useEffect(() => {
+    if (!previewProfileId) { setPreviewFlat({}); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.get('/profiles/' + previewProfileId);
+        if (cancelled) return;
+        setPreviewFlat(flattenProfileData(r.data?.data || {}));
+      } catch {
+        if (!cancelled) setPreviewFlat({});
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [previewProfileId]);
 
   async function loadTranslations() {
     try { const r = await api.get('/mappings/translations'); setTranslations(r.data || {}); } catch {}
@@ -119,13 +166,32 @@ export default function MappingsPage() {
     } catch { setFields({}); }
   }
 
-  async function updateField(label: string, profileKey: string | null) {
+  /** #303 — save profileKey + relation as protected manual binding */
+  async function saveBinding(label: string, profileKey: string | null, relation: MappingRelation | null) {
     setSavingKey(label);
     try {
-      await api.patch('/mappings/' + selected!.formKey + '/' + encodeURIComponent(label), { profileKey: profileKey || null });
-      setFields(prev => ({ ...prev, [label]: { ...prev[label], profileKey: profileKey || null, source: 'manual' } }));
-    } catch (e) { console.warn('save failed', e); }
-    finally { setSavingKey(null); }
+      const body: Record<string, unknown> = {
+        profileKey: profileKey || null,
+        relation: profileKey ? (relation || { kind: 'identity' }) : null,
+      };
+      await api.patch('/mappings/' + selected!.formKey + '/' + encodeURIComponent(label), body);
+      setFields(prev => ({
+        ...prev,
+        [label]: {
+          ...prev[label],
+          profileKey: profileKey || null,
+          relation: profileKey ? (relation || { kind: 'identity' }) : null,
+          source: 'manual',
+        },
+      }));
+      toast.success('Mapping saved');
+      setEditKey(null);
+    } catch (e) {
+      console.warn('save binding failed', e);
+      toast.error('Save failed');
+    } finally {
+      setSavingKey(null);
+    }
   }
 
   // Save the full rule config for a field (radio/dropdown/checkbox rule builder)
@@ -134,6 +200,7 @@ export default function MappingsPage() {
     try {
       await api.patch('/mappings/' + selected!.formKey + '/' + encodeURIComponent(label), {
         profileKey: cfg.profileKey ?? null,
+        relation: cfg.profileKey ? (cfg.relation || { kind: 'identity' }) : null,
         fillMode: cfg.fillMode ?? null,
         rules: cfg.rules ?? null,
         constantValue: cfg.constantValue ?? null,
@@ -226,10 +293,27 @@ export default function MappingsPage() {
                 <span>{mapped} mapped</span>
                 {selected.fills > 0 && <><span>·</span><span>{selected.fills} fills</span></>}
               </div>
+              <p className="text-[11px] text-gray-500 mt-2">
+                AI/learning proposes Source + Relation. Edit only when wrong — manual saves are protected.
+              </p>
             </div>
-            <button onClick={() => deleteForm(selected.formKey)} className="btn-ghost text-red-400 text-xs flex items-center gap-1">
-              <Trash size={14} /> Delete
-            </button>
+            <div className="flex flex-col items-end gap-2 flex-shrink-0">
+              {previewProfiles.length > 0 && (
+                <select
+                  value={previewProfileId}
+                  onChange={(e) => setPreviewProfileId(e.target.value)}
+                  className="input-field text-xs py-1.5 max-w-[220px]"
+                  title="Profile used for Preview column"
+                >
+                  {previewProfiles.map((p) => (
+                    <option key={p.id} value={p.id}>{p.displayLabel || p.name || p.phone || p.id.slice(0, 8)}</option>
+                  ))}
+                </select>
+              )}
+              <button onClick={() => deleteForm(selected.formKey)} className="btn-ghost text-red-400 text-xs flex items-center gap-1">
+                <Trash size={14} /> Delete
+              </button>
+            </div>
           </div>
 
           <div className="mt-4">
@@ -258,14 +342,17 @@ export default function MappingsPage() {
           ))}
         </div>
 
-        <div className="card overflow-hidden">
-          <div className="flex items-center px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04]">
+        <div className="card overflow-hidden overflow-x-auto">
+          <div className="flex items-center px-4 py-3 text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/[0.04] min-w-[720px]">
             <span className="w-5 flex-shrink-0" />
-            <div className="flex-1 ml-3">Form Field</div>
-            <div className="w-52 flex-shrink-0">Profile Key</div>
-            <div className="w-6 flex-shrink-0" />
+            <div className="flex-1 min-w-[140px] ml-3">Form field</div>
+            <div className="w-28 flex-shrink-0">Source</div>
+            <div className="w-32 flex-shrink-0">Relation</div>
+            <div className="w-28 flex-shrink-0">Preview</div>
+            <div className="w-24 flex-shrink-0">Status</div>
+            <div className="w-28 flex-shrink-0" />
           </div>
-          <div className="divide-y divide-white/[0.04]">
+          <div className="divide-y divide-white/[0.04] min-w-[720px]">
             {filteredEntries.map(([key, m]) => {
               const display = m.label || key.replace(/_/g, ' ');
               const type = m.type || 'text';
@@ -287,48 +374,42 @@ export default function MappingsPage() {
               const hasOptions = m.options && m.options.length > 0;
               const grp = getTypeGroup(type);
               const isRuleType = grp === 'radio' || grp === 'dropdown' || grp === 'checkbox';
-              const mode: FillMode | null = (m.fillMode as FillMode) || (m.profileKey ? 'match' : (type === 'checkbox-agreement' ? 'always' : null));
-              const summary = mode === 'match' ? (m.profileKey ? '= ' + m.profileKey.replace(/_/g, ' ') : 'match…')
-                : mode === 'always' ? 'always check'
-                : mode === 'constant' ? '= "' + (m.constantValue || '…') + '"'
-                : mode === 'condition' ? ((m.rules?.length || 0) + ' rule' + ((m.rules?.length || 0) === 1 ? '' : 's'))
-                : mode === 'skip' ? 'skip'
-                : 'not set';
+              const rel = normalizeRelation(m.relation, m.profileKey);
+              const preview = previewRelation(previewFlat, m.profileKey, rel);
+              const status = statusFromSource(m.source);
               const isOpen = expandedKey === key;
               return (
                 <div key={key} className={`px-4 py-2.5 hover:bg-white/[0.02] transition ${!m.profileKey ? 'bg-yellow-500/[0.03]' : ''}`}>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <span className={`text-sm flex-shrink-0 w-5 text-center ${typeColor}`} title={typeLabel}>{typeIcon}</span>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-[140px]">
                       <div className="text-sm text-gray-200 truncate" title={display}>{display}</div>
                     </div>
-                    {isRuleType ? (
+                    <div className="w-28 flex-shrink-0 text-xs text-gray-300 truncate font-mono" title={m.profileKey || ''}>
+                      {m.profileKey || <span className="text-gray-600">—</span>}
+                    </div>
+                    <div className="w-32 flex-shrink-0 text-xs text-gray-300 truncate font-mono" title={formatRelation(rel)}>
+                      {m.profileKey ? formatRelation(rel) : <span className="text-gray-600">—</span>}
+                    </div>
+                    <div className="w-28 flex-shrink-0 text-xs text-gray-400 truncate" title={preview || ''}>
+                      {preview != null ? preview : <span className="text-gray-600">{m.profileKey ? 'n/a' : '—'}</span>}
+                    </div>
+                    <div className={`w-24 flex-shrink-0 text-xs ${status.tone}`}>{status.label}</div>
+                    <div className="w-28 flex-shrink-0 flex items-center justify-end gap-1">
                       <button
-                        onClick={() => setExpandedKey(isOpen ? null : key)}
-                        className={`w-52 flex-shrink-0 text-left input-field text-xs py-1.5 flex items-center justify-between gap-2 ${isOpen ? 'ring-1 ring-[#0a84ff]' : ''}`}
-                        title="Configure how this field is filled"
-                      >
-                        <span className={`truncate ${mode ? 'text-gray-200' : 'text-gray-500'}`}>{summary}</span>
-                        <span className="text-gray-500 flex-shrink-0">{isOpen ? '▴' : '▾'}</span>
-                      </button>
-                    ) : (
-                      <div className="w-52 flex-shrink-0">
-                        <select
-                          value={m.profileKey || ''}
-                          onChange={(e) => updateField(key, e.target.value)}
-                          disabled={savingKey === key}
-                          className="input-field text-xs w-full py-1.5"
-                        >
-                          <option value="">— skip —</option>
-                          {PROFILE_KEY_GROUPS.map(group => (
-                            <optgroup key={group.label} label={group.label}>
-                              {group.keys.map(k => <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>)}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                    <button onClick={() => deleteField(key)} className="text-gray-600 hover:text-red-400 text-lg flex-shrink-0" title="Remove">×</button>
+                        onClick={() => setEditKey(key)}
+                        className="text-[11px] text-[#0a84ff] hover:underline px-1"
+                        disabled={savingKey === key}
+                      >Edit</button>
+                      {isRuleType && (
+                        <button
+                          onClick={() => setExpandedKey(isOpen ? null : key)}
+                          className="text-[11px] text-gray-500 hover:text-gray-300 px-1"
+                          title="Choice rules (legacy fillMode)"
+                        >{isOpen ? 'Rules▴' : 'Rules'}</button>
+                      )}
+                      <button onClick={() => deleteField(key)} className="text-gray-600 hover:text-red-400 text-lg leading-none" title="Remove">×</button>
+                    </div>
                   </div>
                   {hasOptions && (
                     <div className="ml-8 mt-1.5 flex flex-wrap gap-1.5">
@@ -353,6 +434,16 @@ export default function MappingsPage() {
           </div>
           {filteredEntries.length === 0 && <div className="p-8 text-center text-gray-500 text-sm">{typeFilter === 'all' ? 'No fields recorded yet.' : 'No fields of this type.'}</div>}
         </div>
+        {editKey && fields[editKey] && (
+          <BindingEditor
+            fieldKey={editKey}
+            mapping={fields[editKey]}
+            saving={savingKey === editKey}
+            previewFlat={previewFlat}
+            onSave={(pk, rel) => saveBinding(editKey, pk, rel)}
+            onClose={() => setEditKey(null)}
+          />
+        )}
         {confirmState && (
           <ConfirmDialog
             message={confirmState.message}
@@ -379,8 +470,8 @@ export default function MappingsPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-white tracking-tight mb-1">Form Mappings</h1>
         <p className="text-sm text-gray-400">
-          Each form your operators visit gets recorded here. Click any form to assign which profile field
-          fills which form field. Edits take effect on the next fill.
+          Forms discovered from fills. AI proposes Source + Relation; open a form to review and correct.
+          Manual edits are protected and reused on the next fill.
         </p>
       </div>
 
@@ -641,6 +732,135 @@ function FieldRuleEditor({ typeGroup, mapping, saving, onSave, onClose }: {
       <div className="flex justify-end gap-2 pt-1">
         <button onClick={onClose} className="btn-secondary text-xs px-3 py-1">Cancel</button>
         <button onClick={save} disabled={saving} className="btn-primary text-xs px-3 py-1">{saving ? 'Saving…' : 'Save'}</button>
+      </div>
+    </div>
+  );
+}
+
+function BindingEditor({
+  fieldKey,
+  mapping,
+  saving,
+  previewFlat,
+  onSave,
+  onClose,
+}: {
+  fieldKey: string;
+  mapping: FieldMapping;
+  saving: boolean;
+  previewFlat: Record<string, string>;
+  onSave: (profileKey: string | null, relation: MappingRelation | null) => void;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, onClose);
+  const [profileKey, setProfileKey] = useState(mapping.profileKey || '');
+  const initial = normalizeRelation(mapping.relation, mapping.profileKey);
+  const [kind, setKind] = useState(initial.kind);
+  const [n, setN] = useState(String(initial.n ?? 4));
+  const [part, setPart] = useState(initial.part || 'day');
+
+  const relation: MappingRelation | null = !profileKey
+    ? null
+    : kind === 'last_n' || kind === 'first_n'
+      ? { kind, n: Math.max(1, parseInt(n, 10) || 1) }
+      : kind === 'date_part' || kind === 'name_part'
+        ? { kind, part }
+        : { kind };
+
+  const preview = previewRelation(previewFlat, profileKey || null, relation);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true">
+      <div ref={dialogRef} onClick={(e) => e.stopPropagation()} className="card max-w-md w-full p-5 space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-white">Edit mapping</h3>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{mapping.label || fieldKey}</p>
+        </div>
+
+        <div>
+          <label className="text-[11px] text-gray-500 block mb-1">Source (profile atom)</label>
+          <select value={profileKey} onChange={(e) => setProfileKey(e.target.value)} className="input-field text-xs w-full py-1.5">
+            <option value="">— none / clear —</option>
+            {PROFILE_KEY_GROUPS.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.keys.map((k) => (
+                  <option key={k} value={k}>{k.replace(/_/g, ' ')}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
+        {profileKey && (
+          <>
+            <div>
+              <label className="text-[11px] text-gray-500 block mb-1">Relation</label>
+              <select
+                value={kind}
+                onChange={(e) => setKind(e.target.value as MappingRelation['kind'])}
+                className="input-field text-xs w-full py-1.5"
+              >
+                {RELATION_KIND_OPTIONS.map((o) => (
+                  <option key={o.kind} value={o.kind}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {(kind === 'last_n' || kind === 'first_n') && (
+              <div>
+                <label className="text-[11px] text-gray-500 block mb-1">N</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={32}
+                  value={n}
+                  onChange={(e) => setN(e.target.value)}
+                  className="input-field text-xs w-24 py-1.5"
+                />
+              </div>
+            )}
+
+            {kind === 'date_part' && (
+              <div>
+                <label className="text-[11px] text-gray-500 block mb-1">Part</label>
+                <select value={part} onChange={(e) => setPart(e.target.value)} className="input-field text-xs w-full py-1.5">
+                  <option value="day">day</option>
+                  <option value="month">month</option>
+                  <option value="year">year</option>
+                </select>
+              </div>
+            )}
+
+            {kind === 'name_part' && (
+              <div>
+                <label className="text-[11px] text-gray-500 block mb-1">Part</label>
+                <select value={part} onChange={(e) => setPart(e.target.value)} className="input-field text-xs w-full py-1.5">
+                  <option value="first">first</option>
+                  <option value="middle">middle</option>
+                  <option value="last">last</option>
+                </select>
+              </div>
+            )}
+
+            <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-gray-500">Preview</div>
+              <div className="text-sm text-gray-200 font-mono mt-0.5 truncate">
+                {preview != null ? preview : <span className="text-gray-600">n/a (pick a preview profile or check source value)</span>}
+              </div>
+              <div className="text-[11px] text-gray-500 mt-1 font-mono">{formatRelation(relation)}</div>
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button onClick={onClose} className="btn-secondary text-sm">Cancel</button>
+          <button
+            onClick={() => onSave(profileKey || null, relation)}
+            disabled={saving}
+            className="btn-primary text-sm"
+          >{saving ? 'Saving…' : 'Save'}</button>
+        </div>
       </div>
     </div>
   );
