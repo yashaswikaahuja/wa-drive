@@ -39,6 +39,12 @@ jobs:
             echo 'set -euo pipefail'
             printf 'KEY=%q\n' "$KEY"
             cat <<'REMOTE'
+          # Compose sidecar owns Tailscale — stop host agent so TUN is free
+          systemctl stop tailscaled 2>/dev/null || true
+          systemctl disable tailscaled 2>/dev/null || true
+          pkill -9 tailscaled 2>/dev/null || true
+          sleep 1
+
           cd /opt/cybercontrol-docker
           # Upsert TS_AUTHKEY in .env without printing the value
           if grep -q '^TS_AUTHKEY=' .env 2>/dev/null; then
@@ -50,11 +56,11 @@ jobs:
             echo 'TS_HOSTNAME=cybercontrol-mvp' >> .env
           fi
           docker compose pull tailscale
-          docker compose up -d tailscale
-          sleep 5
+          docker compose up -d --force-recreate tailscale
+          sleep 12
           docker compose ps tailscale
-          docker compose logs tailscale --tail 40
-          # Host-level status if TUN/host mode registered the node
-          command -v tailscale >/dev/null && tailscale status | head -20 || true
+          docker compose logs tailscale --tail 60
+          docker compose exec -T tailscale tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -30 || true
+          docker compose exec -T tailscale tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
           REMOTE
           } | ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "sudo bash -s"

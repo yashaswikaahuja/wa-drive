@@ -87,8 +87,10 @@ services:
     volumes:
       - ./nginx-mvp.conf:/etc/nginx/conf.d/default.conf:ro
 
-  # Official Tailscale container — joins tailnet (visible in Tailscale admin).
-  # App images do NOT include Tailscale; this sidecar is the supported Docker approach.
+  # Official Tailscale sidecar — joins the tailnet (visible in Tailscale admin).
+  # App images do NOT include Tailscale. Do NOT also run host `tailscaled`
+  # (TUN conflict: "tailscale0 is busy"). Disable host agent: systemctl disable --now tailscaled
+  # Requires TS_AUTHKEY in .env (inject via workflow aws-mvp-tailscale-compose.yml).
   tailscale:
     image: tailscale/tailscale:stable
     hostname: cybercontrol-mvp
