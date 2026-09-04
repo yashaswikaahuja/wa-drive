@@ -1,6 +1,7 @@
 name: AWS MVP Tailscale (compose)
 
-# Injects TS_AUTHKEY into EC2 /opt/cybercontrol-docker/.env and starts the Tailscale sidecar.
+# Injects Tailscale OAuth creds (same secrets GitHub runners use) into EC2
+# /opt/cybercontrol-docker/.env and starts the Tailscale compose sidecar.
 on:
   workflow_dispatch:
     inputs:
@@ -21,23 +22,24 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/aws.pem
           chmod 600 ~/.ssh/aws.pem
 
-      - name: Set TS_AUTHKEY on host and start tailscale service
+      - name: Set Tailscale OAuth on host and start sidecar
         env:
-          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
           HOST: ${{ inputs.host }}
         run: |
           set -euo pipefail
-          KEY="${TS_AUTHKEY:-}"
-          if [ -z "$KEY" ]; then KEY="${TS_OAUTH_SECRET:-}"; fi
-          if [ -z "$KEY" ]; then
-            echo "ERROR: TS_AUTHKEY / TS_OAUTH_SECRET missing"
+          if [ -z "${TS_OAUTH_CLIENT_ID:-}" ] || [ -z "${TS_OAUTH_SECRET:-}" ]; then
+            echo "ERROR: TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET missing (runners use these)"
             exit 1
           fi
 
           {
             echo 'set -euo pipefail'
-            printf 'KEY=%q\n' "$KEY"
+            printf 'CLIENT_ID=%q\n' "$TS_OAUTH_CLIENT_ID"
+            printf 'CLIENT_SECRET=%q\n' "$TS_OAUTH_SECRET"
+            printf 'AUTHKEY_FALLBACK=%q\n' "${TS_AUTHKEY:-}"
             cat <<'REMOTE'
           # Compose sidecar owns Tailscale — stop host agent so TUN is free
           systemctl stop tailscaled 2>/dev/null || true
@@ -46,21 +48,47 @@ jobs:
           sleep 1
 
           cd /opt/cybercontrol-docker
-          # Upsert TS_AUTHKEY in .env without printing the value
-          if grep -q '^TS_AUTHKEY=' .env 2>/dev/null; then
-            sed -i "s|^TS_AUTHKEY=.*|TS_AUTHKEY=${KEY}|" .env
-          else
-            printf '\nTS_AUTHKEY=%s\nTS_HOSTNAME=cybercontrol-mvp\n' "$KEY" >> .env
+
+          upsert_env() {
+            local k="$1" v="$2"
+            if grep -q "^${k}=" .env 2>/dev/null; then
+              # Avoid sed corruption of secrets: rewrite via awk
+              awk -v k="$k" -v v="$v" '
+                BEGIN { done=0 }
+                $0 ~ ("^" k "=") { print k "=" v; done=1; next }
+                { print }
+                END { if (!done) print k "=" v }
+              ' .env > .env.tmp && mv .env.tmp .env
+            else
+              printf '%s=%s\n' "$k" "$v" >> .env
+            fi
+          }
+
+          # OAuth path (same as tailscale/github-action on runners).
+          # Clear stale auth key so the container does not prefer a bad TS_AUTHKEY.
+          upsert_env TS_CLIENT_ID "$CLIENT_ID"
+          upsert_env TS_CLIENT_SECRET "$CLIENT_SECRET"
+          upsert_env TS_HOSTNAME cybercontrol-mvp
+          upsert_env TS_EXTRA_ARGS '--advertise-tags=tag:cybercontrol --accept-dns=true'
+          # Keep fallback around but empty it for the sidecar when OAuth is present
+          upsert_env TS_AUTHKEY ''
+
+          # Ensure compose file has OAuth env wiring (sync from this heredoc if old)
+          if ! grep -q 'TS_CLIENT_ID' docker-compose.yml 2>/dev/null; then
+            echo "WARNING: host compose file may be stale (no TS_CLIENT_ID). Patching env block via recreate still needs updated compose."
           fi
-          if ! grep -q '^TS_HOSTNAME=' .env; then
-            echo 'TS_HOSTNAME=cybercontrol-mvp' >> .env
-          fi
+
           docker compose pull tailscale
-          docker compose up -d --force-recreate tailscale
-          sleep 12
+          # Fresh state avoids sticky NeedsLogin with a previously rejected key
+          docker compose rm -sf tailscale || true
+          docker volume rm cybercontrol-docker_tailscale-state 2>/dev/null || true
+          docker compose up -d tailscale
+          sleep 15
           docker compose ps tailscale
-          docker compose logs tailscale --tail 60
-          docker compose exec -T tailscale tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -30 || true
+          docker compose logs tailscale --tail 80
+          echo "=== status ==="
+          docker compose exec -T tailscale tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -40 || true
+          echo "=== ip ==="
           docker compose exec -T tailscale tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
           REMOTE
           } | ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "sudo bash -s"

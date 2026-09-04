@@ -90,17 +90,25 @@ services:
   # Official Tailscale sidecar — joins the tailnet (visible in Tailscale admin).
   # App images do NOT include Tailscale. Do NOT also run host `tailscaled`
   # (TUN conflict: "tailscale0 is busy"). Disable host agent: systemctl disable --now tailscaled
-  # Requires TS_AUTHKEY in .env (inject via workflow aws-mvp-tailscale-compose.yml).
+  #
+  # Auth (same as GitHub runners): prefer OAuth client credentials in .env
+  #   TS_CLIENT_ID / TS_CLIENT_SECRET  (from TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET)
+  # Optional fallback: TS_AUTHKEY (auth key or oauth secret with ?ephemeral=false).
+  # Inject via workflow aws-mvp-tailscale-compose.yml.
   tailscale:
     image: tailscale/tailscale:stable
     hostname: cybercontrol-mvp
     restart: unless-stopped
     network_mode: host
     environment:
-      TS_AUTHKEY: ${TS_AUTHKEY}
+      # Prefer OAuth (what runners use). Leave TS_AUTHKEY empty when these are set.
+      TS_CLIENT_ID: ${TS_CLIENT_ID:-}
+      TS_CLIENT_SECRET: ${TS_CLIENT_SECRET:-}
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_HOSTNAME: ${TS_HOSTNAME:-cybercontrol-mvp}
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
+      TS_AUTH_ONCE: "true"
       TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---advertise-tags=tag:cybercontrol --accept-dns=true}
       TS_ACCEPT_DNS: "true"
     volumes:
