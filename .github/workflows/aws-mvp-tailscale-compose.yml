@@ -1,0 +1,60 @@
+name: AWS MVP Tailscale (compose)
+
+# Injects TS_AUTHKEY into EC2 /opt/cybercontrol-docker/.env and starts the Tailscale sidecar.
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: "SSH host"
+        type: string
+        default: "ubuntu@44.219.62.198"
+
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write SSH key
+        env:
+          KEY: ${{ secrets.AWS_MVP_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/aws.pem
+          chmod 600 ~/.ssh/aws.pem
+
+      - name: Set TS_AUTHKEY on host and start tailscale service
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          HOST: ${{ inputs.host }}
+        run: |
+          set -euo pipefail
+          KEY="${TS_AUTHKEY:-}"
+          if [ -z "$KEY" ]; then KEY="${TS_OAUTH_SECRET:-}"; fi
+          if [ -z "$KEY" ]; then
+            echo "ERROR: TS_AUTHKEY / TS_OAUTH_SECRET missing"
+            exit 1
+          fi
+
+          {
+            echo 'set -euo pipefail'
+            printf 'KEY=%q\n' "$KEY"
+            cat <<'REMOTE'
+          cd /opt/cybercontrol-docker
+          # Upsert TS_AUTHKEY in .env without printing the value
+          if grep -q '^TS_AUTHKEY=' .env 2>/dev/null; then
+            sed -i "s|^TS_AUTHKEY=.*|TS_AUTHKEY=${KEY}|" .env
+          else
+            printf '\nTS_AUTHKEY=%s\nTS_HOSTNAME=cybercontrol-mvp\n' "$KEY" >> .env
+          fi
+          if ! grep -q '^TS_HOSTNAME=' .env; then
+            echo 'TS_HOSTNAME=cybercontrol-mvp' >> .env
+          fi
+          docker compose pull tailscale
+          docker compose up -d tailscale
+          sleep 5
+          docker compose ps tailscale
+          docker compose logs tailscale --tail 40
+          # Host-level status if TUN/host mode registered the node
+          command -v tailscale >/dev/null && tailscale status | head -20 || true
+          REMOTE
+          } | ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "sudo bash -s"
