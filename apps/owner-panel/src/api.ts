@@ -83,7 +83,7 @@ const STORE_KEY = 'cc-owner-cfg';
 const DEFAULT_BASE =
   typeof window !== 'undefined' && window.location.protocol.startsWith('http') && window.location.port !== '5180'
     ? window.location.origin
-    : 'http://100.112.147.34:3010';
+    : 'http://cybercontrol-app:3010';
 
 export function loadConfig(): Config {
   try {
