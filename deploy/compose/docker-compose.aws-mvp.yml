@@ -89,12 +89,17 @@ services:
       SES_FROM: ${SES_FROM:-}
       GEOCODE_API_KEY: ${GEOCODE_API_KEY:-}
       OWNER_KEY: ${OWNER_KEY:-}
-      OWNER_PORT: ${OWNER_PORT:-}
-      OWNER_BIND: ${OWNER_BIND:-}
+      # Tailnet owner panel (baked into backend image). Bind 0.0.0.0 inside Docker;
+      # reach it as http://cybercontrol-app:3010 over Tailscale. SG must NOT open 3010.
+      OWNER_PORT: ${OWNER_PORT:-3010}
+      OWNER_BIND: ${OWNER_BIND:-0.0.0.0}
+      OWNER_ALERT_PHONE: ${OWNER_ALERT_PHONE:-}
+      OWNER_ALLOW_PRIVATE: ${OWNER_ALLOW_PRIVATE:-1}
     # Host publish for cybercontrol-app Tailscale (GCP used network_mode:host).
-    # SG must NOT open 3000 to the internet.
+    # SG must NOT open 3000/3010 to the internet.
     ports:
       - "3000:3000"
+      - "3010:3010"
 
   extension-service:
     image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}
