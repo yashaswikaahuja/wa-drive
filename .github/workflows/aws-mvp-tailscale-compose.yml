@@ -1,7 +1,8 @@
 name: AWS MVP Tailscale (compose)
 
 # Injects Tailscale OAuth creds (same secrets GitHub runners use) into EC2
-# /opt/cybercontrol-docker/.env and starts the Tailscale compose sidecar.
+# /opt/cybercontrol-docker/.env and starts MagicDNS sidecars:
+#   cybercontrol-app  (host) + cybercontrol-db (postgres netns)
 on:
   workflow_dispatch:
     inputs:
@@ -9,6 +10,10 @@ on:
         description: "SSH host"
         type: string
         default: "ubuntu@44.219.62.198"
+      purge_offline:
+        description: "Delete offline infra Tailscale nodes (db/wa/mvp/test) before join"
+        type: boolean
+        default: true
 
 jobs:
   start:
@@ -22,12 +27,13 @@ jobs:
           printf '%s\n' "$KEY" > ~/.ssh/aws.pem
           chmod 600 ~/.ssh/aws.pem
 
-      - name: Set Tailscale OAuth on host and start sidecar
+      - name: Set Tailscale OAuth on host and start sidecars
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
           TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
           HOST: ${{ inputs.host }}
+          PURGE: ${{ inputs.purge_offline }}
         run: |
           set -euo pipefail
           if [ -z "${TS_OAUTH_CLIENT_ID:-}" ] || [ -z "${TS_OAUTH_SECRET:-}" ]; then
@@ -39,9 +45,9 @@ jobs:
             echo 'set -euo pipefail'
             printf 'CLIENT_ID=%q\n' "$TS_OAUTH_CLIENT_ID"
             printf 'CLIENT_SECRET=%q\n' "$TS_OAUTH_SECRET"
-            printf 'AUTHKEY_FALLBACK=%q\n' "${TS_AUTHKEY:-}"
+            printf 'PURGE=%q\n' "$PURGE"
             cat <<'REMOTE'
-          # Compose sidecar owns Tailscale — stop host agent so TUN is free
+          # Compose sidecars own Tailscale — stop host agent so TUN is free
           systemctl stop tailscaled 2>/dev/null || true
           systemctl disable tailscaled 2>/dev/null || true
           pkill -9 tailscaled 2>/dev/null || true
@@ -51,44 +57,85 @@ jobs:
 
           upsert_env() {
             local k="$1" v="$2"
-            if grep -q "^${k}=" .env 2>/dev/null; then
-              # Avoid sed corruption of secrets: rewrite via awk
-              awk -v k="$k" -v v="$v" '
-                BEGIN { done=0 }
-                $0 ~ ("^" k "=") { print k "=" v; done=1; next }
-                { print }
-                END { if (!done) print k "=" v }
-              ' .env > .env.tmp && mv .env.tmp .env
-            else
-              printf '%s=%s\n' "$k" "$v" >> .env
-            fi
+            awk -v k="$k" -v v="$v" '
+              BEGIN { done=0 }
+              $0 ~ ("^" k "=") { print k "=" v; done=1; next }
+              { print }
+              END { if (!done) print k "=" v }
+            ' .env > .env.tmp && mv .env.tmp .env
           }
 
-          # OAuth path (same as tailscale/github-action on runners).
-          # Clear stale auth key so the container does not prefer a bad TS_AUTHKEY.
           upsert_env TS_CLIENT_ID "$CLIENT_ID"
           upsert_env TS_CLIENT_SECRET "$CLIENT_SECRET"
-          upsert_env TS_HOSTNAME cybercontrol-mvp
+          upsert_env TS_HOSTNAME_APP cybercontrol-app
+          upsert_env TS_HOSTNAME_DB cybercontrol-db
           upsert_env TS_EXTRA_ARGS '--advertise-tags=tag:cybercontrol --accept-dns=true'
-          # Keep fallback around but empty it for the sidecar when OAuth is present
+          upsert_env TS_EXTRA_ARGS_DB '--advertise-tags=tag:cybercontrol --accept-dns=false'
           upsert_env TS_AUTHKEY ''
+          # drop legacy single-node hostname if present
+          grep -v '^TS_HOSTNAME=' .env > .env.tmp && mv .env.tmp .env || true
 
-          # Ensure compose file has OAuth env wiring (sync from this heredoc if old)
-          if ! grep -q 'TS_CLIENT_ID' docker-compose.yml 2>/dev/null; then
-            echo "WARNING: host compose file may be stale (no TS_CLIENT_ID). Patching env block via recreate still needs updated compose."
+          if [ "$PURGE" = "true" ]; then
+            echo "=== purge offline infra Tailscale nodes ==="
+            TOKEN_JSON=$(curl -fsS -X POST 'https://api.tailscale.com/api/v2/oauth/token' \
+              -d "client_id=${CLIENT_ID}" -d "client_secret=${CLIENT_SECRET}")
+            ACCESS=$(printf '%s' "$TOKEN_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("access_token",""))')
+            if [ -n "$ACCESS" ]; then
+              curl -fsS -H "Authorization: Bearer $ACCESS" \
+                'https://api.tailscale.com/api/v2/tailnet/-/devices' -o /tmp/ts-devices.json
+              printf '%s' "$ACCESS" > /tmp/ts-access
+              python3 - <<'PY'
+          import json, urllib.request
+          access = open("/tmp/ts-access").read().strip()
+          # Names that must be free for the single MVP host to reclaim
+          PURGE = {
+            "cybercontrol-db",
+            "cybercontrol-wa",
+            "cybercontrol-wa-2",
+            "cybercontrol-app",
+            "cybercontrol-mvp",
+            "cc-tsjoin-test",
+          }
+          data = json.load(open("/tmp/ts-devices.json"))
+          for d in data.get("devices") or []:
+              name = d.get("hostname") or ""
+              if name not in PURGE:
+                  continue
+              node_id = d.get("nodeId") or d.get("id")
+              if not node_id:
+                  continue
+              url = f"https://api.tailscale.com/api/v2/device/{node_id}"
+              req = urllib.request.Request(url, method="DELETE", headers={"Authorization": f"Bearer {access}"})
+              try:
+                  with urllib.request.urlopen(req) as resp:
+                      print(f"deleted {name} ({node_id}) HTTP {resp.status}")
+              except Exception as e:
+                  print(f"WARN delete {name} ({node_id}): {e}")
+          PY
+            else
+              echo "WARN: could not mint OAuth token for purge"
+            fi
           fi
 
-          docker compose pull tailscale
-          # Fresh state avoids sticky NeedsLogin with a previously rejected key
-          docker compose rm -sf tailscale || true
-          docker volume rm cybercontrol-docker_tailscale-state 2>/dev/null || true
-          docker compose up -d tailscale
-          sleep 15
-          docker compose ps tailscale
-          docker compose logs tailscale --tail 80
-          echo "=== status ==="
-          docker compose exec -T tailscale tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -40 || true
-          echo "=== ip ==="
-          docker compose exec -T tailscale tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
+          docker compose pull tailscale-app tailscale-db || docker compose pull
+          docker compose rm -sf tailscale tailscale-app tailscale-db 2>/dev/null || true
+          docker volume rm cybercontrol-docker_tailscale-state \
+            cybercontrol-docker_tailscale-app-state \
+            cybercontrol-docker_tailscale-db-state 2>/dev/null || true
+
+          # Recreate postgres briefly so TUN device settings apply, then bring stack up
+          docker compose up -d postgres
+          sleep 3
+          docker compose up -d
+          sleep 20
+          docker compose ps
+          echo "=== app status ==="
+          docker compose logs tailscale-app --tail 40 || true
+          docker compose exec -T tailscale-app tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -30 || true
+          docker compose exec -T tailscale-app tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
+          echo "=== db status ==="
+          docker compose logs tailscale-db --tail 40 || true
+          docker compose exec -T tailscale-db tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -20 || true
+          docker compose exec -T tailscale-db tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
           REMOTE
           } | ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "sudo bash -s"

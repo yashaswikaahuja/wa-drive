@@ -1,5 +1,14 @@
-# Single-host AWS MVP (EC2): postgres + redis + backend + extension-service + nginx + Tailscale sidecar.
-# Deploy to /opt/cybercontrol-docker — secrets in .env (TS_AUTHKEY from GitHub secret).
+# Single-host AWS MVP (EC2): all services on one box, classic MagicDNS names reclaimed.
+#
+# Tailnet contract (same names as the old multi-VM mesh):
+#   cybercontrol-app  → backend :3000, extension-service :3300, nginx :80
+#   cybercontrol-db   → postgres :5432
+#   cybercontrol-wa*  → not on MVP yet (add when WA is restored)
+#
+# Internal compose traffic still uses Docker DNS (postgres/redis/backend).
+# Cross-node / runner / phone traffic uses MagicDNS names above.
+#
+# Deploy to /opt/cybercontrol-docker — OAuth in .env via aws-mvp-tailscale-compose.yml.
 services:
   postgres:
     image: postgres:15-alpine
@@ -10,6 +19,13 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
+    # Caps/devices live on postgres because tailscale-db uses network_mode: service:postgres
+    # (capabilities apply to this netns so the sidecar can create TUN for inbound :5432).
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U cybercontrol_app -d cybercontrol"]
       interval: 5s
@@ -50,8 +66,10 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://api.cybercontrol.fun/api/auth/google/callback}
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-cybercontrol.fun}
-    expose:
-      - "3000"
+    # Published so host-mode Tailscale (cybercontrol-app) can reach :3000 on the host.
+    # Keep SG locked to 22/80 from the internet — do not open 3000 publicly.
+    ports:
+      - "3000:3000"
 
   extension-service:
     image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}
@@ -73,8 +91,8 @@ services:
       BRAND_NAME: CyberControl
     volumes:
       - ext_data:/app/data
-    expose:
-      - "3300"
+    ports:
+      - "3300:3300"
 
   nginx:
     image: nginx:1.27-alpine
@@ -87,33 +105,55 @@ services:
     volumes:
       - ./nginx-mvp.conf:/etc/nginx/conf.d/default.conf:ro
 
-  # Official Tailscale sidecar — joins the tailnet (visible in Tailscale admin).
-  # App images do NOT include Tailscale. Do NOT also run host `tailscaled`
-  # (TUN conflict: "tailscale0 is busy"). Disable host agent: systemctl disable --now tailscaled
-  #
-  # Auth (same as GitHub runners): prefer OAuth client credentials in .env
-  #   TS_CLIENT_ID / TS_CLIENT_SECRET  (from TS_OAUTH_CLIENT_ID / TS_OAUTH_SECRET)
-  # Optional fallback: TS_AUTHKEY (auth key or oauth secret with ?ephemeral=false).
-  # Inject via workflow aws-mvp-tailscale-compose.yml.
-  tailscale:
+  # MagicDNS: cybercontrol-app — owns host TUN. Do NOT also run host `tailscaled`.
+  tailscale-app:
     image: tailscale/tailscale:stable
-    hostname: cybercontrol-mvp
+    hostname: cybercontrol-app
     restart: unless-stopped
     network_mode: host
     environment:
-      # Prefer OAuth (what runners use). Leave TS_AUTHKEY empty when these are set.
       TS_CLIENT_ID: ${TS_CLIENT_ID:-}
       TS_CLIENT_SECRET: ${TS_CLIENT_SECRET:-}
       TS_AUTHKEY: ${TS_AUTHKEY:-}
-      TS_HOSTNAME: ${TS_HOSTNAME:-cybercontrol-mvp}
+      TS_HOSTNAME: ${TS_HOSTNAME_APP:-cybercontrol-app}
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
       TS_AUTH_ONCE: "true"
       TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---advertise-tags=tag:cybercontrol --accept-dns=true}
       TS_ACCEPT_DNS: "true"
     volumes:
-      - tailscale-state:/var/lib/tailscale
+      - tailscale-app-state:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+  # MagicDNS: cybercontrol-db — shares postgres netns so :5432 answers on this Tailscale IP.
+  # Kernel TUN via caps/devices on postgres (required for inbound :5432). Userspace alone
+  # joins MagicDNS but does not accept inbound TCP to the Tailscale IP.
+  # Note: Docker forbids `hostname:` with network_mode: service:* — use TS_HOSTNAME only.
+  tailscale-db:
+    image: tailscale/tailscale:stable
+    restart: unless-stopped
+    network_mode: service:postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      TS_CLIENT_ID: ${TS_CLIENT_ID:-}
+      TS_CLIENT_SECRET: ${TS_CLIENT_SECRET:-}
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME_DB:-cybercontrol-db}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      TS_AUTH_ONCE: "true"
+      # accept-dns=false: only the app node should own host DNS
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS_DB:---advertise-tags=tag:cybercontrol --accept-dns=false}
+      TS_ACCEPT_DNS: "false"
+    volumes:
+      - tailscale-db-state:/var/lib/tailscale
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -123,4 +163,5 @@ services:
 volumes:
   pgdata:
   ext_data:
-  tailscale-state:
+  tailscale-app-state:
+  tailscale-db-state:
