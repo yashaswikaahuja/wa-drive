@@ -72,14 +72,25 @@ services:
       WA_INSTANCES: ${WA_INSTANCES:-cybercontrol-wa}
       RESOLVER_URL: ${RESOLVER_URL:-http://whatsapp-resolver:3200}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_API_KEY_2: ${GROQ_API_KEY_2:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://api.cybercontrol.fun/api/auth/google/callback}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://api.cybercontrol.fun/api/drive/callback}
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-cybercontrol.fun}
       APP_ORIGIN: ${APP_ORIGIN:-https://app.cybercontrol.fun}
       API_ORIGIN: ${API_ORIGIN:-https://api.cybercontrol.fun}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://app.cybercontrol.fun,https://cybercontrol.fun,https://www.cybercontrol.fun}
+      SIGNUP_CODE: ${SIGNUP_CODE:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SES_FROM: ${SES_FROM:-}
+      GEOCODE_API_KEY: ${GEOCODE_API_KEY:-}
+      OWNER_KEY: ${OWNER_KEY:-}
+      OWNER_PORT: ${OWNER_PORT:-}
+      OWNER_BIND: ${OWNER_BIND:-}
     # Host publish for cybercontrol-app Tailscale (GCP used network_mode:host).
     # SG must NOT open 3000 to the internet.
     ports:
@@ -96,13 +107,15 @@ services:
       NODE_ENV: production
       PORT: "3300"
       DATABASE_URL: postgresql://cybercontrol_app:${POSTGRES_PASSWORD}@postgres:5432/cybercontrol
+      # MUST match backend JWT_SECRET (same GitHub secret as GCP)
       JWT_SECRET: ${JWT_SECRET}
       DATA_DIR: /app/data
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       AI_API_KEY: ${AI_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       AI_PROVIDER: ${AI_PROVIDER:-openrouter}
-      BRAND_NAME: CyberControl
+      AI_MODEL: ${AI_MODEL:-}
+      BRAND_NAME: ${BRAND_NAME:-CyberControl}
     volumes:
       - ext_data:/app/data
     ports:
