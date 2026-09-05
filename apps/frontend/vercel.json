@@ -11,7 +11,7 @@
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
         { "key": "Cross-Origin-Opener-Policy", "value": "unsafe-none" },
-        { "key": "Content-Security-Policy", "value": "frame-src blob: https://drive.google.com https://docs.google.com;" }
+        { "key": "Content-Security-Policy", "value": "frame-src 'self' blob: https://accounts.google.com https://drive.google.com https://docs.google.com https://*.google.com;" }
       ]
     }
   ],
