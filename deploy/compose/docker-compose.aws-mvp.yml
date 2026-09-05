@@ -1,17 +1,22 @@
-# Single-host AWS MVP (EC2): full stack on one box with classic MagicDNS names.
+# Single-host AWS MVP — same *contract* as GCP multi-VM (see deploy/docs/AWS-MVP.md).
 #
-# Tailnet contract (same names as the old multi-VM mesh):
-#   cybercontrol-app  → backend :3000, extension-service :3300, nginx :80
-#   cybercontrol-db   → postgres :5432
-#   cybercontrol-wa   → whatsapp-service :3100
+# GCP mapping (one EC2 plays every role):
+#   Caddy :443/:80          ≈ cybercontrol-lb (TLS edge)
+#   nginx (internal)        ≈ path router on app/LB
+#   backend + extension     ≈ cybercontrol-app (+ ext)
+#   postgres + tailscale-db ≈ cybercontrol-db
+#   whatsapp-service + ts   ≈ cybercontrol-wa / wa-2
+#   whatsapp-resolver       ≈ resolver (pm2 on GCP; container here)
 #
-# Internal compose traffic uses Docker DNS (postgres/redis/backend/whatsapp-*).
-# Cross-node / runner / phone traffic uses MagicDNS names above.
+# MagicDNS (identical names to GCP):
+#   cybercontrol-app | cybercontrol-db | cybercontrol-wa
 #
-# Resolver runs in-compose (OTP oracle). On multi-VM prod it stayed on the WA host
-# via pm2; MVP keeps it containerized and reachable as whatsapp-resolver:3200.
+# Public SG must allow ONLY 22/80/443 — never 3000/3300/3100/5432.
+# Host ports 3000/3300/3100 exist so host-mode Tailscale (cybercontrol-app) can
+# reach them (same idea as GCP network_mode:host behind a firewall).
 #
-# Deploy to /opt/cybercontrol-docker — OAuth in .env via aws-mvp-tailscale-compose.yml.
+# Internal traffic: Docker DNS. Off-box / CD: MagicDNS.
+# Deploy: /opt/cybercontrol-docker  |  OAuth: aws-mvp-tailscale-compose.yml
 services:
   postgres:
     image: postgres:15-alpine
@@ -75,8 +80,8 @@ services:
       APP_ORIGIN: ${APP_ORIGIN:-https://app.cybercontrol.fun}
       API_ORIGIN: ${API_ORIGIN:-https://api.cybercontrol.fun}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://app.cybercontrol.fun,https://cybercontrol.fun,https://www.cybercontrol.fun}
-    # Published so host-mode Tailscale (cybercontrol-app) can reach :3000 on the host.
-    # Keep SG locked to 22/80 from the internet — do not open 3000 publicly.
+    # Host publish for cybercontrol-app Tailscale (GCP used network_mode:host).
+    # SG must NOT open 3000 to the internet.
     ports:
       - "3000:3000"
 
