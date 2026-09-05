@@ -19,7 +19,8 @@ export function loadGoogleMaps(): Promise<any> {
     const cb = '__ccMapsReady';
     w[cb] = () => resolve(w.google);
     const s = document.createElement('script');
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}&libraries=places&callback=${cb}&loading=async`;
+    // PlaceAutocompleteElement needs the places library; importLibrary() is used by callers.
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(KEY)}&libraries=places&callback=${cb}&loading=async&v=weekly`;
     s.async = true;
     s.defer = true;
     s.onerror = () => resolve(null);

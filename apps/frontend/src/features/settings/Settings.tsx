@@ -44,12 +44,27 @@ export default function Settings() {
     const payload = token.split('.')[1];
     const wsId = payload ? JSON.parse(atob(payload)).workspaceId || '' : '';
     const popup = window.open(SOCKET_URL + '/api/drive/auth?workspace=' + wsId, 'drive-auth', 'width=500,height=600,left=200,top=100');
+    // Prefer postMessage (DRIVE_CONNECTED). Polling popup.closed throws COOP warnings
+    // against Google's cross-origin OAuth window — catch and fall back to status API.
+    const finish = () => {
+      api.get('/drive/status')
+        .then(r => setDriveStatus(r.data.connected ? 'connected' : 'disconnected'))
+        .catch(() => setDriveStatus('disconnected'));
+    };
     const timer = setInterval(() => {
-      if (popup?.closed) {
-        clearInterval(timer);
-        api.get('/drive/status').then(r => setDriveStatus(r.data.connected ? 'connected' : 'disconnected')).catch(() => setDriveStatus('disconnected'));
+      let closed = false;
+      try {
+        closed = !popup || popup.closed;
+      } catch {
+        // Cross-Origin-Opener-Policy may block reading .closed — ignore and keep waiting for postMessage / timeout.
+        return;
       }
-    }, 500);
+      if (closed) {
+        clearInterval(timer);
+        finish();
+      }
+    }, 1000);
+    setTimeout(() => { clearInterval(timer); finish(); }, 120_000);
   }
 
   return (
