@@ -136,6 +136,7 @@ services:
       RESOLVER_URL: ${RESOLVER_URL:-http://whatsapp-resolver:3200}
       WA_SECRET: ${WA_SECRET}
       WA_AUTH_BACKEND: ${WA_AUTH_BACKEND:-postgres}
+      # Heartbeat/assignment name — must resolve inside the Docker network (see aliases).
       WA_INSTANCE_NAME: ${WA_INSTANCE_NAME:-cybercontrol-wa}
       WA_HEARTBEAT_MS: ${WA_HEARTBEAT_MS:-20000}
       DATABASE_URL: postgresql://cybercontrol_app:${POSTGRES_PASSWORD}@postgres:5432/cybercontrol
@@ -150,6 +151,12 @@ services:
       - /dev/net/tun:/dev/net/tun
     ports:
       - "3100:3100"
+    # Backend shard routing uses http://cybercontrol-wa:3100 (GCP MagicDNS name).
+    # On this single-host compose stack that name must also resolve via Docker DNS.
+    networks:
+      default:
+        aliases:
+          - cybercontrol-wa
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 10s
