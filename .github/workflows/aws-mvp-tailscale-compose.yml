@@ -2,7 +2,7 @@ name: AWS MVP Tailscale (compose)
 
 # Injects Tailscale OAuth creds (same secrets GitHub runners use) into EC2
 # /opt/cybercontrol-docker/.env and starts MagicDNS sidecars:
-#   cybercontrol-app  (host) + cybercontrol-db (postgres netns)
+#   cybercontrol-app (host) + cybercontrol-db (postgres) + cybercontrol-wa (whatsapp)
 on:
   workflow_dispatch:
     inputs:
@@ -69,8 +69,15 @@ jobs:
           upsert_env TS_CLIENT_SECRET "$CLIENT_SECRET"
           upsert_env TS_HOSTNAME_APP cybercontrol-app
           upsert_env TS_HOSTNAME_DB cybercontrol-db
+          upsert_env TS_HOSTNAME_WA cybercontrol-wa
           upsert_env TS_EXTRA_ARGS '--advertise-tags=tag:cybercontrol --accept-dns=true'
           upsert_env TS_EXTRA_ARGS_DB '--advertise-tags=tag:cybercontrol --accept-dns=false'
+          upsert_env TS_EXTRA_ARGS_WA '--advertise-tags=tag:cybercontrol --accept-dns=false'
+          upsert_env WA_SERVICE 'http://whatsapp-service:3100'
+          upsert_env WA_INSTANCES cybercontrol-wa
+          upsert_env WA_INSTANCE_NAME cybercontrol-wa
+          upsert_env PARENT_URL 'http://backend:3000'
+          upsert_env RESOLVER_URL 'http://whatsapp-resolver:3200'
           upsert_env TS_AUTHKEY ''
           # drop legacy single-node hostname if present
           grep -v '^TS_HOSTNAME=' .env > .env.tmp && mv .env.tmp .env || true
@@ -96,6 +103,7 @@ jobs:
             "cybercontrol-mvp",
             "cc-tsjoin-test",
           }
+          # Note: purge runs before recreate so MagiDNS names can be reclaimed cleanly.
           data = json.load(open("/tmp/ts-devices.json"))
           for d in data.get("devices") or []:
               name = d.get("hostname") or ""
@@ -117,25 +125,26 @@ jobs:
             fi
           fi
 
-          docker compose pull tailscale-app tailscale-db || docker compose pull
-          docker compose rm -sf tailscale tailscale-app tailscale-db 2>/dev/null || true
+          docker compose pull || true
+          docker compose rm -sf tailscale tailscale-app tailscale-db tailscale-wa 2>/dev/null || true
           docker volume rm cybercontrol-docker_tailscale-state \
             cybercontrol-docker_tailscale-app-state \
-            cybercontrol-docker_tailscale-db-state 2>/dev/null || true
+            cybercontrol-docker_tailscale-db-state \
+            cybercontrol-docker_tailscale-wa-state 2>/dev/null || true
 
-          # Recreate postgres briefly so TUN device settings apply, then bring stack up
           docker compose up -d postgres
           sleep 3
-          docker compose up -d
-          sleep 20
+          docker compose up -d --remove-orphans
+          sleep 25
           docker compose ps
           echo "=== app status ==="
-          docker compose logs tailscale-app --tail 40 || true
           docker compose exec -T tailscale-app tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -30 || true
-          docker compose exec -T tailscale-app tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
-          echo "=== db status ==="
-          docker compose logs tailscale-db --tail 40 || true
-          docker compose exec -T tailscale-db tailscale --socket=/tmp/tailscaled.sock status 2>&1 | head -20 || true
+          echo "=== db ip ==="
           docker compose exec -T tailscale-db tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
+          echo "=== wa ip ==="
+          docker compose exec -T tailscale-wa tailscale --socket=/tmp/tailscaled.sock ip -4 2>&1 || true
+          echo "=== health ==="
+          curl -fsS -o /dev/null -w "nginx:%{http_code}\n" http://127.0.0.1/api/health || true
+          curl -fsS -o /dev/null -w "wa:%{http_code}\n" http://127.0.0.1:3100/health || true
           REMOTE
           } | ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "sudo bash -s"

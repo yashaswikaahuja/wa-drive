@@ -1,12 +1,15 @@
-# Single-host AWS MVP (EC2): all services on one box, classic MagicDNS names reclaimed.
+# Single-host AWS MVP (EC2): full stack on one box with classic MagicDNS names.
 #
 # Tailnet contract (same names as the old multi-VM mesh):
 #   cybercontrol-app  → backend :3000, extension-service :3300, nginx :80
 #   cybercontrol-db   → postgres :5432
-#   cybercontrol-wa*  → not on MVP yet (add when WA is restored)
+#   cybercontrol-wa   → whatsapp-service :3100
 #
-# Internal compose traffic still uses Docker DNS (postgres/redis/backend).
+# Internal compose traffic uses Docker DNS (postgres/redis/backend/whatsapp-*).
 # Cross-node / runner / phone traffic uses MagicDNS names above.
+#
+# Resolver runs in-compose (OTP oracle). On multi-VM prod it stayed on the WA host
+# via pm2; MVP keeps it containerized and reachable as whatsapp-resolver:3200.
 #
 # Deploy to /opt/cybercontrol-docker — OAuth in .env via aws-mvp-tailscale-compose.yml.
 services:
@@ -20,7 +23,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     # Caps/devices live on postgres because tailscale-db uses network_mode: service:postgres
-    # (capabilities apply to this netns so the sidecar can create TUN for inbound :5432).
     cap_add:
       - NET_ADMIN
       - SYS_MODULE
@@ -51,6 +53,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      whatsapp-service:
+        condition: service_started
     environment:
       NODE_ENV: production
       PORT: "3000"
@@ -59,7 +63,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       WA_SECRET: ${WA_SECRET}
-      WA_SERVICE: ${WA_SERVICE:-}
+      WA_SERVICE: ${WA_SERVICE:-http://whatsapp-service:3100}
+      WA_INSTANCES: ${WA_INSTANCES:-cybercontrol-wa}
+      RESOLVER_URL: ${RESOLVER_URL:-http://whatsapp-resolver:3200}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -93,6 +99,58 @@ services:
       - ext_data:/app/data
     ports:
       - "3300:3300"
+
+  whatsapp-service:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-service:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      WA_PORT: "3100"
+      # Same-host: talk to backend over Docker DNS. Tailnet peers use cybercontrol-app:3000.
+      PARENT_URL: ${PARENT_URL:-http://backend:3000}
+      RESOLVER_URL: ${RESOLVER_URL:-http://whatsapp-resolver:3200}
+      WA_SECRET: ${WA_SECRET}
+      WA_AUTH_BACKEND: ${WA_AUTH_BACKEND:-postgres}
+      WA_INSTANCE_NAME: ${WA_INSTANCE_NAME:-cybercontrol-wa}
+      WA_HEARTBEAT_MS: ${WA_HEARTBEAT_MS:-20000}
+      DATABASE_URL: postgresql://cybercontrol_app:${POSTGRES_PASSWORD}@postgres:5432/cybercontrol
+      AUTH_DIR: /app/sessions
+    volumes:
+      - wa_sessions:/app/sessions
+    # Caps for tailscale-wa (network_mode: service:whatsapp-service)
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  whatsapp-resolver:
+    image: ghcr.io/yashaswikaahuja/cybercontrol-whatsapp-resolver:${IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3200"
+      WA_SECRET: ${WA_SECRET}
+    volumes:
+      - wa_resolver_session:/app/session
+      - wa_resolver_auth:/app/.wwebjs_auth
+    expose:
+      - "3200"
+    # Chromium needs shm; without this wwebjs often crashes
+    shm_size: "256mb"
 
   nginx:
     image: nginx:1.27-alpine
@@ -131,8 +189,6 @@ services:
       - /dev/net/tun:/dev/net/tun
 
   # MagicDNS: cybercontrol-db — shares postgres netns so :5432 answers on this Tailscale IP.
-  # Kernel TUN via caps/devices on postgres (required for inbound :5432). Userspace alone
-  # joins MagicDNS but does not accept inbound TCP to the Tailscale IP.
   # Note: Docker forbids `hostname:` with network_mode: service:* — use TS_HOSTNAME only.
   tailscale-db:
     image: tailscale/tailscale:stable
@@ -149,7 +205,6 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
       TS_AUTH_ONCE: "true"
-      # accept-dns=false: only the app node should own host DNS
       TS_EXTRA_ARGS: ${TS_EXTRA_ARGS_DB:---advertise-tags=tag:cybercontrol --accept-dns=false}
       TS_ACCEPT_DNS: "false"
     volumes:
@@ -160,8 +215,38 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
 
+  # MagicDNS: cybercontrol-wa — shares whatsapp-service netns so :3100 answers on this Tailscale IP.
+  tailscale-wa:
+    image: tailscale/tailscale:stable
+    restart: unless-stopped
+    network_mode: service:whatsapp-service
+    depends_on:
+      whatsapp-service:
+        condition: service_started
+    environment:
+      TS_CLIENT_ID: ${TS_CLIENT_ID:-}
+      TS_CLIENT_SECRET: ${TS_CLIENT_SECRET:-}
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME_WA:-cybercontrol-wa}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      TS_AUTH_ONCE: "true"
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS_WA:---advertise-tags=tag:cybercontrol --accept-dns=false}
+      TS_ACCEPT_DNS: "false"
+    volumes:
+      - tailscale-wa-state:/var/lib/tailscale
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
 volumes:
   pgdata:
   ext_data:
+  wa_sessions:
+  wa_resolver_session:
+  wa_resolver_auth:
   tailscale-app-state:
   tailscale-db-state:
+  tailscale-wa-state:
