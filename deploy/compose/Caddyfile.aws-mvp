@@ -1,0 +1,6 @@
+# TLS edge for AWS MVP — terminates HTTPS for api.cybercontrol.fun
+# and proxies to the internal nginx router (backend + extension-service).
+api.cybercontrol.fun {
+	encode gzip
+	reverse_proxy nginx:80
+}

@@ -72,6 +72,9 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-https://api.cybercontrol.fun/api/auth/google/callback}
       PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:-cybercontrol.fun}
+      APP_ORIGIN: ${APP_ORIGIN:-https://app.cybercontrol.fun}
+      API_ORIGIN: ${API_ORIGIN:-https://api.cybercontrol.fun}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.cybercontrol.fun,https://cybercontrol.fun,https://www.cybercontrol.fun}
     # Published so host-mode Tailscale (cybercontrol-app) can reach :3000 on the host.
     # Keep SG locked to 22/80 from the internet — do not open 3000 publicly.
     ports:
@@ -158,10 +161,27 @@ services:
     depends_on:
       - backend
       - extension-service
-    ports:
-      - "80:80"
+    # Internal only — public 80/443 are owned by caddy (TLS).
+    expose:
+      - "80"
     volumes:
       - ./nginx-mvp.conf:/etc/nginx/conf.d/default.conf:ro
+
+  # Public TLS edge (Let's Encrypt). Frontend at https://app.cybercontrol.fun
+  # calls https://api.cybercontrol.fun — without this, browsers cannot connect.
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - nginx
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.aws-mvp:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
   # MagicDNS: cybercontrol-app — owns host TUN. Do NOT also run host `tailscaled`.
   tailscale-app:
@@ -247,6 +267,8 @@ volumes:
   wa_sessions:
   wa_resolver_session:
   wa_resolver_auth:
+  caddy_data:
+  caddy_config:
   tailscale-app-state:
   tailscale-db-state:
   tailscale-wa-state:
