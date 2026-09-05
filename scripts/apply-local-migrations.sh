@@ -6,20 +6,6 @@ PSQL=(docker exec -i cybercontrol-postgres-1 psql -U cybercontrol_app -d cyberco
 
 echo "=== STUB missing tables referenced by later migrations ==="
 "${PSQL[@]}" <<'SQL'
-CREATE TABLE IF NOT EXISTS drive_files (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID REFERENCES workspaces(id),
-  drive_file_id VARCHAR(255),
-  file_name VARCHAR(512),
-  mime_type VARCHAR(128),
-  phone VARCHAR(32),
-  sender_name VARCHAR(255),
-  uploaded_at TIMESTAMPTZ DEFAULT now(),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_drive_files_workspace ON drive_files(workspace_id);
-CREATE INDEX IF NOT EXISTS idx_drive_files_uploaded ON drive_files(uploaded_at);
-
 CREATE TABLE IF NOT EXISTS app_secrets (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
@@ -43,6 +29,7 @@ FILES=(
   013_workspace_health_state.sql
   014_workspace_settings.sql
   015_profile_shares.sql
+  016_workspace_secrets_and_drive_files.sql
   forms.sql
   forms_required_fields.sql
   extraction_cache.sql
@@ -64,4 +51,4 @@ done
 echo "=== VERIFY key tables ==="
 docker exec cybercontrol-postgres-1 \
   psql -U cybercontrol_app -d cybercontrol -c \
-  "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('workspaces','users','profiles','app_secrets','drive_files','wa_assignments','wa_auth_creds','activity_events','workspace_settings') ORDER BY 1;"
+  "SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename IN ('workspaces','users','profiles','app_secrets','workspace_secrets','drive_files','wa_assignments','wa_auth_creds','activity_events') ORDER BY 1;"
