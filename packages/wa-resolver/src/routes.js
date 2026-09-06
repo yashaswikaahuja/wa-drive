@@ -85,10 +85,23 @@ export function registerRoutes(app, { config, resolver }) {
 
     try {
       const contact = await getClient().getContactById(`${phone}@c.us`);
-      const name = contact?.name || contact?.pushname || null;
-      res.json({ phone, name });
+      // Prefer address-book name (saved contact) over WhatsApp push name / @username.
+      const name = contact?.name || contact?.verifiedName || contact?.pushname || null;
+      let dpUrl = null;
+      try {
+        dpUrl = (await contact.getProfilePicUrl()) || null;
+      } catch {
+        /* privacy / not available */
+      }
+      res.json({
+        phone,
+        name,
+        dpUrl,
+        isMyContact: !!contact?.isMyContact,
+        pushname: contact?.pushname || null,
+      });
     } catch {
-      res.json({ phone, name: null });
+      res.json({ phone, name: null, dpUrl: null, isMyContact: false });
     }
   });
 

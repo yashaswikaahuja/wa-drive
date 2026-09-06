@@ -124,12 +124,17 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           try {
             profilePicUrl = await sock.profilePictureUrl(senderJid, 'image');
           } catch {
-            /* ignore */
+            /* ignore — often blocked by privacy; resolver /contact may still have DP */
           }
           try {
             const data = await fetchContactName(phone);
             savedName = data.name || null;
-            console.log(`[WA] phone ${phone} resolver returned name=${data.name}`);
+            if (!profilePicUrl && data.dpUrl) profilePicUrl = data.dpUrl;
+            console.log(
+              `[WA] phone ${phone} resolver name=${data.name}` +
+                ` isMyContact=${data.isMyContact}` +
+                ` dp=${profilePicUrl ? 'yes' : 'no'}`,
+            );
           } catch (e) {
             console.warn(`[WA] phone ${phone} resolver failed: ${e.message}`);
           }
