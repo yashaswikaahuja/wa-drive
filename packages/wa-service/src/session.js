@@ -34,11 +34,17 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       : id.endsWith('@lid')
         ? id.replace('@lid', '')
         : null;
-    // Baileys: `name` = saved address-book name; `notify` = their WA push name.
+    const prev =
+      (phone && session.contacts.get(`pn:${phone}`)) ||
+      (lid && session.contacts.get(`lid:${lid}`)) ||
+      session.contacts.get(`id:${id}`) ||
+      null;
+    // Baileys: `name` = saved address-book name ONLY; `notify` = their WA push name.
+    // Never treat notify/pushname as the contact-list name.
     const entry = {
-      name: contact.name || null,
-      notify: contact.notify || contact.verifiedName || null,
-      imgUrl: typeof contact.imgUrl === 'string' ? contact.imgUrl : null,
+      name: (contact.name && String(contact.name).trim()) || prev?.name || null,
+      notify: contact.notify || contact.verifiedName || prev?.notify || null,
+      imgUrl: typeof contact.imgUrl === 'string' ? contact.imgUrl : prev?.imgUrl || null,
     };
     if (phone) session.contacts.set(`pn:${phone}`, entry);
     if (lid) session.contacts.set(`lid:${lid}`, entry);
@@ -53,17 +59,6 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       (senderJid?.endsWith('@lid') && session.contacts.get(`lid:${senderJid.replace('@lid', '')}`)) ||
       null
     );
-  }
-
-  function pickBestName(...candidates) {
-    for (const c of candidates) {
-      if (!c) continue;
-      const s = String(c).trim();
-      if (!s) continue;
-      // Prefer real saved names over bare @username pushhandles when possible.
-      return s;
-    }
-    return null;
   }
 
   async function startSession(workspaceId) {
@@ -187,7 +182,8 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           null;
         let phone = altPn;
         let profilePicUrl = null;
-        let savedName = null;
+        // Address-book name only (never OCR/profile, never WA pushname).
+        let contactListName = null;
 
         if (senderJid.endsWith('@s.whatsapp.net')) {
           phone = senderJid.replace('@s.whatsapp.net', '');
@@ -197,8 +193,12 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
             const data = await resolveLid(lidNum);
             phone = data.phone || phone || lidNum;
             profilePicUrl = data.dpUrl || null;
-            savedName = data.name || null;
-            console.log(`[WA] LID ${lidNum} → ${phone}${savedName ? ' (' + savedName + ')' : ''}`);
+            // resolve() may return pushname mixed in — only keep if flagged as saved contact.
+            if (data.isMyContact && data.savedName) contactListName = data.savedName;
+            else if (data.isMyContact && data.name && data.name !== data.pushname) {
+              contactListName = data.name;
+            }
+            console.log(`[WA] LID ${lidNum} → ${phone}${contactListName ? ' (' + contactListName + ')' : ''}`);
           } catch (e) {
             console.warn(`[WA] LID ${lidNum} resolver error: ${e.message}`);
             phone = phone || lidNum;
@@ -208,10 +208,9 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           console.warn(`[WA] sender JID has unknown format: ${senderJid} (rawJid=${rawJid})`);
         }
 
-        // 1) Cafe WA address book (Baileys contacts) — best source for "saved contact" names.
+        // 1) Cafe WA address book (Baileys) — primary source for contact-list names.
         const local = lookupLocalContact(session, { phone, senderJid });
-        if (local?.name) savedName = local.name;
-        else if (!savedName && local?.notify) savedName = local.notify;
+        if (local?.name) contactListName = local.name;
         if (!profilePicUrl && local?.imgUrl) profilePicUrl = local.imgUrl;
 
         // 2) Baileys profile picture for the phone JID (works more often than LID).
@@ -227,16 +226,17 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           }
         }
 
-        // 3) Resolver oracle — fill gaps for name/DP (needs resolver WA to have them in contacts).
+        // 3) Resolver — only for address-book name (isMyContact) + DP gap fill.
         if (phone && /^\d{8,}$/.test(phone)) {
           try {
             const data = await fetchContactName(phone);
-            if (!savedName || savedName.startsWith('@')) {
-              savedName = pickBestName(data.name, savedName);
+            if (!contactListName && data.isMyContact) {
+              contactListName = data.savedName || (data.name !== data.pushname ? data.name : null);
             }
             if (!profilePicUrl && data.dpUrl) profilePicUrl = data.dpUrl;
             console.log(
-              `[WA] phone ${phone} local=${local?.name || '-'} resolver=${data.name || '-'}` +
+              `[WA] phone ${phone} contactList=${contactListName || '-'}` +
+                ` local=${local?.name || '-'} resolverSaved=${data.savedName || data.name || '-'}` +
                 ` isMyContact=${data.isMyContact} dp=${profilePicUrl ? 'yes' : 'no'}`,
             );
           } catch (e) {
@@ -244,7 +244,9 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           }
         }
 
-        const pushName = pickBestName(savedName, msg.pushName, phone) || phone;
+        // Display: contact-list name first; else live WA push name; else phone.
+        // Never use document/OCR profile names here.
+        const pushName = contactListName || msg.pushName || phone;
 
         try {
           const buffer = await downloadMedia(sock, msg);

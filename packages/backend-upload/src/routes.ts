@@ -53,36 +53,16 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
   if (!drive) { res.status(401).json({ error: 'Not connected to Drive' }); return; }
   if (!req.file) { res.status(400).json({ error: 'No file' }); return; }
 
-  let { phone, senderName, profilePicUrl } = req.body;
+  const { phone, senderName, profilePicUrl } = req.body;
   const fileName = req.body.fileName || req.file.originalname || ('file_' + Date.now() + '.jpg');
   const mimetype = req.body.mimetype || req.file.mimetype || 'application/octet-stream';
   const fileSize = req.file.size;
 
-  // Prefer an existing profile display name over WA pushname / @username when available.
-  if (uploadWsId && phone) {
-    try {
-      const pr = await pool.query(
-        `SELECT COALESCE(NULLIF(display_label,''), NULLIF(name,'')) AS n
-         FROM profiles
-         WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL
-         ORDER BY updated_at DESC NULLS LAST
-         LIMIT 1`,
-        [uploadWsId, phone],
-      );
-      const profileName = pr.rows[0]?.n as string | undefined;
-      const looksLikePush =
-        !senderName ||
-        senderName === phone ||
-        senderName.startsWith('@') ||
-        senderName === 'Not A Bussiness';
-      if (profileName && looksLikePush) senderName = profileName;
-    } catch {
-      /* profiles table / columns may be missing on older DBs */
-    }
-  }
+  // senderName must be the WhatsApp address-book / push name from WA service.
+  // Do NOT overwrite with profiles/OCR document names — the sender phone may be
+  // sending someone else's document.
 
   console.log(`[Hub] Upload queued: ${fileName} (${(fileSize / 1024).toFixed(0)}KB) from ${phone}`);
-
   // Upload dedup: check if same file already uploaded for this customer in last 60s
   try {
     const dedupCheck = await pool.query(

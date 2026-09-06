@@ -25,16 +25,34 @@ export function registerRoutes(app, { config, resolver }) {
       const phone = result?.pn?.replace('@c.us', '').replace('@s.whatsapp.net', '') || null;
 
       let dpUrl = null;
-      let name = null;
+      let savedName = null;
+      let pushname = null;
+      let isMyContact = false;
       try {
         const contact = await client.getContactById(phone ? `${phone}@c.us` : lidJid);
-        name = contact?.name || contact?.pushname || null;
-        dpUrl = await contact.getProfilePicUrl();
+        isMyContact = !!contact?.isMyContact;
+        // `name` = address-book entry; `pushname` = their WhatsApp display name.
+        savedName = contact?.name || null;
+        pushname = contact?.pushname || null;
+        try {
+          dpUrl = (await contact.getProfilePicUrl()) || null;
+        } catch {
+          /* privacy */
+        }
       } catch {
         /* ignore enrichment failures */
       }
 
-      res.json({ lid, phone, name, dpUrl });
+      res.json({
+        lid,
+        phone,
+        // Back-compat: `name` prefers saved contact-list name only.
+        name: savedName || null,
+        savedName,
+        pushname,
+        isMyContact,
+        dpUrl,
+      });
     } catch (e) {
       console.error('[Resolver] Error:', e.message);
       res.status(500).json({ error: e.message });
@@ -85,8 +103,10 @@ export function registerRoutes(app, { config, resolver }) {
 
     try {
       const contact = await getClient().getContactById(`${phone}@c.us`);
-      // Prefer address-book name (saved contact) over WhatsApp push name / @username.
-      const name = contact?.name || contact?.verifiedName || contact?.pushname || null;
+      const isMyContact = !!contact?.isMyContact;
+      // Address-book name only — never fall back to pushname here.
+      const savedName = contact?.name || null;
+      const pushname = contact?.pushname || null;
       let dpUrl = null;
       try {
         dpUrl = (await contact.getProfilePicUrl()) || null;
@@ -95,13 +115,14 @@ export function registerRoutes(app, { config, resolver }) {
       }
       res.json({
         phone,
-        name,
+        name: savedName,
+        savedName,
+        pushname,
         dpUrl,
-        isMyContact: !!contact?.isMyContact,
-        pushname: contact?.pushname || null,
+        isMyContact,
       });
     } catch {
-      res.json({ phone, name: null, dpUrl: null, isMyContact: false });
+      res.json({ phone, name: null, savedName: null, pushname: null, dpUrl: null, isMyContact: false });
     }
   });
 
