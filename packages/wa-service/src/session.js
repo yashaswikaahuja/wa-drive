@@ -205,6 +205,18 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         session.phone = sock.user?.id?.split(':')[0] || null;
         console.log(`[WA:${workspaceId.slice(0, 8)}] Connected as ${session.phone}`);
         sock.sendPresenceUpdate('unavailable').catch(() => {});
+        // Force address-book / app-state sync so contacts.upsert gets saved names.
+        sock
+          .resyncAppState(
+            ['critical_block', 'critical_unblock_low', 'regular_high', 'regular_low', 'regular'],
+            true,
+          )
+          .then(() => {
+            console.log(`[WA:${workspaceId.slice(0, 8)}] App-state sync requested (contacts)`);
+          })
+          .catch((e) => {
+            console.warn(`[WA:${workspaceId.slice(0, 8)}] App-state sync failed:`, e.message);
+          });
         notifyParent(workspaceId, 'connected', { phone: session.phone });
         broadcastToWs(workspaceId, {
           type: 'status',
