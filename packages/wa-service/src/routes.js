@@ -69,4 +69,19 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
     sessions.forEach((s, id) => list.push({ workspaceId: id, status: s.status, phone: s.phone }));
     res.json(list);
   });
+
+  // Debug/ops: inspect cafe address-book name for a phone (saved contact-list name only).
+  app.get('/sessions/:workspaceId/contact', authMiddleware, (req, res) => {
+    const session = sessions.get(req.params.workspaceId);
+    if (!session) return res.status(404).json({ error: 'session not found' });
+    const phone = String(req.query.phone || '').replace(/[^0-9]/g, '');
+    if (!phone) return res.status(400).json({ error: 'phone required' });
+    const entry = session.contacts?.get(`pn:${phone}`) || null;
+    res.json({
+      phone,
+      savedName: entry?.name || null,
+      pushname: entry?.notify || null,
+      contactsIndexed: session.contacts?.size || 0,
+    });
+  });
 }

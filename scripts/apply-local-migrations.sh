@@ -30,6 +30,7 @@ FILES=(
   014_workspace_settings.sql
   015_profile_shares.sql
   016_workspace_secrets_and_drive_files.sql
+  017_workspace_wa_contacts.sql
   forms.sql
   forms_required_fields.sql
   extraction_cache.sql

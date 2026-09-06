@@ -23,7 +23,62 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
   const { AUTH_DIR, pgPool } = config;
   const { uploadToParent, notifyParent, resolveLid, fetchContactName } = parent;
 
-  function indexContact(session, contact) {
+  async function ensureContactsTable() {
+    if (!pgPool || ensureContactsTable._done) return;
+    try {
+      await pgPool.query(`
+        CREATE TABLE IF NOT EXISTS workspace_wa_contacts (
+          workspace_id UUID NOT NULL,
+          phone TEXT NOT NULL,
+          name TEXT NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          PRIMARY KEY (workspace_id, phone)
+        )`);
+      ensureContactsTable._done = true;
+    } catch (e) {
+      console.warn('[WA] workspace_wa_contacts ensure failed:', e.message);
+    }
+  }
+
+  async function persistContactName(workspaceId, phone, name) {
+    if (!pgPool || !workspaceId || !phone || !name) return;
+    const pn = String(phone).replace(/[^0-9]/g, '');
+    if (pn.length < 8) return;
+    try {
+      await ensureContactsTable();
+      await pgPool.query(
+        `INSERT INTO workspace_wa_contacts(workspace_id, phone, name, updated_at)
+         VALUES($1::uuid,$2,$3,now())
+         ON CONFLICT(workspace_id, phone) DO UPDATE
+           SET name = EXCLUDED.name, updated_at = now()
+           WHERE workspace_wa_contacts.name IS DISTINCT FROM EXCLUDED.name`,
+        [workspaceId, pn, name],
+      );
+    } catch (e) {
+      console.warn('[WA] persist contact failed:', e.message);
+    }
+  }
+
+  async function loadPersistedContacts(session, workspaceId) {
+    if (!pgPool || !workspaceId) return;
+    try {
+      await ensureContactsTable();
+      const r = await pgPool.query(
+        `SELECT phone, name FROM workspace_wa_contacts WHERE workspace_id = $1::uuid`,
+        [workspaceId],
+      );
+      for (const row of r.rows) {
+        session.contacts.set(`pn:${row.phone}`, { name: row.name, notify: null, imgUrl: null });
+      }
+      if (r.rows.length) {
+        console.log(`[WA:${workspaceId.slice(0, 8)}] Loaded ${r.rows.length} saved contact-list names from DB`);
+      }
+    } catch (e) {
+      console.warn('[WA] load contacts failed:', e.message);
+    }
+  }
+
+  function indexContact(session, contact, workspaceId) {
     if (!contact?.id) return;
     const id = String(contact.id);
     const phone =
@@ -40,25 +95,43 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       session.contacts.get(`id:${id}`) ||
       null;
     // Baileys: `name` = saved address-book name ONLY; `notify` = their WA push name.
-    // Never treat notify/pushname as the contact-list name.
+    const savedName = (contact.name && String(contact.name).trim()) || null;
     const entry = {
-      name: (contact.name && String(contact.name).trim()) || prev?.name || null,
+      name: savedName || prev?.name || null,
       notify: contact.notify || contact.verifiedName || prev?.notify || null,
       imgUrl: typeof contact.imgUrl === 'string' ? contact.imgUrl : prev?.imgUrl || null,
     };
     if (phone) session.contacts.set(`pn:${phone}`, entry);
     if (lid) session.contacts.set(`lid:${lid}`, entry);
     session.contacts.set(`id:${id}`, entry);
+    if (savedName && phone) persistContactName(workspaceId, phone, savedName);
   }
 
-  function lookupLocalContact(session, { phone, senderJid }) {
+  async function lookupLocalContact(session, { phone, senderJid, workspaceId }) {
     if (!session?.contacts) return null;
-    return (
+    const mem =
       (phone && session.contacts.get(`pn:${phone}`)) ||
       (senderJid && session.contacts.get(`id:${senderJid}`)) ||
       (senderJid?.endsWith('@lid') && session.contacts.get(`lid:${senderJid.replace('@lid', '')}`)) ||
-      null
-    );
+      null;
+    if (mem?.name) return mem;
+    if (pgPool && workspaceId && phone && /^\d{8,}$/.test(phone)) {
+      try {
+        await ensureContactsTable();
+        const r = await pgPool.query(
+          `SELECT name FROM workspace_wa_contacts WHERE workspace_id=$1::uuid AND phone=$2 LIMIT 1`,
+          [workspaceId, phone],
+        );
+        if (r.rows[0]?.name) {
+          const entry = { name: r.rows[0].name, notify: mem?.notify || null, imgUrl: mem?.imgUrl || null };
+          session.contacts.set(`pn:${phone}`, entry);
+          return entry;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return mem;
   }
 
   async function startSession(workspaceId) {
@@ -86,6 +159,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       markOnlineOnConnect: false,
       browser: ['CyberControl', 'Chrome', '1.0'],
       syncFullHistory: true,
+      shouldSyncHistoryMessage: () => true,
     });
 
     const session = {
@@ -94,20 +168,22 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       status: 'connecting',
       phone: null,
       contacts: new Map(),
+      workspaceId,
     };
     sessions.set(workspaceId, session);
+    await loadPersistedContacts(session, workspaceId);
 
     sock.ev.on('creds.update', saveCreds);
 
     // Cafe WhatsApp address book — this is where "saved contact" names live.
     sock.ev.on('contacts.upsert', (list) => {
-      for (const c of list || []) indexContact(session, c);
+      for (const c of list || []) indexContact(session, c, workspaceId);
     });
     sock.ev.on('contacts.update', (list) => {
-      for (const c of list || []) indexContact(session, c);
+      for (const c of list || []) indexContact(session, c, workspaceId);
     });
     sock.ev.on('messaging-history.set', ({ contacts }) => {
-      for (const c of contacts || []) indexContact(session, c);
+      for (const c of contacts || []) indexContact(session, c, workspaceId);
       if (contacts?.length) {
         console.log(`[WA:${workspaceId.slice(0, 8)}] Indexed ${session.contacts.size} contact keys from history`);
       }
@@ -193,12 +269,8 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
             const data = await resolveLid(lidNum);
             phone = data.phone || phone || lidNum;
             profilePicUrl = data.dpUrl || null;
-            // resolve() may return pushname mixed in — only keep if flagged as saved contact.
-            if (data.isMyContact && data.savedName) contactListName = data.savedName;
-            else if (data.isMyContact && data.name && data.name !== data.pushname) {
-              contactListName = data.name;
-            }
-            console.log(`[WA] LID ${lidNum} → ${phone}${contactListName ? ' (' + contactListName + ')' : ''}`);
+            // Name comes from cafe address book only (looked up below) — not resolver.
+            console.log(`[WA] LID ${lidNum} → ${phone}`);
           } catch (e) {
             console.warn(`[WA] LID ${lidNum} resolver error: ${e.message}`);
             phone = phone || lidNum;
@@ -208,8 +280,8 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           console.warn(`[WA] sender JID has unknown format: ${senderJid} (rawJid=${rawJid})`);
         }
 
-        // 1) Cafe WA address book (Baileys) — primary source for contact-list names.
-        const local = lookupLocalContact(session, { phone, senderJid });
+        // 1) Cafe WA address book (Baileys + DB) — ONLY source for contact-list names.
+        const local = await lookupLocalContact(session, { phone, senderJid, workspaceId });
         if (local?.name) contactListName = local.name;
         if (!profilePicUrl && local?.imgUrl) profilePicUrl = local.imgUrl;
 
@@ -226,26 +298,24 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           }
         }
 
-        // 3) Resolver — only for address-book name (isMyContact) + DP gap fill.
+        // 3) Resolver — DP + LID support only. Do NOT use resolver contact names:
+        // resolver is often a different WhatsApp than the cafe phone's address book.
         if (phone && /^\d{8,}$/.test(phone)) {
           try {
             const data = await fetchContactName(phone);
-            if (!contactListName && data.isMyContact) {
-              contactListName = data.savedName || (data.name !== data.pushname ? data.name : null);
-            }
             if (!profilePicUrl && data.dpUrl) profilePicUrl = data.dpUrl;
             console.log(
               `[WA] phone ${phone} contactList=${contactListName || '-'}` +
-                ` local=${local?.name || '-'} resolverSaved=${data.savedName || data.name || '-'}` +
-                ` isMyContact=${data.isMyContact} dp=${profilePicUrl ? 'yes' : 'no'}`,
+                ` local=${local?.name || '-'} resolverSaved=${data.savedName || '-'}` +
+                ` (ignored for label) dp=${profilePicUrl ? 'yes' : 'no'}`,
             );
           } catch (e) {
             console.warn(`[WA] phone ${phone} resolver failed: ${e.message}`);
           }
         }
 
-        // Display: contact-list name first; else live WA push name; else phone.
-        // Never use document/OCR profile names here.
+        // Display: cafe contact-list name first; else live WA push name; else phone.
+        // Never use document/OCR profile names, never resolver address book.
         const pushName = contactListName || msg.pushName || phone;
 
         try {
