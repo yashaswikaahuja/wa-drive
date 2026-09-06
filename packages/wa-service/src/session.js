@@ -23,6 +23,49 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
   const { AUTH_DIR, pgPool } = config;
   const { uploadToParent, notifyParent, resolveLid, fetchContactName } = parent;
 
+  function indexContact(session, contact) {
+    if (!contact?.id) return;
+    const id = String(contact.id);
+    const phone =
+      (contact.phoneNumber && String(contact.phoneNumber).replace(/@.*/, '')) ||
+      (id.endsWith('@s.whatsapp.net') ? id.replace('@s.whatsapp.net', '') : null);
+    const lid = contact.lid
+      ? String(contact.lid).replace(/@.*/, '')
+      : id.endsWith('@lid')
+        ? id.replace('@lid', '')
+        : null;
+    // Baileys: `name` = saved address-book name; `notify` = their WA push name.
+    const entry = {
+      name: contact.name || null,
+      notify: contact.notify || contact.verifiedName || null,
+      imgUrl: typeof contact.imgUrl === 'string' ? contact.imgUrl : null,
+    };
+    if (phone) session.contacts.set(`pn:${phone}`, entry);
+    if (lid) session.contacts.set(`lid:${lid}`, entry);
+    session.contacts.set(`id:${id}`, entry);
+  }
+
+  function lookupLocalContact(session, { phone, senderJid }) {
+    if (!session?.contacts) return null;
+    return (
+      (phone && session.contacts.get(`pn:${phone}`)) ||
+      (senderJid && session.contacts.get(`id:${senderJid}`)) ||
+      (senderJid?.endsWith('@lid') && session.contacts.get(`lid:${senderJid.replace('@lid', '')}`)) ||
+      null
+    );
+  }
+
+  function pickBestName(...candidates) {
+    for (const c of candidates) {
+      if (!c) continue;
+      const s = String(c).trim();
+      if (!s) continue;
+      // Prefer real saved names over bare @username pushhandles when possible.
+      return s;
+    }
+    return null;
+  }
+
   async function startSession(workspaceId) {
     if (sessions.has(workspaceId) && sessions.get(workspaceId).socket) {
       console.log(`[WA:${workspaceId.slice(0, 8)}] Session already active`);
@@ -47,12 +90,33 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       printQRInTerminal: false,
       markOnlineOnConnect: false,
       browser: ['CyberControl', 'Chrome', '1.0'],
+      syncFullHistory: true,
     });
 
-    const session = { socket: sock, qr: null, status: 'connecting', phone: null };
+    const session = {
+      socket: sock,
+      qr: null,
+      status: 'connecting',
+      phone: null,
+      contacts: new Map(),
+    };
     sessions.set(workspaceId, session);
 
     sock.ev.on('creds.update', saveCreds);
+
+    // Cafe WhatsApp address book — this is where "saved contact" names live.
+    sock.ev.on('contacts.upsert', (list) => {
+      for (const c of list || []) indexContact(session, c);
+    });
+    sock.ev.on('contacts.update', (list) => {
+      for (const c of list || []) indexContact(session, c);
+    });
+    sock.ev.on('messaging-history.set', ({ contacts }) => {
+      for (const c of contacts || []) indexContact(session, c);
+      if (contacts?.length) {
+        console.log(`[WA:${workspaceId.slice(0, 8)}] Indexed ${session.contacts.size} contact keys from history`);
+      }
+    });
 
     sock.ev.on('connection.update', (update) => {
       const { connection, lastDisconnect, qr } = update;
@@ -115,47 +179,72 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         const rawJid = msg.key.remoteJid || '';
         const participantJid = msg.key.participant || '';
         const senderJid = rawJid.endsWith('@g.us') ? participantJid : rawJid;
-        let phone;
+        // Prefer phone from message metadata when WhatsApp includes it with LID chats.
+        const altPn =
+          msg.key.remoteJidAlt?.replace(/@.*/, '') ||
+          msg.key.senderPn?.replace(/@.*/, '') ||
+          msg.key.participantPn?.replace(/@.*/, '') ||
+          null;
+        let phone = altPn;
         let profilePicUrl = null;
         let savedName = null;
 
         if (senderJid.endsWith('@s.whatsapp.net')) {
           phone = senderJid.replace('@s.whatsapp.net', '');
-          try {
-            profilePicUrl = await sock.profilePictureUrl(senderJid, 'image');
-          } catch {
-            /* ignore — often blocked by privacy; resolver /contact may still have DP */
-          }
-          try {
-            const data = await fetchContactName(phone);
-            savedName = data.name || null;
-            if (!profilePicUrl && data.dpUrl) profilePicUrl = data.dpUrl;
-            console.log(
-              `[WA] phone ${phone} resolver name=${data.name}` +
-                ` isMyContact=${data.isMyContact}` +
-                ` dp=${profilePicUrl ? 'yes' : 'no'}`,
-            );
-          } catch (e) {
-            console.warn(`[WA] phone ${phone} resolver failed: ${e.message}`);
-          }
         } else if (senderJid.endsWith('@lid')) {
           const lidNum = senderJid.replace('@lid', '');
           try {
             const data = await resolveLid(lidNum);
-            phone = data.phone || lidNum;
+            phone = data.phone || phone || lidNum;
             profilePicUrl = data.dpUrl || null;
             savedName = data.name || null;
             console.log(`[WA] LID ${lidNum} → ${phone}${savedName ? ' (' + savedName + ')' : ''}`);
           } catch (e) {
             console.warn(`[WA] LID ${lidNum} resolver error: ${e.message}`);
-            phone = lidNum;
+            phone = phone || lidNum;
           }
         } else {
-          phone = senderJid.replace(/@.*/, '') || rawJid.replace(/@.*/, '');
+          phone = phone || senderJid.replace(/@.*/, '') || rawJid.replace(/@.*/, '');
           console.warn(`[WA] sender JID has unknown format: ${senderJid} (rawJid=${rawJid})`);
         }
 
-        const pushName = savedName || msg.pushName || phone;
+        // 1) Cafe WA address book (Baileys contacts) — best source for "saved contact" names.
+        const local = lookupLocalContact(session, { phone, senderJid });
+        if (local?.name) savedName = local.name;
+        else if (!savedName && local?.notify) savedName = local.notify;
+        if (!profilePicUrl && local?.imgUrl) profilePicUrl = local.imgUrl;
+
+        // 2) Baileys profile picture for the phone JID (works more often than LID).
+        if (!profilePicUrl && phone && /^\d{8,}$/.test(phone)) {
+          try {
+            profilePicUrl = await sock.profilePictureUrl(`${phone}@s.whatsapp.net`, 'image');
+          } catch {
+            try {
+              profilePicUrl = await sock.profilePictureUrl(senderJid, 'image');
+            } catch {
+              /* privacy / none */
+            }
+          }
+        }
+
+        // 3) Resolver oracle — fill gaps for name/DP (needs resolver WA to have them in contacts).
+        if (phone && /^\d{8,}$/.test(phone)) {
+          try {
+            const data = await fetchContactName(phone);
+            if (!savedName || savedName.startsWith('@')) {
+              savedName = pickBestName(data.name, savedName);
+            }
+            if (!profilePicUrl && data.dpUrl) profilePicUrl = data.dpUrl;
+            console.log(
+              `[WA] phone ${phone} local=${local?.name || '-'} resolver=${data.name || '-'}` +
+                ` isMyContact=${data.isMyContact} dp=${profilePicUrl ? 'yes' : 'no'}`,
+            );
+          } catch (e) {
+            console.warn(`[WA] phone ${phone} resolver failed: ${e.message}`);
+          }
+        }
+
+        const pushName = pickBestName(savedName, msg.pushName, phone) || phone;
 
         try {
           const buffer = await downloadMedia(sock, msg);
