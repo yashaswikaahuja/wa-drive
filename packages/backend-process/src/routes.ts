@@ -10,8 +10,23 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 
 async function downloadDriveFile(fileId: string, req: any): Promise<Buffer> {
   const drive = await getDriveForWorkspace(req.user?.workspaceId);
   if (!drive) throw new Error('Drive not connected for this workspace');
-  const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-  return Buffer.from(res.data as ArrayBuffer);
+  try {
+    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+    const buf = Buffer.from(res.data as ArrayBuffer);
+    // Google returns JSON error bodies with HTTP 200 in some edge cases / wrong clients.
+    if (buf.length < 500) {
+      const text = buf.toString('utf8');
+      if (text.startsWith('{') && /"error"/.test(text)) {
+        throw new Error(`Drive download failed for ${fileId}: ${text.slice(0, 180)}`);
+      }
+    }
+    return buf;
+  } catch (e: any) {
+    const status = e?.code || e?.response?.status;
+    if (status === 404) throw new Error(`Drive file not found or deleted: ${fileId}`);
+    if (status === 401 || status === 403) throw new Error('Drive authorization failed — reconnect Google Drive in Settings');
+    throw e;
+  }
 }
 
 router.post('/', async (req: Request, res: Response) => {

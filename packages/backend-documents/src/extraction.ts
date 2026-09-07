@@ -94,55 +94,78 @@ function mistralKey(): string {
   return process.env['MISTRAL_API_KEY'] || '';
 }
 
-/** Vision call: Mistral primary → Groq fallback. */
+/** Vision call: Mistral/Pixtral primary (with 429 backoff) → Groq fallback. */
 async function callVision(base64s: string | string[], prompt: string, maxTokens: number): Promise<string> {
   const images = (Array.isArray(base64s) ? base64s : [base64s]).slice(0, 3);
+  const content: any[] = [
+    { type: 'text', text: prompt },
+    ...images.map((b) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } })),
+  ];
 
-  // ── Primary: Mistral (Small 4 — fast, clean JSON, good Indian doc OCR) ──
+  // Prefer Pixtral for OCR reliability; mistral-small-latest is vision-capable but rate-limits hard.
+  const mistralModels = [
+    process.env['MISTRAL_VISION_MODEL'] || 'pixtral-12b-2409',
+    'mistral-small-latest',
+    'mistral-small-2603',
+  ];
   const mKey = mistralKey();
   if (mKey) {
-    const content: any[] = [{ type: 'text', text: prompt },
-      ...images.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } }))];
-    const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${mKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'mistral-small-latest',
-        messages: [{ role: 'user', content }],
-        max_tokens: maxTokens,
-      }),
-    });
-    if (response.ok) {
-      const data = await response.json() as any;
-      const text = data?.choices?.[0]?.message?.content || '';
-      return text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    for (const model of mistralModels) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${mKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'user', content }],
+            max_tokens: maxTokens,
+          }),
+        });
+        if (response.ok) {
+          const data = (await response.json()) as any;
+          const text = data?.choices?.[0]?.message?.content || '';
+          return text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+        }
+        const errText = await response.text().catch(() => '');
+        if (response.status === 429) {
+          const waitMs = 1500 * (attempt + 1);
+          console.warn(`[Extract] Mistral ${model} rate-limited, retry in ${waitMs}ms`);
+          await new Promise((r) => setTimeout(r, waitMs));
+          continue;
+        }
+        console.warn(`[Extract] Mistral ${model} failed:`, response.status, errText.slice(0, 200));
+        break; // try next model
+      }
     }
-    if (response.status !== 429) console.warn('[Extract] Mistral failed:', response.status, await response.text().catch(() => ''));
   }
 
-  // ── Fallback: Groq (Qwen 3.6-27B vision) ──
+  // ── Fallback: Groq vision ──
   const keys = groqKeys();
-  if (!keys.length && !mKey) throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY)');
-  if (!keys.length) throw new Error('Mistral call failed and no LLM fallback key');
-  const content: any[] = [{ type: 'text', text: prompt },
-    ...images.map(b => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${b}` } }))];
+  if (!keys.length && !mKey) {
+    throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY/GROQ_API_KEY)');
+  }
+  if (!keys.length) throw new Error('Mistral vision failed and no Groq/LLM fallback key');
+  const groqModel = process.env['GROQ_VISION_MODEL'] || 'meta-llama/llama-4-scout-17b-16e-instruct';
   for (let i = 0; i < keys.length; i++) {
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${keys[i]}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${keys[i]}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'qwen/qwen3.6-27b',
+        model: groqModel,
         messages: [{ role: 'user', content }],
         max_tokens: maxTokens,
         temperature: 0,
       }),
     });
     if (response.status === 429 && i < keys.length - 1) continue;
-    const data = await response.json() as any;
+    const data = (await response.json()) as any;
+    if (data?.error) {
+      console.warn('[Extract] Groq failed:', data.error?.message || JSON.stringify(data.error).slice(0, 200));
+      if (i < keys.length - 1) continue;
+      break;
+    }
     const content2 = data?.choices?.[0]?.message?.content;
     if (content2) return content2.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    if (data?.error && i < keys.length - 1) continue;
-    return content2 ?? '';
   }
   return '';
 }
@@ -213,11 +236,22 @@ function normalizeKeys(parsed: any, docType: string): any {
 }
 
 export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
-  if (!llmKeys().length) throw new Error('AI_API_KEY / LLM_API_KEY not configured');
+  if (!llmKeys().length && !mistralKey()) {
+    throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY/GROQ_API_KEY)');
+  }
+  // Guard: Drive sometimes returns JSON error bodies (404/403) instead of media.
+  const head = buffer.slice(0, 1).toString('utf8');
+  if (buffer.length < 500 && (head === '{' || head === '[')) {
+    throw new Error(`Drive file unavailable or deleted (${fileId}): ${buffer.toString('utf8').slice(0, 180)}`);
+  }
   let base64s: string[];
   if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
     const pages = await pdfToImages(buffer); // marks may be on page 2+
     base64s = pages.map(p => p.toString('base64'));
+  } else if (!(buffer[0] === 0xFF && buffer[1] === 0xD8) && !(buffer[0] === 0x89 && buffer[1] === 0x50)) {
+    // Not JPEG/PNG/PDF — still try, but warn
+    console.warn(`[Extract] ${fileId} unexpected magic bytes ${buffer.slice(0, 4).toString('hex')} size=${buffer.length}`);
+    base64s = [buffer.toString('base64')];
   } else {
     base64s = [buffer.toString('base64')];
   }
