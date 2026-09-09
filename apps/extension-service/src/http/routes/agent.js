@@ -45,8 +45,9 @@ function computeSemanticFormKey(snapshot) {
   return 's_' + Math.abs(h).toString(36);
 }
 
+// Match fill.js / corrections gsk — strip punctuation so cache keys stay stable.
 function normLabel(s) {
-  return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  return (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function buildSystemPrompt(profile, hostname, formContext) {

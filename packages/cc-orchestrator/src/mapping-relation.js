@@ -164,6 +164,30 @@
     return String(l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   }
 
+  function labelKeys(label) {
+    var raw = String(label || '').toLowerCase().trim();
+    if (!raw) return [];
+    var stripped = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+    var spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    var out = [];
+    if (stripped) out.push(stripped);
+    if (spaced && spaced !== stripped) out.push(spaced);
+    return out;
+  }
+
+  function lookupSavedEntry(savedMap, field) {
+    if (!savedMap || !field) return null;
+    var keys = labelKeys(field.label).concat(labelKeys(field.name));
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      if (savedMap[keys[i]] && savedMap[keys[i]].profileKey) return savedMap[keys[i]];
+    }
+    for (i = 0; i < keys.length; i++) {
+      if (savedMap[keys[i]]) return savedMap[keys[i]];
+    }
+    return null;
+  }
+
   function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
     if (!savedMap || typeof savedMap !== 'object') return 0;
     var added = 0;
@@ -173,7 +197,7 @@
       var f = fields[i];
       if (!f || !f.selector || map[f.selector]) continue;
       if (/radio|checkbox/i.test(String(f.type || ''))) continue;
-      var entry = savedMap[gsk(f.label)] || savedMap[gsk(f.name)] || null;
+      var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;
       var relation = normalizeRelation(entry, f);
       var value = applyRelation(relation, profile, entry.profileKey, f);

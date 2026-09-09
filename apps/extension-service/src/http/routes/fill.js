@@ -332,6 +332,7 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
 // ── POST /api/semantic-map ──────────────────────────────────────────────
 // Lightweight cold-start for AUTO/sequential fill: map unmapped extracted
 // fields → profile keys via OpenRouter (server-side only). Mistral is OCR-only.
+// Prefer taught form_mappings: never re-AI fields that already have profileKey.
 router.post('/semantic-map', authMiddleware, async (req, res) => {
   const startTime = Date.now();
   try {
@@ -347,7 +348,61 @@ router.post('/semantic-map', authMiddleware, async (req, res) => {
       country: pageContext?.country || null,
     };
 
-    const pseudoNodes = fields.map((f, idx) => sequentialFieldToPseudoNode(f, idx));
+    // Filter out fields that already have a taught mapping (defense in depth).
+    let unknownFields = fields;
+    let taughtSkipped = 0;
+    try {
+      const { loadDoc, KEYS } = await import('../../db/store.js');
+      const allMappings = await loadDoc(KEYS.MAPPINGS);
+      const formKeyResolved = scope.form_key || '';
+      let saved = (formKeyResolved && allMappings[formKeyResolved]) || {};
+      // Hostname overlap fallback when exact formKey is empty (formKey drift).
+      if (!Object.values(saved).some((e) => e && typeof e === 'object' && e.profileKey)) {
+        const host = hostname || scope.portal_id || '';
+        for (const entry of Object.values(allMappings || {})) {
+          if (!entry || typeof entry !== 'object') continue;
+          if (host && entry._meta?.hostname && entry._meta.hostname !== host) continue;
+          for (const [lk, lv] of Object.entries(entry)) {
+            if (lk.startsWith('_') || !lv?.profileKey) continue;
+            if (!saved[lk]) saved = { ...saved, [lk]: lv };
+          }
+        }
+      }
+      const labelKeys = (label) => {
+        const raw = String(label || '').toLowerCase().trim();
+        if (!raw) return [];
+        const stripped = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        const spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+        return [stripped, spaced].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+      };
+      unknownFields = fields.filter((f) => {
+        const keys = [...labelKeys(f?.label), ...labelKeys(f?.name)];
+        const taught = keys.some((k) => saved[k]?.profileKey);
+        if (taught) {
+          taughtSkipped++;
+          return false;
+        }
+        return true;
+      });
+    } catch (e) {
+      console.warn('[semantic-map] taught-map filter skipped:', e.message);
+    }
+
+    if (unknownFields.length === 0) {
+      return res.json({
+        ok: true,
+        strategy: 'taught-only',
+        mappings: [],
+        excluded: [],
+        diagnostics: {
+          taught_skipped: taughtSkipped,
+          latencyMs: Date.now() - startTime,
+          note: 'All candidate fields already have taught mappings — AI skipped',
+        },
+      });
+    }
+
+    const pseudoNodes = unknownFields.map((f, idx) => sequentialFieldToPseudoNode(f, idx));
     const mapResult = await mapUnknownFields({
       fields: pseudoNodes,
       pageContext: {
@@ -385,6 +440,7 @@ router.post('/semantic-map', authMiddleware, async (req, res) => {
       excluded: mapResult.excluded || [],
       diagnostics: {
         ...(mapResult.diagnostics || {}),
+        taught_skipped: taughtSkipped,
         latencyMs: Date.now() - startTime,
       },
     });
@@ -408,10 +464,12 @@ function sequentialFieldToPseudoNode(field, idx) {
   else if (/textarea/.test(type)) affordances = ['type_text'];
 
   const selector = field.selector || field.id || field.name || `field_${idx}`;
+  const label = field.label || field.placeholder || field.name || '';
   return {
     node_id: selector,
     kind: 'input',
-    label: field.label || field.placeholder || field.name || '',
+    label,
+    field_label: label, // knowledge-store draft validation expects field_label
     semantic_label: field.label || '',
     field_type: type,
     options: field.options || null,

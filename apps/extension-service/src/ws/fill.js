@@ -19,6 +19,104 @@ function gsk(l) {
     .trim();
 }
 
+/** Dual normalization — agent/mappings used spaced punctuation; fill/corrections strip it. */
+function labelKeys(label) {
+  const raw = String(label || '')
+    .toLowerCase()
+    .trim();
+  if (!raw) return [];
+  const stripped = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  const spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  const out = [];
+  if (stripped) out.push(stripped);
+  if (spaced && spaced !== stripped) out.push(spaced);
+  return out;
+}
+
+function lookupTaught(saved, field) {
+  if (!saved || !field) return null;
+  const keys = [...labelKeys(field.label), ...labelKeys(field.name)];
+  for (const k of keys) {
+    if (saved[k]?.profileKey) return saved[k];
+  }
+  for (const k of keys) {
+    if (saved[k]) return saved[k];
+  }
+  return null;
+}
+
+function countMapped(saved) {
+  if (!saved || typeof saved !== 'object') return 0;
+  let n = 0;
+  for (const [k, v] of Object.entries(saved)) {
+    if (k.startsWith('_')) continue;
+    if (v && typeof v === 'object' && v.profileKey) n++;
+  }
+  return n;
+}
+
+/**
+ * Resolve taught maps for this fill.
+ * Prefer exact formKey; if empty (formKey drift), pick same-hostname map with
+ * the most overlapping taught labels — restores GCP-style reuse of prior maps.
+ */
+function resolveSavedMappings(allMappings, formKey, hostname, fields) {
+  const exact = (formKey && allMappings[formKey]) || {};
+  if (countMapped(exact) > 0) {
+    return { saved: exact, via: 'exact', resolvedFormKey: formKey };
+  }
+
+  const fieldKeySet = new Set();
+  for (const f of fields || []) {
+    for (const k of labelKeys(f?.label)) fieldKeySet.add(k);
+    for (const k of labelKeys(f?.name)) fieldKeySet.add(k);
+  }
+  if (fieldKeySet.size === 0) {
+    return { saved: exact, via: 'exact-empty', resolvedFormKey: formKey };
+  }
+
+  let best = null;
+  let bestScore = 0;
+  for (const [fk, entry] of Object.entries(allMappings || {})) {
+    if (!entry || typeof entry !== 'object') continue;
+    const metaHost = entry._meta?.hostname || '';
+    if (hostname && metaHost && metaHost !== hostname) continue;
+    let score = 0;
+    for (const [lk, lv] of Object.entries(entry)) {
+      if (lk.startsWith('_') || !lv?.profileKey) continue;
+      if (fieldKeySet.has(lk)) score++;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      best = { fk, entry };
+    }
+  }
+  if (best && bestScore > 0) {
+    return {
+      saved: best.entry,
+      via: `label-overlap:${best.fk}:${bestScore}`,
+      resolvedFormKey: best.fk,
+    };
+  }
+  return { saved: exact, via: 'exact-empty', resolvedFormKey: formKey };
+}
+
+/** Profile key aliases when taught key ≠ profile atom key (mobile↔phone, etc.). */
+const PROFILE_KEY_ALIASES = {
+  mobile: ['phone', 'phone_number', 'mobile_number', 'mobile_no'],
+  phone: ['mobile', 'mobile_number', 'phone_number', 'mobile_no'],
+  name: ['full_name', 'applicant_name'],
+  full_name: ['name'],
+  dob: ['date_of_birth'],
+  date_of_birth: ['dob'],
+  gender: ['sex'],
+  sex: ['gender'],
+  email: ['email_id'],
+  email_id: ['email'],
+  father_name: ['fathers_name'],
+  aadhaar_number: ['aadhaar', 'aadhar'],
+};
+
 function profileVal(profile, key) {
   if (!profile || key == null) return null;
   const entry = profile[key];
@@ -27,6 +125,17 @@ function profileVal(profile, key) {
   if (v == null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
+}
+
+function profileValWithAlias(profile, key) {
+  const direct = profileVal(profile, key);
+  if (direct != null) return { value: direct, key };
+  const aliases = PROFILE_KEY_ALIASES[key] || [];
+  for (const alt of aliases) {
+    const v = profileVal(profile, alt);
+    if (v != null) return { value: v, key: alt };
+  }
+  return null;
 }
 
 function normChoice(s) {
@@ -195,7 +304,8 @@ export async function buildFillMapping(msg, workspaceId) {
   const hostname = msg.hostname || '';
 
   const allMappings = await loadDoc(KEYS.MAPPINGS);
-  const saved = (formKey && allMappings[formKey]) || {};
+  const resolved = resolveSavedMappings(allMappings, formKey, hostname, fields);
+  const saved = resolved.saved || {};
   const allAdapters = await loadDoc(KEYS.ADAPTERS);
   const adapters = (hostname && allAdapters[hostname]) || {};
 
@@ -220,40 +330,56 @@ export async function buildFillMapping(msg, workspaceId) {
     };
   }
 
+  // Profile with aliases so taught mobile↔phone etc. still materialize.
+  const profileForApply = { ...profile };
+  for (const [canonical, aliases] of Object.entries(PROFILE_KEY_ALIASES)) {
+    if (profileVal(profileForApply, canonical) != null) continue;
+    for (const alt of aliases) {
+      const v = profileVal(profile, alt);
+      if (v != null) {
+        profileForApply[canonical] = v;
+        break;
+      }
+    }
+  }
+
   // 1) Taught maps via profileKey + relation (#302).
-  // Bare profileKey never raw-dumps: unknown / failed relation → leave for AI / split-dob.
-  materializeSavedRelations(fields, profile, saved, mapping, filledBySource, 'wss-saved');
+  // Bare profileKey never raw-dumps: unknown / failed relation → leave for split-dob / fuzzy.
+  materializeSavedRelations(fields, profileForApply, saved, mapping, filledBySource, 'wss-saved');
   // Choice widgets need resolveChoice — materialize only sets string values.
   for (const f of fields) {
     if (!f || !f.selector) continue;
     if (mapping[f.selector]) continue;
-    const sk = gsk(f.label) || gsk(f.name);
-    const taught = (sk && saved[sk]) || null;
+    const taught = lookupTaught(saved, f);
 
     if (taught && taught.profileKey && isChoiceType(f.type)) {
       const relation = normalizeRelation(taught, f);
-      const derived = applyRelation(relation, profile, taught.profileKey, f);
+      let derived = applyRelation(relation, profileForApply, taught.profileKey, f);
+      if (derived == null) {
+        const aliased = profileValWithAlias(profile, taught.profileKey);
+        if (aliased) derived = applyRelation(relation, { [taught.profileKey]: aliased.value }, taught.profileKey, f);
+      }
       if (derived != null) {
-        const resolved = resolveChoice(f, derived, taught.profileKey);
-        if (resolved) applyEntry({ ...resolved, source: 'wss-saved' });
+        const resolvedChoice = resolveChoice(f, derived, taught.profileKey);
+        if (resolvedChoice) applyEntry({ ...resolvedChoice, source: 'wss-saved' });
         continue;
       }
     }
     if (taught && (taught.kind === 'conditional' || taught.class === 'CONDITIONAL') && taught.taughtValue) {
-      const resolved = resolveChoice(f, taught.taughtValue, taught.profileKey);
-      if (resolved) {
-        applyEntry({ ...resolved, source: 'wss-saved-conditional' });
+      const resolvedChoice = resolveChoice(f, taught.taughtValue, taught.profileKey);
+      if (resolvedChoice) {
+        applyEntry({ ...resolvedChoice, source: 'wss-saved-conditional' });
         continue;
       }
     }
 
     // 2) Conditional decisions for choice widgets
     if (isChoiceType(f.type)) {
-      const decision = decideConditional(f, profile);
+      const decision = decideConditional(f, profileForApply);
       if (decision) {
-        const resolved = resolveChoice(f, decision, null);
-        if (resolved) {
-          applyEntry({ ...resolved, source: 'wss-conditional' });
+        const resolvedChoice = resolveChoice(f, decision, null);
+        if (resolvedChoice) {
+          applyEntry({ ...resolvedChoice, source: 'wss-conditional' });
           continue;
         }
       }
@@ -263,7 +389,7 @@ export async function buildFillMapping(msg, workspaceId) {
   // 3) Date splitter — DD / MM / YYYY (or Day/Month/Year) from profile.dob
   // Was present in legacy mapper post-pass but skipped on the WSS path.
   const beforeSplit = Object.keys(mapping).length;
-  applySplitDob(fields, profile, mapping);
+  applySplitDob(fields, profileForApply, mapping);
   for (const [sel, entry] of Object.entries(mapping)) {
     if (entry && entry.matchBy === 'split-dob' && !filledBySource[sel]) {
       filledBySource[sel] = {
@@ -278,16 +404,24 @@ export async function buildFillMapping(msg, workspaceId) {
     console.log(`[wss-fill] applySplitDob mapped ${splitAdded} date-part field(s)`);
   }
 
+  const plannedCount = Object.keys(mapping).length;
+  console.log(
+    `[wss-fill] formKey=${formKey || '-'} via=${resolved.via} taught=${countMapped(saved)} planned=${plannedCount}/${fields.length}`
+  );
+
   return {
     formKey,
+    resolvedFormKey: resolved.resolvedFormKey || formKey,
+    mappingSource: resolved.via,
     hostname,
     workspaceId,
     mapping,
     filledBySource,
     adapters,
     savedMappings: saved,
-    plannedCount: Object.keys(mapping).length,
+    plannedCount,
     fieldCount: fields.length,
+    taughtMappedCount: countMapped(saved),
     transport: 'wss',
   };
 }

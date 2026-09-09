@@ -237,6 +237,30 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
     return String(l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   }
 
+  function labelKeys(label) {
+    var raw = String(label || '').toLowerCase().trim();
+    if (!raw) return [];
+    var stripped = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+    var spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    var out = [];
+    if (stripped) out.push(stripped);
+    if (spaced && spaced !== stripped) out.push(spaced);
+    return out;
+  }
+
+  function lookupSavedEntry(savedMap, field) {
+    if (!savedMap || !field) return null;
+    var keys = labelKeys(field.label).concat(labelKeys(field.name));
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      if (savedMap[keys[i]] && savedMap[keys[i]].profileKey) return savedMap[keys[i]];
+    }
+    for (i = 0; i < keys.length; i++) {
+      if (savedMap[keys[i]]) return savedMap[keys[i]];
+    }
+    return null;
+  }
+
   function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
     if (!savedMap || typeof savedMap !== 'object') return 0;
     var added = 0;
@@ -246,7 +270,7 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
       var f = fields[i];
       if (!f || !f.selector || map[f.selector]) continue;
       if (/radio|checkbox/i.test(String(f.type || ''))) continue;
-      var entry = savedMap[gsk(f.label)] || savedMap[gsk(f.name)] || null;
+      var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;
       var relation = normalizeRelation(entry, f);
       var value = applyRelation(relation, profile, entry.profileKey, f);
@@ -419,14 +443,44 @@ if (typeof module !== 'undefined') module.exports = (typeof globalThis !== 'unde
       console.warn('[CC] saved-relation materialize skipped:', relErr && relErr.message ? relErr.message : relErr);
     }
 
-    // ── Stage 2b: Server AI for fields not covered by a real planned value ────
-    // OpenRouter (extension-service /semantic-map). Mistral is OCR-only on hub.
-    // #302: covered ONLY when planned[selector] exists — never because profileKey is saved.
+    // ── Stage 2b: Server AI only for fields with NO taught mapping ───────────
+    // Prefer form_mappings (GCP behavior): if a label already has profileKey,
+    // do not re-ask AI — leave residual to fuzzyMatch / split-dob / skip.
+    // #302 still applies: planned value requires a successful relation, never a raw dump.
     try {
       var planned = wssPlan.mapping || {};
       var covered = {};
       Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
-      var aiCandidates = extracted.fields.filter(function (f) { return !covered[f.selector]; });
+      var savedMaps = wssPlan.savedMappings || {};
+      function labelKeys(label) {
+        var raw = String(label || '').toLowerCase().trim();
+        if (!raw) return [];
+        var gsk = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        var spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+        var out = [];
+        if (gsk) out.push(gsk);
+        if (spaced && spaced !== gsk) out.push(spaced);
+        return out;
+      }
+      function hasTaughtMapping(f) {
+        var keys = labelKeys(f && f.label).concat(labelKeys(f && f.name));
+        for (var i = 0; i < keys.length; i++) {
+          var entry = savedMaps[keys[i]];
+          if (entry && entry.profileKey) return true;
+        }
+        return false;
+      }
+      var aiCandidates = extracted.fields.filter(function (f) {
+        if (covered[f.selector]) return false;
+        if (hasTaughtMapping(f)) return false; // taught map wins — never re-AI
+        return true;
+      });
+      var taughtSkipped = extracted.fields.filter(function (f) {
+        return !covered[f.selector] && hasTaughtMapping(f);
+      }).length;
+      if (taughtSkipped > 0) {
+        console.log('[CC] prefer taught mappings: skipping AI for', taughtSkipped, 'already-mapped field(s)');
+      }
       if (aiCandidates.length > 0 && backendUrl && accessToken) {
         progress('AI mapping ' + aiCandidates.length + ' unknown fields...', 58);
         var aiRes = await fetch(backendUrl + '/semantic-map', {

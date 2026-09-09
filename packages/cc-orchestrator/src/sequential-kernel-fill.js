@@ -145,14 +145,44 @@
       console.warn('[CC] saved-relation materialize skipped:', relErr && relErr.message ? relErr.message : relErr);
     }
 
-    // ── Stage 2b: Server AI for fields not covered by a real planned value ────
-    // OpenRouter (extension-service /semantic-map). Mistral is OCR-only on hub.
-    // #302: covered ONLY when planned[selector] exists — never because profileKey is saved.
+    // ── Stage 2b: Server AI only for fields with NO taught mapping ───────────
+    // Prefer form_mappings (GCP behavior): if a label already has profileKey,
+    // do not re-ask AI — leave residual to fuzzyMatch / split-dob / skip.
+    // #302 still applies: planned value requires a successful relation, never a raw dump.
     try {
       var planned = wssPlan.mapping || {};
       var covered = {};
       Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
-      var aiCandidates = extracted.fields.filter(function (f) { return !covered[f.selector]; });
+      var savedMaps = wssPlan.savedMappings || {};
+      function labelKeys(label) {
+        var raw = String(label || '').toLowerCase().trim();
+        if (!raw) return [];
+        var gsk = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        var spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+        var out = [];
+        if (gsk) out.push(gsk);
+        if (spaced && spaced !== gsk) out.push(spaced);
+        return out;
+      }
+      function hasTaughtMapping(f) {
+        var keys = labelKeys(f && f.label).concat(labelKeys(f && f.name));
+        for (var i = 0; i < keys.length; i++) {
+          var entry = savedMaps[keys[i]];
+          if (entry && entry.profileKey) return true;
+        }
+        return false;
+      }
+      var aiCandidates = extracted.fields.filter(function (f) {
+        if (covered[f.selector]) return false;
+        if (hasTaughtMapping(f)) return false; // taught map wins — never re-AI
+        return true;
+      });
+      var taughtSkipped = extracted.fields.filter(function (f) {
+        return !covered[f.selector] && hasTaughtMapping(f);
+      }).length;
+      if (taughtSkipped > 0) {
+        console.log('[CC] prefer taught mappings: skipping AI for', taughtSkipped, 'already-mapped field(s)');
+      }
       if (aiCandidates.length > 0 && backendUrl && accessToken) {
         progress('AI mapping ' + aiCandidates.length + ' unknown fields...', 58);
         var aiRes = await fetch(backendUrl + '/semantic-map', {

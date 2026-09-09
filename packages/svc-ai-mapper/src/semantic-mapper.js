@@ -307,9 +307,16 @@ export async function mapUnknownFields(request) {
   // ── Step 8: Store candidates as draft knowledge records ───────────
   const candidateMappings = [];
 
+  const labelByNode = new Map(fieldDescriptors.map((d) => [d.node_id, d.label]));
+
   for (const aiMapping of aiMappings) {
     const confidence = confidenceResults.get(aiMapping.node_id);
     if (!confidence) continue;
+
+    // Attach observed label so draft knowledge records pass field_label validation.
+    if (!aiMapping.label && !aiMapping.field_label) {
+      aiMapping.label = labelByNode.get(aiMapping.node_id) || null;
+    }
 
     /** @type {CandidateMapping} */
     const candidate = {
@@ -444,7 +451,7 @@ async function storeDraftMapping(aiMapping, confidence, scope, requesterId) {
       semantic_key: aiMapping.semantic_key,
       profile_key: aiMapping.profile_key,
       transformation: aiMapping.transformation || 'direct',
-      field_label: aiMapping.label || null,
+      field_label: aiMapping.label || aiMapping.field_label || aiMapping.semantic_key || aiMapping.node_id || 'unknown',
       reasoning: aiMapping.reasoning,
       confidence_breakdown: confidence.breakdown,
       disposition: confidence.disposition,

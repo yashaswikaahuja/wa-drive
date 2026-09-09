@@ -264,14 +264,33 @@ export function induceRelation(profile, profileKey, actualOrPlanned, field) {
  * Materialize planned values from taught mappings using relations.
  * Mutates `mapping` / `filledBySource`. Skips selectors already planned.
  */
+function labelKeys(label) {
+  const raw = String(label || '')
+    .toLowerCase()
+    .trim();
+  if (!raw) return [];
+  const stripped = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+  const spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  const out = [];
+  if (stripped) out.push(stripped);
+  if (spaced && spaced !== stripped) out.push(spaced);
+  return out;
+}
+
+function lookupSavedEntry(savedMap, field) {
+  if (!savedMap || !field) return null;
+  const keys = [...labelKeys(field.label), ...labelKeys(field.name)];
+  for (const k of keys) {
+    if (savedMap[k]?.profileKey) return savedMap[k];
+  }
+  for (const k of keys) {
+    if (savedMap[k]) return savedMap[k];
+  }
+  return null;
+}
+
 export function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
   if (!savedMap || typeof savedMap !== 'object') return 0;
-  const gsk = (l) =>
-    String(l || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
   let added = 0;
   const map = mapping || {};
   const fbs = filledBySource || {};
@@ -279,7 +298,7 @@ export function materializeSavedRelations(fields, profile, savedMap, mapping, fi
     if (!f?.selector || map[f.selector]) continue;
     // Choice widgets need option resolution — leave to caller.
     if (/radio|checkbox/i.test(String(f.type || ''))) continue;
-    const entry = savedMap[gsk(f.label)] || savedMap[gsk(f.name)] || null;
+    const entry = lookupSavedEntry(savedMap, f);
     if (!entry?.profileKey) continue;
     const relation = normalizeRelation(entry, f);
     const value = applyRelation(relation, profile, entry.profileKey, f);
