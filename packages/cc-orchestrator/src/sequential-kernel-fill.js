@@ -145,15 +145,27 @@
       console.warn('[CC] saved-relation materialize skipped:', relErr && relErr.message ? relErr.message : relErr);
     }
 
-    // ── Stage 2b: Server AI only for fields with NO taught mapping ───────────
-    // Prefer form_mappings (GCP behavior): if a label already has profileKey,
-    // do not re-ask AI — leave residual to fuzzyMatch / split-dob / skip.
+    // ── Stage 2b: AI cold-start ONLY when this form has zero taught maps ─────
+    // GCP behavior: if form_mappings already exist for the form, fill from those
+    // (+ conditionals / split-dob / fuzzyMatch). Do NOT call OpenRouter again.
     // #302 still applies: planned value requires a successful relation, never a raw dump.
     try {
       var planned = wssPlan.mapping || {};
       var covered = {};
       Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
       var savedMaps = wssPlan.savedMappings || {};
+      function countTaughtProfileKeys(maps) {
+        var n = 0;
+        if (!maps || typeof maps !== 'object') return 0;
+        Object.keys(maps).forEach(function (k) {
+          if (k.charAt(0) === '_') return;
+          if (maps[k] && maps[k].profileKey) n++;
+        });
+        return n;
+      }
+      var formTaughtCount = typeof wssPlan.taughtMappedCount === 'number'
+        ? wssPlan.taughtMappedCount
+        : countTaughtProfileKeys(savedMaps);
       function labelKeys(label) {
         var raw = String(label || '').toLowerCase().trim();
         if (!raw) return [];
@@ -172,6 +184,13 @@
         }
         return false;
       }
+
+      // Form already trained → never call AI. Residuals go to fuzzyMatch / skip.
+      if (formTaughtCount > 0) {
+        var residual = extracted.fields.filter(function (f) { return !covered[f.selector]; }).length;
+        console.log('[CC] prefer taught mappings: form has', formTaughtCount, 'taught key(s); skipping AI (', residual, 'residual field(s) → fuzzy/skip)');
+        progress('Using taught mappings (' + formTaughtCount + ')…', 58);
+      } else {
       var aiCandidates = extracted.fields.filter(function (f) {
         if (covered[f.selector]) return false;
         if (hasTaughtMapping(f)) return false; // taught map wins — never re-AI
@@ -274,6 +293,7 @@
           console.warn('[CC] semantic-map HTTP', aiRes.status);
         }
       }
+      } // end else: cold-start AI only when form has zero taught maps
     } catch (aiErr) {
       console.warn('[CC] semantic-map skipped:', aiErr && aiErr.message ? aiErr.message : aiErr);
     }

@@ -348,26 +348,53 @@ router.post('/semantic-map', authMiddleware, async (req, res) => {
       country: pageContext?.country || null,
     };
 
-    // Filter out fields that already have a taught mapping (defense in depth).
+    // GCP preference: if this form already has ANY taught profileKeys, skip AI
+    // entirely. Only cold-start forms (zero taught maps) may call OpenRouter.
     let unknownFields = fields;
     let taughtSkipped = 0;
+    let formTaughtCount = 0;
     try {
       const { loadDoc, KEYS } = await import('../../db/store.js');
       const allMappings = await loadDoc(KEYS.MAPPINGS);
       const formKeyResolved = scope.form_key || '';
       let saved = (formKeyResolved && allMappings[formKeyResolved]) || {};
+      const countTaught = (entry) =>
+        Object.entries(entry || {}).filter(([k, v]) => !k.startsWith('_') && v?.profileKey).length;
+      formTaughtCount = countTaught(saved);
       // Hostname overlap fallback when exact formKey is empty (formKey drift).
-      if (!Object.values(saved).some((e) => e && typeof e === 'object' && e.profileKey)) {
+      if (formTaughtCount === 0) {
         const host = hostname || scope.portal_id || '';
         for (const entry of Object.values(allMappings || {})) {
           if (!entry || typeof entry !== 'object') continue;
           if (host && entry._meta?.hostname && entry._meta.hostname !== host) continue;
+          const n = countTaught(entry);
+          if (n > formTaughtCount) {
+            formTaughtCount = n;
+            saved = entry;
+          }
           for (const [lk, lv] of Object.entries(entry)) {
             if (lk.startsWith('_') || !lv?.profileKey) continue;
             if (!saved[lk]) saved = { ...saved, [lk]: lv };
           }
         }
+        formTaughtCount = countTaught(saved);
       }
+
+      if (formTaughtCount > 0) {
+        console.log(`[semantic-map] form has ${formTaughtCount} taught key(s) — AI skipped (mapping preference)`);
+        return res.json({
+          ok: true,
+          strategy: 'taught-form',
+          mappings: [],
+          excluded: [],
+          diagnostics: {
+            taught_form_keys: formTaughtCount,
+            latencyMs: Date.now() - startTime,
+            note: 'Form already has taught mappings — AI cold-start skipped',
+          },
+        });
+      }
+
       const labelKeys = (label) => {
         const raw = String(label || '').toLowerCase().trim();
         if (!raw) return [];
@@ -396,6 +423,7 @@ router.post('/semantic-map', authMiddleware, async (req, res) => {
         excluded: [],
         diagnostics: {
           taught_skipped: taughtSkipped,
+          taught_form_keys: formTaughtCount,
           latencyMs: Date.now() - startTime,
           note: 'All candidate fields already have taught mappings — AI skipped',
         },
