@@ -91,6 +91,7 @@ export default function Settings() {
 
         <PasswordPanel
           hasPassword={!!user?.hasPassword}
+          verifyStatus={vstatus}
           onChanged={() => {
             const u = useAuthStore.getState().user;
             if (u) setUser({ ...u, hasPassword: true });
@@ -154,31 +155,99 @@ export default function Settings() {
   );
 }
 
-function PasswordPanel({ hasPassword, onChanged }: { hasPassword: boolean; onChanged: () => void }) {
-  const [current, setCurrent] = useState('');
+function PasswordPanel({
+  hasPassword,
+  verifyStatus,
+  onChanged,
+}: {
+  hasPassword: boolean;
+  verifyStatus: VerifyStatus | null;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-5 pt-4 border-t border-[hsl(var(--pt-border-soft))]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex items-start gap-2">
+          <Key size={14} className="text-gray-400 mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-sm text-gray-200">Password</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {hasPassword
+                ? 'Set — used for email sign-in and CLI'
+                : 'Not set — create one to sign in with email or CLI'}
+            </p>
+          </div>
+        </div>
+        <button type="button" onClick={() => setOpen(true)} className="btn-primary text-xs shrink-0">
+          {hasPassword ? 'Update' : 'Create'}
+        </button>
+      </div>
+      {open && (
+        <PasswordModal
+          hasPassword={hasPassword}
+          verifyStatus={verifyStatus}
+          onClose={() => setOpen(false)}
+          onChanged={() => { onChanged(); setOpen(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PasswordModal({
+  hasPassword,
+  verifyStatus,
+  onClose,
+  onChanged,
+}: {
+  hasPassword: boolean;
+  verifyStatus: VerifyStatus | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const email = verifyStatus?.email || useAuthStore.getState().user?.email || '';
+  const phone = verifyStatus?.phone || '';
+  const [channel, setChannel] = useState<'email' | 'phone'>(email ? 'email' : 'phone');
+  const [otpSent, setOtpSent] = useState(false);
+  const [code, setCode] = useState('');
+  const [masked, setMasked] = useState('');
   const [next, setNext] = useState('');
   const [confirm, setConfirm] = useState('');
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
+  async function sendOtp() {
+    setErr('');
+    setBusy(true);
+    try {
+      const r = await api.post('/auth/password/request-otp', { channel }, { skipErrorToast: true } as any);
+      setOtpSent(true);
+      setMasked(r.data?.masked || '');
+      toast.success(channel === 'email' ? 'Code sent to your email' : 'Code sent to your WhatsApp');
+    } catch (e: any) {
+      setErr(e.response?.data?.error || 'Could not send code');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr('');
     if (next.length < 8) { setErr('Password must be at least 8 characters'); return; }
     if (next !== confirm) { setErr('Passwords do not match'); return; }
-    if (hasPassword && !current) { setErr('Current password is required'); return; }
+    if (hasPassword && !code.trim()) { setErr('Enter the verification code'); return; }
     setBusy(true);
     try {
       await api.patch('/auth/password', {
         password: next,
-        ...(hasPassword ? { currentPassword: current } : {}),
+        ...(hasPassword ? { channel, code: code.trim() } : {}),
       }, { skipErrorToast: true } as any);
-      setCurrent('');
-      setNext('');
-      setConfirm('');
-      onChanged();
       toast.success(hasPassword ? 'Password updated' : 'Password created — you can sign in with email now');
+      onChanged();
     } catch (e: any) {
       setErr(e.response?.data?.error || 'Could not save password');
     } finally {
@@ -187,68 +256,123 @@ function PasswordPanel({ hasPassword, onChanged }: { hasPassword: boolean; onCha
   }
 
   return (
-    <div className="mt-5 pt-4 border-t border-[hsl(var(--pt-border-soft))]">
-      <div className="flex items-center gap-2 mb-2">
-        <Key size={14} className="text-gray-400" />
-        <h4 className="text-xs font-medium text-gray-300 uppercase tracking-wide">Password</h4>
-      </div>
-      {!hasPassword ? (
-        <p className="text-xs text-gray-500 mb-3">
-          No password yet (Google sign-in). Create one to also sign in with email or use the CLI.
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-sm rounded-2xl border shadow-2xl p-6"
+        style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}
+      >
+        <h2 className="pt-display text-lg font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>
+          {hasPassword ? 'Update password' : 'Create password'}
+        </h2>
+        <p className="text-xs pt-muted mt-1 mb-4">
+          {hasPassword
+            ? 'We’ll send a one-time code to your email or WhatsApp to confirm it’s you.'
+            : 'Create a password so you can also sign in with email and use the CLI.'}
         </p>
-      ) : (
-        <p className="text-xs text-gray-500 mb-3">Change the password used for email sign-in and CLI login.</p>
-      )}
-      <form onSubmit={submit} className="space-y-2">
-        {hasPassword && (
+
+        <form onSubmit={submit} className="space-y-3">
+          {hasPassword && (
+            <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: 'hsl(var(--pt-border))' }}>
+              <p className="text-xs font-medium" style={{ color: 'hsl(var(--pt-ink))' }}>Verify with</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={!email}
+                  onClick={() => { setChannel('email'); setOtpSent(false); setCode(''); }}
+                  className={`flex-1 text-xs rounded-lg px-2 py-2 border ${channel === 'email' ? 'btn-primary border-transparent' : 'pt-chip'}`}
+                  title={email || 'No email on account'}
+                >
+                  Email{email ? '' : ' (missing)'}
+                </button>
+                <button
+                  type="button"
+                  disabled={!phone}
+                  onClick={() => { setChannel('phone'); setOtpSent(false); setCode(''); }}
+                  className={`flex-1 text-xs rounded-lg px-2 py-2 border ${channel === 'phone' ? 'btn-primary border-transparent' : 'pt-chip'}`}
+                  title={phone || 'No WhatsApp number on account'}
+                >
+                  WhatsApp{phone ? '' : ' (missing)'}
+                </button>
+              </div>
+              {!email && !phone && (
+                <p className="text-[11px]" style={{ color: 'hsl(0 65% 48%)' }}>
+                  Add an email or WhatsApp number under Contact verification first.
+                </p>
+              )}
+              {!otpSent ? (
+                <button
+                  type="button"
+                  onClick={sendOtp}
+                  disabled={busy || (!email && !phone) || (channel === 'email' ? !email : !phone)}
+                  className="btn-primary text-xs w-full"
+                >
+                  {busy ? 'Sending…' : 'Send code'}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[11px] pt-muted">Code sent{masked ? ` to ${masked}` : ''}</p>
+                  <input
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    className="input-field text-sm"
+                    placeholder="6-digit code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                  />
+                  <button type="button" onClick={sendOtp} disabled={busy} className="pt-chip text-xs w-full">
+                    Resend code
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
-            <label className="text-xs pt-muted mb-1 block" htmlFor="pw-current">Current password</label>
+            <label className="text-xs pt-muted mb-1 block" htmlFor="pw-new">
+              {hasPassword ? 'New password' : 'Password'}
+            </label>
             <input
-              id="pw-current"
+              id="pw-new"
               type={show ? 'text' : 'password'}
-              autoComplete="current-password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
+              autoComplete="new-password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
               className="input-field text-sm"
-              placeholder="Current password"
+              placeholder="At least 8 characters"
             />
           </div>
-        )}
-        <div>
-          <label className="text-xs pt-muted mb-1 block" htmlFor="pw-new">
-            {hasPassword ? 'New password' : 'Password'}
+          <div>
+            <label className="text-xs pt-muted mb-1 block" htmlFor="pw-confirm">Confirm password</label>
+            <input
+              id="pw-confirm"
+              type={show ? 'text' : 'password'}
+              autoComplete="new-password"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className="input-field text-sm"
+              placeholder="Re-enter password"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+            <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+            Show passwords
           </label>
-          <input
-            id="pw-new"
-            type={show ? 'text' : 'password'}
-            autoComplete="new-password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-            className="input-field text-sm"
-            placeholder="At least 8 characters"
-          />
-        </div>
-        <div>
-          <label className="text-xs pt-muted mb-1 block" htmlFor="pw-confirm">Confirm password</label>
-          <input
-            id="pw-confirm"
-            type={show ? 'text' : 'password'}
-            autoComplete="new-password"
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            className="input-field text-sm"
-            placeholder="Re-enter password"
-          />
-        </div>
-        <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
-          <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
-          Show passwords
-        </label>
-        {err && <p className="text-[11px]" style={{ color: 'hsl(0 65% 48%)' }}>{err}</p>}
-        <button type="submit" disabled={busy} className="btn-primary text-xs">
-          {busy ? 'Saving…' : (hasPassword ? 'Update password' : 'Create password')}
-        </button>
-      </form>
+
+          {err && <p className="text-[11px]" style={{ color: 'hsl(0 65% 48%)' }}>{err}</p>}
+
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="pt-chip flex-1">Cancel</button>
+            <button
+              type="submit"
+              disabled={busy || (hasPassword && !otpSent)}
+              className="btn-primary text-xs flex-1"
+            >
+              {busy ? 'Saving…' : (hasPassword ? 'Update password' : 'Create password')}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

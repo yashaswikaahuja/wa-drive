@@ -258,10 +258,64 @@ router.get('/me', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+// Request OTP to update an existing password (email or WhatsApp/phone).
+router.post('/password/request-otp', authMiddleware, loginLimiter, async (req: any, res) => {
+  const channel = req.body?.channel;
+  if (channel !== 'email' && channel !== 'phone') {
+    return res.status(400).json({ error: 'channel must be email or phone' });
+  }
+  try {
+    const u = (await pool.query(
+      'SELECT id, email, phone, password_hash FROM users WHERE id = $1 AND deleted_at IS NULL',
+      [req.user.userId]
+    )).rows[0];
+    if (!u) return res.status(404).json({ error: 'User not found' });
+    if (!(u.password_hash && String(u.password_hash).length > 0)) {
+      return res.status(400).json({ error: 'No password set yet — create one without OTP' });
+    }
+    const contact = channel === 'email' ? u.email : u.phone;
+    if (!contact) {
+      return res.status(400).json({
+        error: channel === 'email'
+          ? 'No email on this account. Add one under Contact verification first.'
+          : 'No phone on this account. Add a WhatsApp number under Contact verification first.',
+      });
+    }
+    // Dedicated OTP channels so password-change codes don't collide with contact-verify OTPs.
+    const otpChannel = channel === 'email' ? 'pw_email' : 'pw_phone';
+    const ex = (await pool.query(
+      'SELECT last_sent_at FROM contact_otps WHERE user_id=$1 AND channel=$2',
+      [req.user.userId, otpChannel]
+    )).rows[0];
+    if (ex?.last_sent_at && Date.now() - new Date(ex.last_sent_at).getTime() < 30_000) {
+      return res.status(429).json({ error: 'Please wait a moment before requesting a new code' });
+    }
+    const code = genCode();
+    const expiresAt = new Date(Date.now() + OTP_TTL_MS);
+    await pool.query(
+      `INSERT INTO contact_otps (user_id, channel, code_hash, expires_at, attempts, last_sent_at)
+       VALUES ($1,$2,$3,$4,0,now())
+       ON CONFLICT (user_id, channel) DO UPDATE
+         SET code_hash=EXCLUDED.code_hash, expires_at=EXCLUDED.expires_at, attempts=0, last_sent_at=now()`,
+      [req.user.userId, otpChannel, hashCode(code), expiresAt]
+    );
+    if (channel === 'email') await sendEmailOtp(contact, code);
+    else await sendPhoneOtp(contact, code);
+    const masked = channel === 'email'
+      ? String(contact).replace(/(^.).*(@.*$)/, '$1***$2')
+      : String(contact).replace(/.(?=.{4})/g, '*');
+    res.json({ ok: true, channel, masked });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Self-service create/change password (Google accounts start with empty password_hash).
+// Create: password only. Update: requires OTP sent via /password/request-otp.
 router.patch('/password', authMiddleware, loginLimiter, async (req: any, res) => {
   const password = req.body?.password != null ? String(req.body.password) : '';
-  const currentPassword = req.body?.currentPassword != null ? String(req.body.currentPassword) : '';
+  const channel = req.body?.channel;
+  const code = req.body?.code != null ? String(req.body.code).trim() : '';
   if (!password || password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
@@ -274,11 +328,29 @@ router.patch('/password', authMiddleware, loginLimiter, async (req: any, res) =>
 
     const hasPassword = !!(row.password_hash && String(row.password_hash).length > 0);
     if (hasPassword) {
-      if (!currentPassword) {
-        return res.status(400).json({ error: 'Current password is required' });
+      if (channel !== 'email' && channel !== 'phone') {
+        return res.status(400).json({ error: 'Choose email or WhatsApp to receive a verification code' });
       }
-      const ok = await bcrypt.compare(currentPassword, row.password_hash);
-      if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+      if (!code) return res.status(400).json({ error: 'Verification code is required' });
+      const otpChannel = channel === 'email' ? 'pw_email' : 'pw_phone';
+      const otp = (await pool.query(
+        'SELECT code_hash, expires_at, attempts FROM contact_otps WHERE user_id=$1 AND channel=$2',
+        [req.user.userId, otpChannel]
+      )).rows[0];
+      if (!otp) return res.status(400).json({ error: 'Request a verification code first' });
+      if (new Date(otp.expires_at).getTime() < Date.now()) {
+        await pool.query('DELETE FROM contact_otps WHERE user_id=$1 AND channel=$2', [req.user.userId, otpChannel]);
+        return res.status(410).json({ error: 'Code expired — request a new one' });
+      }
+      if (otp.attempts >= 5) {
+        await pool.query('DELETE FROM contact_otps WHERE user_id=$1 AND channel=$2', [req.user.userId, otpChannel]);
+        return res.status(429).json({ error: 'Too many attempts — request a new code' });
+      }
+      if (hashCode(code) !== otp.code_hash) {
+        await pool.query('UPDATE contact_otps SET attempts=attempts+1 WHERE user_id=$1 AND channel=$2', [req.user.userId, otpChannel]);
+        return res.status(401).json({ error: 'Incorrect verification code' });
+      }
+      await pool.query('DELETE FROM contact_otps WHERE user_id=$1 AND channel=$2', [req.user.userId, otpChannel]);
     }
 
     const hash = await bcrypt.hash(password, 12);
@@ -289,7 +361,7 @@ router.patch('/password', authMiddleware, loginLimiter, async (req: any, res) =>
       hasPassword ? 'password_change' : 'password_set',
       'user',
       row.id,
-      null
+      hasPassword ? { channel } : null
     );
     res.json({ ok: true, has_password: true });
   } catch (e: any) {
