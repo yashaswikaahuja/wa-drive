@@ -64,7 +64,14 @@ export default function App() {
         if (!alive) return;
         const u = r.data;
         if (u?.status && u.status !== 'active') { logout(); return; }
-        setUser({ id: u.id, workspaceId: u.workspace_id, name: u.name, email: u.email, role: u.role });
+        setUser({
+          id: u.id,
+          workspaceId: u.workspace_id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          hasPassword: !!u.has_password,
+        });
       })
       .catch(() => { /* interceptor handles 401; ignore transient/offline errors */ });
     return () => { alive = false; };

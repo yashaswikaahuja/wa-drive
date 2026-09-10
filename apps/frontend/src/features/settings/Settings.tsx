@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone, PencilSimple } from '@phosphor-icons/react';
+import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone, PencilSimple, Key } from '@phosphor-icons/react';
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
 import PageHeader from '../../shared/PageHeader';
 import { VerifyModal, type VerifyStatus, type Channel } from '../../shared/VerifyBanner';
+import { toast } from '../../shared/toast';
 
 export default function Settings() {
-  const { user, logout } = useAuthStore();
+  const { user, logout, setUser } = useAuthStore();
   const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('loading');
   const [vstatus, setVstatus] = useState<VerifyStatus | null>(null);
   const [verifyChannel, setVerifyChannel] = useState<Channel | null>(null);
@@ -15,6 +16,24 @@ export default function Settings() {
     api.get('/auth/verify-status', { skipErrorToast: true } as any).then(r => setVstatus(r.data)).catch(() => setVstatus(null));
   }, []);
   useEffect(() => { loadVerify(); }, [loadVerify]);
+
+  // Refresh hasPassword from /auth/me (Google login responses omit it).
+  useEffect(() => {
+    api.get('/auth/me', { skipErrorToast: true } as any).then((r) => {
+      const u = r.data;
+      const cur = useAuthStore.getState().user;
+      if (!cur || !u) return;
+      setUser({
+        ...cur,
+        id: u.id || cur.id,
+        workspaceId: u.workspace_id || cur.workspaceId,
+        name: u.name ?? cur.name,
+        email: u.email ?? cur.email,
+        role: u.role ?? cur.role,
+        hasPassword: !!u.has_password,
+      });
+    }).catch(() => {});
+  }, [setUser]);
 
   const onContactSaved = useCallback((channel: Channel, value: string) => {
     loadVerify();
@@ -69,6 +88,15 @@ export default function Settings() {
           <div className="flex justify-between"><span className="text-gray-500">Email</span><span className="text-gray-200">{user?.email}</span></div>
           <div className="flex justify-between"><span className="text-gray-500">Role</span><span className="badge badge-info">{user?.role}</span></div>
         </div>
+
+        <PasswordPanel
+          hasPassword={!!user?.hasPassword}
+          onChanged={() => {
+            const u = useAuthStore.getState().user;
+            if (u) setUser({ ...u, hasPassword: true });
+          }}
+        />
+
         <button onClick={logout} className="mt-4 btn-ghost text-red-400 hover:text-red-300 flex items-center gap-2 px-0">
           <SignOut size={14} /> Sign out
         </button>
@@ -122,6 +150,105 @@ export default function Settings() {
       {verifyChannel && vstatus && (
         <VerifyModal pending={[verifyChannel]} status={vstatus} onClose={() => setVerifyChannel(null)} onChanged={loadVerify} />
       )}
+    </div>
+  );
+}
+
+function PasswordPanel({ hasPassword, onChanged }: { hasPassword: boolean; onChanged: () => void }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr('');
+    if (next.length < 8) { setErr('Password must be at least 8 characters'); return; }
+    if (next !== confirm) { setErr('Passwords do not match'); return; }
+    if (hasPassword && !current) { setErr('Current password is required'); return; }
+    setBusy(true);
+    try {
+      await api.patch('/auth/password', {
+        password: next,
+        ...(hasPassword ? { currentPassword: current } : {}),
+      }, { skipErrorToast: true } as any);
+      setCurrent('');
+      setNext('');
+      setConfirm('');
+      onChanged();
+      toast.success(hasPassword ? 'Password updated' : 'Password created — you can sign in with email now');
+    } catch (e: any) {
+      setErr(e.response?.data?.error || 'Could not save password');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-5 pt-4 border-t border-[hsl(var(--pt-border-soft))]">
+      <div className="flex items-center gap-2 mb-2">
+        <Key size={14} className="text-gray-400" />
+        <h4 className="text-xs font-medium text-gray-300 uppercase tracking-wide">Password</h4>
+      </div>
+      {!hasPassword ? (
+        <p className="text-xs text-gray-500 mb-3">
+          No password yet (Google sign-in). Create one to also sign in with email or use the CLI.
+        </p>
+      ) : (
+        <p className="text-xs text-gray-500 mb-3">Change the password used for email sign-in and CLI login.</p>
+      )}
+      <form onSubmit={submit} className="space-y-2">
+        {hasPassword && (
+          <div>
+            <label className="text-xs pt-muted mb-1 block" htmlFor="pw-current">Current password</label>
+            <input
+              id="pw-current"
+              type={show ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              className="input-field text-sm"
+              placeholder="Current password"
+            />
+          </div>
+        )}
+        <div>
+          <label className="text-xs pt-muted mb-1 block" htmlFor="pw-new">
+            {hasPassword ? 'New password' : 'Password'}
+          </label>
+          <input
+            id="pw-new"
+            type={show ? 'text' : 'password'}
+            autoComplete="new-password"
+            value={next}
+            onChange={(e) => setNext(e.target.value)}
+            className="input-field text-sm"
+            placeholder="At least 8 characters"
+          />
+        </div>
+        <div>
+          <label className="text-xs pt-muted mb-1 block" htmlFor="pw-confirm">Confirm password</label>
+          <input
+            id="pw-confirm"
+            type={show ? 'text' : 'password'}
+            autoComplete="new-password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            className="input-field text-sm"
+            placeholder="Re-enter password"
+          />
+        </div>
+        <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+          <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} />
+          Show passwords
+        </label>
+        {err && <p className="text-[11px]" style={{ color: 'hsl(0 65% 48%)' }}>{err}</p>}
+        <button type="submit" disabled={busy} className="btn-primary text-xs">
+          {busy ? 'Saving…' : (hasPassword ? 'Update password' : 'Create password')}
+        </button>
+      </form>
     </div>
   );
 }

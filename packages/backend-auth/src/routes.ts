@@ -179,6 +179,12 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (!result.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
     const user = result.rows[0];
     if (user.status !== 'active') return res.status(403).json({ error: 'Account not active' });
+    if (!user.password_hash) {
+      return res.status(401).json({
+        error: 'This account uses Google sign-in. Set a password in Settings, then try again.',
+        code: 'password_not_set',
+      });
+    }
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
       await auditLog(user.workspace_id, user.id, 'login_failed', 'user', user.id, { field: useEmail ? 'email' : 'phone', value });
@@ -240,10 +246,55 @@ router.post('/logout', authMiddleware, async (req: any, res) => {
 
 router.get('/me', authMiddleware, async (req: any, res) => {
   try {
-    const result = await pool.query("SELECT id, workspace_id, email, phone, name, role, status, created_at FROM users WHERE id = $1", [req.user.userId]);
+    const result = await pool.query(
+      "SELECT id, workspace_id, email, phone, name, role, status, created_at, password_hash FROM users WHERE id = $1",
+      [req.user.userId]
+    );
     if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
-    res.json(result.rows[0]);
+    const row = result.rows[0];
+    const has_password = !!(row.password_hash && String(row.password_hash).length > 0);
+    delete row.password_hash;
+    res.json({ ...row, has_password });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Self-service create/change password (Google accounts start with empty password_hash).
+router.patch('/password', authMiddleware, loginLimiter, async (req: any, res) => {
+  const password = req.body?.password != null ? String(req.body.password) : '';
+  const currentPassword = req.body?.currentPassword != null ? String(req.body.currentPassword) : '';
+  if (!password || password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  try {
+    const row = (await pool.query(
+      'SELECT id, workspace_id, password_hash FROM users WHERE id = $1 AND deleted_at IS NULL',
+      [req.user.userId]
+    )).rows[0];
+    if (!row) return res.status(404).json({ error: 'User not found' });
+
+    const hasPassword = !!(row.password_hash && String(row.password_hash).length > 0);
+    if (hasPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: 'Current password is required' });
+      }
+      const ok = await bcrypt.compare(currentPassword, row.password_hash);
+      if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    await pool.query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [hash, row.id]);
+    await auditLog(
+      row.workspace_id,
+      req.user.userId,
+      hasPassword ? 'password_change' : 'password_set',
+      'user',
+      row.id,
+      null
+    );
+    res.json({ ok: true, has_password: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Caller's café (workspace) location. GET to check, PATCH to set — used to prompt existing
