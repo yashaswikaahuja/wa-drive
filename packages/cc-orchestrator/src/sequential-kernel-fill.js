@@ -145,27 +145,18 @@
       console.warn('[CC] saved-relation materialize skipped:', relErr && relErr.message ? relErr.message : relErr);
     }
 
-    // ── Stage 2b: AI cold-start ONLY when this form has zero taught maps ─────
-    // GCP behavior: if form_mappings already exist for the form, fill from those
-    // (+ conditionals / split-dob / fuzzyMatch). Do NOT call OpenRouter again.
+    // ── Stage 2b: AI cold-start for NEW forms / websites ───────────────────
+    // Known form (exact formKey has taught maps) → maps + fuzzy only, no AI.
+    // New website / new formKey → AI for fields not already covered by a taught key.
     // #302 still applies: planned value requires a successful relation, never a raw dump.
     try {
       var planned = wssPlan.mapping || {};
       var covered = {};
       Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
       var savedMaps = wssPlan.savedMappings || {};
-      function countTaughtProfileKeys(maps) {
-        var n = 0;
-        if (!maps || typeof maps !== 'object') return 0;
-        Object.keys(maps).forEach(function (k) {
-          if (k.charAt(0) === '_') return;
-          if (maps[k] && maps[k].profileKey) n++;
-        });
-        return n;
-      }
-      var formTaughtCount = typeof wssPlan.taughtMappedCount === 'number'
-        ? wssPlan.taughtMappedCount
-        : countTaughtProfileKeys(savedMaps);
+      var exactTaughtCount = typeof wssPlan.exactTaughtCount === 'number' ? wssPlan.exactTaughtCount : 0;
+      var preferMapsOnly = wssPlan.preferMapsOnly === true
+        || (wssPlan.mappingSource === 'exact' && exactTaughtCount > 0);
       function labelKeys(label) {
         var raw = String(label || '').toLowerCase().trim();
         if (!raw) return [];
@@ -185,15 +176,16 @@
         return false;
       }
 
-      // Form already trained → never call AI. Residuals go to fuzzyMatch / skip.
-      if (formTaughtCount > 0) {
+      // Exact formKey already trained → never call AI. Residuals → fuzzy/skip.
+      if (preferMapsOnly) {
         var residual = extracted.fields.filter(function (f) { return !covered[f.selector]; }).length;
-        console.log('[CC] prefer taught mappings: form has', formTaughtCount, 'taught key(s); skipping AI (', residual, 'residual field(s) → fuzzy/skip)');
-        progress('Using taught mappings (' + formTaughtCount + ')…', 58);
+        console.log('[CC] prefer taught mappings: exact form trained (', exactTaughtCount || 'n', 'keys); skipping AI (', residual, 'residual → fuzzy/skip)');
+        progress('Using taught mappings…', 58);
       } else {
+      // New website / new form (or only soft label-overlap) → AI for unknowns.
       var aiCandidates = extracted.fields.filter(function (f) {
         if (covered[f.selector]) return false;
-        if (hasTaughtMapping(f)) return false; // taught map wins — never re-AI
+        if (hasTaughtMapping(f)) return false; // reused taught label still wins
         return true;
       });
       var taughtSkipped = extracted.fields.filter(function (f) {

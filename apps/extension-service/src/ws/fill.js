@@ -62,8 +62,16 @@ function countMapped(saved) {
  */
 function resolveSavedMappings(allMappings, formKey, hostname, fields) {
   const exact = (formKey && allMappings[formKey]) || {};
-  if (countMapped(exact) > 0) {
-    return { saved: exact, via: 'exact', resolvedFormKey: formKey };
+  const exactTaught = countMapped(exact);
+  if (exactTaught > 0) {
+    return {
+      saved: exact,
+      via: 'exact',
+      resolvedFormKey: formKey,
+      exactTaughtCount: exactTaught,
+      // Exact formKey trained → fill from maps only (no AI cold-start).
+      preferMapsOnly: true,
+    };
   }
 
   const fieldKeySet = new Set();
@@ -72,7 +80,13 @@ function resolveSavedMappings(allMappings, formKey, hostname, fields) {
     for (const k of labelKeys(f?.name)) fieldKeySet.add(k);
   }
   if (fieldKeySet.size === 0) {
-    return { saved: exact, via: 'exact-empty', resolvedFormKey: formKey };
+    return {
+      saved: exact,
+      via: 'exact-empty',
+      resolvedFormKey: formKey,
+      exactTaughtCount: 0,
+      preferMapsOnly: false,
+    };
   }
 
   let best = null;
@@ -92,13 +106,23 @@ function resolveSavedMappings(allMappings, formKey, hostname, fields) {
     }
   }
   if (best && bestScore > 0) {
+    // Soft reuse from a sibling form on the same host — help planning, but still
+    // allow AI for truly new fields (new page / new website section).
     return {
       saved: best.entry,
       via: `label-overlap:${best.fk}:${bestScore}`,
       resolvedFormKey: best.fk,
+      exactTaughtCount: 0,
+      preferMapsOnly: false,
     };
   }
-  return { saved: exact, via: 'exact-empty', resolvedFormKey: formKey };
+  return {
+    saved: exact,
+    via: 'exact-empty',
+    resolvedFormKey: formKey,
+    exactTaughtCount: 0,
+    preferMapsOnly: false,
+  };
 }
 
 /** Profile key aliases when taught key ≠ profile atom key (mobile↔phone, etc.). */
@@ -405,14 +429,18 @@ export async function buildFillMapping(msg, workspaceId) {
   }
 
   const plannedCount = Object.keys(mapping).length;
+  const exactTaughtCount = resolved.exactTaughtCount || 0;
+  const preferMapsOnly = !!resolved.preferMapsOnly;
   console.log(
-    `[wss-fill] formKey=${formKey || '-'} via=${resolved.via} taught=${countMapped(saved)} planned=${plannedCount}/${fields.length}`
+    `[wss-fill] formKey=${formKey || '-'} via=${resolved.via} taught=${countMapped(saved)} exactTaught=${exactTaughtCount} mapsOnly=${preferMapsOnly} planned=${plannedCount}/${fields.length}`
   );
 
   return {
     formKey,
     resolvedFormKey: resolved.resolvedFormKey || formKey,
     mappingSource: resolved.via,
+    preferMapsOnly,
+    exactTaughtCount,
     hostname,
     workspaceId,
     mapping,
