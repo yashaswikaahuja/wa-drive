@@ -289,6 +289,28 @@ function lookupSavedEntry(savedMap, field) {
   return null;
 }
 
+/** Travel/journey fields must never receive identity atoms (#308). */
+function isTravelJourneyField(field) {
+  const raw = [field?.label, field?.name, field?.id, field?.placeholder, field?.selector]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (!raw.trim()) return false;
+  if (/police[_\s-]?station|\bthana\b/.test(raw)) return false;
+  return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota)\b/.test(raw)
+    || /\b(from|to)[_\s-]?station\b/.test(raw)
+    || /\bstation\b/.test(raw);
+}
+
+const IDENTITY_PROFILE_KEYS = new Set([
+  'dob', 'date_of_birth', 'dob__day', 'dob__month', 'dob__year',
+  'name', 'first_name', 'last_name', 'middle_name', 'full_name',
+  'father_name', 'mother_name', 'husband_name', 'guardian_name',
+  'aadhaar', 'aadhaar_number', 'aadhar', 'pan', 'pan_number',
+  'voter_id', 'passport', 'gender', 'sex', 'email', 'email_id',
+  'phone', 'mobile', 'mobile_number',
+]);
+
 export function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
   if (!savedMap || typeof savedMap !== 'object') return 0;
   let added = 0;
@@ -300,6 +322,8 @@ export function materializeSavedRelations(fields, profile, savedMap, mapping, fi
     if (/radio|checkbox/i.test(String(f.type || ''))) continue;
     const entry = lookupSavedEntry(savedMap, f);
     if (!entry?.profileKey) continue;
+    // Never materialize dob/name/IDs into From/To/station (#308 IRCTC).
+    if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS.has(String(entry.profileKey))) continue;
     const relation = normalizeRelation(entry, f);
     const value = applyRelation(relation, profile, entry.profileKey, f);
     if (value == null) continue;

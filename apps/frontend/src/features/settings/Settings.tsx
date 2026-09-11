@@ -111,10 +111,12 @@ export default function Settings() {
         <div className="space-y-4">
           <ContactRow channel="email" Icon={EnvelopeSimple} label="Email"
             value={vstatus?.email ?? user?.email ?? null} verified={!!vstatus?.emailVerified}
+            statusKnown={vstatus !== null}
             canVerify={!!(vstatus?.canVerifyEmail && vstatus?.email && !vstatus?.emailVerified)}
             onVerify={() => setVerifyChannel('email')} onSaved={onContactSaved} />
           <ContactRow channel="phone" Icon={Phone} label="Phone"
             value={vstatus?.phone ?? null} verified={!!vstatus?.phoneVerified}
+            statusKnown={vstatus !== null}
             canVerify={!!(vstatus?.canVerifyPhone && vstatus?.phone && !vstatus?.phoneVerified)}
             onVerify={() => setVerifyChannel('phone')} onSaved={onContactSaved} />
         </div>
@@ -377,12 +379,14 @@ function PasswordModal({
   );
 }
 
-function ContactRow({ channel, Icon, label, value, verified, canVerify, onVerify, onSaved }: {
+function ContactRow({ channel, Icon, label, value, verified, statusKnown, canVerify, onVerify, onSaved }: {
   channel: Channel;
   Icon: React.ComponentType<any>;
   label: string;
   value: string | null;
   verified: boolean;
+  /** False while /auth/verify-status is still loading — avoid "Not verified" flash (#307). */
+  statusKnown: boolean;
   canVerify: boolean;
   onVerify: () => void;
   onSaved: (channel: Channel, value: string) => void;
@@ -424,7 +428,7 @@ function ContactRow({ channel, Icon, label, value, verified, canVerify, onVerify
       </div>
       {!editing && (
         <div className="flex items-center gap-2 shrink-0">
-          {value && (verified ? (
+          {value && statusKnown && (verified ? (
             <span className="badge badge-success flex items-center gap-1"><SealCheck size={12} weight="fill" /> Verified</span>
           ) : canVerify ? (
             <button onClick={onVerify} className="btn-primary text-xs">Verify</button>

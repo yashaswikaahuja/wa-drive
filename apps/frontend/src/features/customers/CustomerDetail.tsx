@@ -58,15 +58,42 @@ export default function CustomerDetail() {
   const [showImport, setShowImport] = useState(false);
   const [importToken, setImportToken] = useState('');
   const [importMsg, setImportMsg] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  /** Digits-only phone compare so +91 / 0 / spaces still match (#305). */
+  const phoneDigits = (p: string) => String(p || '').replace(/\D/g, '');
+  const phonesMatch = (a: string, b: string) => {
+    const da = phoneDigits(a);
+    const db = phoneDigits(b);
+    if (!da || !db) return false;
+    if (da === db) return true;
+    // Last-10 match (India mobile without country code).
+    return da.slice(-10) === db.slice(-10) && da.slice(-10).length === 10;
+  };
 
   const loadHousehold = async () => {
-    const r = await api.get('/customers/households');
-    const h = r.data.find((x: Household) => x.phone === phone);
-    setHousehold(h || null);
-    if (h && h.persons.length > 0 && !selectedPerson) setSelectedPerson(h.persons[0].id);
+    setLoading(true);
+    setNotFound(false);
+    try {
+      const r = await api.get('/customers/households');
+      const h = (r.data || []).find((x: Household) => phonesMatch(x.phone, phone)) || null;
+      setHousehold(h);
+      setNotFound(!h);
+      if (h && h.persons.length > 0 && !selectedPerson) setSelectedPerson(h.persons[0].id);
+    } catch (e: any) {
+      setHousehold(null);
+      setNotFound(true);
+      setError(e?.response?.data?.error || e?.message || 'Could not load customer');
+    } finally {
+      setLoading(false);
+    }
   };
   const loadDocuments = async () => {
-    try { const r = await api.get('/drive/files/ws'); setDocuments(r.data.filter((d: any) => d.customerId === phone)); } catch {}
+    try {
+      const r = await api.get('/drive/files/ws');
+      setDocuments(r.data.filter((d: any) => phonesMatch(d.customerId, phone)));
+    } catch {}
   };
   const loadPerson = async (personId: string) => {
     try { const r = await api.get(`/customers/persons/${personId}`); setPersonDetail(r.data); } catch {}
@@ -172,11 +199,28 @@ export default function CustomerDetail() {
     finally { setSaving(false); }
   };
 
-  if (!household) return (
+  if (loading && !household) return (
     <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse">
       <div className="h-6 w-24 rounded bg-white/[0.03]" />
       <div className="h-16 rounded-2xl bg-white/[0.03]" />
       <div className="h-40 rounded-2xl bg-white/[0.03]" />
+    </div>
+  );
+
+  if (notFound || !household) return (
+    <div className="max-w-4xl mx-auto pt-4">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0 text-gray-400">
+        <ArrowLeft size={15} /> Customers
+      </button>
+      <div className="rounded-2xl border border-[hsl(var(--pt-border))] p-6 text-center">
+        <p className="text-sm text-gray-200 mb-1">Customer not found</p>
+        <p className="text-xs text-gray-500 mb-4">
+          No household matches <span className="font-mono text-gray-400">{phone}</span>.
+          It may use a different phone format, or the profile was never created.
+        </p>
+        {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+        <button onClick={() => navigate('/app/customers')} className="btn-primary text-xs">Back to Customers</button>
+      </div>
     </div>
   );
 

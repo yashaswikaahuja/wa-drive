@@ -3,6 +3,7 @@
  */
 import type { FormField, Mapping, MatchHelpers, NameParts, Profile } from './types.ts';
 import { parseDobParts } from './split-dob.js';
+import { isTravelJourneyField } from './field-ident.ts';
 
 export function tryMatchNameParts(
   field: FormField,
@@ -40,6 +41,8 @@ export function tryMatchDob(
   mapping: Mapping,
 ): boolean {
   if (!profile.dob) return false;
+  // Never dump DOB into From/To/station/journey fields (#308 IRCTC).
+  if (isTravelJourneyField(field)) return false;
   // Support DD/MM/YYYY and YYYY-MM-DD (do not blindly split on '/')
   const dp = parseDobParts(profile.dob);
   if (!dp) return false;
@@ -140,6 +143,8 @@ export function tryMatch(
   helpers: MatchHelpers,
   mapping: Mapping,
 ): boolean {
+  // Travel/journey widgets: leave blank — never bind identity atoms (#308).
+  if (isTravelJourneyField(field)) return true;
   if (ident.includes('hindi') || ident.includes('_hindi') || (field.label||'').includes('हिंदी') || (field.label||'').includes('(Hindi)')) return true;
   const isChangedName = ident.includes('new_name') || ident.includes('changed_name') || ident.includes('newname') || ident.includes('changedname') || (field.label||'').toLowerCase().includes('new name') || (field.label||'').toLowerCase().includes('changed name');
   if (isChangedName && !profile.changed_name) return true;

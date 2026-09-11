@@ -220,12 +220,23 @@
           var flatProf = extracted.profile || {};
           if (!wssPlan.mapping) wssPlan.mapping = {};
           if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
+          var travelRe = /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota|station)\b/i;
+          var policeRe = /police[_\s-]?station|\bthana\b/i;
+          var identityKeys = {
+            dob: 1, date_of_birth: 1, dob__day: 1, dob__month: 1, dob__year: 1,
+            name: 1, first_name: 1, last_name: 1, middle_name: 1, full_name: 1,
+            father_name: 1, mother_name: 1, aadhaar: 1, aadhaar_number: 1, aadhar: 1,
+            pan: 1, pan_number: 1, gender: 1, sex: 1, email: 1, phone: 1, mobile: 1, mobile_number: 1,
+          };
           for (var ai = 0; ai < aiMaps.length; ai++) {
             var am = aiMaps[ai];
             if (!am || !am.selector || !am.profile_key) continue;
             if (am.disposition === 'reject') continue;
             if (wssPlan.mapping[am.selector]) continue;
             var fieldMeta = aiCandidates.find(function (f) { return f.selector === am.selector; }) || {};
+            // #308: never write identity atoms into From/To/station/journey fields.
+            var travelBlob = [fieldMeta.label, fieldMeta.name, fieldMeta.id, fieldMeta.placeholder].filter(Boolean).join(' ');
+            if (travelRe.test(travelBlob) && !policeRe.test(travelBlob) && identityKeys[String(am.profile_key)]) continue;
             // #302: never raw-dump a compound atom onto a part-looking field.
             // Prefer explicit AI projection keys (dob__day) or induce identity only when safe.
             var aiKey = am.profile_key;

@@ -4,6 +4,9 @@ let selectedProfile = null;
 /** Phase 4.1: legacy Agent permanently disabled. Server-driven CcFillOrchestrator is the only fill path. */
 let allowLegacyClientFill = false;
 let _extBuildInfo = null;
+/** Tab id / host of the last Fill Form run — clear stale summary on tab or site switch (#310). */
+let _lastFillTabId = null;
+let _lastFillHost = null;
 
 const profilesEl = document.getElementById('profiles');
 const searchEl = document.getElementById('search');
@@ -156,9 +159,30 @@ const KNOWN_SITES = {
   'digilocker.gov.in': { icon: '📁', name: 'DigiLocker' },
 };
 
+/** Clear stale fill summary when the active tab/site changes (#310). */
+function clearStaleFillSummary(activeTabId, activeHost) {
+  if (!_lastFillTabId && !_lastFillHost) return;
+  const sameTab = activeTabId && activeTabId === _lastFillTabId;
+  const sameHost = activeHost && _lastFillHost && activeHost === _lastFillHost;
+  if (sameTab && sameHost) return;
+  _lastFillTabId = null;
+  _lastFillHost = null;
+  window._lastFilledRecords = [];
+  if (resultsEl) resultsEl.style.display = 'none';
+  if (typeof undoBtn !== 'undefined' && undoBtn) undoBtn.style.display = 'none';
+  const detailEl = document.getElementById('results-detail');
+  if (detailEl) { detailEl.innerHTML = ''; detailEl.style.display = 'none'; }
+  const filledEl = document.getElementById('results-filled');
+  if (filledEl) { filledEl.innerHTML = ''; filledEl.style.display = 'none'; }
+}
+
 async function detectSite() {
   try {
     const tab = await getActivePageTab();
+    let host = null;
+    try { if (tab?.url) host = new URL(tab.url).hostname.replace(/^www\./, ''); } catch {}
+    // Hide previous site's filled/skipped/failed when switching tabs/sites (#310).
+    clearStaleFillSummary(tab?.id || null, host);
     if (!tab?.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
       siteIcon.textContent = '🌐';
       siteName.textContent = 'No page detected';
@@ -562,7 +586,6 @@ async function loadProfilesHttps(data) {
 searchEl.addEventListener('input', () => { focusIdx = -1; renderProfiles(searchEl.value); });
 
 // Fill form
-let _lastFillTabId = null;
 const undoBtn = document.getElementById('undo-btn');
 
 // Required fields for govt forms
@@ -609,6 +632,7 @@ fillBtn.addEventListener('click', async () => {
       showStatus('Open a form page first', CC.danger); hideProgress(); return;
     }
     _lastFillTabId = tab.id;
+    try { _lastFillHost = new URL(tab.url).hostname.replace(/^www\./, ''); } catch { _lastFillHost = null; }
 
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },

@@ -172,6 +172,7 @@ export default function WhatsApp() {
   const [reconnecting, setReconnecting] = useState(false);
   const [qrExpired, setQrExpired] = useState(false);
   const qrStartRef = useRef<number | null>(null);
+  const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const QR_TIMEOUT_MS = 120_000; // 2 minutes
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
@@ -240,22 +241,29 @@ export default function WhatsApp() {
     socketRef.current = socket;
     // ── QR delivery via HTTP polling (no Socket.IO) ──
     // Polls /whatsapp/status every 3s. Stops when connected. Resumes if disconnected.
+    // #306: never restart polling after unmount (mounted flag).
+    let mounted = true;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    };
     const pollStatus = async () => {
+      if (!mounted) return;
       try {
         const r = await api.get('/whatsapp/status');
+        if (!mounted) return;
         if (r.data.connected) {
           setConnected(true); setQrCode(null); setReconnecting(false); setQrExpired(false);
           qrStartRef.current = null;
           localStorage.setItem('cc-wa-connected', 'true');
-          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          stopPolling();
         } else {
           if (r.data.qr) {
             // Track when QR first appeared; expire after 2 min
             if (!qrStartRef.current) qrStartRef.current = Date.now();
             if (Date.now() - qrStartRef.current > QR_TIMEOUT_MS) {
               setQrExpired(true);
-              if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+              stopPolling();
             } else {
               setQrCode(r.data.qr);
             }
@@ -267,7 +275,7 @@ export default function WhatsApp() {
       }
     };
     const startPolling = () => {
-      if (pollTimer) return;
+      if (!mounted || pollTimer) return;
       pollStatus();
       pollTimer = setInterval(pollStatus, 3000);
     };
@@ -275,16 +283,18 @@ export default function WhatsApp() {
     startPolling();
     // Connection events still come via socket (single emit, low cost) — these toggle polling
     socket.on('connection:status', (data: any) => {
+      if (!mounted) return;
       if (data.connected) {
         setConnected(true); setQrCode(null); setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
-        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        stopPolling();
       } else {
-        // Resumed disconnect → restart polling for fresh QR
+        // Resumed disconnect → restart polling for fresh QR (only while mounted)
         startPolling();
       }
     });
     socket.on('new_whatsapp_file', (file: any) => {
+      if (!mounted) return;
       const phone = file.phoneNumber || file.customerId || 'unknown';
       const name = file.customerName || file.phoneNumber || 'Unknown';
       addMessage({ id: file.id || Date.now().toString(), phone, name, fileName: file.fileName,
@@ -300,8 +310,12 @@ export default function WhatsApp() {
     // Request notification permission
     if (Notification.permission === 'default') Notification.requestPermission();
     return () => {
+      mounted = false;
+      stopPolling();
+      if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+      socket.removeAllListeners();
       socket.disconnect();
-      if (pollTimer) clearInterval(pollTimer);
+      socketRef.current = null;
     };
   }, []);
 
@@ -338,18 +352,28 @@ export default function WhatsApp() {
     setReconnecting(true);
     setQrExpired(false);
     qrStartRef.current = null;
+    if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
     // Force start a new session — this generates a fresh QR
     await api.post('/whatsapp/connect').catch(() => {});
-    // Poll for QR (takes 3-10s for Baileys to generate)
+    // Poll for QR (takes 3-10s for Baileys to generate). Cleared on unmount (#306).
     let attempts = 0;
-    const poll = setInterval(async () => {
+    qrPollRef.current = setInterval(async () => {
       attempts++;
       try {
         const r = await api.get('/whatsapp/status');
-        if (r.data.connected) { clearInterval(poll); setConnected(true); setQrCode(null); setReconnecting(false); return; }
-        if (r.data.qr) { clearInterval(poll); setQrCode(r.data.qr); setReconnecting(false); qrStartRef.current = Date.now(); }
+        if (r.data.connected) {
+          if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+          setConnected(true); setQrCode(null); setReconnecting(false); return;
+        }
+        if (r.data.qr) {
+          if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+          setQrCode(r.data.qr); setReconnecting(false); qrStartRef.current = Date.now();
+        }
       } catch {}
-      if (attempts > 15) { clearInterval(poll); setReconnecting(false); }
+      if (attempts > 15) {
+        if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+        setReconnecting(false);
+      }
     }, 2000);
   }, []);
 

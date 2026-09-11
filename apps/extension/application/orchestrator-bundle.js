@@ -261,6 +261,22 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
     return null;
   }
 
+  function isTravelJourneyField(field) {
+    var raw = [field && field.label, field && field.name, field && field.id, field && field.placeholder, field && field.selector]
+      .filter(Boolean).join(' ').toLowerCase();
+    if (!raw.trim()) return false;
+    if (/police[_\s-]?station|\bthana\b/.test(raw)) return false;
+    return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota)\b/.test(raw)
+      || /\b(from|to)[_\s-]?station\b/.test(raw)
+      || /\bstation\b/.test(raw);
+  }
+  var IDENTITY_PROFILE_KEYS = {
+    dob: 1, date_of_birth: 1, dob__day: 1, dob__month: 1, dob__year: 1,
+    name: 1, first_name: 1, last_name: 1, middle_name: 1, full_name: 1,
+    father_name: 1, mother_name: 1, aadhaar: 1, aadhaar_number: 1, aadhar: 1,
+    pan: 1, pan_number: 1, gender: 1, sex: 1, email: 1, phone: 1, mobile: 1, mobile_number: 1,
+  };
+
   function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
     if (!savedMap || typeof savedMap !== 'object') return 0;
     var added = 0;
@@ -272,6 +288,8 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
       if (/radio|checkbox/i.test(String(f.type || ''))) continue;
       var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;
+      // Never materialize dob/name/IDs into From/To/station (#308).
+      if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS[String(entry.profileKey)]) continue;
       var relation = normalizeRelation(entry, f);
       var value = applyRelation(relation, profile, entry.profileKey, f);
       if (value == null) continue;
@@ -518,12 +536,23 @@ if (typeof module !== 'undefined') module.exports = (typeof globalThis !== 'unde
           var flatProf = extracted.profile || {};
           if (!wssPlan.mapping) wssPlan.mapping = {};
           if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
+          var travelRe = /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota|station)\b/i;
+          var policeRe = /police[_\s-]?station|\bthana\b/i;
+          var identityKeys = {
+            dob: 1, date_of_birth: 1, dob__day: 1, dob__month: 1, dob__year: 1,
+            name: 1, first_name: 1, last_name: 1, middle_name: 1, full_name: 1,
+            father_name: 1, mother_name: 1, aadhaar: 1, aadhaar_number: 1, aadhar: 1,
+            pan: 1, pan_number: 1, gender: 1, sex: 1, email: 1, phone: 1, mobile: 1, mobile_number: 1,
+          };
           for (var ai = 0; ai < aiMaps.length; ai++) {
             var am = aiMaps[ai];
             if (!am || !am.selector || !am.profile_key) continue;
             if (am.disposition === 'reject') continue;
             if (wssPlan.mapping[am.selector]) continue;
             var fieldMeta = aiCandidates.find(function (f) { return f.selector === am.selector; }) || {};
+            // #308: never write identity atoms into From/To/station/journey fields.
+            var travelBlob = [fieldMeta.label, fieldMeta.name, fieldMeta.id, fieldMeta.placeholder].filter(Boolean).join(' ');
+            if (travelRe.test(travelBlob) && !policeRe.test(travelBlob) && identityKeys[String(am.profile_key)]) continue;
             // #302: never raw-dump a compound atom onto a part-looking field.
             // Prefer explicit AI projection keys (dob__day) or induce identity only when safe.
             var aiKey = am.profile_key;

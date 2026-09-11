@@ -428,6 +428,36 @@ export async function buildFillMapping(msg, workspaceId) {
     console.log(`[wss-fill] applySplitDob mapped ${splitAdded} date-part field(s)`);
   }
 
+  // Scrub identity atoms that landed on travel/journey fields (#308).
+  const travelRe = /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota|station)\b/i;
+  const policeRe = /police[_\s-]?station|\bthana\b/i;
+  const identityKeys = new Set([
+    'dob', 'date_of_birth', 'dob__day', 'dob__month', 'dob__year',
+    'name', 'first_name', 'last_name', 'middle_name', 'full_name',
+    'father_name', 'mother_name', 'aadhaar', 'aadhaar_number', 'aadhar',
+    'pan', 'pan_number', 'gender', 'sex', 'email', 'phone', 'mobile', 'mobile_number',
+  ]);
+  const dateValRe = /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/;
+  let scrubbed = 0;
+  for (const f of fields) {
+    if (!f?.selector || !mapping[f.selector]) continue;
+    const blob = [f.label, f.name, f.id, f.placeholder].filter(Boolean).join(' ');
+    if (!travelRe.test(blob) || policeRe.test(blob)) continue;
+    const entry = mapping[f.selector];
+    const pk = entry?.profileKey || (entry?.matchBy === 'split-dob' ? 'dob' : null);
+    const looksDob = identityKeys.has(String(entry?.profileKey || ''))
+      || entry?.matchBy === 'split-dob'
+      || dateValRe.test(String(entry?.value || ''));
+    if (looksDob || identityKeys.has(String(pk || ''))) {
+      delete mapping[f.selector];
+      delete filledBySource[f.selector];
+      scrubbed++;
+    }
+  }
+  if (scrubbed > 0) {
+    console.log(`[wss-fill] scrubbed ${scrubbed} identity→travel mapping(s)`);
+  }
+
   const plannedCount = Object.keys(mapping).length;
   const exactTaughtCount = resolved.exactTaughtCount || 0;
   const preferMapsOnly = !!resolved.preferMapsOnly;

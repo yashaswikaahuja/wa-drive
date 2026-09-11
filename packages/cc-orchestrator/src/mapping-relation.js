@@ -188,6 +188,22 @@
     return null;
   }
 
+  function isTravelJourneyField(field) {
+    var raw = [field && field.label, field && field.name, field && field.id, field && field.placeholder, field && field.selector]
+      .filter(Boolean).join(' ').toLowerCase();
+    if (!raw.trim()) return false;
+    if (/police[_\s-]?station|\bthana\b/.test(raw)) return false;
+    return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota)\b/.test(raw)
+      || /\b(from|to)[_\s-]?station\b/.test(raw)
+      || /\bstation\b/.test(raw);
+  }
+  var IDENTITY_PROFILE_KEYS = {
+    dob: 1, date_of_birth: 1, dob__day: 1, dob__month: 1, dob__year: 1,
+    name: 1, first_name: 1, last_name: 1, middle_name: 1, full_name: 1,
+    father_name: 1, mother_name: 1, aadhaar: 1, aadhaar_number: 1, aadhar: 1,
+    pan: 1, pan_number: 1, gender: 1, sex: 1, email: 1, phone: 1, mobile: 1, mobile_number: 1,
+  };
+
   function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
     if (!savedMap || typeof savedMap !== 'object') return 0;
     var added = 0;
@@ -199,6 +215,8 @@
       if (/radio|checkbox/i.test(String(f.type || ''))) continue;
       var entry = lookupSavedEntry(savedMap, f);
       if (!entry || !entry.profileKey) continue;
+      // Never materialize dob/name/IDs into From/To/station (#308).
+      if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS[String(entry.profileKey)]) continue;
       var relation = normalizeRelation(entry, f);
       var value = applyRelation(relation, profile, entry.profileKey, f);
       if (value == null) continue;
