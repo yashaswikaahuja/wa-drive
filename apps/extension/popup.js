@@ -112,19 +112,32 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 // Side panel stays open across tab switches — always resolve the active *page* tab
-// (never chrome:// or the extension itself).
+// (never chrome:// or the extension itself). Prefer lastFocusedWindow: side panel
+// often makes currentWindow the wrong context.
 async function getActivePageTab() {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-  let tab = tabs[0];
-  if (!tab?.url || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
-    const allTabs = await chrome.tabs.query({ currentWindow: true });
-    tab = allTabs.find(t =>
-      t.url &&
-      !t.url.startsWith('chrome') &&
-      !t.url.startsWith('edge://') &&
-      !t.url.startsWith('about:') &&
-      !t.url.startsWith('devtools:')
-    ) || tab;
+  const isPageUrl = (u) =>
+    !!u &&
+    !u.startsWith('chrome-extension://') &&
+    !u.startsWith('chrome://') &&
+    !u.startsWith('edge://') &&
+    !u.startsWith('about:') &&
+    !u.startsWith('devtools:');
+
+  let tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  let tab = tabs.find((t) => isPageUrl(t.url)) || tabs[0];
+  if (!isPageUrl(tab?.url)) {
+    tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    tab = tabs.find((t) => isPageUrl(t.url)) || tabs[0];
+  }
+  if (!isPageUrl(tab?.url)) {
+    const allTabs = await chrome.tabs.query({ lastFocusedWindow: true });
+    tab = allTabs.find((t) => t.active && isPageUrl(t.url))
+      || allTabs.find((t) => isPageUrl(t.url))
+      || tab;
+  }
+  if (!isPageUrl(tab?.url)) {
+    const any = await chrome.tabs.query({});
+    tab = any.find((t) => t.active && isPageUrl(t.url)) || any.find((t) => isPageUrl(t.url)) || tab;
   }
   return tab || null;
 }
@@ -190,8 +203,10 @@ async function detectSite() {
       if (conf) conf.style.display = 'none';
       return;
     }
-    const url = new URL(tab.url);
-    const host = url.hostname.replace('www.', '');
+    // Reuse `host` from above — do not redeclare (SyntaxError broke auth + site detect).
+    if (!host) {
+      try { host = new URL(tab.url).hostname.replace(/^www\./, ''); } catch {}
+    }
     const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
     if (match) { siteIcon.textContent = match[1].icon; siteName.textContent = match[1].name + ' — ' + host; }
     else { siteIcon.textContent = '🌐'; siteName.textContent = host; }
