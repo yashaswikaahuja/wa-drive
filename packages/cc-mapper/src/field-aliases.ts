@@ -51,6 +51,16 @@ export const FIELD_ALIASES: AliasMap = {
   block:          ['block', 'block_name', 'taluka', 'tehsil', 'prakhnd', 'txt_block', 'ddl_block', 'प्रखंड'],
   house_no:       ['house_no', 'house_number', 'house', 'flat_no', 'door_no', 'txt_house'],
   street:         ['street', 'street_name', 'road', 'lane', 'txt_street'],
+  // Travel / journey (#312) — do not confuse with police_station
+  departure:      ['departure', 'depart', 'from', 'from_city', 'source', 'origin', 'boarding', 'leaving_from', 'start_city'],
+  arrival:        ['arrival', 'arrive', 'to', 'to_city', 'destination', 'going_to', 'end_city'],
+  from_station:   ['from_station', 'source_station', 'boarding_station', 'origin_station', 'from_stn'],
+  to_station:     ['to_station', 'destination_station', 'arrival_station', 'to_stn'],
+  journey_date:   ['journey_date', 'travel_date', 'departure_date', 'date_of_journey', 'doj', 'onward_date', 'going_date'],
+  return_date:    ['return_date', 'return_journey_date', 'coming_date'],
+  travel_class:   ['travel_class', 'class', 'coach_class', 'reservation_class'],
+  quota:          ['quota', 'reservation_quota'],
+  passenger_count:['passenger_count', 'passengers', 'no_of_passengers', 'travellers', 'adults'],
 };
 
 /** Returns FIELD_ALIASES merged with server-synced mappings. */

@@ -437,6 +437,11 @@ export async function buildFillMapping(msg, workspaceId) {
     'father_name', 'mother_name', 'aadhaar', 'aadhaar_number', 'aadhar',
     'pan', 'pan_number', 'gender', 'sex', 'email', 'phone', 'mobile', 'mobile_number',
   ]);
+  // Travel profile keys are allowed on travel fields (#312). Only scrub identity atoms.
+  const travelProfileKeys = new Set([
+    'departure', 'arrival', 'from_station', 'to_station', 'journey_date', 'return_date',
+    'travel_class', 'quota', 'passenger_count',
+  ]);
   const dateValRe = /^\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}$/;
   let scrubbed = 0;
   for (const f of fields) {
@@ -444,11 +449,12 @@ export async function buildFillMapping(msg, workspaceId) {
     const blob = [f.label, f.name, f.id, f.placeholder].filter(Boolean).join(' ');
     if (!travelRe.test(blob) || policeRe.test(blob)) continue;
     const entry = mapping[f.selector];
-    const pk = entry?.profileKey || (entry?.matchBy === 'split-dob' ? 'dob' : null);
-    const looksDob = identityKeys.has(String(entry?.profileKey || ''))
+    const pk = String(entry?.profileKey || (entry?.matchBy === 'split-dob' ? 'dob' : '') || '');
+    if (travelProfileKeys.has(pk)) continue; // taught travel binding — keep
+    const looksIdentity = identityKeys.has(pk)
       || entry?.matchBy === 'split-dob'
-      || dateValRe.test(String(entry?.value || ''));
-    if (looksDob || identityKeys.has(String(pk || ''))) {
+      || ((!pk || identityKeys.has(pk)) && dateValRe.test(String(entry?.value || '')));
+    if (looksIdentity) {
       delete mapping[f.selector];
       delete filledBySource[f.selector];
       scrubbed++;

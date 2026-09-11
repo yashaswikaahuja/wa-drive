@@ -66,6 +66,8 @@ const PROFILE_KEY_GROUPS: { label: string; keys: string[] }[] = [
   { label: 'Contact', keys: ['phone', 'email', 'email_id'] },
   { label: 'IDs', keys: ['aadhaar_number', 'vid', 'pan_number', 'epic_number'] },
   { label: 'Address', keys: ['pincode', 'state', 'district', 'block', 'village', 'sub_division', 'police_station', 'post_office', 'ward_no', 'city', 'street', 'house_no', 'address', 'permanent_address', 'domicile_state'] },
+  // Travel / journey — IRCTC, redBus, Cleartrip, etc. (#312)
+  { label: 'Travel', keys: ['departure', 'arrival', 'from_station', 'to_station', 'journey_date', 'return_date', 'travel_class', 'quota', 'passenger_count'] },
   { label: 'Eligibility', keys: ['occupation', 'ex_serviceman', 'ews_certificate', 'disability_certificate', 'domicile_certificate', 'income_certificate', 'caste_certificate', 'languages', 'skills'] },
   { label: 'Education (10th)', keys: ['roll_number_10th', 'board_10th', 'passing_year_10th', 'marks_obtained_10th', 'total_marks_10th', 'percentage_10th', 'division_10th', 'school_name', 'certificate_number_10th'] },
   { label: 'Education (12th)', keys: ['roll_number_12th', 'board_12th', 'passing_year_12th', 'marks_obtained_12th', 'total_marks_12th', 'percentage_12th', 'division_12th', 'stream_12th', 'school_name_12th', 'certificate_number_12th'] },

@@ -10,9 +10,11 @@
  *
  * Three helpers used by every extractor scan pass:
  *
- *   isInSkipContext(el)           — true if el is inside nav/header/footer/search/banner
+ *   isInSkipContext(el)           — true if el is inside nav/header/footer/banner
+ *                                   (role=search allowed when journey-like — #311)
  *   isGoodLabel(s, ccDomUtils)    — true if label is non-empty, meaningful, min 2 chars
  *   hasFormContext(doc, ccDomUtils) — true if page has a <form> OR 2+ labeled inputs
+ *                                   (includes journey search widgets — #311)
  *
  * ccDomUtils is injected (not read from window) so the functions are testable in Node.
  *
@@ -20,21 +22,50 @@
  *   isInSkipContext(el)
  *   isGoodLabel(s, ccDomUtils)
  *   hasFormContext(doc, ccDomUtils)
+ *   isJourneyLike(el, labelHint)
  *
  * See docs/form-context.md for full documentation.
  */
 (function (root) {
   'use strict';
 
+  var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|onward|return|leaving|going|city|date)\b/i;
+
   /**
-   * Returns true if el is inside a navigation/header/footer/search/banner context.
-   * These containers are never part of a form worth filling.
+   * True if element looks like a travel From/To/date widget (OTA search strips).
+   */
+  function isJourneyLike(el, labelHint) {
+    if (!el) return false;
+    var blob = [
+      labelHint || '',
+      el.getAttribute && el.getAttribute('aria-label'),
+      el.getAttribute && el.getAttribute('placeholder'),
+      el.placeholder,
+      el.id,
+      el.name,
+      typeof el.className === 'string' ? el.className : '',
+      el.getAttribute && el.getAttribute('data-testid'),
+    ].filter(Boolean).join(' ');
+    return JOURNEY_RE.test(blob);
+  }
+
+  /**
+   * Returns true if el is inside a navigation/header/footer/banner context.
+   * Site chrome is never part of a form worth filling.
+   * Exception (#311): [role=search] is allowed when the widget looks like
+   * a journey From/To/date control (redBus / Cleartrip / IRCTC search strips).
    *
    * @param {Element} el
    * @returns {boolean}
    */
   function isInSkipContext(el) {
-    return !!(el.closest('nav,header,footer,[role="navigation"],[role="search"],[role="banner"]'));
+    if (!el || !el.closest) return false;
+    if (el.closest('nav,header,footer,[role="navigation"],[role="banner"]')) return true;
+    var searchHost = el.closest('[role="search"]');
+    if (!searchHost) return false;
+    // Allow journey search widgets inside role=search
+    if (isJourneyLike(el) || isJourneyLike(searchHost)) return false;
+    return true;
   }
 
   /**
@@ -57,7 +88,8 @@
 
   /**
    * Returns true if the page has a real form worth scanning.
-   * Requires either a <form> element OR at least 2 labeled visible inputs.
+   * Requires either a <form> element OR at least 2 labeled visible inputs
+   * (including type=search / combobox journey widgets — #311).
    *
    * @param {Document} doc
    * @param {object} [ccDomUtils]
@@ -67,26 +99,28 @@
     const forms = doc.querySelectorAll('form');
     if (forms.length > 0) return true;
     // No <form> tag — check for 2+ labeled inputs (some govt sites don't use <form>)
+    // Include type=search for OTA journey strips (#311).
     const inputs = doc.querySelectorAll(
-      'input[type="text"],input[type="email"],input[type="tel"],textarea'
+      'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input:not([type]),textarea,[role="combobox"]'
     );
     let labeled = 0;
     inputs.forEach(function (el) {
-      if (!isInSkipContext(el)) {
-        const lbl = ccDomUtils && typeof ccDomUtils.getLabel === 'function'
-          ? ccDomUtils.getLabel(el)
-          : el.placeholder || '';
-        if (lbl) labeled++;
-      }
+      if (isInSkipContext(el)) return;
+      const lbl = ccDomUtils && typeof ccDomUtils.getLabel === 'function'
+        ? ccDomUtils.getLabel(el)
+        : (el.getAttribute && el.getAttribute('aria-label')) || el.placeholder || '';
+      if (lbl || isJourneyLike(el, lbl)) labeled++;
     });
     return labeled >= 2;
   }
 
-  root.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext };
+  root.CcFormContext = { isInSkipContext, isGoodLabel, hasFormContext, isJourneyLike };
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-if (typeof module !== 'undefined') module.exports = root.CcFormContext;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = (typeof globalThis !== 'undefined' ? globalThis : root).CcFormContext;
+}
 
 /* ==== scan-standard-fields.js ==== */
 /**
@@ -113,11 +147,19 @@ if (typeof module !== 'undefined') module.exports = root.CcFormContext;
 
   var INPUT_SELECTOR = (
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
-    'input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
+    // type=search included for OTA From/To widgets (#311)
+    'input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
   );
 
-  var SKIP_META_RE = /search|query|filter|captcha|otp|token|csrf|recaptcha/i;
+  // Site chrome / security — NOT journey search. "search" alone is OK when journey-like (#311).
+  var SKIP_META_HARD_RE = /captcha|otp|token|csrf|recaptcha/i;
+  var SKIP_META_SOFT_RE = /search|query|filter/i;
+  var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|onward|return|leaving|going|city|date)\b/i;
   var AGREEMENT_RE = /\b(i\s+)?(agree|accept|confirm|declare|certify|consent|terms|self.declaration)\b/i;
+
+  function isJourneyMeta(meta, label) {
+    return JOURNEY_RE.test(String(meta || '') + ' ' + String(label || ''));
+  }
 
   function makeSelector(el) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
@@ -178,12 +220,19 @@ if (typeof module !== 'undefined') module.exports = root.CcFormContext;
 
     inputs.forEach(function (el) {
       var t = el.type;
+      // Allow type=search when journey-like (redBus/Cleartrip From/To) — #311
       if (t === 'hidden' || t === 'submit' || t === 'button' ||
-          t === 'search' || t === 'password' || t === 'image' || t === 'reset') return;
+          t === 'password' || t === 'image' || t === 'reset') return;
+      if (t === 'search') {
+        var earlyLbl = getLabel(el) || el.placeholder || '';
+        var earlyMeta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
+        if (!isJourneyMeta(earlyMeta, earlyLbl)) return;
+      }
       if (isInSkipContext(el)) return;
 
       var meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
-      if (SKIP_META_RE.test(meta)) return;
+      if (SKIP_META_HARD_RE.test(meta)) return;
+      if (SKIP_META_SOFT_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || '')) return;
 
       // ── Radio ──
       if (t === 'radio' && el.name) {
@@ -512,12 +561,20 @@ if (typeof module !== 'undefined') module.exports = root.CcScanMatWidgets;
     var labelList = [];
 
     // ── role=combobox / role=listbox ──
+    var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|city|date)\b/i;
     doc.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(function (el) {
+      // INPUT/SELECT comboboxes are handled by the standard scanner (incl. type=search #311)
       if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
       if (isInSkipContext(el)) return;
       var meta = ((el.id || '') + ' ' + (el.className || '')).toLowerCase();
-      if (/search|query|filter/i.test(meta)) return;
       var label = getLabel(el) || el.getAttribute('aria-label') || '';
+      // Soft-skip site search chrome; keep journey From/To comboboxes (#311)
+      if (/search|query|filter/i.test(meta) && !JOURNEY_RE.test(meta + ' ' + label)) return;
+      if (!isGoodLabel(label) && !JOURNEY_RE.test(meta + ' ' + label)) return;
+      if (!isGoodLabel(label) && JOURNEY_RE.test(meta)) {
+        // Prefer a journey-ish fallback label from meta when aria label is thin
+        label = label || meta.replace(/[_-]+/g, ' ').trim().slice(0, 40);
+      }
       if (!isGoodLabel(label)) return;
       var tagLower = el.tagName.toLowerCase();
       var isNg = tagLower === 'ng-select' || (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown')));
@@ -895,7 +952,7 @@ function extractFormFieldsWithFingerprint() {
   var helpers = {
     isInSkipContext: function (el) {
       return _fc.isInSkipContext ? _fc.isInSkipContext(el) :
-        !!(el.closest && el.closest('nav,header,footer,[role="navigation"],[role="search"],[role="banner"]'));
+        !!(el.closest && el.closest('nav,header,footer,[role="navigation"],[role="banner"]'));
     },
     humanizeAttr: function (raw) {
       return ccDomUtils.humanizeAttr ? ccDomUtils.humanizeAttr(raw) : '';

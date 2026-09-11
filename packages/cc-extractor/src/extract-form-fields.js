@@ -13,7 +13,7 @@ function extractFormFieldsWithFingerprint() {
   var helpers = {
     isInSkipContext: function (el) {
       return _fc.isInSkipContext ? _fc.isInSkipContext(el) :
-        !!(el.closest && el.closest('nav,header,footer,[role="navigation"],[role="search"],[role="banner"]'));
+        !!(el.closest && el.closest('nav,header,footer,[role="navigation"],[role="banner"]'));
     },
     humanizeAttr: function (raw) {
       return ccDomUtils.humanizeAttr ? ccDomUtils.humanizeAttr(raw) : '';

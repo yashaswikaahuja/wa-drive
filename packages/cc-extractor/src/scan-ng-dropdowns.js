@@ -70,12 +70,20 @@
     var labelList = [];
 
     // ── role=combobox / role=listbox ──
+    var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|city|date)\b/i;
     doc.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(function (el) {
+      // INPUT/SELECT comboboxes are handled by the standard scanner (incl. type=search #311)
       if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
       if (isInSkipContext(el)) return;
       var meta = ((el.id || '') + ' ' + (el.className || '')).toLowerCase();
-      if (/search|query|filter/i.test(meta)) return;
       var label = getLabel(el) || el.getAttribute('aria-label') || '';
+      // Soft-skip site search chrome; keep journey From/To comboboxes (#311)
+      if (/search|query|filter/i.test(meta) && !JOURNEY_RE.test(meta + ' ' + label)) return;
+      if (!isGoodLabel(label) && !JOURNEY_RE.test(meta + ' ' + label)) return;
+      if (!isGoodLabel(label) && JOURNEY_RE.test(meta)) {
+        // Prefer a journey-ish fallback label from meta when aria label is thin
+        label = label || meta.replace(/[_-]+/g, ' ').trim().slice(0, 40);
+      }
       if (!isGoodLabel(label)) return;
       var tagLower = el.tagName.toLowerCase();
       var isNg = tagLower === 'ng-select' || (el.classList && (el.classList.contains('ng-select') || el.classList.contains('ng-dropdown')));

@@ -124,6 +124,23 @@ export const PROFILE_SCHEMA: Section[] = [
       { key: 'division_grad', label: 'Division / Grade' },
     ],
   },
+  // Travel / journey preferences for IRCTC, redBus, Cleartrip, etc. (#312)
+  {
+    id: 'travel',
+    title: 'Travel',
+    icon: '🚂',
+    fields: [
+      { key: 'departure', label: 'Departure / From (city or station)' },
+      { key: 'arrival', label: 'Arrival / To (city or station)' },
+      { key: 'from_station', label: 'From Station Code / Name' },
+      { key: 'to_station', label: 'To Station Code / Name' },
+      { key: 'journey_date', label: 'Journey / Travel Date' },
+      { key: 'return_date', label: 'Return Date' },
+      { key: 'travel_class', label: 'Class (SL/3A/2A/CC/…)' },
+      { key: 'quota', label: 'Quota' },
+      { key: 'passenger_count', label: 'Number of Passengers' },
+    ],
+  },
 ];
 
 export function getCompleteness(data: Record<string, any>): { filled: number; total: number; percent: number; missing: string[] } {

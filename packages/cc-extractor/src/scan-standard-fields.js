@@ -22,11 +22,19 @@
 
   var INPUT_SELECTOR = (
     'input[type="text"],input[type="email"],input[type="tel"],input[type="number"],input[type="date"],' +
-    'input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
+    // type=search included for OTA From/To widgets (#311)
+    'input[type="search"],input[type="file"],input[type="radio"],input[type="checkbox"],input:not([type]),textarea,select'
   );
 
-  var SKIP_META_RE = /search|query|filter|captcha|otp|token|csrf|recaptcha/i;
+  // Site chrome / security — NOT journey search. "search" alone is OK when journey-like (#311).
+  var SKIP_META_HARD_RE = /captcha|otp|token|csrf|recaptcha/i;
+  var SKIP_META_SOFT_RE = /search|query|filter/i;
+  var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|onward|return|leaving|going|city|date)\b/i;
   var AGREEMENT_RE = /\b(i\s+)?(agree|accept|confirm|declare|certify|consent|terms|self.declaration)\b/i;
+
+  function isJourneyMeta(meta, label) {
+    return JOURNEY_RE.test(String(meta || '') + ' ' + String(label || ''));
+  }
 
   function makeSelector(el) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
@@ -87,12 +95,19 @@
 
     inputs.forEach(function (el) {
       var t = el.type;
+      // Allow type=search when journey-like (redBus/Cleartrip From/To) — #311
       if (t === 'hidden' || t === 'submit' || t === 'button' ||
-          t === 'search' || t === 'password' || t === 'image' || t === 'reset') return;
+          t === 'password' || t === 'image' || t === 'reset') return;
+      if (t === 'search') {
+        var earlyLbl = getLabel(el) || el.placeholder || '';
+        var earlyMeta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
+        if (!isJourneyMeta(earlyMeta, earlyLbl)) return;
+      }
       if (isInSkipContext(el)) return;
 
       var meta = ((el.id || '') + ' ' + (el.name || '') + ' ' + (el.className || '')).toLowerCase();
-      if (SKIP_META_RE.test(meta)) return;
+      if (SKIP_META_HARD_RE.test(meta)) return;
+      if (SKIP_META_SOFT_RE.test(meta) && !isJourneyMeta(meta, getLabel(el) || el.placeholder || '')) return;
 
       // ── Radio ──
       if (t === 'radio' && el.name) {

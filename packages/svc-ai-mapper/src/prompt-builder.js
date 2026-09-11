@@ -71,6 +71,9 @@ const PROFILE_SCHEMA_KEYS = [
   'bank_name', 'account_number', 'ifsc_code', 'branch_name',
   // Physical
   'height', 'weight',
+  // Travel / journey (#312)
+  'departure', 'arrival', 'from_station', 'to_station', 'journey_date', 'return_date',
+  'travel_class', 'quota', 'passenger_count',
   // Other
   'photo', 'signature',
 ];
