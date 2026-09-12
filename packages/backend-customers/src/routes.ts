@@ -67,14 +67,45 @@ router.get('/persons/:id', authMiddleware, async (req: any, res) => {
 });
 
 // PATCH /api/customers/persons/:id
+// If the person id is missing/stale, auto-create a profile when phone + name are available
+// (manual Build Profile save must not fail with "Person not found").
 router.patch('/persons/:id', authMiddleware, async (req: any, res) => {
-  const { fields, displayLabel, relationship } = req.body;
+  const { fields, displayLabel, relationship, phone, name, createIfMissing } = req.body || {};
   try {
-    const { rows } = await pool.query(
-      "SELECT data FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
-      [req.params.id, req.user.workspaceId]
+    let personId = req.params.id;
+    let { rows } = await pool.query(
+      "SELECT id, data FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+      [personId, req.user.workspaceId]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Person not found' });
+
+    if (!rows.length) {
+      const fieldName = fields?.name && typeof fields.name === 'object' ? fields.name.value : fields?.name;
+      const createName = String(name || fieldName || displayLabel || '').trim();
+      const createPhone = String(phone || '').replace(/\D/g, '');
+      const allowCreate = createIfMissing !== false; // default true when identity present
+      if (!allowCreate || !createPhone || createPhone.length < 7 || !createName || createName.length < 2) {
+        return res.status(404).json({
+          error: 'Person not found',
+          hint: 'Pass phone + name (or fields.name) to auto-create the profile on save',
+        });
+      }
+      const created = await pool.query(
+        `INSERT INTO profiles (workspace_id, primary_contact_phone, name, display_label, relationship, data, created_by)
+         VALUES ($1,$2,$3,$4,$5,'{}'::jsonb,$6) RETURNING id, data`,
+        [
+          req.user.workspaceId,
+          createPhone,
+          createName,
+          displayLabel || createName,
+          relationship || 'self',
+          req.user.userId,
+        ]
+      );
+      rows = created.rows;
+      personId = created.rows[0].id;
+      console.log(`[Customers] auto-created profile ${personId} for ${createPhone} / ${createName}`);
+    }
+
     const current = rows[0].data || {};
     const merged: any = { ...current };
     if (fields) {
@@ -96,9 +127,9 @@ router.patch('/persons/:id', authMiddleware, async (req: any, res) => {
     let pi = 3;
     if (displayLabel !== undefined) { updates.push(`display_label = $${pi}`); params.push(displayLabel); pi++; }
     if (relationship !== undefined) { updates.push(`relationship = $${pi}`); params.push(relationship); pi++; }
-    params.push(req.params.id, req.user.workspaceId);
+    params.push(personId, req.user.workspaceId);
     await pool.query(`UPDATE profiles SET ${updates.join(', ')} WHERE id = $${pi} AND workspace_id = $${pi + 1}`, params);
-    res.json({ ok: true });
+    res.json({ ok: true, id: personId, created: personId !== req.params.id });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

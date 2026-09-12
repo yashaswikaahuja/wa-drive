@@ -644,12 +644,30 @@ export default function WhatsApp() {
     console.log('[Save] personId:', pid, 'fields:', Object.keys(acceptedFields).length);
     if (!pid) { setExtractError('No target person — pick a person first'); return; }
     try {
-      await api.patch(`/customers/persons/${pid}`, { fields: acceptedFields });
+      // Phone from selected docs / active chat — used to auto-create if person id is stale/missing
+      const phoneFromDocs = Array.from(selectedDocs.values()).map((d) => d.phone).find(Boolean)
+        || selectedChat
+        || '';
+      const nameFromFields = acceptedFields?.name?.value || acceptedFields?.name || '';
+      const r = await api.patch(`/customers/persons/${pid}`, {
+        fields: acceptedFields,
+        phone: phoneFromDocs,
+        name: nameFromFields,
+        createIfMissing: true,
+      }, { skipErrorToast: true } as any);
+      if (r.data?.id) {
+        targetPersonIdRef.current = r.data.id;
+        setTargetPersonId(r.data.id);
+      }
       setExtractedSuggestions(null);
       setTargetPersonId(null);
       exitSelectionMode();
-      toast.success('✅ Profile updated! Open a govt form and use the extension to fill.');
-    } catch (e: any) { setExtractError(e.message); }
+      toast.success(r.data?.created
+        ? '✅ Profile created and saved! Open a govt form and use the extension to fill.'
+        : '✅ Profile updated! Open a govt form and use the extension to fill.');
+    } catch (e: any) {
+      setExtractError(e.response?.data?.error || e.message || 'Save failed');
+    }
   };
 
   const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
