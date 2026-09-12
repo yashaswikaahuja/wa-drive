@@ -809,6 +809,9 @@ importers:
       '@cybercontrol/backend-core':
         specifier: workspace:*
         version: link:../backend-core
+      '@cybercontrol/backend-documents':
+        specifier: workspace:*
+        version: link:../backend-documents
       '@cybercontrol/backend-operations':
         specifier: workspace:*
         version: link:../backend-operations
@@ -828,6 +831,9 @@ importers:
 
   packages/backend-process:
     dependencies:
+      '@cybercontrol/backend-core':
+        specifier: workspace:*
+        version: link:../backend-core
       '@cybercontrol/backend-documents':
         specifier: workspace:*
         version: link:../backend-documents

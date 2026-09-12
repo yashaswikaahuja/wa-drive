@@ -1,6 +1,7 @@
 import { Router, Request, Response, type Router as ExpressRouter } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
+import { pool } from '@cybercontrol/backend-core';
 import { generateAadhaarLayout, generatePassportSheet, generateSingleSheet, SheetPreset, PhotoSpec, cropAndAlignFace, setLastImage, getLastImage } from '@cybercontrol/backend-documents';
 import { getDriveForWorkspace } from '@cybercontrol/backend-drive';
 
@@ -140,35 +141,81 @@ router.get('/debug/last-image', async (req: Request, res: Response) => {
 
 export default router;
 
-// POST /api/process/extract
+// POST /api/process/set-document-type — operator confirms type → typed field extract
+router.post('/set-document-type', async (req: any, res: Response) => {
+  const { fileId, documentType } = req.body as { fileId?: string; documentType?: string };
+  if (!fileId || !documentType) {
+    res.status(400).json({ error: 'fileId and documentType required' });
+    return;
+  }
+  try {
+    const {
+      normalizeDocTypeKey, applyConfirmedDocumentType, DOC_TYPE_LABELS,
+    } = await import('@cybercontrol/backend-documents');
+    const typeKey = normalizeDocTypeKey(String(documentType));
+    if (!typeKey) { res.status(400).json({ error: 'Unknown document type' }); return; }
+    const wsId = req.user?.workspaceId;
+    if (!wsId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    const row = (await pool.query(
+      'SELECT id, drive_file_id, customer_id FROM drive_files WHERE (id::text = $1 OR drive_file_id = $1) AND workspace_id = $2 LIMIT 1',
+      [fileId, wsId],
+    )).rows[0];
+    if (!row) { res.status(404).json({ error: 'Document not found' }); return; }
+    const googleId = row.drive_file_id;
+    const phone = row.customer_id as string | null;
+    const buffer = await downloadDriveFile(googleId, req);
+    const result = await applyConfirmedDocumentType({
+      fileId,
+      workspaceId: wsId,
+      documentType: typeKey,
+      phone,
+      operatorId: req.user?.userId,
+      download: async () => ({ buffer }),
+    });
+    res.json({
+      ok: true,
+      documentType: typeKey,
+      tag: DOC_TYPE_LABELS[typeKey] || typeKey,
+      needsType: result.needsType,
+      suggested: result.suggested,
+      fieldCount: Object.keys(result.suggested || {}).filter((k) => !['document_type', 'document_label', 'needs_type'].includes(k)).length,
+    });
+  } catch (e: any) {
+    console.error('[Process] set-document-type:', e.message);
+    res.status(500).json({ error: e.message ?? 'Failed to set document type' });
+  }
+});
+
+// POST /api/process/extract — type-first: cache hit OK; else classify→typed extract (or needsType)
 router.post('/extract', async (req: any, res: Response) => {
-  const { fileId } = req.body as { fileId?: string };
+  const { fileId, documentType, force } = req.body as { fileId?: string; documentType?: string; force?: boolean };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
 
-  // Instant path: return cached extraction if auto-extract already ran on arrival
   try {
     const { getCachedExtraction } = await import('@cybercontrol/backend-documents');
     const cached = await getCachedExtraction(fileId);
-    if (cached && Object.keys(cached).length > 0) {
-      res.json({ ok: true, suggested: cached, cached: true });
+    const needsType = !!(cached?.needs_type || cached?.document_type?.needsReview || cached?.document_type?.decision === 'unknown' || cached?.document_type?.decision === 'uncertain');
+    // Return cache when we have real fields, or when waiting on type (unless force / forcedType)
+    if (!force && !documentType && cached && Object.keys(cached).length > 0) {
+      res.json({ ok: true, suggested: cached, cached: true, needsType });
       return;
     }
   } catch {}
 
-  // Use the shared extraction pipeline (normalizeKeys → correct sections, provenance, validation)
   try {
     const buffer = await downloadDriveFile(fileId, req);
     const { extractFromBuffer, cacheExtraction } = await import('@cybercontrol/backend-documents');
-    const { suggested } = await extractFromBuffer(buffer, fileId);
+    const { suggested, needsType } = await extractFromBuffer(buffer, fileId, {
+      forcedType: documentType || undefined,
+    });
     if (req.user?.workspaceId && Object.keys(suggested).length > 0) {
       try { await cacheExtraction(fileId, req.user.workspaceId, suggested); } catch {}
     }
-    res.json({ ok: true, suggested });
+    res.json({ ok: true, suggested, needsType: !!needsType });
     return;
   } catch (e: any) {
     console.error('[Process] extract error:', e.message);
     res.status(500).json({ error: e.message ?? 'Extraction failed' });
     return;
   }
-
 });

@@ -1,31 +1,28 @@
 import { pool } from '@cybercontrol/backend-core';
+import {
+  DOC_TYPES,
+  DOC_TYPE_LABELS,
+  getExtractFieldsForType,
+  resolveDocTypeDecision,
+  normalizeDocTypeKey,
+} from './doc-extract-maps.js';
 
-// ── Field GROUPS: a misclassification *within* a group loses no fields, because the
-// whole group shares one superset. Classification only needs to pick the right group. ──
-const ID_FIELDS = ['name','first_name','middle_name','last_name','name_devanagari','father_name','mother_name','husband_name','dob','gender','category','religion','nationality','marital_status','address','village','post_office','police_station','block','sub_division','ward_no','city','district','state','pincode','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','issue_date','expiry_date','place_of_issue'];
-const ACADEMIC_FIELDS = ['name','name_devanagari','father_name','mother_name','dob','roll_number','registration_number','enrollment_number','application_number','certificate_number','board','board_name','school_name','college_name','university_name','course','stream','subject','qualification','exam_name','exam_date','exam_center','exam_seat_number','marks_obtained','total_marks','percentage','division','passing_year','graduation_subject','issue_date'];
-const BANK_FIELDS = ['account_holder_name','bank_account_number','ifsc_code','bank_name','branch_name','address','city','state','pincode'];
-const TYPE_FIELDS: Record<string, string[]> = {
-  aadhaar: ID_FIELDS, pan: ID_FIELDS, passport: ID_FIELDS, voter_id: ID_FIELDS,
-  driving_license: ID_FIELDS, ration_card: ID_FIELDS,
-  marksheet_10th: ACADEMIC_FIELDS, marksheet_12th: ACADEMIC_FIELDS,
-  marksheet_graduation: ACADEMIC_FIELDS, marksheet_postgrad: ACADEMIC_FIELDS,
-  certificate: ACADEMIC_FIELDS, admit_card: ACADEMIC_FIELDS, result: ACADEMIC_FIELDS,
-  bank_passbook: BANK_FIELDS,
-};
-const ALL_FIELDS = ['document_type','name','first_name','middle_name','last_name','name_devanagari','father_name','mother_name','husband_name','spouse_name','guardian_name','dob','gender','category','religion','nationality','marital_status','blood_group','phone','alt_phone','email','address','permanent_address','village','post_office','police_station','block','sub_division','ward_no','city','district','state','pincode','country','aadhaar_number','pan_number','passport_number','voter_id_number','driving_license_number','ration_card_number','bank_account_number','ifsc_code','bank_name','branch_name','account_holder_name','roll_number','registration_number','enrollment_number','application_number','exam_name','exam_date','exam_center','exam_seat_number','subject','qualification','school_name','college_name','university_name','board_name','course','stream','passing_year_10th','marks_10th','percentage_10th','board_10th','passing_year_12th','marks_12th','percentage_12th','board_12th','stream_12th','passing_year_graduation','marks_graduation','percentage_graduation','graduation_university','graduation_subject','occupation','employer','designation','issue_date','expiry_date','place_of_issue'];
+function buildClassifyPrompt(): string {
+  return `Identify this Indian document image. Return ONLY JSON (no markdown):
+{"document_type":"<one of: ${DOC_TYPES.join(', ')}>","document_label":"<short human title>","confidence":0.0}
+Rules: document_type must be EXACTLY one listed value (selfie/person photo → "photo").
+confidence is 0..1 how sure you are. Use "other" only when truly unclear.
+Return ONLY the JSON.`;
+}
 
-const DOC_TYPES = ['aadhaar','pan','passport','voter_id','driving_license','ration_card','marksheet_10th','marksheet_12th','marksheet_graduation','marksheet_postgrad','admit_card','result','certificate','bank_passbook','photo','signature','form','other'];
-
-function buildExtractPrompt(fields: string[]): string {
-  return `Extract data from this Indian document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari, document_label, extra_fields.
-document_type must be EXACTLY ONE of: ${DOC_TYPES.join(', ')} (a person photo/selfie is "photo").
-document_label: a short human title for this document (e.g. "Caste Certificate", "Income Certificate", "Marriage Certificate", "Domicile Certificate", "Experience Letter", "Property Document"). 
-extra_fields: an OBJECT of any other important labelled values present that don't fit the keys above, using snake_case keys (e.g. {"caste":"OBC","certificate_authority":"Tahsildar","valid_until":"2026"}). Use {} if none.
-Rules: Transcribe text EXACTLY as printed, letter by letter — do NOT guess phonetic spellings or normalize (e.g. if printed "SADHNA" do NOT write "SADDHNA"). If a Devanagari/Hindi name is present, read it into name_devanagari and make the English name consistent with it. phone is a 10-digit mobile only — never put an Aadhaar/ID number in phone. For marksheets, marks_obtained is the marks the student scored and total_marks is the maximum/out-of marks (e.g. "391/500" → marks_obtained 391, total_marks 500); percentage is the % if printed. division is the class/grade if printed (e.g. "FIRST","SECOND","Distinction") — put it in division NOT percentage. Fill only fields visibly present; leave the rest as empty string "". dob format DD/MM/YYYY. aadhaar_number exactly 12 digits no spaces. pan_number 10 chars uppercase. Copy all numbers digit-for-digit.
-NAME SPLITTING: "name" is the full name as printed. ALSO split it into "first_name" (first word), "middle_name" (middle words if any, empty if only 2 words), "last_name" (last word/surname). Example: "Ram Prakash Singh" → name="Ram Prakash Singh", first_name="Ram", middle_name="Prakash", last_name="Singh". "Kamaljeet Kumar" → first_name="Kamaljeet", middle_name="", last_name="Kumar".
-RELATIONSHIP PARSING: On Aadhaar cards, "S/O" (Son of) or "D/O" (Daughter of) = father_name. "W/O" (Wife of) = husband_name. "C/O" (Care of) = father_name (unless context indicates otherwise). The name AFTER S/O, D/O, C/O, W/O is the relationship person — extract it into the correct field (father_name or husband_name). Do NOT put this in mother_name unless it explicitly says "Mother:" or similar. Example: "S/O: Rajesh Kumar" → father_name="Rajesh Kumar". "W/O: Sunil Prasad" → husband_name="Sunil Prasad". "C/O: Ramesh Singh" → father_name="Ramesh Singh".
-ADDRESS SPLITTING: "address" is the full address as printed. ALSO extract individual components into: "village" (village/town/locality name), "post_office" (post office name if mentioned), "police_station" (thana/PS if mentioned), "block" (block/tehsil/taluka if mentioned), "sub_division" (sub-division/anchal if mentioned), "ward_no" (ward number if mentioned), "city" (city/town name for urban areas), "district", "state", "pincode". Use common sense: on an Aadhaar card the address format is typically "S/O: X, House, Village/Town, PO: Y, District, State - PIN". Extract each component to its field.
+function buildTypedExtractPrompt(docType: string, fields: string[]): string {
+  return `Extract data from this Indian ${docType} document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari.
+Do NOT invent document_type. Fill only fields visibly present; leave missing as "".
+Rules: Transcribe text EXACTLY as printed. phone is 10-digit mobile only. dob format DD/MM/YYYY. aadhaar_number 12 digits. pan_number 10 chars uppercase.
+NAME SPLITTING when "name" is requested: also fill first_name / middle_name / last_name if those keys are listed.
+RELATIONSHIP: S/O D/O C/O → father_name; W/O → husband_name when those keys are listed.
+ADDRESS SPLITTING when address components are listed: village, post_office, police_station, block, district, state, pincode.
+For marksheets: marks_obtained = scored, total_marks = maximum; percentage and division if printed.
 Return ONLY the JSON.`;
 }
 
@@ -235,84 +232,193 @@ function normalizeKeys(parsed: any, docType: string): any {
   return out;
 }
 
-export async function extractFromBuffer(buffer: Buffer, fileId: string): Promise<{ suggested: any; raw: any }> {
-  if (!llmKeys().length && !mistralKey()) {
-    throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY/GROQ_API_KEY)');
-  }
-  // Guard: Drive sometimes returns JSON error bodies (404/403) instead of media.
+async function bufferToVisionBase64s(buffer: Buffer, fileId: string): Promise<string[]> {
   const head = buffer.slice(0, 1).toString('utf8');
   if (buffer.length < 500 && (head === '{' || head === '[')) {
     throw new Error(`Drive file unavailable or deleted (${fileId}): ${buffer.toString('utf8').slice(0, 180)}`);
   }
-  let base64s: string[];
   if (buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46) {
-    const pages = await pdfToImages(buffer); // marks may be on page 2+
-    base64s = pages.map(p => p.toString('base64'));
-  } else if (!(buffer[0] === 0xFF && buffer[1] === 0xD8) && !(buffer[0] === 0x89 && buffer[1] === 0x50)) {
-    // Not JPEG/PNG/PDF — still try, but warn
-    console.warn(`[Extract] ${fileId} unexpected magic bytes ${buffer.slice(0, 4).toString('hex')} size=${buffer.length}`);
-    base64s = [buffer.toString('base64')];
-  } else {
-    base64s = [buffer.toString('base64')];
+    const pages = await pdfToImages(buffer);
+    return pages.map((p) => p.toString('base64'));
   }
+  if (!(buffer[0] === 0xFF && buffer[1] === 0xD8) && !(buffer[0] === 0x89 && buffer[1] === 0x50)) {
+    console.warn(`[Extract] ${fileId} unexpected magic bytes ${buffer.slice(0, 4).toString('hex')} size=${buffer.length}`);
+  }
+  return [buffer.toString('base64')];
+}
 
-  // One superset covering ID + academic + bank; model also returns document_type.
-  const fields = ['document_type', ...new Set([...ID_FIELDS, ...ACADEMIC_FIELDS, ...BANK_FIELDS])];
-  const prompt = buildExtractPrompt(fields);
+function parseJsonObject(text: string): any {
+  const jsonMatch = String(text || '').match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return {};
+  try { return JSON.parse(jsonMatch[0]); } catch { return {}; }
+}
+
+/** Phase 1 — AI type detection only (cheap). */
+export async function classifyDocumentType(
+  buffer: Buffer,
+  fileId: string,
+): Promise<{ documentType: string; documentLabel: string; confidence: number; decision: string }> {
+  if (!llmKeys().length && !mistralKey()) {
+    throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY/GROQ_API_KEY)');
+  }
+  const base64s = await bufferToVisionBase64s(buffer, fileId);
   let parsed: any = {};
   for (let attempt = 0; attempt < 2; attempt++) {
-    const text = await callVision(base64s, prompt, 4000);
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) { try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = {}; } }
-    if (Object.values(parsed).some(v => v && String(v).trim())) break;
-    if (attempt === 0) await new Promise(r => setTimeout(r, 800));
+    const text = await callVision(base64s, buildClassifyPrompt(), 200);
+    parsed = parseJsonObject(text);
+    if (parsed.document_type) break;
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
   }
-  const docType = String(parsed.document_type || '').trim().toLowerCase();
-  if (docType === 'photo' || docType === 'signature') return { suggested: {}, raw: { document_type: docType } };
-  parsed = normalizeKeys(parsed, docType);
+  const documentType = normalizeDocTypeKey(String(parsed.document_type || '')) || 'other';
+  const confidenceRaw = Number(parsed.confidence);
+  const confidence = Number.isFinite(confidenceRaw)
+    ? Math.max(0, Math.min(1, confidenceRaw))
+    : (documentType === 'other' ? 0.3 : 0.8);
+  const decision = resolveDocTypeDecision(documentType, confidence);
+  const documentLabel = String(parsed.document_label || DOC_TYPE_LABELS[documentType] || documentType).trim();
+  return { documentType, documentLabel, confidence, decision };
+}
 
-  // ── Post-process: fix S/O, C/O, D/O → father_name; W/O → husband_name ──
-  // Some models put the S/O name in mother_name by mistake on Aadhaar cards
+/** Phase 2 — extract ONLY the configured fields for a known type. */
+export async function extractFieldsForType(
+  buffer: Buffer,
+  fileId: string,
+  docType: string,
+  fieldKeys?: string[],
+): Promise<{ suggested: any; raw: any }> {
+  if (!llmKeys().length && !mistralKey()) {
+    throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY/GROQ_API_KEY)');
+  }
+  const type = normalizeDocTypeKey(docType) || docType;
+  if (type === 'photo' || type === 'signature') {
+    return {
+      suggested: {
+        document_type: {
+          value: type, source: 'document', documentId: fileId, confidence: 1, needsReview: false, decision: 'known',
+        },
+      },
+      raw: { document_type: type },
+    };
+  }
+  const fields = fieldKeys && fieldKeys.length ? fieldKeys : await getExtractFieldsForType(type);
+  if (!fields.length) {
+    return {
+      suggested: {
+        document_type: {
+          value: type, source: 'document', documentId: fileId, confidence: 1, needsReview: false, decision: 'known',
+        },
+      },
+      raw: { document_type: type },
+    };
+  }
+
+  const base64s = await bufferToVisionBase64s(buffer, fileId);
+  let parsed: any = {};
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const text = await callVision(base64s, buildTypedExtractPrompt(type, fields), 1800);
+    parsed = parseJsonObject(text);
+    if (Object.values(parsed).some((v) => v && String(v).trim())) break;
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+  }
+  parsed.document_type = type;
+  parsed = normalizeKeys(parsed, type);
+
   const rawAddr = String(parsed.address || '').trim();
   const fName = String(parsed.father_name || '').trim();
   const mName = String(parsed.mother_name || '').trim();
-  if (!fName && mName && (docType === 'aadhaar' || /\b[SsDdCc]\/[Oo]\b/.test(rawAddr))) {
-    // If mother_name is filled but father_name is not, and it's an Aadhaar (which uses S/O, not mother), swap
+  if (!fName && mName && (type === 'aadhaar' || /\b[SsDdCc]\/[Oo]\b/.test(rawAddr))) {
     parsed.father_name = mName;
     parsed.mother_name = '';
   }
-  // Also extract father/husband from address S/O, C/O, D/O, W/O if not already extracted
   const soMatch = rawAddr.match(/\b(?:[Ss]\/[Oo]|[Dd]\/[Oo]|[Cc]\/[Oo])\s*:?\s*([^,]+)/);
   const woMatch = rawAddr.match(/\b[Ww]\/[Oo]\s*:?\s*([^,]+)/);
-  if (soMatch && !String(parsed.father_name || '').trim()) {
-    parsed.father_name = soMatch[1].trim();
-  }
-  if (woMatch && !String(parsed.husband_name || '').trim()) {
-    parsed.husband_name = woMatch[1].trim();
-  }
+  if (soMatch && !String(parsed.father_name || '').trim()) parsed.father_name = soMatch[1].trim();
+  if (woMatch && !String(parsed.husband_name || '').trim()) parsed.husband_name = woMatch[1].trim();
 
-  // Validate → real per-field confidence + needsReview flag
-  const suggested: any = {};
-  if (docType) suggested.document_type = { value: docType, source: 'document', documentId: fileId };
-  const docLabel = String(parsed.document_label?.value ?? parsed.document_label ?? '').trim();
-  if (docLabel) suggested.document_label = { value: docLabel, source: 'document', documentType: docType, documentId: fileId };
+  const allowed = new Set(fields);
+  const suggested: any = {
+    document_type: {
+      value: type, source: 'document', documentId: fileId, confidence: 1, needsReview: false, decision: 'known',
+    },
+  };
   for (const [k, v] of Object.entries(parsed)) {
     if (k === 'document_type' || k === 'name_devanagari' || k === 'document_label' || k === 'extra_fields') continue;
+    if (!allowed.has(k) && !allowed.has(k.replace(/_10th$|_12th$|_grad$/, ''))) {
+      // allow normalized level-specific keys derived from generic academic keys
+      const base = k.replace(/_10th$|_12th$|_grad$/, '');
+      if (!allowed.has(base) && !allowed.has(k)) continue;
+    }
     if (!v || !String(v).trim()) continue;
     const { confidence, needsReview } = validateField(k, String(v));
-    suggested[k] = { value: v, source: 'document', documentType: docType, documentId: fileId, confidence, needsReview };
-  }
-  // Open-ended extra fields for odd/unspecified documents → flattened with provenance
-  const extra = parsed.extra_fields && typeof parsed.extra_fields === 'object' ? parsed.extra_fields : null;
-  if (extra) {
-    for (const [k, v] of Object.entries(extra)) {
-      const val = (v && typeof v === 'object' ? (v as any).value : v);
-      const key = k.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-      if (!key || !val || !String(val).trim() || suggested[key]) continue;
-      suggested[key] = { value: val, source: 'document', documentType: docType, documentId: fileId, confidence: 0.8, needsReview: false, extra: true };
-    }
+    suggested[k] = { value: v, source: 'document', documentType: type, documentId: fileId, confidence, needsReview };
   }
   return { suggested, raw: parsed };
+}
+
+/**
+ * Typed intake pipeline: classify first; extract fields only when type is known.
+ * Unknown/uncertain → needsType stub (no field vision call).
+ */
+export async function extractFromBuffer(
+  buffer: Buffer,
+  fileId: string,
+  opts?: { forcedType?: string },
+): Promise<{ suggested: any; raw: any; needsType?: boolean }> {
+  if (!llmKeys().length && !mistralKey()) {
+    throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY/GROQ_API_KEY)');
+  }
+
+  let documentType = normalizeDocTypeKey(opts?.forcedType || '') || '';
+  let confidence = 1;
+  let decision = 'known';
+  let documentLabel = '';
+
+  if (!documentType) {
+    const classified = await classifyDocumentType(buffer, fileId);
+    documentType = classified.documentType;
+    confidence = classified.confidence;
+    decision = classified.decision;
+    documentLabel = classified.documentLabel;
+  } else {
+    decision = resolveDocTypeDecision(documentType, 1);
+    documentLabel = DOC_TYPE_LABELS[documentType] || documentType;
+  }
+
+  if (decision !== 'known' || documentType === 'other') {
+    const suggested: any = {
+      document_type: {
+        value: documentType || 'other',
+        source: 'ai',
+        documentId: fileId,
+        confidence,
+        needsReview: true,
+        decision: decision === 'known' ? 'unknown' : decision,
+      },
+      needs_type: true,
+    };
+    if (documentLabel) {
+      suggested.document_label = {
+        value: documentLabel, source: 'ai', documentType: documentType || 'other', documentId: fileId,
+      };
+    }
+    return {
+      suggested,
+      raw: { document_type: documentType || 'other', confidence },
+      needsType: true,
+    };
+  }
+
+  const { suggested, raw } = await extractFieldsForType(buffer, fileId, documentType);
+  if (documentLabel && !suggested.document_label) {
+    suggested.document_label = {
+      value: documentLabel, source: 'document', documentType, documentId: fileId,
+    };
+  }
+  if (suggested.document_type) {
+    suggested.document_type.confidence = confidence;
+    suggested.document_type.decision = 'known';
+  }
+  return { suggested, raw, needsType: false };
 }
 
 /** Read cached extraction for a fileId (instant, no Groq call). */
@@ -416,36 +522,47 @@ async function _drainQueue() {
   _extractRunning = false;
 }
 
-/** Fire-and-forget background extraction after a document arrives. */
+/** Fire-and-forget: classify → typed extract only when type known (no field extract if needs type). */
 export function autoExtractInBackground(buffer: Buffer, fileId: string, workspaceId: string, mimetype: string, phone?: string) {
-  // Detect type by magic bytes (WhatsApp uploads often arrive as octet-stream)
   const b = buffer;
   const isJpeg = b[0] === 0xFF && b[1] === 0xD8;
   const isPng = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47;
   const isPdf = b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46;
   const isImageMime = (mimetype || '').startsWith('image/') || mimetype === 'application/pdf';
-  if (!isJpeg && !isPng && !isPdf && !isImageMime) return; // skip video/audio/unknown
+  if (!isJpeg && !isPng && !isPdf && !isImageMime) return;
   const buf = Buffer.from(buffer);
   const run = (attempt: number) => _extractQueue.push(async () => {
     try {
-      const { suggested, raw } = await extractFromBuffer(buf, fileId);
-      // Persist AI-detected document type as the file's tag (drives chat badge + smart selection)
-      const docType = (raw?.document_type || '').toString().trim();
+      const { suggested, raw, needsType } = await extractFromBuffer(buf, fileId);
+      const docType = String(raw?.document_type || suggested?.document_type?.value || '').trim();
+      if (needsType) {
+        try {
+          await pool.query(
+            `UPDATE drive_files SET tag = $1 WHERE id = $2`,
+            ['Needs type', fileId],
+          );
+        } catch {}
+        await cacheExtraction(fileId, workspaceId, suggested);
+        // Do NOT upsert profile until operator confirms type (prevents override fights + token waste).
+        console.log(`[AutoExtract] ⏳ ${fileId} → needs type (${docType || '?'}); field extract skipped`);
+        markExtractionJobDone(fileId);
+        return;
+      }
       if (docType) {
         const label = DOC_TYPE_LABELS[docType] || null;
-        try { await pool.query('UPDATE drive_files SET tag = $1 WHERE id = $2 AND tag IS NULL', [label, fileId]); } catch {}
+        try { await pool.query('UPDATE drive_files SET tag = $1 WHERE id = $2 AND (tag IS NULL OR tag = $3)', [label, fileId, 'Needs type']); } catch {}
       }
       if (Object.keys(suggested).length > 0) {
         await cacheExtraction(fileId, workspaceId, suggested);
-        // Auto-build/update the customer's profile (find-or-create by name)
-        if (phone) await upsertProfileFromExtraction(workspaceId, phone, suggested, fileId);
-        console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields`);
+        if (phone && docType !== 'photo' && docType !== 'signature') {
+          await upsertProfileFromExtraction(workspaceId, phone, suggested, fileId);
+        }
+        console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields (typed)`);
         markExtractionJobDone(fileId);
       } else if (docType === 'photo' || docType === 'signature') {
         console.log(`[AutoExtract] ${fileId} → ${docType} (not an ID doc)`);
         markExtractionJobDone(fileId);
       } else if (attempt < 2) {
-        // empty/unknown on a doc that should have data → retry (transient Groq empty)
         console.warn(`[AutoExtract] ↻ ${fileId} empty, retry ${attempt + 1}`);
         setTimeout(() => run(attempt + 1), 4000);
       } else {
@@ -454,23 +571,47 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
       }
     } catch (e: any) {
       console.warn(`[AutoExtract] ✗ ${fileId}:`, e.message);
-      if (attempt < 2) setTimeout(() => run(attempt + 1), 4000); // crash/transient → retry
+      if (attempt < 2) setTimeout(() => run(attempt + 1), 4000);
     }
   });
   run(0);
   setTimeout(_drainQueue, 500);
 }
 
-// Map raw document_type → human label used as the file tag
-const DOC_TYPE_LABELS: Record<string, string> = {
-  aadhaar: 'Aadhaar', pan: 'PAN', passport: 'Passport', voter_id: 'Voter ID',
-  driving_license: 'Driving License', ration_card: 'Ration Card',
-  marksheet_10th: '10th Marksheet', marksheet_12th: '12th Marksheet',
-  marksheet_graduation: 'Graduation', marksheet_postgrad: 'Post-Grad',
-  admit_card: 'Admit Card', result: 'Result', certificate: 'Certificate',
-  bank_passbook: 'Bank', photo: 'Photo', signature: 'Signature',
-  form: 'Form', other: 'Other',
-};
+/**
+ * Operator confirmed document type → typed field extract + profile upsert.
+ * Downloads bytes from Drive via injected downloader callback.
+ */
+export async function applyConfirmedDocumentType(opts: {
+  fileId: string;
+  workspaceId: string;
+  documentType: string;
+  phone?: string | null;
+  operatorId?: string | null;
+  download: () => Promise<{ buffer: Buffer; mimetype?: string }>;
+}): Promise<{ suggested: any; needsType: boolean }> {
+  const type = normalizeDocTypeKey(opts.documentType);
+  if (!type) throw new Error('Invalid document type');
+  const { buffer } = await opts.download();
+  const { suggested, needsType } = await extractFromBuffer(buffer, opts.fileId, { forcedType: type });
+  if (suggested?.document_type) {
+    suggested.document_type.source = 'operator';
+    suggested.document_type.confidence = 1;
+    suggested.document_type.needsReview = false;
+    suggested.document_type.decision = 'known';
+    suggested.document_type.correctedAt = new Date().toISOString();
+    if (opts.operatorId) suggested.document_type.correctedBy = opts.operatorId;
+  }
+  delete suggested.needs_type;
+  const label = DOC_TYPE_LABELS[type] || type;
+  try { await pool.query('UPDATE drive_files SET tag = $1 WHERE id = $2', [label, opts.fileId]); } catch {}
+  await cacheExtraction(opts.fileId, opts.workspaceId, suggested);
+  if (!needsType && opts.phone && type !== 'photo' && type !== 'signature') {
+    await upsertProfileFromExtraction(opts.workspaceId, opts.phone, suggested, opts.fileId);
+  }
+  markExtractionJobDone(opts.fileId);
+  return { suggested, needsType: !!needsType };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DURABLE EXTRACTION LEDGER — safety net over the in-memory queue above.

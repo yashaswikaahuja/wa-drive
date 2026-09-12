@@ -198,6 +198,30 @@ export async function patchAiSettings(cfg: Config, data: Partial<AiSettings>): P
   }
 }
 
+export interface DocumentExtractMapsResponse {
+  docTypes: string[];
+  labels: Record<string, string>;
+  defaults: Record<string, string[]>;
+  maps: Record<string, string[]>;
+}
+
+export const fetchDocumentExtractMaps = (cfg: Config) =>
+  get<DocumentExtractMapsResponse>(cfg, '/owner/document-extract-maps');
+
+export async function putDocumentExtractMaps(cfg: Config, maps: Record<string, string[]>): Promise<DocumentExtractMapsResponse> {
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/owner/document-extract-maps`, {
+    method: 'PUT',
+    headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ maps }),
+  });
+  if (!res.ok) {
+    let msg = 'Save failed';
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new ApiError(res.status, msg);
+  }
+  return res.json();
+}
+
 
 // ─── Forms catalog (Phase 2) ────────────────────────────────────────────────
 

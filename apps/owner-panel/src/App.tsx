@@ -9,6 +9,7 @@ import { WorkspacesTable, TableSkeleton } from './components/WorkspacesTable';
 import { WorkspaceDrawer } from './components/WorkspaceDrawer';
 import { Setup } from './components/Setup';
 import { AiSettingsPanel } from './components/AiSettings';
+import { DocumentExtractMapsPanel } from './components/DocumentExtractMaps';
 import { FormsPanel } from './components/FormsPanel';
 import { exportWorkspacesCsv } from './lib/csv';
 
@@ -221,6 +222,7 @@ export function App() {
         {section === 'ai' && (
           <div className="section-body">
             <AiSettingsPanel cfg={cfg} />
+            <DocumentExtractMapsPanel cfg={cfg} />
           </div>
         )}
 

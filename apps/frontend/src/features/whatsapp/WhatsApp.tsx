@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { SOCKET_URL } from '../../shared/api';
+import { DocTypePickerModal } from '../../shared/DocTypePicker';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
@@ -91,13 +92,16 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
   );
 });
 
-const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete }: any) => {
+const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete, onSetType }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w600' : (msg.fileUrl?.replace('sz=w200','sz=w600') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
   const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
-  const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag); // Photo / Other / Signature / Form
-  const category = msg.tag
+  const needsType = msg.tag === 'Needs type' || msg.needsType;
+  const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag) && !needsType;
+  const category = needsType
+    ? { category: 'Needs type', color: 'bg-amber-500/20 text-amber-400' }
+    : msg.tag
     ? { category: msg.tag, color: isJunkTag ? 'bg-white/10 text-gray-500' : 'bg-green-500/15 text-green-400' }
     : docCategory(msg.fileName || '');
 
@@ -129,7 +133,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         {!selectionMode && (
           <div className="flex flex-wrap gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition">
             <button onClick={() => onClick(msg)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Open"><Eye size={14} /></button>
-            <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="p-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" title="Tag"><Tag size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); onSetType?.(msg); }} className={`p-1.5 rounded-md border ${needsType ? 'border-amber-500/50 bg-amber-500/20 text-amber-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-400'} hover:bg-amber-500/20`} title={needsType ? 'Set document type' : 'Tag / set type'}><Tag size={14} /></button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="p-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" title="Print"><Printer size={14} /></button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Photo Tool"><Camera size={14} /></button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Download"><DownloadSimple size={14} /></button>
@@ -187,6 +191,7 @@ export default function WhatsApp() {
   });
   const [msgSearch, setMsgSearch] = useState('');
   const [dpPreview, setDpPreview] = useState<string | null>(null);
+  const [typePickerFile, setTypePickerFile] = useState<Message | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
@@ -569,6 +574,10 @@ export default function WhatsApp() {
           continue;
         }
         if (!r.result?.suggested) continue;
+        if (r.result.needsType || r.result.suggested.needs_type || r.result.suggested.document_type?.needsReview) {
+          errors.push(r.doc.fileName + ': needs document type — use the Tag button to set it before Build Profile');
+          continue;
+        }
         const docType = r.result.suggested.document_type?.value || 'other';
         const docPriority = TYPE_PRIORITY[docType] || 30;
 
@@ -801,6 +810,7 @@ export default function WhatsApp() {
                     selected={selectedDocs.has(msg.id)}
                     onToggleSelect={toggleDocSelection}
                     onDelete={handleDeleteDoc}
+                    onSetType={(m: Message) => setTypePickerFile(m)}
                   />
                 </>);
               })}
@@ -910,6 +920,24 @@ export default function WhatsApp() {
             </div>
           </div>
         </div>
+      )}
+      {typePickerFile && (
+        <DocTypePickerModal
+          fileId={typePickerFile.id}
+          onClose={() => setTypePickerFile(null)}
+          onDone={(tag) => {
+            setChats((prev) => {
+              const next = new Map(prev);
+              for (const [phone, chat] of next) {
+                const msgs = chat.messages.map((m) =>
+                  m.id === typePickerFile.id ? { ...m, tag, needsType: false } : m
+                );
+                next.set(phone, { ...chat, messages: msgs });
+              }
+              return next;
+            });
+          }}
+        />
       )}
     </div>
   );

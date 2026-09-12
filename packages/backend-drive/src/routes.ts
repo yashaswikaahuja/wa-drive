@@ -102,7 +102,7 @@ router.get('/download/:fileId', (req: any, res, next) => {
 export default router;
 
 
-// Tag a file with document category
+// Tag a file with document category (Hub badge). Prefer POST /process/set-document-type for typed extract.
 router.patch('/files/:id/tag', authMiddleware, async (req: any, res) => {
   const { tag } = req.body;
   if (!tag) return res.status(400).json({ error: 'tag required' });

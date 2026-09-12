@@ -6,6 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
+import { ProvenanceChip } from '../../shared/DocTypePicker';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
@@ -378,6 +379,14 @@ export default function CustomerDetail() {
                                   className="flex items-center gap-1.5 group text-left">
                                   <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
                                   {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
+                                  {rawVal && typeof rawVal === 'object' && (
+                                    <ProvenanceChip
+                                      source={rawVal.source}
+                                      documentType={rawVal.documentType}
+                                      confidence={rawVal.confidence}
+                                      needsReview={rawVal.needsReview}
+                                    />
+                                  )}
                                   <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
                                 </button>
                               )}
