@@ -8,24 +8,46 @@ import { getDriveForWorkspace } from '@cybercontrol/backend-drive';
 const router: ExpressRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
+/** Resolve Hub UUID → Google Drive file id when needed. */
+async function resolveGoogleFileId(fileId: string, workspaceId?: string): Promise<string> {
+  // Google ids are not UUIDs; our drive_files.id is.
+  const looksUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fileId);
+  if (!looksUuid) return fileId;
+  if (!workspaceId) return fileId;
+  const row = (await pool.query(
+    'SELECT drive_file_id FROM drive_files WHERE id::text = $1 AND workspace_id = $2 LIMIT 1',
+    [fileId, workspaceId],
+  )).rows[0];
+  if (!row?.drive_file_id) throw new Error(`Document not found for id ${fileId}`);
+  return row.drive_file_id;
+}
+
 async function downloadDriveFile(fileId: string, req: any): Promise<Buffer> {
   const drive = await getDriveForWorkspace(req.user?.workspaceId);
   if (!drive) throw new Error('Drive not connected for this workspace');
+  const googleId = await resolveGoogleFileId(fileId, req.user?.workspaceId);
   try {
-    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+    const res = await drive.files.get(
+      { fileId: googleId, alt: 'media', supportsAllDrives: true },
+      { responseType: 'arraybuffer' },
+    );
     const buf = Buffer.from(res.data as ArrayBuffer);
     // Google returns JSON error bodies with HTTP 200 in some edge cases / wrong clients.
     if (buf.length < 500) {
       const text = buf.toString('utf8');
       if (text.startsWith('{') && /"error"/.test(text)) {
-        throw new Error(`Drive download failed for ${fileId}: ${text.slice(0, 180)}`);
+        throw new Error(`Drive download failed for ${googleId}: ${text.slice(0, 180)}`);
       }
     }
     return buf;
   } catch (e: any) {
     const status = e?.code || e?.response?.status;
-    if (status === 404) throw new Error(`Drive file not found or deleted: ${fileId}`);
+    const detail = e?.response?.data
+      ? (typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 200)
+      : '';
+    if (status === 404) throw new Error(`Drive file not found or deleted: ${googleId}`);
     if (status === 401 || status === 403) throw new Error('Drive authorization failed — reconnect Google Drive in Settings');
+    if (status === 400) throw new Error(`Drive download rejected (400) for ${googleId}${detail ? `: ${detail}` : ''}`);
     throw e;
   }
 }
@@ -139,8 +161,6 @@ router.get('/debug/last-image', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
-
 // POST /api/process/set-document-type — operator confirms type → typed field extract
 router.post('/set-document-type', async (req: any, res: Response) => {
   const { fileId, documentType } = req.body as { fileId?: string; documentType?: string };
@@ -161,11 +181,13 @@ router.post('/set-document-type', async (req: any, res: Response) => {
       [fileId, wsId],
     )).rows[0];
     if (!row) { res.status(404).json({ error: 'Document not found' }); return; }
-    const googleId = row.drive_file_id;
+    // Some rows store the Google id in `id` and leave drive_file_id empty.
+    const googleId = String(row.drive_file_id || row.id || '').trim();
+    if (!googleId) { res.status(400).json({ error: 'Document has no Drive file id' }); return; }
     const phone = row.customer_id as string | null;
     const buffer = await downloadDriveFile(googleId, req);
     const result = await applyConfirmedDocumentType({
-      fileId,
+      fileId: String(row.id),
       workspaceId: wsId,
       documentType: typeKey,
       phone,
@@ -181,8 +203,10 @@ router.post('/set-document-type', async (req: any, res: Response) => {
       fieldCount: Object.keys(result.suggested || {}).filter((k) => !['document_type', 'document_label', 'needs_type'].includes(k)).length,
     });
   } catch (e: any) {
-    console.error('[Process] set-document-type:', e.message);
-    res.status(500).json({ error: e.message ?? 'Failed to set document type' });
+    const msg = e?.message || e?.response?.data?.error || 'Failed to set document type';
+    console.error('[Process] set-document-type:', msg);
+    const status = /not found/i.test(msg) ? 404 : /authoriz|reconnect/i.test(msg) ? 401 : 500;
+    res.status(status).json({ error: msg });
   }
 });
 
@@ -220,3 +244,5 @@ router.post('/extract', async (req: any, res: Response) => {
     return;
   }
 });
+
+export default router;
