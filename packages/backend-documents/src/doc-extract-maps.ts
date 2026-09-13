@@ -6,7 +6,7 @@
 import { pool } from '@cybercontrol/backend-core';
 
 export const DOC_TYPES = [
-  'aadhaar', 'pan', 'passport', 'voter_id', 'driving_license', 'ration_card',
+  'aadhaar', 'pan', 'passport', 'voter_id', 'driving_license', 'ration_card', 'ayushman',
   'marksheet_10th', 'marksheet_12th', 'marksheet_graduation', 'marksheet_postgrad',
   'admit_card', 'result', 'certificate', 'bank_passbook', 'photo', 'signature', 'form', 'other',
 ] as const;
@@ -16,16 +16,23 @@ export type DocType = (typeof DOC_TYPES)[number];
 export const DOC_TYPE_LABELS: Record<string, string> = {
   aadhaar: 'Aadhaar', pan: 'PAN', passport: 'Passport', voter_id: 'Voter ID',
   driving_license: 'Driving License', ration_card: 'Ration Card',
+  ayushman: 'Ayushman',
   marksheet_10th: '10th Marksheet', marksheet_12th: '12th Marksheet',
   marksheet_graduation: 'Graduation', marksheet_postgrad: 'Post-Grad',
   admit_card: 'Admit Card', result: 'Result', certificate: 'Certificate',
   bank_passbook: 'Bank', photo: 'Photo', signature: 'Signature', form: 'Form', other: 'Other',
 };
 
-/** Inverse: Hub tag label → canonical type key */
-export const LABEL_TO_DOC_TYPE: Record<string, string> = Object.fromEntries(
-  Object.entries(DOC_TYPE_LABELS).map(([k, v]) => [v.toLowerCase(), k])
-);
+/** Inverse: Hub tag label → canonical type key (+ common aliases) */
+export const LABEL_TO_DOC_TYPE: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(DOC_TYPE_LABELS).map(([k, v]) => [v.toLowerCase(), k])),
+  'ayushman bharat': 'ayushman',
+  'ayushman card': 'ayushman',
+  'pmjay': 'ayushman',
+  'pm-jay': 'ayushman',
+  'abha': 'ayushman',
+  'abha card': 'ayushman',
+};
 
 /**
  * Default: which profile fields to extract from each document type.
@@ -48,6 +55,8 @@ export const DEFAULT_EXTRACT_MAPS: Record<string, string[]> = {
     'name', 'dob', 'address', 'driving_license_number', 'issue_date', 'expiry_date', 'district', 'state',
   ],
   ration_card: ['name', 'father_name', 'address', 'ration_card_number', 'district', 'state', 'pincode'],
+  // Ayushman Bharat / PM-JAY / ABHA — lean identity + card id (Hindi name often primary on card)
+  ayushman: ['name', 'name_devanagari', 'ayushman_id', 'gender'],
   marksheet_10th: [
     'name', 'father_name', 'mother_name', 'dob', 'roll_number', 'registration_number',
     'board', 'school_name', 'marks_obtained', 'total_marks', 'percentage', 'division', 'passing_year',
@@ -67,9 +76,9 @@ export const DEFAULT_EXTRACT_MAPS: Record<string, string[]> = {
   admit_card: ['name', 'dob', 'roll_number', 'application_number', 'exam_name', 'exam_date', 'exam_center', 'exam_seat_number'],
   result: ['name', 'roll_number', 'exam_name', 'marks_obtained', 'total_marks', 'percentage', 'division'],
   certificate: ['name', 'father_name', 'dob', 'certificate_number', 'issue_date'],
+  // Lean map: only banking identifiers (no address — avoids override fights).
   bank_passbook: [
-    'account_holder_name', 'bank_account_number', 'ifsc_code', 'bank_name', 'branch_name',
-    'address', 'city', 'state', 'pincode',
+    'bank_account_number', 'ifsc_code', 'cif_number', 'bank_name', 'branch_name',
   ],
   form: ['name', 'dob', 'phone', 'email', 'address'],
   photo: [],

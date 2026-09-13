@@ -11,15 +11,19 @@ function buildClassifyPrompt(): string {
   return `Identify this Indian document image. Return ONLY JSON (no markdown):
 {"document_type":"<one of: ${DOC_TYPES.join(', ')}>","document_label":"<short human title>","confidence":0.0}
 Rules: document_type must be EXACTLY one listed value (selfie/person photo → "photo").
+Ayushman Bharat / PM-JAY / ABHA health cards → "ayushman" (not "other" or "certificate").
 confidence is 0..1 how sure you are. Use "other" only when truly unclear.
 Return ONLY the JSON.`;
 }
 
 function buildTypedExtractPrompt(docType: string, fields: string[]): string {
-  return `Extract data from this Indian ${docType} document image. Return ONLY a valid JSON object (no markdown) with these keys: ${fields.join(', ')}, name_devanagari.
+  const keys = fields.includes('name_devanagari') ? fields : [...fields, 'name_devanagari'];
+  return `Extract data from this Indian ${docType} document image. Return ONLY a valid JSON object (no markdown) with these keys: ${keys.join(', ')}.
 Do NOT invent document_type. Fill only fields visibly present; leave missing as "".
 Rules: Transcribe text EXACTLY as printed. phone is 10-digit mobile only. dob format DD/MM/YYYY. aadhaar_number 12 digits. pan_number 10 chars uppercase.
 NAME SPLITTING when "name" is requested: also fill first_name / middle_name / last_name if those keys are listed.
+If a Hindi/Devanagari name is printed, put it in name_devanagari and the English transliteration in name when both are listed.
+For ayushman / PM-JAY / ABHA cards: ayushman_id is the card/ABHA/PM-JAY ID number printed on the card.
 RELATIONSHIP: S/O D/O C/O → father_name; W/O → husband_name when those keys are listed.
 ADDRESS SPLITTING when address components are listed: village, post_office, police_station, block, district, state, pincode.
 For marksheets: marks_obtained = scored, total_marks = maximum; percentage and division if printed.
@@ -342,7 +346,9 @@ export async function extractFieldsForType(
     },
   };
   for (const [k, v] of Object.entries(parsed)) {
-    if (k === 'document_type' || k === 'name_devanagari' || k === 'document_label' || k === 'extra_fields') continue;
+    if (k === 'document_type' || k === 'document_label' || k === 'extra_fields') continue;
+    // Keep name_devanagari when the type map asks for it (Ayushman/Aadhaar Hindi names).
+    if (k === 'name_devanagari' && !allowed.has('name_devanagari')) continue;
     if (!allowed.has(k) && !allowed.has(k.replace(/_10th$|_12th$|_grad$/, ''))) {
       // allow normalized level-specific keys derived from generic academic keys
       const base = k.replace(/_10th$|_12th$|_grad$/, '');

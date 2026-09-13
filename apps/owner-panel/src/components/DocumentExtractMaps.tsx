@@ -10,6 +10,7 @@ const PROFILE_KEY_OPTIONS = [
   'phone', 'email', 'address', 'village', 'post_office', 'police_station', 'block', 'sub_division',
   'ward_no', 'city', 'district', 'state', 'pincode',
   'aadhaar_number', 'pan_number', 'passport_number', 'voter_id_number', 'driving_license_number', 'ration_card_number',
+  'ayushman_id', 'name_devanagari',
   'roll_number', 'registration_number', 'certificate_number', 'board', 'school_name', 'college_name', 'university_name',
   'course', 'stream', 'marks_obtained', 'total_marks', 'percentage', 'division', 'passing_year',
   'exam_name', 'exam_date', 'exam_center', 'exam_seat_number', 'application_number',

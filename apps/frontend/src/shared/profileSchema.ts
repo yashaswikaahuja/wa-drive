@@ -14,7 +14,7 @@ export interface Section {
 // Which document types feed which section (used to place extra/non-schema fields in the right section)
 export const SECTION_FOR_DOCTYPE: Record<string, string> = {
   aadhaar: 'identity', pan: 'identity', passport: 'identity', voter_id: 'identity',
-  driving_license: 'identity', ration_card: 'identity',
+  driving_license: 'identity', ration_card: 'identity', ayushman: 'identity',
   marksheet_10th: 'education_10th',
   marksheet_12th: 'education_12th',
   marksheet_graduation: 'education_grad', marksheet_postgrad: 'education_grad',
@@ -47,6 +47,7 @@ export function sectionIdForFieldKey(key: string): string | null {
   if (/^(bank_|ifsc|cif|account_holder|account_number|branch_name)/.test(k) || k === 'ifsc_code' || k === 'cif_number') {
     return 'bank';
   }
+  if (/^(ayushman|abha|pmjay)/.test(k)) return 'identity';
   if (/^(departure|arrival|from_station|to_station|journey_date|return_date|travel_class|quota|passenger_count)$/.test(k)) {
     return 'travel';
   }
@@ -55,6 +56,7 @@ export function sectionIdForFieldKey(key: string): string | null {
 
 function humanizeDocType(dt: string): string {
   if (dt === 'bank_passbook') return 'Bank Details';
+  if (dt === 'ayushman') return 'Ayushman Card';
   if (dt === 'other') return 'Other Details';
   return dt.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }

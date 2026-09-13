@@ -97,7 +97,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w600' : (msg.fileUrl?.replace('sz=w200','sz=w600') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
-  const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+  const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
   const needsType = msg.tag === 'Needs type' || msg.needsType;
   const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag) && !needsType;
   const category = needsType
@@ -808,7 +808,7 @@ export default function WhatsApp() {
                 <div className="flex items-center gap-2">
                   <button onClick={() => {
                     // Smart-select only document-type files (skip greetings/photos/junk)
-                    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+                    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
                     const msgs = activeChat?.messages || [];
                     const next = new Map(selectedDocs);
                     let n = 0;

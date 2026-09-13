@@ -9,6 +9,7 @@ export const DOC_TYPE_OPTIONS: { key: string; label: string }[] = [
   { key: 'voter_id', label: 'Voter ID' },
   { key: 'driving_license', label: 'Driving License' },
   { key: 'ration_card', label: 'Ration Card' },
+  { key: 'ayushman', label: 'Ayushman' },
   { key: 'marksheet_10th', label: '10th Marksheet' },
   { key: 'marksheet_12th', label: '12th Marksheet' },
   { key: 'marksheet_graduation', label: 'Graduation' },

@@ -4,7 +4,7 @@ import { pool } from '@cybercontrol/backend-core';
 const DOC_AUTHORITY: Record<string, number> = {
   aadhaar: 100, passport: 90, pan: 80, voter_id: 70, driving_license: 70, ration_card: 60,
   marksheet_10th: 40, marksheet_12th: 40, marksheet_graduation: 40, marksheet_postgrad: 40,
-  certificate: 30, result: 30, admit_card: 30, bank_passbook: 50, form: 10, other: 10,
+  certificate: 30, result: 30, admit_card: 30, ayushman: 55, bank_passbook: 50, form: 10, other: 10,
 };
 const IDENTITY_FIELDS = new Set(['name','first_name','middle_name','last_name','father_name','mother_name','husband_name','dob','gender','nationality','category','religion','marital_status','aadhaar_number','pan_number','voter_id_number','address','permanent_address','village','post_office','police_station','block','sub_division','ward_no','phone','email','city','district','state','pincode']);
 
