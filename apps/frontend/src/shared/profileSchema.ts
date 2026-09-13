@@ -208,6 +208,8 @@ export const PROFILE_SCHEMA: Section[] = [
     icon: '🪪',
     fields: [
       { key: 'aadhaar_number', label: 'Aadhaar Number', required: true },
+      { key: 'ayushman_id', label: 'Ayushman / ABHA ID' },
+      { key: 'name_devanagari', label: 'Name (Hindi)' },
       { key: 'pan_number', label: 'PAN Number' },
       { key: 'voter_id', label: 'Voter ID' },
       { key: 'driving_license', label: 'Driving License' },
