@@ -6,7 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
-import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
+import { getCompleteness, flattenProfileData, buildVisibleSections } from '../../shared/profileSchema';
 import { ProvenanceChip } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 
@@ -358,156 +358,83 @@ export default function CustomerDetail() {
             )}
           </section>
 
-          {/* Profile data — grouped sections */}
+          {/* Profile data — schema sections + dynamic sections (Bank Details, etc.) */}
           <section className="mb-6">
             <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Profile data</h2>
             <div className="space-y-3">
-              {PROFILE_SCHEMA.map(section => {
+              {buildVisibleSections(personDetail.data || {}).map((section) => {
                 const raw = personDetail.data || {};
                 const sflat = flattenProfileData(raw);
-                const schemaKeysAll = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
-                // extra fields (not in any schema section) whose source document maps to THIS section
-                const GENERIC_NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name']);
-                const extras = Object.entries(raw).filter(([k, v]: any) => {
-                  if (schemaKeysAll.has(k) || k === 'document_type') return false;
-                  if (GENERIC_NOISE.has(k)) return false; // unsuffixed generic — its level-specific key is shown instead
-                  const val = v && typeof v === 'object' ? v.value : v;
-                  if (!val) return false;
-                  // Level suffix wins over documentType: a 12th certificate's keys (_12th) must show under 12th, not Graduation.
-                  if (/_10th$/.test(k)) return section.id === 'education_10th';
-                  if (/_12th$/.test(k)) return section.id === 'education_12th';
-                  if (/_grad$/.test(k)) return section.id === 'education_grad';
-                  const dt = v && typeof v === 'object' ? v.documentType : null;
-                  return dt && SECTION_FOR_DOCTYPE[dt] === section.id;
-                });
-                const hasAny = section.fields.some(f => sflat[f.key]) || extras.length > 0;
-                const visibleFields = section.fields;
-                if (!hasAny && !extras.length) return null;
+                // Schema sections: filled + required missing. Dynamic: filled only.
+                const rows = section.dynamic
+                  ? section.fields.filter((f) => !!sflat[f.key])
+                  : section.fields.filter((f) => !!sflat[f.key] || f.required).concat(
+                      section.extraKeys
+                        .filter((k) => !!sflat[k] && !section.fields.some((f) => f.key === k))
+                        .map((k) => ({
+                          key: k,
+                          label: k.replace(/_(10th|12th|grad)$/, '').replace(/_/g, ' '),
+                        })),
+                    );
+
                 return (
                   <div key={section.id} className="card">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{section.title}</p>
-                    {!hasAny ? (
-                      <p className="text-xs text-gray-600">No data yet</p>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                        {visibleFields.map(f => {
-                          const val = sflat[f.key];
-                          const rawVal = raw[f.key];
-                          const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
-                          const isEditing = editingField === f.key;
-                          return (
-                            <div key={f.key} className="flex flex-col gap-0.5">
-                              <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
-                                {f.label}{f.required && !val ? ' *' : ''}
-                              </span>
-                              {isEditing ? (
-                                <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                                  onBlur={() => { if (editValue !== (val || '')) saveField(f.key, editValue); else setEditingField(null); }}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveField(f.key, editValue); if (e.key === 'Escape') setEditingField(null); }}
-                                  className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
-                              ) : (
-                                <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
-                                  className="flex items-center gap-1.5 group text-left">
-                                  <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
-                                  {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
-                                  {rawVal && typeof rawVal === 'object' && (
-                                    <ProvenanceChip
-                                      source={rawVal.source}
-                                      documentType={rawVal.documentType}
-                                      confidence={rawVal.confidence}
-                                      needsReview={rawVal.needsReview}
-                                    />
-                                  )}
-                                  <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                        {extras.map(([k, v]: any) => {
-                          const val = v && typeof v === 'object' ? v.value : v;
-                          const isEditing = editingField === k;
-                          return (
-                            <div key={k} className="flex flex-col gap-0.5">
-                              <span className="text-[10px] uppercase tracking-wide text-gray-500 capitalize">{k.replace(/_(10th|12th|grad)$/, '').replace(/_/g, ' ')}</span>
-                              {isEditing ? (
-                                <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                                  onBlur={() => { if (editValue !== (val || '')) saveField(k, editValue); else setEditingField(null); }}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveField(k, editValue); if (e.key === 'Escape') setEditingField(null); }}
-                                  className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
-                              ) : (
-                                <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
-                                  <span className="text-sm text-gray-100 truncate" title={val || ''}>{val}</span>
-                                  <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />
-                                  <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    {addingInSection === section.id ? (
-                      <div className="flex gap-2 mt-3">
-                        <input placeholder="Field name" value={newFieldKey} onChange={e => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
-                        <input placeholder="Value" value={newFieldValue} onChange={e => setNewFieldValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
-                        <button onClick={handleAddField} className="text-xs text-[#30d158] px-2">Save</button>
-                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setAddingInSection(section.id)} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
-                        <Plus size={12} /> Add field
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Fields whose source document has NO dedicated section → DYNAMIC section per document */}
-              {(() => {
-                const schemaKeys = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
-                const raw = personDetail.data || {};
-                const NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name','document_label']);
-                const humanize = (dt: string) => dt.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                // group fields (whose docType has no schema section) by a TITLE derived from document_label
-                const groups: Record<string, { title: string; fields: [string, string][] }> = {};
-                for (const [k, val] of Object.entries(flat)) {
-                  if (schemaKeys.has(k) || k === 'document_type' || !val || NOISE.has(k)) continue;
-                  const rv = raw[k];
-                  const dt = (rv && typeof rv === 'object' && rv.documentType) || 'other';
-                  if (SECTION_FOR_DOCTYPE[dt]) continue; // already shown inside its schema section
-                  // title: the document's own label if present, else humanized docType
-                  const labelEntry = Object.entries(raw).find(([kk, vv]: any) => kk === 'document_label' && vv?.documentType === dt);
-                  const title = (labelEntry && (labelEntry[1] as any).value) || (dt === 'other' ? 'Other Details' : humanize(dt));
-                  (groups[title] ||= { title, fields: [] }).fields.push([k, val]);
-                }
-                return Object.values(groups).map(g => (
-                  <div key={g.title} className="card">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{g.title}</p>
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">
+                      {section.icon ? `${section.icon} ` : ''}{section.title}
+                    </p>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      {g.fields.map(([k, val]) => {
-                        const isEditing = editingField === k;
+                      {rows.map((f) => {
+                        const val = sflat[f.key];
+                        const rawVal = raw[f.key];
+                        const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
+                        const isEditing = editingField === f.key;
                         return (
-                          <div key={k} className="flex flex-col gap-0.5">
-                            <span className="text-[10px] uppercase tracking-wide text-gray-500">{k.replace(/_/g, ' ')}</span>
+                          <div key={f.key} className="flex flex-col gap-0.5">
+                            <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
+                              {f.label}{f.required && !val ? ' *' : ''}
+                            </span>
                             {isEditing ? (
-                              <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                                onBlur={() => { if (editValue !== (val || '')) saveField(k, editValue); else setEditingField(null); }}
-                                onKeyDown={e => { if (e.key === 'Enter') saveField(k, editValue); if (e.key === 'Escape') setEditingField(null); }}
+                              <input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={() => { if (editValue !== (val || '')) saveField(f.key, editValue); else setEditingField(null); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') saveField(f.key, editValue); if (e.key === 'Escape') setEditingField(null); }}
                                 className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
                             ) : (
-                              <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
-                                <span className="text-sm text-gray-100 truncate">{val}</span>
-                                <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity" />
+                              <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
+                                className="flex items-center gap-1.5 group text-left">
+                                <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
+                                {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
+                                {rawVal && typeof rawVal === 'object' && (
+                                  <ProvenanceChip
+                                    source={rawVal.source}
+                                    documentType={rawVal.documentType}
+                                    confidence={rawVal.confidence}
+                                    needsReview={rawVal.needsReview}
+                                  />
+                                )}
+                                <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
                               </button>
                             )}
                           </div>
                         );
                       })}
                     </div>
+                    {!section.dynamic && (
+                      addingInSection === section.id ? (
+                        <div className="flex gap-2 mt-3">
+                          <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
+                          <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
+                          <button onClick={handleAddField} className="text-xs text-[#30d158] px-2">Save</button>
+                          <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setAddingInSection(section.id)} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
+                          <Plus size={12} /> Add field
+                        </button>
+                      )
+                    )}
                   </div>
-                ));
-              })()}
+                );
+              })}
             </div>
           </section>
         </>
@@ -576,7 +503,7 @@ export default function CustomerDetail() {
 
       {/* Extraction confirm */}
       {extractedSuggestions && (
-        <ExtractionConfirm suggestions={extractedSuggestions} documentId={extractDocId || ''} error={extractError} saving={saving}
+        <ExtractionConfirm suggestions={extractedSuggestions} error={extractError} saving={saving}
           onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }} onConfirm={confirmExtraction} />
       )}
 
