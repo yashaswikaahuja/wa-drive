@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { SOCKET_URL } from '../../shared/api';
 import { DocTypePickerModal } from '../../shared/DocTypePicker';
+import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
@@ -639,12 +640,16 @@ export default function WhatsApp() {
     }
   };
 
-  const onConfirmExtraction = async (acceptedFields: Record<string, any>) => {
-    const pid = targetPersonIdRef.current || targetPersonId;
-    console.log('[Save] personId:', pid, 'fields:', Object.keys(acceptedFields).length);
+  const onConfirmExtraction = async (acceptedFields: Record<string, any>, target?: ExtractSaveTarget) => {
+    const defaultPid = targetPersonIdRef.current || targetPersonId;
+    if (target?.chooseProfile && !target.chosenPersonId) {
+      setExtractError('Select a profile from the list, or uncheck “Choose which profile…”');
+      return;
+    }
+    const pid = target?.chooseProfile ? target.chosenPersonId! : defaultPid;
+    console.log('[Save] personId:', pid, 'fields:', Object.keys(acceptedFields).length, 'chooseProfile:', !!target?.chooseProfile);
     if (!pid) { setExtractError('No target person — pick a person first'); return; }
     try {
-      // Phone from selected docs / active chat — used to auto-create if person id is stale/missing
       const phoneFromDocs = Array.from(selectedDocs.values()).map((d) => d.phone).find(Boolean)
         || selectedChat
         || '';
@@ -653,7 +658,7 @@ export default function WhatsApp() {
         fields: acceptedFields,
         phone: phoneFromDocs,
         name: nameFromFields,
-        createIfMissing: true,
+        createIfMissing: !target?.chooseProfile,
       }, { skipErrorToast: true } as any);
       if (r.data?.id) {
         targetPersonIdRef.current = r.data.id;
@@ -662,7 +667,9 @@ export default function WhatsApp() {
       setExtractedSuggestions(null);
       setTargetPersonId(null);
       exitSelectionMode();
-      if (r.data?.created || r.data?.redirected) {
+      if (target?.chooseProfile) {
+        toast.success(`✅ Saved to ${target.chosenLabel || 'selected profile'}`);
+      } else if (r.data?.created || r.data?.redirected) {
         toast.success(
           `✅ Saved to ${r.data?.name || 'new profile'}${r.data?.created ? ' (created — name did not match selected person)' : ' (matched existing person)'}.`,
         );
@@ -1051,8 +1058,21 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
   );
 }
 
-function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
+function ExtractionConfirmModal({
+  suggestions,
+  onCancel,
+  onConfirm,
+}: {
+  suggestions: Record<string, any>;
+  onCancel: () => void;
+  onConfirm: (fields: Record<string, any>, target?: ExtractSaveTarget) => void;
+}) {
   const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
+  const [target, setTarget] = useState<ExtractSaveTarget>({
+    chooseProfile: false,
+    chosenPersonId: null,
+    chosenLabel: null,
+  });
 
   const toggle = (key: string) => {
     setAccepted((prev: any) => {
@@ -1070,7 +1090,12 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
       <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-blue-500/30 rounded-xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
         <p className="text-sm font-medium text-blue-400 mb-3">Review extracted fields</p>
-        <p className="text-xs text-gray-500 mb-4">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
+        <p className="text-xs text-gray-500 mb-3">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
+        <ExtractProfileTarget
+          value={target}
+          onChange={setTarget}
+          hint="Useful for bank passbooks and other docs with no name — pick the person these details belong to."
+        />
         <div className="space-y-2 mb-4">
           {Object.entries(suggestions).map(([k, v]: [string, any]) => (
             <div key={k} className="flex items-center gap-2">
@@ -1085,7 +1110,13 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
           ))}
         </div>
         <div className="flex gap-2">
-          <button onClick={() => onConfirm(accepted)} className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded">Confirm & Save</button>
+          <button
+            onClick={() => onConfirm(accepted, target)}
+            disabled={target.chooseProfile && !target.chosenPersonId}
+            className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded disabled:opacity-50"
+          >
+            Confirm & Save
+          </button>
           <button onClick={onCancel} className="px-3 py-1.5 bg-white/5 text-gray-400 text-sm rounded">Cancel</button>
         </div>
       </div>

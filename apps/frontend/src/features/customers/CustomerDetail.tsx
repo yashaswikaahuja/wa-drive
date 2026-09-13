@@ -8,6 +8,7 @@ import api from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
 import { ProvenanceChip } from '../../shared/DocTypePicker';
+import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
@@ -184,8 +185,12 @@ export default function CustomerDetail() {
     } catch (e: any) { setError(e.response?.data?.error || e.message || 'Extraction failed'); }
     finally { setExtracting(null); }
   };
-  const confirmExtraction = async (acceptedFields: Record<string, any>) => {
+  const confirmExtraction = async (acceptedFields: Record<string, any>, target?: ExtractSaveTarget) => {
     if (!selectedPerson) { setExtractError('No person selected'); return; }
+    if (target?.chooseProfile && !target.chosenPersonId) {
+      setExtractError('Select a profile from the list, or uncheck “Choose which profile…”');
+      return;
+    }
     setExtractError('');
     setSaving(true);
     try {
@@ -195,26 +200,31 @@ export default function CustomerDetail() {
         fields[k] = { ...v, source: 'document_corrected' };
       }
       const extractedName = fields?.name?.value || fields?.account_holder_name?.value || '';
-      // If extracted name ≠ open person, backend creates/redirects to the right profile (no silent override).
-      const r = await api.patch(`/customers/persons/${selectedPerson}`, {
+      // Explicit picker wins — save exactly onto that profile (no name-mismatch redirect).
+      const forceId = target?.chooseProfile ? target.chosenPersonId! : selectedPerson;
+      const r = await api.patch(`/customers/persons/${forceId}`, {
         fields,
         phone,
         name: extractedName,
-        createIfMissing: true,
+        // When operator picked a profile, do not auto-create/redirect away from it.
+        createIfMissing: !target?.chooseProfile,
       }, { skipErrorToast: true } as any);
       setExtractedSuggestions(null); setExtractDocId(null);
-      const savedId = r.data?.id || selectedPerson;
+      const savedId = r.data?.id || forceId;
       if (savedId !== selectedPerson) {
         setSelectedPerson(savedId);
         await loadHousehold();
         await loadPerson(savedId);
         toast.success(
-          r.data?.created
-            ? `Created profile for ${r.data?.name || extractedName} (name did not match open person)`
-            : `Saved to ${r.data?.name || 'matching person'} instead of open profile`,
+          target?.chooseProfile
+            ? `Saved to ${target.chosenLabel || 'selected profile'}`
+            : r.data?.created
+              ? `Created profile for ${r.data?.name || extractedName} (name did not match open person)`
+              : `Saved to ${r.data?.name || 'matching person'} instead of open profile`,
         );
       } else {
         await loadPerson(selectedPerson);
+        if (target?.chooseProfile) toast.success(`Saved to ${target.chosenLabel || 'selected profile'}`);
       }
       loadReadiness();
     } catch (e: any) { setExtractError(e.response?.data?.error || e.message || 'Save failed'); }
@@ -671,8 +681,25 @@ function AddPersonForm({ onSubmit, onCancel }: { onSubmit: (f: any) => void; onC
   );
 }
 
-function ExtractionConfirm({ suggestions, onCancel, onConfirm, error, saving }: any) {
+function ExtractionConfirm({
+  suggestions,
+  onCancel,
+  onConfirm,
+  error,
+  saving,
+}: {
+  suggestions: Record<string, any>;
+  onCancel: () => void;
+  onConfirm: (fields: Record<string, any>, target?: ExtractSaveTarget) => void;
+  error?: string;
+  saving?: boolean;
+}) {
   const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
+  const [target, setTarget] = useState<ExtractSaveTarget>({
+    chooseProfile: false,
+    chosenPersonId: null,
+    chosenLabel: null,
+  });
   const toggle = (key: string) => setAccepted((prev: any) => {
     const next = { ...prev };
     if (next[key]) delete next[key]; else next[key] = suggestions[key];
@@ -688,7 +715,12 @@ function ExtractionConfirm({ suggestions, onCancel, onConfirm, error, saving }: 
             <Sparkle size={18} weight="fill" className="text-[#0a84ff]" />
             <p className="text-base font-semibold text-white">Review extracted data</p>
           </div>
-          <p className="text-xs text-gray-500 mb-4">Uncheck to skip. Edit values inline. Confirm to save.</p>
+          <p className="text-xs text-gray-500 mb-3">Uncheck to skip. Edit values inline. Confirm to save.</p>
+          <ExtractProfileTarget
+            value={target}
+            onChange={setTarget}
+            hint="Useful for bank passbooks and other docs with no name — pick the person these details belong to."
+          />
           <div className="space-y-2 mb-4 overflow-y-auto flex-1">
             {Object.entries(suggestions).map(([k, v]: [string, any]) => (
               <label key={k} className="flex items-center gap-3 cursor-pointer">
@@ -701,7 +733,11 @@ function ExtractionConfirm({ suggestions, onCancel, onConfirm, error, saving }: 
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => onConfirm(accepted)} disabled={saving} className="btn-primary flex items-center gap-2 flex-1 justify-center disabled:opacity-50">
+            <button
+              onClick={() => onConfirm(accepted, target)}
+              disabled={saving || (target.chooseProfile && !target.chosenPersonId)}
+              className="btn-primary flex items-center gap-2 flex-1 justify-center disabled:opacity-50"
+            >
               <CheckCircle size={16} weight="fill" /> {saving ? 'Saving…' : 'Confirm & Save'}
             </button>
             <button onClick={onCancel} disabled={saving} className="btn-secondary disabled:opacity-50">Cancel</button>
