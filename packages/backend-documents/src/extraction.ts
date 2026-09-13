@@ -3,8 +3,12 @@ import {
   DOC_TYPES,
   DOC_TYPE_LABELS,
   getExtractFieldsForType,
+  hasExtractRule,
   resolveDocTypeDecision,
   normalizeDocTypeKey,
+  PROFILE_KEY_ALLOWLIST,
+  sanitizeProposedFields,
+  saveExtractRule,
 } from './doc-extract-maps.js';
 
 function buildClassifyPrompt(): string {
@@ -273,7 +277,11 @@ export async function classifyDocumentType(
     if (parsed.document_type) break;
     if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
   }
-  const documentType = normalizeDocTypeKey(String(parsed.document_type || '')) || 'other';
+  // Prefer seed/alias normalize; else keep AI snake_case as learned type key
+  const rawType = String(parsed.document_type || '').trim();
+  const documentType = normalizeDocTypeKey(rawType)
+    || (normalizeDocTypeKey(rawType.replace(/\s+/g, '_')) )
+    || 'other';
   const confidenceRaw = Number(parsed.confidence);
   const confidence = Number.isFinite(confidenceRaw)
     ? Math.max(0, Math.min(1, confidenceRaw))
@@ -281,6 +289,103 @@ export async function classifyDocumentType(
   const decision = resolveDocTypeDecision(documentType, confidence);
   const documentLabel = String(parsed.document_label || DOC_TYPE_LABELS[documentType] || documentType).trim();
   return { documentType, documentLabel, confidence, decision };
+}
+
+/**
+ * Rule maker: ask AI what type this is (if needed) and which fields matter.
+ * Result is meant to be saved in settings like a form mapping — not re-asked every time.
+ */
+export async function proposeDocumentRule(
+  buffer: Buffer,
+  fileId: string,
+  hintType?: string | null,
+): Promise<{ documentType: string; documentLabel: string; fields: string[]; confidence: number }> {
+  if (!llmKeys().length && !mistralKey()) {
+    throw new Error('No vision API key configured');
+  }
+  const base64s = await bufferToVisionBase64s(buffer, fileId);
+  const seedList = DOC_TYPES.filter((t) => t !== 'other').join(', ');
+  const allow = PROFILE_KEY_ALLOWLIST.join(', ');
+  const hint = hintType
+    ? `The operator/classifier already named this type as "${hintType}". Propose the lean field list for that type (reuse the type key if valid).`
+    : `If it matches a seed type, reuse that key. Otherwise invent a short snake_case document_type.`;
+  const prompt = `You are building an extract RULE for an Indian cyber-café autofill system (like teaching a form mapping once).
+Look at this document image and return ONLY JSON:
+{"document_type":"<snake_case>","document_label":"<short title>","fields":["key1","key2"],"confidence":0.0}
+
+${hint}
+
+Seed types (prefer when matching): ${seedList}
+Allowed field keys ONLY: ${allow}
+
+Rules:
+- fields = ONLY important data for THIS document type (lean). Examples:
+  - bank passbook → bank_account_number, ifsc_code, cif_number, bank_name, branch_name
+  - ayushman/PM-JAY/ABHA → name, name_devanagari, ayushman_id, gender
+  - aadhaar → name, father_name, dob, address parts, aadhaar_number
+- Do NOT dump every possible field. No address from bank docs.
+- photo/selfie → document_type "photo", fields []
+- confidence 0..1. Use low confidence if unclear.
+Return ONLY the JSON.`;
+
+  let parsed: any = {};
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const text = await callVision(base64s, prompt, 500);
+    parsed = parseJsonObject(text);
+    if (parsed.document_type || (Array.isArray(parsed.fields) && parsed.fields.length)) break;
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
+  }
+
+  const hintNorm = hintType ? normalizeDocTypeKey(hintType) : null;
+  const documentType = normalizeDocTypeKey(String(parsed.document_type || '')) || hintNorm || 'other';
+  const documentLabel = String(parsed.document_label || DOC_TYPE_LABELS[documentType] || documentType).trim();
+  const fields = sanitizeProposedFields(parsed.fields);
+  const confidenceRaw = Number(parsed.confidence);
+  const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0.7;
+  return { documentType, documentLabel, fields, confidence };
+}
+
+/**
+ * Ensure an extract rule exists for this type (seed/owner/learned).
+ * If missing → AI proposes fields → save to workspace settings → return fields.
+ */
+export async function ensureExtractRule(
+  workspaceId: string,
+  docType: string,
+  opts: { buffer: Buffer; fileId: string; label?: string | null },
+): Promise<{ fields: string[]; learned: boolean; documentType: string; documentLabel: string }> {
+  const type = normalizeDocTypeKey(docType) || docType;
+  if (!type || type === 'other') {
+    return { fields: [], learned: false, documentType: 'other', documentLabel: 'Other' };
+  }
+  if (type === 'photo' || type === 'signature') {
+    return { fields: [], learned: false, documentType: type, documentLabel: DOC_TYPE_LABELS[type] || type };
+  }
+  const existing = await getExtractFieldsForType(type);
+  if (existing.length > 0) {
+    return {
+      fields: existing,
+      learned: false,
+      documentType: type,
+      documentLabel: opts.label || DOC_TYPE_LABELS[type] || type,
+    };
+  }
+  const proposed = await proposeDocumentRule(opts.buffer, opts.fileId, type);
+  const useType = normalizeDocTypeKey(proposed.documentType) || type;
+  const fields = proposed.fields.length ? proposed.fields : sanitizeProposedFields(
+    // minimal fallback if AI returns empty but type is known-ish
+    useType.includes('bank') ? ['bank_account_number', 'ifsc_code', 'bank_name', 'branch_name']
+      : ['name'],
+  );
+  if (workspaceId && fields.length) {
+    await saveExtractRule(workspaceId, useType, fields, proposed.documentLabel || opts.label);
+  }
+  return {
+    fields,
+    learned: true,
+    documentType: useType,
+    documentLabel: proposed.documentLabel || opts.label || DOC_TYPE_LABELS[useType] || useType,
+  };
 }
 
 /** Phase 2 — extract ONLY the configured fields for a known type. */
@@ -362,18 +467,20 @@ export async function extractFieldsForType(
 }
 
 /**
- * Typed intake pipeline: classify first; extract fields only when type is known.
- * Unknown/uncertain → needsType stub (no field vision call).
+ * Typed intake pipeline:
+ * classify → ensure extract rule (seed or AI-learned into settings) → extract those fields only.
+ * Very unclear docs still get Needs type (operator confirms) instead of silent invent.
  */
 export async function extractFromBuffer(
   buffer: Buffer,
   fileId: string,
-  opts?: { forcedType?: string },
-): Promise<{ suggested: any; raw: any; needsType?: boolean }> {
+  opts?: { forcedType?: string; workspaceId?: string },
+): Promise<{ suggested: any; raw: any; needsType?: boolean; ruleLearned?: boolean }> {
   if (!llmKeys().length && !mistralKey()) {
     throw new Error('No vision API key configured (MISTRAL_API_KEY or AI_API_KEY/LLM_API_KEY/GROQ_API_KEY)');
   }
 
+  const workspaceId = opts?.workspaceId || '';
   let documentType = normalizeDocTypeKey(opts?.forcedType || '') || '';
   let confidence = 1;
   let decision = 'known';
@@ -390,7 +497,37 @@ export async function extractFromBuffer(
     documentLabel = DOC_TYPE_LABELS[documentType] || documentType;
   }
 
-  if (decision !== 'known' || documentType === 'other') {
+  // Unclear → try rule maker once when we have a workspace (learn type+fields).
+  // If still unusable / low confidence → Needs type for operator.
+  if ((!documentType || documentType === 'other' || decision === 'unknown' || decision === 'uncertain')
+    && !opts?.forcedType) {
+    if (workspaceId && confidence >= 0.55) {
+      try {
+        const proposed = await proposeDocumentRule(buffer, fileId, documentType !== 'other' ? documentType : null);
+        if (proposed.documentType && proposed.documentType !== 'other' && proposed.fields.length > 0
+          && proposed.confidence >= 0.6) {
+          await saveExtractRule(workspaceId, proposed.documentType, proposed.fields, proposed.documentLabel);
+          documentType = proposed.documentType;
+          documentLabel = proposed.documentLabel;
+          decision = 'known';
+          confidence = proposed.confidence;
+          const { suggested, raw } = await extractFieldsForType(buffer, fileId, documentType, proposed.fields);
+          if (documentLabel && !suggested.document_label) {
+            suggested.document_label = {
+              value: documentLabel, source: 'document', documentType, documentId: fileId,
+            };
+          }
+          if (suggested.document_type) {
+            suggested.document_type.confidence = confidence;
+            suggested.document_type.decision = 'known';
+            suggested.document_type.ruleLearned = true;
+          }
+          return { suggested, raw, needsType: false, ruleLearned: true };
+        }
+      } catch (e: any) {
+        console.warn('[Extract] rule maker failed:', e.message);
+      }
+    }
     const suggested: any = {
       document_type: {
         value: documentType || 'other',
@@ -414,7 +551,20 @@ export async function extractFromBuffer(
     };
   }
 
-  const { suggested, raw } = await extractFieldsForType(buffer, fileId, documentType);
+  // Known / forced type → ensure rule (seed or learn fields) then extract
+  let ruleLearned = false;
+  let fieldKeys: string[] | undefined;
+  if (workspaceId && documentType && documentType !== 'other') {
+    const ensured = await ensureExtractRule(workspaceId, documentType, {
+      buffer, fileId, label: documentLabel,
+    });
+    fieldKeys = ensured.fields;
+    ruleLearned = ensured.learned;
+    documentType = ensured.documentType;
+    documentLabel = ensured.documentLabel || documentLabel;
+  }
+
+  const { suggested, raw } = await extractFieldsForType(buffer, fileId, documentType, fieldKeys);
   if (documentLabel && !suggested.document_label) {
     suggested.document_label = {
       value: documentLabel, source: 'document', documentType, documentId: fileId,
@@ -423,8 +573,9 @@ export async function extractFromBuffer(
   if (suggested.document_type) {
     suggested.document_type.confidence = confidence;
     suggested.document_type.decision = 'known';
+    if (ruleLearned) suggested.document_type.ruleLearned = true;
   }
-  return { suggested, raw, needsType: false };
+  return { suggested, raw, needsType: false, ruleLearned };
 }
 
 /** Read cached extraction for a fileId (instant, no Groq call). */
@@ -539,7 +690,7 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
   const buf = Buffer.from(buffer);
   const run = (attempt: number) => _extractQueue.push(async () => {
     try {
-      const { suggested, raw, needsType } = await extractFromBuffer(buf, fileId);
+      const { suggested, raw, needsType, ruleLearned } = await extractFromBuffer(buf, fileId, { workspaceId });
       const docType = String(raw?.document_type || suggested?.document_type?.value || '').trim();
       if (needsType) {
         try {
@@ -563,7 +714,7 @@ export function autoExtractInBackground(buffer: Buffer, fileId: string, workspac
         if (phone && docType !== 'photo' && docType !== 'signature') {
           await upsertProfileFromExtraction(workspaceId, phone, suggested, fileId);
         }
-        console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields (typed)`);
+        console.log(`[AutoExtract] ✓ ${fileId} → ${docType || '?'}, ${Object.keys(suggested).length} fields (typed)${ruleLearned ? ' [rule learned]' : ''}`);
         markExtractionJobDone(fileId);
       } else if (docType === 'photo' || docType === 'signature') {
         console.log(`[AutoExtract] ${fileId} → ${docType} (not an ID doc)`);
@@ -599,7 +750,10 @@ export async function applyConfirmedDocumentType(opts: {
   const type = normalizeDocTypeKey(opts.documentType);
   if (!type) throw new Error('Invalid document type');
   const { buffer } = await opts.download();
-  const { suggested, needsType } = await extractFromBuffer(buffer, opts.fileId, { forcedType: type });
+  const { suggested, needsType } = await extractFromBuffer(buffer, opts.fileId, {
+    forcedType: type,
+    workspaceId: opts.workspaceId,
+  });
   if (suggested?.document_type) {
     suggested.document_type.source = 'operator';
     suggested.document_type.confidence = 1;
@@ -683,7 +837,7 @@ export async function recoverStuckExtractions(): Promise<void> {
       const drive = await getDriveForWorkspace(job.workspace_id);
       if (!drive) throw new Error('no Drive client for workspace');
       const buffer = await downloadFileFromDrive(drive, job.file_id);
-      const { suggested } = await extractFromBuffer(buffer, job.file_id);
+      const { suggested } = await extractFromBuffer(buffer, job.file_id, { workspaceId: job.workspace_id });
       if (Object.keys(suggested).length > 0) {
         await cacheExtraction(job.file_id, job.workspace_id, suggested);
         if (job.phone) await upsertProfileFromExtraction(job.workspace_id, job.phone, suggested, job.file_id);

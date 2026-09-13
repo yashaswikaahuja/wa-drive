@@ -87,7 +87,7 @@ export const DEFAULT_EXTRACT_MAPS: Record<string, string[]> = {
 };
 
 const CACHE_TTL_MS = 60_000;
-let _mapsCache: { at: number; maps: Record<string, string[]> } | null = null;
+let _mapsCache: { at: number; maps: Record<string, string[]>; key: string } | null = null;
 
 /** Merge owner overrides onto defaults (owner wins per type when non-empty array). */
 export function mergeExtractMaps(ownerMaps?: Record<string, string[]> | null): Record<string, string[]> {
@@ -108,25 +108,33 @@ export function mergeExtractMaps(ownerMaps?: Record<string, string[]> | null): R
   return out;
 }
 
-/** Load owner-configured maps from any workspace settings (global AI config pattern). */
-export async function loadOwnerExtractMaps(): Promise<Record<string, string[]>> {
-  if (_mapsCache && Date.now() - _mapsCache.at < CACHE_TTL_MS) return _mapsCache.maps;
+/** Load owner/learned maps (prefer a workspace when provided). */
+export async function loadOwnerExtractMaps(workspaceId?: string | null): Promise<Record<string, string[]>> {
+  const cacheKey = workspaceId || '_any';
+  if (_mapsCache && _mapsCache.key === cacheKey && Date.now() - _mapsCache.at < CACHE_TTL_MS) {
+    return _mapsCache.maps;
+  }
   try {
-    const { rows } = await pool.query(
-      `SELECT settings->'ai'->'documentExtractMaps' AS maps
-       FROM workspaces
-       WHERE settings->'ai'->'documentExtractMaps' IS NOT NULL
-       ORDER BY created_at DESC NULLS LAST
-       LIMIT 1`
-    );
+    const { rows } = workspaceId
+      ? await pool.query(
+        `SELECT settings->'ai'->'documentExtractMaps' AS maps FROM workspaces WHERE id = $1`,
+        [workspaceId],
+      )
+      : await pool.query(
+        `SELECT settings->'ai'->'documentExtractMaps' AS maps
+         FROM workspaces
+         WHERE settings->'ai'->'documentExtractMaps' IS NOT NULL
+         ORDER BY created_at DESC NULLS LAST
+         LIMIT 1`,
+      );
     const raw = rows[0]?.maps;
     const owner = raw && typeof raw === 'object' ? (raw as Record<string, string[]>) : null;
     const maps = mergeExtractMaps(owner);
-    _mapsCache = { at: Date.now(), maps };
+    _mapsCache = { at: Date.now(), maps, key: cacheKey };
     return maps;
   } catch {
     const maps = mergeExtractMaps(null);
-    _mapsCache = { at: Date.now(), maps };
+    _mapsCache = { at: Date.now(), maps, key: cacheKey };
     return maps;
   }
 }
@@ -141,24 +149,108 @@ export async function getExtractFieldsForType(docType: string): Promise<string[]
   return maps[t] || DEFAULT_EXTRACT_MAPS[t] || [];
 }
 
+/** True when we already have a non-empty extract rule (seed or owner/learned). */
+export async function hasExtractRule(docType: string): Promise<boolean> {
+  const fields = await getExtractFieldsForType(docType);
+  return fields.length > 0;
+}
+
 export type TypeDecision = 'known' | 'uncertain' | 'unknown';
 
-/** Decide whether we can run typed field extract. */
+/** Decide whether we can run typed field extract (or must learn a rule / ask operator). */
 export function resolveDocTypeDecision(docType: string, confidence?: number): TypeDecision {
   const t = String(docType || '').toLowerCase().trim();
   if (!t || t === 'other') return 'unknown';
   if (t === 'photo' || t === 'signature') return 'known'; // known but no fields
-  if (!(DOC_TYPES as readonly string[]).includes(t)) return 'unknown';
+  // Seed or learned snake_case types are eligible; confidence gates auto-learn path.
   if (typeof confidence === 'number' && confidence < 0.55) return 'uncertain';
   if (typeof confidence === 'number' && confidence < 0.75) return 'uncertain';
   return 'known';
 }
 
+/** Seed keys, label aliases, or safe dynamic snake_case (learned types). */
 export function normalizeDocTypeKey(input: string): string | null {
   const raw = String(input || '').trim();
   if (!raw) return null;
-  const lower = raw.toLowerCase().replace(/\s+/g, '_');
+  const lower = raw.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!lower || lower === 'other') {
+    const fromLabel = LABEL_TO_DOC_TYPE[raw.toLowerCase()];
+    return fromLabel && fromLabel !== 'other' ? fromLabel : (lower === 'other' ? 'other' : null);
+  }
   if ((DOC_TYPES as readonly string[]).includes(lower)) return lower;
   const fromLabel = LABEL_TO_DOC_TYPE[raw.toLowerCase()];
-  return fromLabel || null;
+  if (fromLabel) return fromLabel;
+  // Learned / dynamic type keys: a_z start, snake_case, max 40
+  if (/^[a-z][a-z0-9_]{1,39}$/.test(lower)) return lower;
+  return null;
+}
+
+/** Profile keys the rule maker may propose (keep extract maps stable & mergeable). */
+export const PROFILE_KEY_ALLOWLIST = [
+  'name', 'first_name', 'middle_name', 'last_name', 'name_devanagari',
+  'father_name', 'mother_name', 'husband_name', 'guardian_name',
+  'dob', 'gender', 'nationality', 'category', 'religion', 'marital_status',
+  'phone', 'email', 'address', 'village', 'post_office', 'police_station', 'block',
+  'sub_division', 'ward_no', 'city', 'district', 'state', 'pincode',
+  'aadhaar_number', 'pan_number', 'passport_number', 'voter_id_number',
+  'driving_license_number', 'ration_card_number', 'ayushman_id',
+  'roll_number', 'registration_number', 'certificate_number', 'board', 'school_name',
+  'college_name', 'university_name', 'course', 'stream', 'marks_obtained', 'total_marks',
+  'percentage', 'division', 'passing_year', 'exam_name', 'exam_date', 'exam_center',
+  'exam_seat_number', 'application_number',
+  'bank_account_number', 'ifsc_code', 'cif_number', 'bank_name', 'branch_name', 'account_holder_name',
+  'issue_date', 'expiry_date', 'place_of_issue',
+  'departure', 'arrival', 'from_station', 'to_station', 'journey_date', 'return_date',
+  'travel_class', 'quota', 'passenger_count',
+] as const;
+
+export function sanitizeProposedFields(fields: unknown): string[] {
+  const allow = new Set(PROFILE_KEY_ALLOWLIST as readonly string[]);
+  if (!Array.isArray(fields)) return [];
+  return [...new Set(
+    fields.map((k) => String(k || '').toLowerCase().trim().replace(/[^a-z0-9_]/g, ''))
+      .filter((k) => k && allow.has(k)),
+  )];
+}
+
+/** Persist a learned/edited extract map for one document type (settings = form-mapping style). */
+export async function saveExtractRule(
+  workspaceId: string,
+  docType: string,
+  fields: string[],
+  label?: string | null,
+): Promise<Record<string, string[]>> {
+  const type = normalizeDocTypeKey(docType);
+  if (!type || type === 'other') throw new Error('Cannot save extract rule for invalid/other type');
+  const clean = sanitizeProposedFields(fields);
+  const current = await loadOwnerExtractMaps();
+  const next = { ...current, [type]: clean };
+
+  await pool.query(
+    `UPDATE workspaces
+     SET settings = jsonb_set(
+       jsonb_set(COALESCE(settings, '{}'::jsonb), '{ai}', COALESCE(settings->'ai', '{}'::jsonb)),
+       '{ai,documentExtractMaps}',
+       $1::jsonb
+     )
+     WHERE id = $2`,
+    [JSON.stringify(next), workspaceId],
+  );
+
+  if (label && String(label).trim()) {
+    await pool.query(
+      `UPDATE workspaces
+       SET settings = jsonb_set(
+         COALESCE(settings, '{}'::jsonb),
+         '{ai,documentTypeLabels}',
+         COALESCE(settings->'ai'->'documentTypeLabels', '{}'::jsonb) || $1::jsonb
+       )
+       WHERE id = $2`,
+      [JSON.stringify({ [type]: String(label).trim() }), workspaceId],
+    );
+  }
+
+  invalidateExtractMapsCache();
+  console.log(`[ExtractMaps] saved rule ${type} → [${clean.join(', ')}] ws=${workspaceId}`);
+  return next;
 }

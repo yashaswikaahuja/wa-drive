@@ -205,13 +205,14 @@ router.post('/extract', async (req: any, res: Response) => {
   try {
     const buffer = await downloadDriveFile(fileId, req);
     const { extractFromBuffer, cacheExtraction } = await import('@cybercontrol/backend-documents');
-    const { suggested, needsType } = await extractFromBuffer(buffer, fileId, {
+    const { suggested, needsType, ruleLearned } = await extractFromBuffer(buffer, fileId, {
       forcedType: documentType || undefined,
+      workspaceId: req.user?.workspaceId,
     });
     if (req.user?.workspaceId && Object.keys(suggested).length > 0) {
       try { await cacheExtraction(fileId, req.user.workspaceId, suggested); } catch {}
     }
-    res.json({ ok: true, suggested, needsType: !!needsType });
+    res.json({ ok: true, suggested, needsType: !!needsType, ruleLearned: !!ruleLearned });
     return;
   } catch (e: any) {
     console.error('[Process] extract error:', e.message);
