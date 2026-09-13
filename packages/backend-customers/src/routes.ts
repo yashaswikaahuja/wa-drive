@@ -66,44 +66,119 @@ router.get('/persons/:id', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
+function fieldValue(fields: any, key: string): string {
+  const v = fields?.[key];
+  if (v == null) return '';
+  return String(typeof v === 'object' && v && 'value' in v ? v.value : v).trim();
+}
+
+function normPersonName(s: string): string {
+  return String(s || '').toLowerCase().replace(/[^a-z\u0900-\u097F]/g, '').trim();
+}
+
+function personNamesMatch(a: string, b: string): boolean {
+  const na = normPersonName(a);
+  const nb = normPersonName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  // Containment for minor OCR drift (min length guard)
+  if (na.length >= 4 && nb.length >= 4 && (na.includes(nb) || nb.includes(na))) return true;
+  return false;
+}
+
+async function createPersonRow(
+  workspaceId: string,
+  phone: string,
+  personName: string,
+  relationship: string,
+  userId: string,
+) {
+  const { rows } = await pool.query(
+    `INSERT INTO profiles (workspace_id, primary_contact_phone, name, display_label, relationship, data, created_by)
+     VALUES ($1,$2,$3,$4,$5,'{}'::jsonb,$6) RETURNING id, data, name, display_label, primary_contact_phone`,
+    [workspaceId, phone, personName, personName, relationship || 'self', userId],
+  );
+  return rows[0];
+}
+
 // PATCH /api/customers/persons/:id
-// If the person id is missing/stale, auto-create a profile when phone + name are available
-// (manual Build Profile save must not fail with "Person not found").
+// - Missing/stale id → auto-create when phone + name available
+// - Extracted name does not match target person → do NOT overwrite; create/find matching person on same phone
 router.patch('/persons/:id', authMiddleware, async (req: any, res) => {
   const { fields, displayLabel, relationship, phone, name, createIfMissing } = req.body || {};
+  const allowCreate = createIfMissing !== false;
   try {
     let personId = req.params.id;
+    let created = false;
+    let redirected = false;
+
     let { rows } = await pool.query(
-      "SELECT id, data FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL",
+      `SELECT id, data, name, display_label, primary_contact_phone
+       FROM profiles WHERE id = $1 AND workspace_id = $2 AND deleted_at IS NULL`,
       [personId, req.user.workspaceId]
     );
 
+    const extractedName = String(
+      name || fieldValue(fields, 'name') || fieldValue(fields, 'account_holder_name') || displayLabel || '',
+    ).trim();
+    const createPhone = String(phone || rows[0]?.primary_contact_phone || '').replace(/\D/g, '');
+
+    // Target missing → create
     if (!rows.length) {
-      const fieldName = fields?.name && typeof fields.name === 'object' ? fields.name.value : fields?.name;
-      const createName = String(name || fieldName || displayLabel || '').trim();
-      const createPhone = String(phone || '').replace(/\D/g, '');
-      const allowCreate = createIfMissing !== false; // default true when identity present
-      if (!allowCreate || !createPhone || createPhone.length < 7 || !createName || createName.length < 2) {
+      if (!allowCreate || !createPhone || createPhone.length < 7 || !extractedName || extractedName.length < 2) {
         return res.status(404).json({
           error: 'Person not found',
           hint: 'Pass phone + name (or fields.name) to auto-create the profile on save',
         });
       }
-      const created = await pool.query(
-        `INSERT INTO profiles (workspace_id, primary_contact_phone, name, display_label, relationship, data, created_by)
-         VALUES ($1,$2,$3,$4,$5,'{}'::jsonb,$6) RETURNING id, data`,
-        [
-          req.user.workspaceId,
-          createPhone,
-          createName,
-          displayLabel || createName,
-          relationship || 'self',
-          req.user.userId,
-        ]
-      );
-      rows = created.rows;
-      personId = created.rows[0].id;
-      console.log(`[Customers] auto-created profile ${personId} for ${createPhone} / ${createName}`);
+      const row = await createPersonRow(req.user.workspaceId, createPhone, extractedName, relationship || 'self', req.user.userId);
+      rows = [row];
+      personId = row.id;
+      created = true;
+      console.log(`[Customers] auto-created profile ${personId} for ${createPhone} / ${extractedName}`);
+    } else if (allowCreate && extractedName.length >= 2) {
+      // Target exists but extracted identity is a different person → never override
+      const targetLabel = String(rows[0].display_label || rows[0].name || '').trim();
+      if (targetLabel && !personNamesMatch(targetLabel, extractedName)) {
+        const phoneForHousehold = createPhone || String(rows[0].primary_contact_phone || '').replace(/\D/g, '');
+        if (!phoneForHousehold || phoneForHousehold.length < 7) {
+          return res.status(409).json({
+            error: 'Extracted name does not match the selected person',
+            selected: targetLabel,
+            extracted: extractedName,
+            hint: 'Provide phone to create a new profile for the extracted person',
+          });
+        }
+        // Prefer an existing household member with matching name
+        const household = await pool.query(
+          `SELECT id, data, name, display_label, primary_contact_phone
+           FROM profiles
+           WHERE workspace_id = $1 AND primary_contact_phone = $2 AND deleted_at IS NULL`,
+          [req.user.workspaceId, phoneForHousehold],
+        );
+        const match = household.rows.find((p: any) =>
+          personNamesMatch(p.display_label || p.name || '', extractedName)
+        );
+        if (match) {
+          rows = [match];
+          personId = match.id;
+          redirected = true;
+          console.log(`[Customers] redirected save ${req.params.id} → ${personId} (name match ${extractedName})`);
+        } else {
+          const row = await createPersonRow(
+            req.user.workspaceId,
+            phoneForHousehold,
+            extractedName,
+            relationship || 'self',
+            req.user.userId,
+          );
+          rows = [row];
+          personId = row.id;
+          created = true;
+          redirected = true;
+          console.log(`[Customers] name mismatch "${targetLabel}" vs "${extractedName}" → created ${personId}`);
+        }
+      }
     }
 
     const current = rows[0].data || {};
@@ -125,11 +200,30 @@ router.patch('/persons/:id', authMiddleware, async (req: any, res) => {
     const updates = ['data = $1::jsonb', 'updated_by = $2', 'updated_at = now()'];
     const params: any[] = [JSON.stringify(merged), req.user.userId];
     let pi = 3;
-    if (displayLabel !== undefined) { updates.push(`display_label = $${pi}`); params.push(displayLabel); pi++; }
-    if (relationship !== undefined) { updates.push(`relationship = $${pi}`); params.push(relationship); pi++; }
+    // Only rename display when saving onto a matching/new person intentionally
+    if (displayLabel !== undefined && !redirected) {
+      updates.push(`display_label = $${pi}`);
+      params.push(displayLabel);
+      pi++;
+    } else if (created && extractedName) {
+      updates.push(`display_label = $${pi}`);
+      params.push(extractedName);
+      pi++;
+    }
+    if (relationship !== undefined && !redirected) {
+      updates.push(`relationship = $${pi}`);
+      params.push(relationship);
+      pi++;
+    }
     params.push(personId, req.user.workspaceId);
     await pool.query(`UPDATE profiles SET ${updates.join(', ')} WHERE id = $${pi} AND workspace_id = $${pi + 1}`, params);
-    res.json({ ok: true, id: personId, created: personId !== req.params.id });
+    res.json({
+      ok: true,
+      id: personId,
+      created,
+      redirected,
+      name: extractedName || rows[0].display_label || rows[0].name,
+    });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

@@ -5,6 +5,7 @@ import {
   Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import { toast } from '../../shared/toast';
 import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
 import { ProvenanceChip } from '../../shared/DocTypePicker';
 
@@ -193,9 +194,29 @@ export default function CustomerDetail() {
         if (k === 'document_type') continue;
         fields[k] = { ...v, source: 'document_corrected' };
       }
-      await api.patch(`/customers/persons/${selectedPerson}`, { fields });
+      const extractedName = fields?.name?.value || fields?.account_holder_name?.value || '';
+      // If extracted name ≠ open person, backend creates/redirects to the right profile (no silent override).
+      const r = await api.patch(`/customers/persons/${selectedPerson}`, {
+        fields,
+        phone,
+        name: extractedName,
+        createIfMissing: true,
+      }, { skipErrorToast: true } as any);
       setExtractedSuggestions(null); setExtractDocId(null);
-      await loadPerson(selectedPerson); loadReadiness();
+      const savedId = r.data?.id || selectedPerson;
+      if (savedId !== selectedPerson) {
+        setSelectedPerson(savedId);
+        await loadHousehold();
+        await loadPerson(savedId);
+        toast.success(
+          r.data?.created
+            ? `Created profile for ${r.data?.name || extractedName} (name did not match open person)`
+            : `Saved to ${r.data?.name || 'matching person'} instead of open profile`,
+        );
+      } else {
+        await loadPerson(selectedPerson);
+      }
+      loadReadiness();
     } catch (e: any) { setExtractError(e.response?.data?.error || e.message || 'Save failed'); }
     finally { setSaving(false); }
   };

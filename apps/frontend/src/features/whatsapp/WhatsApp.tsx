@@ -662,9 +662,13 @@ export default function WhatsApp() {
       setExtractedSuggestions(null);
       setTargetPersonId(null);
       exitSelectionMode();
-      toast.success(r.data?.created
-        ? '✅ Profile created and saved! Open a govt form and use the extension to fill.'
-        : '✅ Profile updated! Open a govt form and use the extension to fill.');
+      if (r.data?.created || r.data?.redirected) {
+        toast.success(
+          `✅ Saved to ${r.data?.name || 'new profile'}${r.data?.created ? ' (created — name did not match selected person)' : ' (matched existing person)'}.`,
+        );
+      } else {
+        toast.success('✅ Profile updated! Open a govt form and use the extension to fill.');
+      }
     } catch (e: any) {
       setExtractError(e.response?.data?.error || e.message || 'Save failed');
     }
