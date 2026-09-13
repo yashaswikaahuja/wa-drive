@@ -503,8 +503,14 @@ export default function CustomerDetail() {
 
       {/* Extraction confirm */}
       {extractedSuggestions && (
-        <ExtractionConfirm suggestions={extractedSuggestions} error={extractError} saving={saving}
-          onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }} onConfirm={confirmExtraction} />
+        <ExtractionConfirm
+          suggestions={extractedSuggestions}
+          phone={phone}
+          error={extractError}
+          saving={saving}
+          onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }}
+          onConfirm={confirmExtraction}
+        />
       )}
 
       {/* Share modal */}
@@ -610,12 +616,14 @@ function AddPersonForm({ onSubmit, onCancel }: { onSubmit: (f: any) => void; onC
 
 function ExtractionConfirm({
   suggestions,
+  phone,
   onCancel,
   onConfirm,
   error,
   saving,
 }: {
   suggestions: Record<string, any>;
+  phone?: string;
   onCancel: () => void;
   onConfirm: (fields: Record<string, any>, target?: ExtractSaveTarget) => void;
   error?: string;
@@ -646,7 +654,8 @@ function ExtractionConfirm({
           <ExtractProfileTarget
             value={target}
             onChange={setTarget}
-            hint="Useful for bank passbooks and other docs with no name — pick the person these details belong to."
+            phone={phone}
+            hint="Only family members on this phone — pick who these details belong to (e.g. bank passbook with no name)."
           />
           <div className="space-y-2 mb-4 overflow-y-auto flex-1">
             {Object.entries(suggestions).map(([k, v]: [string, any]) => (

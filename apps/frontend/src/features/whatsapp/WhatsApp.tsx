@@ -897,6 +897,11 @@ export default function WhatsApp() {
       {extractedSuggestions && (
         <ExtractionConfirmModal
           suggestions={extractedSuggestions}
+          phone={
+            Array.from(selectedDocs.values()).map((d) => d.phone).find(Boolean)
+            || selectedChat
+            || undefined
+          }
           onCancel={() => { setExtractedSuggestions(null); setTargetPersonId(null); }}
           onConfirm={onConfirmExtraction}
         />
@@ -1060,10 +1065,12 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
 
 function ExtractionConfirmModal({
   suggestions,
+  phone,
   onCancel,
   onConfirm,
 }: {
   suggestions: Record<string, any>;
+  phone?: string;
   onCancel: () => void;
   onConfirm: (fields: Record<string, any>, target?: ExtractSaveTarget) => void;
 }) {
@@ -1094,7 +1101,8 @@ function ExtractionConfirmModal({
         <ExtractProfileTarget
           value={target}
           onChange={setTarget}
-          hint="Useful for bank passbooks and other docs with no name — pick the person these details belong to."
+          phone={phone}
+          hint="Only family members on this phone — pick who these details belong to (e.g. bank passbook with no name)."
         />
         <div className="space-y-2 mb-4">
           {Object.entries(suggestions).map(([k, v]: [string, any]) => (

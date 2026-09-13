@@ -15,18 +15,34 @@ type PersonOpt = {
   relationship?: string;
 };
 
+function phoneDigits(p: string) {
+  return String(p || '').replace(/\D/g, '');
+}
+
+function phonesMatch(a: string, b: string) {
+  const da = phoneDigits(a);
+  const db = phoneDigits(b);
+  if (!da || !db) return false;
+  if (da === db) return true;
+  // India: match last 10 digits
+  return da.slice(-10) === db.slice(-10) && da.slice(-10).length === 10;
+}
+
 /**
  * Checkbox + searchable profile dropdown for manual extract save.
- * Use when the doc has no name, or the operator wants to pick the target person.
+ * Only lists household members that share `phone` (same WA customer), not the whole workspace.
  */
 export function ExtractProfileTarget({
   value,
   onChange,
   hint,
+  phone,
 }: {
   value: ExtractSaveTarget;
   onChange: (v: ExtractSaveTarget) => void;
   hint?: string;
+  /** Restrict list to this customer's phone / household. */
+  phone?: string | null;
 }) {
   const [people, setPeople] = useState<PersonOpt[]>([]);
   const [q, setQ] = useState('');
@@ -39,12 +55,14 @@ export function ExtractProfileTarget({
       .then((r) => {
         const opts: PersonOpt[] = [];
         for (const h of r.data || []) {
+          // Only same phone household (common number with the document / chat)
+          if (phone && !phonesMatch(h.phone, phone)) continue;
           for (const p of h.persons || []) {
             opts.push({
               id: p.id,
               phone: h.phone,
               relationship: p.relationship,
-              label: `${p.displayLabel || p.name || 'Unnamed'}${p.relationship ? ` (${p.relationship})` : ''} · ${h.phone}`,
+              label: `${p.displayLabel || p.name || 'Unnamed'}${p.relationship ? ` (${p.relationship})` : ''}`,
             });
           }
         }
@@ -52,14 +70,12 @@ export function ExtractProfileTarget({
       })
       .catch(() => setPeople([]))
       .finally(() => setLoading(false));
-  }, [value.chooseProfile]);
+  }, [value.chooseProfile, phone]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return people.slice(0, 40);
-    return people.filter((p) =>
-      p.label.toLowerCase().includes(s) || p.phone.includes(s)
-    ).slice(0, 40);
+    if (!s) return people;
+    return people.filter((p) => p.label.toLowerCase().includes(s));
   }, [people, q]);
 
   return (
@@ -83,24 +99,32 @@ export function ExtractProfileTarget({
         <span>
           <span className="text-sm text-gray-200">Choose which profile to add these details to</span>
           <span className="block text-[11px] text-gray-500 mt-0.5">
-            {hint || 'Use when the document has no name, or you want a specific person (not the open profile).'}
+            {hint
+              || (phone
+                ? `Only people under ${phone} — use when the document has no name, or you want a specific family member.`
+                : 'Use when the document has no name, or you want a specific person (not the open profile).')}
           </span>
         </span>
       </label>
 
       {value.chooseProfile && (
         <div className="space-y-2 pt-1">
+          {!phone && (
+            <p className="text-[11px] text-amber-400">No phone on this document — cannot list household members.</p>
+          )}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by name or phone…"
+            placeholder="Search by name…"
             className="input-field text-xs w-full"
             autoFocus
           />
           <div className="max-h-40 overflow-y-auto rounded-lg border border-white/10">
             {loading && <p className="text-xs text-gray-500 p-2">Loading profiles…</p>}
             {!loading && filtered.length === 0 && (
-              <p className="text-xs text-gray-500 p-2">No profiles match</p>
+              <p className="text-xs text-gray-500 p-2">
+                {phone ? 'No profiles on this phone yet' : 'No profiles match'}
+              </p>
             )}
             {filtered.map((p) => (
               <button
