@@ -73,38 +73,49 @@ export type VisibleSection = {
 };
 
 /**
- * Profile UI organisation — document cards, not a growing hardcoded schema.
+ * Profile UI = one card per source document (zero operator organisation work).
  *
- * Psychology / UX: café operators should not organise sections. When a doc type
- * contributes fields (via extract maps / provenance.documentType), a card appears
- * automatically. New types need zero UI work — only an extract map.
+ * Grouping priority (no hardcoded section list to maintain):
+ * 1. documentType on the field → card titled Aadhaar / Bank / 10th / …
+ * 2. else documentId → card per file; title from matching document_label if any
+ * 3. else → "Manually added"
  *
- * Manual / untyped fields land in "Manually added" (rare). True orphans → Other.
+ * Café flow never asks the operator to name sections. New doc types appear as
+ * new cards when extract maps + provenance exist.
  */
 export function buildVisibleSections(raw: Record<string, any> | null | undefined): VisibleSection[] {
   const data = raw || {};
   const flat = flattenProfileData(data);
-  const NOISE = new Set([
-    'document_label', 'document_type', 'needs_type',
-  ]);
+  const NOISE = new Set(['document_label', 'document_type', 'needs_type']);
 
   type Group = { title: string; icon: string; keys: string[]; documentType: string | null };
   const byDoc: Record<string, Group> = {};
   const manualKeys: string[] = [];
 
+  // documentId → best human title from any document_label row sharing that id
+  const labelByDocId: Record<string, string> = {};
+  for (const [kk, vv] of Object.entries(data)) {
+    if (kk !== 'document_label' && !kk.startsWith('document_label')) continue;
+    if (!vv || typeof vv !== 'object') continue;
+    const id = String((vv as any).documentId || '');
+    const label = String((vv as any).value || '').trim();
+    if (id && label) labelByDocId[id] = label;
+  }
+
   for (const [k, val] of Object.entries(flat)) {
     if (!val || NOISE.has(k)) continue;
     const rv = data[k];
-    const source = rv && typeof rv === 'object' ? String((rv as any).source || '') : '';
-    const dt = rv && typeof rv === 'object' ? ((rv as any).documentType as string | null) : null;
+    const dtRaw = rv && typeof rv === 'object' ? ((rv as any).documentType as string | null | undefined) : null;
+    const dt = dtRaw && String(dtRaw).trim() && String(dtRaw) !== 'other' ? String(dtRaw).trim() : null;
+    const docId = rv && typeof rv === 'object' ? String((rv as any).documentId || '') : '';
 
-    // Typed document provenance → one card per document type (organisation builder)
-    if (dt && dt !== 'other') {
-      const id = `doc_${dt}`;
-      const labelEntry = Object.entries(data).find(
-        ([kk, vv]: any) => kk === 'document_label' && vv?.documentType === dt,
+    // 1) Known document type → one card per type
+    if (dt) {
+      const id = `type_${dt}`;
+      const titleFromLabel = Object.entries(data).find(
+        ([kk, vv]: any) => kk === 'document_label' && vv?.documentType === dt && vv?.value,
       );
-      const title = (labelEntry && (labelEntry[1] as any).value) || humanizeDocType(dt);
+      const title = (titleFromLabel && (titleFromLabel[1] as any).value) || humanizeDocType(dt);
       (byDoc[id] ||= {
         title,
         icon: DOC_CARD_ICONS[dt] || '📄',
@@ -114,29 +125,37 @@ export function buildVisibleSections(raw: Record<string, any> | null | undefined
       continue;
     }
 
-    // Operator / manual edits without a document type
-    if (source === 'manual' || source === 'document_corrected' || source === 'operator' || !dt) {
-      manualKeys.push(k);
+    // 2) Has documentId but type missing (common after manual Confirm & Save) → card per file
+    if (docId) {
+      const id = `file_${docId}`;
+      const title = labelByDocId[docId] || 'From document';
+      (byDoc[id] ||= {
+        title,
+        icon: '📄',
+        keys: [],
+        documentType: null,
+      }).keys.push(k);
       continue;
     }
 
+    // 3) Pure manual / unknown
     manualKeys.push(k);
   }
 
   const out: VisibleSection[] = [];
 
-  // Stable-ish order: identity docs first, then education, bank, rest alphabetical by title
-  const orderRank = (dt: string | null) => {
-    if (!dt) return 90;
-    if (['aadhaar', 'pan', 'passport', 'voter_id', 'driving_license', 'ration_card', 'ayushman'].includes(dt)) return 10;
-    if (dt.startsWith('marksheet') || ['admit_card', 'result', 'certificate'].includes(dt)) return 20;
-    if (dt === 'bank_passbook') return 30;
+  const orderRank = (dt: string | null, title: string) => {
+    if (dt && ['aadhaar', 'pan', 'passport', 'voter_id', 'driving_license', 'ration_card', 'ayushman'].includes(dt)) return 10;
+    if (dt && (dt.startsWith('marksheet') || ['admit_card', 'result', 'certificate'].includes(dt))) return 20;
+    if (dt === 'bank_passbook' || /bank/i.test(title)) return 30;
     if (dt === 'photo' || dt === 'signature') return 80;
+    if (!dt && title === 'From document') return 40;
     return 50;
   };
+
   const docCards = Object.entries(byDoc).sort((a, b) => {
-    const ra = orderRank(a[1].documentType);
-    const rb = orderRank(b[1].documentType);
+    const ra = orderRank(a[1].documentType, a[1].title);
+    const rb = orderRank(b[1].documentType, b[1].title);
     if (ra !== rb) return ra - rb;
     return a[1].title.localeCompare(b[1].title);
   });

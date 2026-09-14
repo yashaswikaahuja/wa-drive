@@ -195,9 +195,19 @@ export default function CustomerDetail() {
     setSaving(true);
     try {
       const fields: Record<string, any> = {};
+      const docTypeHint =
+        acceptedFields?.document_type?.value ||
+        acceptedFields?.document_type ||
+        null;
       for (const [k, v] of Object.entries(acceptedFields)) {
-        if (k === 'document_type') continue;
-        fields[k] = { ...v, source: 'document_corrected' };
+        if (k === 'document_type' || k === 'needs_type') continue;
+        const base = v && typeof v === 'object' ? { ...v } : { value: v };
+        fields[k] = {
+          ...base,
+          source: 'document_corrected',
+          // Keep type for doc-card organisation (otherwise everything looks empty / "manual")
+          documentType: base.documentType || docTypeHint || undefined,
+        };
       }
       const extractedName = fields?.name?.value || fields?.account_holder_name?.value || '';
       // Explicit picker wins — save exactly onto that profile (no name-mismatch redirect).
