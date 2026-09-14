@@ -24,8 +24,19 @@ export async function deriveProfile(workspaceId: string, phone: string, personKe
     for (const [k, v] of Object.entries(sugg)) {
       if (k === 'document_type') continue;
       const nv = v as any;
-      if (!nv || (typeof nv === 'object' && !String(nv.value ?? '').trim())) continue;
+      if (!nv || (typeof nv === 'object' && (nv.value == null || nv.value === ''))) continue;
+      // Coerce nested objects (subject→marks maps) to strings — React cannot render objects (#31).
+      if (nv && typeof nv === 'object' && nv.value != null && typeof nv.value === 'object') {
+        try {
+          nv.value = Object.entries(nv.value as Record<string, unknown>)
+            .map(([sk, sv]) => `${sk}: ${sv == null ? '' : String(sv)}`)
+            .join(', ');
+        } catch {
+          nv.value = JSON.stringify(nv.value);
+        }
+      }
       const nvValRaw = String(nv.value ?? '').trim();
+      if (!nvValRaw) continue;
       // Guard: a "degree" that is really a school-level exam name is mis-placed (from a null-typed doc) — skip it.
       if (k === 'degree' && /intermediate|secondary|matric|10\+2|high school|class (10|12)/i.test(nvValRaw)) continue;
       const cur = result[k];
