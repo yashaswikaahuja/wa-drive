@@ -440,7 +440,7 @@ export default function CustomerDetail() {
                             ) : (
                               <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
                                 className="flex items-center gap-1.5 group text-left">
-                                <span className="text-sm truncate text-gray-100" title={val || ''}>{val}</span>
+                                <span className="text-sm truncate text-gray-100" title={val || ''}>{typeof val === 'string' ? val : String(val ?? '')}</span>
                                 {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
                                 {rawVal && typeof rawVal === 'object' && (
                                   <ProvenanceChip

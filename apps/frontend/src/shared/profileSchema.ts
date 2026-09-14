@@ -334,10 +334,25 @@ export function getCompleteness(data: Record<string, any>): { filled: number; to
   return { filled, total: required.length, percent: Math.round((filled / required.length) * 100), missing: missing.map(f => f.label) };
 }
 
+/** Always return plain strings — nested objects (e.g. subject→marks maps) must not reach JSX. */
 export function flattenProfileData(data: Record<string, any>): Record<string, string> {
   const flat: Record<string, string> = {};
   for (const [k, v] of Object.entries(data || {})) {
-    flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : String(v || '');
+    let raw: unknown = (v && typeof v === 'object' && v !== null && 'value' in v) ? (v as any).value : v;
+    if (raw == null) {
+      flat[k] = '';
+    } else if (typeof raw === 'object') {
+      // Marksheet subject bags etc. — never pass objects to React text nodes (error #31).
+      try {
+        flat[k] = Object.entries(raw as Record<string, unknown>)
+          .map(([sk, sv]) => `${sk}: ${sv == null ? '' : String(sv)}`)
+          .join(', ');
+      } catch {
+        flat[k] = JSON.stringify(raw);
+      }
+    } else {
+      flat[k] = String(raw);
+    }
   }
   return flat;
 }
