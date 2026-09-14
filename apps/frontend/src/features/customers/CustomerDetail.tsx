@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
@@ -231,13 +231,17 @@ export default function CustomerDetail() {
     finally { setSaving(false); }
   };
 
-  // Hooks must run every render (before any early return) — blank page was "Rendered more hooks…"
-  const visibleSections = useMemo(
-    () => (personDetail ? buildVisibleSections(personDetail.data || {}) : []),
-    [personDetail],
-  );
-  const flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
-  const completeness = getCompleteness(flat);
+  // Compute after hooks only — never useMemo after conditional returns (blank-page crash).
+  let visibleSections: ReturnType<typeof buildVisibleSections> = [];
+  let flat: Record<string, string> = {};
+  let completeness = { filled: 0, total: 0, percent: 0, missing: [] as string[] };
+  try {
+    flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
+    completeness = getCompleteness(flat);
+    visibleSections = personDetail ? buildVisibleSections(personDetail.data || {}) : [];
+  } catch (e) {
+    console.error('[CustomerDetail] section build failed', e);
+  }
 
   if (loading && !household) return (
     <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse">
