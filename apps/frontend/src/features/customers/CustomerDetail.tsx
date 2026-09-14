@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
   Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check
@@ -31,12 +31,14 @@ function DocThumb({ src, isPdf }: { src: string; isPdf: boolean }) {
 
 export default function CustomerDetail() {
   const { id: phoneParam } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const phone = decodeURIComponent(phoneParam || '');
+  const personFromQuery = searchParams.get('person');
 
   const [household, setHousehold] = useState<Household | null>(null);
   const [documents, setDocuments] = useState<DriveFile[]>([]);
-  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(personFromQuery);
   const [personDetail, setPersonDetail] = useState<PersonDetail | null>(null);
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [extracting, setExtracting] = useState<string | null>(null);
@@ -83,7 +85,17 @@ export default function CustomerDetail() {
       const h = (r.data || []).find((x: Household) => phonesMatch(x.phone, phone)) || null;
       setHousehold(h);
       setNotFound(!h);
-      if (h && h.persons.length > 0 && !selectedPerson) setSelectedPerson(h.persons[0].id);
+      if (h && h.persons.length > 0) {
+        // Prefer ?person= from Customers list (so searching Shubham opens Shubham, not Kamaljeet).
+        const fromQuery = personFromQuery && h.persons.some((p) => p.id === personFromQuery)
+          ? personFromQuery
+          : null;
+        setSelectedPerson((prev) => {
+          if (fromQuery) return fromQuery;
+          if (prev && h.persons.some((p) => p.id === prev)) return prev;
+          return h.persons[0].id;
+        });
+      }
     } catch (e: any) {
       setHousehold(null);
       setNotFound(true);
@@ -314,13 +326,21 @@ export default function CustomerDetail() {
       {household.persons.length > 1 && (
         <div className="flex items-center gap-2 mb-6 flex-wrap">
           {household.persons.map(p => (
-            <button key={p.id} onClick={() => setSelectedPerson(p.id)}
+            <button
+              key={p.id}
+              onClick={() => {
+                if (p.id === selectedPerson) return;
+                setPersonDetail(null); // avoid showing previous person's fields under new tab
+                setSelectedPerson(p.id);
+                setSearchParams({ person: p.id }, { replace: true });
+              }}
               className="group flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full text-sm transition-all active:scale-[0.97]"
               style={{
                 background: selectedPerson === p.id ? 'hsl(var(--pt-marigold) / 0.14)' : 'hsl(var(--pt-secondary))',
                 color: selectedPerson === p.id ? 'hsl(var(--pt-marigold-deep))' : 'hsl(var(--pt-muted))',
                 transitionTimingFunction: EASE, transitionDuration: '200ms',
-              }}>
+              }}
+            >
               {p.displayLabel || p.name}
               <span className="text-[10px] opacity-50 capitalize">{p.relationship}</span>
               <span onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
