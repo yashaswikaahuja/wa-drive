@@ -407,14 +407,24 @@ export default function CustomerDetail() {
             )}
           </section>
 
-          {/* Doc cards — auto-organised by document type (no hardcoded section maze). */}
+          {/* Classic sections: Personal / Identity / Contact / Education / Bank / Travel */}
           <section className="mb-6">
-            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">From documents</h2>
+            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Profile data</h2>
             <div className="space-y-3">
               {visibleSections.map((section) => {
                 const raw = personDetail.data || {};
                 const sflat = flattenProfileData(raw);
-                const rows = section.fields.filter((f) => !!sflat[f.key]);
+                // Schema sections: filled + required missing. Dynamic: filled only.
+                const rows = section.dynamic
+                  ? section.fields.filter((f) => !!sflat[f.key])
+                  : section.fields.filter((f) => !!sflat[f.key] || f.required).concat(
+                      section.extraKeys
+                        .filter((k) => !!sflat[k] && !section.fields.some((f) => f.key === k))
+                        .map((k) => ({
+                          key: k,
+                          label: k.replace(/_(10th|12th|grad)$/, '').replace(/_/g, ' '),
+                        })),
+                    );
                 if (!rows.length) return null;
                 return (
                   <div key={section.id} className="card">
@@ -429,8 +439,8 @@ export default function CustomerDetail() {
                         const isEditing = editingField === f.key;
                         return (
                           <div key={f.key} className="flex flex-col gap-0.5">
-                            <span className="text-[10px] uppercase tracking-wide text-gray-500">
-                              {f.label}
+                            <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
+                              {f.label}{f.required && !val ? ' *' : ''}
                             </span>
                             {isEditing ? (
                               <input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)}
@@ -440,7 +450,9 @@ export default function CustomerDetail() {
                             ) : (
                               <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
                                 className="flex items-center gap-1.5 group text-left">
-                                <span className="text-sm truncate text-gray-100" title={val || ''}>{typeof val === 'string' ? val : String(val ?? '')}</span>
+                                <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-600'}`} title={val || ''}>
+                                  {val ? (typeof val === 'string' ? val : String(val)) : '—'}
+                                </span>
                                 {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
                                 {rawVal && typeof rawVal === 'object' && (
                                   <ProvenanceChip
@@ -457,25 +469,23 @@ export default function CustomerDetail() {
                         );
                       })}
                     </div>
-                    {section.id === 'manual' && (
-                      addingInSection === 'manual' ? (
-                        <div className="flex gap-2 mt-3">
-                          <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
-                          <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
-                          <button onClick={handleAddField} className="text-xs text-[#30d158] px-2">Save</button>
-                          <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
-                        </div>
-                      ) : (
-                        <button onClick={() => setAddingInSection('manual')} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
-                          <Plus size={12} /> Add field
-                        </button>
-                      )
+                    {addingInSection === section.id ? (
+                      <div className="flex gap-2 mt-3">
+                        <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
+                        <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
+                        <button onClick={handleAddField} className="text-xs text-[#30d158] px-2">Save</button>
+                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setAddingInSection(section.id)} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
+                        <Plus size={12} /> Add field
+                      </button>
                     )}
                   </div>
                 );
               })}
               {visibleSections.length === 0 && (
-                <p className="text-xs text-gray-600 px-1">No document details yet — extract from Documents.</p>
+                <p className="text-xs text-gray-600 px-1">No profile details yet — extract from Documents.</p>
               )}
             </div>
           </section>

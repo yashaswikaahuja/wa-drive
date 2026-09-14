@@ -11,7 +11,7 @@ export interface Section {
   fields: FieldDef[];
 }
 
-/** Kept for readiness % / form required fields — NOT the primary profile UI layout. */
+/** Which document types feed which classic section (extras land in the right bucket). */
 export const SECTION_FOR_DOCTYPE: Record<string, string> = {
   aadhaar: 'identity', pan: 'identity', passport: 'identity', voter_id: 'identity',
   driving_license: 'identity', ration_card: 'identity', ayushman: 'identity',
@@ -22,25 +22,41 @@ export const SECTION_FOR_DOCTYPE: Record<string, string> = {
   bank_passbook: 'bank',
 };
 
-const DOC_CARD_ICONS: Record<string, string> = {
-  aadhaar: '🪪', pan: '🪪', passport: '🛂', voter_id: '🪪', driving_license: '🚗',
-  ration_card: '🪪', ayushman: '🏥',
-  marksheet_10th: '🎓', marksheet_12th: '🎓', marksheet_graduation: '🎓', marksheet_postgrad: '🎓',
-  admit_card: '🎫', result: '📊', certificate: '📜',
-  bank_passbook: '🏦', form: '📝', photo: '📷', signature: '✍️', other: '📄',
+/** Nice titles for dynamic / doc-type sections (fallback when not in PROFILE_SCHEMA). */
+export const SECTION_TITLES: Record<string, { title: string; icon: string }> = {
+  bank: { title: 'Bank Details', icon: '🏦' },
+  personal: { title: 'Personal Details', icon: '👤' },
+  identity: { title: 'Identity Documents', icon: '🪪' },
+  contact: { title: 'Contact & Address', icon: '📍' },
+  education_10th: { title: '10th (Matriculation)', icon: '🎓' },
+  education_12th: { title: '12th (Intermediate)', icon: '🎓' },
+  education_grad: { title: 'Graduation', icon: '🎓' },
+  travel: { title: 'Travel', icon: '🚂' },
 };
 
-const DOC_CARD_TITLES: Record<string, string> = {
-  aadhaar: 'Aadhaar', pan: 'PAN', passport: 'Passport', voter_id: 'Voter ID',
-  driving_license: 'Driving License', ration_card: 'Ration Card', ayushman: 'Ayushman',
-  marksheet_10th: '10th Marksheet', marksheet_12th: '12th Marksheet',
-  marksheet_graduation: 'Graduation', marksheet_postgrad: 'Post-Grad',
-  admit_card: 'Admit Card', result: 'Result', certificate: 'Certificate',
-  bank_passbook: 'Bank Details', form: 'Form', photo: 'Photo', signature: 'Signature',
-};
+/**
+ * Infer a section id from a field key when documentType is missing.
+ * Keeps bank / travel / etc. out of "Other Details".
+ */
+export function sectionIdForFieldKey(key: string): string | null {
+  const k = String(key || '').toLowerCase();
+  if (!k || k === 'document_type' || k === 'document_label' || k === 'needs_type') return null;
+  if (/_10th$/.test(k)) return 'education_10th';
+  if (/_12th$/.test(k)) return 'education_12th';
+  if (/_grad$/.test(k)) return 'education_grad';
+  if (/^(bank_|ifsc|cif|account_holder|account_number|branch_name)/.test(k) || k === 'ifsc_code' || k === 'cif_number') {
+    return 'bank';
+  }
+  if (/^(ayushman|abha|pmjay)/.test(k)) return 'identity';
+  if (/^(departure|arrival|from_station|to_station|journey_date|return_date|travel_class|quota|passenger_count)$/.test(k)) {
+    return 'travel';
+  }
+  return null;
+}
 
 function humanizeDocType(dt: string): string {
-  if (DOC_CARD_TITLES[dt]) return DOC_CARD_TITLES[dt];
+  if (dt === 'bank_passbook') return 'Bank Details';
+  if (dt === 'ayushman') return 'Ayushman Card';
   if (dt === 'other') return 'Other Details';
   return dt.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -65,124 +81,113 @@ export type VisibleSection = {
   id: string;
   title: string;
   icon: string;
+  /** Schema fields that belong to this section (may be empty for pure dynamic groups). */
   fields: FieldDef[];
+  /** Extra keys present in profile data that aren't in `fields` but belong here. */
   extraKeys: string[];
   dynamic: boolean;
-  /** Document type this card came from (when auto-built from provenance). */
+  /** Optional — set for pure doc-type leftovers. */
   documentType?: string | null;
 };
 
 /**
- * Profile UI = one card per source document (zero operator organisation work).
- *
- * Grouping priority (no hardcoded section list to maintain):
- * 1. documentType on the field → card titled Aadhaar / Bank / 10th / …
- * 2. else documentId → card per file; title from matching document_label if any
- * 3. else → "Manually added"
- *
- * Café flow never asks the operator to name sections. New doc types appear as
- * new cards when extract maps + provenance exist.
+ * Classic section layout: Personal / Identity / Contact / 10th / 12th / Grad / Bank / Travel.
+ * Extras from extracts are merged into the matching section (by key suffix or documentType).
+ * Unknown leftovers become typed dynamic cards or "Other Details".
  */
 export function buildVisibleSections(raw: Record<string, any> | null | undefined): VisibleSection[] {
   const data = raw || {};
   const flat = flattenProfileData(data);
-  const NOISE = new Set(['document_label', 'document_type', 'needs_type']);
-
-  type Group = { title: string; icon: string; keys: string[]; documentType: string | null };
-  const byDoc: Record<string, Group> = {};
-  const manualKeys: string[] = [];
-
-  // documentId → best human title from any document_label row sharing that id
-  const labelByDocId: Record<string, string> = {};
-  for (const [kk, vv] of Object.entries(data)) {
-    if (kk !== 'document_label' && !kk.startsWith('document_label')) continue;
-    if (!vv || typeof vv !== 'object') continue;
-    const id = String((vv as any).documentId || '');
-    const label = String((vv as any).value || '').trim();
-    if (id && label) labelByDocId[id] = label;
-  }
-
-  for (const [k, val] of Object.entries(flat)) {
-    if (!val || NOISE.has(k)) continue;
-    const rv = data[k];
-    const dtRaw = rv && typeof rv === 'object' ? ((rv as any).documentType as string | null | undefined) : null;
-    const dt = dtRaw && String(dtRaw).trim() && String(dtRaw) !== 'other' ? String(dtRaw).trim() : null;
-    const docId = rv && typeof rv === 'object' ? String((rv as any).documentId || '') : '';
-
-    // 1) Known document type → one card per type
-    if (dt) {
-      const id = `type_${dt}`;
-      const titleFromLabel = Object.entries(data).find(
-        ([kk, vv]: any) => kk === 'document_label' && vv?.documentType === dt && vv?.value,
-      );
-      const title = (titleFromLabel && (titleFromLabel[1] as any).value) || humanizeDocType(dt);
-      (byDoc[id] ||= {
-        title,
-        icon: DOC_CARD_ICONS[dt] || '📄',
-        keys: [],
-        documentType: dt,
-      }).keys.push(k);
-      continue;
-    }
-
-    // 2) Has documentId but type missing (common after manual Confirm & Save) → card per file
-    if (docId) {
-      const id = `file_${docId}`;
-      const title = labelByDocId[docId] || 'From document';
-      (byDoc[id] ||= {
-        title,
-        icon: '📄',
-        keys: [],
-        documentType: null,
-      }).keys.push(k);
-      continue;
-    }
-
-    // 3) Pure manual / unknown
-    manualKeys.push(k);
-  }
+  const schemaKeys = new Set(PROFILE_SCHEMA.flatMap((s) => s.fields.map((f) => f.key)));
+  const NOISE = new Set([
+    'stream', 'subject', 'course', 'division', 'percentage', 'marks_obtained', 'total_marks',
+    'marks', 'marks_10th', 'marks_graduation', 'percentage_graduation', 'passing_year_graduation',
+    'roll_number', 'registration_number', 'enrollment_number', 'exam_date', 'exam_name',
+    'graduation_subject', 'board_name', 'document_label', 'document_type', 'needs_type',
+  ]);
 
   const out: VisibleSection[] = [];
+  const claimed = new Set<string>();
 
-  const orderRank = (dt: string | null, title: string) => {
-    if (dt && ['aadhaar', 'pan', 'passport', 'voter_id', 'driving_license', 'ration_card', 'ayushman'].includes(dt)) return 10;
-    if (dt && (dt.startsWith('marksheet') || ['admit_card', 'result', 'certificate'].includes(dt))) return 20;
-    if (dt === 'bank_passbook' || /bank/i.test(title)) return 30;
-    if (dt === 'photo' || dt === 'signature') return 80;
-    if (!dt && title === 'From document') return 40;
-    return 50;
-  };
+  for (const section of PROFILE_SCHEMA) {
+    const extras: string[] = [];
+    for (const [k, v] of Object.entries(data)) {
+      if (schemaKeys.has(k) || NOISE.has(k) || claimed.has(k)) continue;
+      const val = v && typeof v === 'object' && 'value' in v ? (v as any).value : v;
+      if (val == null || val === '') continue;
+      // Nested subject bags still count as "has value" after flatten.
+      if (typeof val === 'object' && !Object.keys(val as object).length) continue;
+      if (/_10th$/.test(k) && section.id === 'education_10th') { extras.push(k); continue; }
+      if (/_12th$/.test(k) && section.id === 'education_12th') { extras.push(k); continue; }
+      if (/_grad$/.test(k) && section.id === 'education_grad') { extras.push(k); continue; }
+      const dt = v && typeof v === 'object' ? (v as any).documentType : null;
+      if (dt && SECTION_FOR_DOCTYPE[dt] === section.id) extras.push(k);
+      else if (!dt && sectionIdForFieldKey(k) === section.id) extras.push(k);
+    }
+    const hasSchemaVal = section.fields.some((f) => !!flat[f.key]);
+    if (!hasSchemaVal && extras.length === 0) continue;
+    for (const k of extras) claimed.add(k);
+    for (const f of section.fields) if (flat[f.key]) claimed.add(f.key);
+    out.push({
+      id: section.id,
+      title: section.title,
+      icon: section.icon,
+      fields: section.fields,
+      extraKeys: extras,
+      dynamic: false,
+    });
+  }
 
-  const docCards = Object.entries(byDoc).sort((a, b) => {
-    const ra = orderRank(a[1].documentType, a[1].title);
-    const rb = orderRank(b[1].documentType, b[1].title);
-    if (ra !== rb) return ra - rb;
-    return a[1].title.localeCompare(b[1].title);
-  });
+  // Remaining keys → group by resolved section id / title
+  const groups: Record<string, { title: string; icon: string; keys: string[]; documentType: string | null }> = {};
+  for (const [k, val] of Object.entries(flat)) {
+    if (schemaKeys.has(k) || claimed.has(k) || NOISE.has(k) || !val) continue;
+    const rv = data[k];
+    const dt = (rv && typeof rv === 'object' && (rv as any).documentType) || null;
+    let sectionId = (dt && SECTION_FOR_DOCTYPE[dt]) || sectionIdForFieldKey(k) || null;
 
-  for (const [id, g] of docCards) {
-    const uniq = [...new Set(g.keys)];
+    let title: string;
+    let icon = '📄';
+    if (sectionId && SECTION_TITLES[sectionId]) {
+      title = SECTION_TITLES[sectionId].title;
+      icon = SECTION_TITLES[sectionId].icon;
+    } else if (sectionId) {
+      title = humanizeDocType(sectionId);
+    } else if (dt) {
+      sectionId = `doc_${dt}`;
+      const labelEntry = Object.entries(data).find(
+        ([kk, vv]: any) => kk === 'document_label' && vv?.documentType === dt,
+      );
+      title = (labelEntry && (labelEntry[1] as any).value) || humanizeDocType(String(dt));
+      if (dt === 'bank_passbook') { title = 'Bank Details'; icon = '🏦'; }
+    } else {
+      sectionId = 'other';
+      title = 'Other Details';
+    }
+
+    // Prefer merging into an already-emitted schema section of the same id
+    const existing = out.find((s) => s.id === sectionId);
+    if (existing) {
+      if (!existing.extraKeys.includes(k) && !existing.fields.some((f) => f.key === k)) {
+        existing.extraKeys.push(k);
+      }
+      claimed.add(k);
+      continue;
+    }
+
+    (groups[sectionId!] ||= { title, icon, keys: [], documentType: dt || null }).keys.push(k);
+    claimed.add(k);
+  }
+
+  for (const [id, g] of Object.entries(groups)) {
     out.push({
       id,
       title: g.title,
       icon: g.icon,
-      fields: uniq.map((key) => ({ key, label: labelForProfileKey(key) })),
+      fields: g.keys.map((key) => ({ key, label: labelForProfileKey(key) })),
       extraKeys: [],
       dynamic: true,
       documentType: g.documentType,
-    });
-  }
-
-  if (manualKeys.length) {
-    const uniq = [...new Set(manualKeys)];
-    out.push({
-      id: 'manual',
-      title: 'Manually added',
-      icon: '✏️',
-      fields: uniq.map((key) => ({ key, label: labelForProfileKey(key) })),
-      extraKeys: [],
-      dynamic: true,
-      documentType: null,
     });
   }
 

@@ -8,3 +8,5 @@ self.addEventListener('activate', (event) => {
       .then(clients => clients.forEach(c => c.navigate(c.url)))
   );
 });
+
+// cache-bust classic-sections 2026-09-14T15:10:00+05:30
