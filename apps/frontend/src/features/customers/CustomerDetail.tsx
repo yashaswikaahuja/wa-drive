@@ -278,7 +278,9 @@ export default function CustomerDetail() {
     </div>
   );
 
-  const primaryName = household.persons[0]?.displayLabel || household.persons[0]?.name || phone;
+  // Header must follow the selected tab — not always persons[0] (was confusing/wrong person).
+  const selectedMeta = household.persons.find((p) => p.id === selectedPerson) || household.persons[0];
+  const primaryName = selectedMeta?.displayLabel || selectedMeta?.name || phone;
 
   return (
     <div className="max-w-4xl mx-auto pt-4">

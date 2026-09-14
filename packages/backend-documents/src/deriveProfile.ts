@@ -43,11 +43,39 @@ export async function deriveProfile(workspaceId: string, phone: string, personKe
       }
     }
   }
-  // operator overrides always win
-  for (const [k, v] of Object.entries(overrides || {})) {
-    const ov = v as any;
-    if (ov && (ov.source === 'manual' || ov.source === 'document_corrected' || ov.source === 'shared')) result[k] = ov;
+  // Build documentId → documentType from cache so overrides that lost type still organise as doc cards
+  const typeByDocId: Record<string, string> = {};
+  for (const row of rows) {
+    const sugg = row.suggested || {};
+    for (const nv of Object.values(sugg)) {
+      const o = nv as any;
+      const id = o?.documentId != null ? String(o.documentId) : '';
+      const t = o?.documentType != null ? String(o.documentType).trim() : '';
+      if (id && t && t !== 'other') typeByDocId[id] = t;
+    }
   }
+
+  // operator overrides always win (but never promote pipeline metadata into profile fields)
+  const OVERRIDE_NOISE = new Set(['needs_type', 'document_type', 'document_label']);
+  // Bank extracts must not keep OCR junk address lines (S/O …) — lean banking keys only
+  const BANK_DENY = new Set(['address', 'city', 'state', 'pincode', 'village', 'district', 'post_office']);
+  for (const [k, v] of Object.entries(overrides || {})) {
+    if (OVERRIDE_NOISE.has(k)) continue;
+    const ov = v as any;
+    if (ov && (ov.source === 'manual' || ov.source === 'document_corrected' || ov.source === 'shared')) {
+      const enriched = { ...ov };
+      const id = enriched.documentId != null ? String(enriched.documentId) : '';
+      if (id && !enriched.documentType && typeByDocId[id]) {
+        enriched.documentType = typeByDocId[id];
+      }
+      const effectiveType = String(enriched.documentType || typeByDocId[id] || '');
+      if (effectiveType === 'bank_passbook' && BANK_DENY.has(k)) continue;
+      result[k] = enriched;
+    }
+  }
+  // Drop metadata keys if they somehow landed from cache
+  delete result.needs_type;
+  delete result.document_type;
   // auto-fill mobile from the WhatsApp number if no doc provided one
   if (!result.phone || !String(result.phone?.value ?? '').trim()) {
     const mobile = String(phone).slice(-10);
