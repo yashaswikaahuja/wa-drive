@@ -3,6 +3,7 @@ import { tailnetOnly, requireOwner } from './gate.js';
 import { computeHealth } from './health.js';
 import { runHealthSweep } from '@cybercontrol/backend-operations';
 import ownerFormsRouter from './forms.js';
+import ownerLearningRouter from './learning.js';
 
 const router: ExpressRouter = Router();
 
@@ -11,6 +12,9 @@ router.use(tailnetOnly, requireOwner);
 
 // Forms catalog editor (owner-panel Forms section)
 router.use('/forms', ownerFormsRouter);
+
+// Learning/config formerly on Hub /admin (mappings, sessions, corrections)
+router.use('/learning', ownerLearningRouter);
 
 /**
  * GET /owner/metrics — the top-line Level-1 customer numbers.

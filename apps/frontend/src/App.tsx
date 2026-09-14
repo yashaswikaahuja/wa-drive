@@ -26,10 +26,6 @@ const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex
 const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
 const SharedProfile = lazy(() => import('./features/customers/SharedProfile'));
 const Settings = lazy(() => import('./features/settings/Settings'));
-const Overview = lazy(() => import('./features/admin/Overview'));
-const Sessions = lazy(() => import('./features/admin/Sessions'));
-const Corrections = lazy(() => import('./features/admin/Corrections'));
-const Mappings = lazy(() => import('./features/admin/Mappings'));
 const Operators = lazy(() => import('./features/admin/Operators'));
 
 function PageLoader() {
@@ -113,11 +109,12 @@ export default function App() {
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
           <Route element={<AdminOnly />}>
-            <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
-            <Route path="/admin/corrections" element={<Suspense fallback={<PageLoader />}><Corrections /></Suspense>} />
-            <Route path="/admin/sessions" element={<Suspense fallback={<PageLoader />}><Sessions /></Suspense>} />
-            <Route path="/admin/mappings" element={<Suspense fallback={<PageLoader />}><Mappings /></Suspense>} />
             <Route path="/admin/operators" element={<Suspense fallback={<PageLoader />}><Operators /></Suspense>} />
+            {/* Learning/config moved to owner-panel — keep old bookmarks from landing on a blank admin home */}
+            <Route path="/admin" element={<Navigate to="/admin/operators" replace />} />
+            <Route path="/admin/corrections" element={<Navigate to="/admin/operators" replace />} />
+            <Route path="/admin/sessions" element={<Navigate to="/admin/operators" replace />} />
+            <Route path="/admin/mappings" element={<Navigate to="/admin/operators" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Route>

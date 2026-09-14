@@ -6,7 +6,7 @@ import VerifyBanner from './VerifyBanner';
 import LocationBanner from './LocationBanner';
 import {
   Users, ChatCircle, Camera, Gear,
-  ChartPie, PencilSimple, Brain, Broadcast, UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,
+  UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,
   List, CaretLeft, CaretRight
 } from '@phosphor-icons/react';
 
@@ -34,11 +34,9 @@ const OPERATOR_NAV = [
   { path: '/app/settings', icon: Gear, label: 'Settings' },
 ];
 
+// Learning/config (Mappings, Corrections, Sessions, Overview) lives in owner-panel.
+// Hub admins only manage Operators so café owners can give employees workspace access.
 const ADMIN_NAV = [
-  { path: '/admin', icon: ChartPie, label: 'Overview', end: true },
-  { path: '/admin/corrections', icon: PencilSimple, label: 'Corrections' },
-  { path: '/admin/mappings', icon: Brain, label: 'Mappings' },
-  { path: '/admin/sessions', icon: Broadcast, label: 'Sessions' },
   { path: '/admin/operators', icon: UserCircle, label: 'Operators' },
 ];
 

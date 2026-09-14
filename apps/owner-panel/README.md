@@ -11,6 +11,8 @@ owner API that runs on a cybercontrol-app VM, bound to its **tailscale IP** — 
 ## What it shows
 - **Metrics:** Active (30d), Paying, Signups, New this month/week, Churned, Dormant.
 - **Cybercafés:** per-café operators, WhatsApp connected?, files processed, last active, plan, status.
+- **Learning (moved from Hub /admin):** Form Mappings, Fill Sessions, Corrections, plus extract-maps/AI under AI.
+  Café Hub keeps Operators only so owners can invite employees without the learning clutter.
 
 ## Run
 ```bash

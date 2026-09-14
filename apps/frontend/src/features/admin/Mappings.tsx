@@ -66,6 +66,8 @@ const PROFILE_KEY_GROUPS: { label: string; keys: string[] }[] = [
   { label: 'Contact', keys: ['phone', 'email', 'email_id'] },
   { label: 'IDs', keys: ['aadhaar_number', 'vid', 'pan_number', 'epic_number'] },
   { label: 'Address', keys: ['pincode', 'state', 'district', 'block', 'village', 'sub_division', 'police_station', 'post_office', 'ward_no', 'city', 'street', 'house_no', 'address', 'permanent_address', 'domicile_state'] },
+  // Bank — passbook / account docs
+  { label: 'Bank', keys: ['bank_account_number', 'ifsc_code', 'cif_number', 'bank_name', 'branch_name', 'account_holder_name'] },
   // Travel / journey — IRCTC, redBus, Cleartrip, etc. (#312)
   { label: 'Travel', keys: ['departure', 'arrival', 'from_station', 'to_station', 'journey_date', 'return_date', 'travel_class', 'quota', 'passenger_count'] },
   { label: 'Eligibility', keys: ['occupation', 'ex_serviceman', 'ews_certificate', 'disability_certificate', 'domicile_certificate', 'income_certificate', 'caste_certificate', 'languages', 'skills'] },
