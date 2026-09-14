@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
@@ -41,7 +41,7 @@ export default function CustomerDetail() {
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [extracting, setExtracting] = useState<string | null>(null);
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
-  const [extractDocId, setExtractDocId] = useState<string | null>(null);
+  const [, setExtractDocId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [extractError, setExtractError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -259,6 +259,10 @@ export default function CustomerDetail() {
   const primaryName = household.persons[0]?.displayLabel || household.persons[0]?.name || phone;
   const flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
   const completeness = getCompleteness(flat);
+  const visibleSections = useMemo(
+    () => (personDetail ? buildVisibleSections(personDetail.data || {}) : []),
+    [personDetail],
+  );
 
   return (
     <div className="max-w-4xl mx-auto pt-4">
@@ -358,25 +362,15 @@ export default function CustomerDetail() {
             )}
           </section>
 
-          {/* Profile data — schema sections + dynamic sections (Bank Details, etc.) */}
+          {/* Doc cards — auto-organised by document type (no hardcoded section maze). */}
           <section className="mb-6">
-            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Profile data</h2>
+            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">From documents</h2>
             <div className="space-y-3">
-              {buildVisibleSections(personDetail.data || {}).map((section) => {
+              {visibleSections.map((section) => {
                 const raw = personDetail.data || {};
                 const sflat = flattenProfileData(raw);
-                // Schema sections: filled + required missing. Dynamic: filled only.
-                const rows = section.dynamic
-                  ? section.fields.filter((f) => !!sflat[f.key])
-                  : section.fields.filter((f) => !!sflat[f.key] || f.required).concat(
-                      section.extraKeys
-                        .filter((k) => !!sflat[k] && !section.fields.some((f) => f.key === k))
-                        .map((k) => ({
-                          key: k,
-                          label: k.replace(/_(10th|12th|grad)$/, '').replace(/_/g, ' '),
-                        })),
-                    );
-
+                const rows = section.fields.filter((f) => !!sflat[f.key]);
+                if (!rows.length) return null;
                 return (
                   <div key={section.id} className="card">
                     <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">
@@ -390,8 +384,8 @@ export default function CustomerDetail() {
                         const isEditing = editingField === f.key;
                         return (
                           <div key={f.key} className="flex flex-col gap-0.5">
-                            <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
-                              {f.label}{f.required && !val ? ' *' : ''}
+                            <span className="text-[10px] uppercase tracking-wide text-gray-500">
+                              {f.label}
                             </span>
                             {isEditing ? (
                               <input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)}
@@ -401,7 +395,7 @@ export default function CustomerDetail() {
                             ) : (
                               <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
                                 className="flex items-center gap-1.5 group text-left">
-                                <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
+                                <span className="text-sm truncate text-gray-100" title={val || ''}>{val}</span>
                                 {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
                                 {rawVal && typeof rawVal === 'object' && (
                                   <ProvenanceChip
@@ -418,8 +412,8 @@ export default function CustomerDetail() {
                         );
                       })}
                     </div>
-                    {!section.dynamic && (
-                      addingInSection === section.id ? (
+                    {section.id === 'manual' && (
+                      addingInSection === 'manual' ? (
                         <div className="flex gap-2 mt-3">
                           <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
                           <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
@@ -427,7 +421,7 @@ export default function CustomerDetail() {
                           <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
                         </div>
                       ) : (
-                        <button onClick={() => setAddingInSection(section.id)} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
+                        <button onClick={() => setAddingInSection('manual')} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
                           <Plus size={12} /> Add field
                         </button>
                       )
@@ -435,6 +429,9 @@ export default function CustomerDetail() {
                   </div>
                 );
               })}
+              {visibleSections.length === 0 && (
+                <p className="text-xs text-gray-600 px-1">No document details yet — extract from Documents.</p>
+              )}
             </div>
           </section>
         </>
