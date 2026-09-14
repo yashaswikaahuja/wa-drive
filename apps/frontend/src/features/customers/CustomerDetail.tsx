@@ -231,6 +231,14 @@ export default function CustomerDetail() {
     finally { setSaving(false); }
   };
 
+  // Hooks must run every render (before any early return) — blank page was "Rendered more hooks…"
+  const visibleSections = useMemo(
+    () => (personDetail ? buildVisibleSections(personDetail.data || {}) : []),
+    [personDetail],
+  );
+  const flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
+  const completeness = getCompleteness(flat);
+
   if (loading && !household) return (
     <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse">
       <div className="h-6 w-24 rounded bg-white/[0.03]" />
@@ -257,12 +265,6 @@ export default function CustomerDetail() {
   );
 
   const primaryName = household.persons[0]?.displayLabel || household.persons[0]?.name || phone;
-  const flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
-  const completeness = getCompleteness(flat);
-  const visibleSections = useMemo(
-    () => (personDetail ? buildVisibleSections(personDetail.data || {}) : []),
-    [personDetail],
-  );
 
   return (
     <div className="max-w-4xl mx-auto pt-4">
