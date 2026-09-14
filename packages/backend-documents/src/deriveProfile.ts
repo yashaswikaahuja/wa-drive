@@ -43,15 +43,40 @@ export async function deriveProfile(workspaceId: string, phone: string, personKe
       }
     }
   }
-  // Build documentId → documentType from cache so overrides that lost type still organise as doc cards
+  // Build documentId → documentType from cache so overrides that lost type still organise as doc cards.
+  // Also look up by file_id: some caches (e.g. bank) were written without phone/person_key, so the
+  // phone+person query above misses them — that was why Bank became a generic "From Document" card.
   const typeByDocId: Record<string, string> = {};
-  for (const row of rows) {
-    const sugg = row.suggested || {};
+  const ingestSuggested = (sugg: any, fileId?: string) => {
+    if (!sugg || typeof sugg !== 'object') return;
+    const topType = sugg.document_type?.value || sugg.document_type;
+    if (fileId && topType && String(topType) !== 'other') typeByDocId[String(fileId)] = String(topType);
     for (const nv of Object.values(sugg)) {
       const o = nv as any;
-      const id = o?.documentId != null ? String(o.documentId) : '';
-      const t = o?.documentType != null ? String(o.documentType).trim() : '';
+      if (!o || typeof o !== 'object') continue;
+      const id = o.documentId != null ? String(o.documentId) : (fileId || '');
+      const t = o.documentType != null ? String(o.documentType).trim() : '';
       if (id && t && t !== 'other') typeByDocId[id] = t;
+    }
+  };
+  for (const row of rows) ingestSuggested(row.suggested);
+  const overrideDocIds = [
+    ...new Set(
+      Object.values(overrides || {})
+        .map((v: any) => (v && v.documentId != null ? String(v.documentId) : ''))
+        .filter(Boolean),
+    ),
+  ].filter((id) => !typeByDocId[id]);
+  if (overrideDocIds.length) {
+    try {
+      const { rows: byFile } = await pool.query(
+        `SELECT file_id, suggested FROM extraction_cache
+         WHERE workspace_id = $1 AND file_id = ANY($2::text[])`,
+        [workspaceId, overrideDocIds],
+      );
+      for (const row of byFile) ingestSuggested(row.suggested, row.file_id);
+    } catch (e: any) {
+      console.warn('[deriveProfile] file_id type lookup failed', e.message);
     }
   }
 
