@@ -115,6 +115,13 @@ export default function CustomerDetail() {
   };
 
   useEffect(() => { loadHousehold(); loadDocuments(); loadReadiness(); }, [phone]);
+  // Same phone + new ?person= does NOT remount this page — must react to query changes
+  // (otherwise list click "Shubham" keeps showing Kamaljeet).
+  useEffect(() => {
+    if (!personFromQuery) return;
+    setSelectedPerson((prev) => (prev === personFromQuery ? prev : personFromQuery));
+    setPersonDetail(null);
+  }, [personFromQuery]);
   useEffect(() => { if (selectedPerson) loadPerson(selectedPerson); }, [selectedPerson]);
 
   const loadReadiness = async () => {

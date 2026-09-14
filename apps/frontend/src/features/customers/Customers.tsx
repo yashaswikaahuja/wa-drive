@@ -29,10 +29,19 @@ export default function Customers() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name || !form.phone) return;
-    await api.post('/customers/persons', { phone: form.phone, name: form.name, displayLabel: form.name, relationship: 'self' });
+    const r = await api.post('/customers/persons', {
+      phone: form.phone,
+      name: form.name,
+      displayLabel: form.name,
+      relationship: 'self',
+    });
     setForm({ name: '', phone: '' });
     setShowCreate(false);
-    load();
+    await load();
+    const newId = r.data?.id;
+    navigate(
+      `/app/customers/${encodeURIComponent(form.phone)}${newId ? `?person=${encodeURIComponent(newId)}` : ''}`,
+    );
   };
 
   const deleteHousehold = async (phone: string, e: React.MouseEvent) => {
@@ -41,9 +50,9 @@ export default function Customers() {
     try { await api.delete(`/customers/households/${encodeURIComponent(phone)}`); load(); } catch {}
   };
 
-  const openPerson = (phone: string, personId?: string) => {
-    const base = `/app/customers/${encodeURIComponent(phone)}`;
-    navigate(personId ? `${base}?person=${encodeURIComponent(personId)}` : base);
+  /** Always open a specific person — never rely on persons[0] alone. */
+  const openPerson = (phone: string, personId: string) => {
+    navigate(`/app/customers/${encodeURIComponent(phone)}?person=${encodeURIComponent(personId)}`);
   };
 
   const q = search.trim().toLowerCase();
@@ -99,54 +108,54 @@ export default function Customers() {
           {!search && <p className="text-xs pt-muted mt-1">Add your first customer to get started</p>}
         </div>
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-2">
           {filtered.map((h) => {
-            // When searching by name, open THAT person — not always persons[0] (Kamaljeet).
-            const matched = q
-              ? h.persons.find((p) =>
+            const qMatch = q
+              ? h.persons.filter((p) =>
                   (p.name || '').toLowerCase().includes(q) ||
                   (p.displayLabel || '').toLowerCase().includes(q),
                 )
-              : null;
-            const primary = matched || h.persons[0];
-            const others = h.persons.filter((p) => p.id !== primary?.id);
+              : [];
+            // When searching: show one row per matched person. Otherwise: one row per person in household.
+            const rows = qMatch.length > 0 ? qMatch : h.persons;
 
             return (
-              <div
-                key={h.phone}
-                onClick={() => openPerson(h.phone, primary?.id)}
-                className="group flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all hover:bg-[hsl(var(--pt-secondary))]"
-              >
-                <div
-                  className="w-9 h-9 rounded-md flex items-center justify-center font-semibold text-sm"
-                  style={{ background: 'hsl(var(--pt-marigold) / 0.14)', color: 'hsl(var(--pt-marigold-deep))' }}
-                >
-                  {(primary?.displayLabel || primary?.name || '?')[0]?.toUpperCase() || '?'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium" style={{ color: INK }}>
-                    {primary?.displayLabel || primary?.name || h.phone}
+              <div key={h.phone} className="rounded-lg overflow-hidden" style={{ background: 'hsl(var(--pt-secondary) / 0.35)' }}>
+                <div className="px-4 pt-2 pb-1 flex items-center justify-between">
+                  <p className="text-[11px] pt-muted">
+                    {h.phone.match(/^\d{10,13}$/) ? `+${h.phone}` : h.phone}
+                    {' · '}{h.persons.length} {h.persons.length === 1 ? 'person' : 'people'}
                   </p>
-                  <p className="text-xs pt-muted truncate">
-                    {h.phone.match(/^\d{10,13}$/) ? h.phone : ''}
-                    {others.length > 0 && (
-                      <span>
-                        {' · also '}
-                        {others.map((p) => p.displayLabel || p.name).join(', ')}
-                      </span>
-                    )}
-                  </p>
+                  <button
+                    onClick={(e) => deleteHousehold(h.phone, e)}
+                    className="p-1 pt-muted hover:text-red-500 rounded"
+                    title="Delete household"
+                  >
+                    <Trash size={13} />
+                  </button>
                 </div>
-                <span className="text-[11px] pt-muted px-2 py-0.5 rounded" style={{ background: 'hsl(var(--pt-secondary))' }}>
-                  {h.person_count} {parseInt(h.person_count, 10) === 1 ? 'person' : 'people'}
-                </span>
-                <button
-                  onClick={(e) => deleteHousehold(h.phone, e)}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 pt-muted hover:text-red-500 rounded transition-all"
-                  title="Delete"
-                >
-                  <Trash size={14} />
-                </button>
+                {rows.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => openPerson(h.phone, p.id)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all hover:bg-[hsl(var(--pt-secondary))] border-t border-white/5"
+                  >
+                    <div
+                      className="w-9 h-9 rounded-md flex items-center justify-center font-semibold text-sm shrink-0"
+                      style={{ background: 'hsl(var(--pt-marigold) / 0.14)', color: 'hsl(var(--pt-marigold-deep))' }}
+                    >
+                      {(p.displayLabel || p.name || '?')[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: INK }}>
+                        {p.displayLabel || p.name || 'Unnamed'}
+                      </p>
+                      <p className="text-xs pt-muted capitalize">{p.relationship || 'self'}</p>
+                    </div>
+                    <span className="text-[11px] text-[#0a84ff]">Open →</span>
+                  </button>
+                ))}
               </div>
             );
           })}
