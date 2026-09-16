@@ -76,7 +76,7 @@ export const DEFAULT_EXTRACT_MAPS: Record<string, string[]> = {
   admit_card: ['name', 'dob', 'roll_number', 'application_number', 'exam_name', 'exam_date', 'exam_center', 'exam_seat_number'],
   result: ['name', 'roll_number', 'exam_name', 'marks_obtained', 'total_marks', 'percentage', 'division'],
   certificate: ['name', 'father_name', 'dob', 'certificate_number', 'issue_date'],
-  // Lean map: only banking identifiers (no address — avoids override fights).
+  // Lean map only — never address/city (OCR puts S/O lines into address).
   bank_passbook: [
     'bank_account_number', 'ifsc_code', 'cif_number', 'bank_name', 'branch_name',
   ],
