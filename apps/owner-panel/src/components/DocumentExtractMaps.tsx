@@ -26,6 +26,7 @@ export function DocumentExtractMapsPanel({ cfg }: { cfg: Config }) {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [keyFilter, setKeyFilter] = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -41,6 +42,11 @@ export function DocumentExtractMapsPanel({ cfg }: { cfg: Config }) {
   }, [cfg]);
 
   const selectedKeys = useMemo(() => new Set(maps[selected] || []), [maps, selected]);
+  const visibleKeys = useMemo(() => {
+    const q = keyFilter.trim().toLowerCase();
+    if (!q) return PROFILE_KEY_OPTIONS;
+    return PROFILE_KEY_OPTIONS.filter((k) => k.toLowerCase().includes(q));
+  }, [keyFilter]);
 
   const toggle = (key: string) => {
     setMaps((prev) => {
@@ -65,36 +71,42 @@ export function DocumentExtractMapsPanel({ cfg }: { cfg: Config }) {
   };
 
   if (loading) {
-    return <section className="card" style={{ padding: 20, marginTop: 16 }}>Loading extract maps…</section>;
+    return (
+      <section className="card" style={{ padding: 20, marginTop: 16 }}>
+        <div className="skeleton" style={{ height: 20, width: 220, marginBottom: 14 }} />
+        <div className="skeleton" style={{ height: 220, borderRadius: 10 }} />
+      </section>
+    );
   }
+
+  const visibleTypes = docTypes.filter((t) => t !== 'photo' && t !== 'signature');
 
   return (
     <section className="card" style={{ padding: 20, marginTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ width: 30, height: 30, borderRadius: 8, background: 'hsl(158 50% 40% / 0.12)', display: 'grid', placeItems: 'center' }}>
           <Files size={16} weight="duotone" style={{ color: 'hsl(158 50% 35%)' }} />
         </div>
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
           <h2 className="display" style={{ fontSize: 15, fontWeight: 700 }}>Document extract maps</h2>
           <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
             After AI identifies the document type, only these fields are extracted. Prevents token waste and profile overwrites.
           </p>
         </div>
-        <button type="button" className="btn" onClick={save} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button type="button" className="btn btn--primary" onClick={save} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {msg === 'saved' ? <CheckCircle size={14} weight="fill" /> : <FloppyDisk size={14} />}
           {saving ? 'Saving…' : msg === 'saved' ? 'Saved' : 'Save maps'}
         </button>
       </div>
-      {msg && msg !== 'saved' && <p style={{ color: 'hsl(0 65% 45%)', fontSize: 12, marginBottom: 10 }}>{msg}</p>}
+      {msg && msg !== 'saved' && <p className="banner" role="alert" style={{ marginBottom: 10 }}>{msg}</p>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 16 }}>
+      <div className="extract-maps-layout" style={{ display: 'grid', gridTemplateColumns: 'minmax(160px, 220px) 1fr', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 420, overflow: 'auto' }}>
-          {docTypes.filter((t) => t !== 'photo' && t !== 'signature').map((t) => (
+          {visibleTypes.map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setSelected(t)}
-              className="pt-chip"
               style={{
                 textAlign: 'left',
                 padding: '8px 10px',
@@ -104,23 +116,41 @@ export function DocumentExtractMapsPanel({ cfg }: { cfg: Config }) {
                 cursor: 'pointer',
                 fontSize: 12,
                 fontWeight: selected === t ? 700 : 500,
+                color: 'inherit',
               }}
             >
               {labels[t] || t}
-              <span className="muted" style={{ float: 'right' }}>{(maps[t] || []).length}</span>
+              <span className="muted num" style={{ float: 'right' }}>{(maps[t] || []).length}</span>
             </button>
           ))}
         </div>
         <div style={{ background: 'hsl(var(--bg))', borderRadius: 10, padding: 14, maxHeight: 420, overflow: 'auto' }}>
-          <p style={{ fontSize: 12, fontWeight: 700, marginBottom: 10 }}>{labels[selected] || selected}</p>
+          <div className="row between" style={{ marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: 13, fontWeight: 700 }}>{labels[selected] || selected}</p>
+              <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                {(maps[selected] || []).length} field{(maps[selected] || []).length === 1 ? '' : 's'} selected
+              </p>
+            </div>
+            <input
+              className="input"
+              value={keyFilter}
+              onChange={(e) => setKeyFilter(e.target.value)}
+              placeholder="Filter fields…"
+              style={{ width: 160, fontSize: 12, padding: '6px 10px' }}
+            />
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 6 }}>
-            {PROFILE_KEY_OPTIONS.map((key) => (
+            {visibleKeys.map((key) => (
               <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer' }}>
                 <input type="checkbox" checked={selectedKeys.has(key)} onChange={() => toggle(key)} />
                 <span style={{ fontFamily: 'var(--mono)' }}>{key}</span>
               </label>
             ))}
           </div>
+          {visibleKeys.length === 0 && (
+            <p className="muted" style={{ fontSize: 12, padding: '16px 0' }}>No fields match “{keyFilter}”.</p>
+          )}
         </div>
       </div>
     </section>

@@ -213,20 +213,35 @@ export function App() {
             {metrics ? <MetricsGrid m={metrics} /> : <MetricsSkeleton />}
             {learning && (
               <div className="card" style={{ padding: 16, marginTop: 14 }}>
-                <div className="label" style={{ marginBottom: 10 }}>Learning (fills across cafés)</div>
+                <div className="row between" style={{ marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+                  <div className="label">Learning (fills across cafés)</div>
+                  <span className="muted" style={{ fontSize: 11 }}>Click a card to open that section</span>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
-                  {[
-                    { label: 'Sessions', value: learning.sessions },
-                    { label: 'Filled', value: learning.filled },
-                    { label: 'Failed', value: learning.failed },
-                    { label: 'Corrections', value: learning.corrections },
-                    { label: 'Forms', value: learning.forms },
-                    { label: 'Unmapped', value: learning.unmapped },
-                  ].map((c) => (
-                    <div key={c.label}>
+                  {([
+                    { label: 'Sessions', value: learning.sessions, section: 'sessions' as Section },
+                    { label: 'Filled', value: learning.filled, section: 'sessions' as Section },
+                    { label: 'Failed', value: learning.failed, section: 'sessions' as Section },
+                    { label: 'Corrections', value: learning.corrections, section: 'corrections' as Section },
+                    { label: 'Forms mapped', value: learning.forms, section: 'mappings' as Section },
+                    { label: 'Unmapped', value: learning.unmapped, section: 'mappings' as Section },
+                  ]).map((c) => (
+                    <button
+                      key={c.label}
+                      type="button"
+                      className="card"
+                      onClick={() => navigate(c.section)}
+                      style={{
+                        padding: 12,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        border: '1px solid hsl(var(--border-soft))',
+                        background: 'hsl(var(--bg))',
+                      }}
+                    >
                       <div className="muted" style={{ fontSize: 11 }}>{c.label}</div>
                       <div className="num display" style={{ fontSize: 20, fontWeight: 700 }}>{c.value}</div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
