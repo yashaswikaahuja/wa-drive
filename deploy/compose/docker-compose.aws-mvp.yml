@@ -88,6 +88,7 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       SES_FROM: ${SES_FROM:-}
       GEOCODE_API_KEY: ${GEOCODE_API_KEY:-}
+      REMOVE_BG_API_KEY: ${REMOVE_BG_API_KEY:-}
       OWNER_KEY: ${OWNER_KEY:-}
       # Tailnet owner panel (baked into backend image). Bind 0.0.0.0 inside Docker;
       # reach it as http://cybercontrol-app:3010 over Tailscale. SG must NOT open 3010.

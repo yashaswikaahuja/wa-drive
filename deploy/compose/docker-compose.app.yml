@@ -39,6 +39,7 @@ services:
       OWNER_BIND: ${OWNER_BIND:-}                 # 'auto' → bind this VM's tailscale IP
       OWNER_ALERT_PHONE: ${OWNER_ALERT_PHONE:-}   # owner WhatsApp for daily health-drop digest (empty → no alerts)
       GEOCODE_API_KEY: ${GEOCODE_API_KEY:-}       # server-side reverse-geocode of GPS captures
+      REMOVE_BG_API_KEY: ${REMOVE_BG_API_KEY:-}   # remove.bg for passport photo cutouts
 
   extension-service:
     image: ghcr.io/yashaswikaahuja/cybercontrol-extension-service:${IMAGE_TAG:-latest}
