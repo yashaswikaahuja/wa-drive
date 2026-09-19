@@ -1,7 +1,7 @@
 import { Router, Request, Response, type Router as ExpressRouter } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
-import { pool } from '@cybercontrol/backend-core';
+import { pool, REMOVE_BG_KEY } from '@cybercontrol/backend-core';
 import { generateAadhaarLayout, generatePassportSheet, generateSingleSheet, SheetPreset, PhotoSpec, cropAndAlignFace, setLastImage, getLastImage } from '@cybercontrol/backend-documents';
 import { getDriveForWorkspace } from '@cybercontrol/backend-drive';
 
@@ -158,6 +158,52 @@ router.get('/debug/last-image', async (req: Request, res: Response) => {
     res.send(result);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * POST /api/process/remove-bg
+ * Multipart `image_file` OR JSON `{ fileId }` → transparent PNG via remove.bg
+ * (also mounted at /api/remove-bg for older clients).
+ */
+router.post('/remove-bg', upload.single('image_file') as any, async (req: any, res: Response) => {
+  if (!REMOVE_BG_KEY) {
+    res.status(503).json({ error: 'Background removal not configured (REMOVE_BG_API_KEY)' });
+    return;
+  }
+  try {
+    let imageBuffer: Buffer;
+    if (req.file) {
+      imageBuffer = req.file.buffer;
+    } else if (req.body?.fileId) {
+      imageBuffer = await downloadDriveFile(String(req.body.fileId), req);
+    } else {
+      res.status(400).json({ error: 'Provide image_file (multipart) or fileId' });
+      return;
+    }
+    const form = new FormData();
+    form.append('size', 'auto');
+    form.append('format', 'png');
+    form.append('image_file', new Blob([imageBuffer]), 'photo.jpg');
+    const upstream = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: { 'X-Api-Key': REMOVE_BG_KEY },
+      body: form,
+    });
+    if (!upstream.ok) {
+      const errText = await upstream.text().catch(() => '');
+      res.status(upstream.status === 402 ? 402 : 502).json({
+        error: `remove.bg failed (${upstream.status})${errText ? `: ${errText.slice(0, 180)}` : ''}`,
+      });
+      return;
+    }
+    const png = Buffer.from(await upstream.arrayBuffer());
+    res.set('Content-Type', 'image/png');
+    res.set('Content-Disposition', 'inline; filename="cutout.png"');
+    res.send(png);
+  } catch (e: any) {
+    console.error('[Process] remove-bg error:', e.message);
+    res.status(500).json({ error: e.message || 'Background removal failed' });
   }
 });
 

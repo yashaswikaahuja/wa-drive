@@ -854,9 +854,23 @@ export default function WhatsApp() {
                   className="px-3 py-1 bg-white text-gray-900 rounded-full text-xs font-bold hover:bg-gray-100">
                   Build Profile
                 </button>
-                <button onClick={() => { const files = Array.from(selectedDocs.values()).map(m => ({ id: m.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || m.id, fileName: m.fileName || '', fileUrl: m.fileUrl || '', customerName: m.name })); window.location.href = '/app/stitch?files=' + encodeURIComponent(JSON.stringify(files)); }}
+                <button onClick={() => {
+                  const first = Array.from(selectedDocs.values())[0];
+                  const driveId = first?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || first?.id;
+                  const phone = first?.phone || '';
+                  const name = first?.name || '';
+                  const q = new URLSearchParams();
+                  if (driveId) q.set('fileId', String(driveId));
+                  if (phone) q.set('phone', String(phone));
+                  if (name) q.set('name', String(name));
+                  window.location.href = '/app/photos/passport?' + q.toString();
+                }}
                   className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  Photo Tool
+                  Passport photo
+                </button>
+                <button onClick={() => { window.location.href = '/app/photos/pdf-scan'; }}
+                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                  PDF Scan
                 </button>
               </div>
             )}

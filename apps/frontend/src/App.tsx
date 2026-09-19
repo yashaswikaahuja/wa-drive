@@ -18,10 +18,9 @@ const NewJob = lazy(() => import('./features/jobs/NewJob'));
 const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const FormDirectory = lazy(() => import('./features/forms/FormDirectory'));
-const FormPhotoTool = lazy(() => import('./features/forms/FormPhotoTool'));
-const Stitch = lazy(() => import('./features/services/Stitch'));
-const PhotoTool = lazy(() => import('./features/photo-tool/PhotoTool'));
 const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
+const PassportEditor = lazy(() => import('./features/media-tools/PassportEditor'));
+const PdfScan = lazy(() => import('./features/media-tools/PdfScan'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
 const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
 const SharedProfile = lazy(() => import('./features/customers/SharedProfile'));
@@ -95,17 +94,19 @@ export default function App() {
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/forms" element={<Suspense fallback={<PageLoader />}><FormDirectory /></Suspense>} />
-          {/* Unified Photos hub (mode tabs) */}
+          {/* Photos = Passport editor + PDF Scan (#316) */}
           <Route path="/app/photos" element={<Suspense fallback={<PageLoader />}><PhotosHub /></Suspense>}>
-            <Route index element={<Navigate to="/app/photos/prints" replace />} />
-            <Route path="prints" element={<Suspense fallback={<PageLoader />}><PhotoTool /></Suspense>} />
-            <Route path="process" element={<Suspense fallback={<PageLoader />}><Stitch /></Suspense>} />
-            <Route path="form" element={<Suspense fallback={<PageLoader />}><FormPhotoTool /></Suspense>} />
+            <Route index element={<Navigate to="/app/photos/passport" replace />} />
+            <Route path="passport" element={<Suspense fallback={<PageLoader />}><PassportEditor /></Suspense>} />
+            <Route path="pdf-scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
           </Route>
-          {/* Back-compat redirects (preserve query string) */}
-          <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/prints" />} />
-          <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/process" />} />
-          <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/form" />} />
+          {/* Back-compat: old Photo Tool / Stitch / Form photo → new tools */}
+          <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/passport" />} />
+          <Route path="/app/photos/prints" element={<RedirectWithSearch to="/app/photos/passport" />} />
+          <Route path="/app/photos/process" element={<RedirectWithSearch to="/app/photos/passport" />} />
+          <Route path="/app/photos/form" element={<RedirectWithSearch to="/app/photos/passport" />} />
+          <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/passport" />} />
+          <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/passport" />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
           <Route element={<AdminOnly />}>

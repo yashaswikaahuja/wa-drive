@@ -89,6 +89,12 @@ app.use((req: any, res, next) => { req.pool = pool; next(); });
 app.use('/api/auth', authRoutes);
 app.use('/api/drive', driveRoutes);
 app.use('/api/process', authMiddleware, processRoutes);
+// Alias used by older Photo Tool / Stitch clients → same remove-bg handler
+app.use('/api/remove-bg', authMiddleware, (req, _res, next) => {
+  // Rewrite path so process router matches POST /remove-bg
+  req.url = '/remove-bg' + (req.url === '/' ? '' : req.url);
+  next();
+}, processRoutes);
 app.use('/api/worker', uploadRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/worker', whatsappRoutes); // /api/worker/event and /api/worker/update-dp

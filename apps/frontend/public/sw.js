@@ -9,4 +9,4 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// cache-bust classic-sections 2026-09-14T15:10:00+05:30
+// cache-bust media-tools-316 2026-09-19

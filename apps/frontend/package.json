@@ -23,6 +23,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.20",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.14.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.2",
+    "@types/jspdf": "^2.0.0",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@vitejs/plugin-react": "^4.1.1",
