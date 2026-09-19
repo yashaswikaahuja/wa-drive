@@ -184,7 +184,8 @@ router.post('/remove-bg', upload.single('image_file') as any, async (req: any, r
     const form = new FormData();
     form.append('size', 'auto');
     form.append('format', 'png');
-    form.append('image_file', new Blob([imageBuffer]), 'photo.jpg');
+    // Base64 field avoids Node Buffer↔Blob typing friction in tsc
+    form.append('image_file_b64', imageBuffer.toString('base64'));
     const upstream = await fetch('https://api.remove.bg/v1.0/removebg', {
       method: 'POST',
       headers: { 'X-Api-Key': REMOVE_BG_KEY },
