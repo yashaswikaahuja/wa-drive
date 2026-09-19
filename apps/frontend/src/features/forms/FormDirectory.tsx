@@ -205,7 +205,7 @@ function FormRow({ f, isOpen, onToggle, style }: { f: Form; isOpen: boolean; onT
               </a>
               {(f.photo_specs || f.signature_specs) && (
                 <a
-                  href={`/app/photos/passport?form=${encodeURIComponent(f.short_name)}`}
+                  href={`/app/photos/portal?form=${encodeURIComponent(f.short_name)}`}
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-full font-medium text-sm text-gray-200 bg-white/[0.06] border border-white/[0.06] hover:bg-white/[0.1] active:scale-[0.98] transition-all shrink-0"
                   style={{ transitionTimingFunction: EASE, transitionDuration: '300ms' }}>
                   <Camera size={15} /> Prepare Photo

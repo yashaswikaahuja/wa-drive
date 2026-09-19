@@ -19,8 +19,11 @@ const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const FormDirectory = lazy(() => import('./features/forms/FormDirectory'));
 const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
+const MediaDeskHome = lazy(() => import('./features/media-tools/MediaDeskHome'));
 const PassportEditor = lazy(() => import('./features/media-tools/PassportEditor'));
+const PrintSheet = lazy(() => import('./features/media-tools/PrintSheet'));
 const PdfScan = lazy(() => import('./features/media-tools/PdfScan'));
+const AadhaarLayout = lazy(() => import('./features/media-tools/AadhaarLayout'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
 const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
 const SharedProfile = lazy(() => import('./features/customers/SharedProfile'));
@@ -94,19 +97,23 @@ export default function App() {
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/forms" element={<Suspense fallback={<PageLoader />}><FormDirectory /></Suspense>} />
-          {/* Photos = Passport editor + PDF Scan (#316) */}
+          {/* Media Desk — portal / print / scan / aadhaar (#316) */}
           <Route path="/app/photos" element={<Suspense fallback={<PageLoader />}><PhotosHub /></Suspense>}>
-            <Route index element={<Navigate to="/app/photos/passport" replace />} />
-            <Route path="passport" element={<Suspense fallback={<PageLoader />}><PassportEditor /></Suspense>} />
-            <Route path="pdf-scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
+            <Route index element={<Suspense fallback={<PageLoader />}><MediaDeskHome /></Suspense>} />
+            <Route path="portal" element={<Suspense fallback={<PageLoader />}><PassportEditor /></Suspense>} />
+            <Route path="print" element={<Suspense fallback={<PageLoader />}><PrintSheet /></Suspense>} />
+            <Route path="scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
+            <Route path="aadhaar" element={<Suspense fallback={<PageLoader />}><AadhaarLayout /></Suspense>} />
           </Route>
-          {/* Back-compat: old Photo Tool / Stitch / Form photo → new tools */}
-          <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/passport" />} />
-          <Route path="/app/photos/prints" element={<RedirectWithSearch to="/app/photos/passport" />} />
-          <Route path="/app/photos/process" element={<RedirectWithSearch to="/app/photos/passport" />} />
-          <Route path="/app/photos/form" element={<RedirectWithSearch to="/app/photos/passport" />} />
-          <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/passport" />} />
-          <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/passport" />} />
+          {/* Back-compat redirects */}
+          <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/photos/passport" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/photos/pdf-scan" element={<RedirectWithSearch to="/app/photos/scan" />} />
+          <Route path="/app/photos/prints" element={<RedirectWithSearch to="/app/photos/print" />} />
+          <Route path="/app/photos/process" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/photos/form" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/aadhaar" />} />
+          <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/portal" />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
           <Route element={<AdminOnly />}>

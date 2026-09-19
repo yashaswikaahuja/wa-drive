@@ -863,14 +863,18 @@ export default function WhatsApp() {
                   if (driveId) q.set('fileId', String(driveId));
                   if (phone) q.set('phone', String(phone));
                   if (name) q.set('name', String(name));
-                  window.location.href = '/app/photos/passport?' + q.toString();
+                  window.location.href = '/app/photos/portal?' + q.toString();
                 }}
                   className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  Passport photo
+                  Portal photo
                 </button>
-                <button onClick={() => { window.location.href = '/app/photos/pdf-scan'; }}
+                <button onClick={() => { window.location.href = '/app/photos/scan'; }}
                   className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  PDF Scan
+                  Scan PDF
+                </button>
+                <button onClick={() => { window.location.href = '/app/photos/aadhaar'; }}
+                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                  Aadhaar
                 </button>
               </div>
             )}
