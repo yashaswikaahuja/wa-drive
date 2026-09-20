@@ -15,6 +15,7 @@ import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
 import PdfThumb from './PdfThumb';
+import PdfViewer from './PdfViewer';
 
 type DriveFile = {
   id: string;
@@ -506,73 +507,74 @@ export default function FileManager() {
   };
 
   return (
-    <div className="h-full md:h-[calc(100vh-4rem)] flex flex-col min-h-0 bg-[hsl(var(--background))]">
-      {/* Toolbar */}
+    /* Break out of Layout padding; fill phone (top bar 3rem) and desktop main */
+    <div
+      className="-mx-4 -mb-4 md:-mx-6 md:-mb-6 flex flex-col min-h-0 overflow-hidden bg-[hsl(var(--background))] h-[calc(100dvh-3rem)] md:h-[calc(100dvh)]"
+    >
+      {/* Toolbar — stacks cleanly on phone */}
       <div
-        className="shrink-0 border-b px-3 py-2 flex flex-wrap items-center gap-2"
+        className="shrink-0 border-b px-2 sm:px-3 py-2 flex flex-col gap-2"
         style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)))' }}
       >
-        {!atRoot && (
-          <button type="button" className="btn-secondary text-xs py-1.5 px-2 flex items-center gap-1" onClick={goRoot} title="Back to customers">
-            <CaretLeft size={14} /> Back
-          </button>
-        )}
-        <FolderOpen size={18} weight="fill" className="text-[hsl(27_95%_55%)]" />
-        <span className="text-sm font-semibold hidden sm:inline">File Manager</span>
-
-        <nav className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] min-w-0 flex-1">
-          <button type="button" className="hover:text-[hsl(27_95%_55%)] truncate" onClick={goRoot}>
-            Customers
-          </button>
-          {activeFolder && (
-            <>
-              <CaretRight size={12} className="shrink-0" />
-              <span className="text-[var(--foreground)] truncate font-medium">{activeFolder.name}</span>
-            </>
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {!atRoot && (
+            <button type="button" className="btn-secondary text-xs py-1.5 px-2 flex items-center gap-1 shrink-0" onClick={goRoot} title="Back to customers">
+              <CaretLeft size={14} /> <span className="hidden xs:inline sm:inline">Back</span>
+            </button>
           )}
-        </nav>
-
-        <div className="relative w-40 sm:w-52">
-          <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            className="input-field text-xs w-full pl-7 py-1.5"
-            placeholder={atRoot ? 'Search customers…' : 'Search files…'}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <FolderOpen size={18} weight="fill" className="text-[hsl(27_95%_55%)] shrink-0" />
+          <nav className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] min-w-0 flex-1">
+            <button type="button" className="hover:text-[hsl(27_95%_55%)] truncate" onClick={goRoot}>
+              Customers
+            </button>
+            {activeFolder && (
+              <>
+                <CaretRight size={12} className="shrink-0" />
+                <span className="text-[var(--foreground)] truncate font-medium">{activeFolder.name}</span>
+              </>
+            )}
+          </nav>
+          <button type="button" className="btn-secondary text-xs py-1.5 px-2 shrink-0" onClick={load} disabled={loading} title="Refresh">
+            <ArrowsClockwise size={13} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button
+            type="button"
+            className="btn-primary text-xs py-1.5 px-2 flex items-center gap-1 shrink-0"
+            disabled={uploading || atRoot || folderPhone === '__unassigned__'}
+            title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
+            onClick={() => fileRef.current?.click()}
+          >
+            <UploadSimple size={13} /> <span className="hidden sm:inline">Upload</span>
+          </button>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => uploadLocal(e.target.files)} />
         </div>
-
-        {!atRoot && (
-          <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
-            <button type="button" className={`p-1.5 ${view === 'grid' ? 'bg-[hsl(27_95%_55%/0.2)]' : ''}`} title="Icons" onClick={() => setView('grid')}>
-              <SquaresFour size={15} />
-            </button>
-            <button type="button" className={`p-1.5 ${view === 'list' ? 'bg-[hsl(27_95%_55%/0.2)]' : ''}`} title="List" onClick={() => setView('list')}>
-              <ListBullets size={15} />
-            </button>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              className="input-field text-xs w-full pl-7 py-1.5"
+              placeholder={atRoot ? 'Search customers…' : 'Search files…'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-        )}
-
-        <button type="button" className="btn-secondary text-xs py-1.5 px-2" onClick={load} disabled={loading} title="Refresh">
-          <ArrowsClockwise size={13} className={loading ? 'animate-spin' : ''} />
-        </button>
-
-        <button
-          type="button"
-          className="btn-primary text-xs py-1.5 px-2.5 flex items-center gap-1"
-          disabled={uploading || atRoot || folderPhone === '__unassigned__'}
-          title={atRoot ? 'Open a customer folder to upload into it' : 'Upload from this PC into this folder'}
-          onClick={() => fileRef.current?.click()}
-        >
-          <UploadSimple size={13} /> Upload
-        </button>
-        <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => uploadLocal(e.target.files)} />
+          {!atRoot && (
+            <div className="flex rounded-lg border overflow-hidden shrink-0" style={{ borderColor: 'var(--border)' }}>
+              <button type="button" className={`p-1.5 ${view === 'grid' ? 'bg-[hsl(27_95%_55%/0.2)]' : ''}`} title="Icons" onClick={() => setView('grid')}>
+                <SquaresFour size={15} />
+              </button>
+              <button type="button" className={`p-1.5 ${view === 'list' ? 'bg-[hsl(27_95%_55%/0.2)]' : ''}`} title="List" onClick={() => setView('list')}>
+                <ListBullets size={15} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 flex">
         {/* Sidebar folders */}
         <aside
-          className="w-56 shrink-0 border-r overflow-y-auto hidden sm:block"
+          className="w-52 lg:w-56 shrink-0 border-r overflow-y-auto hidden md:block"
           style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)) / 0.45)' }}
         >
           <p className="text-[10px] uppercase tracking-wider text-gray-500 px-3 pt-3 pb-1">Customers</p>
@@ -610,8 +612,8 @@ export default function FileManager() {
           className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4"
           onClick={() => clearSelection()}
         >
-          {/* Mobile folder strip */}
-          <div className="flex gap-1.5 overflow-x-auto mb-3 sm:hidden pb-1">
+          {/* Phone / small tablet folder strip (sidebar hidden below md) */}
+          <div className="flex gap-1.5 overflow-x-auto mb-3 md:hidden pb-1 -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' } as any}>
             <button
               type="button"
               className={`shrink-0 text-[11px] px-2.5 py-1 rounded-full border ${atRoot ? 'border-[hsl(27_95%_55%)] text-[hsl(27_95%_55%)]' : ''}`}
@@ -641,7 +643,7 @@ export default function FileManager() {
 
           {/* ROOT: customer folders */}
           {!loading && atRoot && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
               {filteredFolders.map((fol) => (
                 <button
                   key={fol.phone}
@@ -673,7 +675,7 @@ export default function FileManager() {
 
           {/* INSIDE FOLDER: files */}
           {!loading && !atRoot && view === 'grid' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 sm:gap-2">
               {visibleFiles.map((f) => {
                 const isSel = selectedIds.has(f.id);
                 return (
@@ -874,30 +876,32 @@ export default function FileManager() {
               }}
             />
 
-            {/* Floating controls — high-contrast frosted pills (readable on any photo) */}
+            {/* Floating controls — compact on phone, full on tablet/desktop */}
             <button
               type="button"
               onClick={closePreview}
-              className="absolute top-4 left-4 z-20 h-11 px-3.5 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center gap-1.5 shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
+              className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 h-9 sm:h-11 px-2.5 sm:px-3.5 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center gap-1 shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
               title="Back (Esc)"
             >
-              <ArrowBendUpLeft size={18} weight="bold" />
-              <span className="text-xs font-semibold pr-0.5">Back</span>
+              <ArrowBendUpLeft size={16} weight="bold" />
+              <span className="text-[11px] sm:text-xs font-semibold">Back</span>
             </button>
 
-            <div className="absolute top-4 right-4 z-20 flex items-center gap-2.5">
-              <button
-                type="button"
-                className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
-                title="Zoom"
-                onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
-              >
-                <MagnifyingGlassPlus size={20} weight="bold" />
-              </button>
+            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2.5">
+              {preview.kind === 'image' && (
+                <button
+                  type="button"
+                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                  title="Zoom"
+                  onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
+                >
+                  <MagnifyingGlassPlus size={18} weight="bold" />
+                </button>
+              )}
               {isImage(preview.file) && (
                 <button
                   type="button"
-                  className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
+                  className="hidden sm:flex w-11 h-11 rounded-full bg-white/95 hover:bg-white text-black items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
                   title="Edit in Photo Editor"
                   onClick={() => openInPhotoEditor(preview.file)}
                 >
@@ -906,20 +910,20 @@ export default function FileManager() {
               )}
               <button
                 type="button"
-                className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
+                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
                 title="Delete"
                 onClick={() => void deleteFile(preview.file)}
               >
-                <Trash size={20} weight="bold" />
+                <Trash size={18} weight="bold" />
               </button>
               <div className="relative">
                 <button
                   type="button"
-                  className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
+                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
                   title="More"
                   onClick={() => setViewerMore((v) => !v)}
                 >
-                  <DotsThree size={24} weight="bold" />
+                  <DotsThree size={22} weight="bold" />
                 </button>
                 {viewerMore && (
                   <div
@@ -943,24 +947,26 @@ export default function FileManager() {
               </div>
             </div>
 
-            {/* Large circular side chevrons — bright so they never vanish into the photo */}
+            {/* Side chevrons — smaller on phone so they don't crush the image */}
             {visibleFiles.length > 1 && (
               <>
                 <button
                   type="button"
-                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
+                  className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
                   onClick={() => void goPreviewDelta(-1)}
-                  title="Previous (Left arrow)"
+                  title="Previous"
                 >
-                  <CaretLeft size={32} weight="bold" />
+                  <CaretLeft size={22} weight="bold" className="sm:hidden" />
+                  <CaretLeft size={28} weight="bold" className="hidden sm:block" />
                 </button>
                 <button
                   type="button"
-                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
+                  className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
                   onClick={() => void goPreviewDelta(1)}
-                  title="Next (Right arrow)"
+                  title="Next"
                 >
-                  <CaretRight size={32} weight="bold" />
+                  <CaretRight size={22} weight="bold" className="sm:hidden" />
+                  <CaretRight size={28} weight="bold" className="hidden sm:block" />
                 </button>
               </>
             )}
@@ -971,44 +977,42 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo / PDF */}
-            <div className="relative z-[5] max-w-[min(92vw,1100px)] max-h-[calc(100%-7rem)] flex items-center justify-center px-14 sm:px-20">
+            {/* Photo / PDF — pdf.js on all devices (iframe broken on many phones) */}
+            <div className="relative z-[5] w-full h-full max-w-[1100px] flex items-center justify-center px-11 sm:px-16 pb-2">
               {preview.kind === 'image' ? (
                 <img
                   src={preview.url}
                   alt={preview.file.fileName}
-                  className="max-w-full max-h-[calc(100vh-11rem)] object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-200"
+                  className="max-w-full max-h-[calc(100dvh-10rem)] sm:max-h-[calc(100vh-11rem)] object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-200"
                   style={{ transform: `scale(${zoom})` }}
                   draggable={false}
                 />
               ) : (
-                <iframe
-                  title={preview.file.fileName}
-                  src={preview.url}
-                  className="w-[min(92vw,900px)] h-[calc(100vh-11rem)] rounded-md bg-white shadow-2xl"
-                />
+                <div className="w-full h-[calc(100dvh-10rem)] sm:h-[calc(100vh-11rem)] max-w-[900px]">
+                  <PdfViewer url={preview.url} />
+                </div>
               )}
             </div>
 
-            {/* Filename chip — high contrast */}
-            <div className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-              <div className="px-3.5 py-1.5 rounded-full bg-white/90 text-[12px] font-medium text-black shadow-lg max-w-[70vw] truncate">
+            {/* Filename chip */}
+            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none sm:bottom-3">
+              <div className="px-3 py-1 rounded-full bg-white/95 text-[11px] sm:text-[12px] font-medium text-black shadow-lg max-w-[80vw] truncate">
                 {displayName(preview.file.fileName)}
                 {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
               </div>
             </div>
           </div>
 
-          {/* Bottom filmstrip — brighter thumbs */}
+          {/* Bottom filmstrip */}
           {visibleFiles.length > 0 && (
             <div
-              className="shrink-0 pb-5 pt-3 px-4 bg-black"
+              className="shrink-0 pb-3 pt-2 px-2 sm:px-4 bg-black safe-pb"
               onClick={(e) => e.stopPropagation()}
             >
               <div
                 ref={filmstripRef}
-                className="flex gap-3 overflow-x-auto justify-center scroll-smooth py-1"
-                style={{ scrollbarWidth: 'none' }}
+                className="flex gap-2 sm:gap-3 overflow-x-auto justify-start sm:justify-center scroll-smooth py-1 px-1"
+                style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
               >
                 {visibleFiles.map((f) => {
                   const active = f.id === preview.file.id;
@@ -1018,7 +1022,7 @@ export default function FileManager() {
                       type="button"
                       data-file-id={f.id}
                       onClick={() => { setZoom(1); void openFile(f); }}
-                      className={`shrink-0 w-[76px] h-[76px] sm:w-[84px] sm:h-[84px] rounded-xl overflow-hidden transition-all ${
+                      className={`shrink-0 w-14 h-14 sm:w-[84px] sm:h-[84px] rounded-lg sm:rounded-xl overflow-hidden transition-all ${
                         active
                           ? 'ring-[3px] ring-[#4da3ff] ring-offset-2 ring-offset-black scale-105'
                           : 'opacity-80 hover:opacity-100 ring-1 ring-white/30'
