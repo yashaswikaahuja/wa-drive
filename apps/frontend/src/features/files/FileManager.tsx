@@ -7,7 +7,8 @@ import {
   FolderOpen, Folder, MagnifyingGlass, UploadSimple, ArrowsClockwise,
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, X,
   SquaresFour, ListBullets, DownloadSimple, Trash, Camera, SpinnerGap,
-  ArrowLeft, ArrowRight, ArrowBendUpLeft,
+  ArrowLeft, ArrowRight, ArrowBendUpLeft, MagnifyingGlassPlus, DotsThree,
+  PencilSimple,
 } from '@phosphor-icons/react';
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
@@ -99,6 +100,8 @@ export default function FileManager() {
   const [preview, setPreview] = useState<{ file: DriveFile; url: string; kind: 'image' | 'pdf' } | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; file: DriveFile } | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [viewerMore, setViewerMore] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const blobUrlCache = useRef<Map<string, string>>(new Map());
   const filmstripRef = useRef<HTMLDivElement>(null);
@@ -239,6 +242,16 @@ export default function FileManager() {
   const closePreview = () => {
     setPreview(null);
     setOpeningId(null);
+    setZoom(1);
+    setViewerMore(false);
+  };
+
+  const openInPhotoEditor = (f: DriveFile) => {
+    const q = new URLSearchParams();
+    q.set('fileId', driveIdOf(f));
+    if (f.customerId) q.set('phone', f.customerId);
+    if (f.customerName) q.set('name', f.customerName);
+    window.location.href = `/app/photos/portal?${q}`;
   };
 
   const previewIndex = preview
@@ -248,7 +261,11 @@ export default function FileManager() {
   const goPreviewDelta = async (delta: number) => {
     if (previewIndex < 0 || !visibleFiles.length) return;
     const next = visibleFiles[(previewIndex + delta + visibleFiles.length) % visibleFiles.length];
-    if (next) await openFile(next);
+    if (next) {
+      setZoom(1);
+      setViewerMore(false);
+      await openFile(next);
+    }
   };
 
   // Viewer keyboard: Esc back, ← → navigate
@@ -649,130 +666,158 @@ export default function FileManager() {
       )}
 
       {preview && (
-        <div className="fixed inset-0 z-[70] bg-black/92 flex flex-col" onClick={closePreview}>
-          {/* Top bar */}
+        <div
+          className="fixed inset-0 z-[70] bg-[#0a0a0a] flex flex-col"
+          onClick={closePreview}
+        >
+          {/* Stage — full-bleed photo like Windows Photos */}
           <div
-            className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-black/70 text-white shrink-0 border-b border-white/10"
+            className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Soft vignette behind image */}
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(ellipse at center, rgba(40,40,45,0.9) 0%, rgba(10,10,10,1) 70%)',
+              }}
+            />
+
+            {/* Floating top-left: Back */}
             <button
               type="button"
-              className="flex items-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 rounded-md hover:bg-white/10 shrink-0"
               onClick={closePreview}
-              title="Back to folder (Esc)"
+              className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+              title="Back (Esc)"
             >
-              <ArrowBendUpLeft size={16} />
-              <span>Back</span>
+              <ArrowBendUpLeft size={18} />
             </button>
-            <div className="min-w-0 flex-1 text-center sm:text-left">
-              <p className="text-sm font-medium truncate">{displayName(preview.file.fileName)}</p>
-              <p className="text-[10px] text-white/50">
-                {previewIndex >= 0 ? `File ${previewIndex + 1} of ${visibleFiles.length}` : ''}
-                {preview.file.source ? ` · ${preview.file.source.replace(/-/g, ' ')}` : ''}
-                {' · Left/Right arrows to switch'}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30"
-              disabled={visibleFiles.length < 2}
-              onClick={() => void goPreviewDelta(-1)}
-              title="Previous (←)"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <button
-              type="button"
-              className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30"
-              disabled={visibleFiles.length < 2}
-              onClick={() => void goPreviewDelta(1)}
-              title="Next (→)"
-            >
-              <ArrowRight size={18} />
-            </button>
-            <button
-              type="button"
-              className="text-xs px-2.5 py-1.5 rounded-md hover:bg-white/10 hidden sm:inline-flex items-center gap-1"
-              onClick={() => downloadFile(preview.file)}
-            >
-              <DownloadSimple size={14} /> Download
-            </button>
-            {isImage(preview.file) && (
+
+            {/* Floating top-right: Zoom / Edit / Delete / More */}
+            <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
               <button
                 type="button"
-                className="text-xs px-2.5 py-1.5 rounded-md hover:bg-white/10 hidden md:inline-flex items-center gap-1"
-                onClick={() => {
-                  const q = new URLSearchParams();
-                  q.set('fileId', driveIdOf(preview.file));
-                  if (preview.file.customerId) q.set('phone', preview.file.customerId);
-                  if (preview.file.customerName) q.set('name', preview.file.customerName);
-                  window.location.href = `/app/photos/portal?${q}`;
-                }}
+                className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                title="Zoom"
+                onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
               >
-                <Camera size={14} /> Photo Editor
+                <MagnifyingGlassPlus size={18} />
               </button>
-            )}
-            <button type="button" className="p-1.5 rounded-md hover:bg-white/10 sm:hidden" onClick={() => downloadFile(preview.file)} title="Download">
-              <DownloadSimple size={16} />
-            </button>
-            <button type="button" className="p-1.5 rounded-md hover:bg-white/10" onClick={closePreview} aria-label="Close">
-              <X size={18} />
-            </button>
-          </div>
+              {isImage(preview.file) && (
+                <button
+                  type="button"
+                  className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                  title="Edit in Photo Editor"
+                  onClick={() => openInPhotoEditor(preview.file)}
+                >
+                  <PencilSimple size={18} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                title="Delete"
+                onClick={() => void deleteFile(preview.file)}
+              >
+                <Trash size={18} />
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                  title="More"
+                  onClick={() => setViewerMore((v) => !v)}
+                >
+                  <DotsThree size={22} weight="bold" />
+                </button>
+                {viewerMore && (
+                  <div
+                    className="absolute right-0 top-12 min-w-[160px] rounded-xl border border-white/10 bg-[#1c1c1e]/95 backdrop-blur-md shadow-2xl py-1 text-xs text-white z-30"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button type="button" className="w-full px-3 py-2.5 text-left hover:bg-white/10 flex items-center gap-2" onClick={() => { setViewerMore(false); void downloadFile(preview.file); }}>
+                      <DownloadSimple size={14} /> Download
+                    </button>
+                    {isImage(preview.file) && (
+                      <button type="button" className="w-full px-3 py-2.5 text-left hover:bg-white/10 flex items-center gap-2" onClick={() => { setViewerMore(false); openInPhotoEditor(preview.file); }}>
+                        <Camera size={14} /> Photo Editor
+                      </button>
+                    )}
+                    <button type="button" className="w-full px-3 py-2.5 text-left hover:bg-white/10" onClick={() => { setZoom(1); setViewerMore(false); }}>
+                      Reset zoom
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
 
-          {/* Main preview */}
-          <div className="flex-1 min-h-0 flex items-center justify-center relative px-2 sm:px-10 py-3" onClick={(e) => e.stopPropagation()}>
+            {/* Large circular side chevrons */}
             {visibleFiles.length > 1 && (
               <>
                 <button
                   type="button"
-                  className="absolute left-1 sm:left-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white z-10"
+                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-white flex items-center justify-center border border-white/15 shadow-xl"
                   onClick={() => void goPreviewDelta(-1)}
-                  title="Previous (←)"
+                  title="Previous (Left arrow)"
                 >
-                  <CaretLeft size={22} weight="bold" />
+                  <CaretLeft size={28} weight="bold" />
                 </button>
                 <button
                   type="button"
-                  className="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white z-10"
+                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-white flex items-center justify-center border border-white/15 shadow-xl"
                   onClick={() => void goPreviewDelta(1)}
-                  title="Next (→)"
+                  title="Next (Right arrow)"
                 >
-                  <CaretRight size={22} weight="bold" />
+                  <CaretRight size={28} weight="bold" />
                 </button>
               </>
             )}
+
             {openingId && openingId !== preview.file.id && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
-                <SpinnerGap size={28} className="animate-spin text-white" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10">
+                <SpinnerGap size={32} className="animate-spin text-white" />
               </div>
             )}
-            {preview.kind === 'image' && (
-              <img
-                src={preview.url}
-                alt={preview.file.fileName}
-                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-              />
-            )}
-            {preview.kind === 'pdf' && (
-              <iframe
-                title={preview.file.fileName}
-                src={preview.url}
-                className="w-full h-full max-w-5xl rounded-lg bg-white shadow-2xl"
-              />
-            )}
+
+            {/* Photo / PDF */}
+            <div className="relative z-[5] max-w-[min(92vw,1100px)] max-h-[calc(100%-7rem)] flex items-center justify-center px-14 sm:px-20">
+              {preview.kind === 'image' ? (
+                <img
+                  src={preview.url}
+                  alt={preview.file.fileName}
+                  className="max-w-full max-h-[calc(100vh-11rem)] object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-200"
+                  style={{ transform: `scale(${zoom})` }}
+                  draggable={false}
+                />
+              ) : (
+                <iframe
+                  title={preview.file.fileName}
+                  src={preview.url}
+                  className="w-[min(92vw,900px)] h-[calc(100vh-11rem)] rounded-md bg-white shadow-2xl"
+                />
+              )}
+            </div>
+
+            {/* Filename chip bottom-center above filmstrip */}
+            <div className="absolute bottom-[5.5rem] left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+              <div className="px-3 py-1 rounded-full bg-black/50 backdrop-blur-md text-[11px] text-white/80 border border-white/10 max-w-[70vw] truncate">
+                {displayName(preview.file.fileName)}
+                {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
+              </div>
+            </div>
           </div>
 
-          {/* Bottom filmstrip — other files in this folder */}
+          {/* Bottom filmstrip — Windows Photos style */}
           {visibleFiles.length > 0 && (
             <div
-              className="shrink-0 border-t border-white/10 bg-black/80 px-2 py-2"
+              className="shrink-0 pb-4 pt-2 px-4 bg-gradient-to-t from-black via-black/90 to-transparent"
               onClick={(e) => e.stopPropagation()}
             >
               <div
                 ref={filmstripRef}
-                className="flex gap-2 overflow-x-auto pb-1 scroll-smooth"
-                style={{ scrollbarWidth: 'thin' }}
+                className="flex gap-3 overflow-x-auto justify-center scroll-smooth py-1"
+                style={{ scrollbarWidth: 'none' }}
               >
                 {visibleFiles.map((f) => {
                   const active = f.id === preview.file.id;
@@ -781,17 +826,19 @@ export default function FileManager() {
                       key={f.id}
                       type="button"
                       data-file-id={f.id}
-                      onClick={() => void openFile(f)}
-                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
-                        active ? 'border-[hsl(27_95%_55%)] ring-1 ring-[hsl(27_95%_55%)]' : 'border-white/20 opacity-70 hover:opacity-100'
+                      onClick={() => { setZoom(1); void openFile(f); }}
+                      className={`shrink-0 w-[72px] h-[72px] sm:w-20 sm:h-20 rounded-xl overflow-hidden transition-all ${
+                        active
+                          ? 'ring-2 ring-[#4da3ff] ring-offset-2 ring-offset-black scale-105'
+                          : 'opacity-55 hover:opacity-90'
                       }`}
                       title={displayName(f.fileName)}
                     >
-                      <div className="w-full h-full bg-black/40 flex items-center justify-center">
+                      <div className="w-full h-full bg-[#1a1a1a] flex items-center justify-center">
                         {isImage(f) ? (
                           <img src={authFileUrl(driveIdOf(f))} alt="" className="w-full h-full object-cover" loading="lazy" />
                         ) : (
-                          <FileGlyph f={f} size={28} />
+                          <FileGlyph f={f} size={30} />
                         )}
                       </div>
                     </button>
