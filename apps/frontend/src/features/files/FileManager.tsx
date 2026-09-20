@@ -684,67 +684,68 @@ export default function FileManager() {
               }}
             />
 
-            {/* Floating top-left: Back */}
+            {/* Floating controls — high-contrast frosted pills (readable on any photo) */}
             <button
               type="button"
               onClick={closePreview}
-              className="absolute top-4 left-4 z-20 w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+              className="absolute top-4 left-4 z-20 h-11 px-3.5 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center gap-1.5 shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
               title="Back (Esc)"
             >
-              <ArrowBendUpLeft size={18} />
+              <ArrowBendUpLeft size={18} weight="bold" />
+              <span className="text-xs font-semibold pr-0.5">Back</span>
             </button>
 
-            {/* Floating top-right: Zoom / Edit / Delete / More */}
-            <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            <div className="absolute top-4 right-4 z-20 flex items-center gap-2.5">
               <button
                 type="button"
-                className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
                 title="Zoom"
                 onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
               >
-                <MagnifyingGlassPlus size={18} />
+                <MagnifyingGlassPlus size={20} weight="bold" />
               </button>
               {isImage(preview.file) && (
                 <button
                   type="button"
-                  className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                  className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
                   title="Edit in Photo Editor"
                   onClick={() => openInPhotoEditor(preview.file)}
                 >
-                  <PencilSimple size={18} />
+                  <PencilSimple size={20} weight="bold" />
                 </button>
               )}
               <button
                 type="button"
-                className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
                 title="Delete"
                 onClick={() => void deleteFile(preview.file)}
               >
-                <Trash size={18} />
+                <Trash size={20} weight="bold" />
               </button>
               <div className="relative">
                 <button
                   type="button"
-                  className="w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 backdrop-blur-md text-white flex items-center justify-center border border-white/10 shadow-lg"
+                  className="w-11 h-11 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/80"
                   title="More"
                   onClick={() => setViewerMore((v) => !v)}
                 >
-                  <DotsThree size={22} weight="bold" />
+                  <DotsThree size={24} weight="bold" />
                 </button>
                 {viewerMore && (
                   <div
-                    className="absolute right-0 top-12 min-w-[160px] rounded-xl border border-white/10 bg-[#1c1c1e]/95 backdrop-blur-md shadow-2xl py-1 text-xs text-white z-30"
+                    className="absolute right-0 top-13 min-w-[170px] rounded-xl border border-white/20 bg-[#2c2c2e] shadow-2xl py-1.5 text-sm text-white z-30"
+                    style={{ top: '3.25rem' }}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button type="button" className="w-full px-3 py-2.5 text-left hover:bg-white/10 flex items-center gap-2" onClick={() => { setViewerMore(false); void downloadFile(preview.file); }}>
-                      <DownloadSimple size={14} /> Download
+                    <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); void downloadFile(preview.file); }}>
+                      <DownloadSimple size={16} /> Download
                     </button>
                     {isImage(preview.file) && (
-                      <button type="button" className="w-full px-3 py-2.5 text-left hover:bg-white/10 flex items-center gap-2" onClick={() => { setViewerMore(false); openInPhotoEditor(preview.file); }}>
-                        <Camera size={14} /> Photo Editor
+                      <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); openInPhotoEditor(preview.file); }}>
+                        <Camera size={16} /> Photo Editor
                       </button>
                     )}
-                    <button type="button" className="w-full px-3 py-2.5 text-left hover:bg-white/10" onClick={() => { setZoom(1); setViewerMore(false); }}>
+                    <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10" onClick={() => { setZoom(1); setViewerMore(false); }}>
                       Reset zoom
                     </button>
                   </div>
@@ -752,24 +753,24 @@ export default function FileManager() {
               </div>
             </div>
 
-            {/* Large circular side chevrons */}
+            {/* Large circular side chevrons — bright so they never vanish into the photo */}
             {visibleFiles.length > 1 && (
               <>
                 <button
                   type="button"
-                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-white flex items-center justify-center border border-white/15 shadow-xl"
+                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 z-20 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
                   onClick={() => void goPreviewDelta(-1)}
                   title="Previous (Left arrow)"
                 >
-                  <CaretLeft size={28} weight="bold" />
+                  <CaretLeft size={32} weight="bold" />
                 </button>
                 <button
                   type="button"
-                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md text-white flex items-center justify-center border border-white/15 shadow-xl"
+                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 z-20 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-white/90 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
                   onClick={() => void goPreviewDelta(1)}
                   title="Next (Right arrow)"
                 >
-                  <CaretRight size={28} weight="bold" />
+                  <CaretRight size={32} weight="bold" />
                 </button>
               </>
             )}
@@ -799,19 +800,19 @@ export default function FileManager() {
               )}
             </div>
 
-            {/* Filename chip bottom-center above filmstrip */}
-            <div className="absolute bottom-[5.5rem] left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-              <div className="px-3 py-1 rounded-full bg-black/50 backdrop-blur-md text-[11px] text-white/80 border border-white/10 max-w-[70vw] truncate">
+            {/* Filename chip — high contrast */}
+            <div className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+              <div className="px-3.5 py-1.5 rounded-full bg-white/90 text-[12px] font-medium text-black shadow-lg max-w-[70vw] truncate">
                 {displayName(preview.file.fileName)}
                 {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
               </div>
             </div>
           </div>
 
-          {/* Bottom filmstrip — Windows Photos style */}
+          {/* Bottom filmstrip — brighter thumbs */}
           {visibleFiles.length > 0 && (
             <div
-              className="shrink-0 pb-4 pt-2 px-4 bg-gradient-to-t from-black via-black/90 to-transparent"
+              className="shrink-0 pb-5 pt-3 px-4 bg-black"
               onClick={(e) => e.stopPropagation()}
             >
               <div
@@ -827,18 +828,18 @@ export default function FileManager() {
                       type="button"
                       data-file-id={f.id}
                       onClick={() => { setZoom(1); void openFile(f); }}
-                      className={`shrink-0 w-[72px] h-[72px] sm:w-20 sm:h-20 rounded-xl overflow-hidden transition-all ${
+                      className={`shrink-0 w-[76px] h-[76px] sm:w-[84px] sm:h-[84px] rounded-xl overflow-hidden transition-all ${
                         active
-                          ? 'ring-2 ring-[#4da3ff] ring-offset-2 ring-offset-black scale-105'
-                          : 'opacity-55 hover:opacity-90'
+                          ? 'ring-[3px] ring-[#4da3ff] ring-offset-2 ring-offset-black scale-105'
+                          : 'opacity-80 hover:opacity-100 ring-1 ring-white/30'
                       }`}
                       title={displayName(f.fileName)}
                     >
-                      <div className="w-full h-full bg-[#1a1a1a] flex items-center justify-center">
+                      <div className="w-full h-full bg-[#222] flex items-center justify-center">
                         {isImage(f) ? (
                           <img src={authFileUrl(driveIdOf(f))} alt="" className="w-full h-full object-cover" loading="lazy" />
                         ) : (
-                          <FileGlyph f={f} size={30} />
+                          <FileGlyph f={f} size={32} />
                         )}
                       </div>
                     </button>
