@@ -667,9 +667,9 @@ export default function FileManager() {
             <div className="min-w-0 flex-1 text-center sm:text-left">
               <p className="text-sm font-medium truncate">{displayName(preview.file.fileName)}</p>
               <p className="text-[10px] text-white/50">
-                {previewIndex >= 0 ? `${previewIndex + 1} / ${visibleFiles.length}` : ''}
+                {previewIndex >= 0 ? `File ${previewIndex + 1} of ${visibleFiles.length}` : ''}
                 {preview.file.source ? ` · ${preview.file.source.replace(/-/g, ' ')}` : ''}
-                {' · ← → to switch'}
+                {' · Left/Right arrows to switch'}
               </p>
             </div>
             <button
