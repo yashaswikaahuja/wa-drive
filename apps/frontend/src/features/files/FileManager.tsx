@@ -8,12 +8,13 @@ import {
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, X,
   SquaresFour, ListBullets, DownloadSimple, Trash, Camera, SpinnerGap,
   ArrowLeft, ArrowRight, ArrowBendUpLeft, MagnifyingGlassPlus, DotsThree,
-  PencilSimple,
+  PencilSimple, CheckSquare,
 } from '@phosphor-icons/react';
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
+import PdfThumb from './PdfThumb';
 
 type DriveFile = {
   id: string;
@@ -75,6 +76,14 @@ function driveIdOf(f: DriveFile) {
 
 function Thumb({ f }: { f: DriveFile }) {
   const [broken, setBroken] = useState(false);
+  if (isPdf(f)) {
+    return (
+      <PdfThumb
+        fileId={driveIdOf(f)}
+        driveThumbUrl={f.fileUrl}
+      />
+    );
+  }
   if (isImage(f) && !broken) {
     return (
       <img
@@ -96,6 +105,8 @@ export default function FileManager() {
   const [folderPhone, setFolderPhone] = useState<string | null>(null);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [anchorId, setAnchorId] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ file: DriveFile; url: string; kind: 'image' | 'pdf' } | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; file: DriveFile } | null>(null);
@@ -105,6 +116,7 @@ export default function FileManager() {
   const fileRef = useRef<HTMLInputElement>(null);
   const blobUrlCache = useRef<Map<string, string>>(new Map());
   const filmstripRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -187,6 +199,57 @@ export default function FileManager() {
 
   const activeFolder = folderPhone ? folders.find((f) => f.phone === folderPhone) : null;
   const atRoot = !folderPhone;
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectedId(null);
+    setAnchorId(null);
+  };
+
+  const selectOnly = (id: string) => {
+    setSelectedIds(new Set([id]));
+    setSelectedId(id);
+    setAnchorId(id);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setSelectedId(id);
+    setAnchorId(id);
+  };
+
+  const selectRange = (toId: string) => {
+    const ids = visibleFiles.map((f) => f.id);
+    const from = anchorId ? ids.indexOf(anchorId) : ids.indexOf(toId);
+    const to = ids.indexOf(toId);
+    if (from < 0 || to < 0) {
+      selectOnly(toId);
+      return;
+    }
+    const [a, b] = from < to ? [from, to] : [to, from];
+    setSelectedIds(new Set(ids.slice(a, b + 1)));
+    setSelectedId(toId);
+  };
+
+  /** Click a file tile: modifiers = multi-select; plain click = open */
+  const onFileActivate = (e: React.MouseEvent, f: DriveFile) => {
+    e.stopPropagation();
+    if (e.ctrlKey || e.metaKey) {
+      toggleSelect(f.id);
+      return;
+    }
+    if (e.shiftKey) {
+      selectRange(f.id);
+      return;
+    }
+    selectOnly(f.id);
+    void openFile(f);
+  };
 
   const fetchBlob = async (f: DriveFile) => {
     const id = driveIdOf(f);
@@ -323,15 +386,86 @@ export default function FileManager() {
 
   const goRoot = () => {
     setFolderPhone(null);
-    setSelectedId(null);
+    clearSelection();
     setSearch('');
   };
 
   const openFolder = (phone: string) => {
     setFolderPhone(phone);
-    setSelectedId(null);
+    clearSelection();
     setSearch('');
   };
+
+  const deleteSelected = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} selected file(s)?`)) return;
+    let ok = 0;
+    for (const id of ids) {
+      try {
+        await api.delete(`/drive/files/${id}`);
+        ok += 1;
+      } catch { /* continue */ }
+    }
+    setFiles((prev) => prev.filter((x) => !selectedIds.has(x.id)));
+    clearSelection();
+    if (preview && selectedIds.has(preview.file.id)) closePreview();
+    toast.success(`Deleted ${ok} file(s)`);
+  };
+
+  // Folder view: Shift+Arrow extends selection; Delete removes; arrows move focus
+  useEffect(() => {
+    if (preview || atRoot) return;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const ids = visibleFiles.map((f) => f.id);
+      if (!ids.length) return;
+      const cur = selectedId && ids.includes(selectedId) ? ids.indexOf(selectedId) : 0;
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedIds.size) {
+          e.preventDefault();
+          void deleteSelected();
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const cols = view === 'grid' ? Math.max(2, Math.min(6, Math.floor((mainRef.current?.clientWidth || 800) / 140))) : 1;
+        let next = cur;
+        if (e.key === 'ArrowLeft') next = Math.max(0, cur - 1);
+        if (e.key === 'ArrowRight') next = Math.min(ids.length - 1, cur + 1);
+        if (e.key === 'ArrowUp') next = Math.max(0, cur - cols);
+        if (e.key === 'ArrowDown') next = Math.min(ids.length - 1, cur + cols);
+        const nextId = ids[next];
+        if (e.shiftKey) {
+          // Hold Shift + move = grow/shrink selection from anchor (Explorer-style)
+          if (!anchorId) setAnchorId(selectedId || ids[0]);
+          const from = ids.indexOf(anchorId || ids[0]);
+          const [a, b] = from < next ? [from, next] : [next, from];
+          setSelectedIds(new Set(ids.slice(a, b + 1)));
+          setSelectedId(nextId);
+        } else {
+          selectOnly(nextId);
+        }
+        return;
+      }
+
+      if (e.key === 'Enter' && selectedId) {
+        const f = visibleFiles.find((x) => x.id === selectedId);
+        if (f) void openFile(f);
+      }
+
+      if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setSelectedIds(new Set(ids));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const uploadLocal = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -471,7 +605,11 @@ export default function FileManager() {
           ))}
         </aside>
 
-        <main className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4" onClick={() => setSelectedId(null)}>
+        <main
+          ref={mainRef as any}
+          className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4"
+          onClick={() => clearSelection()}
+        >
           {/* Mobile folder strip */}
           <div className="flex gap-1.5 overflow-x-auto mb-3 sm:hidden pb-1">
             <button
@@ -536,34 +674,42 @@ export default function FileManager() {
           {/* INSIDE FOLDER: files */}
           {!loading && !atRoot && view === 'grid' && (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-              {visibleFiles.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); openFile(f); }}
-                  onContextMenu={(e) => onContextMenu(e, f)}
-                  className={`relative flex flex-col items-stretch rounded-xl border p-2 text-left transition ${
-                    selectedId === f.id || openingId === f.id
-                      ? 'border-[hsl(27_95%_55%)] bg-[hsl(27_95%_55%/0.12)]'
-                      : 'border-transparent hover:bg-white/5 hover:border-[var(--border)]'
-                  }`}
-                  title={`${displayName(f.fileName)} — click to open`}
-                >
-                  <div className="aspect-square rounded-lg bg-black/25 flex items-center justify-center overflow-hidden mb-2 relative">
-                    <Thumb f={f} />
-                    {openingId === f.id && (
-                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                        <SpinnerGap size={22} className="animate-spin text-white" />
-                      </div>
+              {visibleFiles.map((f) => {
+                const isSel = selectedIds.has(f.id);
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={(e) => onFileActivate(e, f)}
+                    onContextMenu={(e) => onContextMenu(e, f)}
+                    className={`relative flex flex-col items-stretch rounded-xl border p-2 text-left transition ${
+                      isSel || openingId === f.id
+                        ? 'border-[hsl(27_95%_55%)] bg-[hsl(27_95%_55%/0.14)]'
+                        : 'border-transparent hover:bg-white/5 hover:border-[var(--border)]'
+                    }`}
+                    title={`${displayName(f.fileName)} — click open · Ctrl+click select · Shift+arrows select`}
+                  >
+                    {isSel && (
+                      <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded bg-[hsl(27_95%_55%)] text-white flex items-center justify-center shadow">
+                        <CheckSquare size={12} weight="bold" />
+                      </span>
                     )}
-                  </div>
-                  <span className="text-[11px] font-medium truncate">{displayName(f.fileName)}</span>
-                  <span className="text-[10px] text-[var(--muted-foreground)] truncate">
-                    {(f.source || 'whatsapp').replace('-', ' ')}
-                    {f.timestamp ? ` · ${new Date(f.timestamp).toLocaleDateString()}` : ''}
-                  </span>
-                </button>
-              ))}
+                    <div className="aspect-square rounded-lg bg-black/25 flex items-center justify-center overflow-hidden mb-2 relative">
+                      <Thumb f={f} />
+                      {openingId === f.id && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <SpinnerGap size={22} className="animate-spin text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[11px] font-medium truncate">{displayName(f.fileName)}</span>
+                    <span className="text-[10px] text-[var(--muted-foreground)] truncate">
+                      {(f.source || 'whatsapp').replace('-', ' ')}
+                      {f.timestamp ? ` · ${new Date(f.timestamp).toLocaleDateString()}` : ''}
+                    </span>
+                  </button>
+                );
+              })}
               {visibleFiles.length === 0 && (
                 <div className="col-span-full text-center py-16 px-4">
                   <Folder size={40} className="mx-auto mb-3 opacity-30" />
@@ -590,20 +736,18 @@ export default function FileManager() {
                 <button
                   key={f.id}
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); openFile(f); }}
+                  onClick={(e) => onFileActivate(e, f)}
                   onContextMenu={(e) => onContextMenu(e, f)}
                   className={`w-full grid grid-cols-[1fr_100px_110px_70px] gap-2 px-3 py-2.5 text-left text-xs items-center border-b last:border-0 ${
-                    selectedId === f.id ? 'bg-[hsl(27_95%_55%/0.12)]' : 'hover:bg-white/5'
+                    selectedIds.has(f.id) ? 'bg-[hsl(27_95%_55%/0.14)]' : 'hover:bg-white/5'
                   }`}
                   style={{ borderColor: 'var(--border)' }}
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     {openingId === f.id ? <SpinnerGap size={16} className="animate-spin shrink-0" /> : (
-                      isImage(f) ? (
-                        <img src={authFileUrl(driveIdOf(f))} alt="" className="w-7 h-7 rounded object-cover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                      ) : (
-                        <FileGlyph f={f} size={18} />
-                      )
+                      <span className="w-7 h-7 rounded overflow-hidden shrink-0 bg-black/20 flex items-center justify-center">
+                        <Thumb f={f} />
+                      </span>
                     )}
                     <span className="truncate">{displayName(f.fileName)}</span>
                   </span>
@@ -620,6 +764,35 @@ export default function FileManager() {
         </main>
       </div>
 
+      {/* Multi-select action bar */}
+      {!preview && selectedIds.size > 0 && (
+        <div
+          className="shrink-0 border-t px-3 py-2 flex flex-wrap items-center gap-2"
+          style={{ borderColor: 'var(--border)', background: 'hsl(27 95% 55% / 0.12)' }}
+        >
+          <CheckSquare size={16} className="text-[hsl(27_95%_55%)]" weight="fill" />
+          <span className="text-xs font-medium">{selectedIds.size} selected</span>
+          <button type="button" className="btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1" onClick={() => {
+            const first = visibleFiles.find((f) => selectedIds.has(f.id));
+            if (first) void openFile(first);
+          }}>
+            Open
+          </button>
+          <button type="button" className="btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1" onClick={async () => {
+            for (const id of selectedIds) {
+              const f = files.find((x) => x.id === id);
+              if (f) await downloadFile(f);
+            }
+          }}>
+            <DownloadSimple size={13} /> Download
+          </button>
+          <button type="button" className="text-xs py-1.5 px-2.5 rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 flex items-center gap-1" onClick={() => void deleteSelected()}>
+            <Trash size={13} /> Delete
+          </button>
+          <button type="button" className="text-xs text-[var(--muted-foreground)] ml-auto px-2" onClick={clearSelection}>Clear</button>
+        </div>
+      )}
+
       <div
         className="shrink-0 border-t px-3 py-1.5 text-[10px] text-[var(--muted-foreground)] flex flex-wrap justify-between gap-2"
         style={{ borderColor: 'var(--border)' }}
@@ -627,9 +800,9 @@ export default function FileManager() {
         <span>
           {atRoot
             ? `${filteredFolders.length} customer folder(s) · ${files.length} file(s) total`
-            : `${visibleFiles.length} item(s) in ${activeFolder?.name || 'folder'}`}
+            : `${visibleFiles.length} item(s) in ${activeFolder?.name || 'folder'}${selectedIds.size ? ` · ${selectedIds.size} selected` : ''}`}
         </span>
-        <span className="hidden sm:inline">Click to open · Right-click for Download / Delete</span>
+        <span className="hidden sm:inline">Click open · Ctrl+click select · Shift+←/→ extend · Delete removes</span>
       </div>
 
       {ctx && (
@@ -836,11 +1009,7 @@ export default function FileManager() {
                       title={displayName(f.fileName)}
                     >
                       <div className="w-full h-full bg-[#222] flex items-center justify-center">
-                        {isImage(f) ? (
-                          <img src={authFileUrl(driveIdOf(f))} alt="" className="w-full h-full object-cover" loading="lazy" />
-                        ) : (
-                          <FileGlyph f={f} size={32} />
-                        )}
+                        <Thumb f={f} />
                       </div>
                     </button>
                   );
