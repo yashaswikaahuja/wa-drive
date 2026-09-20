@@ -315,26 +315,38 @@ router.get('/group-docs/:phone', authMiddleware, async (req: any, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/customers/upload — operator uploads a hardcopy scan for a customer
+// POST /api/customers/upload — operator uploads / Photo·PDF Save for a customer
+// body.source: photo-editor | pdf-editor | manual-upload | generated (default manual-upload)
 router.post('/upload', authMiddleware, upload.single('file') as any, async (req: any, res) => {
   const { phone, personName } = req.body;
   if (!phone) return res.status(400).json({ error: 'phone required' });
   if (!req.file) return res.status(400).json({ error: 'No file attached' });
+
+  const ALLOWED = new Set(['photo-editor', 'pdf-editor', 'manual-upload', 'generated']);
+  const source = ALLOWED.has(String(req.body.source || '')) ? String(req.body.source) : 'manual-upload';
+  let sourceMetadata: any = null;
+  if (req.body.sourceMetadata) {
+    try {
+      sourceMetadata = typeof req.body.sourceMetadata === 'string'
+        ? JSON.parse(req.body.sourceMetadata)
+        : req.body.sourceMetadata;
+    } catch { sourceMetadata = { raw: String(req.body.sourceMetadata).slice(0, 200) }; }
+  }
 
   const wsId = req.user.workspaceId;
   try {
     const drive = await getDriveForWorkspace(wsId);
     if (!drive) return res.status(500).json({ error: 'Drive not connected' });
 
-    const fileName = `${phone}_${Date.now()}_${req.file.originalname || 'scan.jpg'}`;
+    const fileName = req.file.originalname || `${phone}_${Date.now()}_upload.jpg`;
     const mimetype = req.file.mimetype || 'image/jpeg';
     const { fileId, webContentLink } = await uploadFileToDrive(drive, req.file.buffer, fileName, mimetype, phone, personName || 'Operator Upload');
 
-    // Insert into drive_files
+    // Insert into drive_files with provenance (#318) — never appears in WA received-media
     await pool.query(
-      `INSERT INTO drive_files(id, workspace_id, file_name, customer_id, customer_name, file_url, uploaded_at)
-       VALUES($1,$2,$3,$4,$5,$6,now()) ON CONFLICT(id) DO NOTHING`,
-      [fileId, wsId, fileName, phone, personName || '', `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`]
+      `INSERT INTO drive_files(id, workspace_id, file_name, customer_id, customer_name, file_url, uploaded_at, source, source_metadata, mime_type, drive_file_id)
+       VALUES($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$1) ON CONFLICT(id) DO NOTHING`,
+      [fileId, wsId, fileName, phone, personName || '', `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, source, sourceMetadata ? JSON.stringify(sourceMetadata) : null, mimetype]
     );
 
     // Auto-extract in background

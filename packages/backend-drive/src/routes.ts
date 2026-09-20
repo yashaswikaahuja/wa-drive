@@ -55,11 +55,29 @@ router.get('/status', authMiddleware, async (req: any, res) => {
 });
 
 // Per-workspace Drive files (DB-backed)
+// Query: ?source=whatsapp (WA Documents view) | ?source=all|omit (File Manager — every provenance)
+//         ?customerId=91… to scope to one phone
 router.get('/files/ws', authMiddleware, async (req: any, res) => {
   try {
+    const source = String(req.query.source || '').trim().toLowerCase();
+    const customerId = String(req.query.customerId || '').trim();
+    const params: any[] = [req.user.workspaceId];
+    let where = 'workspace_id = $1';
+    if (source && source !== 'all') {
+      params.push(source);
+      where += ` AND COALESCE(source, 'whatsapp') = $${params.length}`;
+    }
+    if (customerId) {
+      params.push(customerId);
+      where += ` AND customer_id = $${params.length}`;
+    }
     const r = await pool.query(
-      'SELECT id, file_name as "fileName", customer_id as "customerId", customer_name as "customerName", file_url as "fileUrl", uploaded_at as "timestamp", profile_pic_url as "dpUrl", tag FROM drive_files WHERE workspace_id = $1 ORDER BY uploaded_at DESC',
-      [req.user.workspaceId]
+      `SELECT id, file_name as "fileName", customer_id as "customerId", customer_name as "customerName",
+              file_url as "fileUrl", uploaded_at as "timestamp", profile_pic_url as "dpUrl", tag,
+              COALESCE(source, 'whatsapp') as source, source_metadata as "sourceMetadata",
+              mime_type as "mimeType", drive_file_id as "driveFileId"
+       FROM drive_files WHERE ${where} ORDER BY uploaded_at DESC`,
+      params
     );
     if (r.rows.length > 0) return res.json(r.rows);
     // Fallback: legacy Drive API scan

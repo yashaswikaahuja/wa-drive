@@ -223,6 +223,8 @@ export default function PassportEditor() {
       fd.append('file', lastBlob, fileName);
       fd.append('phone', phone.trim());
       fd.append('personName', personName || '');
+      fd.append('source', 'photo-editor');
+      fd.append('sourceMetadata', JSON.stringify({ preset: preset.id, kb: exportInfo?.kb, w: exportInfo?.w, h: exportInfo?.h }));
       await api.post('/customers/upload', fd);
       toast.success(`Saved ${fileName} on server`);
     } catch (e: any) {

@@ -18,6 +18,7 @@ const NewJob = lazy(() => import('./features/jobs/NewJob'));
 const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const FormDirectory = lazy(() => import('./features/forms/FormDirectory'));
+const FileManager = lazy(() => import('./features/files/FileManager'));
 const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
 const MediaDeskHome = lazy(() => import('./features/media-tools/MediaDeskHome'));
 const PassportEditor = lazy(() => import('./features/media-tools/PassportEditor'));
@@ -97,10 +98,12 @@ export default function App() {
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/forms" element={<Suspense fallback={<PageLoader />}><FormDirectory /></Suspense>} />
-          {/* Media Desk — portal / print / scan / aadhaar (#316) */}
+          <Route path="/app/files" element={<Suspense fallback={<PageLoader />}><FileManager /></Suspense>} />
+          {/* Photos = Photo Editor + PDF Tool (#317) */}
           <Route path="/app/photos" element={<Suspense fallback={<PageLoader />}><PhotosHub /></Suspense>}>
             <Route index element={<Suspense fallback={<PageLoader />}><MediaDeskHome /></Suspense>} />
             <Route path="portal" element={<Suspense fallback={<PageLoader />}><PassportEditor /></Suspense>} />
+            <Route path="editor" element={<RedirectWithSearch to="/app/photos/portal" />} />
             <Route path="print" element={<Suspense fallback={<PageLoader />}><PrintSheet /></Suspense>} />
             <Route path="scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
             <Route path="aadhaar" element={<Suspense fallback={<PageLoader />}><AadhaarLayout /></Suspense>} />

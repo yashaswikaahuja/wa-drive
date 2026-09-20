@@ -84,6 +84,8 @@ export default function AadhaarLayout() {
       const fd = new FormData();
       fd.append('file', blob, 'aadhaar_front_back.jpg');
       fd.append('phone', phone.trim());
+      fd.append('source', 'pdf-editor');
+      fd.append('sourceMetadata', JSON.stringify({ layout: 'aadhaar-2up' }));
       await api.post('/customers/upload', fd);
       toast.success('Saved on server');
     } catch (e: any) {

@@ -110,8 +110,9 @@ router.post('/upload', upload.single('file'), async (req: any, res) => {
     // DB insert
     try {
       await pool.query(
-        'INSERT INTO drive_files(id,workspace_id,file_name,customer_id,customer_name,file_url,uploaded_at,profile_pic_url) VALUES($1,$2,$3,$4,$5,$6,now(),$7) ON CONFLICT(id) DO NOTHING',
-        [fileId, uploadWsId, fileName, phone, senderName, `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, profilePicUrl || null]
+        `INSERT INTO drive_files(id,workspace_id,file_name,customer_id,customer_name,file_url,uploaded_at,profile_pic_url,source,mime_type,drive_file_id)
+         VALUES($1,$2,$3,$4,$5,$6,now(),$7,'whatsapp',$8,$1) ON CONFLICT(id) DO NOTHING`,
+        [fileId, uploadWsId, fileName, phone, senderName, `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, profilePicUrl || null, mimetype || null]
       );
       if (profilePicUrl) await pool.query('UPDATE drive_files SET profile_pic_url = $1 WHERE workspace_id = $2 AND customer_id = $3', [profilePicUrl, uploadWsId, phone]);
       if (senderName) await pool.query('UPDATE drive_files SET customer_name = $1 WHERE workspace_id = $2 AND customer_id = $3 AND customer_name != $1', [senderName, uploadWsId, phone]);

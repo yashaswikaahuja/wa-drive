@@ -3,10 +3,11 @@
  * add pages → enhance → reorder → export multi-page PDF → Download / Save.
  */
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import {
   ArrowDown, ArrowUp, Camera, DownloadSimple, FloppyDisk,
-  Plus, Trash, UploadSimple, FilePdf,
+  Plus, Trash, UploadSimple, FilePdf, IdentificationCard,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
@@ -160,7 +161,8 @@ export default function PdfScan() {
       fd.append('file', blob, name);
       fd.append('phone', phone.trim());
       fd.append('personName', docName || '');
-      await api.post('/customers/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      fd.append('source', 'pdf-editor');
+      await api.post('/customers/upload', fd);
       toast.success(`Saved ${name} on server`);
     } catch (e: any) {
       toast.error(e.response?.data?.error || e.message || 'Save failed');
@@ -173,11 +175,14 @@ export default function PdfScan() {
     <div className="flex flex-col lg:flex-row gap-4 p-3 md:p-4 h-full min-h-0">
       <div className="w-full lg:w-80 shrink-0 space-y-3 overflow-y-auto">
         <div>
-          <h1 className="text-base font-semibold">PDF Scan</h1>
+          <h1 className="text-base font-semibold">PDF Tool</h1>
           <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-            Like Adobe Scan — pages in, clean PDF out
+            Scan pages → clean PDF. Local / camera / Drive.
           </p>
         </div>
+        <Link to="../aadhaar" className="btn-secondary w-full text-xs flex items-center justify-center gap-1.5 py-2">
+          <IdentificationCard size={14} /> Aadhaar front + back layout
+        </Link>
 
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-primary text-xs flex items-center gap-1.5" onClick={() => fileRef.current?.click()}>

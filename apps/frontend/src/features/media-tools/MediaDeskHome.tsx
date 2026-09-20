@@ -1,57 +1,39 @@
 /**
- * Media Desk home — four big job tiles for a Bihar cybercafé counter.
- * Medicine for “too many clicks / wrong tool under a queue”.
+ * Photos home — exactly two tools (#317).
  */
 import { Link, useSearchParams } from 'react-router-dom';
-import { IdentificationCard, Images, FilePdf, Printer } from '@phosphor-icons/react';
+import { Images, FilePdf } from '@phosphor-icons/react';
 
 const JOBS = [
   {
     to: 'portal',
-    title: 'Portal photo',
-    hindi: 'पोर्टल फोटो',
-    desc: 'Exam / RTPS / Passport Seva JPG — size, KB, background',
+    title: 'Photo Editor',
+    hindi: 'फोटो',
+    desc: 'Background, frame, portal JPG, free print sheet, signature — Save to Drive',
     icon: Images,
     accent: 'hsl(27 95% 55%)',
   },
   {
-    to: 'print',
-    title: 'Print sheet',
-    hindi: 'प्रिंट शीट',
-    desc: '8 on 4×6 glossy or A4 — same framed face',
-    icon: Printer,
-    accent: 'hsl(200 70% 45%)',
-  },
-  {
     to: 'scan',
-    title: 'Scan PDF',
-    hindi: 'स्कैन PDF',
-    desc: 'Multi-page clean PDF — forms & certificates',
+    title: 'PDF Tool',
+    hindi: 'PDF',
+    desc: 'Scan pages, enhance, Aadhaar layout, multi-page PDF — Save to Drive',
     icon: FilePdf,
     accent: 'hsl(145 50% 40%)',
-  },
-  {
-    to: 'aadhaar',
-    title: 'Aadhaar card',
-    hindi: 'आधार',
-    desc: 'Front + back on one A4 page',
-    icon: IdentificationCard,
-    accent: 'hsl(260 45% 55%)',
   },
 ] as const;
 
 export default function MediaDeskHome() {
   const [params] = useSearchParams();
-  // Preserve WA / customer context across tiles
   const q = params.toString();
   const suffix = q ? `?${q}` : '';
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="mb-5">
-        <h1 className="text-xl font-semibold tracking-tight">Media Desk</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Photos</h1>
         <p className="text-sm text-[var(--muted-foreground)] mt-1">
-          Pick the job — portal upload, glossy print, scan, or Aadhaar. One desk for the counter.
+          Two tools only — Photo Editor and PDF Tool. Files live in File Manager / Drive.
         </p>
       </div>
 
@@ -85,11 +67,6 @@ export default function MediaDeskHome() {
           );
         })}
       </div>
-
-      <p className="text-[11px] text-[var(--muted-foreground)] mt-6 leading-relaxed">
-        Tip: open from WhatsApp with a photo selected — phone and file come with you.
-        Save finished files on the customer so tomorrow’s visit is one click.
-      </p>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { extensionBridge } from './extensionBridge';
 import VerifyBanner from './VerifyBanner';
 import LocationBanner from './LocationBanner';
 import {
-  Users, ChatCircle, Camera, Gear,
+  Users, ChatCircle, Camera, Gear, FolderOpen,
   UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,
   List, CaretLeft, CaretRight
 } from '@phosphor-icons/react';
@@ -29,6 +29,7 @@ const OPERATOR_NAV = [
   { path: '/app', icon: Lightning, label: 'Today', end: true },
   { path: '/app/customers', icon: Users, label: 'Customers' },
   { path: '/app/forms', icon: MagnifyingGlass, label: 'Find Form' },
+  { path: '/app/files', icon: FolderOpen, label: 'File Manager' },
   { path: '/app/whatsapp', icon: ChatCircle, label: 'Documents' },
   { path: '/app/photos', icon: Camera, label: 'Photos' },
   { path: '/app/settings', icon: Gear, label: 'Settings' },

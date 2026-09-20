@@ -9,4 +9,4 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// cache-bust media-desk-phase-a 2026-09-19
+// cache-bust file-manager-provenance 2026-09-20

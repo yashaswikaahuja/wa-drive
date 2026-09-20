@@ -224,7 +224,7 @@ export default function WhatsApp() {
     if (cached) {
       try { const msgs = JSON.parse(cached); groupMessages(msgs); } catch {}
     }
-    api.get('/drive/files/ws').then(r => {
+    api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then(r => {
       const msgs: Message[] = r.data.map((f: any) => ({
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
         fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
@@ -393,7 +393,7 @@ export default function WhatsApp() {
           if (!connected) { setConnected(true); setQrCode(null); setReconnecting(false); }
           localStorage.setItem('cc-wa-connected', 'true');
           // Refresh files when connected
-          api.get('/drive/files/ws').then(fr => {
+          api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then(fr => {
             const msgs: Message[] = fr.data.map((f: any) => ({
               id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
               fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
