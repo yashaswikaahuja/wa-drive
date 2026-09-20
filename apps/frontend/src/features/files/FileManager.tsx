@@ -7,6 +7,7 @@ import {
   FolderOpen, Folder, MagnifyingGlass, UploadSimple, ArrowsClockwise,
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, X,
   SquaresFour, ListBullets, DownloadSimple, Trash, Camera, SpinnerGap,
+  ArrowLeft, ArrowRight, ArrowBendUpLeft,
 } from '@phosphor-icons/react';
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
@@ -99,6 +100,8 @@ export default function FileManager() {
   const [ctx, setCtx] = useState<{ x: number; y: number; file: DriveFile } | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const blobUrlCache = useRef<Map<string, string>>(new Map());
+  const filmstripRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,23 +118,16 @@ export default function FileManager() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Revoke blob URLs on unmount
+  useEffect(() => () => {
+    blobUrlCache.current.forEach((url) => URL.revokeObjectURL(url));
+    blobUrlCache.current.clear();
+  }, []);
+
   useEffect(() => {
     const close = () => setCtx(null);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setCtx(null);
-        setPreview((p) => {
-          if (p) URL.revokeObjectURL(p.url);
-          return null;
-        });
-      }
-    };
     window.addEventListener('click', close);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('keydown', onKey);
-    };
+    return () => window.removeEventListener('click', close);
   }, []);
 
   const folders: FolderRow[] = useMemo(() => {
@@ -206,26 +202,74 @@ export default function FileManager() {
     });
   };
 
+  const ensureBlobUrl = async (f: DriveFile) => {
+    const id = driveIdOf(f);
+    const cached = blobUrlCache.current.get(id);
+    if (cached) return cached;
+    const blob = await fetchBlob(f);
+    const url = URL.createObjectURL(blob);
+    blobUrlCache.current.set(id, url);
+    return url;
+  };
+
   const openFile = async (f: DriveFile) => {
     setCtx(null);
     setSelectedId(f.id);
     setOpeningId(f.id);
     try {
-      const blob = await fetchBlob(f);
-      const url = URL.createObjectURL(blob);
-      if (preview) URL.revokeObjectURL(preview.url);
-      if (isImage(f)) setPreview({ file: f, url, kind: 'image' });
-      else if (isPdf(f)) setPreview({ file: f, url, kind: 'pdf' });
-      else {
+      if (!isImage(f) && !isPdf(f)) {
+        const url = await ensureBlobUrl(f);
         window.open(url, '_blank', 'noopener');
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        return;
       }
+      const url = await ensureBlobUrl(f);
+      setPreview({ file: f, url, kind: isImage(f) ? 'image' : 'pdf' });
+      // Keep filmstrip thumb in view
+      requestAnimationFrame(() => {
+        const el = filmstripRef.current?.querySelector(`[data-file-id="${f.id}"]`);
+        el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      });
     } catch (e: any) {
       toast.error(e.message || 'Could not open file');
     } finally {
       setOpeningId(null);
     }
   };
+
+  const closePreview = () => {
+    setPreview(null);
+    setOpeningId(null);
+  };
+
+  const previewIndex = preview
+    ? visibleFiles.findIndex((f) => f.id === preview.file.id)
+    : -1;
+
+  const goPreviewDelta = async (delta: number) => {
+    if (previewIndex < 0 || !visibleFiles.length) return;
+    const next = visibleFiles[(previewIndex + delta + visibleFiles.length) % visibleFiles.length];
+    if (next) await openFile(next);
+  };
+
+  // Viewer keyboard: Esc back, ← → navigate
+  useEffect(() => {
+    if (!preview) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closePreview();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        void goPreviewDelta(-1);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        void goPreviewDelta(1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate uses latest previewIndex/visibleFiles via closure refresh
+  }, [preview?.file.id, previewIndex, visibleFiles.length]);
 
   const downloadFile = async (f: DriveFile) => {
     setCtx(null);
@@ -249,8 +293,10 @@ export default function FileManager() {
       setFiles((prev) => prev.filter((x) => x.id !== f.id));
       if (selectedId === f.id) setSelectedId(null);
       if (preview?.file.id === f.id) {
-        URL.revokeObjectURL(preview.url);
-        setPreview(null);
+        closePreview();
+        // After delete, jump to neighbour if any remain
+        const rest = visibleFiles.filter((x) => x.id !== f.id);
+        if (rest.length) void openFile(rest[Math.max(0, previewIndex - 1)] || rest[0]);
       }
       toast.success('Deleted');
     } catch {
@@ -603,32 +649,157 @@ export default function FileManager() {
       )}
 
       {preview && (
-        <div
-          className="fixed inset-0 z-[70] bg-black/85 flex flex-col"
-          onClick={() => { URL.revokeObjectURL(preview.url); setPreview(null); }}
-        >
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-black/60 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
-            <span className="text-sm font-medium truncate flex-1">{displayName(preview.file.fileName)}</span>
-            <button type="button" className="text-xs px-2.5 py-1 rounded-md hover:bg-white/10" onClick={() => downloadFile(preview.file)}>
-              Download
+        <div className="fixed inset-0 z-[70] bg-black/92 flex flex-col" onClick={closePreview}>
+          {/* Top bar */}
+          <div
+            className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-black/70 text-white shrink-0 border-b border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 rounded-md hover:bg-white/10 shrink-0"
+              onClick={closePreview}
+              title="Back to folder (Esc)"
+            >
+              <ArrowBendUpLeft size={16} />
+              <span>Back</span>
+            </button>
+            <div className="min-w-0 flex-1 text-center sm:text-left">
+              <p className="text-sm font-medium truncate">{displayName(preview.file.fileName)}</p>
+              <p className="text-[10px] text-white/50">
+                {previewIndex >= 0 ? `${previewIndex + 1} / ${visibleFiles.length}` : ''}
+                {preview.file.source ? ` · ${preview.file.source.replace(/-/g, ' ')}` : ''}
+                {' · ← → to switch'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30"
+              disabled={visibleFiles.length < 2}
+              onClick={() => void goPreviewDelta(-1)}
+              title="Previous (←)"
+            >
+              <ArrowLeft size={18} />
             </button>
             <button
               type="button"
-              className="p-1.5 rounded-md hover:bg-white/10"
-              onClick={() => { URL.revokeObjectURL(preview.url); setPreview(null); }}
-              aria-label="Close"
+              className="p-2 rounded-md hover:bg-white/10 disabled:opacity-30"
+              disabled={visibleFiles.length < 2}
+              onClick={() => void goPreviewDelta(1)}
+              title="Next (→)"
             >
+              <ArrowRight size={18} />
+            </button>
+            <button
+              type="button"
+              className="text-xs px-2.5 py-1.5 rounded-md hover:bg-white/10 hidden sm:inline-flex items-center gap-1"
+              onClick={() => downloadFile(preview.file)}
+            >
+              <DownloadSimple size={14} /> Download
+            </button>
+            {isImage(preview.file) && (
+              <button
+                type="button"
+                className="text-xs px-2.5 py-1.5 rounded-md hover:bg-white/10 hidden md:inline-flex items-center gap-1"
+                onClick={() => {
+                  const q = new URLSearchParams();
+                  q.set('fileId', driveIdOf(preview.file));
+                  if (preview.file.customerId) q.set('phone', preview.file.customerId);
+                  if (preview.file.customerName) q.set('name', preview.file.customerName);
+                  window.location.href = `/app/photos/portal?${q}`;
+                }}
+              >
+                <Camera size={14} /> Photo Editor
+              </button>
+            )}
+            <button type="button" className="p-1.5 rounded-md hover:bg-white/10 sm:hidden" onClick={() => downloadFile(preview.file)} title="Download">
+              <DownloadSimple size={16} />
+            </button>
+            <button type="button" className="p-1.5 rounded-md hover:bg-white/10" onClick={closePreview} aria-label="Close">
               <X size={18} />
             </button>
           </div>
-          <div className="flex-1 min-h-0 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
+
+          {/* Main preview */}
+          <div className="flex-1 min-h-0 flex items-center justify-center relative px-2 sm:px-10 py-3" onClick={(e) => e.stopPropagation()}>
+            {visibleFiles.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  className="absolute left-1 sm:left-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white z-10"
+                  onClick={() => void goPreviewDelta(-1)}
+                  title="Previous (←)"
+                >
+                  <CaretLeft size={22} weight="bold" />
+                </button>
+                <button
+                  type="button"
+                  className="absolute right-1 sm:right-3 top-1/2 -translate-y-1/2 p-2 sm:p-3 rounded-full bg-black/50 hover:bg-black/70 text-white z-10"
+                  onClick={() => void goPreviewDelta(1)}
+                  title="Next (→)"
+                >
+                  <CaretRight size={22} weight="bold" />
+                </button>
+              </>
+            )}
+            {openingId && openingId !== preview.file.id && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20">
+                <SpinnerGap size={28} className="animate-spin text-white" />
+              </div>
+            )}
             {preview.kind === 'image' && (
-              <img src={preview.url} alt={preview.file.fileName} className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" />
+              <img
+                src={preview.url}
+                alt={preview.file.fileName}
+                className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              />
             )}
             {preview.kind === 'pdf' && (
-              <iframe title={preview.file.fileName} src={preview.url} className="w-full h-full max-w-5xl rounded-lg bg-white shadow-2xl" />
+              <iframe
+                title={preview.file.fileName}
+                src={preview.url}
+                className="w-full h-full max-w-5xl rounded-lg bg-white shadow-2xl"
+              />
             )}
           </div>
+
+          {/* Bottom filmstrip — other files in this folder */}
+          {visibleFiles.length > 0 && (
+            <div
+              className="shrink-0 border-t border-white/10 bg-black/80 px-2 py-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                ref={filmstripRef}
+                className="flex gap-2 overflow-x-auto pb-1 scroll-smooth"
+                style={{ scrollbarWidth: 'thin' }}
+              >
+                {visibleFiles.map((f) => {
+                  const active = f.id === preview.file.id;
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      data-file-id={f.id}
+                      onClick={() => void openFile(f)}
+                      className={`shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition ${
+                        active ? 'border-[hsl(27_95%_55%)] ring-1 ring-[hsl(27_95%_55%)]' : 'border-white/20 opacity-70 hover:opacity-100'
+                      }`}
+                      title={displayName(f.fileName)}
+                    >
+                      <div className="w-full h-full bg-black/40 flex items-center justify-center">
+                        {isImage(f) ? (
+                          <img src={authFileUrl(driveIdOf(f))} alt="" className="w-full h-full object-cover" loading="lazy" />
+                        ) : (
+                          <FileGlyph f={f} size={28} />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
