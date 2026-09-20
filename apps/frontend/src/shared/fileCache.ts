@@ -1,22 +1,26 @@
 const CACHE_NAME = 'cc-drive-files-v1';
 
 export async function getCachedBlob(fileId: string, fetcher: () => Promise<Blob>): Promise<Blob> {
-  const cache = await caches.open(CACHE_NAME);
-  const cacheKey = new Request(`/cached-drive/${fileId}`);
-  
-  // Try cache first
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    return cached.blob();
+  // Cache API can throw (private mode / non-secure / quota) — never block open/download.
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const cacheKey = new Request(`/cached-drive/${fileId}`);
+    const cached = await cache.match(cacheKey);
+    if (cached) return cached.blob();
+
+    const blob = await fetcher();
+    try {
+      await cache.put(
+        cacheKey,
+        new Response(blob, {
+          headers: { 'Content-Type': blob.type || 'application/octet-stream', 'X-Cached-At': Date.now().toString() },
+        }),
+      );
+    } catch { /* ignore put failures */ }
+    return blob;
+  } catch {
+    return fetcher();
   }
-  
-  // Fetch and cache
-  const blob = await fetcher();
-  const response = new Response(blob, {
-    headers: { 'Content-Type': blob.type, 'X-Cached-At': Date.now().toString() }
-  });
-  await cache.put(cacheKey, response);
-  return blob;
 }
 
 /**

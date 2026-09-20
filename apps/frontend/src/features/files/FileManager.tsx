@@ -8,9 +8,10 @@ import {
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, X,
   SquaresFour, ListBullets, DownloadSimple, Trash, Camera, SpinnerGap,
 } from '@phosphor-icons/react';
-import api from '../../shared/api';
+import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
+import { useAuthStore } from '../auth/store';
 
 type DriveFile = {
   id: string;
@@ -22,6 +23,7 @@ type DriveFile = {
   tag?: string;
   source?: string;
   mimeType?: string;
+  driveFileId?: string;
 };
 
 type FolderRow = { phone: string; name: string; count: number };
@@ -59,12 +61,22 @@ function FileGlyph({ f, size = 36 }: { f: DriveFile; size?: number }) {
   return <FileIcon size={size} className="text-gray-400" weight="fill" />;
 }
 
+/** Authenticated thumbnail — Google Drive thumbnail URLs often fail in-app. */
+function authFileUrl(fileId: string) {
+  const token = useAuthStore.getState().accessToken || '';
+  return `${API_URL}/drive/download/${fileId}?token=${encodeURIComponent(token)}`;
+}
+
+function driveIdOf(f: DriveFile) {
+  return f.driveFileId || f.id;
+}
+
 function Thumb({ f }: { f: DriveFile }) {
   const [broken, setBroken] = useState(false);
-  if (isImage(f) && f.fileUrl && !broken) {
+  if (isImage(f) && !broken) {
     return (
       <img
-        src={f.fileUrl}
+        src={authFileUrl(driveIdOf(f))}
         alt=""
         className="w-full h-full object-cover"
         loading="lazy"
@@ -178,11 +190,19 @@ export default function FileManager() {
   const atRoot = !folderPhone;
 
   const fetchBlob = async (f: DriveFile) => {
-    return getCachedBlob(f.id, async () => {
-      const res = await api.get(`/drive/download/${f.id}`, { responseType: 'blob' });
-      return new Blob([res.data], {
-        type: String(res.headers['content-type'] ?? 'application/octet-stream'),
-      });
+    const id = driveIdOf(f);
+    return getCachedBlob(id, async () => {
+      const res = await api.get(`/drive/download/${id}`, { responseType: 'blob' });
+      // Axios may give JSON error body as blob on 4xx
+      if (res.status >= 400) throw new Error('Download failed');
+      const type = String(res.headers['content-type'] ?? 'application/octet-stream');
+      if (type.includes('application/json')) {
+        const text = await (res.data as Blob).text();
+        let msg = 'Download failed';
+        try { msg = JSON.parse(text).error || msg; } catch { /* ignore */ }
+        throw new Error(msg);
+      }
+      return new Blob([res.data], { type });
     });
   };
 
@@ -516,8 +536,8 @@ export default function FileManager() {
                 >
                   <span className="flex items-center gap-2 min-w-0">
                     {openingId === f.id ? <SpinnerGap size={16} className="animate-spin shrink-0" /> : (
-                      isImage(f) && f.fileUrl ? (
-                        <img src={f.fileUrl} alt="" className="w-7 h-7 rounded object-cover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                      isImage(f) ? (
+                        <img src={authFileUrl(driveIdOf(f))} alt="" className="w-7 h-7 rounded object-cover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <FileGlyph f={f} size={18} />
                       )
