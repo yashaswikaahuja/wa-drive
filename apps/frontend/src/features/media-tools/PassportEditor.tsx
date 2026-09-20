@@ -6,10 +6,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   ArrowClockwise, Crop, DownloadSimple, FloppyDisk, Image as ImageIcon,
-  MagicWand, UploadSimple, Camera, FolderOpen,
+  MagicWand, UploadSimple, Camera, FolderOpen, Printer, PenNib,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
+import { printBlob } from '../../shared/fileCache';
 import { BG_PRESETS, PORTAL_PRESETS, type BgPresetId } from './bgPresets';
 import AspectCropModal from './AspectCropModal';
 import { removeBackgroundSmart } from './removeBg';
@@ -17,6 +18,7 @@ import {
   applyTone, compositeOnColor, downloadBlob,
   encodeJpegToKb, flipCanvas, loadImageFromFile, rotateCanvas, type ToneAdjust,
 } from './imageOps';
+import { buildPassportSheet, type PaperId } from './printSheetBuild';
 
 export default function PassportEditor() {
   const [params] = useSearchParams();
@@ -38,11 +40,19 @@ export default function PassportEditor() {
   const [lastBlob, setLastBlob] = useState<Blob | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
   const [bgVia, setBgVia] = useState<'server' | 'client' | null>(null);
+  const [editMode, setEditMode] = useState<'photo' | 'signature'>('photo');
+  const [showPrint, setShowPrint] = useState(false);
+  const [printCount, setPrintCount] = useState(8);
+  const [printPaper, setPrintPaper] = useState<PaperId>('4x6');
+  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+  const [sheetBusy, setSheetBusy] = useState(false);
 
-  const preset = useMemo(
-    () => PORTAL_PRESETS.find((p) => p.id === presetId) || PORTAL_PRESETS[0],
-    [presetId],
-  );
+  const preset = useMemo(() => {
+    if (editMode === 'signature') {
+      return { id: 'signature', label: 'Signature', width: 300, height: 100, maxKb: 30, note: 'Wide crop, ≤30 KB' };
+    }
+    return PORTAL_PRESETS.find((p) => p.id === presetId) || PORTAL_PRESETS[0];
+  }, [presetId, editMode]);
 
   const bgHex = useMemo(() => {
     if (bgId === 'custom') return customHex;
@@ -129,14 +139,24 @@ export default function PassportEditor() {
     }
   };
 
-  /** Working bitmap before frame: cutout+bg+tone, or source+tone */
+  /** Working bitmap before frame: cutout+bg+tone, or source+tone (signature: white plate) */
   const buildWorking = useCallback(async (): Promise<HTMLCanvasElement | null> => {
     const base = cutoutCanvas || sourceCanvas;
     if (!base) return null;
-    let working = cutoutCanvas ? await compositeOnColor(cutoutCanvas, bgHex) : base;
-    working = applyTone(working, tone);
+    let working: HTMLCanvasElement;
+    if (cutoutCanvas) {
+      working = await compositeOnColor(cutoutCanvas, bgHex);
+    } else if (editMode === 'signature') {
+      working = await compositeOnColor(base, '#ffffff');
+    } else {
+      working = base;
+    }
+    const t = editMode === 'signature'
+      ? { ...tone, contrast: Math.max(tone.contrast, 25), smooth: 0 }
+      : tone;
+    working = applyTone(working, t);
     return working;
-  }, [cutoutCanvas, sourceCanvas, bgHex, tone]);
+  }, [cutoutCanvas, sourceCanvas, bgHex, tone, editMode]);
 
   const rebuildPreview = useCallback(async () => {
     const working = await buildWorking();
@@ -172,8 +192,8 @@ export default function PassportEditor() {
   }, [tone, bgId, customHex, cutoutCanvas]);
 
   const openCrop = async () => {
-    if (!cutoutCanvas && !sourceCanvas) return;
-    if (!cutoutCanvas) {
+    if (!sourceCanvas && !cutoutCanvas) return;
+    if (editMode === 'photo' && !cutoutCanvas) {
       toast.error('Remove background first — then frame the face');
       return;
     }
@@ -183,7 +203,23 @@ export default function PassportEditor() {
   const onFrameApply = (framed: HTMLCanvasElement) => {
     setFramedCanvas(framed);
     setCropOpen(false);
-    toast.success('Face framed');
+    toast.success(editMode === 'signature' ? 'Signature framed' : 'Face framed');
+  };
+
+  const makeSheet = async (n = printCount, paper = printPaper) => {
+    if (!framedCanvas) { toast.error('Frame the photo first'); return; }
+    setSheetBusy(true);
+    try {
+      const blob = await buildPassportSheet(framedCanvas, n, paper);
+      if (sheetUrl) URL.revokeObjectURL(sheetUrl);
+      setSheetUrl(URL.createObjectURL(blob));
+      setShowPrint(true);
+      toast.success(`${n} copies on ${paper === 'a4' ? 'A4' : '4×6'}`);
+    } catch (e: any) {
+      toast.error(e.message || 'Sheet failed');
+    } finally {
+      setSheetBusy(false);
+    }
   };
 
   const rotate = (deg: 90 | -90) => {
@@ -197,7 +233,7 @@ export default function PassportEditor() {
 
   const lights = {
     loaded: !!sourceCanvas,
-    bg: !!cutoutCanvas,
+    bg: editMode === 'signature' ? true : !!cutoutCanvas,
     framed: !!framedCanvas,
     size: !!(framedCanvas && exportInfo && exportInfo.w === preset.width && exportInfo.h === preset.height),
     kb: !!(exportInfo && exportInfo.kb > 0 && exportInfo.kb <= preset.maxKb
@@ -207,8 +243,8 @@ export default function PassportEditor() {
 
   const doDownload = () => {
     if (!allGreen || !lastBlob) { toast.error('Fix red lights before download'); return; }
-    const safe = (personName || 'photo').replace(/\s+/g, '_').toLowerCase();
-    downloadBlob(lastBlob, `${safe}_${preset.id}_photo.jpg`);
+    const safe = (personName || (editMode === 'signature' ? 'sign' : 'photo')).replace(/\s+/g, '_').toLowerCase();
+    downloadBlob(lastBlob, `${safe}_${preset.id}_${editMode === 'signature' ? 'sign' : 'photo'}.jpg`);
     toast.success('Downloaded');
   };
 
@@ -217,14 +253,14 @@ export default function PassportEditor() {
     if (!phone.trim()) { toast.error('Enter customer phone — Save keeps the file for next visit'); return; }
     setBusy('Saving to customer…');
     try {
-      const safe = (personName || 'photo').replace(/\s+/g, '_').toLowerCase();
-      const fileName = `${safe}_${preset.id}_photo.jpg`;
+      const safe = (personName || (editMode === 'signature' ? 'sign' : 'photo')).replace(/\s+/g, '_').toLowerCase();
+      const fileName = `${safe}_${preset.id}_${editMode === 'signature' ? 'sign' : 'photo'}.jpg`;
       const fd = new FormData();
       fd.append('file', lastBlob, fileName);
       fd.append('phone', phone.trim());
       fd.append('personName', personName || '');
       fd.append('source', 'photo-editor');
-      fd.append('sourceMetadata', JSON.stringify({ preset: preset.id, kb: exportInfo?.kb, w: exportInfo?.w, h: exportInfo?.h }));
+      fd.append('sourceMetadata', JSON.stringify({ preset: preset.id, mode: editMode, kb: exportInfo?.kb, w: exportInfo?.w, h: exportInfo?.h }));
       await api.post('/customers/upload', fd);
       toast.success(`Saved ${fileName} on server`);
     } catch (e: any) {
@@ -252,10 +288,27 @@ export default function PassportEditor() {
     <div className="flex flex-col lg:flex-row gap-4 p-3 md:p-4 h-full min-h-0">
       <div className="w-full lg:w-[22rem] shrink-0 space-y-3 overflow-y-auto">
         <div>
-          <h1 className="text-base font-semibold">Portal photo</h1>
+          <h1 className="text-base font-semibold">Photo Editor</h1>
           <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-            Remove BG → pick colour → frame face → green lights → Save
+            Edit once → portal JPG and/or print sheet → Save
           </p>
+        </div>
+
+        <div className="flex rounded-lg border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+          <button
+            type="button"
+            className={`flex-1 text-xs py-2.5 flex items-center justify-center gap-1 ${editMode === 'photo' ? 'bg-[hsl(27_95%_55%/0.2)] font-semibold' : ''}`}
+            onClick={() => { setEditMode('photo'); setFramedCanvas(null); setShowPrint(false); }}
+          >
+            <ImageIcon size={14} /> Photo
+          </button>
+          <button
+            type="button"
+            className={`flex-1 text-xs py-2.5 flex items-center justify-center gap-1 ${editMode === 'signature' ? 'bg-[hsl(27_95%_55%/0.2)] font-semibold' : ''}`}
+            onClick={() => { setEditMode('signature'); setFramedCanvas(null); setShowPrint(false); setTone((t) => ({ ...t, contrast: 30, smooth: 0 })); }}
+          >
+            <PenNib size={14} /> Signature
+          </button>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -272,64 +325,72 @@ export default function PassportEditor() {
           <input ref={cameraInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={(e) => onPickFile(e.target.files?.[0] || null)} />
         </div>
 
-        {/* Big job presets */}
-        <div className="card space-y-2">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">Job preset</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {PORTAL_PRESETS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => { setPresetId(p.id); setFramedCanvas(null); }}
-                className="rounded-lg border px-2 py-2 text-left text-[11px] leading-snug"
-                style={{
-                  borderColor: presetId === p.id ? 'hsl(27 95% 55%)' : 'var(--border)',
-                  background: presetId === p.id ? 'hsl(27 95% 55% / 0.12)' : 'transparent',
-                }}
-              >
-                <span className="font-semibold block">{p.label}</span>
-                <span className="opacity-70">{p.note}</span>
-              </button>
-            ))}
+        {editMode === 'photo' && (
+          <div className="card space-y-2">
+            <p className="text-[11px] uppercase tracking-wider text-gray-500">Job preset</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {PORTAL_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => { setPresetId(p.id); setFramedCanvas(null); }}
+                  className="rounded-lg border px-2 py-2 text-left text-[11px] leading-snug"
+                  style={{
+                    borderColor: presetId === p.id ? 'hsl(27 95% 55%)' : 'var(--border)',
+                    background: presetId === p.id ? 'hsl(27 95% 55% / 0.12)' : 'transparent',
+                  }}
+                >
+                  <span className="font-semibold block">{p.label}</span>
+                  <span className="opacity-70">{p.note}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+        {editMode === 'signature' && (
+          <div className="card text-xs text-[var(--muted-foreground)] leading-relaxed">
+            Signature mode: load a photo of the signature → boost contrast → frame tightly → Save as portal sign JPG.
+          </div>
+        )}
 
-        <div className="card space-y-2">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">1. Background</p>
-          <button
-            type="button"
-            disabled={!sourceCanvas || !!busy}
-            onClick={removeBg}
-            className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-2.5"
-          >
-            <MagicWand size={16} /> Remove background
-          </button>
-          {bgVia && <p className="text-[10px] text-[var(--muted-foreground)]">via {bgVia}</p>}
-          <div className="grid grid-cols-4 gap-1.5">
-            {BG_PRESETS.filter((p) => p.id !== 'custom').map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                disabled={!cutoutCanvas && p.id !== 'transparent'}
-                onClick={() => setBgId(p.id)}
-                className="rounded-lg border px-1 py-2 text-[10px] disabled:opacity-40"
-                style={{
-                  borderColor: bgId === p.id ? 'hsl(27 95% 55%)' : 'var(--border)',
-                  background: p.hex
-                    ? p.hex
-                    : 'repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 8px 8px',
-                  color: ['black', 'navy', 'green', 'red'].includes(p.id) ? '#fff' : '#222',
-                }}
-              >
-                {p.label}
-              </button>
-            ))}
+        {editMode === 'photo' && (
+          <div className="card space-y-2">
+            <p className="text-[11px] uppercase tracking-wider text-gray-500">1. Background</p>
+            <button
+              type="button"
+              disabled={!sourceCanvas || !!busy}
+              onClick={removeBg}
+              className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-2.5"
+            >
+              <MagicWand size={16} /> Remove background
+            </button>
+            {bgVia && <p className="text-[10px] text-[var(--muted-foreground)]">via {bgVia}</p>}
+            <div className="grid grid-cols-4 gap-1.5">
+              {BG_PRESETS.filter((p) => p.id !== 'custom').map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  disabled={!cutoutCanvas && p.id !== 'transparent'}
+                  onClick={() => setBgId(p.id)}
+                  className="rounded-lg border px-1 py-2 text-[10px] disabled:opacity-40"
+                  style={{
+                    borderColor: bgId === p.id ? 'hsl(27 95% 55%)' : 'var(--border)',
+                    background: p.hex
+                      ? p.hex
+                      : 'repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 50% / 8px 8px',
+                    color: ['black', 'navy', 'green', 'red'].includes(p.id) ? '#fff' : '#222',
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+              <input type="color" value={customHex} onChange={(e) => { setCustomHex(e.target.value); setBgId('custom'); }} className="w-8 h-8 rounded cursor-pointer border-0" />
+              Custom colour
+            </label>
           </div>
-          <label className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-            <input type="color" value={customHex} onChange={(e) => { setCustomHex(e.target.value); setBgId('custom'); }} className="w-8 h-8 rounded cursor-pointer border-0" />
-            Custom colour
-          </label>
-        </div>
+        )}
 
         <div className="card space-y-2">
           <p className="text-[11px] uppercase tracking-wider text-gray-500">2. Tone & frame</p>
@@ -351,21 +412,59 @@ export default function PassportEditor() {
             </button>
             <button type="button" className="btn-secondary text-xs flex-1" onClick={flip} disabled={!sourceCanvas}>Flip</button>
           </div>
-          <button type="button" className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-2.5" onClick={openCrop} disabled={!cutoutCanvas}>
-            <Crop size={16} /> Frame face ({preset.width}×{preset.height})
+          <button
+            type="button"
+            className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-2.5"
+            onClick={openCrop}
+            disabled={editMode === 'photo' ? !cutoutCanvas : !sourceCanvas}
+          >
+            <Crop size={16} /> {editMode === 'signature' ? 'Frame signature' : 'Frame face'} ({preset.width}×{preset.height})
           </button>
         </div>
 
         <div className="card space-y-2">
           <p className="text-[11px] uppercase tracking-wider text-gray-500">Traffic lights</p>
           <ul className="space-y-1.5">
-            <Light ok={lights.loaded} label="Photo loaded" />
-            <Light ok={lights.bg} label="Background removed" />
-            <Light ok={lights.framed} label="Face framed" />
+            <Light ok={lights.loaded} label="Loaded" />
+            {editMode === 'photo' && <Light ok={lights.bg} label="Background removed" />}
+            <Light ok={lights.framed} label={editMode === 'signature' ? 'Signature framed' : 'Face framed'} />
             <Light ok={lights.size} label={`Size ${preset.width}×${preset.height}${exportInfo ? ` (${exportInfo.w}×${exportInfo.h})` : ''}`} />
             <Light ok={lights.kb} label={`KB ≤ ${preset.maxKb}${exportInfo ? ` (now ${exportInfo.kb})` : ''}`} />
           </ul>
         </div>
+
+        {framedCanvas && editMode === 'photo' && (
+          <div className="card space-y-2">
+            <p className="text-[11px] uppercase tracking-wider text-gray-500">Print sheet (same session)</p>
+            <div className="flex items-center gap-2">
+              <button type="button" className="btn-secondary px-3" onClick={() => { const n = Math.max(1, printCount - 1); setPrintCount(n); if (showPrint) void makeSheet(n, printPaper); }}>−</button>
+              <input type="number" min={1} max={100} value={printCount} className="input-field text-sm text-center flex-1"
+                onChange={(e) => setPrintCount(Math.max(1, Math.min(100, +e.target.value || 1)))} />
+              <button type="button" className="btn-secondary px-3" onClick={() => { const n = Math.min(100, printCount + 1); setPrintCount(n); if (showPrint) void makeSheet(n, printPaper); }}>+</button>
+            </div>
+            <div className="flex gap-1">
+              {([
+                ['4x6', '4×6'],
+                ['a4', 'A4'],
+              ] as const).map(([id, label]) => (
+                <button key={id} type="button" className="flex-1 text-xs rounded-lg py-2 border"
+                  style={{ borderColor: printPaper === id ? 'hsl(27 95% 55%)' : 'var(--border)', background: printPaper === id ? 'hsl(27 95% 55% / 0.12)' : 'transparent' }}
+                  onClick={() => { setPrintPaper(id); if (showPrint) void makeSheet(printCount, id); }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button type="button" className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-2.5" disabled={sheetBusy} onClick={() => void makeSheet()}>
+              <Printer size={16} /> {sheetBusy ? 'Building…' : `Make ${printCount}-up sheet`}
+            </button>
+            {sheetUrl && (
+              <div className="flex gap-2">
+                <button type="button" className="btn-primary flex-1 text-xs py-2" onClick={async () => printBlob(await (await fetch(sheetUrl)).blob())}>Print</button>
+                <button type="button" className="btn-secondary flex-1 text-xs py-2" onClick={async () => downloadBlob(await (await fetch(sheetUrl)).blob(), `sheet_x${printCount}.jpg`)}>Download sheet</button>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="card space-y-2">
           <p className="text-[11px] uppercase tracking-wider text-gray-500">Save for customer</p>
@@ -385,24 +484,35 @@ export default function PassportEditor() {
         {busy && <p className="text-xs text-[var(--muted-foreground)] animate-pulse">{busy}</p>}
       </div>
 
-      <div className="flex-1 min-h-[320px] card flex items-center justify-center bg-[var(--card)] relative">
-        {previewUrl ? (
+      <div className="flex-1 min-h-[320px] card flex items-center justify-center bg-[var(--card)] relative overflow-auto">
+        {showPrint && sheetUrl ? (
+          <img src={sheetUrl} alt="Print sheet" className="max-h-full max-w-full object-contain rounded shadow-lg" />
+        ) : previewUrl ? (
           <img
             src={previewUrl}
             alt="Preview"
             className="max-h-full max-w-full object-contain rounded shadow-lg"
-            style={{ aspectRatio: framedCanvas ? `${preset.width}/${preset.height}` : undefined, background: bgHex || '#fff' }}
+            style={{ aspectRatio: framedCanvas ? `${preset.width}/${preset.height}` : undefined, background: editMode === 'signature' ? '#fff' : (bgHex || '#fff') }}
           />
         ) : (
           <div className="text-center text-[var(--muted-foreground)] px-6">
             <ImageIcon size={40} className="mx-auto mb-2 opacity-40" />
-            <p className="text-sm">Load a selfie → Remove background → Frame face</p>
+            <p className="text-sm">
+              {editMode === 'signature'
+                ? 'Load signature photo → Frame → Save'
+                : 'Load selfie → Remove BG → Frame → Save or Print sheet'}
+            </p>
           </div>
         )}
-        {allGreen && (
+        {allGreen && !showPrint && (
           <span className="absolute top-3 right-3 text-[10px] uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-full">
-            Portal ready
+            {editMode === 'signature' ? 'Sign ready' : 'Portal ready'}
           </span>
+        )}
+        {showPrint && sheetUrl && (
+          <button type="button" className="absolute top-3 left-3 text-xs btn-secondary py-1 px-2" onClick={() => setShowPrint(false)}>
+            ← Photo
+          </button>
         )}
       </div>
 

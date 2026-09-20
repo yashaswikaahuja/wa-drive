@@ -2,12 +2,12 @@
  * PDF Scan — Adobe Scan–style for cybercafé:
  * add pages → enhance → reorder → export multi-page PDF → Download / Save.
  */
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
 import {
   ArrowDown, ArrowUp, Camera, DownloadSimple, FloppyDisk,
-  Plus, Trash, UploadSimple, FilePdf, IdentificationCard,
+  Plus, Trash, UploadSimple, FilePdf, IdentificationCard, FolderOpen,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
@@ -89,14 +89,78 @@ function buildPdf(pages: Page[]): Blob {
 }
 
 export default function PdfScan() {
+  const [params] = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
   const camRef = useRef<HTMLInputElement>(null);
   const [pages, setPages] = useState<Page[]>([]);
   const [enhance, setEnhance] = useState<Enhance>('clean');
-  const [phone, setPhone] = useState('');
-  const [docName, setDocName] = useState('');
+  const [phone, setPhone] = useState(params.get('phone') || '');
+  const [docName, setDocName] = useState(params.get('name') || '');
   const [busy, setBusy] = useState<string | null>(null);
   const [active, setActive] = useState(0);
+
+  const addBlobAsPage = async (blob: Blob, name: string) => {
+    const img = await loadImageFromFile(blob);
+    const canvas = enhanceImage(img, enhance);
+    const page: Page = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      dataUrl: canvas.toDataURL('image/jpeg', 0.88),
+      name,
+    };
+    setPages((p) => {
+      const next = [...p, page];
+      setActive(next.length - 1);
+      return next;
+    });
+  };
+
+  // Deep-link: ?fileId= from File Manager / WA
+  useEffect(() => {
+    const fileId = params.get('fileId');
+    if (!fileId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setBusy('Loading from Drive…');
+        const res = await api.get(`/drive/download/${fileId}`, { responseType: 'blob' });
+        if (cancelled) return;
+        await addBlobAsPage(new Blob([res.data]), params.get('fileName') || 'drive-page.jpg');
+        toast.success('Page added from Drive');
+      } catch (e: any) {
+        toast.error(e.message || 'Drive load failed');
+      } finally {
+        if (!cancelled) setBusy(null);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
+
+  const loadFromDriveOrWa = async (sourceFilter?: string) => {
+    try {
+      setBusy('Loading files…');
+      const res = await api.get('/drive/files/ws', {
+        params: sourceFilter ? { source: sourceFilter } : undefined,
+      });
+      const files = (res.data || []).filter((f: any) =>
+        /\.(jpe?g|png|webp)$/i.test(f.fileName || '') || (f.mimeType || '').startsWith('image/'),
+      );
+      if (!files.length) { toast.error('No images found'); return; }
+      // Add up to 5 most recent
+      const pick = files.slice(0, 5);
+      for (const f of pick) {
+        const dl = await api.get(`/drive/download/${f.driveFileId || f.id}`, { responseType: 'blob' });
+        await addBlobAsPage(new Blob([dl.data]), f.fileName || 'page.jpg');
+        if (f.customerId && !phone) setPhone(String(f.customerId));
+        if (f.customerName && !docName) setDocName(String(f.customerName));
+      }
+      toast.success(`Added ${pick.length} page(s)`);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const addFiles = async (list: FileList | File[] | null) => {
     if (!list || !list.length) return;
@@ -192,7 +256,13 @@ export default function PdfScan() {
             <Camera size={14} /> Camera
           </button>
           <button type="button" className="btn-secondary text-xs flex items-center gap-1.5" onClick={() => fileRef.current?.click()}>
-            <UploadSimple size={14} /> Upload
+            <UploadSimple size={14} /> Local
+          </button>
+          <button type="button" className="btn-secondary text-xs flex items-center gap-1.5" disabled={!!busy} onClick={() => void loadFromDriveOrWa()}>
+            <FolderOpen size={14} /> Drive
+          </button>
+          <button type="button" className="btn-secondary text-xs flex items-center gap-1.5" disabled={!!busy} onClick={() => void loadFromDriveOrWa('whatsapp')}>
+            <FolderOpen size={14} /> Latest WA
           </button>
           <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
           <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => addFiles(e.target.files)} />

@@ -4,64 +4,10 @@
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DownloadSimple, Printer, UploadSimple } from '@phosphor-icons/react';
-import { mm, PAPER_4X6_L, PAPER_A4_P, PASSPORT_SLOT } from './sheetGeometry';
 import { downloadBlob, loadImageFromFile } from './imageOps';
 import { printBlob } from '../../shared/fileCache';
 import { toast } from '../../shared/toast';
-
-type PaperId = '4x6' | 'a4';
-
-async function buildSheet(img: HTMLImageElement, count: number, paperId: PaperId): Promise<Blob> {
-  const paper = paperId === 'a4' ? PAPER_A4_P : PAPER_4X6_L;
-  const slotW = PASSPORT_SLOT.w;
-  const slotH = PASSPORT_SLOT.h;
-  const gap = mm(paperId === 'a4' ? 4 : 3);
-  const margin = mm(paperId === 'a4' ? 10 : 6);
-
-  const usableW = paper.w - margin * 2;
-  const usableH = paper.h - margin * 2;
-  const cols = Math.max(1, Math.floor((usableW + gap) / (slotW + gap)));
-  const rowsPerPage = Math.max(1, Math.floor((usableH + gap) / (slotH + gap)));
-  const perPage = cols * rowsPerPage;
-  const pages = Math.max(1, Math.ceil(count / perPage));
-
-  // Single canvas: stack pages vertically for simple print/download (multi-page later)
-  const c = document.createElement('canvas');
-  c.width = paper.w;
-  c.height = paper.h * pages;
-  const ctx = c.getContext('2d')!;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, c.width, c.height);
-  ctx.imageSmoothingQuality = 'high';
-
-  const drawCover = (x: number, y: number) => {
-    const sa = img.naturalWidth / img.naturalHeight;
-    const da = slotW / slotH;
-    let sx = 0, sy = 0, sw = img.naturalWidth, sh = img.naturalHeight;
-    if (sa > da) { sw = img.naturalHeight * da; sx = (img.naturalWidth - sw) / 2; }
-    else { sh = img.naturalWidth / da; sy = (img.naturalHeight - sh) * 0.35; }
-    ctx.drawImage(img, sx, sy, sw, sh, x, y, slotW, slotH);
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, slotW - 1, slotH - 1);
-  };
-
-  for (let i = 0; i < count; i++) {
-    const page = Math.floor(i / perPage);
-    const idx = i % perPage;
-    const r = Math.floor(idx / cols);
-    const col = idx % cols;
-    const gridW = cols * slotW + (cols - 1) * gap;
-    const gridH = rowsPerPage * slotH + (rowsPerPage - 1) * gap;
-    const ox = Math.round((paper.w - gridW) / 2);
-    const oy = page * paper.h + Math.round((paper.h - gridH) / 2);
-    drawCover(ox + col * (slotW + gap), oy + r * (slotH + gap));
-  }
-
-  return new Promise((resolve, reject) => {
-    c.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/jpeg', 0.92);
-  });
-}
+import { buildPassportSheet, type PaperId } from './printSheetBuild';
 
 export default function PrintSheet() {
   const [params] = useSearchParams();
@@ -76,7 +22,7 @@ export default function PrintSheet() {
   const remake = async (img: HTMLImageElement, n: number, p: PaperId) => {
     setBusy(true);
     try {
-      const blob = await buildSheet(img, Math.max(1, Math.min(100, n)), p);
+      const blob = await buildPassportSheet(img, Math.max(1, Math.min(100, n)), p);
       if (sheetUrl) URL.revokeObjectURL(sheetUrl);
       setSheetUrl(URL.createObjectURL(blob));
     } catch (e: any) {

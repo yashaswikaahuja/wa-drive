@@ -822,13 +822,30 @@ export default function FileManager() {
               onClick={() => {
                 setCtx(null);
                 const q = new URLSearchParams();
-                q.set('fileId', ctx.file.id);
+                q.set('fileId', driveIdOf(ctx.file));
                 if (ctx.file.customerId) q.set('phone', ctx.file.customerId);
                 if (ctx.file.customerName) q.set('name', ctx.file.customerName);
                 window.location.href = `/app/photos/portal?${q}`;
               }}
             >
               <Camera size={13} /> Open in Photo Editor
+            </button>
+          )}
+          {(isImage(ctx.file) || isPdf(ctx.file)) && (
+            <button
+              type="button"
+              className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2"
+              onClick={() => {
+                setCtx(null);
+                const q = new URLSearchParams();
+                q.set('fileId', driveIdOf(ctx.file));
+                if (ctx.file.fileName) q.set('fileName', ctx.file.fileName);
+                if (ctx.file.customerId) q.set('phone', ctx.file.customerId);
+                if (ctx.file.customerName) q.set('name', ctx.file.customerName);
+                window.location.href = `/app/photos/scan?${q}`;
+              }}
+            >
+              <FilePdf size={13} /> Open in PDF Tool
             </button>
           )}
           <div className="border-t my-1" style={{ borderColor: 'var(--border)' }} />
