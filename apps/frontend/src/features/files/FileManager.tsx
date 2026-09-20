@@ -319,11 +319,10 @@ export default function FileManager() {
                 <button
                   key={f.id}
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); }}
-                  onDoubleClick={(e) => { e.stopPropagation(); openFile(f); }}
+                  onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); openFile(f); }}
                   onContextMenu={(e) => onContextMenu(e, f)}
                   className={`flex flex-col items-stretch rounded-xl border p-2 text-left transition ${selectedId === f.id ? 'border-[hsl(27_95%_55%)] bg-[hsl(27_95%_55%/0.12)]' : 'border-transparent hover:bg-white/5 hover:border-[var(--border)]'}`}
-                  title="Double-click to open · Right-click for more"
+                  title="Click to open · Right-click for more"
                 >
                   <div className="aspect-square rounded-lg bg-black/25 flex items-center justify-center overflow-hidden mb-2">
                     {isImage(f) && f.fileUrl ? (
@@ -353,8 +352,7 @@ export default function FileManager() {
                 <button
                   key={f.id}
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); }}
-                  onDoubleClick={(e) => { e.stopPropagation(); openFile(f); }}
+                  onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); openFile(f); }}
                   onContextMenu={(e) => onContextMenu(e, f)}
                   className={`w-full grid grid-cols-[1fr_100px_110px_90px] gap-2 px-3 py-2 text-left text-xs items-center border-b last:border-0 ${selectedId === f.id ? 'bg-[hsl(27_95%_55%/0.12)]' : 'hover:bg-white/5'}`}
                   style={{ borderColor: 'var(--border)' }}
@@ -385,7 +383,7 @@ export default function FileManager() {
             : `${folders.length} folder(s) · ${files.length} file(s)`}
           {selectedId ? ' · 1 selected' : ''}
         </span>
-        <span>Double-click to open · Right-click for Open / Download / Delete</span>
+        <span>Click a file to open · Right-click for Download / Delete</span>
       </div>
 
       {/* Context menu */}
