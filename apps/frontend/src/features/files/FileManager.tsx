@@ -507,9 +507,13 @@ export default function FileManager() {
   };
 
   return (
-    /* Break out of Layout padding; fill phone (top bar 3rem) and desktop main */
+    /* Phone (<md): fixed under mobile top bar. md+: fill Layout main (sidebar present). */
     <div
-      className="-mx-4 -mb-4 md:-mx-6 md:-mb-6 flex flex-col min-h-0 overflow-hidden bg-[hsl(var(--background))] h-[calc(100dvh-3rem)] md:h-[calc(100dvh)]"
+      className="
+        flex flex-col min-h-0 overflow-hidden bg-[hsl(var(--background))]
+        max-md:fixed max-md:z-20 max-md:inset-x-0 max-md:top-12 max-md:bottom-0
+        md:relative md:-mx-6 md:-mb-6 md:h-[calc(100vh-1.25rem)]
+      "
     >
       {/* Toolbar — stacks cleanly on phone */}
       <div
