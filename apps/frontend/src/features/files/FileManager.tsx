@@ -114,10 +114,19 @@ export default function FileManager() {
   const [uploading, setUploading] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [viewerMore, setViewerMore] = useState(false);
+  const [isNarrow, setIsNarrow] = useState(false); // phone / small tablet portrait
   const fileRef = useRef<HTMLInputElement>(null);
   const blobUrlCache = useRef<Map<string, string>>(new Map());
   const filmstripRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const apply = () => setIsNarrow(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -578,7 +587,7 @@ export default function FileManager() {
       <div className="flex-1 min-h-0 flex">
         {/* Sidebar folders */}
         <aside
-          className="w-52 lg:w-56 shrink-0 border-r overflow-y-auto hidden md:block"
+          className={`w-52 lg:w-56 shrink-0 border-r overflow-y-auto ${isNarrow ? 'hidden' : 'block'}`}
           style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)) / 0.45)' }}
         >
           <p className="text-[10px] uppercase tracking-wider text-gray-500 px-3 pt-3 pb-1">Customers</p>
@@ -616,8 +625,9 @@ export default function FileManager() {
           className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4"
           onClick={() => clearSelection()}
         >
-          {/* Phone / small tablet folder strip (sidebar hidden below md) */}
-          <div className="flex gap-1.5 overflow-x-auto mb-3 md:hidden pb-1 -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' } as any}>
+          {/* Phone folder chips when sidebar is hidden */}
+          {isNarrow && (
+          <div className="flex gap-1.5 overflow-x-auto mb-3 pb-1 -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' } as any}>
             <button
               type="button"
               className={`shrink-0 text-[11px] px-2.5 py-1 rounded-full border ${atRoot ? 'border-[hsl(27_95%_55%)] text-[hsl(27_95%_55%)]' : ''}`}
@@ -638,6 +648,7 @@ export default function FileManager() {
               </button>
             ))}
           </div>
+          )}
 
           {loading && (
             <div className="flex items-center justify-center gap-2 py-20 text-sm text-[var(--muted-foreground)]">
@@ -863,7 +874,7 @@ export default function FileManager() {
 
       {preview && (
         <div
-          className="fixed inset-0 z-[70] bg-[#0a0a0a] flex flex-col"
+          className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col"
           onClick={closePreview}
         >
           {/* Stage — full-bleed photo like Windows Photos */}
