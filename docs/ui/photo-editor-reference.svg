@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<rect width="1600" height="900" fill="#f6f8fb"/><rect width="1600" height="64" fill="#202631"/>
+<text x="28" y="42" fill="white" font-family="Arial" font-size="28" font-weight="700">CyberControl</text>
+<rect x="0" y="64" width="190" height="836" fill="#202631"/>
+<text x="24" y="118" fill="#fff" font-family="Arial" font-size="20">Home</text><text x="24" y="170" fill="#fff" font-family="Arial" font-size="20">Customers</text>
+<rect x="10" y="260" width="170" height="48" rx="8" fill="#1677ff"/><text x="30" y="291" fill="#fff" font-family="Arial" font-size="18">Photo Editor</text>
+<text x="24" y="350" fill="#fff" font-family="Arial" font-size="20">PDF Tool</text><text x="24" y="410" fill="#fff" font-family="Arial" font-size="20">File Manager</text>
+<text x="220" y="112" fill="#172033" font-family="Arial" font-size="34" font-weight="700">Photo Editor</text><text x="220" y="145" fill="#64748b" font-family="Arial" font-size="18">Edit once → portal JPG / signature / print output → Save to Drive</text>
+<rect x="1160" y="90" width="150" height="44" rx="7" fill="white" stroke="#cbd5e1"/><text x="1190" y="118" fill="#172033" font-family="Arial" font-size="16">Open from Drive</text>
+<rect x="1320" y="90" width="120" height="44" rx="7" fill="#1677ff"/><text x="1345" y="118" fill="white" font-family="Arial" font-size="16">Camera</text>
+<rect x="220" y="175" width="260" height="560" fill="white" stroke="#dbe2ea"/><text x="245" y="215" fill="#172033" font-family="Arial" font-size="20" font-weight="700">Edit</text>
+<text x="245" y="260" fill="#334155" font-family="Arial" font-size="18">Crop</text><text x="245" y="305" fill="#334155" font-family="Arial" font-size="18">Resize / mm / px</text><text x="245" y="350" fill="#334155" font-family="Arial" font-size="18">Background removal</text><text x="245" y="395" fill="#334155" font-family="Arial" font-size="18">Brightness / Contrast</text><text x="245" y="440" fill="#334155" font-family="Arial" font-size="18">Signature Mode</text><text x="245" y="485" fill="#334155" font-family="Arial" font-size="18">Presets</text>
+<rect x="500" y="175" width="610" height="560" fill="#e5e7eb" stroke="#cbd5e1"/><rect x="650" y="220" width="310" height="430" fill="white" stroke="#1677ff" stroke-width="3"/>
+<circle cx="805" cy="360" r="70" fill="#d8dde5"/><rect x="700" y="440" width="210" height="150" rx="90" fill="#d8dde5"/>
+<line x1="805" y1="220" x2="805" y2="650" stroke="#1677ff" stroke-dasharray="8 8"/><line x1="650" y1="435" x2="960" y2="435" stroke="#1677ff" stroke-dasharray="8 8"/>
+<rect x="1130" y="175" width="400" height="560" fill="white" stroke="#dbe2ea"/><text x="1160" y="215" fill="#172033" font-family="Arial" font-size="20" font-weight="700">Preset / Output</text><rect x="1160" y="245" width="340" height="58" rx="6" fill="#f8fafc" stroke="#cbd5e1"/><text x="1180" y="280" fill="#172033" font-family="Arial" font-size="17">Passport 35 × 45 mm</text>
+<text x="1160" y="340" fill="#475569" font-family="Arial" font-size="16">Custom dimensions</text><text x="1160" y="375" fill="#475569" font-family="Arial" font-size="16">Max file size: target KB</text><text x="1160" y="410" fill="#475569" font-family="Arial" font-size="16">Background: White</text><text x="1160" y="445" fill="#475569" font-family="Arial" font-size="16">JPG · live validation</text>
+<rect x="1160" y="490" width="340" height="52" rx="7" fill="#16a34a"/><text x="1260" y="523" fill="white" font-family="Arial" font-size="18">Save to Drive</text>
+<rect x="220" y="760" width="1310" height="95" fill="white" stroke="#dbe2ea"/><text x="245" y="798" fill="#475569" font-family="Arial" font-size="17">Print Sheet: N copies · auto-pack · free canvas · add/remove/duplicate · paper &amp; cell size</text><text x="245" y="830" fill="#475569" font-family="Arial" font-size="17">Output: Portal JPG · Signature · Print · Save to Drive</text>
+</svg>
