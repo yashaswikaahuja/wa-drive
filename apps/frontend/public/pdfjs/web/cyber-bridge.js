@@ -61,8 +61,16 @@
     return btn;
   }
 
+  function scrollToolbarToStart() {
+    const bar = document.getElementById("toolbarContainer");
+    if (bar) bar.scrollLeft = 0;
+  }
+
   function injectToolbarButtons() {
-    if (document.getElementById("cyberBackButton")) return;
+    if (document.getElementById("cyberBackButton")) {
+      scrollToolbarToStart();
+      return;
+    }
 
     const left = document.getElementById("toolbarViewerLeft");
     const right = document.getElementById("toolbarViewerRight");
@@ -71,10 +79,10 @@
       const back = makeTextBtn("cyberBackButton", "← Back", "Back to File Manager", () =>
         post("cyber-pdf-back"),
       );
-      const prev = makeTextBtn("cyberPrevFileButton", "‹ Prev", "Previous file in folder", () =>
+      const prev = makeTextBtn("cyberPrevFileButton", "‹ File", "Previous file in folder", () =>
         post("cyber-pdf-prev-file"),
       );
-      const next = makeTextBtn("cyberNextFileButton", "Next ›", "Next file in folder", () =>
+      const next = makeTextBtn("cyberNextFileButton", "File ›", "Next file in folder", () =>
         post("cyber-pdf-next-file"),
       );
       left.insertBefore(next, left.firstChild);
@@ -93,6 +101,9 @@
         right.appendChild(del);
       }
     }
+
+    // Start scrolled to our Back/Prev/Next so they're visible on phones
+    requestAnimationFrame(scrollToolbarToStart);
   }
 
   /** Desktop keys: ← → switch FILES (capture before PDF.js page handlers). */

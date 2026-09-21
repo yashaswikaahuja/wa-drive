@@ -1,0 +1,57 @@
+/* Make Mozilla toolbar scroll horizontally so Back/Prev/Next aren't clipped on phones */
+#toolbarContainer {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+}
+
+#toolbarViewer {
+  flex-wrap: nowrap !important;
+  width: max-content !important;
+  min-width: 100%;
+  padding-right: 12px;
+}
+
+#toolbarViewerLeft,
+#toolbarViewerMiddle,
+#toolbarViewerRight {
+  flex-wrap: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+/* Our injected text buttons */
+.cyberTextBtn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: auto !important;
+  width: auto !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  margin: 0 3px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 28px !important;
+  color: #f0f0f0 !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.cyberTextBtn::before {
+  display: none !important;
+  content: none !important;
+}
+
+.cyberTextBtn > span {
+  display: inline !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  position: static !important;
+}
