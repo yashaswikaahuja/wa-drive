@@ -15,5 +15,8 @@
       ]
     }
   ],
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/pdfjs/(.*)", "destination": "/pdfjs/$1" },
+    { "source": "/((?!pdfjs/).*)", "destination": "/index.html" }
+  ]
 }

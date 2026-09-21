@@ -1,6 +1,9 @@
 node_modules/
 dist/
 build/
+# Keep Mozilla PDF.js engine (public/pdfjs/build) — required for in-app viewer
+!apps/frontend/public/pdfjs/build/
+!apps/frontend/public/pdfjs/build/**
 .env
 .env.local
 .env.*.local
