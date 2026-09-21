@@ -588,12 +588,12 @@ export default function FileManager() {
   };
 
   return (
-    /* Phone (<md): fixed under mobile top bar. md+: fill Layout main (sidebar present). */
+    /* Phone (<md): fixed under mobile top bar. md+: fill Layout full-bleed main pane. */
     <div
       className="
         flex flex-col min-h-0 overflow-hidden bg-[hsl(var(--background))]
         max-md:fixed max-md:z-20 max-md:inset-x-0 max-md:top-12 max-md:bottom-0
-        md:relative md:-mx-6 md:-mb-6 md:h-[calc(100vh-1.25rem)]
+        md:relative md:flex-1 md:h-full
       "
     >
       {/* Toolbar — stacks cleanly on phone */}

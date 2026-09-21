@@ -761,7 +761,7 @@ export default function WhatsApp() {
   }
 
   return (
-    <div className="h-full md:h-[calc(100vh-48px)] flex w-full min-w-0 overflow-hidden">
+    <div className="h-full flex w-full min-w-0 overflow-hidden">
       <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
         <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
           <span className="w-2 h-2 rounded-full bg-emerald-400" />

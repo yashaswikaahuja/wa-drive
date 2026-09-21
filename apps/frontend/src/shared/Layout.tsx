@@ -1,9 +1,12 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { memo, useMemo, useEffect, useState } from 'react';
 import { useAuthStore } from '../features/auth/store';
 import { extensionBridge } from './extensionBridge';
 import VerifyBanner from './VerifyBanner';
 import LocationBanner from './LocationBanner';
+
+/** Full-bleed panes — no Layout main padding (avoids white gap above toolbars). */
+const FULL_BLEED = new Set(['/app/files', '/app/whatsapp']);
 import {
   Users, ChatCircle, Camera, Gear, FolderOpen,
   UserCircle, SignOut, Lightning, Plugs, MagnifyingGlass,
@@ -110,6 +113,8 @@ const Sidebar = memo(({ user, logout, open, onClose, collapsed, onToggleCollapse
 
 export default function Layout() {
   const { user, logout } = useAuthStore();
+  const { pathname } = useLocation();
+  const fullBleed = FULL_BLEED.has(pathname);
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('cc-sidebar-collapsed') === '1');
   const toggleCollapse = () => setCollapsed(c => {
@@ -134,10 +139,16 @@ export default function Layout() {
 
       <Sidebar user={user} logout={logout} open={open} onClose={() => setOpen(false)} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
 
-      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-6">
+      <main
+        className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden ${
+          fullBleed ? 'p-0 flex flex-col' : 'p-4 md:p-6'
+        }`}
+      >
         <VerifyBanner />
         <LocationBanner />
-        <Outlet />
+        <div className={fullBleed ? 'flex-1 min-h-0 flex flex-col' : undefined}>
+          <Outlet />
+        </div>
       </main>
     </div>
   );
