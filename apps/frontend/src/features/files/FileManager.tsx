@@ -1115,10 +1115,10 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo / PDF — same full-stage compliance */}
-            <div className="absolute inset-0 z-[5] pt-12 pb-[4.5rem] sm:pb-20 px-2 sm:px-6 overflow-hidden">
+            {/* Photo / PDF — same full-stage compliance (PDF must not stamp-size) */}
+            <div className="absolute inset-0 z-[5] pt-12 pb-[4.5rem] sm:pb-20 overflow-hidden">
               {preview.kind === 'image' ? (
-                <div className="w-full h-full flex items-center justify-center overflow-hidden px-8 sm:px-12">
+                <div className="w-full h-full flex items-center justify-center overflow-hidden px-10 sm:px-14">
                   <img
                     src={preview.url}
                     alt={preview.file.fileName}
@@ -1128,7 +1128,7 @@ export default function FileManager() {
                   />
                 </div>
               ) : (
-                <div className="w-full h-full min-h-0">
+                <div className="w-full h-full min-h-0 px-1 sm:px-3">
                   <PdfViewer url={preview.url} zoom={zoom} />
                 </div>
               )}

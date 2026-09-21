@@ -109,20 +109,18 @@ export default function PdfViewer({ url, zoom = 1, className = '' }: Props) {
       {!loading && !error && pages.length > 0 && (
         <>
           <div className="flex-1 min-h-0 w-full overflow-auto overscroll-contain">
+            {/* Block layout (not flex-shrink) so the page always spans the stage width */}
             <div
-              className="min-h-full w-full flex items-start justify-center p-2 sm:p-4"
+              className="w-full p-2 sm:p-4 box-border"
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top center',
+              }}
             >
               <img
                 src={pages[page]}
                 alt={`Page ${page + 1}`}
-                className="rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] bg-white block transition-transform duration-150"
-                style={{
-                  width: '100%',
-                  maxWidth: '100%',
-                  height: 'auto',
-                  transform: `scale(${zoom})`,
-                  transformOrigin: 'top center',
-                }}
+                className="w-full h-auto max-w-none rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] bg-white block"
                 draggable={false}
               />
             </div>
