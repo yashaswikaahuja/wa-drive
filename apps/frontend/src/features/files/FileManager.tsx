@@ -1028,16 +1028,14 @@ export default function FileManager() {
             </button>
 
             <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2.5">
-              {preview.kind === 'image' && (
-                <button
-                  type="button"
-                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                  title="Zoom"
-                  onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
-                >
-                  <MagnifyingGlassPlus size={18} weight="bold" />
-                </button>
-              )}
+              <button
+                type="button"
+                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                title="Zoom"
+                onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
+              >
+                <MagnifyingGlassPlus size={18} weight="bold" />
+              </button>
               {isImage(preview.file) && (
                 <button
                   type="button"
@@ -1117,18 +1115,20 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo / PDF — fill the stage (not half-screen) */}
-            <div className="absolute inset-0 z-[5] flex items-center justify-center px-10 sm:px-14 pt-12 pb-16 sm:pb-20 overflow-hidden">
+            {/* Photo / PDF — same full-stage compliance */}
+            <div className="absolute inset-0 z-[5] pt-12 pb-[4.5rem] sm:pb-20 px-2 sm:px-6 overflow-hidden">
               {preview.kind === 'image' ? (
-                <img
-                  src={preview.url}
-                  alt={preview.file.fileName}
-                  className="max-w-full max-h-full object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
-                  style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
-                  draggable={false}
-                />
+                <div className="w-full h-full flex items-center justify-center overflow-hidden px-8 sm:px-12">
+                  <img
+                    src={preview.url}
+                    alt={preview.file.fileName}
+                    className="max-w-full max-h-full object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
+                    style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
+                    draggable={false}
+                  />
+                </div>
               ) : (
-                <div className="w-full h-full max-w-5xl">
+                <div className="w-full h-full min-h-0">
                   <PdfViewer url={preview.url} zoom={zoom} />
                 </div>
               )}

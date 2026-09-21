@@ -1,6 +1,7 @@
 /**
- * Full-bleed PDF viewer — pdf.js page images (iframe/blob PDFs fail on many phones).
- * Zoom applies only to the page content, not the browser chrome.
+ * Full-stage PDF viewer (same compliance as photo viewer).
+ * Renders pages with pdf.js; ResizeObserver so we never stamp a tiny page
+ * into a large desktop stage.
  */
 import { useEffect, useRef, useState } from 'react';
 import { SpinnerGap, CaretLeft, CaretRight } from '@phosphor-icons/react';
@@ -17,8 +18,23 @@ export default function PdfViewer({ url, zoom = 1, className = '' }: Props) {
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hostW, setHostW] = useState(0);
+
+  // Track real stage width — first paint is often 0/tiny
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width || 0;
+      if (w >= 80) setHostW(Math.floor(w));
+    });
+    ro.observe(el);
+    setHostW(Math.floor(el.clientWidth) || 0);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
+    if (!url || hostW < 80) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -38,21 +54,23 @@ export default function PdfViewer({ url, zoom = 1, className = '' }: Props) {
         const pdf = await pdfjs.getDocument({ data }).promise;
         const urls: string[] = [];
         const maxPages = Math.min(pdf.numPages, 40);
-        // Render wide enough for desktop full stage; CSS scales down on phone
-        const targetW = Math.min(Math.max(hostRef.current?.clientWidth || 720, 360), 1200);
+        // Fill the stage width (minus small padding); crisp on desktop retina
+        const targetW = Math.min(Math.max(hostW - 8, 320), 1400);
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
         for (let i = 1; i <= maxPages; i++) {
           const pg = await pdf.getPage(i);
           const base = pg.getViewport({ scale: 1 });
-          const scale = targetW / base.width;
-          const viewport = pg.getViewport({ scale: Math.min(Math.max(scale, 1.1), 2.4) });
+          const cssScale = targetW / base.width;
+          const viewport = pg.getViewport({ scale: cssScale * dpr });
           const canvas = document.createElement('canvas');
           canvas.width = viewport.width;
           canvas.height = viewport.height;
           const ctx = canvas.getContext('2d');
           if (!ctx) continue;
           await pg.render({ canvasContext: ctx, viewport, canvas } as any).promise;
-          urls.push(canvas.toDataURL('image/jpeg', 0.88));
+          // Store as PNG for sharp text on docs (stamps/Hindi)
+          urls.push(canvas.toDataURL('image/png'));
         }
         if (!cancelled) {
           setPages(urls);
@@ -67,7 +85,7 @@ export default function PdfViewer({ url, zoom = 1, className = '' }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [url]);
+  }, [url, hostW]);
 
   return (
     <div
@@ -81,8 +99,8 @@ export default function PdfViewer({ url, zoom = 1, className = '' }: Props) {
         </div>
       )}
       {error && (
-        <div className="flex-1 flex items-center justify-center text-center px-4 text-sm text-red-200 space-y-2">
-          <div>
+        <div className="flex-1 flex items-center justify-center text-center px-4 text-sm text-red-200">
+          <div className="space-y-2">
             <p>{error}</p>
             <a href={url} download className="underline text-white">Download PDF instead</a>
           </div>
@@ -90,20 +108,21 @@ export default function PdfViewer({ url, zoom = 1, className = '' }: Props) {
       )}
       {!loading && !error && pages.length > 0 && (
         <>
-          <div className="flex-1 min-h-0 w-full overflow-auto overscroll-contain p-0 sm:p-2">
+          <div className="flex-1 min-h-0 w-full overflow-auto overscroll-contain">
             <div
-              className="mx-auto transition-transform duration-150"
-              style={{
-                transform: `scale(${zoom})`,
-                transformOrigin: 'top center',
-                width: zoom > 1 ? `${100 / zoom}%` : '100%',
-                maxWidth: '100%',
-              }}
+              className="min-h-full w-full flex items-start justify-center p-2 sm:p-4"
             >
               <img
                 src={pages[page]}
                 alt={`Page ${page + 1}`}
-                className="w-full h-auto rounded shadow-2xl bg-white block"
+                className="rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] bg-white block transition-transform duration-150"
+                style={{
+                  width: '100%',
+                  maxWidth: '100%',
+                  height: 'auto',
+                  transform: `scale(${zoom})`,
+                  transformOrigin: 'top center',
+                }}
                 draggable={false}
               />
             </div>
