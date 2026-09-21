@@ -1146,18 +1146,18 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo: top chrome only. Filmstrip overlays the preview. PDF: edge-to-edge. */}
+            {/* Photo: bias image upward; leave only filmstrip clearance at bottom. PDF: edge-to-edge. */}
             <div
               className={`absolute inset-0 z-[5] overflow-hidden ${
                 preview.kind === 'pdf' ? 'pt-0 pb-0' : 'pt-12 pb-0'
               }`}
             >
               {preview.kind === 'image' ? (
-                <div className="w-full h-full flex items-center justify-center overflow-hidden px-10 sm:px-14">
+                <div className="w-full h-full flex items-start justify-center overflow-hidden px-10 sm:px-14 pt-1 pb-[3.75rem] sm:pb-[4.5rem]">
                   <img
                     src={preview.url}
                     alt={preview.file.fileName}
-                    className="max-w-full max-h-full object-contain shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
+                    className="max-w-full max-h-full object-contain object-top shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
                     style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
                     draggable={false}
                   />
