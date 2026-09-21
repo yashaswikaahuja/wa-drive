@@ -1,4 +1,4 @@
-/* cyber-open-bridge: open PDF + toolbar Back/Delete/Prev/Next file + edge swipe */
+/* cyber-open-bridge: icon toolbar buttons + file switch without toolbar-scroll false positives */
 (async function () {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const ORIGIN = window.location.origin;
@@ -25,33 +25,48 @@
     post("cyber-pdf-ready");
   }
 
-  function makeTextBtn(id, label, title, onClick) {
+  function iconSvg(pathD) {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true">' +
+      '<path d="' + pathD + '"></path></svg>'
+    );
+  }
+
+  // Simple, readable 256-viewBox icons
+  const ICONS = {
+    // arrow left (back)
+    back: "M204 128a12 12 0 0 1-12 12H69l35 35a12 12 0 1 1-17 17l-56-56a12 12 0 0 1 0-17l56-56a12 12 0 1 1 17 17l-35 35h123a12 12 0 0 1 12 12Z",
+    // caret left
+    prev: "M160 40a12 12 0 0 1 0 17L95 128l65 71a12 12 0 1 1-17 17L69 136a12 12 0 0 1 0-17l74-79a12 12 0 0 1 17 0Z",
+    // caret right
+    next: "M96 40a12 12 0 0 1 17 0l74 79a12 12 0 0 1 0 17l-74 79a12 12 0 1 1-17-17l65-71-65-71a12 12 0 0 1 0-17Z",
+    // trash
+    del: "M216 56h-40v-8a24 24 0 0 0-24-24h-48a24 24 0 0 0-24 24v8H40a12 12 0 0 0 0 24h8v136a24 24 0 0 0 24 24h112a24 24 0 0 0 24-24V80h8a12 12 0 0 0 0-24ZM104 48h48v8h-48Zm88 168H64V80h128Zm-80-24a12 12 0 0 0 12-12v-64a12 12 0 0 0-24 0v64a12 12 0 0 0 12 12Zm40 0a12 12 0 0 0 12-12v-64a12 12 0 0 0-24 0v64a12 12 0 0 0 12 12Z",
+  };
+
+  function makeIconBtn(id, iconKey, title, onClick) {
     const btn = document.createElement("button");
     btn.id = id;
     btn.type = "button";
-    btn.className = "cyberTextBtn";
+    btn.className = "cyberIconBtn";
     btn.title = title;
     btn.setAttribute("aria-label", title);
-    btn.textContent = label;
+    btn.innerHTML = iconSvg(ICONS[iconKey]);
     btn.style.cssText = [
       "display:inline-flex",
       "align-items:center",
       "justify-content:center",
-      "min-width:auto",
-      "width:auto",
-      "height:28px",
-      "padding:0 10px",
-      "margin:0 3px",
-      "font-size:12px",
-      "font-weight:600",
-      "line-height:28px",
+      "width:32px",
+      "height:32px",
+      "min-width:32px",
+      "padding:0",
+      "margin:0 2px",
       "color:#f0f0f0",
-      "background:rgba(255,255,255,0.14)",
-      "border:1px solid rgba(255,255,255,0.35)",
-      "border-radius:4px",
+      "background:rgba(255,255,255,0.12)",
+      "border:1px solid rgba(255,255,255,0.3)",
+      "border-radius:6px",
       "cursor:pointer",
-      "white-space:nowrap",
-      "z-index:5",
+      "flex-shrink:0",
     ].join(";");
     btn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -76,13 +91,13 @@
     const right = document.getElementById("toolbarViewerRight");
 
     if (left) {
-      const back = makeTextBtn("cyberBackButton", "← Back", "Back to File Manager", () =>
+      const back = makeIconBtn("cyberBackButton", "back", "Back to File Manager", () =>
         post("cyber-pdf-back"),
       );
-      const prev = makeTextBtn("cyberPrevFileButton", "‹ File", "Previous file in folder", () =>
+      const prev = makeIconBtn("cyberPrevFileButton", "prev", "Previous file", () =>
         post("cyber-pdf-prev-file"),
       );
-      const next = makeTextBtn("cyberNextFileButton", "File ›", "Next file in folder", () =>
+      const next = makeIconBtn("cyberNextFileButton", "next", "Next file", () =>
         post("cyber-pdf-next-file"),
       );
       left.insertBefore(next, left.firstChild);
@@ -91,7 +106,7 @@
     }
 
     if (right) {
-      const del = makeTextBtn("cyberDeleteButton", "Delete", "Delete this file", () =>
+      const del = makeIconBtn("cyberDeleteButton", "del", "Delete this file", () =>
         post("cyber-pdf-delete"),
       );
       const download = document.getElementById("downloadButton");
@@ -102,11 +117,9 @@
       }
     }
 
-    // Start scrolled to our Back/Prev/Next so they're visible on phones
     requestAnimationFrame(scrollToolbarToStart);
   }
 
-  /** Desktop keys: ← → switch FILES (capture before PDF.js page handlers). */
   function bindFileSwitchKeys() {
     if (window.__cyberKeysBound) return;
     window.__cyberKeysBound = true;
@@ -132,9 +145,19 @@
     );
   }
 
+  function isInToolbar(target) {
+    if (!target || !target.closest) return false;
+    return !!(
+      target.closest("#toolbarContainer") ||
+      target.closest(".toolbar") ||
+      target.closest("#secondaryToolbar") ||
+      target.closest("#findbar")
+    );
+  }
+
   /**
-   * Phone: edge swipe only (left/right 56px) → switch FILES.
-   * Center of the page still scrolls/pans the PDF normally.
+   * Edge swipe for file switch — IGNORE anything that starts on the toolbar
+   * so horizontal toolbar scroll never changes files.
    */
   function bindEdgeSwipe() {
     if (window.__cyberSwipeBound) return;
@@ -142,50 +165,66 @@
 
     let startX = null;
     let startY = null;
-    let edge = null; // 'left' | 'right' | null
+    let edge = null;
+    let armed = false;
     const EDGE = 56;
 
-    const onStart = (e) => {
-      if (e.touches.length !== 1) return;
-      const x = e.touches[0].clientX;
-      const y = e.touches[0].clientY;
-      const w = window.innerWidth;
-      if (x <= EDGE) edge = "left";
-      else if (x >= w - EDGE) edge = "right";
-      else {
-        edge = null;
-        startX = null;
-        return;
-      }
-      startX = x;
-      startY = y;
-    };
-
-    const onEnd = (e) => {
-      if (edge == null || startX == null || e.changedTouches.length === 0) {
+    document.addEventListener(
+      "touchstart",
+      (e) => {
+        armed = false;
         startX = null;
         edge = null;
-        return;
-      }
-      const x = e.changedTouches[0].clientX;
-      const y = e.changedTouches[0].clientY;
-      const dx = x - startX;
-      const dy = y - startY;
-      startX = null;
-      const which = edge;
-      edge = null;
+        if (e.touches.length !== 1) return;
+        // Critical: toolbar scroll must not switch files
+        if (isInToolbar(e.target)) return;
 
-      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
-      // Swipe inward from edge, or continue in swipe direction
-      if (which === "left" && dx > 0) post("cyber-pdf-prev-file");
-      else if (which === "right" && dx < 0) post("cyber-pdf-next-file");
-      else if (dx < 0) post("cyber-pdf-next-file");
-      else post("cyber-pdf-prev-file");
-    };
+        const x = e.touches[0].clientX;
+        const y = e.touches[0].clientY;
+        const w = window.innerWidth;
+        if (x <= EDGE) edge = "left";
+        else if (x >= w - EDGE) edge = "right";
+        else return;
 
-    // Capture on document so we get events even over canvas
-    document.addEventListener("touchstart", onStart, { passive: true, capture: true });
-    document.addEventListener("touchend", onEnd, { passive: true, capture: true });
+        startX = x;
+        startY = y;
+        armed = true;
+      },
+      { passive: true, capture: true },
+    );
+
+    document.addEventListener(
+      "touchend",
+      (e) => {
+        if (!armed || edge == null || startX == null || e.changedTouches.length === 0) {
+          armed = false;
+          startX = null;
+          edge = null;
+          return;
+        }
+        // If finger ended on toolbar, ignore
+        if (isInToolbar(e.target)) {
+          armed = false;
+          startX = null;
+          edge = null;
+          return;
+        }
+
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        const which = edge;
+        armed = false;
+        startX = null;
+        edge = null;
+
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+        if (which === "left" && dx > 0) post("cyber-pdf-prev-file");
+        else if (which === "right" && dx < 0) post("cyber-pdf-next-file");
+        else if (dx < 0) post("cyber-pdf-next-file");
+        else post("cyber-pdf-prev-file");
+      },
+      { passive: true, capture: true },
+    );
   }
 
   window.addEventListener("message", async (e) => {
