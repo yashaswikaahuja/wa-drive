@@ -90,14 +90,23 @@ export default function PdfViewer({ url, zoom = 1, className = '' }: Props) {
       )}
       {!loading && !error && pages.length > 0 && (
         <>
-          <div className="flex-1 min-h-0 w-full overflow-auto flex items-center justify-center p-1 sm:p-3 overscroll-contain">
-            <img
-              src={pages[page]}
-              alt={`Page ${page + 1}`}
-              className="max-w-full max-h-full object-contain rounded shadow-2xl bg-white origin-center transition-transform duration-150"
-              style={{ transform: `scale(${zoom})` }}
-              draggable={false}
-            />
+          <div className="flex-1 min-h-0 w-full overflow-auto overscroll-contain p-0 sm:p-2">
+            <div
+              className="mx-auto transition-transform duration-150"
+              style={{
+                transform: `scale(${zoom})`,
+                transformOrigin: 'top center',
+                width: zoom > 1 ? `${100 / zoom}%` : '100%',
+                maxWidth: '100%',
+              }}
+            >
+              <img
+                src={pages[page]}
+                alt={`Page ${page + 1}`}
+                className="w-full h-auto rounded shadow-2xl bg-white block"
+                draggable={false}
+              />
+            </div>
           </div>
           {pages.length > 1 && (
             <div className="shrink-0 flex items-center justify-center gap-3 py-2 text-white text-xs">
