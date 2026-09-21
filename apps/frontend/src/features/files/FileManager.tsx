@@ -273,7 +273,7 @@ export default function FileManager() {
   const longPressFired = useRef(false);
 
   /**
-   * Desktop: click opens; Ctrl/Shift multi-select.
+   * Desktop: plain click opens only (no select). Ctrl/Cmd toggles; Shift range-selects.
    * Phone: tap opens; long-press starts selection; once selecting, tap toggles more files.
    */
   const onFileActivate = (e: React.MouseEvent, f: DriveFile) => {
@@ -295,7 +295,6 @@ export default function FileManager() {
       toggleSelect(f.id);
       return;
     }
-    selectOnly(f.id);
     void openFile(f);
   };
 
