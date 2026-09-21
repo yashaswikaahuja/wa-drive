@@ -15,7 +15,7 @@ import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
 import PdfThumb from './PdfThumb';
-import PdfViewer from './PdfViewer';
+import MozillaPdfEmbed from './MozillaPdfEmbed';
 
 type DriveFile = {
   id: string;
@@ -397,10 +397,13 @@ export default function FileManager() {
     }
   };
 
-  // Viewer keyboard: Esc back, ← → navigate; block pinch-zoom of the whole page
+  // Desktop: ← → switch files (PDF.js handles pages itself). Esc = back.
+  // Phone: swipe left/right switches files. Don't steal keys when typing in PDF.js find box.
   useEffect(() => {
     if (!preview) return;
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (e.key === 'Escape') {
         e.preventDefault();
         closePreview();
@@ -412,17 +415,24 @@ export default function FileManager() {
         void goPreviewDelta(1);
       }
     };
-    const preventPagePinch = (e: TouchEvent) => {
-      if (e.touches.length > 1) e.preventDefault();
-    };
     window.addEventListener('keydown', onKey);
-    document.addEventListener('touchmove', preventPagePinch, { passive: false });
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      document.removeEventListener('touchmove', preventPagePinch);
-    };
+    return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preview?.file.id, previewIndex, visibleFiles.length]);
+
+  // Phone swipe between files (PDF or photo)
+  const swipeStartX = useRef<number | null>(null);
+  const onViewerTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) swipeStartX.current = e.touches[0].clientX;
+  };
+  const onViewerTouchEnd = (e: React.TouchEvent) => {
+    if (swipeStartX.current == null || e.changedTouches.length === 0) return;
+    const dx = e.changedTouches[0].clientX - swipeStartX.current;
+    swipeStartX.current = null;
+    if (Math.abs(dx) < 60) return; // ignore taps
+    if (dx < 0) void goPreviewDelta(1);  // swipe left → next
+    else void goPreviewDelta(-1);         // swipe right → prev
+  };
 
   const downloadFile = async (f: DriveFile) => {
     setCtx(null);
@@ -991,21 +1001,24 @@ export default function FileManager() {
       {preview && (
         <div
           className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col overscroll-none"
-          style={{ touchAction: 'none' }}
+          style={{ touchAction: preview.kind === 'pdf' ? 'auto' : 'none' }}
           onClick={closePreview}
           onWheel={(e) => {
-            // Ctrl+wheel → zoom content only, never the browser page
+            // Images only: Ctrl+wheel zooms our stage. PDF.js owns its own zoom.
+            if (preview.kind !== 'image') return;
             if (e.ctrlKey || e.metaKey) {
               e.preventDefault();
               setZoom((z) => Math.min(3, Math.max(0.5, Number((z - e.deltaY * 0.002).toFixed(2)))));
             }
           }}
         >
-          {/* Stage — full-bleed */}
+          {/* Stage — full-bleed (PDF gets max space: no filmstrip) */}
           <div
             className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
             onClick={(e) => e.stopPropagation()}
-            style={{ touchAction: 'none' }}
+            onTouchStart={onViewerTouchStart}
+            onTouchEnd={onViewerTouchEnd}
+            style={{ touchAction: preview.kind === 'pdf' ? 'auto' : 'none' }}
           >
             {/* Soft vignette behind image */}
             <div
@@ -1028,14 +1041,16 @@ export default function FileManager() {
             </button>
 
             <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2.5">
-              <button
-                type="button"
-                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                title="Zoom"
-                onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
-              >
-                <MagnifyingGlassPlus size={18} weight="bold" />
-              </button>
+              {preview.kind === 'image' && (
+                <button
+                  type="button"
+                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                  title="Zoom"
+                  onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
+                >
+                  <MagnifyingGlassPlus size={18} weight="bold" />
+                </button>
+              )}
               {isImage(preview.file) && (
                 <button
                   type="button"
@@ -1085,14 +1100,14 @@ export default function FileManager() {
               </div>
             </div>
 
-            {/* Side chevrons — smaller on phone so they don't crush the image */}
-            {visibleFiles.length > 1 && (
+            {/* Side chevrons for photos only — PDF uses keys (desktop) / swipe (phone) for file switch */}
+            {preview.kind === 'image' && visibleFiles.length > 1 && (
               <>
                 <button
                   type="button"
                   className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
                   onClick={() => void goPreviewDelta(-1)}
-                  title="Previous"
+                  title="Previous file"
                 >
                   <CaretLeft size={22} weight="bold" className="sm:hidden" />
                   <CaretLeft size={28} weight="bold" className="hidden sm:block" />
@@ -1101,11 +1116,26 @@ export default function FileManager() {
                   type="button"
                   className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
                   onClick={() => void goPreviewDelta(1)}
-                  title="Next"
+                  title="Next file"
                 >
                   <CaretRight size={22} weight="bold" className="sm:hidden" />
                   <CaretRight size={28} weight="bold" className="hidden sm:block" />
                 </button>
+              </>
+            )}
+            {/* Phone edge strips — swipe zone for PDF file switch without covering the doc */}
+            {preview.kind === 'pdf' && visibleFiles.length > 1 && isNarrow && (
+              <>
+                <div
+                  className="absolute left-0 top-12 bottom-0 w-5 z-30"
+                  onTouchStart={onViewerTouchStart}
+                  onTouchEnd={onViewerTouchEnd}
+                />
+                <div
+                  className="absolute right-0 top-12 bottom-0 w-5 z-30"
+                  onTouchStart={onViewerTouchStart}
+                  onTouchEnd={onViewerTouchEnd}
+                />
               </>
             )}
 
@@ -1115,8 +1145,12 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo / PDF — same full-stage compliance (PDF must not stamp-size) */}
-            <div className="absolute inset-0 z-[5] pt-12 pb-[4.5rem] sm:pb-20 overflow-hidden">
+            {/* Photo: Photos-style. PDF: Mozilla viewer fills almost entire stage (no filmstrip). */}
+            <div
+              className={`absolute inset-0 z-[5] pt-12 overflow-hidden ${
+                preview.kind === 'pdf' ? 'pb-2' : 'pb-[4.5rem] sm:pb-20'
+              }`}
+            >
               {preview.kind === 'image' ? (
                 <div className="w-full h-full flex items-center justify-center overflow-hidden px-10 sm:px-14">
                   <img
@@ -1128,24 +1162,26 @@ export default function FileManager() {
                   />
                 </div>
               ) : (
-                <div className="w-full h-full min-h-0 px-1 sm:px-3">
-                  <PdfViewer url={preview.url} zoom={zoom} />
+                <div className="w-full h-full min-h-0 bg-[#525659]">
+                  <MozillaPdfEmbed fileUrl={preview.url} />
                 </div>
               )}
             </div>
 
-            {/* Filename chip */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none sm:bottom-3">
-              <div className="px-3 py-1 rounded-full bg-white/95 text-[11px] sm:text-[12px] font-medium text-black shadow-lg max-w-[80vw] truncate">
-                {displayName(preview.file.fileName)}
-                {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
-                {zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : ''}
+            {/* Filename chip — photos only (PDF.js has its own chrome) */}
+            {preview.kind === 'image' && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none sm:bottom-3">
+                <div className="px-3 py-1 rounded-full bg-white/95 text-[11px] sm:text-[12px] font-medium text-black shadow-lg max-w-[80vw] truncate">
+                  {displayName(preview.file.fileName)}
+                  {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
+                  {zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : ''}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Bottom filmstrip */}
-          {visibleFiles.length > 0 && (
+          {/* Filmstrip — hidden for PDF so document gets max space */}
+          {preview.kind === 'image' && visibleFiles.length > 0 && (
             <div
               className="shrink-0 pb-3 pt-2 px-2 sm:px-4 bg-black safe-pb"
               onClick={(e) => e.stopPropagation()}
