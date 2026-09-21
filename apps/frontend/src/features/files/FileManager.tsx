@@ -1165,6 +1165,8 @@ export default function FileManager() {
                     fileUrl={preview.url}
                     onBack={closePreview}
                     onDelete={() => void deleteFile(preview.file)}
+                    onPrevFile={() => void goPreviewDelta(-1)}
+                    onNextFile={() => void goPreviewDelta(1)}
                   />
                 </div>
               )}

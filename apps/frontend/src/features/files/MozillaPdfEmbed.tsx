@@ -8,15 +8,23 @@ type Props = {
   className?: string;
   onBack?: () => void;
   onDelete?: () => void;
+  onPrevFile?: () => void;
+  onNextFile?: () => void;
 };
 
-export default function MozillaPdfEmbed({ fileUrl, className = '', onBack, onDelete }: Props) {
+export default function MozillaPdfEmbed({
+  fileUrl, className = '', onBack, onDelete, onPrevFile, onNextFile,
+}: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState<string | null>(null);
   const onBackRef = useRef(onBack);
   const onDeleteRef = useRef(onDelete);
+  const onPrevRef = useRef(onPrevFile);
+  const onNextRef = useRef(onNextFile);
   onBackRef.current = onBack;
   onDeleteRef.current = onDelete;
+  onPrevRef.current = onPrevFile;
+  onNextRef.current = onNextFile;
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +56,10 @@ export default function MozillaPdfEmbed({ fileUrl, className = '', onBack, onDel
         onBackRef.current?.();
       } else if (type === 'cyber-pdf-delete') {
         onDeleteRef.current?.();
+      } else if (type === 'cyber-pdf-prev-file') {
+        onPrevRef.current?.();
+      } else if (type === 'cyber-pdf-next-file') {
+        onNextRef.current?.();
       } else if (type === 'cyber-pdf-error') {
         setError(e.data?.message || 'PDF viewer error');
       }
