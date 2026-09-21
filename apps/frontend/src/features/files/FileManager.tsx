@@ -1158,7 +1158,7 @@ export default function FileManager() {
                   <img
                     src={preview.url}
                     alt={preview.file.fileName}
-                    className="max-w-full max-h-full object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
+                    className="max-w-full max-h-full object-contain shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
                     style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
                     draggable={false}
                   />
