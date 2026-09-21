@@ -1029,76 +1029,74 @@ export default function FileManager() {
               }}
             />
 
-            {/* Floating controls — compact on phone, full on tablet/desktop */}
-            <button
-              type="button"
-              onClick={closePreview}
-              className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 h-9 sm:h-11 px-2.5 sm:px-3.5 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center gap-1 shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-              title="Back (Esc)"
-            >
-              <ArrowBendUpLeft size={16} weight="bold" />
-              <span className="text-[11px] sm:text-xs font-semibold">Back</span>
-            </button>
+            {/* Floating controls — photos only. PDF uses buttons inside Mozilla toolbar. */}
+            {preview.kind === 'image' && (
+              <>
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 h-9 sm:h-11 px-2.5 sm:px-3.5 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center gap-1 shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                  title="Back (Esc)"
+                >
+                  <ArrowBendUpLeft size={16} weight="bold" />
+                  <span className="text-[11px] sm:text-xs font-semibold">Back</span>
+                </button>
 
-            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2.5">
-              {preview.kind === 'image' && (
-                <button
-                  type="button"
-                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                  title="Zoom"
-                  onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
-                >
-                  <MagnifyingGlassPlus size={18} weight="bold" />
-                </button>
-              )}
-              {isImage(preview.file) && (
-                <button
-                  type="button"
-                  className="hidden sm:flex w-11 h-11 rounded-full bg-white/95 hover:bg-white text-black items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                  title="Edit in Photo Editor"
-                  onClick={() => openInPhotoEditor(preview.file)}
-                >
-                  <PencilSimple size={20} weight="bold" />
-                </button>
-              )}
-              <button
-                type="button"
-                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                title="Delete"
-                onClick={() => void deleteFile(preview.file)}
-              >
-                <Trash size={18} weight="bold" />
-              </button>
-              <div className="relative">
-                <button
-                  type="button"
-                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                  title="More"
-                  onClick={() => setViewerMore((v) => !v)}
-                >
-                  <DotsThree size={22} weight="bold" />
-                </button>
-                {viewerMore && (
-                  <div
-                    className="absolute right-0 top-13 min-w-[170px] rounded-xl border border-white/20 bg-[#2c2c2e] shadow-2xl py-1.5 text-sm text-white z-30"
-                    style={{ top: '3.25rem' }}
-                    onClick={(e) => e.stopPropagation()}
+                <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2.5">
+                  <button
+                    type="button"
+                    className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                    title="Zoom"
+                    onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
                   >
-                    <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); void downloadFile(preview.file); }}>
-                      <DownloadSimple size={16} /> Download
+                    <MagnifyingGlassPlus size={18} weight="bold" />
+                  </button>
+                  <button
+                    type="button"
+                    className="hidden sm:flex w-11 h-11 rounded-full bg-white/95 hover:bg-white text-black items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                    title="Edit in Photo Editor"
+                    onClick={() => openInPhotoEditor(preview.file)}
+                  >
+                    <PencilSimple size={20} weight="bold" />
+                  </button>
+                  <button
+                    type="button"
+                    className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                    title="Delete"
+                    onClick={() => void deleteFile(preview.file)}
+                  >
+                    <Trash size={18} weight="bold" />
+                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                      title="More"
+                      onClick={() => setViewerMore((v) => !v)}
+                    >
+                      <DotsThree size={22} weight="bold" />
                     </button>
-                    {isImage(preview.file) && (
-                      <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); openInPhotoEditor(preview.file); }}>
-                        <Camera size={16} /> Photo Editor
-                      </button>
+                    {viewerMore && (
+                      <div
+                        className="absolute right-0 min-w-[170px] rounded-xl border border-white/20 bg-[#2c2c2e] shadow-2xl py-1.5 text-sm text-white z-30"
+                        style={{ top: '3.25rem' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); void downloadFile(preview.file); }}>
+                          <DownloadSimple size={16} /> Download
+                        </button>
+                        <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); openInPhotoEditor(preview.file); }}>
+                          <Camera size={16} /> Photo Editor
+                        </button>
+                        <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10" onClick={() => { setZoom(1); setViewerMore(false); }}>
+                          Reset zoom
+                        </button>
+                      </div>
                     )}
-                    <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10" onClick={() => { setZoom(1); setViewerMore(false); }}>
-                      Reset zoom
-                    </button>
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
 
             {/* Side chevrons for photos only — PDF uses keys (desktop) / swipe (phone) for file switch */}
             {preview.kind === 'image' && visibleFiles.length > 1 && (
@@ -1163,7 +1161,11 @@ export default function FileManager() {
                 </div>
               ) : (
                 <div className="w-full h-full min-h-0 bg-[#525659]">
-                  <MozillaPdfEmbed fileUrl={preview.url} />
+                  <MozillaPdfEmbed
+                    fileUrl={preview.url}
+                    onBack={closePreview}
+                    onDelete={() => void deleteFile(preview.file)}
+                  />
                 </div>
               )}
             </div>

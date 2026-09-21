@@ -1,27 +1,29 @@
 /**
- * Mozilla PDF.js official viewer — phone + desktop.
- * Opens via postMessage ArrayBuffer (avoids blob/cross-origin file URL checks).
+ * Mozilla PDF.js viewer with Back/Delete integrated into its toolbar.
  */
 import { useEffect, useRef, useState } from 'react';
 
 type Props = {
-  /** Same-origin blob: URL — we fetch bytes and hand them to the viewer */
   fileUrl: string;
   className?: string;
+  onBack?: () => void;
+  onDelete?: () => void;
 };
 
-export default function MozillaPdfEmbed({ fileUrl, className = '' }: Props) {
+export default function MozillaPdfEmbed({ fileUrl, className = '', onBack, onDelete }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState<string | null>(null);
+  const onBackRef = useRef(onBack);
+  const onDeleteRef = useRef(onDelete);
+  onBackRef.current = onBack;
+  onDeleteRef.current = onDelete;
 
   useEffect(() => {
     let cancelled = false;
     const iframe = iframeRef.current;
     if (!iframe) return;
 
-    const onMessage = async (e: MessageEvent) => {
-      if (e.origin !== window.location.origin) return;
-      if (e.data?.type !== 'cyber-pdf-ready') return;
+    const sendOpen = async () => {
       try {
         const buf = await fetch(fileUrl).then((r) => {
           if (!r.ok) throw new Error(`Failed to read PDF (${r.status})`);
@@ -37,11 +39,22 @@ export default function MozillaPdfEmbed({ fileUrl, className = '' }: Props) {
       }
     };
 
-    window.addEventListener('message', onMessage);
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const type = e.data?.type;
+      if (type === 'cyber-pdf-ready') {
+        void sendOpen();
+      } else if (type === 'cyber-pdf-back') {
+        onBackRef.current?.();
+      } else if (type === 'cyber-pdf-delete') {
+        onDeleteRef.current?.();
+      } else if (type === 'cyber-pdf-error') {
+        setError(e.data?.message || 'PDF viewer error');
+      }
+    };
 
-    // If iframe already loaded before listener, also try on load
+    window.addEventListener('message', onMessage);
     const onLoad = () => {
-      // viewer bridge posts cyber-pdf-ready; if already ready, nudge
       try {
         iframe.contentWindow?.postMessage({ type: 'cyber-ping' }, window.location.origin);
       } catch { /* ignore */ }
