@@ -342,11 +342,12 @@ router.post('/upload', authMiddleware, upload.single('file') as any, async (req:
     const mimetype = req.file.mimetype || 'image/jpeg';
     const { fileId, webContentLink } = await uploadFileToDrive(drive, req.file.buffer, fileName, mimetype, phone, personName || 'Operator Upload');
 
-    // Insert into drive_files with provenance (#318) — never appears in WA received-media
+    // Insert into drive_files with provenance (#318) — never appears in WA received-media.
+    // Distinct $10 for drive_file_id: reusing $1 triggers Postgres "inconsistent types deduced".
     await pool.query(
       `INSERT INTO drive_files(id, workspace_id, file_name, customer_id, customer_name, file_url, uploaded_at, source, source_metadata, mime_type, drive_file_id)
-       VALUES($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$1) ON CONFLICT(id) DO NOTHING`,
-      [fileId, wsId, fileName, phone, personName || '', `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, source, sourceMetadata ? JSON.stringify(sourceMetadata) : null, mimetype]
+       VALUES($1,$2,$3,$4,$5,$6,now(),$7,$8,$9,$10) ON CONFLICT(id) DO NOTHING`,
+      [fileId, wsId, fileName, phone, personName || '', `https://drive.google.com/thumbnail?id=${fileId}&sz=w200`, source, sourceMetadata ? JSON.stringify(sourceMetadata) : null, mimetype, fileId]
     );
 
     // Auto-extract in background
