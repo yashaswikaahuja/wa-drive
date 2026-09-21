@@ -1,4 +1,4 @@
-/* cyber-open-bridge: open PDF + Back/Delete in toolbar + file switch keys/swipe */
+/* cyber-open-bridge: open PDF + toolbar Back/Delete/Prev/Next file + edge swipe */
 (async function () {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const ORIGIN = window.location.origin;
@@ -25,12 +25,10 @@
     post("cyber-pdf-ready");
   }
 
-  /** Text buttons — do NOT use .toolbarButton alone (icons hide span text → white square). */
   function makeTextBtn(id, label, title, onClick) {
     const btn = document.createElement("button");
     btn.id = id;
     btn.type = "button";
-    // Do not use .toolbarButton — PDF.js hides label spans and draws icon masks (white square).
     btn.className = "cyberTextBtn";
     btn.title = title;
     btn.setAttribute("aria-label", title);
@@ -43,7 +41,7 @@
       "width:auto",
       "height:28px",
       "padding:0 10px",
-      "margin:0 4px",
+      "margin:0 3px",
       "font-size:12px",
       "font-weight:600",
       "line-height:28px",
@@ -53,6 +51,7 @@
       "border-radius:4px",
       "cursor:pointer",
       "white-space:nowrap",
+      "z-index:5",
     ].join(";");
     btn.addEventListener("click", (e) => {
       e.preventDefault();
@@ -72,6 +71,14 @@
       const back = makeTextBtn("cyberBackButton", "← Back", "Back to File Manager", () =>
         post("cyber-pdf-back"),
       );
+      const prev = makeTextBtn("cyberPrevFileButton", "‹ Prev", "Previous file in folder", () =>
+        post("cyber-pdf-prev-file"),
+      );
+      const next = makeTextBtn("cyberNextFileButton", "Next ›", "Next file in folder", () =>
+        post("cyber-pdf-next-file"),
+      );
+      left.insertBefore(next, left.firstChild);
+      left.insertBefore(prev, left.firstChild);
       left.insertBefore(back, left.firstChild);
     }
 
@@ -88,7 +95,7 @@
     }
   }
 
-  /** Desktop: ← → switch FILES (not PDF pages). PDF pages use toolbar prev/next. */
+  /** Desktop keys: ← → switch FILES (capture before PDF.js page handlers). */
   function bindFileSwitchKeys() {
     if (window.__cyberKeysBound) return;
     window.__cyberKeysBound = true;
@@ -110,43 +117,64 @@
           post("cyber-pdf-back");
         }
       },
-      true, // capture before PDF.js page handlers
+      true,
     );
   }
 
-  /** Phone: horizontal swipe switches FILES. */
-  function bindFileSwitchSwipe() {
+  /**
+   * Phone: edge swipe only (left/right 56px) → switch FILES.
+   * Center of the page still scrolls/pans the PDF normally.
+   */
+  function bindEdgeSwipe() {
     if (window.__cyberSwipeBound) return;
     window.__cyberSwipeBound = true;
+
     let startX = null;
     let startY = null;
-    const el = document.getElementById("viewerContainer") || document.body;
+    let edge = null; // 'left' | 'right' | null
+    const EDGE = 56;
 
-    el.addEventListener(
-      "touchstart",
-      (e) => {
-        if (e.touches.length !== 1) return;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-      },
-      { passive: true },
-    );
-
-    el.addEventListener(
-      "touchend",
-      (e) => {
-        if (startX == null || e.changedTouches.length === 0) return;
-        const dx = e.changedTouches[0].clientX - startX;
-        const dy = e.changedTouches[0].clientY - startY;
+    const onStart = (e) => {
+      if (e.touches.length !== 1) return;
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      const w = window.innerWidth;
+      if (x <= EDGE) edge = "left";
+      else if (x >= w - EDGE) edge = "right";
+      else {
+        edge = null;
         startX = null;
-        startY = null;
-        // Horizontal swipe dominant
-        if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
-        if (dx < 0) post("cyber-pdf-next-file");
-        else post("cyber-pdf-prev-file");
-      },
-      { passive: true },
-    );
+        return;
+      }
+      startX = x;
+      startY = y;
+    };
+
+    const onEnd = (e) => {
+      if (edge == null || startX == null || e.changedTouches.length === 0) {
+        startX = null;
+        edge = null;
+        return;
+      }
+      const x = e.changedTouches[0].clientX;
+      const y = e.changedTouches[0].clientY;
+      const dx = x - startX;
+      const dy = y - startY;
+      startX = null;
+      const which = edge;
+      edge = null;
+
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+      // Swipe inward from edge, or continue in swipe direction
+      if (which === "left" && dx > 0) post("cyber-pdf-prev-file");
+      else if (which === "right" && dx < 0) post("cyber-pdf-next-file");
+      else if (dx < 0) post("cyber-pdf-next-file");
+      else post("cyber-pdf-prev-file");
+    };
+
+    // Capture on document so we get events even over canvas
+    document.addEventListener("touchstart", onStart, { passive: true, capture: true });
+    document.addEventListener("touchend", onEnd, { passive: true, capture: true });
   }
 
   window.addEventListener("message", async (e) => {
@@ -162,7 +190,7 @@
       if (!app) throw new Error("PDFViewerApplication not ready");
       injectToolbarButtons();
       bindFileSwitchKeys();
-      bindFileSwitchSwipe();
+      bindEdgeSwipe();
       await app.open({ data: e.data.data });
       injectToolbarButtons();
     } catch (err) {
@@ -175,7 +203,7 @@
     await appReady();
     injectToolbarButtons();
     bindFileSwitchKeys();
-    bindFileSwitchSwipe();
+    bindEdgeSwipe();
     notifyReady();
   } catch {}
 })();

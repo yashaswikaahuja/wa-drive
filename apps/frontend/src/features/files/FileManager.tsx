@@ -1121,18 +1121,22 @@ export default function FileManager() {
                 </button>
               </>
             )}
-            {/* Phone edge strips — swipe zone for PDF file switch without covering the doc */}
-            {preview.kind === 'pdf' && visibleFiles.length > 1 && isNarrow && (
+            {/* Wide edge hit-zones over the iframe (phone) — center stays for PDF pan/scroll */}
+            {preview.kind === 'pdf' && visibleFiles.length > 1 && (
               <>
                 <div
-                  className="absolute left-0 top-12 bottom-0 w-5 z-30"
+                  className="absolute left-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
+                  style={{ touchAction: 'pan-y' }}
                   onTouchStart={onViewerTouchStart}
                   onTouchEnd={onViewerTouchEnd}
+                  title="Swipe for previous file"
                 />
                 <div
-                  className="absolute right-0 top-12 bottom-0 w-5 z-30"
+                  className="absolute right-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
+                  style={{ touchAction: 'pan-y' }}
                   onTouchStart={onViewerTouchStart}
                   onTouchEnd={onViewerTouchEnd}
+                  title="Swipe for next file"
                 />
               </>
             )}
