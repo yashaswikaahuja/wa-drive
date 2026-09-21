@@ -48,26 +48,13 @@
     const btn = document.createElement("button");
     btn.id = id;
     btn.type = "button";
-    btn.className = "cyberIconBtn";
+    // Same shell as Mozilla buttons — cyber-toolbar.css strips the patched look
+    btn.className = "toolbarButton cyberIconBtn";
+    btn.tabIndex = 0;
     btn.title = title;
     btn.setAttribute("aria-label", title);
-    btn.innerHTML = iconSvg(ICONS[iconKey]);
-    btn.style.cssText = [
-      "display:inline-flex",
-      "align-items:center",
-      "justify-content:center",
-      "width:32px",
-      "height:32px",
-      "min-width:32px",
-      "padding:0",
-      "margin:0 2px",
-      "color:#f0f0f0",
-      "background:rgba(255,255,255,0.12)",
-      "border:1px solid rgba(255,255,255,0.3)",
-      "border-radius:6px",
-      "cursor:pointer",
-      "flex-shrink:0",
-    ].join(";");
+    // Empty span keeps PDF.js a11y pattern; SVG is the visible icon
+    btn.innerHTML = "<span></span>" + iconSvg(ICONS[iconKey]);
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
