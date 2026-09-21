@@ -1146,10 +1146,10 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo: leave room for chrome. PDF: edge-to-edge (no black gap above Mozilla toolbar). */}
+            {/* Photo: top chrome only. Filmstrip overlays the preview. PDF: edge-to-edge. */}
             <div
               className={`absolute inset-0 z-[5] overflow-hidden ${
-                preview.kind === 'pdf' ? 'pt-0 pb-0' : 'pt-12 pb-[4.5rem] sm:pb-20'
+                preview.kind === 'pdf' ? 'pt-0 pb-0' : 'pt-12 pb-0'
               }`}
             >
               {preview.kind === 'image' ? (
@@ -1175,9 +1175,9 @@ export default function FileManager() {
               )}
             </div>
 
-            {/* Filename chip — photos only (PDF.js has its own chrome) */}
+            {/* Filename chip — above the overlapping filmstrip */}
             {preview.kind === 'image' && (
-              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none sm:bottom-3">
+              <div className="absolute bottom-[3.25rem] sm:bottom-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
                 <div className="px-3 py-1 rounded-full bg-white/95 text-[11px] sm:text-[12px] font-medium text-black shadow-lg max-w-[80vw] truncate">
                   {displayName(preview.file.fileName)}
                   {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
@@ -1185,43 +1185,43 @@ export default function FileManager() {
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Filmstrip — hidden for PDF so document gets max space */}
-          {preview.kind === 'image' && visibleFiles.length > 0 && (
-            <div
-              className="shrink-0 pb-3 pt-2 px-2 sm:px-4 bg-black safe-pb"
-              onClick={(e) => e.stopPropagation()}
-            >
+            {/* Small transparent filmstrip overlaid on the preview (photos only) */}
+            {preview.kind === 'image' && visibleFiles.length > 0 && (
               <div
-                ref={filmstripRef}
-                className="flex gap-2 sm:gap-3 overflow-x-auto justify-start sm:justify-center scroll-smooth py-1 px-1"
-                style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
+                className="absolute inset-x-0 bottom-0 z-20 pointer-events-none safe-pb"
+                onClick={(e) => e.stopPropagation()}
               >
-                {visibleFiles.map((f) => {
-                  const active = f.id === preview.file.id;
-                  return (
-                    <button
-                      key={f.id}
-                      type="button"
-                      data-file-id={f.id}
-                      onClick={() => { setZoom(1); void openFile(f); }}
-                      className={`shrink-0 w-14 h-14 sm:w-[84px] sm:h-[84px] rounded-lg sm:rounded-xl overflow-hidden transition-all ${
-                        active
-                          ? 'ring-[3px] ring-[#4da3ff] ring-offset-2 ring-offset-black scale-105'
-                          : 'opacity-80 hover:opacity-100 ring-1 ring-white/30'
-                      }`}
-                      title={displayName(f.fileName)}
-                    >
-                      <div className="w-full h-full bg-[#222] flex items-center justify-center">
-                        <Thumb f={f} />
-                      </div>
-                    </button>
-                  );
-                })}
+                <div
+                  ref={filmstripRef}
+                  className="pointer-events-auto flex gap-1.5 sm:gap-2 overflow-x-auto justify-start sm:justify-center scroll-smooth px-2 sm:px-4 py-2 bg-transparent"
+                  style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
+                >
+                  {visibleFiles.map((f) => {
+                    const active = f.id === preview.file.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        data-file-id={f.id}
+                        onClick={() => { setZoom(1); void openFile(f); }}
+                        className={`shrink-0 w-9 h-9 sm:w-12 sm:h-12 rounded-md overflow-hidden transition-all shadow-md ${
+                          active
+                            ? 'ring-2 ring-[#4da3ff] ring-offset-1 ring-offset-transparent scale-105'
+                            : 'opacity-75 hover:opacity-100 ring-1 ring-white/40'
+                        }`}
+                        title={displayName(f.fileName)}
+                      >
+                        <div className="w-full h-full bg-black/40 flex items-center justify-center">
+                          <Thumb f={f} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>
