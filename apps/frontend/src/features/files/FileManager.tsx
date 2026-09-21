@@ -1163,7 +1163,7 @@ export default function FileManager() {
                 </div>
               ) : (
                 <div className="w-full h-full min-h-0 bg-[#525659]">
-                  <MozillaPdfEmbed fileUrl={preview.url} driveFileId={driveIdOf(preview.file)} />
+                  <MozillaPdfEmbed fileUrl={preview.url} />
                 </div>
               )}
             </div>
