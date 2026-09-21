@@ -1145,10 +1145,10 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo: Photos-style. PDF: Mozilla viewer fills almost entire stage (no filmstrip). */}
+            {/* Photo: leave room for chrome. PDF: edge-to-edge (no black gap above Mozilla toolbar). */}
             <div
-              className={`absolute inset-0 z-[5] pt-12 overflow-hidden ${
-                preview.kind === 'pdf' ? 'pb-2' : 'pb-[4.5rem] sm:pb-20'
+              className={`absolute inset-0 z-[5] overflow-hidden ${
+                preview.kind === 'pdf' ? 'pt-0 pb-0' : 'pt-12 pb-[4.5rem] sm:pb-20'
               }`}
             >
               {preview.kind === 'image' ? (
