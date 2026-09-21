@@ -32,6 +32,9 @@ type DriveFile = {
 
 type FolderRow = { phone: string; name: string; count: number };
 
+/** Cap visible folders so 500–600 customers stay usable; search finds the rest. */
+const FOLDER_CAP = 50;
+
 function isImage(f: DriveFile) {
   const n = (f.fileName || '').toLowerCase();
   const m = (f.mimeType || '').toLowerCase();
@@ -199,16 +202,36 @@ export default function FileManager() {
       .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
   }, [files, folderPhone, search]);
 
-  const filteredFolders = useMemo(() => {
+  const folderMatches = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q || folderPhone) return folders;
+    if (!q) return folders;
     return folders.filter(
       (f) => f.name.toLowerCase().includes(q) || f.phone.toLowerCase().includes(q),
     );
-  }, [folders, search, folderPhone]);
+  }, [folders, search]);
+
+  /** At root: search → autocomplete matches (capped). No search → first 50 only. */
+  const filteredFolders = useMemo(() => {
+    if (folderPhone) return folderMatches; // unused at folder level for grid
+    const q = search.trim();
+    const list = q ? folderMatches : folders.filter((f) => f.phone !== '__unassigned__');
+    const capped = list.slice(0, FOLDER_CAP);
+    // Keep Unassigned reachable when not searching
+    if (!q) {
+      const un = folders.find((f) => f.phone === '__unassigned__');
+      if (un && !capped.some((f) => f.phone === un.phone)) capped.push(un);
+    }
+    return capped;
+  }, [folders, folderMatches, folderPhone, search]);
 
   const activeFolder = folderPhone ? folders.find((f) => f.phone === folderPhone) : null;
   const atRoot = !folderPhone;
+  const totalFolders = folders.length;
+
+  const autocompleteFolders = useMemo(() => {
+    if (folderPhone || search.trim().length < 1) return [];
+    return folderMatches.slice(0, FOLDER_CAP);
+  }, [folderPhone, search, folderMatches]);
 
   const clearSelection = () => {
     setSelectedIds(new Set());
@@ -246,9 +269,19 @@ export default function FileManager() {
     setSelectedId(toId);
   };
 
-  /** Click a file tile: modifiers = multi-select; plain click = open */
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  /**
+   * Desktop: click opens; Ctrl/Shift multi-select.
+   * Phone: tap opens; long-press starts selection; once selecting, tap toggles more files.
+   */
   const onFileActivate = (e: React.MouseEvent, f: DriveFile) => {
     e.stopPropagation();
+    if (isNarrow && longPressFired.current) {
+      longPressFired.current = false;
+      return; // long-press already selected — ignore synthetic click
+    }
     if (e.ctrlKey || e.metaKey) {
       toggleSelect(f.id);
       return;
@@ -257,8 +290,31 @@ export default function FileManager() {
       selectRange(f.id);
       return;
     }
+    // Mobile selection mode: after long-press selected something, further taps toggle
+    if (isNarrow && selectedIds.size > 0) {
+      toggleSelect(f.id);
+      return;
+    }
     selectOnly(f.id);
     void openFile(f);
+  };
+
+  const onFilePointerDown = (f: DriveFile) => {
+    if (!isNarrow) return;
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      selectOnly(f.id);
+      try { navigator.vibrate?.(12); } catch { /* ignore */ }
+      toast.success('Selection mode — tap more files, then Delete / Open');
+    }, 450);
+  };
+
+  const onFilePointerUpOrCancel = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   };
 
   const fetchBlob = async (f: DriveFile) => {
@@ -341,7 +397,7 @@ export default function FileManager() {
     }
   };
 
-  // Viewer keyboard: Esc back, ← → navigate
+  // Viewer keyboard: Esc back, ← → navigate; block pinch-zoom of the whole page
   useEffect(() => {
     if (!preview) return;
     const onKey = (e: KeyboardEvent) => {
@@ -356,9 +412,16 @@ export default function FileManager() {
         void goPreviewDelta(1);
       }
     };
+    const preventPagePinch = (e: TouchEvent) => {
+      if (e.touches.length > 1) e.preventDefault();
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate uses latest previewIndex/visibleFiles via closure refresh
+    document.addEventListener('touchmove', preventPagePinch, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('touchmove', preventPagePinch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preview?.file.id, previewIndex, visibleFiles.length]);
 
   const downloadFile = async (f: DriveFile) => {
@@ -547,29 +610,68 @@ export default function FileManager() {
               </>
             )}
           </nav>
-          <button type="button" className="btn-secondary text-xs py-1.5 px-2 shrink-0" onClick={load} disabled={loading} title="Refresh">
-            <ArrowsClockwise size={13} className={loading ? 'animate-spin' : ''} />
+          {/* Grey icon buttons — clearer on phone than tiny labeled pills */}
+          <button
+            type="button"
+            className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 text-gray-400 hover:text-gray-200 hover:bg-white/10 disabled:opacity-40"
+            onClick={load}
+            disabled={loading}
+            title="Refresh"
+            aria-label="Refresh"
+          >
+            <ArrowsClockwise size={20} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
             type="button"
-            className="btn-primary text-xs py-1.5 px-2 flex items-center gap-1 shrink-0"
+            className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 text-gray-400 hover:text-gray-200 hover:bg-white/10 disabled:opacity-40"
             disabled={uploading || atRoot || folderPhone === '__unassigned__'}
             title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
+            aria-label="Upload"
             onClick={() => fileRef.current?.click()}
           >
-            <UploadSimple size={13} /> <span className="hidden sm:inline">Upload</span>
+            <UploadSimple size={20} />
           </button>
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => uploadLocal(e.target.files)} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative">
           <div className="relative flex-1 min-w-0">
-            <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+            <MagnifyingGlass size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
-              className="input-field text-xs w-full pl-7 py-1.5"
-              placeholder={atRoot ? 'Search customers…' : 'Search files…'}
+              className="input-field text-sm sm:text-xs w-full pl-8 py-2 sm:py-1.5"
+              placeholder={atRoot ? 'Search name or phone…' : 'Search files…'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              autoComplete="off"
             />
+            {/* Autocomplete for customer folders */}
+            {atRoot && autocompleteFolders.length > 0 && search.trim().length > 0 && (
+              <ul
+                className="absolute left-0 right-0 top-full mt-1 z-40 max-h-64 overflow-y-auto rounded-xl border shadow-xl py-1"
+                style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)))' }}
+              >
+                {autocompleteFolders.map((fol) => (
+                  <li key={fol.phone}>
+                    <button
+                      type="button"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                      onClick={() => {
+                        openFolder(fol.phone);
+                        setSearch('');
+                      }}
+                    >
+                      <Folder size={16} weight="fill" className="text-amber-400/90 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{fol.name}</span>
+                        {fol.phone !== '__unassigned__' && fol.name !== fol.phone && (
+                          <span className="block truncate text-[11px] text-[var(--muted-foreground)]">{fol.phone}</span>
+                        )}
+                      </span>
+                      <span className="text-[11px] text-[var(--muted-foreground)]">{fol.count}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           {!atRoot && (
             <div className="flex rounded-lg border overflow-hidden shrink-0" style={{ borderColor: 'var(--border)' }}>
@@ -590,7 +692,9 @@ export default function FileManager() {
           className={`w-52 lg:w-56 shrink-0 border-r overflow-y-auto ${isNarrow ? 'hidden' : 'block'}`}
           style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)) / 0.45)' }}
         >
-          <p className="text-[10px] uppercase tracking-wider text-gray-500 px-3 pt-3 pb-1">Customers</p>
+          <p className="text-[10px] uppercase tracking-wider text-gray-500 px-3 pt-3 pb-1">
+            Customers{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
+          </p>
           <button
             type="button"
             onClick={goRoot}
@@ -598,9 +702,9 @@ export default function FileManager() {
           >
             <FolderOpen size={16} weight={atRoot ? 'fill' : 'regular'} />
             <span className="truncate flex-1">All customers</span>
-            <span className="text-[10px] opacity-60">{files.length}</span>
+            <span className="text-[10px] opacity-60">{totalFolders}</span>
           </button>
-          {folders.map((fol) => (
+          {filteredFolders.map((fol) => (
             <button
               key={fol.phone}
               type="button"
@@ -636,7 +740,7 @@ export default function FileManager() {
             >
               All
             </button>
-            {folders.map((fol) => (
+            {filteredFolders.slice(0, 20).map((fol) => (
               <button
                 key={fol.phone}
                 type="button"
@@ -656,36 +760,42 @@ export default function FileManager() {
             </div>
           )}
 
-          {/* ROOT: customer folders */}
+          {/* ROOT: customer folders (capped — search for the rest) */}
           {!loading && atRoot && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-              {filteredFolders.map((fol) => (
-                <button
-                  key={fol.phone}
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); openFolder(fol.phone); }}
-                  className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-white/5 border border-transparent hover:border-[var(--border)] text-center transition"
-                >
-                  <Folder size={52} weight="fill" className={fol.phone === '__unassigned__' ? 'text-gray-500' : 'text-amber-400/90'} />
-                  <span className="text-xs font-medium truncate w-full">{fol.name}</span>
-                  <span className="text-[10px] text-[var(--muted-foreground)]">
-                    {fol.count} item{fol.count === 1 ? '' : 's'}
-                    {fol.phone !== '__unassigned__' && fol.name !== fol.phone ? '' : fol.phone !== '__unassigned__' ? '' : ''}
-                  </span>
-                  {fol.phone !== '__unassigned__' && (
-                    <span className="text-[10px] text-[var(--muted-foreground)]/70 truncate w-full">{fol.phone}</span>
-                  )}
-                </button>
-              ))}
-              {filteredFolders.length === 0 && (
-                <div className="col-span-full text-center py-16 px-4">
-                  <FolderOpen size={40} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm text-[var(--muted-foreground)]">
-                    {search ? 'No customers match your search.' : 'No files yet. Receive documents on WhatsApp or open a customer and upload.'}
-                  </p>
-                </div>
+            <>
+              {totalFolders > FOLDER_CAP && !search.trim() && (
+                <p className="text-[11px] text-[var(--muted-foreground)] mb-2 px-1">
+                  Showing {FOLDER_CAP} of {totalFolders} customers — type a name or phone to find others.
+                </p>
               )}
-            </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+                {filteredFolders.map((fol) => (
+                  <button
+                    key={fol.phone}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); openFolder(fol.phone); setSearch(''); }}
+                    className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl hover:bg-white/5 border border-transparent hover:border-[var(--border)] text-center transition"
+                  >
+                    <Folder size={44} weight="fill" className={fol.phone === '__unassigned__' ? 'text-gray-500' : 'text-amber-400/90'} />
+                    <span className="text-xs font-medium truncate w-full">{fol.name}</span>
+                    <span className="text-[10px] text-[var(--muted-foreground)]">
+                      {fol.count} item{fol.count === 1 ? '' : 's'}
+                    </span>
+                    {fol.phone !== '__unassigned__' && fol.name !== fol.phone && (
+                      <span className="text-[10px] text-[var(--muted-foreground)]/70 truncate w-full">{fol.phone}</span>
+                    )}
+                  </button>
+                ))}
+                {filteredFolders.length === 0 && (
+                  <div className="col-span-full text-center py-16 px-4">
+                    <FolderOpen size={40} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-sm text-[var(--muted-foreground)]">
+                      {search ? 'No customers match your search.' : 'No files yet. Receive documents on WhatsApp or open a customer and upload.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           {/* INSIDE FOLDER: files */}
@@ -699,12 +809,16 @@ export default function FileManager() {
                     type="button"
                     onClick={(e) => onFileActivate(e, f)}
                     onContextMenu={(e) => onContextMenu(e, f)}
-                    className={`relative flex flex-col items-stretch rounded-xl border p-2 text-left transition ${
+                    onPointerDown={() => onFilePointerDown(f)}
+                    onPointerUp={onFilePointerUpOrCancel}
+                    onPointerLeave={onFilePointerUpOrCancel}
+                    onPointerCancel={onFilePointerUpOrCancel}
+                    className={`relative flex flex-col items-stretch rounded-xl border p-2 text-left transition select-none ${
                       isSel || openingId === f.id
                         ? 'border-[hsl(27_95%_55%)] bg-[hsl(27_95%_55%/0.14)]'
                         : 'border-transparent hover:bg-white/5 hover:border-[var(--border)]'
                     }`}
-                    title={`${displayName(f.fileName)} — click open · Ctrl+click select · Shift+arrows select`}
+                    title={isNarrow ? 'Tap to open · Long-press to select' : 'Click open · Ctrl+click select'}
                   >
                     {isSel && (
                       <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded bg-[hsl(27_95%_55%)] text-white flex items-center justify-center shadow">
@@ -816,10 +930,12 @@ export default function FileManager() {
       >
         <span>
           {atRoot
-            ? `${filteredFolders.length} customer folder(s) · ${files.length} file(s) total`
+            ? `${filteredFolders.length}${totalFolders > FOLDER_CAP && !search.trim() ? `/${totalFolders}` : ''} customers · ${files.length} files`
             : `${visibleFiles.length} item(s) in ${activeFolder?.name || 'folder'}${selectedIds.size ? ` · ${selectedIds.size} selected` : ''}`}
         </span>
-        <span className="hidden sm:inline">Click open · Ctrl+click select · Shift+←/→ extend · Delete removes</span>
+        <span className="hidden sm:inline">
+          {isNarrow ? 'Tap open · Long-press select' : 'Click open · Ctrl+click select · Search finds any customer'}
+        </span>
       </div>
 
       {ctx && (
@@ -874,13 +990,22 @@ export default function FileManager() {
 
       {preview && (
         <div
-          className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col"
+          className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col overscroll-none"
+          style={{ touchAction: 'none' }}
           onClick={closePreview}
+          onWheel={(e) => {
+            // Ctrl+wheel → zoom content only, never the browser page
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              setZoom((z) => Math.min(3, Math.max(0.5, Number((z - e.deltaY * 0.002).toFixed(2)))));
+            }
+          }}
         >
-          {/* Stage — full-bleed photo like Windows Photos */}
+          {/* Stage — full-bleed */}
           <div
             className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            style={{ touchAction: 'none' }}
           >
             {/* Soft vignette behind image */}
             <div
@@ -992,19 +1117,19 @@ export default function FileManager() {
               </div>
             )}
 
-            {/* Photo / PDF — pdf.js on all devices (iframe broken on many phones) */}
-            <div className="relative z-[5] w-full h-full max-w-[1100px] flex items-center justify-center px-11 sm:px-16 pb-2">
+            {/* Photo / PDF — fill the stage (not half-screen) */}
+            <div className="absolute inset-0 z-[5] flex items-center justify-center px-10 sm:px-14 pt-12 pb-16 sm:pb-20 overflow-hidden">
               {preview.kind === 'image' ? (
                 <img
                   src={preview.url}
                   alt={preview.file.fileName}
-                  className="max-w-full max-h-[calc(100dvh-10rem)] sm:max-h-[calc(100vh-11rem)] object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-200"
-                  style={{ transform: `scale(${zoom})` }}
+                  className="max-w-full max-h-full object-contain rounded-md shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
+                  style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
                   draggable={false}
                 />
               ) : (
-                <div className="w-full h-[calc(100dvh-10rem)] sm:h-[calc(100vh-11rem)] max-w-[900px]">
-                  <PdfViewer url={preview.url} />
+                <div className="w-full h-full max-w-5xl">
+                  <PdfViewer url={preview.url} zoom={zoom} />
                 </div>
               )}
             </div>
@@ -1014,6 +1139,7 @@ export default function FileManager() {
               <div className="px-3 py-1 rounded-full bg-white/95 text-[11px] sm:text-[12px] font-medium text-black shadow-lg max-w-[80vw] truncate">
                 {displayName(preview.file.fileName)}
                 {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
+                {zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : ''}
               </div>
             </div>
           </div>
