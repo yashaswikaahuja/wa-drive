@@ -18,7 +18,7 @@ import {
   applyTone, compositeOnColor, downloadBlob,
   encodeJpegToKb, flipCanvas, loadImageFromFile, rotateCanvas, type ToneAdjust,
 } from './imageOps';
-import { buildPassportSheet, type PaperId } from './printSheetBuild';
+import EditablePrintCanvas from './EditablePrintCanvas';
 
 export default function PassportEditor() {
   const [params] = useSearchParams();
@@ -42,10 +42,6 @@ export default function PassportEditor() {
   const [bgVia, setBgVia] = useState<'server' | 'client' | null>(null);
   const [editMode, setEditMode] = useState<'photo' | 'signature'>('photo');
   const [showPrint, setShowPrint] = useState(false);
-  const [printCount, setPrintCount] = useState(8);
-  const [printPaper, setPrintPaper] = useState<PaperId>('4x6');
-  const [sheetUrl, setSheetUrl] = useState<string | null>(null);
-  const [sheetBusy, setSheetBusy] = useState(false);
 
   const preset = useMemo(() => {
     if (editMode === 'signature') {
@@ -206,19 +202,26 @@ export default function PassportEditor() {
     toast.success(editMode === 'signature' ? 'Signature framed' : 'Face framed');
   };
 
-  const makeSheet = async (n = printCount, paper = printPaper) => {
-    if (!framedCanvas) { toast.error('Frame the photo first'); return; }
-    setSheetBusy(true);
+  const handlePrintBlob = async (blob: Blob) => {
+    await printBlob(blob);
+  };
+
+  const handleSaveSheet = async (blob: Blob) => {
+    if (!phone.trim()) { toast.error('Enter customer phone before saving sheet'); return; }
+    setBusy('Saving sheet…');
     try {
-      const blob = await buildPassportSheet(framedCanvas, n, paper);
-      if (sheetUrl) URL.revokeObjectURL(sheetUrl);
-      setSheetUrl(URL.createObjectURL(blob));
-      setShowPrint(true);
-      toast.success(`${n} copies on ${paper === 'a4' ? 'A4' : '4×6'}`);
+      const fd = new FormData();
+      fd.append('file', blob, `sheet_${phone.trim()}.jpg`);
+      fd.append('phone', phone.trim());
+      fd.append('personName', personName || '');
+      fd.append('source', 'photo-editor');
+      fd.append('sourceMetadata', JSON.stringify({ type: 'print-sheet' }));
+      await api.post('/customers/upload', fd);
+      toast.success('Sheet saved to Drive');
     } catch (e: any) {
-      toast.error(e.message || 'Sheet failed');
+      toast.error(e.response?.data?.error || e.message || 'Save failed');
     } finally {
-      setSheetBusy(false);
+      setBusy(null);
     }
   };
 
@@ -436,33 +439,16 @@ export default function PassportEditor() {
         {framedCanvas && editMode === 'photo' && (
           <div className="card space-y-2">
             <p className="text-[11px] uppercase tracking-wider text-gray-500">Print sheet (same session)</p>
-            <div className="flex items-center gap-2">
-              <button type="button" className="btn-secondary px-3" onClick={() => { const n = Math.max(1, printCount - 1); setPrintCount(n); if (showPrint) void makeSheet(n, printPaper); }}>−</button>
-              <input type="number" min={1} max={100} value={printCount} className="input-field text-sm text-center flex-1"
-                onChange={(e) => setPrintCount(Math.max(1, Math.min(100, +e.target.value || 1)))} />
-              <button type="button" className="btn-secondary px-3" onClick={() => { const n = Math.min(100, printCount + 1); setPrintCount(n); if (showPrint) void makeSheet(n, printPaper); }}>+</button>
-            </div>
-            <div className="flex gap-1">
-              {([
-                ['4x6', '4×6'],
-                ['a4', 'A4'],
-              ] as const).map(([id, label]) => (
-                <button key={id} type="button" className="flex-1 text-xs rounded-lg py-2 border"
-                  style={{ borderColor: printPaper === id ? 'hsl(27 95% 55%)' : 'var(--border)', background: printPaper === id ? 'hsl(27 95% 55% / 0.12)' : 'transparent' }}
-                  onClick={() => { setPrintPaper(id); if (showPrint) void makeSheet(printCount, id); }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-2.5" disabled={sheetBusy} onClick={() => void makeSheet()}>
-              <Printer size={16} /> {sheetBusy ? 'Building…' : `Make ${printCount}-up sheet`}
+            <button
+              type="button"
+              className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-2.5"
+              onClick={() => setShowPrint(true)}
+            >
+              <Printer size={16} /> Open print canvas
             </button>
-            {sheetUrl && (
-              <div className="flex gap-2">
-                <button type="button" className="btn-primary flex-1 text-xs py-2" onClick={async () => printBlob(await (await fetch(sheetUrl)).blob())}>Print</button>
-                <button type="button" className="btn-secondary flex-1 text-xs py-2" onClick={async () => downloadBlob(await (await fetch(sheetUrl)).blob(), `sheet_x${printCount}.jpg`)}>Download sheet</button>
-              </div>
-            )}
+            <p className="text-[10px] text-[var(--muted-foreground)]">
+              Drag / add / remove cells · free copy count · mixed photos
+            </p>
           </div>
         )}
 
@@ -485,8 +471,18 @@ export default function PassportEditor() {
       </div>
 
       <div className="flex-1 min-h-[320px] card flex items-center justify-center bg-[var(--card)] relative overflow-auto">
-        {showPrint && sheetUrl ? (
-          <img src={sheetUrl} alt="Print sheet" className="max-h-full max-w-full object-contain rounded shadow-lg" />
+        {showPrint && framedCanvas ? (
+          <div className="w-full h-full p-2 flex flex-col">
+            <button type="button" className="absolute top-3 left-3 z-10 text-xs btn-secondary py-1 px-2" onClick={() => setShowPrint(false)}>
+              ← Photo
+            </button>
+            <EditablePrintCanvas
+              primary={framedCanvas}
+              initCount={8}
+              onPrint={handlePrintBlob}
+              onSave={handleSaveSheet}
+            />
+          </div>
         ) : previewUrl ? (
           <img
             src={previewUrl}
@@ -508,11 +504,6 @@ export default function PassportEditor() {
           <span className="absolute top-3 right-3 text-[10px] uppercase tracking-wider bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-full">
             {editMode === 'signature' ? 'Sign ready' : 'Portal ready'}
           </span>
-        )}
-        {showPrint && sheetUrl && (
-          <button type="button" className="absolute top-3 left-3 text-xs btn-secondary py-1 px-2" onClick={() => setShowPrint(false)}>
-            ← Photo
-          </button>
         )}
       </div>
 
