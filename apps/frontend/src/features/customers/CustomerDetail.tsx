@@ -87,12 +87,12 @@ export default function CustomerDetail() {
       setNotFound(!h);
       if (h && h.persons.length > 0) {
         // Prefer ?person= from Customers list (so searching Shubham opens Shubham, not Kamaljeet).
-        const fromQuery = personFromQuery && h.persons.some((p) => p.id === personFromQuery)
+        const fromQuery = personFromQuery && h.persons.some((p: Person) => p.id === personFromQuery)
           ? personFromQuery
           : null;
         setSelectedPerson((prev) => {
           if (fromQuery) return fromQuery;
-          if (prev && h.persons.some((p) => p.id === prev)) return prev;
+          if (prev && h.persons.some((p: Person) => p.id === prev)) return prev;
           return h.persons[0].id;
         });
       }

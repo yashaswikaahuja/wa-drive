@@ -5,10 +5,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FolderOpen, Folder, MagnifyingGlass, UploadSimple, ArrowsClockwise,
-  File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, X,
-  SquaresFour, ListBullets, DownloadSimple, Trash, Camera, SpinnerGap,
-  ArrowLeft, ArrowRight, ArrowBendUpLeft, MagnifyingGlassPlus, DotsThree,
-  PencilSimple, CheckSquare,
+  File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, SquaresFour,
+  ListBullets, DownloadSimple, Trash, Camera, SpinnerGap, ArrowBendUpLeft,
+  MagnifyingGlassPlus, DotsThree, PencilSimple, CheckSquare,
 } from '@phosphor-icons/react';
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
