@@ -14,6 +14,7 @@ import { printBlob } from '../../shared/fileCache';
 import { BG_PRESETS, PORTAL_PRESETS, type BgPresetId } from './bgPresets';
 import AspectCropModal from './AspectCropModal';
 import { removeBackgroundSmart } from './removeBg';
+import DrivePicker from '../photo-tool/DrivePicker';
 import {
   applyTone, compositeOnColor, downloadBlob,
   encodeJpegToKb, flipCanvas, loadImageFromFile, rotateCanvas, type ToneAdjust,
@@ -42,6 +43,30 @@ export default function PassportEditor() {
   const [bgVia, setBgVia] = useState<'server' | 'client' | null>(null);
   const [editMode, setEditMode] = useState<'photo' | 'signature'>('photo');
   const [showPrint, setShowPrint] = useState(false);
+  const [drivePickerOpen, setDrivePickerOpen] = useState(false);
+  const driveResolveRef = useRef<((c: HTMLCanvasElement | null) => void) | null>(null);
+
+  const onPickDriveForCanvas = (): Promise<HTMLCanvasElement | null> =>
+    new Promise((resolve) => {
+      driveResolveRef.current = resolve;
+      setDrivePickerOpen(true);
+    });
+
+  const onDrivePickFile = async (file: File) => {
+    setDrivePickerOpen(false);
+    try {
+      const img = await loadImageFromFile(file);
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth || img.width;
+      c.height = img.naturalHeight || img.height;
+      c.getContext('2d')!.drawImage(img, 0, 0);
+      driveResolveRef.current?.(c);
+    } catch {
+      driveResolveRef.current?.(null);
+    } finally {
+      driveResolveRef.current = null;
+    }
+  };
 
   const preset = useMemo(() => {
     if (editMode === 'signature') {
@@ -481,6 +506,7 @@ export default function PassportEditor() {
               initCount={8}
               onPrint={handlePrintBlob}
               onSave={handleSaveSheet}
+              onPickDrive={onPickDriveForCanvas}
             />
           </div>
         ) : previewUrl ? (
@@ -515,6 +541,12 @@ export default function PassportEditor() {
         targetH={preset.height}
         onApply={onFrameApply}
         onClose={() => setCropOpen(false)}
+      />
+
+      <DrivePicker
+        open={drivePickerOpen}
+        onClose={() => { setDrivePickerOpen(false); driveResolveRef.current?.(null); driveResolveRef.current = null; }}
+        onPick={onDrivePickFile}
       />
     </div>
   );
