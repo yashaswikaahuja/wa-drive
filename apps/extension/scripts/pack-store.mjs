@@ -32,6 +32,7 @@ const INCLUDE = [
   'popup.html',
   'popup.js',
   'icon.png',
+  'icons',
   'knowledge-sync.js',
   'drivers-bundle.js',
   'shared-bundle.js',
