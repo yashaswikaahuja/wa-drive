@@ -64,24 +64,36 @@ for (const name of INCLUDE) {
   cpSync(src, join(stageDir, name), { recursive: true });
 }
 
-// ZIP via PowerShell Compress-Archive (Windows) — paths relative so manifest is at zip root
+// ZIP with Python zipfile — uses POSIX "/" separators.
+// Windows PowerShell Compress-Archive writes "\\" paths which Chrome Web Store
+// (Linux) rejects as: "Invalid package … manifest.json is at the root".
 const zipPath = join(outDir, zipName);
 if (existsSync(zipPath)) rmSync(zipPath, { force: true });
 
-const ps = spawnSync(
-  'powershell.exe',
-  [
-    '-NoProfile',
-    '-Command',
-    `Compress-Archive -Path '${stageDir}\\*' -DestinationPath '${zipPath}' -Force`,
-  ],
-  { encoding: 'utf8' },
-);
-if (ps.status !== 0) {
-  console.error(ps.stderr || ps.stdout);
+const py = `
+import os, zipfile
+root = r'''${stageDir}'''
+out = r'''${zipPath}'''
+with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+    for dirpath, _, files in os.walk(root):
+        for name in files:
+            full = os.path.join(dirpath, name)
+            arc = os.path.relpath(full, root).replace('\\\\', '/')
+            zf.write(full, arcname=arc)
+# sanity: manifest must be at zip root with forward slashes only
+with zipfile.ZipFile(out) as zf:
+    names = zf.namelist()
+    assert 'manifest.json' in names, names[:20]
+    bad = [n for n in names if '\\\\' in n]
+    assert not bad, bad
+print('entries', len(names))
+`;
+const zipRun = spawnSync('python', ['-c', py], { encoding: 'utf8' });
+if (zipRun.status !== 0) {
+  console.error(zipRun.stderr || zipRun.stdout);
   process.exit(1);
 }
-console.log(`[pack] ZIP  → ${zipPath}`);
+console.log(`[pack] ZIP  → ${zipPath} (${(zipRun.stdout || '').trim()})`);
 
 // CRX via Chrome --pack-extension + existing PEM (keeps same extension ID)
 const chrome = findChrome();
