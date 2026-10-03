@@ -115,6 +115,16 @@ router.get('/status', authMiddleware, async (req: any, res) => {
   try {
     const r = await fetch(base + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
+    let lastUploadAt: string | null = null;
+    try {
+      const upload = await pool.query(
+        'SELECT max(uploaded_at) AS last_upload_at FROM drive_files WHERE workspace_id = $1 AND source = \'whatsapp\'',
+        [wsId],
+      );
+      lastUploadAt = upload.rows[0]?.last_upload_at?.toISOString?.() || upload.rows[0]?.last_upload_at || null;
+    } catch {
+      // Observability must never make the connection-status endpoint fail.
+    }
     // Update cache: only refresh timestamp when worker returns a DIFFERENT QR
     if (data?.qr) {
       if (data.qr !== before.qr) {
@@ -145,6 +155,10 @@ router.get('/status', authMiddleware, async (req: any, res) => {
       status: data.status || 'unknown',
       phone: data.phone || null,
       qr: data.qr || before.qr || null,
+      lastUploadAt,
+      reconnectAttempts: data.reconnectAttempts || 0,
+      lastDisconnectReason: data.lastDisconnectReason || null,
+      lastDisconnectAt: data.lastDisconnectAt || null,
     });
   } catch {
     res.json({ connected: false, status: 'service_down', qr: before.qr || null });
@@ -227,35 +241,13 @@ router.post('/instance-heartbeat', async (req, res) => {
   res.json({ ok: true });
 });
 
-// Instance heartbeat (whatsapp-service → hub). Drives the sticky-shard health check:
-// an instance that stops heartbeating (off the tailnet) is treated as dead → its workspaces fail over.
-router.post('/instance-heartbeat', async (req, res) => {
-  const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
-  if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
-  const { instance, mem_pct, sessions, accepting } = req.body || {};
-  if (!instance) return res.status(400).json({ error: 'instance required' });
-  try {
-    await pool.query(
-      `INSERT INTO wa_instances(instance, last_seen, status, mem_pct, sessions, accepting)
-       VALUES($1, now(), 'up', COALESCE($2,0), COALESCE($3,0), COALESCE($4,true))
-       ON CONFLICT (instance) DO UPDATE SET
-         last_seen = now(), status = 'up',
-         mem_pct   = COALESCE(EXCLUDED.mem_pct, wa_instances.mem_pct),
-         sessions  = COALESCE(EXCLUDED.sessions, wa_instances.sessions),
-         accepting = COALESCE(EXCLUDED.accepting, wa_instances.accepting)`,
-      [instance, mem_pct ?? null, sessions ?? null, accepting ?? null]
-    );
-  } catch { /* health table absent → ignore (single-instance mode) */ }
-  res.json({ ok: true });
-});
-
 // Worker event relay (WhatsApp service → hub).
 // QR is cached only — frontend polls /status to retrieve it (no socket.io).
 // Other events (connected/disconnected) still emit via socket for UI quickness.
 router.post('/event', async (req, res) => {
   const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
   if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
-  const { workspaceId, event, qr, phone } = req.body;
+  const { workspaceId, event, qr, phone, reason, attempt, desynced } = req.body;
   if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
   const io = getIO();
   if (event === 'qr') {
@@ -278,6 +270,18 @@ router.post('/event', async (req, res) => {
         .catch(() => {});
       logActivity(workspaceId, 'whatsapp.connected', { phone });
     }
+  } else if (event === 'reauth_required') {
+    io.to(workspaceId).emit('connection:status', {
+      connected: false,
+      status: 'reauth_required',
+      workspaceId,
+    });
+    console.warn(`[Hub] WhatsApp re-auth required (${workspaceId.slice(0, 8)}) reason=${reason || 'unknown'} attempt=${attempt || 0}`);
+    logActivity(workspaceId, 'whatsapp.reauth_required', {
+      reason: reason || null,
+      attempt: attempt || 0,
+      desynced: !!desynced,
+    });
   } else if (event === 'disconnected') {
     io.to(workspaceId).emit('connection:status', { connected: false, workspaceId });
     console.log(`[Hub] Disconnected (${workspaceId.slice(0, 8)})`);
