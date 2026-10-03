@@ -162,6 +162,11 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       shouldSyncHistoryMessage: () => true,
     });
 
+    const prior = sessions.get(workspaceId);
+    if (prior?.reconnectTimer) {
+      clearTimeout(prior.reconnectTimer);
+      prior.reconnectTimer = null;
+    }
     const session = {
       socket: sock,
       qr: null,
@@ -169,6 +174,14 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       phone: null,
       contacts: new Map(),
       workspaceId,
+      // Preserve across reconnects so the 3-attempt re-auth cap can accumulate.
+      // Reset only on successful open (below) or after an auth wipe.
+      reconnectAttempts: prior?.reconnectAttempts || 0,
+      reconnectTimer: null,
+      lastDisconnectReason: prior?.lastDisconnectReason || null,
+      lastDisconnectAt: prior?.lastDisconnectAt || null,
+      lastUploadAt: prior?.lastUploadAt || null,
+      stopping: false,
     };
     sessions.set(workspaceId, session);
     await loadPersistedContacts(session, workspaceId);
@@ -189,7 +202,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       }
     });
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
@@ -203,6 +216,12 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         session.status = 'connected';
         session.qr = null;
         session.phone = sock.user?.id?.split(':')[0] || null;
+        session.reconnectAttempts = 0;
+        session.lastDisconnectReason = null;
+        if (session.reconnectTimer) {
+          clearTimeout(session.reconnectTimer);
+          session.reconnectTimer = null;
+        }
         console.log(`[WA:${workspaceId.slice(0, 8)}] Connected as ${session.phone}`);
         sock.sendPresenceUpdate('unavailable').catch(() => {});
         // Force address-book / app-state sync so contacts.upsert gets saved names.
@@ -227,19 +246,61 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       }
 
       if (connection === 'close') {
-        const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+        const disconnectError = lastDisconnect?.error;
+        const reason = new Boom(disconnectError)?.output?.statusCode;
+        const errorMessage = String(disconnectError?.message || disconnectError || '');
         const loggedOut = reason === DisconnectReason.loggedOut;
-        session.status = loggedOut ? 'logged_out' : 'disconnected';
+        const desynced = /over 2000 messages into the future|sessionerror|signal.*desync|desync/i.test(errorMessage);
+        const nextAttempt = session.reconnectAttempts + 1;
+        const reauthRequired = !loggedOut && (desynced || nextAttempt >= 3);
+
+        session.reconnectAttempts = nextAttempt;
+        session.lastDisconnectReason = reason || errorMessage || 'unknown';
+        session.lastDisconnectAt = new Date().toISOString();
+        session.status = loggedOut || reauthRequired ? 'logged_out' : 'disconnected';
         session.socket = null;
-        console.log(`[WA:${workspaceId.slice(0, 8)}] Disconnected: ${reason} loggedOut=${loggedOut}`);
-        notifyParent(workspaceId, 'disconnected', { loggedOut });
+
+        // Intentional stop / force-restart: no reconnect or parent notify.
+        // Auth wipe for logout is owned by stopSession so force end() does not wipe.
+        if (session.stopping) {
+          session.status = 'disconnected';
+          return;
+        }
+
+        console.log(
+          `[WA:${workspaceId.slice(0, 8)}] Disconnected: ${reason} loggedOut=${loggedOut}` +
+            ` attempt=${nextAttempt} desynced=${desynced} reauth=${reauthRequired}`,
+        );
+        notifyParent(workspaceId, reauthRequired ? 'reauth_required' : 'disconnected', {
+          loggedOut,
+          reason: reason || null,
+          attempt: nextAttempt,
+          desynced,
+        });
         broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
 
-        if (loggedOut) {
-          if (pgPool) clearPostgresAuthState(pgPool, workspaceId).catch(() => {});
-          else fs.rmSync(sessionDir, { recursive: true, force: true });
-        } else {
-          setTimeout(() => startSession(workspaceId), 5000);
+        if (loggedOut || reauthRequired) {
+          try {
+            if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
+            else fs.rmSync(sessionDir, { recursive: true, force: true });
+          } catch (e) {
+            console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth:`, e.message);
+          }
+          session.reconnectAttempts = 0;
+          session.status = 'qr_pending';
+        }
+
+        const delay = reauthRequired || loggedOut
+          ? 1000
+          : Math.min(5000 * 2 ** Math.max(0, nextAttempt - 1), 30000);
+
+        if (!session.reconnectTimer) {
+          session.reconnectTimer = setTimeout(() => {
+            session.reconnectTimer = null;
+            startSession(workspaceId).catch((e) =>
+              console.error(`[WA:${workspaceId.slice(0, 8)}] Reconnect failed:`, e.message),
+            );
+          }, delay);
         }
       }
     });
@@ -338,6 +399,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           const fileName = `${phone}_${Date.now()}_file.${ext}`;
 
           await uploadToParent(workspaceId, buffer, fileName, phone, pushName, profilePicUrl);
+          session.lastUploadAt = new Date().toISOString();
           console.log(`[WA:${workspaceId.slice(0, 8)}] Uploaded ${fileName} from ${pushName}`);
         } catch (e) {
           console.error(`[WA:${workspaceId.slice(0, 8)}] Media error:`, e.message);
@@ -348,10 +410,24 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
 
   async function stopSession(workspaceId) {
     const session = sessions.get(workspaceId);
+    const sessionDir = path.join(AUTH_DIR, workspaceId);
     if (session?.socket) {
+      session.stopping = true;
       await session.socket.logout().catch(() => {});
       session.socket = null;
       session.status = 'disconnected';
+    }
+    if (session?.reconnectTimer) {
+      clearTimeout(session.reconnectTimer);
+      session.reconnectTimer = null;
+    }
+    // Wipe auth on intentional stop so a later start cannot reload logged-out keys.
+    // (close handler returns early when stopping=true, so wipe lives here.)
+    try {
+      if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
+      else fs.rmSync(sessionDir, { recursive: true, force: true });
+    } catch (e) {
+      console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth on stop:`, e.message);
     }
     sessions.delete(workspaceId);
   }

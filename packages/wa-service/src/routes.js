@@ -15,6 +15,8 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
     if (force) {
       const existing = sessions.get(workspaceId);
       if (existing?.socket) {
+        existing.stopping = true;
+        if (existing.reconnectTimer) clearTimeout(existing.reconnectTimer);
         console.log(`[WA:${workspaceId.slice(0, 8)}] Force restart — tearing down existing socket`);
         try {
           existing.socket.end();
@@ -30,6 +32,7 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
 
   app.post('/sessions/stop', authMiddleware, async (req, res) => {
     const { workspaceId } = req.body;
+    if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
     await stopSession(workspaceId);
     res.json({ ok: true });
   });
@@ -42,6 +45,10 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
       status: session.status,
       phone: session.phone,
       qr: session.qr,
+      reconnectAttempts: session.reconnectAttempts || 0,
+      lastDisconnectReason: session.lastDisconnectReason || null,
+      lastDisconnectAt: session.lastDisconnectAt || null,
+      lastUploadAt: session.lastUploadAt || null,
     });
   });
 
