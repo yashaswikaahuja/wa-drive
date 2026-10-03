@@ -1,0 +1,37 @@
+name: AWS MVP debug logs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump WA + backend logs
+        env:
+          SSH_KEY: ${{ secrets.AWS_MVP_SSH_KEY }}
+          HOST: ubuntu@44.219.62.198
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/aws.pem
+          chmod 600 ~/.ssh/aws.pem
+          ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          cd /opt/cybercontrol-docker
+          echo "=== compose ps ==="
+          docker compose ps
+          echo "=== WA logs (tail 250) ==="
+          docker compose logs --tail=250 whatsapp-service 2>&1 | tail -n 250
+          echo "=== backend filtered logs ==="
+          docker compose logs --tail=400 backend 2>&1 | grep -E "Upload|DB:|Media|Drive|worker|whatsapp|Not connected|error|Error|warn|✓|✗" | tail -n 200 || true
+          echo "=== recent drive_files ==="
+          # Prefer compose env user; fall back.
+          set +e
+          docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT left(id::text,20) AS id, left(file_name,40) AS file_name, customer_id, source, uploaded_at FROM drive_files ORDER BY uploaded_at DESC NULLS LAST LIMIT 15;"'
+          echo "=== whatsapp-service health ==="
+          docker compose exec -T whatsapp-service sh -c 'wget -qO- http://127.0.0.1:3100/health || curl -fsS http://127.0.0.1:3100/health || true'
+          echo
+          echo "=== backend image id ==="
+          docker compose images backend
+          REMOTE
