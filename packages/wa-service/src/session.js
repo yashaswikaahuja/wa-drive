@@ -162,6 +162,11 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       shouldSyncHistoryMessage: () => true,
     });
 
+    const prior = sessions.get(workspaceId);
+    if (prior?.reconnectTimer) {
+      clearTimeout(prior.reconnectTimer);
+      prior.reconnectTimer = null;
+    }
     const session = {
       socket: sock,
       qr: null,
@@ -169,11 +174,13 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       phone: null,
       contacts: new Map(),
       workspaceId,
-      reconnectAttempts: 0,
+      // Preserve across reconnects so the 3-attempt re-auth cap can accumulate.
+      // Reset only on successful open (below) or after an auth wipe.
+      reconnectAttempts: prior?.reconnectAttempts || 0,
       reconnectTimer: null,
-      lastDisconnectReason: null,
-      lastDisconnectAt: null,
-      lastUploadAt: null,
+      lastDisconnectReason: prior?.lastDisconnectReason || null,
+      lastDisconnectAt: prior?.lastDisconnectAt || null,
+      lastUploadAt: prior?.lastUploadAt || null,
       stopping: false,
     };
     sessions.set(workspaceId, session);
@@ -195,7 +202,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       }
     });
 
-    sock.ev.on('connection.update', (update) => {
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
@@ -253,6 +260,8 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         session.status = loggedOut || reauthRequired ? 'logged_out' : 'disconnected';
         session.socket = null;
 
+        // Intentional stop / force-restart: no reconnect or parent notify.
+        // Auth wipe for logout is owned by stopSession so force end() does not wipe.
         if (session.stopping) {
           session.status = 'disconnected';
           return;
@@ -271,12 +280,11 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
 
         if (loggedOut || reauthRequired) {
-          if (pgPool) {
-            clearPostgresAuthState(pgPool, workspaceId).catch((e) =>
-              console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth:`, e.message),
-            );
-          } else {
-            fs.rmSync(sessionDir, { recursive: true, force: true });
+          try {
+            if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
+            else fs.rmSync(sessionDir, { recursive: true, force: true });
+          } catch (e) {
+            console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth:`, e.message);
           }
           session.reconnectAttempts = 0;
           session.status = 'qr_pending';
@@ -402,13 +410,25 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
 
   async function stopSession(workspaceId) {
     const session = sessions.get(workspaceId);
+    const sessionDir = path.join(AUTH_DIR, workspaceId);
     if (session?.socket) {
       session.stopping = true;
       await session.socket.logout().catch(() => {});
       session.socket = null;
       session.status = 'disconnected';
     }
-    if (session?.reconnectTimer) clearTimeout(session.reconnectTimer);
+    if (session?.reconnectTimer) {
+      clearTimeout(session.reconnectTimer);
+      session.reconnectTimer = null;
+    }
+    // Wipe auth on intentional stop so a later start cannot reload logged-out keys.
+    // (close handler returns early when stopping=true, so wipe lives here.)
+    try {
+      if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
+      else fs.rmSync(sessionDir, { recursive: true, force: true });
+    } catch (e) {
+      console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth on stop:`, e.message);
+    }
     sessions.delete(workspaceId);
   }
 

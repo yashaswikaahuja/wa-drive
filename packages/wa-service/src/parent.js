@@ -55,14 +55,14 @@ export function createParentBridge(config) {
   }
 
   async function resolverFetch(pathname, options = {}) {
-    const attempts = options.attempts || 2;
+    const { attempts = 2, timeoutMs = 8000, ...fetchOpts } = options;
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt++) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), options.timeoutMs || 8000);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const r = await fetch(`${RESOLVER_URL}${pathname}`, {
-          ...options,
+          ...fetchOpts,
           signal: controller.signal,
         });
         if (r.ok || ![502, 503, 504].includes(r.status) || attempt === attempts) return r;

@@ -112,19 +112,19 @@ router.get('/status', authMiddleware, async (req: any, res) => {
   const base = await waBase(wsId);
   // Snapshot cache state BEFORE worker call (we need ageMs for staleness check)
   const before = await getWorkspaceQRWithAge(wsId);
+  let lastUploadAt: string | null = null;
+  try {
+    const upload = await pool.query(
+      'SELECT max(uploaded_at) AS last_upload_at FROM drive_files WHERE workspace_id = $1 AND source = \'whatsapp\'',
+      [wsId],
+    );
+    lastUploadAt = upload.rows[0]?.last_upload_at?.toISOString?.() || upload.rows[0]?.last_upload_at || null;
+  } catch {
+    // Observability must never make the connection-status endpoint fail.
+  }
   try {
     const r = await fetch(base + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
-    let lastUploadAt: string | null = null;
-    try {
-      const upload = await pool.query(
-        'SELECT max(uploaded_at) AS last_upload_at FROM drive_files WHERE workspace_id = $1 AND source = \'whatsapp\'',
-        [wsId],
-      );
-      lastUploadAt = upload.rows[0]?.last_upload_at?.toISOString?.() || upload.rows[0]?.last_upload_at || null;
-    } catch {
-      // Observability must never make the connection-status endpoint fail.
-    }
     // Update cache: only refresh timestamp when worker returns a DIFFERENT QR
     if (data?.qr) {
       if (data.qr !== before.qr) {
@@ -161,7 +161,7 @@ router.get('/status', authMiddleware, async (req: any, res) => {
       lastDisconnectAt: data.lastDisconnectAt || null,
     });
   } catch {
-    res.json({ connected: false, status: 'service_down', qr: before.qr || null });
+    res.json({ connected: false, status: 'service_down', qr: before.qr || null, lastUploadAt });
   }
 });
 
