@@ -54,9 +54,35 @@ export function createParentBridge(config) {
     }
   }
 
+  async function resolverFetch(pathname, options = {}) {
+    const attempts = options.attempts || 2;
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), options.timeoutMs || 8000);
+      try {
+        const r = await fetch(`${RESOLVER_URL}${pathname}`, {
+          ...options,
+          signal: controller.signal,
+        });
+        if (r.ok || ![502, 503, 504].includes(r.status) || attempt === attempts) return r;
+        lastError = new Error(`resolver HTTP ${r.status}`);
+      } catch (e) {
+        lastError = e;
+        if (attempt === attempts) throw e;
+      } finally {
+        clearTimeout(timer);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+    }
+    throw lastError || new Error('resolver request failed');
+  }
+
   async function resolveLid(lidNum) {
-    const r = await fetch(`${RESOLVER_URL}/resolve?lid=${lidNum}`, {
+    const r = await resolverFetch(`/resolve?lid=${encodeURIComponent(lidNum)}`, {
       headers: { 'x-service-secret': WA_SECRET },
+      attempts: 3,
+      timeoutMs: 10000,
     });
     if (!r.ok) {
       const err = new Error(`resolver HTTP ${r.status}`);
@@ -67,8 +93,10 @@ export function createParentBridge(config) {
   }
 
   async function fetchContactName(phone) {
-    const r = await fetch(`${RESOLVER_URL}/contact?phone=${phone}`, {
+    const r = await resolverFetch(`/contact?phone=${encodeURIComponent(phone)}`, {
       headers: { 'x-service-secret': WA_SECRET },
+      attempts: 2,
+      timeoutMs: 8000,
     });
     if (!r.ok) {
       const err = new Error(`resolver HTTP ${r.status}`);
