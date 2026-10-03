@@ -59,7 +59,8 @@ router.get('/funnel', async (req: any, res) => {
       SELECT
         count(*) FILTER (WHERE w.deleted_at IS NULL)                                            AS signed_up,
         count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
-            SELECT 1 FROM whatsapp_numbers wn WHERE wn.workspace_id = w.id))                    AS connected,
+            SELECT 1 FROM whatsapp_numbers wn
+             WHERE wn.workspace_id = w.id AND wn.is_current = true AND wn.disconnected_at IS NULL)) AS connected,
         count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
             SELECT 1 FROM drive_files df WHERE df.workspace_id = w.id))                         AS activated,
         count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(

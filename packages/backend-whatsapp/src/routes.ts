@@ -250,8 +250,18 @@ router.post('/event', async (req, res) => {
   const { workspaceId, event, qr, phone, reason, attempt, desynced } = req.body;
   if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
   const io = getIO();
+  // Owner-panel "Connected" is whatsapp_numbers.disconnected_at IS NULL.
+  // Any non-connected WA lifecycle event must stamp disconnected_at or the panel stays green.
+  const markWhatsAppOffline = () =>
+    pool.query(
+      'UPDATE whatsapp_numbers SET disconnected_at = now() WHERE workspace_id = $1 AND is_current = true AND disconnected_at IS NULL',
+      [workspaceId],
+    ).catch(() => {});
+
   if (event === 'qr') {
     await setWorkspaceQR(workspaceId, qr);
+    // QR means the café is not online — clear the owner-panel connected flag.
+    markWhatsAppOffline();
     console.log(`[Hub] QR cached for workspace ${workspaceId.slice(0, 8)} (qr_len=${qr?.length || 0})`);
   } else if (event === 'connected') {
     await setWorkspaceQR(workspaceId, null);
@@ -276,6 +286,7 @@ router.post('/event', async (req, res) => {
       status: 'reauth_required',
       workspaceId,
     });
+    markWhatsAppOffline();
     console.warn(`[Hub] WhatsApp re-auth required (${workspaceId.slice(0, 8)}) reason=${reason || 'unknown'} attempt=${attempt || 0}`);
     logActivity(workspaceId, 'whatsapp.reauth_required', {
       reason: reason || null,
@@ -286,7 +297,7 @@ router.post('/event', async (req, res) => {
     io.to(workspaceId).emit('connection:status', { connected: false, workspaceId });
     console.log(`[Hub] Disconnected (${workspaceId.slice(0, 8)})`);
     // Mark the current number offline (keeps it as the current number, just disconnected). Best-effort.
-    pool.query('UPDATE whatsapp_numbers SET disconnected_at = now() WHERE workspace_id = $1 AND is_current = true AND disconnected_at IS NULL', [workspaceId]).catch(() => {});
+    markWhatsAppOffline();
     logActivity(workspaceId, 'whatsapp.disconnected');
   }
   res.json({ ok: true });

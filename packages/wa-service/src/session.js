@@ -260,10 +260,17 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         session.status = loggedOut || reauthRequired ? 'logged_out' : 'disconnected';
         session.socket = null;
 
-        // Intentional stop / force-restart: no reconnect or parent notify.
+        // Intentional stop / force-restart: no reconnect scheduling.
+        // Still tell the hub so owner-panel whatsapp_numbers.disconnected_at updates.
         // Auth wipe for logout is owned by stopSession so force end() does not wipe.
         if (session.stopping) {
           session.status = 'disconnected';
+          notifyParent(workspaceId, 'disconnected', {
+            loggedOut,
+            reason: reason || null,
+            intentional: true,
+          });
+          broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
           return;
         }
 
