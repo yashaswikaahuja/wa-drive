@@ -1,15 +1,20 @@
-export function registerRoutes(app, { config, sessions, startSession, stopSession }) {
+export function registerRoutes(app: any, {
+  config,
+  sessions,
+  startSession,
+  stopSession
+}: any) {
   const { SERVICE_SECRET } = config;
 
-  function authMiddleware(req, res, next) {
+  function authMiddleware(req: any, res: any, next: any) {
     const token = req.headers['x-service-secret'];
     if (token !== SERVICE_SECRET) return res.status(401).json({ error: 'Unauthorized' });
     next();
   }
 
-  app.get('/health', (_, res) => res.json({ status: 'ok', sessions: sessions.size }));
+  app.get('/health', (_: any, res: any) => res.json({ status: 'ok', sessions: sessions.size }));
 
-  app.post('/sessions/start', authMiddleware, async (req, res) => {
+  app.post('/sessions/start', authMiddleware, async (req: any, res: any) => {
     const { workspaceId, force } = req.body;
     if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
     if (force) {
@@ -30,14 +35,14 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
     res.json({ ok: true, forced: !!force });
   });
 
-  app.post('/sessions/stop', authMiddleware, async (req, res) => {
+  app.post('/sessions/stop', authMiddleware, async (req: any, res: any) => {
     const { workspaceId } = req.body;
     if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
     await stopSession(workspaceId);
     res.json({ ok: true });
   });
 
-  app.get('/sessions/:workspaceId/status', authMiddleware, (req, res) => {
+  app.get('/sessions/:workspaceId/status', authMiddleware, (req: any, res: any) => {
     const session = sessions.get(req.params.workspaceId);
     if (!session) return res.json({ connected: false, status: 'none' });
     res.json({
@@ -54,12 +59,12 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
     });
   });
 
-  app.get('/sessions/:workspaceId/qr', authMiddleware, (req, res) => {
+  app.get('/sessions/:workspaceId/qr', authMiddleware, (req: any, res: any) => {
     const session = sessions.get(req.params.workspaceId);
     res.json({ qr: session?.qr || null });
   });
 
-  app.post('/sessions/:workspaceId/send', authMiddleware, async (req, res) => {
+  app.post('/sessions/:workspaceId/send', authMiddleware, async (req: any, res: any) => {
     const session = sessions.get(req.params.workspaceId);
     if (!session?.socket) return res.status(400).json({ error: 'Not connected' });
     const { phone, message } = req.body;
@@ -69,18 +74,19 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
       await session.socket.sendMessage(jid, { text: message });
       res.json({ ok: true });
     } catch (e) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
       res.status(500).json({ error: e.message });
     }
   });
 
-  app.get('/sessions', authMiddleware, (_, res) => {
-    const list = [];
-    sessions.forEach((s, id) => list.push({ workspaceId: id, status: s.status, phone: s.phone }));
+  app.get('/sessions', authMiddleware, (_: any, res: any) => {
+    const list: any = [];
+    sessions.forEach((s: any, id: any) => list.push({ workspaceId: id, status: s.status, phone: s.phone }));
     res.json(list);
   });
 
   // Debug/ops: inspect cafe address-book name for a phone (saved contact-list name only).
-  app.get('/sessions/:workspaceId/contact', authMiddleware, (req, res) => {
+  app.get('/sessions/:workspaceId/contact', authMiddleware, (req: any, res: any) => {
     const session = sessions.get(req.params.workspaceId);
     if (!session) return res.status(404).json({ error: 'session not found' });
     const phone = String(req.query.phone || '').replace(/[^0-9]/g, '');

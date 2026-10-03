@@ -1,6 +1,11 @@
 import { memStats } from './metrics.js';
 
-export function createHeartbeat({ config, sessions, parent, startSession }) {
+export function createHeartbeat({
+  config,
+  sessions,
+  parent,
+  startSession
+}: any) {
   const { WA_INSTANCE_NAME, WA_ACCEPT_THRESHOLD_PCT, HEARTBEAT_MS, pgPool } = config;
   const { sendHeartbeatPayload } = parent;
 
@@ -31,11 +36,11 @@ export function createHeartbeat({ config, sessions, parent, startSession }) {
         `[WhatsApp Service] Resuming ${rows.length} assigned session(s) for ${WA_INSTANCE_NAME}`,
       );
       for (const r of rows) {
-        startSession(r.workspace_id).catch((e) =>
-          console.warn(`[resume] ${r.workspace_id.slice(0, 8)}: ${e.message}`),
+        startSession(r.workspace_id).catch((e: any) => console.warn(`[resume] ${r.workspace_id.slice(0, 8)}: ${e.message}`),
         );
       }
     } catch (e) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
       console.warn(`[WhatsApp Service] resume skipped: ${e.message}`);
     }
   }

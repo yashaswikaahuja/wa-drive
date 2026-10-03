@@ -1,4 +1,4 @@
-export async function downloadMedia(sock, msg) {
+export async function downloadMedia(sock: any, msg: any) {
   const { downloadMediaMessage } = await import('baileys');
   try {
     return await downloadMediaMessage(msg, 'buffer', {});
@@ -8,7 +8,7 @@ export async function downloadMedia(sock, msg) {
   }
 }
 
-export function getExtFromMsg(msg) {
+export function getExtFromMsg(msg: any) {
   const m =
     msg.message?.viewOnceMessage?.message ||
     msg.message?.viewOnceMessageV2?.message ||

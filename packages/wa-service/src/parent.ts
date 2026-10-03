@@ -1,10 +1,10 @@
 /**
  * Parent hub + resolver HTTP helpers.
  */
-export function createParentBridge(config) {
+export function createParentBridge(config: any) {
   const { PARENT_URL, SERVICE_SECRET, WA_SECRET, RESOLVER_URL } = config;
 
-  async function uploadToParent(workspaceId, buffer, fileName, phone, pushName, profilePicUrl) {
+  async function uploadToParent(workspaceId: any, buffer: any, fileName: any, phone: any, pushName: any, profilePicUrl: any) {
     const FormData = (await import('form-data')).default;
     const https = await import('https');
     const http = await import('http');
@@ -39,10 +39,11 @@ export function createParentBridge(config) {
       form.pipe(req);
     });
 
+    // @ts-expect-error TS(2571): Object is of type 'unknown'.
     if (res.status >= 400) throw new Error(`Upload failed: ${res.status} ${res.body.substring(0, 100)}`);
   }
 
-  async function notifyParent(workspaceId, event, data) {
+  async function notifyParent(workspaceId: any, event: any, data: any) {
     try {
       await fetch(`${PARENT_URL}/api/worker/event`, {
         method: 'POST',
@@ -54,7 +55,8 @@ export function createParentBridge(config) {
     }
   }
 
-  async function resolverFetch(pathname, options = {}) {
+  async function resolverFetch(pathname: any, options = {}) {
+    // @ts-expect-error TS(2339): Property 'attempts' does not exist on type '{}'.
     const { attempts = 2, timeoutMs = 8000, ...fetchOpts } = options;
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -78,7 +80,7 @@ export function createParentBridge(config) {
     throw lastError || new Error('resolver request failed');
   }
 
-  async function resolveLid(lidNum) {
+  async function resolveLid(lidNum: any) {
     const r = await resolverFetch(`/resolve?lid=${encodeURIComponent(lidNum)}`, {
       headers: { 'x-service-secret': WA_SECRET },
       attempts: 3,
@@ -86,13 +88,14 @@ export function createParentBridge(config) {
     });
     if (!r.ok) {
       const err = new Error(`resolver HTTP ${r.status}`);
+      // @ts-expect-error TS(2339): Property 'status' does not exist on type 'Error'.
       err.status = r.status;
       throw err;
     }
     return r.json();
   }
 
-  async function fetchContactName(phone) {
+  async function fetchContactName(phone: any) {
     const r = await resolverFetch(`/contact?phone=${encodeURIComponent(phone)}`, {
       headers: { 'x-service-secret': WA_SECRET },
       attempts: 2,
@@ -100,13 +103,14 @@ export function createParentBridge(config) {
     });
     if (!r.ok) {
       const err = new Error(`resolver HTTP ${r.status}`);
+      // @ts-expect-error TS(2339): Property 'status' does not exist on type 'Error'.
       err.status = r.status;
       throw err;
     }
     return r.json();
   }
 
-  async function sendHeartbeatPayload(body) {
+  async function sendHeartbeatPayload(body: any) {
     await fetch(`${PARENT_URL}/api/worker/instance-heartbeat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-worker-secret': SERVICE_SECRET },

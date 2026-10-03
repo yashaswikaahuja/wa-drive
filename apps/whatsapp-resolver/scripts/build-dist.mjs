@@ -15,10 +15,8 @@ const vendorRoot = path.join(distRoot, 'vendor');
 const serviceFiles = ['index.js', 'package.json'];
 const packageNames = ['wa-resolver'];
 
-const copyFilter = (source) => {
-  const name = path.basename(source);
-  return name !== 'node_modules' && name !== 'dist';
-};
+// Include package dist/ (compiled TS). Only skip nested node_modules.
+const copyFilter = (source) => path.basename(source) !== 'node_modules';
 
 fs.rmSync(distRoot, { recursive: true, force: true });
 fs.mkdirSync(vendorRoot, { recursive: true });

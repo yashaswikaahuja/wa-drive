@@ -15,10 +15,8 @@ const vendorRoot = path.join(distRoot, 'vendor');
 const serviceFiles = ['index.js', 'migrate-sessions-to-db.js', 'package.json'];
 const packageNames = ['wa-auth', 'wa-service'];
 
-const copyFilter = (source) => {
-  const name = path.basename(source);
-  return name !== 'node_modules' && name !== 'dist';
-};
+// Include package dist/ (compiled TS). Only skip nested node_modules.
+const copyFilter = (source) => path.basename(source) !== 'node_modules';
 
 fs.rmSync(distRoot, { recursive: true, force: true });
 fs.mkdirSync(vendorRoot, { recursive: true });
@@ -35,6 +33,12 @@ for (const packageName of packageNames) {
   const destination = path.join(vendorRoot, packageName);
   if (!fs.existsSync(source)) {
     throw new Error(`missing workspace package: ${source}`);
+  }
+  // TS packages (e.g. wa-auth) must ship compiled dist/ — Docker runs plain Node 20.
+  const pkgJson = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
+  const main = String(pkgJson.main || '');
+  if (main.startsWith('dist/') && !fs.existsSync(path.join(source, 'dist'))) {
+    throw new Error(`package ${packageName} main=${main} but dist/ is missing — run its build first`);
   }
   fs.cpSync(source, destination, { recursive: true, filter: copyFilter });
 

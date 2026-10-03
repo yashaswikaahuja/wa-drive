@@ -1,9 +1,24 @@
 import pg from 'pg';
+import type { Pool } from 'pg';
+
+export interface WaServiceConfig {
+  PORT: number;
+  PARENT_URL: string;
+  SERVICE_SECRET: string;
+  WA_SECRET: string;
+  AUTH_DIR: string;
+  RESOLVER_URL: string;
+  WA_AUTH_BACKEND: string;
+  WA_INSTANCE_NAME: string;
+  HEARTBEAT_MS: number;
+  WA_ACCEPT_THRESHOLD_PCT: number;
+  pgPool: Pool | null;
+}
 
 /**
  * Load runtime config from environment (HTTP/env contracts stay identical to the old monolith).
  */
-export function loadConfig(env = process.env) {
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): WaServiceConfig {
   const SERVICE_SECRET = env.SERVICE_SECRET || 'wa-service-secret-2024';
   const WA_AUTH_BACKEND = env.WA_AUTH_BACKEND || 'files';
   const DATABASE_URL = env.DATABASE_URL || '';

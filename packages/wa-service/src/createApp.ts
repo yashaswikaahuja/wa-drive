@@ -1,16 +1,31 @@
-import express from 'express';
-import http from 'http';
-import { loadConfig } from './config.js';
+import express, { type Express } from 'express';
+import http, { type Server as HttpServer } from 'http';
+import { loadConfig, type WaServiceConfig } from './config.js';
 import { createParentBridge } from './parent.js';
 import { attachWorkspaceWs } from './ws.js';
 import { createSessionManager } from './session.js';
 import { createHeartbeat } from './heartbeat.js';
 import { registerRoutes } from './routes.js';
 
+export interface WaServiceApp {
+  app: Express;
+  server: HttpServer;
+  config: WaServiceConfig;
+  sessions: Map<string, unknown>;
+  startSession: (workspaceId: string) => Promise<unknown>;
+  stopSession: (workspaceId: string) => Promise<unknown>;
+  start: () => Promise<{
+    app: Express;
+    server: HttpServer;
+    config: WaServiceConfig;
+    sessions: Map<string, unknown>;
+  }>;
+}
+
 /**
  * Build the WhatsApp Baileys service (express + http + ws). Does not listen until start().
  */
-export function createApp(env = process.env) {
+export function createApp(env: NodeJS.ProcessEnv = process.env): WaServiceApp {
   const config = loadConfig(env);
   const parent = createParentBridge(config);
 
@@ -29,7 +44,12 @@ export function createApp(env = process.env) {
   registerRoutes(app, { config, sessions, startSession, stopSession });
 
   function start() {
-    return new Promise((resolve) => {
+    return new Promise<{
+      app: Express;
+      server: HttpServer;
+      config: WaServiceConfig;
+      sessions: Map<string, unknown>;
+    }>((resolve) => {
       server.listen(config.PORT, () => {
         console.log(`[WhatsApp Service] Running on port ${config.PORT}`);
         console.log(`[WhatsApp Service] Parent: ${config.PARENT_URL}`);

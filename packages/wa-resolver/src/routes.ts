@@ -1,11 +1,38 @@
+import type { Express, NextFunction, Request, Response } from 'express';
 import wwebjs from 'whatsapp-web.js';
-const { MessageMedia } = wwebjs;
+import type { ResolverConfig } from './config.js';
+import type { ResolverClient } from './client.js';
 
-export function registerRoutes(app, { config, resolver }) {
+const { MessageMedia } = wwebjs as {
+  MessageMedia: new (type: string, data: string, filename: string) => unknown;
+};
+
+type ResolverApi = {
+  getContactLidAndPhone: (jids: string[]) => Promise<Array<{ pn?: string } | undefined>>;
+  getContactById: (id: string) => Promise<{
+    isMyContact?: boolean;
+    name?: string;
+    pushname?: string;
+    getProfilePicUrl: () => Promise<string | undefined>;
+  }>;
+  getNumberId: (digits: string) => Promise<{ _serialized: string } | null>;
+  sendMessage: (to: string, content: unknown, opts?: object) => Promise<unknown>;
+};
+
+export function registerRoutes(
+  app: Express,
+  {
+    config,
+    resolver,
+  }: {
+    config: ResolverConfig;
+    resolver: ResolverClient;
+  },
+) {
   const { SECRET } = config;
   const { getClient, isReady, getQr } = resolver;
 
-  function auth(req, res, next) {
+  function auth(req: Request, res: Response, next: NextFunction) {
     if (req.headers['x-service-secret'] !== SECRET) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
@@ -14,19 +41,19 @@ export function registerRoutes(app, { config, resolver }) {
 
   app.get('/resolve', auth, async (req, res) => {
     const { lid } = req.query;
-    if (!lid) return res.status(400).json({ error: 'lid required' });
+    if (!lid || typeof lid !== 'string') return res.status(400).json({ error: 'lid required' });
     if (!isReady()) return res.status(503).json({ error: 'Not connected' });
 
     try {
-      const client = getClient();
+      const client = getClient() as ResolverApi;
       const lidJid = lid.includes('@') ? lid : `${lid}@lid`;
       const results = await client.getContactLidAndPhone([lidJid]);
       const result = results?.[0];
       const phone = result?.pn?.replace('@c.us', '').replace('@s.whatsapp.net', '') || null;
 
-      let dpUrl = null;
-      let savedName = null;
-      let pushname = null;
+      let dpUrl: string | null = null;
+      let savedName: string | null = null;
+      let pushname: string | null = null;
       let isMyContact = false;
       try {
         const contact = await client.getContactById(phone ? `${phone}@c.us` : lidJid);
@@ -54,18 +81,19 @@ export function registerRoutes(app, { config, resolver }) {
         dpUrl,
       });
     } catch (e) {
-      console.error('[Resolver] Error:', e.message);
-      res.status(500).json({ error: e.message });
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[Resolver] Error:', msg);
+      res.status(500).json({ error: msg });
     }
   });
 
   app.post('/resolve-bulk', auth, async (req, res) => {
-    const { lids } = req.body;
+    const { lids } = req.body as { lids?: string[] };
     if (!lids?.length) return res.status(400).json({ error: 'lids array required' });
     if (!isReady()) return res.status(503).json({ error: 'Not connected' });
 
     try {
-      const client = getClient();
+      const client = getClient() as ResolverApi;
       const lidJids = lids.map((l) => (l.includes('@') ? l : `${l}@lid`));
       const results = await client.getContactLidAndPhone(lidJids);
       const resolved = lids.map((lid, i) => {
@@ -77,17 +105,18 @@ export function registerRoutes(app, { config, resolver }) {
       });
       res.json({ resolved });
     } catch (e) {
-      res.status(500).json({ error: e.message });
+      const msg = e instanceof Error ? e.message : String(e);
+      res.status(500).json({ error: msg });
     }
   });
 
   app.get('/dp', auth, async (req, res) => {
     const { phone } = req.query;
-    if (!phone) return res.status(400).json({ error: 'phone required' });
+    if (!phone || typeof phone !== 'string') return res.status(400).json({ error: 'phone required' });
     if (!isReady()) return res.status(503).json({ error: 'Not connected' });
 
     try {
-      const contact = await getClient().getContactById(`${phone}@c.us`);
+      const contact = await (getClient() as ResolverApi).getContactById(`${phone}@c.us`);
       const dpUrl = await contact.getProfilePicUrl();
       const name = contact?.name || contact?.pushname || null;
       res.json({ phone, name, dpUrl: dpUrl || null });
@@ -98,16 +127,16 @@ export function registerRoutes(app, { config, resolver }) {
 
   app.get('/contact', auth, async (req, res) => {
     const { phone } = req.query;
-    if (!phone) return res.status(400).json({ error: 'phone required' });
+    if (!phone || typeof phone !== 'string') return res.status(400).json({ error: 'phone required' });
     if (!isReady()) return res.status(503).json({ error: 'Not connected' });
 
     try {
-      const contact = await getClient().getContactById(`${phone}@c.us`);
+      const contact = await (getClient() as ResolverApi).getContactById(`${phone}@c.us`);
       const isMyContact = !!contact?.isMyContact;
       // Address-book name only — never fall back to pushname here.
       const savedName = contact?.name || null;
       const pushname = contact?.pushname || null;
-      let dpUrl = null;
+      let dpUrl: string | null = null;
       try {
         dpUrl = (await contact.getProfilePicUrl()) || null;
       } catch {
@@ -127,7 +156,12 @@ export function registerRoutes(app, { config, resolver }) {
   });
 
   app.post('/send', auth, async (req, res) => {
-    const { phone, message, media, caption } = req.body || {};
+    const { phone, message, media, caption } = (req.body || {}) as {
+      phone?: string;
+      message?: string;
+      media?: string;
+      caption?: string;
+    };
     if (!phone || (!message && !media)) {
       return res.status(400).json({ error: 'phone and message or media required' });
     }
@@ -135,23 +169,25 @@ export function registerRoutes(app, { config, resolver }) {
     try {
       const digits = String(phone).replace(/[^0-9]/g, '');
       if (digits.length < 10) return res.status(400).json({ error: 'invalid phone' });
-      const numberId = await getClient().getNumberId(digits);
+      const client = getClient() as ResolverApi;
+      const numberId = await client.getNumberId(digits);
       if (!numberId) return res.status(422).json({ error: 'number not on WhatsApp' });
       if (media) {
         const m = new MessageMedia('image/png', media, 'cybercontrol.png');
-        await getClient().sendMessage(numberId._serialized, m, caption ? { caption } : {});
+        await client.sendMessage(numberId._serialized, m, caption ? { caption } : {});
       } else {
-        await getClient().sendMessage(numberId._serialized, message);
+        await client.sendMessage(numberId._serialized, message);
       }
       res.json({ ok: true });
     } catch (e) {
-      console.error('[Resolver] send error:', e.message);
-      res.status(500).json({ error: e.message });
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error('[Resolver] send error:', msg);
+      res.status(500).json({ error: msg });
     }
   });
 
-  app.get('/health', (_, res) => res.json({ status: 'ok', connected: isReady() }));
-  app.get('/qr', auth, (_, res) => res.json({ qr: getQr() }));
+  app.get('/health', (_req, res) => res.json({ status: 'ok', connected: isReady() }));
+  app.get('/qr', auth, (_req, res) => res.json({ qr: getQr() }));
 
   app.get('/qr-page', (req, res) => {
     if (req.query.secret !== SECRET) return res.status(401).send('unauthorized');

@@ -2,13 +2,14 @@
  * One-time migration: import existing useMultiFileAuthState file sessions into Postgres,
  * so enabling WA_AUTH_BACKEND=postgres does NOT force a QR re-scan of already-linked accounts.
  *
- * Value encoding matches postgres.js (Baileys BufferJSON form stored as jsonb).
+ * Value encoding matches postgres.ts (Baileys BufferJSON form stored as jsonb).
  * CAVEAT: Baileys sanitizes key filenames (':'->'-', '/'->'__'). We reverse '__'->'/' and
  * split on known type prefixes. Ids containing ':' can't be reversed unambiguously — for any
  * account that does NOT reconnect after the cutover, just re-scan its QR (one-time, safe fallback).
  */
 import fs from 'fs';
 import path from 'path';
+import type { Pool } from 'pg';
 
 // Longest-first so 'sender-key-memory' matches before 'sender-key', etc.
 const TYPES = [
@@ -18,9 +19,9 @@ const TYPES = [
   'sender-key',
   'pre-key',
   'session',
-];
+] as const;
 
-function splitTypeId(base) {
+function splitTypeId(base: string): { type: string; id: string } | null {
   for (const t of TYPES) {
     if (base === t || base.startsWith(t + '-')) {
       return { type: t, id: base.slice(t.length + 1).replace(/__/g, '/') };
@@ -29,7 +30,7 @@ function splitTypeId(base) {
   return null;
 }
 
-async function migrateWorkspace(pool, authDir, wsId) {
+async function migrateWorkspace(pool: Pool, authDir: string, wsId: string) {
   const dir = path.join(authDir, wsId);
   const credsPath = path.join(dir, 'creds.json');
   if (!fs.existsSync(credsPath)) {
@@ -41,7 +42,7 @@ async function migrateWorkspace(pool, authDir, wsId) {
   await pool.query(
     `INSERT INTO wa_auth_creds (workspace_id, creds, updated_at) VALUES ($1, $2, now())
      ON CONFLICT (workspace_id) DO UPDATE SET creds = $2, updated_at = now()`,
-    [wsId, creds]
+    [wsId, creds],
   );
 
   let keys = 0;
@@ -58,26 +59,33 @@ async function migrateWorkspace(pool, authDir, wsId) {
     await pool.query(
       `INSERT INTO wa_auth_keys (workspace_id, key_type, key_id, value) VALUES ($1, $2, $3, $4)
        ON CONFLICT (workspace_id, key_type, key_id) DO UPDATE SET value = $4`,
-      [wsId, parsed.type, parsed.id, value]
+      [wsId, parsed.type, parsed.id, value],
     );
     keys++;
   }
   console.log(`migrated ${wsId}: creds + ${keys} keys${skipped ? ` (${skipped} skipped)` : ''}`);
 }
 
-/**
- * @param {{ pool: import('pg').Pool, authDir?: string }} opts
- */
-export async function migrateFilesToDb({ pool, authDir = process.env.AUTH_DIR || './sessions' }) {
+export async function migrateFilesToDb({
+  pool,
+  authDir = process.env.AUTH_DIR || './sessions',
+}: {
+  pool: Pool;
+  authDir?: string;
+}) {
   const dirs = fs.existsSync(authDir)
-    ? fs.readdirSync(authDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name)
+    ? fs
+        .readdirSync(authDir, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
     : [];
   console.log(`found ${dirs.length} workspace session dir(s) in ${authDir}`);
   for (const wsId of dirs) {
     try {
       await migrateWorkspace(pool, authDir, wsId);
     } catch (e) {
-      console.error(`fail ${wsId}: ${e.message}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`fail ${wsId}: ${msg}`);
     }
   }
   console.log(

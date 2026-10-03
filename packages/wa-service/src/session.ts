@@ -7,7 +7,7 @@ import {
   fetchLatestBaileysVersion,
 } from 'baileys';
 import { Boom } from '@hapi/boom';
-import pino from 'pino';
+import { pino } from 'pino';
 import { usePostgresAuthState, clearPostgresAuthState } from '@cybercontrol/wa-auth';
 import { downloadMedia, getExtFromMsg } from './media.js';
 
@@ -19,10 +19,10 @@ const DESYNC_WINDOW_MS = 60_000;
 const DESYNC_HIT_THRESHOLD = 5;
 const MEDIA_FAIL_THRESHOLD = 5;
 
-function createDesyncTracker(onThreshold) {
-  const hits = [];
+function createDesyncTracker(onThreshold: any) {
+  const hits: any = [];
   return {
-    note(text) {
+    note(text: any) {
       if (!DESYNC_RE.test(String(text || ''))) return false;
       const now = Date.now();
       while (hits.length && now - hits[0] > DESYNC_WINDOW_MS) hits.shift();
@@ -41,11 +41,11 @@ function createDesyncTracker(onThreshold) {
 }
 
 /** Baileys logger that stays quiet but watches decrypt/session errors. */
-function createBaileysLogger(tracker) {
-  const intercept = (args) => {
+function createBaileysLogger(tracker: any) {
+  const intercept = (args: any) => {
     try {
       const text = (args || [])
-        .map((a) => {
+        .map((a: any) => {
           if (!a) return '';
           if (typeof a === 'string') return a;
           if (a instanceof Error) return a.message;
@@ -65,7 +65,7 @@ function createBaileysLogger(tracker) {
   return pino({
     level: 'error',
     hooks: {
-      logMethod(inputArgs) {
+      logMethod(inputArgs: unknown[]) {
         intercept(inputArgs);
       },
     },
@@ -79,12 +79,17 @@ function createBaileysLogger(tracker) {
  *   broadcastToWs: (workspaceId: string, data: object) => void,
  * }} deps
  */
-export function createSessionManager({ config, parent, broadcastToWs }) {
+export function createSessionManager({
+  config,
+  parent,
+  broadcastToWs
+}: any) {
   const sessions = new Map();
   const { AUTH_DIR, pgPool } = config;
   const { uploadToParent, notifyParent, resolveLid, fetchContactName } = parent;
 
   async function ensureContactsTable() {
+    // @ts-expect-error TS(2339): Property '_done' does not exist on type '() => Pro... Remove this comment to see the full error message
     if (!pgPool || ensureContactsTable._done) return;
     try {
       await pgPool.query(`
@@ -95,13 +100,15 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           PRIMARY KEY (workspace_id, phone)
         )`);
+      // @ts-expect-error TS(2339): Property '_done' does not exist on type '() => Pro... Remove this comment to see the full error message
       ensureContactsTable._done = true;
     } catch (e) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
       console.warn('[WA] workspace_wa_contacts ensure failed:', e.message);
     }
   }
 
-  async function persistContactName(workspaceId, phone, name) {
+  async function persistContactName(workspaceId: any, phone: any, name: any) {
     if (!pgPool || !workspaceId || !phone || !name) return;
     const pn = String(phone).replace(/[^0-9]/g, '');
     if (pn.length < 8) return;
@@ -116,11 +123,12 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         [workspaceId, pn, name],
       );
     } catch (e) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
       console.warn('[WA] persist contact failed:', e.message);
     }
   }
 
-  async function loadPersistedContacts(session, workspaceId) {
+  async function loadPersistedContacts(session: any, workspaceId: any) {
     if (!pgPool || !workspaceId) return;
     try {
       await ensureContactsTable();
@@ -135,11 +143,12 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         console.log(`[WA:${workspaceId.slice(0, 8)}] Loaded ${r.rows.length} saved contact-list names from DB`);
       }
     } catch (e) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
       console.warn('[WA] load contacts failed:', e.message);
     }
   }
 
-  function indexContact(session, contact, workspaceId) {
+  function indexContact(session: any, contact: any, workspaceId: any) {
     if (!contact?.id) return;
     const id = String(contact.id);
     const phone =
@@ -168,7 +177,11 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
     if (savedName && phone) persistContactName(workspaceId, phone, savedName);
   }
 
-  async function lookupLocalContact(session, { phone, senderJid, workspaceId }) {
+  async function lookupLocalContact(session: any, {
+    phone,
+    senderJid,
+    workspaceId
+  }: any) {
     if (!session?.contacts) return null;
     const mem =
       (phone && session.contacts.get(`pn:${phone}`)) ||
@@ -195,7 +208,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
     return mem;
   }
 
-  async function startSession(workspaceId) {
+  async function startSession(workspaceId: any) {
     if (sessions.has(workspaceId) && sessions.get(workspaceId).socket) {
       console.log(`[WA:${workspaceId.slice(0, 8)}] Session already active`);
       return;
@@ -239,13 +252,13 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       desyncReauthDone: false,
     };
 
-    const desyncTracker = createDesyncTracker((reason) => {
+    const desyncTracker = createDesyncTracker((reason: any) => {
       forceReauthWhileConnected(reason).catch((e) =>
         console.error(`[WA:${workspaceId.slice(0, 8)}] Desync re-auth failed:`, e.message),
       );
     });
 
-    async function forceReauthWhileConnected(reason) {
+    async function forceReauthWhileConnected(reason: any) {
       if (!session || session.forcingReauth || session.stopping || session.desyncReauthDone) return;
       if (session.status !== 'connected' && session.status !== 'connecting') return;
       session.forcingReauth = true;
@@ -271,12 +284,14 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
         else fs.rmSync(sessionDir, { recursive: true, force: true });
       } catch (e) {
+        // @ts-expect-error TS(2571): Object is of type 'unknown'.
         console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth on desync:`, e.message);
       }
       session.reconnectAttempts = 0;
       session.status = 'qr_pending';
       desyncTracker.reset();
       try {
+        // @ts-expect-error TS(2339): Property 'end' does not exist on type 'never'.
         session.socket?.end?.(undefined);
       } catch {
         /* ignore */
@@ -285,6 +300,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
 
     const sock = makeWASocket({
       version,
+      // @ts-expect-error TS(2322): Type '{ creds: any; keys: { get: (type: string, id... Remove this comment to see the full error message
       auth: state,
       logger: createBaileysLogger(desyncTracker),
       printQRInTerminal: false,
@@ -293,6 +309,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       syncFullHistory: true,
       shouldSyncHistoryMessage: () => true,
     });
+    // @ts-expect-error TS(2322): Type '{ logger: ILogger; getOrderDetails: (orderId... Remove this comment to see the full error message
     session.socket = sock;
     sessions.set(workspaceId, session);
     await loadPersistedContacts(session, workspaceId);
@@ -317,6 +334,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        // @ts-expect-error TS(2322): Type 'string' is not assignable to type 'null'.
         session.qr = qr;
         session.status = 'qr_pending';
         broadcastToWs(workspaceId, { type: 'qr', qr, workspaceId });
@@ -326,6 +344,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       if (connection === 'open') {
         session.status = 'connected';
         session.qr = null;
+        // @ts-expect-error TS(2322): Type 'string | null' is not assignable to type 'nu... Remove this comment to see the full error message
         session.phone = sock.user?.id?.split(':')[0] || null;
         session.reconnectAttempts = 0;
         session.lastDisconnectReason = null;
@@ -418,6 +437,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
               if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
               else fs.rmSync(sessionDir, { recursive: true, force: true });
             } catch (e) {
+              // @ts-expect-error TS(2571): Object is of type 'unknown'.
               console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth:`, e.message);
             }
             session.reconnectAttempts = 0;
@@ -430,6 +450,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           : Math.min(5000 * 2 ** Math.max(0, nextAttempt - 1), 30000);
 
         if (!session.reconnectTimer) {
+          // @ts-expect-error TS(2322): Type 'Timeout' is not assignable to type 'null'.
           session.reconnectTimer = setTimeout(() => {
             session.reconnectTimer = null;
             startSession(workspaceId).catch((e) =>
@@ -460,8 +481,11 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         const senderJid = rawJid.endsWith('@g.us') ? participantJid : rawJid;
         // Prefer phone from message metadata when WhatsApp includes it with LID chats.
         const altPn =
+          // @ts-expect-error TS(2339): Property 'remoteJidAlt' does not exist on type 'IM... Remove this comment to see the full error message
           msg.key.remoteJidAlt?.replace(/@.*/, '') ||
+          // @ts-expect-error TS(2339): Property 'senderPn' does not exist on type 'IMessa... Remove this comment to see the full error message
           msg.key.senderPn?.replace(/@.*/, '') ||
+          // @ts-expect-error TS(2551): Property 'participantPn' does not exist on type 'I... Remove this comment to see the full error message
           msg.key.participantPn?.replace(/@.*/, '') ||
           null;
         let phone = altPn;
@@ -480,6 +504,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
             // Name comes from cafe address book only (looked up below) — not resolver.
             console.log(`[WA] LID ${lidNum} → ${phone}`);
           } catch (e) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             console.warn(`[WA] LID ${lidNum} resolver error: ${e.message}`);
             phone = phone || lidNum;
           }
@@ -518,6 +543,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
                 ` (ignored for label) dp=${profilePicUrl ? 'yes' : 'no'}`,
             );
           } catch (e) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             console.warn(`[WA] phone ${phone} resolver failed: ${e.message}`);
           }
         }
@@ -547,10 +573,13 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           session.failedMediaDownloads = 0;
           console.log(`[WA:${workspaceId.slice(0, 8)}] Uploaded ${fileName} from ${pushName}`);
         } catch (e) {
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
           console.error(`[WA:${workspaceId.slice(0, 8)}] Media error:`, e.message);
+          // @ts-expect-error TS(2571): Object is of type 'unknown'.
           desyncTracker.note(e.message);
           session.failedMediaDownloads = (session.failedMediaDownloads || 0) + 1;
           if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
+            // @ts-expect-error TS(2571): Object is of type 'unknown'.
             await forceReauthWhileConnected(`repeated media error: ${e.message}`);
           }
         }
@@ -558,7 +587,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
     });
   }
 
-  async function stopSession(workspaceId) {
+  async function stopSession(workspaceId: any) {
     const session = sessions.get(workspaceId);
     const sessionDir = path.join(AUTH_DIR, workspaceId);
     if (session?.socket) {
@@ -577,6 +606,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
       else fs.rmSync(sessionDir, { recursive: true, force: true });
     } catch (e) {
+      // @ts-expect-error TS(2571): Object is of type 'unknown'.
       console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth on stop:`, e.message);
     }
     sessions.delete(workspaceId);
