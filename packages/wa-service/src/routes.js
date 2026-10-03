@@ -49,6 +49,8 @@ export function registerRoutes(app, { config, sessions, startSession, stopSessio
       lastDisconnectReason: session.lastDisconnectReason || null,
       lastDisconnectAt: session.lastDisconnectAt || null,
       lastUploadAt: session.lastUploadAt || null,
+      lastDesyncAt: session.lastDesyncAt || null,
+      failedMediaDownloads: session.failedMediaDownloads || 0,
     });
   });
 

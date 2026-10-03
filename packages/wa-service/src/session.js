@@ -11,6 +11,67 @@ import pino from 'pino';
 import { usePostgresAuthState, clearPostgresAuthState } from '@cybercontrol/wa-auth';
 import { downloadMedia, getExtFromMsg } from './media.js';
 
+// Signal/session crypto failures can leave the TCP session "open" and the phone
+// linked-device status Active while inbound media never decrypts — silent receive death.
+const DESYNC_RE =
+  /over 2000 messages into the future|sessionerror|failed to decrypt message|invalidmessageexception|bad mac|signal.*desync|desync/i;
+const DESYNC_WINDOW_MS = 60_000;
+const DESYNC_HIT_THRESHOLD = 5;
+const MEDIA_FAIL_THRESHOLD = 5;
+
+function createDesyncTracker(onThreshold) {
+  const hits = [];
+  return {
+    note(text) {
+      if (!DESYNC_RE.test(String(text || ''))) return false;
+      const now = Date.now();
+      while (hits.length && now - hits[0] > DESYNC_WINDOW_MS) hits.shift();
+      hits.push(now);
+      if (hits.length >= DESYNC_HIT_THRESHOLD) {
+        hits.length = 0;
+        onThreshold(String(text).slice(0, 240));
+        return true;
+      }
+      return false;
+    },
+    reset() {
+      hits.length = 0;
+    },
+  };
+}
+
+/** Baileys logger that stays quiet but watches decrypt/session errors. */
+function createBaileysLogger(tracker) {
+  const intercept = (args) => {
+    try {
+      const text = (args || [])
+        .map((a) => {
+          if (!a) return '';
+          if (typeof a === 'string') return a;
+          if (a instanceof Error) return a.message;
+          if (typeof a === 'object') {
+            return [a.msg, a.err?.message, a.error?.message, a.message].filter(Boolean).join(' ');
+          }
+          return String(a);
+        })
+        .join(' ');
+      tracker.note(text);
+    } catch {
+      /* ignore */
+    }
+  };
+  // Level 'error' so decrypt failures (Baileys logger.error) still invoke hooks;
+  // we swallow output and only feed the desync tracker.
+  return pino({
+    level: 'error',
+    hooks: {
+      logMethod(inputArgs) {
+        intercept(inputArgs);
+      },
+    },
+  });
+}
+
 /**
  * @param {{
  *   config: ReturnType<import('./config.js').loadConfig>,
@@ -151,24 +212,14 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
     }
     const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({
-      version,
-      auth: state,
-      logger: pino({ level: 'silent' }),
-      printQRInTerminal: false,
-      markOnlineOnConnect: false,
-      browser: ['CyberControl', 'Chrome', '1.0'],
-      syncFullHistory: true,
-      shouldSyncHistoryMessage: () => true,
-    });
-
     const prior = sessions.get(workspaceId);
     if (prior?.reconnectTimer) {
       clearTimeout(prior.reconnectTimer);
       prior.reconnectTimer = null;
     }
+
     const session = {
-      socket: sock,
+      socket: null,
       qr: null,
       status: 'connecting',
       phone: null,
@@ -181,8 +232,68 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       lastDisconnectReason: prior?.lastDisconnectReason || null,
       lastDisconnectAt: prior?.lastDisconnectAt || null,
       lastUploadAt: prior?.lastUploadAt || null,
+      lastDesyncAt: prior?.lastDesyncAt || null,
+      failedMediaDownloads: 0,
       stopping: false,
+      forcingReauth: false,
+      desyncReauthDone: false,
     };
+
+    const desyncTracker = createDesyncTracker((reason) => {
+      forceReauthWhileConnected(reason).catch((e) =>
+        console.error(`[WA:${workspaceId.slice(0, 8)}] Desync re-auth failed:`, e.message),
+      );
+    });
+
+    async function forceReauthWhileConnected(reason) {
+      if (!session || session.forcingReauth || session.stopping || session.desyncReauthDone) return;
+      if (session.status !== 'connected' && session.status !== 'connecting') return;
+      session.forcingReauth = true;
+      session.desyncReauthDone = true;
+      session.lastDesyncAt = new Date().toISOString();
+      session.lastDisconnectReason = `desync_while_connected:${reason}`;
+      session.lastDisconnectAt = session.lastDesyncAt;
+      console.warn(
+        `[WA:${workspaceId.slice(0, 8)}] Desync while connected — forcing re-auth (${reason})`,
+      );
+      notifyParent(workspaceId, 'reauth_required', {
+        desynced: true,
+        reason,
+        whileConnected: true,
+      });
+      broadcastToWs(workspaceId, {
+        type: 'status',
+        connected: false,
+        status: 'reauth_required',
+        workspaceId,
+      });
+      try {
+        if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
+        else fs.rmSync(sessionDir, { recursive: true, force: true });
+      } catch (e) {
+        console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth on desync:`, e.message);
+      }
+      session.reconnectAttempts = 0;
+      session.status = 'qr_pending';
+      desyncTracker.reset();
+      try {
+        session.socket?.end?.(undefined);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const sock = makeWASocket({
+      version,
+      auth: state,
+      logger: createBaileysLogger(desyncTracker),
+      printQRInTerminal: false,
+      markOnlineOnConnect: false,
+      browser: ['CyberControl', 'Chrome', '1.0'],
+      syncFullHistory: true,
+      shouldSyncHistoryMessage: () => true,
+    });
+    session.socket = sock;
     sessions.set(workspaceId, session);
     await loadPersistedContacts(session, workspaceId);
 
@@ -218,6 +329,10 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         session.phone = sock.user?.id?.split(':')[0] || null;
         session.reconnectAttempts = 0;
         session.lastDisconnectReason = null;
+        session.forcingReauth = false;
+        session.desyncReauthDone = false;
+        session.failedMediaDownloads = 0;
+        desyncTracker.reset();
         if (session.reconnectTimer) {
           clearTimeout(session.reconnectTimer);
           session.reconnectTimer = null;
@@ -250,12 +365,16 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         const reason = new Boom(disconnectError)?.output?.statusCode;
         const errorMessage = String(disconnectError?.message || disconnectError || '');
         const loggedOut = reason === DisconnectReason.loggedOut;
-        const desynced = /over 2000 messages into the future|sessionerror|signal.*desync|desync/i.test(errorMessage);
+        const desynced =
+          session.desyncReauthDone || DESYNC_RE.test(errorMessage);
         const nextAttempt = session.reconnectAttempts + 1;
         const reauthRequired = !loggedOut && (desynced || nextAttempt >= 3);
 
         session.reconnectAttempts = nextAttempt;
-        session.lastDisconnectReason = reason || errorMessage || 'unknown';
+        session.lastDisconnectReason =
+          session.lastDisconnectReason?.startsWith('desync_while_connected:')
+            ? session.lastDisconnectReason
+            : reason || errorMessage || 'unknown';
         session.lastDisconnectAt = new Date().toISOString();
         session.status = loggedOut || reauthRequired ? 'logged_out' : 'disconnected';
         session.socket = null;
@@ -274,27 +393,36 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
           return;
         }
 
-        console.log(
-          `[WA:${workspaceId.slice(0, 8)}] Disconnected: ${reason} loggedOut=${loggedOut}` +
-            ` attempt=${nextAttempt} desynced=${desynced} reauth=${reauthRequired}`,
-        );
-        notifyParent(workspaceId, reauthRequired ? 'reauth_required' : 'disconnected', {
-          loggedOut,
-          reason: reason || null,
-          attempt: nextAttempt,
-          desynced,
-        });
-        broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
-
-        if (loggedOut || reauthRequired) {
-          try {
-            if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
-            else fs.rmSync(sessionDir, { recursive: true, force: true });
-          } catch (e) {
-            console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth:`, e.message);
-          }
-          session.reconnectAttempts = 0;
+        // Already wiped + notified by forceReauthWhileConnected — just restart for QR.
+        if (session.desyncReauthDone) {
           session.status = 'qr_pending';
+          session.forcingReauth = false;
+          console.log(
+            `[WA:${workspaceId.slice(0, 8)}] Closed after desync-while-connected re-auth — awaiting QR`,
+          );
+        } else {
+          console.log(
+            `[WA:${workspaceId.slice(0, 8)}] Disconnected: ${reason} loggedOut=${loggedOut}` +
+              ` attempt=${nextAttempt} desynced=${desynced} reauth=${reauthRequired}`,
+          );
+          notifyParent(workspaceId, reauthRequired ? 'reauth_required' : 'disconnected', {
+            loggedOut,
+            reason: reason || null,
+            attempt: nextAttempt,
+            desynced,
+          });
+          broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
+
+          if (loggedOut || reauthRequired) {
+            try {
+              if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
+              else fs.rmSync(sessionDir, { recursive: true, force: true });
+            } catch (e) {
+              console.error(`[WA:${workspaceId.slice(0, 8)}] Failed to clear auth:`, e.message);
+            }
+            session.reconnectAttempts = 0;
+            session.status = 'qr_pending';
+          }
         }
 
         const delay = reauthRequired || loggedOut
@@ -400,16 +528,31 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
 
         try {
           const buffer = await downloadMedia(sock, msg);
-          if (!buffer) continue;
+          if (!buffer) {
+            session.failedMediaDownloads = (session.failedMediaDownloads || 0) + 1;
+            console.warn(
+              `[WA:${workspaceId.slice(0, 8)}] Media download empty (${session.failedMediaDownloads})`,
+            );
+            if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
+              await forceReauthWhileConnected('repeated media download failure while connected');
+            }
+            continue;
+          }
 
           const ext = getExtFromMsg(msg);
           const fileName = `${phone}_${Date.now()}_file.${ext}`;
 
           await uploadToParent(workspaceId, buffer, fileName, phone, pushName, profilePicUrl);
           session.lastUploadAt = new Date().toISOString();
+          session.failedMediaDownloads = 0;
           console.log(`[WA:${workspaceId.slice(0, 8)}] Uploaded ${fileName} from ${pushName}`);
         } catch (e) {
           console.error(`[WA:${workspaceId.slice(0, 8)}] Media error:`, e.message);
+          desyncTracker.note(e.message);
+          session.failedMediaDownloads = (session.failedMediaDownloads || 0) + 1;
+          if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
+            await forceReauthWhileConnected(`repeated media error: ${e.message}`);
+          }
         }
       }
     });

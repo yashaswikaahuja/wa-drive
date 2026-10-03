@@ -159,6 +159,8 @@ router.get('/status', authMiddleware, async (req: any, res) => {
       reconnectAttempts: data.reconnectAttempts || 0,
       lastDisconnectReason: data.lastDisconnectReason || null,
       lastDisconnectAt: data.lastDisconnectAt || null,
+      lastDesyncAt: data.lastDesyncAt || null,
+      failedMediaDownloads: data.failedMediaDownloads || 0,
     });
   } catch {
     res.json({ connected: false, status: 'service_down', qr: before.qr || null, lastUploadAt });
