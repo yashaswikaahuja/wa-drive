@@ -4,9 +4,12 @@
  * Vendors @cybercontrol/svc-* under dist/vendor/ (NOT dist/node_modules) so
  * Docker COPY is not stripped by .dockerignore node_modules rules.
  * package.json uses file:./vendor/<pkg> so `npm install` in the image resolves.
+ *
+ * TS packages must ship compiled dist/ — Docker runs plain Node 20.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { findRepoRoot } from '../../../tooling/find-repo-root.mjs';
 
@@ -18,23 +21,47 @@ const vendorRoot = path.join(distRoot, 'vendor');
 const serviceDirectories = ['src', 'migrations'];
 const serviceFiles = ['index.js', 'package.json'];
 
+// Dependency order so sibling imports resolve during tsc emit.
 const packageNames = [
-  'svc-ai-mapper',
-  'svc-fill-planner',
+  'svc-shared',
   'svc-knowledge',
   'svc-learning',
-  'svc-runtime',
   'svc-session',
+  'svc-fill-planner',
+  'svc-ai-mapper',
   'svc-teach',
+  'svc-runtime',
 ];
 
 // Plain-JS @cc packages needed at runtime (date splitter for WSS fill).
 const ccPackageNames = ['cc-mapper'];
 
-const copyFilter = (source) => {
-  const name = path.basename(source);
-  return name !== 'node_modules' && name !== 'dist';
-};
+// Include package dist/ (compiled TS). Only skip nested node_modules.
+const copyFilter = (source) => path.basename(source) !== 'node_modules';
+
+function buildPackage(packageName) {
+  const source = path.join(repositoryRoot, 'packages', packageName);
+  const pkgJson = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
+  const main = String(pkgJson.main || '');
+  if (!main.startsWith('dist/')) return;
+  if (fs.existsSync(path.join(source, 'dist', 'index.js'))) return;
+  console.log(`Building @cybercontrol/${packageName}…`);
+  const result = spawnSync('pnpm', ['--filter', `@cybercontrol/${packageName}`, 'build'], {
+    cwd: repositoryRoot,
+    stdio: 'inherit',
+    shell: true,
+  });
+  if (result.status !== 0) {
+    throw new Error(`failed to build @cybercontrol/${packageName}`);
+  }
+  if (!fs.existsSync(path.join(source, 'dist'))) {
+    throw new Error(`package ${packageName} main=${main} but dist/ is missing after build`);
+  }
+}
+
+for (const packageName of packageNames) {
+  buildPackage(packageName);
+}
 
 fs.rmSync(distRoot, { recursive: true, force: true });
 fs.mkdirSync(vendorRoot, { recursive: true });
@@ -57,6 +84,11 @@ for (const packageName of packageNames) {
   const destination = path.join(vendorRoot, packageName);
   if (!fs.existsSync(source)) {
     throw new Error(`missing workspace package: ${source}`);
+  }
+  const pkgJson = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
+  const main = String(pkgJson.main || '');
+  if (main.startsWith('dist/') && !fs.existsSync(path.join(source, 'dist'))) {
+    throw new Error(`package ${packageName} main=${main} but dist/ is missing — run its build first`);
   }
   fs.cpSync(source, destination, { recursive: true, filter: copyFilter });
 

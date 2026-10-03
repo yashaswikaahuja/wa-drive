@@ -157,6 +157,9 @@ importers:
       '@cybercontrol/svc-session':
         specifier: workspace:*
         version: link:../../packages/svc-session
+      '@cybercontrol/svc-shared':
+        specifier: workspace:*
+        version: link:../../packages/svc-shared
       '@cybercontrol/svc-teach':
         specifier: workspace:*
         version: link:../../packages/svc-teach
@@ -1019,6 +1022,13 @@ importers:
       '@cybercontrol/svc-knowledge':
         specifier: workspace:*
         version: link:../svc-knowledge
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/svc-fill-planner:
     dependencies:
@@ -1028,14 +1038,35 @@ importers:
       '@cybercontrol/svc-session':
         specifier: workspace:*
         version: link:../svc-session
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
-  packages/svc-knowledge: {}
+  packages/svc-knowledge:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/svc-learning:
     dependencies:
       '@cybercontrol/svc-knowledge':
         specifier: workspace:*
         version: link:../svc-knowledge
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/svc-runtime:
     dependencies:
@@ -1051,6 +1082,16 @@ importers:
       '@cybercontrol/svc-learning':
         specifier: workspace:*
         version: link:../svc-learning
+      '@cybercontrol/svc-shared':
+        specifier: workspace:*
+        version: link:../svc-shared
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/svc-session:
     dependencies:
@@ -1060,12 +1101,38 @@ importers:
       '@cybercontrol/svc-learning':
         specifier: workspace:*
         version: link:../svc-learning
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/svc-shared:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/svc-teach:
     dependencies:
       '@cybercontrol/svc-knowledge':
         specifier: workspace:*
         version: link:../svc-knowledge
+      '@cybercontrol/svc-shared':
+        specifier: workspace:*
+        version: link:../svc-shared
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/wa-auth:
     dependencies:

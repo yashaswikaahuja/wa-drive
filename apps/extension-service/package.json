@@ -19,6 +19,7 @@
     "@cybercontrol/svc-learning": "workspace:*",
     "@cybercontrol/svc-runtime": "workspace:*",
     "@cybercontrol/svc-session": "workspace:*",
+    "@cybercontrol/svc-shared": "workspace:*",
     "@cybercontrol/svc-teach": "workspace:*",
     "dotenv": "^17.0.1",
     "express": "^4.21.2",
