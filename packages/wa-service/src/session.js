@@ -174,6 +174,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
       lastDisconnectReason: null,
       lastDisconnectAt: null,
       lastUploadAt: null,
+      stopping: false,
     };
     sessions.set(workspaceId, session);
     await loadPersistedContacts(session, workspaceId);
@@ -251,6 +252,11 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
         session.lastDisconnectAt = new Date().toISOString();
         session.status = loggedOut || reauthRequired ? 'logged_out' : 'disconnected';
         session.socket = null;
+
+        if (session.stopping) {
+          session.status = 'disconnected';
+          return;
+        }
 
         console.log(
           `[WA:${workspaceId.slice(0, 8)}] Disconnected: ${reason} loggedOut=${loggedOut}` +
@@ -397,6 +403,7 @@ export function createSessionManager({ config, parent, broadcastToWs }) {
   async function stopSession(workspaceId) {
     const session = sessions.get(workspaceId);
     if (session?.socket) {
+      session.stopping = true;
       await session.socket.logout().catch(() => {});
       session.socket = null;
       session.status = 'disconnected';
