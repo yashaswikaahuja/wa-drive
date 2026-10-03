@@ -1,0 +1,39 @@
+﻿name: AWS MVP reset WA session
+
+on:
+  workflow_dispatch:
+    inputs:
+      workspace_id:
+        description: Full workspace UUID to reset
+        required: true
+        default: "d905b2fa-2e28-48f7-b288-116043d2c018"
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clear wa_auth and restart session
+        env:
+          SSH_KEY: ${{ secrets.AWS_MVP_SSH_KEY }}
+          HOST: ubuntu@44.219.62.198
+          WS: ${{ github.event.inputs.workspace_id }}
+          WA_SECRET: ${{ secrets.WA_SECRET }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/aws.pem
+          chmod 600 ~/.ssh/aws.pem
+          ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "WS='$WS' WA_SECRET='$WA_SECRET' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/cybercontrol-docker
+          echo "Resetting WA auth for $WS"
+          docker compose exec -T postgres sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -v ON_ERROR_STOP=1 -c \"DELETE FROM wa_auth_keys WHERE workspace_id = '$WS'; DELETE FROM wa_auth_creds WHERE workspace_id = '$WS'; SELECT left(workspace_id::text,8) FROM wa_auth_creds WHERE workspace_id::text LIKE '$(echo $WS | cut -c1-8)%';\""
+          # Stop in-memory session then start fresh
+          docker compose exec -T whatsapp-service sh -c "wget -qO- --method=POST --header='x-service-secret: $WA_SECRET' --header='Content-Type: application/json' --body-data='{\"workspaceId\":\"$WS\"}' http://127.0.0.1:3100/sessions/stop || curl -fsS -X POST -H \"x-service-secret: $WA_SECRET\" -H 'Content-Type: application/json' -d '{\"workspaceId\":\"$WS\"}' http://127.0.0.1:3100/sessions/stop || true"
+          sleep 2
+          docker compose exec -T whatsapp-service sh -c "wget -qO- --method=POST --header='x-service-secret: $WA_SECRET' --header='Content-Type: application/json' --body-data='{\"workspaceId\":\"$WS\"}' http://127.0.0.1:3100/sessions/start || curl -fsS -X POST -H \"x-service-secret: $WA_SECRET\" -H 'Content-Type: application/json' -d '{\"workspaceId\":\"$WS\"}' http://127.0.0.1:3100/sessions/start"
+          sleep 5
+          docker compose exec -T whatsapp-service sh -c "wget -qO- --header='x-service-secret: $WA_SECRET' http://127.0.0.1:3100/sessions/$WS/status || curl -fsS -H \"x-service-secret: $WA_SECRET\" http://127.0.0.1:3100/sessions/$WS/status"
+          echo
+          echo "Done — scan QR from Hub Settings"
+          REMOTE
