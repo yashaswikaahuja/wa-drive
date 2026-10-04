@@ -2,17 +2,24 @@
   "name": "@cc/wss",
   "version": "1.0.0",
   "description": "CyberControl service-worker WSS client — reconnect, session, ws-client",
-  "main": "src/ws-client.js",
+  "type": "module",
+  "main": "./src/ws-client.ts",
   "exports": {
-    ".": "./src/ws-client.js",
-    "./reconnect-manager": "./src/reconnect-manager.js",
-    "./ws-client": "./src/ws-client.js",
-    "./wss-session": "./src/wss-session.js"
+    ".": "./src/ws-client.ts",
+    "./reconnect-manager": "./src/reconnect-manager.ts",
+    "./ws-client": "./src/ws-client.ts",
+    "./wss-session": "./src/wss-session.ts"
   },
   "scripts": {
-    "test": "echo 'No unit tests (browser SW required)'"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node -e \"console.log('[cc-wss] no unit tests (browser SW required)')\""
   },
-  "type": "module",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
 }

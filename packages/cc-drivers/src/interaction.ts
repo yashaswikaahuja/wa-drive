@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Click + wait drivers — interaction primitives.
  *

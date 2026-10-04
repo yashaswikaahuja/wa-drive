@@ -2,7 +2,7 @@ import path from 'node:path';
 import { extensionRoot, packageRoot } from './lib/resolve.mjs';
 import { writeConcatBundle } from './lib/concat-bundle.mjs';
 
-writeConcatBundle({
+await writeConcatBundle({
   banner: `/**
  * AUTO-GENERATED — do not edit.
  * Source: @cc/background

@@ -1,8 +1,10 @@
 /**
- * Concatenate ordered IIFE source files into one Chrome inject bundle.
+ * Concatenate ordered source files into one Chrome inject / SW bundle.
+ * `.ts` files are type-stripped via esbuild.transform; `.js` stays raw text.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import * as esbuild from 'esbuild';
 
 /**
  * @param {{
@@ -14,7 +16,7 @@ import path from 'node:path';
  *   idempotentKey?: string,
  * }} opts
  */
-export function writeConcatBundle({ banner, srcDir, order, outfile, idempotentKey }) {
+export async function writeConcatBundle({ banner, srcDir, order, outfile, idempotentKey }) {
   const parts = [banner.endsWith('\n') ? banner : banner + '\n'];
 
   if (idempotentKey) {
@@ -29,9 +31,18 @@ export function writeConcatBundle({ banner, srcDir, order, outfile, idempotentKe
     const p = path.join(srcDir, name);
     if (!fs.existsSync(p)) throw new Error(`missing ${name} (looked in ${srcDir})`);
     const src = fs.readFileSync(p, 'utf8');
+    let code = src;
+    if (name.endsWith('.ts') || name.endsWith('.tsx')) {
+      const transformed = await esbuild.transform(src, {
+        loader: name.endsWith('.tsx') ? 'tsx' : 'ts',
+        target: 'es2018',
+        legalComments: 'none',
+      });
+      code = transformed.code;
+    }
     parts.push(`\n/* ==== ${name} ==== */\n`);
-    parts.push(src);
-    if (!src.endsWith('\n')) parts.push('\n');
+    parts.push(code);
+    if (!code.endsWith('\n')) parts.push('\n');
   }
 
   if (idempotentKey) {

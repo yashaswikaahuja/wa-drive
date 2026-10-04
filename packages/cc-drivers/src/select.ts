@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Select drivers — pick options from native <select>, ng-select, mat-select,
  * and custom JS-driven dropdowns.

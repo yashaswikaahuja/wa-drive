@@ -29,6 +29,7 @@ const DEFAULTS = {
 };
 
 class ReconnectManager {
+  [key: string]: any;
   /**
    * @param {object} [options]
    * @param {number} [options.baseDelayMs]
@@ -39,7 +40,7 @@ class ReconnectManager {
    * @param {function} [options.onAttempt] — (attempt, delayMs) => void
    * @param {function} [options.onGiveUp] — (attempts) => void
    */
-  constructor(options = {}) {
+  constructor(options: any = {}) {
     this._config = { ...DEFAULTS, ...options };
     this._onAttempt = options.onAttempt || null;
     this._onGiveUp = options.onGiveUp || null;

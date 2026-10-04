@@ -33,6 +33,7 @@ function nextMsgId() {
 }
 
 class WsClient {
+  [key: string]: any;
   /**
    * @param {object} options
    * @param {string} options.url — WSS endpoint (e.g. wss://api.example.com/ws)
@@ -42,7 +43,7 @@ class WsClient {
    * @param {function} [options.onError] — (error: Error) => void
    * @param {object} [options.reconnectManager] — ReconnectManager instance
    */
-  constructor(options) {
+  constructor(options: any) {
     this._url = options.url;
     this._token = options.token;
     this._onMessage = options.onMessage || null;
@@ -200,7 +201,7 @@ class WsClient {
    * @param {number} [timeoutMs]
    * @returns {Promise<object>}
    */
-  request(type, payload = {}, timeoutMs) {
+  request(type: any, payload: any = {}, timeoutMs?: any) {
     const timeout = timeoutMs || this._requestTimeout;
     const id = this.send(type, payload);
 
@@ -291,14 +292,14 @@ class WsClient {
   /**
    * Request knowledge sync over WSS.
    */
-  async requestSync(requestType, payload = {}) {
+  async requestSync(requestType: any, payload: any = {}) {
     return this.request('sync_request', { requestType, payload });
   }
 
   /**
    * Send a teach-mode observation.
    */
-  sendTeachObservation(data) {
+  sendTeachObservation(data: any) {
     return this.send('teach_observation', { data });
   }
 

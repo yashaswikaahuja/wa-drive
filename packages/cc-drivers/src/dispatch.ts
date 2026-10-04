@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * CyberControl driver dispatcher — window.cc.do(action) → result
  *

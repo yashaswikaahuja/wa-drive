@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Input drivers — keystroke-style typing, clearing, focusing.
  * Wraps window.keystrokeFillSync from autofill/plugins/keystroke-input.js.

@@ -998,7 +998,11 @@ importers:
 
   packages/cc-background: {}
 
-  packages/cc-drivers: {}
+  packages/cc-drivers:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/cc-executor: {}
 
@@ -1019,7 +1023,11 @@ importers:
 
   packages/cc-shared: {}
 
-  packages/cc-wss: {}
+  packages/cc-wss:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/svc-ai-mapper:
     dependencies:

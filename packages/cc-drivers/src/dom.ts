@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * DOM observation drivers — read-only primitives.
  *
