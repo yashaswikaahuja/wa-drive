@@ -2,14 +2,9 @@
  * fuzzy-post-passes — Post-loop mapping passes
  */
 import type { FormField, Mapping, MatchHelpers, Profile } from './types.ts';
-import { applySplitDob as applySplitDobJs, parseDobParts as parseDobPartsJs } from './split-dob.js';
+import { applySplitDob, parseDobParts } from './split-dob.ts';
 
-export const parseDobParts = parseDobPartsJs;
-export const applySplitDob = applySplitDobJs as (
-  formFields: FormField[],
-  profile: Profile,
-  mapping: Mapping,
-) => void;
+export { applySplitDob, parseDobParts };
 
 const TWIN_PREFIX_RE = /^(?:[a-z]\.|\d+\.|\(\w\)|[i-x]+\.)?\s*(?:verify|re[\s_-]*type|re[\s_-]*enter|confirm|repeat)\b[\s:_-]*/i;
 

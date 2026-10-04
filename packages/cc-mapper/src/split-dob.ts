@@ -1,17 +1,21 @@
 /**
  * split-dob — Parse profile.dob and map DD/MM/YYYY (or Day/Month/Year) fields.
  *
- * Plain JS so both the browser mapper bundle and extension-service WSS can share
- * the same root module (no TypeScript / strip-types required at runtime).
+ * Shared by the browser mapper bundle (esbuild) and extension-service WSS
+ * (compiled to dist/ for Node 20 Docker).
  *
  * Many bank/insurance/gov forms split DOB into 3 small inputs.
  */
 
-/**
- * @param {unknown} dob
- * @returns {{ day: string, month: string, year: string } | null}
- */
-export function parseDobParts(dob) {
+import type { FormField, Mapping, Profile } from './types.ts';
+
+export interface DobParts {
+  day: string;
+  month: string;
+  year: string;
+}
+
+export function parseDobParts(dob: unknown): DobParts | null {
   if (dob == null) return null;
   const dobStr = String(dob).trim();
   if (!dobStr) return null;
@@ -24,13 +28,12 @@ export function parseDobParts(dob) {
   return null;
 }
 
-/**
- * @param {Array<{ selector: string, label?: string, id?: string, name?: string, placeholder?: string, type?: string }>} formFields
- * @param {{ dob?: unknown }} profile
- * @param {Record<string, object>} mapping
- */
-export function applySplitDob(formFields, profile, mapping) {
-  if (!profile || !profile.dob) return;
+export function applySplitDob(
+  formFields: FormField[],
+  profile: Profile | null | undefined,
+  mapping: Mapping,
+): void {
+  if (!profile || profile.dob == null || profile.dob === '') return;
   const dp = parseDobParts(profile.dob);
   if (!dp) return;
 

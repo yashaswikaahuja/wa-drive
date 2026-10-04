@@ -8,7 +8,36 @@
  *   identity | last_n | first_n | date_part | email_local | name_part | unknown
  */
 
-import { parseDobParts } from './split-dob.js';
+import type { FormField, Mapping } from './types.ts';
+import { parseDobParts } from './split-dob.ts';
+
+/** Profile may hold plain atoms or `{ value }` wrappers from Hub/extraction. */
+export type RelationProfile = Record<string, unknown>;
+
+export type Relation =
+  | { kind: 'unknown' }
+  | { kind: 'identity' }
+  | { kind: 'last_n'; n: number }
+  | { kind: 'first_n'; n: number }
+  | { kind: 'date_part'; part: 'day' | 'month' | 'year'; pad?: number }
+  | { kind: 'email_local' }
+  | { kind: 'name_part'; part: 'first' | 'middle' | 'last' };
+
+export type SavedMappingEntry = {
+  profileKey?: string | null;
+  relation?: Relation | null;
+  [key: string]: unknown;
+};
+
+export type FilledBySource = Record<
+  string,
+  {
+    label: string;
+    profileKey: string;
+    relation: Relation;
+    source: string;
+  }
+>;
 
 const MONTH_NAMES = [
   '',
@@ -26,29 +55,32 @@ const MONTH_NAMES = [
   'December',
 ];
 
-export function profileAtom(profile, key) {
+export function profileAtom(profile: RelationProfile | null | undefined, key: string | null | undefined): string | null {
   if (!profile || key == null) return null;
   const entry = profile[key];
   if (entry == null) return null;
-  const v = typeof entry === 'object' && entry && 'value' in entry ? entry.value : entry;
+  const v =
+    typeof entry === 'object' && entry && 'value' in (entry as object)
+      ? (entry as { value: unknown }).value
+      : entry;
   if (v == null) return null;
   const s = String(v).trim();
   return s === '' ? null : s;
 }
 
-function normLoose(s) {
+function normLoose(s: unknown): string {
   return String(s || '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 }
 
-function fieldBlob(field) {
+function fieldBlob(field: FormField | null | undefined): string {
   if (!field || typeof field !== 'object') return '';
   return `${field.label || ''} ${field.name || ''} ${field.id || ''} ${field.placeholder || ''}`.toLowerCase();
 }
 
 /** Compound atoms that are often projected into part widgets. */
-export function isCompoundAtom(profileKey) {
+export function isCompoundAtom(profileKey: string | null | undefined): boolean {
   return /^(dob|date_of_birth|phone|mobile|email|email_id|name|full_name|aadhaar_number|aadhaar|pan_number)$/i.test(
     String(profileKey || '')
   );
@@ -57,7 +89,7 @@ export function isCompoundAtom(profileKey) {
 /**
  * Heuristic: widget looks like it wants a part/slice, not a full atom.
  */
-export function looksLikePartField(field) {
+export function looksLikePartField(field: FormField | null | undefined): boolean {
   const blob = fieldBlob(field);
   const label = String(field?.label || '').trim();
   if (/^dd$|^day$|^mm$|^month$|^yyyy$|^yyy$|^year$/i.test(label)) return true;
@@ -70,12 +102,14 @@ export function looksLikePartField(field) {
   return false;
 }
 
-export function shapeCompatible(field, value) {
+export function shapeCompatible(field: FormField | null | undefined, value: unknown): boolean {
   if (value == null) return false;
   const s = String(value);
-  const maxLen = Number(field?.maxLength || field?.maxlength || 0);
+  const maxLen = Number((field as { maxLength?: number; maxlength?: number } | null | undefined)?.maxLength
+    || (field as { maxlength?: number } | null | undefined)?.maxlength
+    || 0);
   if (maxLen > 0 && s.length > maxLen) return false;
-  const pattern = field?.pattern;
+  const pattern = (field as { pattern?: string } | null | undefined)?.pattern;
   if (pattern) {
     try {
       if (!new RegExp(`^(?:${pattern})$`).test(s)) return false;
@@ -92,7 +126,7 @@ export function shapeCompatible(field, value) {
  *   - part-looking field + compound atom → unknown (do not raw-dump)
  *   - otherwise → identity (keep existing full-atom maps working)
  */
-export function normalizeRelation(entry, field) {
+export function normalizeRelation(entry: SavedMappingEntry | null | undefined, field: FormField | null | undefined): Relation {
   if (entry && entry.relation && entry.relation.kind) {
     return { ...entry.relation };
   }
@@ -106,13 +140,13 @@ export function normalizeRelation(entry, field) {
 }
 
 /** Higher = more specific / safer to keep when merging sync updates. */
-export function relationStrength(rel) {
+export function relationStrength(rel: Relation | null | undefined): number {
   if (!rel || !rel.kind || rel.kind === 'unknown') return 0;
   if (rel.kind === 'identity') return 2;
   return 3;
 }
 
-function applyDatePart(atom, part, field) {
+function applyDatePart(atom: string, part: unknown, field: FormField | null | undefined): string | null {
   const dp = parseDobParts(atom);
   if (!dp) return null;
   const monthNum = parseInt(dp.month, 10) || 0;
@@ -135,28 +169,33 @@ function applyDatePart(atom, part, field) {
 }
 
 /**
- * @returns {string|null} planned value, or null if cannot apply (caller → AI / other paths)
+ * @returns planned value, or null if cannot apply (caller → AI / other paths)
  */
-export function applyRelation(relation, profile, profileKey, field) {
+export function applyRelation(
+  relation: Relation | null | undefined,
+  profile: RelationProfile | null | undefined,
+  profileKey: string | null | undefined,
+  field: FormField | null | undefined,
+): string | null {
   const kind = relation?.kind || 'unknown';
   if (kind === 'unknown') return null;
 
   const atom = profileAtom(profile, profileKey);
   if (atom == null) return null;
 
-  let value = null;
+  let value: string | null = null;
   if (kind === 'identity') {
     value = atom;
   } else if (kind === 'last_n') {
-    const n = Math.max(1, Number(relation.n) || 0);
+    const n = Math.max(1, Number((relation as { n?: number }).n) || 0);
     if (!n || atom.length < n) return null;
     value = atom.slice(-n);
   } else if (kind === 'first_n') {
-    const n = Math.max(1, Number(relation.n) || 0);
+    const n = Math.max(1, Number((relation as { n?: number }).n) || 0);
     if (!n || atom.length < n) return null;
     value = atom.slice(0, n);
   } else if (kind === 'date_part') {
-    value = applyDatePart(atom, relation.part, field);
+    value = applyDatePart(atom, (relation as { part?: string }).part, field);
   } else if (kind === 'email_local') {
     const at = atom.indexOf('@');
     if (at <= 0) return null;
@@ -164,9 +203,10 @@ export function applyRelation(relation, profile, profileKey, field) {
   } else if (kind === 'name_part') {
     const parts = atom.split(/\s+/).filter(Boolean);
     if (!parts.length) return null;
-    if (relation.part === 'first') value = parts[0];
-    else if (relation.part === 'last') value = parts[parts.length - 1];
-    else if (relation.part === 'middle') value = parts.length >= 3 ? parts.slice(1, -1).join(' ') : '';
+    const namePart = (relation as { part?: string }).part;
+    if (namePart === 'first') value = parts[0];
+    else if (namePart === 'last') value = parts[parts.length - 1];
+    else if (namePart === 'middle') value = parts.length >= 3 ? parts.slice(1, -1).join(' ') : '';
     else return null;
   } else {
     return null;
@@ -181,7 +221,12 @@ export function applyRelation(relation, profile, profileKey, field) {
  * Induce relation from a successful fill value vs a profile atom.
  * Returns { kind: 'unknown' } when unsafe / unclear.
  */
-export function induceRelation(profile, profileKey, actualOrPlanned, field) {
+export function induceRelation(
+  profile: RelationProfile | null | undefined,
+  profileKey: string | null | undefined,
+  actualOrPlanned: unknown,
+  field: FormField | null | undefined,
+): Relation {
   if (!profileKey) return { kind: 'unknown' };
   const atom = profileAtom(profile, profileKey);
   const sample = actualOrPlanned == null ? '' : String(actualOrPlanned).trim();
@@ -264,20 +309,23 @@ export function induceRelation(profile, profileKey, actualOrPlanned, field) {
  * Materialize planned values from taught mappings using relations.
  * Mutates `mapping` / `filledBySource`. Skips selectors already planned.
  */
-function labelKeys(label) {
+function labelKeys(label: unknown): string[] {
   const raw = String(label || '')
     .toLowerCase()
     .trim();
   if (!raw) return [];
   const stripped = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   const spaced = raw.replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-  const out = [];
+  const out: string[] = [];
   if (stripped) out.push(stripped);
   if (spaced && spaced !== stripped) out.push(spaced);
   return out;
 }
 
-function lookupSavedEntry(savedMap, field) {
+function lookupSavedEntry(
+  savedMap: Record<string, SavedMappingEntry> | null | undefined,
+  field: FormField,
+): SavedMappingEntry | null {
   if (!savedMap || !field) return null;
   const keys = [...labelKeys(field.label), ...labelKeys(field.name)];
   for (const k of keys) {
@@ -290,8 +338,8 @@ function lookupSavedEntry(savedMap, field) {
 }
 
 /** Travel/journey fields must never receive identity atoms (#308). */
-function isTravelJourneyField(field) {
-  const raw = [field?.label, field?.name, field?.id, field?.placeholder, field?.selector]
+function isTravelJourneyField(field: FormField | null | undefined): boolean {
+  const raw = [field?.label, field?.name, field?.id, field?.placeholder, (field as { selector?: string })?.selector]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -311,11 +359,18 @@ const IDENTITY_PROFILE_KEYS = new Set([
   'phone', 'mobile', 'mobile_number',
 ]);
 
-export function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
+export function materializeSavedRelations(
+  fields: FormField[] | null | undefined,
+  profile: RelationProfile | null | undefined,
+  savedMap: Record<string, SavedMappingEntry> | null | undefined,
+  mapping: Mapping | null | undefined,
+  filledBySource: FilledBySource | null | undefined,
+  sourceTag?: string,
+): number {
   if (!savedMap || typeof savedMap !== 'object') return 0;
   let added = 0;
-  const map = mapping || {};
-  const fbs = filledBySource || {};
+  const map = mapping || ({} as Mapping);
+  const fbs = filledBySource || ({} as FilledBySource);
   for (const f of fields || []) {
     if (!f?.selector || map[f.selector]) continue;
     // Choice widgets need option resolution — leave to caller.
@@ -329,11 +384,11 @@ export function materializeSavedRelations(fields, profile, savedMap, mapping, fi
     if (value == null) continue;
     map[f.selector] = {
       value,
-      type: f.type,
-      label: f.label,
+      type: f.type || '',
+      label: f.label || null,
       profileKey: entry.profileKey,
-      relation,
       matchBy: sourceTag || 'saved-relation',
+      relation,
     };
     fbs[f.selector] = {
       label: f.label || '',

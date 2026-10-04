@@ -1,7 +1,7 @@
 /**
- * split-dob.test.mjs — date splitter root module (plain JS)
+ * split-dob.test.mjs — date splitter (TypeScript via strip-types)
  */
-import { parseDobParts, applySplitDob } from '../src/split-dob.js';
+import { parseDobParts, applySplitDob } from '../src/split-dob.ts';
 
 let passed = 0, failed = 0;
 function assert(desc, actual, expected) {

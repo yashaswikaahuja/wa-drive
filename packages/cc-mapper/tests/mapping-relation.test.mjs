@@ -7,7 +7,7 @@ import {
   induceRelation,
   looksLikePartField,
   materializeSavedRelations,
-} from '../src/mapping-relation.js';
+} from '../src/mapping-relation.ts';
 
 let passed = 0;
 let failed = 0;

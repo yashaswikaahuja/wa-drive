@@ -2,7 +2,7 @@
  * match-profile-fields — Name parts, DOB split, longest-alias win
  */
 import type { FormField, Mapping, MatchHelpers, NameParts, Profile } from './types.ts';
-import { parseDobParts } from './split-dob.js';
+import { parseDobParts } from './split-dob.ts';
 import { isTravelJourneyField } from './field-ident.ts';
 
 export function tryMatchNameParts(
