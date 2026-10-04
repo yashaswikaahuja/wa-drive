@@ -1,10 +1,12 @@
 /**
  * Build a runnable dist/ for whatsapp-service.
  * Vendors @cybercontrol/wa-* under dist/vendor/ (not node_modules) for Docker.
+ * Entry shells are TypeScript — emit .js via build-entry.mjs first.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 import { findRepoRoot } from '../../../tooling/find-repo-root.mjs';
 
 const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,6 +17,9 @@ const vendorRoot = path.join(distRoot, 'vendor');
 const serviceFiles = ['index.js', 'migrate-sessions-to-db.js', 'package.json'];
 const packageNames = ['wa-auth', 'wa-service'];
 
+// Emit index.js + migrate-sessions-to-db.js from .ts sources.
+execSync('node scripts/build-entry.mjs', { cwd: serviceRoot, stdio: 'inherit' });
+
 // Include package dist/ (compiled TS). Only skip nested node_modules.
 const copyFilter = (source) => path.basename(source) !== 'node_modules';
 
@@ -23,9 +28,10 @@ fs.mkdirSync(vendorRoot, { recursive: true });
 
 for (const file of serviceFiles) {
   const src = path.join(serviceRoot, file);
-  if (fs.existsSync(src)) {
-    fs.copyFileSync(src, path.join(distRoot, file));
+  if (!fs.existsSync(src)) {
+    throw new Error(`missing emitted entry: ${src} — build-entry.mjs failed?`);
   }
+  fs.copyFileSync(src, path.join(distRoot, file));
 }
 
 for (const packageName of packageNames) {

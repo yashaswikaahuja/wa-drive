@@ -6,11 +6,12 @@
   "description": "CyberControl WhatsApp LID resolver (thin entry). Logic in @cybercontrol/wa-resolver.",
   "main": "index.js",
   "scripts": {
+    "build:entry": "node scripts/build-entry.mjs",
     "build": "pnpm --filter @cybercontrol/wa-resolver run build && node scripts/build-dist.mjs",
-    "start": "node index.js",
+    "start": "node scripts/build-entry.mjs && node index.js",
     "start:dist": "node dist/index.js",
-    "dev": "node --watch index.js",
-    "typecheck": "node -e \"console.log('[whatsapp-resolver] typecheck skipped (JS)')\"",
+    "dev": "node scripts/build-entry.mjs && node --watch index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node -e \"console.log('[whatsapp-resolver] no package tests yet')\""
   },
   "dependencies": {
@@ -18,6 +19,11 @@
     "express": "^4.18.2",
     "qrcode-terminal": "^0.12.0",
     "whatsapp-web.js": "^1.34.7"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=20"

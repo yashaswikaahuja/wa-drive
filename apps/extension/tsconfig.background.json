@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2018",
+    "module": "None",
+    "lib": ["ES2018", "WebWorker"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": []
+  },
+  "include": ["background.ts"]
+}

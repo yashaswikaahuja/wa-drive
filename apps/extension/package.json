@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node scripts/build-all.mjs",
     "pack": "node scripts/build-all.mjs && node scripts/pack-store.mjs",
-    "typecheck": "node -e \"console.log('[extension] typecheck skipped until TS migration')\"",
+    "typecheck": "tsc -p tsconfig.background.json --noEmit && node scripts/build-background.mjs",
     "test": "node -e \"console.log('[extension] tests live under extension-dev/; skipped in package test')\""
   },
   "dependencies": {
@@ -22,7 +22,8 @@
     "@cc/wss": "workspace:*"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=20"
