@@ -1,6 +1,6 @@
 /**
  * Rebuild all extension inject/SW bundles from @cc/* workspace packages,
- * then emit background.js from background.ts.
+ * then emit entry .js files from .ts (background, content, popup, SW helpers, …).
  * Run: pnpm --filter cybercontrol-extension build
  */
 import fs from 'node:fs';
@@ -21,5 +21,5 @@ for (const s of scripts) {
   execSync(`node "${s}"`, { stdio: 'inherit' });
 }
 
-execSync(`node "${path.join(scriptsDir, 'build-background.mjs')}"`, { stdio: 'inherit' });
-console.log('\nAll extension bundles + background.js rebuilt.');
+execSync(`node "${path.join(scriptsDir, 'build-extension-entries.mjs')}"`, { stdio: 'inherit' });
+console.log('\nAll extension bundles + entry .js files rebuilt.');

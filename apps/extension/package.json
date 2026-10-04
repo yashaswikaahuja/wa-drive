@@ -7,7 +7,7 @@
   "scripts": {
     "build": "node scripts/build-all.mjs",
     "pack": "node scripts/build-all.mjs && node scripts/pack-store.mjs",
-    "typecheck": "tsc -p tsconfig.background.json --noEmit && node scripts/build-background.mjs",
+    "typecheck": "tsc -p tsconfig.entries.json --noEmit && node scripts/build-extension-entries.mjs",
     "test": "node -e \"console.log('[extension] tests live under extension-dev/; skipped in package test')\""
   },
   "dependencies": {

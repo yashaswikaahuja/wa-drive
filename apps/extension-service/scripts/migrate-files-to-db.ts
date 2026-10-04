@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-nocheck
 // migrate-files-to-db.js — one-time migration of the legacy on-disk extension-service stores
 // (DATA_DIR/form_mappings.json + DATA_DIR/adapters.json) into the shared Postgres ext_kv_store.
 //

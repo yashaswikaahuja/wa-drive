@@ -1,8 +1,9 @@
 /**
  * Build a runnable dist/ for extension-service.
  *
- * Vendors @cybercontrol/svc-* under dist/vendor/ (NOT dist/node_modules) so
- * Docker COPY is not stripped by .dockerignore node_modules rules.
+ * 1. Compiles TypeScript sources (tsc → .tsbuild/)
+ * 2. Vendors @cybercontrol/svc-* under dist/vendor/ (NOT dist/node_modules) so
+ *    Docker COPY is not stripped by .dockerignore node_modules rules.
  * package.json uses file:./vendor/<pkg> so `npm install` in the image resolves.
  *
  * TS packages must ship compiled dist/ — Docker runs plain Node 20.
@@ -17,9 +18,7 @@ const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const repositoryRoot = findRepoRoot(serviceRoot);
 const distRoot = path.join(serviceRoot, 'dist');
 const vendorRoot = path.join(distRoot, 'vendor');
-
-const serviceDirectories = ['src', 'migrations'];
-const serviceFiles = ['index.js', 'package.json'];
+const tsbuildRoot = path.join(serviceRoot, '.tsbuild');
 
 // Dependency order so sibling imports resolve during tsc emit.
 const packageNames = [
@@ -63,21 +62,47 @@ for (const packageName of packageNames) {
   buildPackage(packageName);
 }
 
+// Compile this service's TypeScript → .tsbuild/
+console.log('Compiling extension-service TypeScript…');
+const tscResult = spawnSync('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], {
+  cwd: serviceRoot,
+  stdio: 'inherit',
+  shell: true,
+});
+if (tscResult.status !== 0) {
+  throw new Error('extension-service tsc failed');
+}
+if (!fs.existsSync(path.join(tsbuildRoot, 'index.js'))) {
+  throw new Error('tsc did not emit .tsbuild/index.js');
+}
+
 fs.rmSync(distRoot, { recursive: true, force: true });
 fs.mkdirSync(vendorRoot, { recursive: true });
 
-for (const file of serviceFiles) {
-  const src = path.join(serviceRoot, file);
-  if (fs.existsSync(src)) {
-    fs.copyFileSync(src, path.join(distRoot, file));
-  }
+// Emitted JS: index.js + src/** + scripts/**
+fs.copyFileSync(path.join(tsbuildRoot, 'index.js'), path.join(distRoot, 'index.js'));
+const indexMap = path.join(tsbuildRoot, 'index.js.map');
+if (fs.existsSync(indexMap)) {
+  fs.copyFileSync(indexMap, path.join(distRoot, 'index.js.map'));
 }
-for (const directory of serviceDirectories) {
-  fs.cpSync(path.join(serviceRoot, directory), path.join(distRoot, directory), {
+fs.cpSync(path.join(tsbuildRoot, 'src'), path.join(distRoot, 'src'), {
+  recursive: true,
+  filter: copyFilter,
+});
+const scriptsBuild = path.join(tsbuildRoot, 'scripts');
+if (fs.existsSync(scriptsBuild)) {
+  fs.cpSync(scriptsBuild, path.join(distRoot, 'scripts'), {
     recursive: true,
     filter: copyFilter,
   });
 }
+
+// Non-TS assets
+fs.copyFileSync(path.join(serviceRoot, 'package.json'), path.join(distRoot, 'package.json'));
+fs.cpSync(path.join(serviceRoot, 'migrations'), path.join(distRoot, 'migrations'), {
+  recursive: true,
+  filter: copyFilter,
+});
 
 for (const packageName of packageNames) {
   const source = path.join(repositoryRoot, 'packages', packageName);
@@ -151,6 +176,12 @@ for (const [name, version] of Object.entries(nextDeps)) {
     delete nextDeps[name];
   }
 }
+// Drop typescript-only tooling from the Docker image package.json.
+delete distPkg.devDependencies;
+distPkg.main = 'index.js';
+distPkg.scripts = {
+  start: 'node index.js',
+};
 distPkg.dependencies = nextDeps;
 fs.writeFileSync(distPkgPath, JSON.stringify(distPkg, null, 2) + '\n');
 

@@ -16,5 +16,11 @@
     "sourceMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/services/whatsapp.service.ts", "src/server.ts", "src/api"]
+  "exclude": [
+    "node_modules",
+    "src/assets",
+    "src/services/whatsapp.service.ts",
+    "src/server.ts",
+    "src/api"
+  ]
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from 'express';
 import { pool } from '../../db/db.js';
 import { authMiddleware } from '../auth.js';

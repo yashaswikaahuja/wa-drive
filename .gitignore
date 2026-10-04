@@ -92,6 +92,10 @@ extension-dev/cli/out/
 # Turborepo
 .turbo/
 
+# tsc emit staging (extension-service and similar)
+.tsbuild/
+**/.tsbuild/
+
 
 # Local issue scratch
 .tmp-issue*/

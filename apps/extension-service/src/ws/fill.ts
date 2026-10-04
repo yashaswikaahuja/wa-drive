@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * WSS Stage C — fill plan + session over the live socket (not HTTPS).
  * Builds a sequential-kernel mapping from taught form maps + profile + conditionals.

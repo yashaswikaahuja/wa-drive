@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Label-to-profileKey heuristic mapping. Server-side mirror of the extension's
 // mapper.js FIELD_ALIASES, simplified for backfill use.
 //

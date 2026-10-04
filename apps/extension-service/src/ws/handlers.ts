@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * CyberControl WebSocket Message Handlers — extension-service/ws-handlers.js
  * Phase 3.4 — WSS Protocol

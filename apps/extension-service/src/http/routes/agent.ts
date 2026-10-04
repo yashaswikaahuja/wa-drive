@@ -1,3 +1,4 @@
+// @ts-nocheck
 // routes/agent.js — AI agent that plans driver actions for a given goal.
 //
 // POST /api/agent/plan

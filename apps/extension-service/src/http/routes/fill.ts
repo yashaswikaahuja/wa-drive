@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '@cybercontrol/svc-fill-planner';

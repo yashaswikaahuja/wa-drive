@@ -1,3 +1,4 @@
+// @ts-nocheck
 // store.js — shared document store for the extension-service.
 //
 // WHY: form_mappings.json and adapters.json used to live on local disk (DATA_DIR). That made the

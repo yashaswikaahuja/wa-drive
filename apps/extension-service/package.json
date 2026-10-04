@@ -5,10 +5,11 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
+    "build:tsc": "tsc -p tsconfig.json",
     "build": "node scripts/build-dist.mjs",
     "start": "node dist/index.js",
-    "dev": "node --watch index.js",
-    "typecheck": "node -e \"console.log('[extension-service] typecheck skipped (JS)')\"",
+    "dev": "tsc -p tsconfig.json && node --watch dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node -e \"console.log('[extension-service] no package tests yet')\""
   },
   "dependencies": {
@@ -26,6 +27,14 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1",
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^20.17.0",
+    "@types/pg": "^8.11.10",
+    "@types/ws": "^8.5.13",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=20"

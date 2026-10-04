@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Router } from 'express';
 import { loadDoc, mutateDoc, KEYS } from '../../db/store.js';
 

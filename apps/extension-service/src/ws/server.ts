@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * CyberControl WebSocket Server — extension-service/ws-server.js
  * Phase 3.4 — WSS Protocol (#128 / CYB-98)

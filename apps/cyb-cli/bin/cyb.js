@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-import { main } from '../src/index.mjs';
+// Generated from cyb.ts — edit cyb.ts, then pnpm build.
 
+import { main } from "../src/index.mjs";
 main(process.argv.slice(2)).catch((e) => {
-  console.error(`\nError: ${e?.message || e}`);
+  const message = e instanceof Error ? e.message : String(e);
+  console.error(`
+Error: ${message || e}`);
   process.exit(1);
 });
