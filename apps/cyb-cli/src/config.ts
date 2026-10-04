@@ -1,12 +1,13 @@
 import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
+import type { CliFlags } from './types.js';
 
 const PUBLIC_DOMAIN = (process.env.PUBLIC_DOMAIN || process.env.CYB_PUBLIC_DOMAIN || 'cybercontrol.fun').replace(/^\./, '');
 export const DEFAULT_API = process.env.CYB_API_URL || process.env.CC_BACKEND_URL || `https://api.${PUBLIC_DOMAIN}/api`;
 export const APP_NAME = 'cybercontrol';
 export const CLI_VERSION = '0.1.0';
 
-export function configDir() {
+export function configDir(): string {
   if (process.env.CYB_CONFIG_DIR) return process.env.CYB_CONFIG_DIR;
   if (platform() === 'win32') {
     const base = process.env.APPDATA || join(homedir(), 'AppData', 'Roaming');
@@ -16,11 +17,11 @@ export function configDir() {
   return join(xdg, 'cybercontrol');
 }
 
-export function credentialsPath() {
+export function credentialsPath(): string {
   return join(configDir(), 'credentials.json');
 }
 
-export function resolveApiBase(flags = {}) {
+export function resolveApiBase(flags: Partial<CliFlags> = {}): string {
   return (
     flags.api ||
     process.env.CYB_API_URL ||

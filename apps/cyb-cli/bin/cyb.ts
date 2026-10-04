@@ -1,4 +1,4 @@
-import { main } from '../src/index.mjs';
+import { main } from '../src/index.js';
 
 main(process.argv.slice(2)).catch((e: unknown) => {
   const message = e instanceof Error ? e.message : String(e);

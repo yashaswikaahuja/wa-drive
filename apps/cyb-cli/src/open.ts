@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { platform } from 'node:os';
 
 /** Open a URL in the default browser (best-effort). */
-export function openBrowser(url) {
+export function openBrowser(url: string): boolean {
   const p = platform();
   try {
     if (p === 'win32') {

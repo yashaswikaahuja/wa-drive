@@ -1,13 +1,14 @@
-import { CLI_VERSION } from './config.mjs';
-import { cmdLogin } from './commands/login.mjs';
-import { cmdLogout } from './commands/logout.mjs';
-import { cmdWhoami } from './commands/whoami.mjs';
-import { cmdSessions, cmdSession } from './commands/sessions.mjs';
-import { cmdLive } from './commands/live.mjs';
-import { cmdStatus } from './commands/status.mjs';
+import { CLI_VERSION } from './config.js';
+import { cmdLogin } from './commands/login.js';
+import { cmdLogout } from './commands/logout.js';
+import { cmdWhoami } from './commands/whoami.js';
+import { cmdSessions, cmdSession } from './commands/sessions.js';
+import { cmdLive } from './commands/live.js';
+import { cmdStatus } from './commands/status.js';
+import type { CliFlags } from './types.js';
 
-function parseArgs(argv) {
-  const flags = { _: [] };
+function parseArgs(argv: string[]): CliFlags {
+  const flags: CliFlags = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => {
@@ -66,7 +67,7 @@ Credentials file: platform config dir / cybercontrol / credentials.json
 `);
 }
 
-export async function main(argv) {
+export async function main(argv: string[]): Promise<void> {
   const flags = parseArgs(argv);
 
   if (flags.version) {

@@ -1,5 +1,5 @@
 /**
- * Emit runnable bin/cyb.js from bin/cyb.ts (Node 18+ ESM).
+ * Bundle bin/cyb.ts (+ src imports) → bin/cyb.js (Node 18+ ESM).
  * package.bin and install scripts keep pointing at cyb.js.
  */
 import path from 'node:path';
@@ -16,10 +16,11 @@ await esbuild.build({
   platform: 'node',
   format: 'esm',
   target: 'node18',
-  bundle: false,
+  bundle: true,
+  packages: 'external',
   sourcemap: false,
   banner: {
-    js: '#!/usr/bin/env node\n// Generated from cyb.ts — edit cyb.ts, then pnpm build.\n',
+    js: '#!/usr/bin/env node\n// Generated from cyb.ts — edit sources, then pnpm build.\n',
   },
   logLevel: 'info',
 });

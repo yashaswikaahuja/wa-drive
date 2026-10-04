@@ -1,13 +1,14 @@
-import { requireAuth } from '../credentials.mjs';
-import { authMe } from '../api.mjs';
-import { credentialsPath, CLI_VERSION } from '../config.mjs';
+import { requireAuth } from '../credentials.js';
+import { authMe } from '../api.js';
+import { credentialsPath, CLI_VERSION } from '../config.js';
+import type { CliFlags } from '../types.js';
 
-export async function cmdWhoami(flags) {
+export async function cmdWhoami(flags: CliFlags): Promise<void> {
   const auth = await requireAuth(flags);
   let me;
   try {
     me = await authMe(auth.apiBase, auth.accessToken);
-  } catch (e) {
+  } catch (e: any) {
     throw new Error(`${e.message}\n  Token may be expired — run: cyb login`);
   }
   console.log(`cyb v${CLI_VERSION}`);

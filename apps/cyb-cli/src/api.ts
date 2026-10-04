@@ -1,21 +1,26 @@
 /**
  * Thin HTTP client for CyberControl API.
  */
+import type { ApiRequestOptions, ApiResponse } from './types.js';
 
-export async function apiRequest(apiBase, path, { method = 'GET', token, body, form, timeoutMs = 45000 } = {}) {
+export async function apiRequest(
+  apiBase: string,
+  path: string,
+  { method = 'GET', token, body, form, timeoutMs = 45000 }: ApiRequestOptions = {}
+): Promise<ApiResponse> {
   const base = String(apiBase || '').replace(/\/$/, '');
   const url = path.startsWith('http') ? path : base + path;
-  const headers = {};
+  const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
-  let payload;
+  let payload: string | undefined;
   if (form) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    payload = new URLSearchParams(form).toString();
+    payload = new URLSearchParams(form as any).toString();
   } else if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     payload = JSON.stringify(body);
   }
-  let res;
+  let res: Response;
   try {
     res = await fetch(url, {
       method,
@@ -23,12 +28,12 @@ export async function apiRequest(apiBase, path, { method = 'GET', token, body, f
       body: payload,
       signal: AbortSignal.timeout(timeoutMs),
     });
-  } catch (e) {
+  } catch (e: any) {
     const cause = e?.cause?.message || e?.message || String(e);
     throw new Error(`Network error ${method} ${url}\n  ${cause}`);
   }
   const text = await res.text();
-  let data = null;
+  let data: any = null;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
@@ -37,7 +42,7 @@ export async function apiRequest(apiBase, path, { method = 'GET', token, body, f
   return { ok: res.ok, status: res.status, data, text, url };
 }
 
-export async function apiGet(apiBase, token, path) {
+export async function apiGet(apiBase: string, token: string, path: string): Promise<any> {
   const { ok, status, data, url } = await apiRequest(apiBase, path, { token });
   if (!ok) {
     if (status === 401 || status === 403) {
@@ -48,11 +53,15 @@ export async function apiGet(apiBase, token, path) {
   return data;
 }
 
-export async function authMe(apiBase, token) {
+export async function authMe(apiBase: string, token: string): Promise<any> {
   return apiGet(apiBase, token, '/auth/me');
 }
 
-export async function listSessions(apiBase, token, { limit = 20, offset = 0 } = {}) {
+export async function listSessions(
+  apiBase: string,
+  token: string,
+  { limit = 20, offset = 0 }: { limit?: number; offset?: number } = {}
+): Promise<any[]> {
   const data = await apiGet(apiBase, token, `/sessions?limit=${limit}&offset=${offset}`);
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.sessions)) return data.sessions;
@@ -61,11 +70,11 @@ export async function listSessions(apiBase, token, { limit = 20, offset = 0 } = 
   throw new Error(`Unexpected sessions shape: ${typeof data}`);
 }
 
-export async function getSession(apiBase, token, id) {
+export async function getSession(apiBase: string, token: string, id: string): Promise<any> {
   return apiGet(apiBase, token, `/sessions/${id}`);
 }
 
-export async function startDeviceLogin(apiBase) {
+export async function startDeviceLogin(apiBase: string): Promise<any> {
   const { ok, status, data } = await apiRequest(apiBase, '/auth/cli/device', { method: 'POST', body: {} });
   if (!ok) {
     throw new Error(
@@ -78,7 +87,7 @@ export async function startDeviceLogin(apiBase) {
   return data;
 }
 
-export async function pollDeviceLogin(apiBase, deviceCode) {
+export async function pollDeviceLogin(apiBase: string, deviceCode: string): Promise<any> {
   const { ok, status, data } = await apiRequest(
     apiBase,
     `/auth/cli/poll?device_code=${encodeURIComponent(deviceCode)}`,
@@ -90,7 +99,7 @@ export async function pollDeviceLogin(apiBase, deviceCode) {
   return data || { status: 'expired' };
 }
 
-export async function passwordLogin(apiBase, emailOrPhone, password) {
+export async function passwordLogin(apiBase: string, emailOrPhone: string, password: string): Promise<any> {
   const body = emailOrPhone.includes('@')
     ? { email: emailOrPhone.trim().toLowerCase(), password }
     : { phone: emailOrPhone.trim(), password };
@@ -101,7 +110,7 @@ export async function passwordLogin(apiBase, emailOrPhone, password) {
   return data;
 }
 
-export async function refreshTokens(apiBase, refreshToken) {
+export async function refreshTokens(apiBase: string, refreshToken: string): Promise<any | null> {
   const { ok, data } = await apiRequest(apiBase, '/auth/refresh', {
     method: 'POST',
     body: { refreshToken },

@@ -1,8 +1,9 @@
-import { clearCredentials, loadCredentials } from '../credentials.mjs';
-import { credentialsPath } from '../config.mjs';
-import { apiRequest } from '../api.mjs';
+import { clearCredentials, loadCredentials } from '../credentials.js';
+import { credentialsPath } from '../config.js';
+import { apiRequest } from '../api.js';
+import type { CliFlags } from '../types.js';
 
-export async function cmdLogout(flags) {
+export async function cmdLogout(flags: CliFlags): Promise<void> {
   const creds = loadCredentials();
   if (creds?.accessToken && creds?.apiBase && !flags.localOnly) {
     try {

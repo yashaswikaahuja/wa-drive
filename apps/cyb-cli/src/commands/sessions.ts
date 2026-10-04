@@ -1,8 +1,9 @@
-import { requireAuth } from '../credentials.mjs';
-import { listSessions, getSession } from '../api.mjs';
-import { formatSessionListLine, reportFromSession } from '../report.mjs';
+import { requireAuth } from '../credentials.js';
+import { listSessions, getSession } from '../api.js';
+import { formatSessionListLine, reportFromSession } from '../report.js';
+import type { CliFlags } from '../types.js';
 
-export async function cmdSessions(flags) {
+export async function cmdSessions(flags: CliFlags): Promise<void> {
   const auth = await requireAuth(flags);
   const limit = flags.limit || 20;
   console.log(`API ${auth.apiBase}  (limit=${limit})\n`);
@@ -27,7 +28,7 @@ export async function cmdSessions(flags) {
   console.log(`Detail:  cyb session <id>`);
 }
 
-export async function cmdSession(flags) {
+export async function cmdSession(flags: CliFlags): Promise<void> {
   const auth = await requireAuth(flags);
   const id = flags.id || flags._[0];
   if (!id) throw new Error('Usage: cyb session <session-uuid>');

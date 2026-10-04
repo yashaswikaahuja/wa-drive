@@ -1,19 +1,20 @@
-import { requireAuth } from '../credentials.mjs';
-import { listSessions, getSession, authMe } from '../api.mjs';
-import { reportFromSession, formatSessionListLine } from '../report.mjs';
-import { peekJwtClaims, jwtTtlSeconds } from '../jwt.mjs';
+import { requireAuth } from '../credentials.js';
+import { listSessions, getSession, authMe } from '../api.js';
+import { reportFromSession, formatSessionListLine } from '../report.js';
+import { peekJwtClaims, jwtTtlSeconds } from '../jwt.js';
+import type { CliFlags } from '../types.js';
 
-function deriveWsUrl(apiBase) {
+function deriveWsUrl(apiBase: string): string {
   const origin = String(apiBase || '').replace(/\/$/, '').replace(/\/api$/i, '');
   return origin.replace(/^http/i, 'ws') + '/ws';
 }
 
-async function openWebSocket(url) {
+async function openWebSocket(url: string): Promise<any> {
   if (typeof WebSocket !== 'undefined') {
     return new WebSocket(url);
   }
   try {
-    const mod = await import('ws');
+    const mod: any = await import('ws');
     const WS = mod.default || mod.WebSocket;
     return new WS(url);
   } catch {
@@ -23,7 +24,7 @@ async function openWebSocket(url) {
   }
 }
 
-function fmtLive(msg) {
+function fmtLive(msg: any): string {
   const ev = msg.event || '?';
   const label = (msg.label || msg.selector || '').toString().slice(0, 48);
   const planned = msg.planned != null ? String(msg.planned).slice(0, 36) : '';
@@ -42,11 +43,11 @@ function fmtLive(msg) {
   return `  · ${ev} ${label} ${planned}${fr}`;
 }
 
-function attach(sock, event, fn) {
+function attach(sock: any, event: string, fn: (...args: any[]) => void): void {
   if (typeof sock.addEventListener === 'function') {
     sock.addEventListener(event, fn);
   } else if (event === 'message') {
-    sock.on('message', (data) => fn({ data }));
+    sock.on('message', (data: any) => fn({ data }));
   } else {
     sock.on(event, fn);
   }
@@ -57,7 +58,7 @@ function attach(sock, event, fn) {
  * Auto-reconnects on close (common during Fill / LB blips).
  * Falls back to HTTPS session poll if WSS cannot connect at all.
  */
-export async function cmdLive(flags) {
+export async function cmdLive(flags: CliFlags): Promise<void> {
   const auth = await requireAuth(flags);
   const pollMs = flags.pollMs || 3000;
   const claims = peekJwtClaims(auth.accessToken) || auth.claims || null;
@@ -85,7 +86,7 @@ export async function cmdLive(flags) {
           : '') +
         '\n'
     );
-  } catch (e) {
+  } catch (e: any) {
     console.error(`Auth check failed: ${e.message}`);
     console.error('  Token is invalid/expired for HTTPS — WSS will also fail.');
     console.error('  Run:  cyb login\n');
@@ -112,12 +113,12 @@ export async function cmdLive(flags) {
     let sock;
     try {
       sock = await openWebSocket(wsUrl);
-    } catch (e) {
+    } catch (e: any) {
       console.warn(`WSS open failed (${e.message}) — HTTPS poll fallback.\n`);
       break;
     }
 
-    const handshakeOk = await new Promise((resolve) => {
+    const handshakeOk = await new Promise<boolean>((resolve) => {
       const t = setTimeout(() => resolve(false), 12000);
       attach(sock, 'message', (raw) => {
         let msg;
@@ -167,8 +168,8 @@ export async function cmdLive(flags) {
 
     attempt = 1; // reset after success
 
-    const closed = await new Promise((resolve) => {
-      const handle = async (raw) => {
+    const closed = await new Promise<{ code: any; reason: string }>((resolve) => {
+      const handle = async (raw: any) => {
         let msg;
         try {
           const data = typeof raw.data === 'string' ? raw.data : raw.data?.toString?.() || raw.toString();
@@ -187,7 +188,7 @@ export async function cmdLive(flags) {
               const { lines } = reportFromSession(full);
               console.log(lines.join('\n'));
               console.log('');
-            } catch (e) {
+            } catch (e: any) {
               console.warn(`(report fetch failed: ${e.message})`);
             }
           }
@@ -260,11 +261,11 @@ export async function cmdLive(flags) {
           console.log(formatSessionListLine(full));
           const { lines } = reportFromSession(full);
           console.log(lines.join('\n'));
-        } catch (e) {
+        } catch (e: any) {
           console.error(`Failed to load ${s.id}: ${e.message}`);
         }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn(`[poll] ${e.message}`);
       if (/Auth failed|401|403|expired/i.test(e.message)) {
         console.warn('  Run: cyb login');

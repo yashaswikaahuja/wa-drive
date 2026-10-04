@@ -1,10 +1,11 @@
 import { createInterface } from 'node:readline';
-import { resolveApiBase, credentialsPath, CLI_VERSION } from '../config.mjs';
-import { saveCredentials } from '../credentials.mjs';
-import { startDeviceLogin, pollDeviceLogin, passwordLogin } from '../api.mjs';
-import { openBrowser } from '../open.mjs';
+import { resolveApiBase, credentialsPath, CLI_VERSION } from '../config.js';
+import { saveCredentials } from '../credentials.js';
+import { startDeviceLogin, pollDeviceLogin, passwordLogin } from '../api.js';
+import { openBrowser } from '../open.js';
+import type { CliFlags } from '../types.js';
 
-function ask(question) {
+function ask(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     rl.question(question, (ans) => {
@@ -14,7 +15,7 @@ function ask(question) {
   });
 }
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
@@ -22,7 +23,7 @@ function sleep(ms) {
  * Browser device-code login (primary).
  * Fallbacks: --email/--password, --token
  */
-export async function cmdLogin(flags) {
+export async function cmdLogin(flags: CliFlags): Promise<void> {
   const apiBase = resolveApiBase(flags);
 
   if (flags.token) {
@@ -59,7 +60,7 @@ export async function cmdLogin(flags) {
   let device;
   try {
     device = await startDeviceLogin(apiBase);
-  } catch (e) {
+  } catch (e: any) {
     console.error(e.message);
     console.error('');
     console.error('Trying password login instead…');
@@ -97,7 +98,7 @@ export async function cmdLogin(flags) {
     let poll;
     try {
       poll = await pollDeviceLogin(apiBase, device.device_code);
-    } catch (e) {
+    } catch {
       process.stdout.write('.');
       continue;
     }

@@ -4,15 +4,14 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2020"],
-    "strict": true,
+    "strict": false,
+    "noImplicitAny": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
-    "allowJs": true,
-    "checkJs": false,
     "types": ["node"]
   },
-  "include": ["bin/cyb.ts", "src/index.d.mts"],
+  "include": ["bin/**/*.ts", "src/**/*.ts"],
   "exclude": ["node_modules"]
 }

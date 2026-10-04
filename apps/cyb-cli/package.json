@@ -14,7 +14,7 @@
   "scripts": {
     "build": "node scripts/build-entry.mjs && node --check bin/cyb.js",
     "build:entry": "node scripts/build-entry.mjs",
-    "test": "node src/report.test.mjs",
+    "test": "node scripts/run-test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {

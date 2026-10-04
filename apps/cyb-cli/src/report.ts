@@ -1,13 +1,13 @@
 /** Session report + timing + planned/actual value audit. */
 
-function durationMs(r) {
+function durationMs(r: any): number | null {
   const v = r?.durationMs ?? r?.duration_ms ?? null;
   if (v == null) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-function extensionVersionOf(session) {
+function extensionVersionOf(session: any): string | null {
   return (
     session.runtimeVersion ||
     session.runtime_version ||
@@ -17,7 +17,7 @@ function extensionVersionOf(session) {
   );
 }
 
-function pathHint(records) {
+function pathHint(records: any[] | null | undefined): string {
   if (!records?.length) return 'unknown';
   const r0 = records[0] || {};
   if (r0.selector != null || r0.strategy != null) return 'legacy-style';
@@ -25,10 +25,10 @@ function pathHint(records) {
   return 'unknown';
 }
 
-function analyzeTiming(records) {
-  const durs = [];
-  let wall = null;
-  const withTs = [];
+function analyzeTiming(records: any[] | null | undefined) {
+  const durs: number[] = [];
+  let wall: number | null = null;
+  const withTs: number[] = [];
   for (const r of records || []) {
     const ms = durationMs(r);
     if (ms != null) durs.push(ms);
@@ -45,28 +45,28 @@ function analyzeTiming(records) {
   return { sum, avg, p95, count: durs.length, wall, max: sorted.length ? sorted[sorted.length - 1] : null };
 }
 
-function plannedOf(r) {
+function plannedOf(r: any): string | null {
   if (r.value != null && r.value !== '') return String(r.value);
   if (r.plannedValue != null) return String(r.plannedValue);
   if (r.expected != null) return String(r.expected);
   return null;
 }
 
-function actualOf(r) {
+function actualOf(r: any): string | null {
   if (r.actualValue != null && r.actualValue !== '') return String(r.actualValue);
   if (r.actual_value != null && r.actual_value !== '') return String(r.actual_value);
   if (r.observedValue != null && r.observedValue !== '') return String(r.observedValue);
   return r.actualValue === '' || r.actual_value === '' ? '' : null;
 }
 
-function norm(s) {
+function norm(s: unknown): string {
   return String(s || '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 }
 
 /** Portal-masked display (e.g. Aadhaar ********8335) after a successful fill. */
-export function isMaskedActual(actual) {
+export function isMaskedActual(actual: unknown): boolean {
   const a = String(actual || '');
   if (!a) return false;
   // Mostly bullets/asterisks/X with a short visible tail (common UIDAI / portal mask)
@@ -79,7 +79,7 @@ export function isMaskedActual(actual) {
  * Extension verified=true + masked actual is SUCCESS, not VERIFIED_LIE.
  * T17: exported for unit tests.
  */
-export function valuesAgree(planned, actual) {
+export function valuesAgree(planned: unknown, actual: unknown): boolean {
   if (planned == null || actual == null || actual === '') return false;
   const p = String(planned);
   const a = String(actual);
@@ -126,12 +126,12 @@ export function valuesAgree(planned, actual) {
  * Critical: verified=true can still hide wrong mapping when planned was already wrong.
  * Do NOT flag portal-masked actuals (********8335) as VERIFIED_LIE.
  */
-export function auditValue(r) {
+export function auditValue(r: any): { planned: string | null; actual: string | null; flags: string[] } {
   const result = String(r.result || r.status || '?');
   const label = String(r.label || r.nodeId || '');
   const planned = plannedOf(r);
   const actual = actualOf(r);
-  const flags = [];
+  const flags: string[] = [];
 
   if (result === 'filled' || result === 'succeeded') {
     if (actual == null) flags.push('MISSING_ACTUAL');
@@ -171,13 +171,13 @@ export function auditValue(r) {
   return { planned, actual, flags };
 }
 
-function analyzeValues(records) {
+function analyzeValues(records: any[] | null | undefined) {
   let missingActual = 0;
   let mismatch = 0;
   let suspect = 0;
   let withPlanned = 0;
   let withActual = 0;
-  const issues = [];
+  const issues: any[] = [];
   for (let i = 0; i < (records || []).length; i++) {
     const r = records[i];
     const a = auditValue(r);
@@ -205,11 +205,11 @@ function analyzeValues(records) {
  * Infer static vs AJAX dropdown class from session records.
  * Extension does not post an explicit ajax:true flag — we reconstruct from strategy + failReason.
  */
-function classifyDropdownRecords(records) {
-  const rows = [];
-  const counts = {};
-  const ajaxFails = [];
-  const neverTried = [];
+function classifyDropdownRecords(records: any[] | null | undefined) {
+  const rows: any[] = [];
+  const counts: Record<string, number> = {};
+  const ajaxFails: string[] = [];
+  const neverTried: string[] = [];
   for (const r of records || []) {
     const type = String(r.type || '');
     const strategy = String(r.strategy || '');
@@ -278,7 +278,7 @@ function classifyDropdownRecords(records) {
   return { rows, counts, ajaxFails, neverTried };
 }
 
-export function formatSessionListLine(session) {
+export function formatSessionListLine(session: any): string {
   const records = Array.isArray(session.records) ? session.records : [];
   const ver = extensionVersionOf(session) || '?';
   const t = analyzeTiming(records);
@@ -300,19 +300,19 @@ export function formatSessionListLine(session) {
 }
 
 /** Normalize session.records (array or T16 { _metrics, records } envelope). */
-export function normalizeSessionRecords(session) {
+export function normalizeSessionRecords(session: any): any[] {
   const raw = session?.records;
   if (Array.isArray(raw)) return raw;
   if (raw && Array.isArray(raw.records)) return raw.records;
   return [];
 }
 
-export function reportFromSession(session) {
+export function reportFromSession(session: any): { lines: string[]; summary: any } {
   const records = normalizeSessionRecords(session);
   const ver = extensionVersionOf(session) || '?';
   const t = analyzeTiming(records);
   const valStats = analyzeValues(records);
-  const lines = [];
+  const lines: string[] = [];
   lines.push('═══════════════════════════════════════════════════════════');
   lines.push('  CYB SESSION REPORT');
   lines.push('═══════════════════════════════════════════════════════════');

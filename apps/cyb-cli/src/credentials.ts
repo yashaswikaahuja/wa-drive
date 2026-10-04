@@ -1,26 +1,36 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, chmodSync } from 'node:fs';
-import { dirname } from 'node:path';
-import { configDir, credentialsPath, resolveApiBase } from './config.mjs';
-import { isJwtExpired, peekJwtClaims, jwtTtlSeconds } from './jwt.mjs';
-import { refreshTokens } from './api.mjs';
+import { configDir, credentialsPath, resolveApiBase } from './config.js';
+import { isJwtExpired, peekJwtClaims, jwtTtlSeconds } from './jwt.js';
+import { refreshTokens } from './api.js';
+import { AuthError, type AuthContext, type CliFlags, type StoredCredentials } from './types.js';
 
-export function loadCredentials() {
+export function loadCredentials(): StoredCredentials | null {
   const path = credentialsPath();
   if (!existsSync(path)) return null;
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8'));
     if (!raw?.accessToken) return null;
-    return raw;
+    return raw as StoredCredentials;
   } catch {
     return null;
   }
 }
 
-export function saveCredentials({ accessToken, refreshToken, user, apiBase }) {
+export function saveCredentials({
+  accessToken,
+  refreshToken,
+  user,
+  apiBase,
+}: {
+  accessToken: string;
+  refreshToken?: string | null;
+  user?: Record<string, unknown> | null;
+  apiBase?: string;
+}): string {
   const dir = configDir();
   mkdirSync(dir, { recursive: true });
   const path = credentialsPath();
-  const payload = {
+  const payload: StoredCredentials = {
     accessToken,
     refreshToken: refreshToken || null,
     user: user || null,
@@ -36,7 +46,7 @@ export function saveCredentials({ accessToken, refreshToken, user, apiBase }) {
   return path;
 }
 
-export function clearCredentials() {
+export function clearCredentials(): string {
   const path = credentialsPath();
   if (existsSync(path)) unlinkSync(path);
   return path;
@@ -46,18 +56,17 @@ export function clearCredentials() {
  * Resolve auth. If access JWT is expired and refreshToken exists, try /auth/refresh.
  * Throws NOT_LOGGED_IN / TOKEN_EXPIRED with clear next steps.
  */
-export async function requireAuth(flags = {}) {
+export async function requireAuth(flags: Partial<CliFlags> = {}): Promise<AuthContext> {
   const apiBase = resolveApiBase(flags).replace(/\/$/, '');
 
   if (flags.token) {
     if (isJwtExpired(flags.token)) {
-      const err = new Error(
+      throw new AuthError(
         'Token expired (--token).\n' +
           '  Run:  cyb login\n' +
-          '  Or paste a fresh JWT from the café app.'
+          '  Or paste a fresh JWT from the café app.',
+        'TOKEN_EXPIRED'
       );
-      err.code = 'TOKEN_EXPIRED';
-      throw err;
     }
     return { apiBase, accessToken: flags.token, user: null, source: 'flag' };
   }
@@ -66,30 +75,29 @@ export async function requireAuth(flags = {}) {
     const accessToken = (
       process.env.CYB_TOKEN ||
       process.env.CC_ACCESS_TOKEN ||
-      process.env.ACCESS_TOKEN
+      process.env.ACCESS_TOKEN ||
+      ''
     ).trim();
     if (isJwtExpired(accessToken)) {
-      const err = new Error(
+      throw new AuthError(
         'Token expired (env).\n' +
           '  Run:  cyb login\n' +
-          '  Or set a fresh CYB_TOKEN / CC_ACCESS_TOKEN.'
+          '  Or set a fresh CYB_TOKEN / CC_ACCESS_TOKEN.',
+        'TOKEN_EXPIRED'
       );
-      err.code = 'TOKEN_EXPIRED';
-      throw err;
     }
     return { apiBase, accessToken, user: null, source: 'env' };
   }
 
   const creds = loadCredentials();
   if (!creds?.accessToken) {
-    const err = new Error(
+    throw new AuthError(
       'Not logged in.\n' +
         '  Run:  cyb login\n' +
         '  Or:   cyb login --token <jwt>\n' +
-        `  Creds: ${credentialsPath()}`
+        `  Creds: ${credentialsPath()}`,
+      'NOT_LOGGED_IN'
     );
-    err.code = 'NOT_LOGGED_IN';
-    throw err;
   }
 
   let accessToken = creds.accessToken;
@@ -120,32 +128,29 @@ export async function requireAuth(flags = {}) {
           });
           console.warn('Token refreshed.\n');
         } else {
-          const err = new Error(
+          throw new AuthError(
             'Access token expired and refresh failed.\n' +
               '  Run:  cyb login\n' +
-              `  Creds: ${credentialsPath()}`
+              `  Creds: ${credentialsPath()}`,
+            'TOKEN_EXPIRED'
           );
-          err.code = 'TOKEN_EXPIRED';
-          throw err;
         }
-      } catch (e) {
+      } catch (e: any) {
         if (e.code === 'TOKEN_EXPIRED') throw e;
-        const err = new Error(
+        throw new AuthError(
           `Access token expired; refresh error: ${e.message}\n` +
             '  Run:  cyb login\n' +
-            `  Creds: ${credentialsPath()}`
+            `  Creds: ${credentialsPath()}`,
+          'TOKEN_EXPIRED'
         );
-        err.code = 'TOKEN_EXPIRED';
-        throw err;
       }
     } else {
-      const err = new Error(
+      throw new AuthError(
         'Access token expired (no refresh token saved).\n' +
           '  Run:  cyb login\n' +
-          `  Creds: ${credentialsPath()}`
+          `  Creds: ${credentialsPath()}`,
+        'TOKEN_EXPIRED'
       );
-      err.code = 'TOKEN_EXPIRED';
-      throw err;
     }
   }
 
@@ -160,7 +165,7 @@ export async function requireAuth(flags = {}) {
 }
 
 /** Sync wrapper kept for callers that cannot await — prefer requireAuth. */
-export function requireAuthSync(flags = {}) {
+export function requireAuthSync(flags: Partial<CliFlags> = {}): AuthContext {
   // Deprecated path: no refresh. Use async requireAuth.
   const apiBase = resolveApiBase(flags);
   if (flags.token) {
@@ -169,30 +174,28 @@ export function requireAuthSync(flags = {}) {
   if (process.env.CC_ACCESS_TOKEN || process.env.CYB_TOKEN || process.env.ACCESS_TOKEN) {
     return {
       apiBase,
-      accessToken: (process.env.CYB_TOKEN || process.env.CC_ACCESS_TOKEN || process.env.ACCESS_TOKEN).trim(),
+      accessToken: (process.env.CYB_TOKEN || process.env.CC_ACCESS_TOKEN || process.env.ACCESS_TOKEN || '').trim(),
       user: null,
       source: 'env',
     };
   }
   const creds = loadCredentials();
   if (!creds?.accessToken) {
-    const err = new Error(
+    throw new AuthError(
       'Not logged in.\n' +
         '  Run:  cyb login\n' +
         '  Or:   cyb login --token <jwt>\n' +
-        `  Creds: ${credentialsPath()}`
+        `  Creds: ${credentialsPath()}`,
+      'NOT_LOGGED_IN'
     );
-    err.code = 'NOT_LOGGED_IN';
-    throw err;
   }
   if (isJwtExpired(creds.accessToken)) {
-    const err = new Error(
+    throw new AuthError(
       'Access token expired.\n' +
         '  Run:  cyb login\n' +
-        `  Creds: ${credentialsPath()}`
+        `  Creds: ${credentialsPath()}`,
+      'TOKEN_EXPIRED'
     );
-    err.code = 'TOKEN_EXPIRED';
-    throw err;
   }
   return {
     apiBase: (creds.apiBase || apiBase).replace(/\/$/, ''),

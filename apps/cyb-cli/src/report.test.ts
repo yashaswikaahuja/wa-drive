@@ -1,16 +1,16 @@
 /**
  * T17 — CLI audit: portal mask + date format aware
- * Run: node cyb-cli/src/report.test.mjs
+ * Run: pnpm --filter cybercontrol-cli test
  */
 import {
   valuesAgree,
   isMaskedActual,
   auditValue,
   normalizeSessionRecords,
-} from './report.mjs';
+} from './report.js';
 
 let failed = 0;
-function assert(cond, msg) {
+function assert(cond: boolean, msg: string): void {
   if (!cond) {
     failed++;
     console.error('FAIL:', msg);
