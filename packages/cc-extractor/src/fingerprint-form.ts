@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * fingerprint-form — Form fingerprinting + pageModel assembly
  *

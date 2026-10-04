@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * cc-background/label-utils — Label normalisation and semantic alias resolution
  * for the service worker (background.js).

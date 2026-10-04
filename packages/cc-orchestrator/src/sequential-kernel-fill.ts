@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * sequential-kernel-fill — Sequential kernel fill path
  *

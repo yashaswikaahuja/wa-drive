@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ── extractFormFieldsWithFingerprint ──────────────────────────────────────────
 function extractFormFieldsWithFingerprint() {
   var _fc  = globalThis.CcFormContext        || {};

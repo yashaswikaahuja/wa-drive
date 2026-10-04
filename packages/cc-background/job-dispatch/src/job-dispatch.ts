@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * cc-background/job-dispatch — Job dispatch runner for the service worker.
  *

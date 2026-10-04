@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * cc-background/wss-manager — WSS message handler dispatcher for the service worker.
  *

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * cc-background/teach — Teach session orchestrator for the service worker.
  *

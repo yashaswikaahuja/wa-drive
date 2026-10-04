@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * correction-observer — Post-fill correction + enrichment listeners
  *

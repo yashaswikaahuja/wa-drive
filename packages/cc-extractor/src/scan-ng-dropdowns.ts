@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * scan-ng-dropdowns — ng-select / combobox / custom dropdown scanner
  *

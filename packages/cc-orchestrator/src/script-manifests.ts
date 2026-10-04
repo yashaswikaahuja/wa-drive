@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * script-manifests — Injection script lists for the sequential fill path
  *

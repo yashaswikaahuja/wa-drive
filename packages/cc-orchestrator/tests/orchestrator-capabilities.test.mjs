@@ -3,21 +3,18 @@
  * Tests for script-manifests and flatten-profile (pure, no browser).
  * Plain Node, no framework.
  */
-import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { loadIifeSource } from '../../../tooling/load-iife-source.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-function load(name) {
-  const src = readFileSync(path.join(__dirname, name), 'utf8');
-  const r = {};
-  new Function('globalThis', src)(r);
-  return r;
+async function load(name) {
+  return loadIifeSource(path.join(__dirname, name));
 }
 
-const { CcScriptManifests } = load('../src/script-manifests.js');
+const { CcScriptManifests } = await load('../src/script-manifests.ts');
 const { SEQUENTIAL_KERNEL_SCRIPTS } = CcScriptManifests;
-const { CcFlattenProfile }  = load('../src/flatten-profile.js');
+const { CcFlattenProfile } = await load('../src/flatten-profile.ts');
 
 let passed = 0, failed = 0;
 function assert(desc, actual, expected) {

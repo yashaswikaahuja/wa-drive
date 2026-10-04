@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * form-context — Form guard + element skip + label helpers
  *

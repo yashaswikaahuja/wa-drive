@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * mapping-relation — browser/SW copy of @cc/mapper/mapping-relation (#302).
  * Keep behavior aligned with packages/cc-mapper/src/mapping-relation.js

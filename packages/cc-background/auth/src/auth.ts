@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * cc-background/auth — Authentication and trust guards for the service worker.
  *

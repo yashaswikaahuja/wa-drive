@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * scan-standard-fields — Standard input/select/radio/checkbox scanner
  *

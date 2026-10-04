@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * sort-fields-visual — Visual position sort for form fields
  *

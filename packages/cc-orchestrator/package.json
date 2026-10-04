@@ -2,18 +2,27 @@
   "name": "@cc/orchestrator",
   "version": "1.0.0",
   "description": "CyberControl fill orchestrator — sequential kernel + ActionPlan paths",
-  "main": "src/index.js",
+  "type": "module",
+  "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./script-manifests": "./src/script-manifests.js",
-    "./flatten-profile": "./src/flatten-profile.js",
-    "./sequential-kernel-fill": "./src/sequential-kernel-fill.js",
-    "./action-plan-fill": "./src/action-plan-fill.js"
+    ".": "./src/index.ts",
+    "./script-manifests": "./src/script-manifests.ts",
+    "./flatten-profile": "./src/flatten-profile.ts",
+    "./sequential-kernel-fill": "./src/sequential-kernel-fill.ts",
+    "./action-plan-fill": "./src/action-plan-fill.ts",
+    "./mapping-relation": "./src/mapping-relation.ts"
   },
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "test": "node ../../tooling/run-package-tests.mjs"
   },
-  "type": "module",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
+  },
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
 }

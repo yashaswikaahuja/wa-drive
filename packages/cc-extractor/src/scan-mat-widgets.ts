@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * scan-mat-widgets — Angular Material widget scanner
  *

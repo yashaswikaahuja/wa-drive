@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * cc-background/bridge — Frontend bridge: port handler, handleBridgeMessage,
  * and onMessageExternal for the service worker.

@@ -4,9 +4,11 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import * as esbuild from 'esbuild';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(path.join(__dirname, '../src/scan-mat-widgets.js'), 'utf8');
+const srcTs = readFileSync(path.join(__dirname, '../src/scan-mat-widgets.ts'), 'utf8');
+const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es2018' });
 const root = {};
 new Function('globalThis', src)(root);
 const { scan } = root.CcScanMatWidgets;

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * flatten-profile — Profile data flattener
  *

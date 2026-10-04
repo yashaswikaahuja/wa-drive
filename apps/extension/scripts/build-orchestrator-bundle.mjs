@@ -10,11 +10,11 @@ await writeConcatBundle({
  */`,
   srcDir: packageSrc('@cc/orchestrator'),
   order: [
-    'script-manifests.js',
-    'flatten-profile.js',
-    'mapping-relation.js',
-    'sequential-kernel-fill.js',
-    'action-plan-fill.js',
+    'script-manifests.ts',
+    'flatten-profile.ts',
+    'mapping-relation.ts',
+    'sequential-kernel-fill.ts',
+    'action-plan-fill.ts',
   ],
   outfile: path.join(extensionRoot, 'application/orchestrator-bundle.js'),
 });
