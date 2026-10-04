@@ -1008,7 +1008,14 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  packages/cc-executor: {}
+  packages/cc-executor:
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/cc-extractor:
     devDependencies:

@@ -10,9 +10,11 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import * as esbuild from 'esbuild';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '../src/detect-fill-strategy.js'), 'utf8');
+const srcTs = readFileSync(join(__dirname, '../src/detect-fill-strategy.ts'), 'utf8');
+const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es2018' });
 
 const sandbox = {};
 const fn = new Function('globalThis', src);

@@ -13,11 +13,13 @@ import { createRequire } from 'module';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import * as esbuild from 'esbuild';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Load the IIFE into a minimal globalThis-like sandbox
-const src = readFileSync(join(__dirname, '../src/cascade-field-level.js'), 'utf8');
+const srcTs = readFileSync(join(__dirname, '../src/cascade-field-level.ts'), 'utf8');
+const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es2018' });
 const sandbox = { CcCascadeFieldLevel: null };
 const fn = new Function('globalThis', src);
 fn(sandbox);

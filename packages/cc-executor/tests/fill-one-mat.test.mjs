@@ -6,9 +6,11 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import * as esbuild from 'esbuild';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const src = readFileSync(join(__dirname, '../src/fill-one-mat.js'), 'utf8');
+const srcTs = readFileSync(join(__dirname, '../src/fill-one-mat.ts'), 'utf8');
+const { code: src } = await esbuild.transform(srcTs, { loader: 'ts', target: 'es2018' });
 
 // Mock document for mat-select queries
 let _mockOpts = [];
