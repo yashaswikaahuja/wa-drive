@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Phase 4.1 — legacy client-fill gate (permanently closed).
  *

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ── shared/dom-utils.js ────────────────────────────────────────────────────
 // Single source of truth for DOM utility functions used across the extension.
 // Exposes: window.ccDomUtils = { getLabel, isVisible, isGoodLabel, humanizeAttr }

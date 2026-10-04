@@ -2,21 +2,30 @@
   "name": "@cc/shared",
   "version": "1.0.0",
   "description": "CyberControl shared utilities — DOM utils, LLM client, option match, network idle",
-  "main": "src/index.js",
+  "type": "module",
+  "main": "./src/dom-utils.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./dom-utils": "./src/dom-utils.js",
-    "./label-utils": "./src/label-utils.js",
-    "./llm-client": "./src/llm-client.js",
-    "./option-match": "./src/option-match.js",
-    "./network-idle": "./src/network-idle.js",
-    "./select-apply": "./src/select-apply.js",
-    "./semantic-aliases": "./src/semantic-aliases.js",
-    "./legacy-fill-gate": "./src/legacy-fill-gate.js"
+    ".": "./src/dom-utils.ts",
+    "./dom-utils": "./src/dom-utils.ts",
+    "./label-utils": "./src/label-utils.ts",
+    "./llm-client": "./src/llm-client.ts",
+    "./option-match": "./src/option-match.ts",
+    "./network-idle": "./src/network-idle.ts",
+    "./select-apply": "./src/select-apply.ts",
+    "./semantic-aliases": "./src/semantic-aliases.ts",
+    "./legacy-fill-gate": "./src/legacy-fill-gate.ts"
   },
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
     "test": "node tests/dom-utils-humanize.test.mjs"
   },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
+  },
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
 }

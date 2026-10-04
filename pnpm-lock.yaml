@@ -1019,9 +1019,20 @@ importers:
 
   packages/cc-orchestrator: {}
 
-  packages/cc-plugins: {}
+  packages/cc-plugins:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
-  packages/cc-shared: {}
+  packages/cc-shared:
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/cc-wss:
     devDependencies:

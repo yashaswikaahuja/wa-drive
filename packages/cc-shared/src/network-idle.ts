@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ── shared/network-idle.js ─────────────────────────────────────────────────
 // Single source of truth for waiting on network idle state.
 // Reads counters published by network-monitor.js (which runs in MAIN world).

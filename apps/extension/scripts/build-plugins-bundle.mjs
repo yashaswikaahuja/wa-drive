@@ -10,12 +10,12 @@ await writeConcatBundle({
  */`,
   srcDir: packageSrc('@cc/plugins'),
   order: [
-    'interface.js',
-    'cascade-select.js',
-    'ng-dropdown.js',
-    'button-click.js',
-    'keystroke-input.js',
-    'network-monitor.js',
+    'interface.ts',
+    'cascade-select.ts',
+    'ng-dropdown.ts',
+    'button-click.ts',
+    'keystroke-input.ts',
+    'network-monitor.ts',
   ],
   outfile: path.join(extensionRoot, 'autofill/plugins-bundle.js'),
 });

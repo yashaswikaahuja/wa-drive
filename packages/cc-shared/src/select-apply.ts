@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ── shared/select-apply.js ─────────────────────────────────────────────────
 // Single source of truth for applying a native <select> option with full event
 // dispatch compatibility (ASP.NET, DWR/ServicePlus, jQuery, Angular).

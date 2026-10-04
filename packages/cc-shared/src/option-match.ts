@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ── shared/option-match.js ─────────────────────────────────────────────────
 // Single source of truth for matching a desired value against a list of options.
 // Used by: executor.js, cascade-select.js, ng-dropdown.js, drivers/select.js,

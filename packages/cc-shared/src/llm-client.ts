@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ── shared/llm-client.js ───────────────────────────────────────────────────
 // Single LLM client for all AI calls across the extension.
 // Exposes: window.ccLLM = { call, parseJSON }
