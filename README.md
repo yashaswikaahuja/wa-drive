@@ -114,7 +114,7 @@ Push any change to `frontend/**` on master → GitHub Actions auto-deploys to Ve
 
 ## Environment Variables
 
-### Backend (ecosystem.config.cjs)
+### Backend (ecosystem.config.ts)
 ```
 PORT=3000
 WORKER_SECRET=cybercontrol-worker-secret-2024
@@ -145,12 +145,12 @@ ssh gcp-worker "pm2 logs cloudflare-tunnel --lines 30 --nostream | grep trycloud
 
 ```bash
 # 1. Edit extension/manifest.json — bump version (e.g. 1.2 → 1.3)
-# 2. Edit extension/popup.js — update CURRENT_VERSION constant
+# 2. Edit extension/popup.ts — update CURRENT_VERSION constant
 # 3. Repackage
 python3 -c "
 import zipfile
 with zipfile.ZipFile('/tmp/ext.zip','w') as z:
-    for f in ['manifest.json','popup.html','popup.js','content.js','icon.png']:
+    for f in ['manifest.json','popup.html','popup.ts','content.ts','icon.png']:
         z.write(f'extension/{f}', f)
 "
 # 4. Upload to GCP

@@ -12,9 +12,9 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node scripts/build-entry.mjs && node --check bin/cyb.js",
-    "build:entry": "node scripts/build-entry.mjs",
-    "test": "node scripts/run-test.mjs",
+    "build": "node --experimental-strip-types scripts/build-entry.ts && node --check bin/cyb.js",
+    "build:entry": "node --experimental-strip-types scripts/build-entry.ts",
+    "test": "node --experimental-strip-types scripts/run-test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {

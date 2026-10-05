@@ -44,14 +44,14 @@ flowchart TD
 /opt/cybercontrol-hub/
 ├── extension/
 │   ├── manifest.json              — v4.75, permissions: storage,activeTab,scripting,tabs,alarms
-│   ├── popup.js                   — Planner + UI orchestrator
+│   ├── popup.ts                   — Planner + UI orchestrator
 │   ├── popup.html                 — Extension popup UI
-│   ├── background.js              — Teaching orchestration, SW lifecycle
-│   ├── content.js                 — Content script shim
+│   ├── background.ts              — Teaching orchestration, SW lifecycle
+│   ├── content.ts                 — Content script shim
 │   ├── autofill/
-│   │   ├── extractor.js           — DOM → formFields[] + formKey + semanticFormKey
-│   │   ├── mapper.js              — fuzzyMatch + aiMatch (Groq) + FIELD_ALIASES
-│   │   └── executor.js            — Deterministic runtime (fills DOM)
+│   │   ├── extractor.ts           — DOM → formFields[] + formKey + semanticFormKey
+│   │   ├── mapper.ts              — fuzzyMatch + aiMatch (Groq) + FIELD_ALIASES
+│   │   └── executor.ts            — Deterministic runtime (fills DOM)
 │   └── icon.png
 ├── backend/
 │   ├── dist/server.js             — Express API server
@@ -257,8 +257,8 @@ https://survivor-scene-nest-championships.trycloudflare.com/api/extension/downlo
 - **DOM attributes** bridge data between worlds (shared across all contexts)
 
 ### Planner/Runtime Separation
-- Planner (popup.js): produces FillPlan from formFields + profile + savedMappings
-- Runtime (executor.js): consumes FillPlan deterministically
+- Planner (popup.ts): produces FillPlan from formFields + profile + savedMappings
+- Runtime (executor.ts): consumes FillPlan deterministically
 - Planner never touches DOM. Runtime never makes semantic decisions.
 
 ### Tiered Execution

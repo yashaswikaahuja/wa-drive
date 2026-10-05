@@ -3,7 +3,7 @@ const g = globalThis;
 if (!g.__CC_SW_SCRIPTS_LOADED) {
   g.__CC_SW_SCRIPTS_LOADED = true;
   try {
-    importScripts("knowledge-sync.js");
+    importScripts("knowledge-sync.ts");
   } catch (e) {
     console.warn("[CC] knowledge-sync load failed:", e.message);
   }

@@ -2,7 +2,7 @@
 
 Status: **Frozen Phase 3.0 contract**  
 Current public IR: **2.0.0**  
-Legacy runtime model: `extension/models/ir.js` **1.0.0**
+Legacy runtime model: `extension/models/ir.ts` **1.0.0**
 
 ## Compatibility rules
 

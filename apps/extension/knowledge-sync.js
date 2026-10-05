@@ -160,7 +160,7 @@ const ccKnowledgeSync = {
     return ((_a = cache == null ? void 0 : cache.artifacts) == null ? void 0 : _a.derivation_rules) || [];
   },
   /**
-   * Schedule periodic sync. Call once from background.js on startup.
+   * Schedule periodic sync. Call once from background.ts on startup.
    */
   startPeriodicSync() {
     setTimeout(() => this._periodicSync(), 1e4);

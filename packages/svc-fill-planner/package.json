@@ -14,7 +14,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node ../../tooling/run-package-tests.mjs"
+    "test": "node --experimental-strip-types ../../tooling/run-package-tests.ts"
   },
   "dependencies": {
     "@cybercontrol/svc-knowledge": "workspace:*",

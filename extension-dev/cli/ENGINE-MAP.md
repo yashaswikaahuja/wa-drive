@@ -23,7 +23,7 @@ This is the **only** path the Fill button uses when legacy is gated off.
 
 | Engine | Role |
 |---|---|
-| `autofill/executor.js` + plugins | Legacy client fill (5.91-style sessions) |
+| `autofill/executor.ts` + plugins | Legacy client fill (5.91-style sessions) |
 | `drivers/*` | Legacy agent / teach inject |
 | Agent UI | Permanently disabled (Phase 4.1) |
 | `background` DISPATCH_JOB inject list | Legacy stack if that message path is used |

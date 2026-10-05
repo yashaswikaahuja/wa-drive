@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node ../../tooling/run-dist-node-tests.mjs"
+    "test": "node --experimental-strip-types ../../tooling/run-dist-node-tests.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

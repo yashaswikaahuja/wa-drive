@@ -130,8 +130,8 @@ Then re-run real Fill on 5.92 and read `session --id` — failReason should beco
 ## 8. Commands used
 
 ```powershell
-node extension-dev/cli/cc-debug.mjs sessions --limit 15
-node extension-dev/cli/cc-debug.mjs session --id 88b999df-017d-47b1-a6e2-82d1999f69d5
-node extension-dev/cli/cc-debug.mjs session --id 18263fe8-de5a-4de1-a27d-74cc5eddff1a
-node extension-dev/cli/cc-debug.mjs fill --fixture govt-form.html --profile ...\kamaljeet-kumar.profile.json --headless
+node extension-dev/cli/cc-debug.ts sessions --limit 15
+node extension-dev/cli/cc-debug.ts session --id 88b999df-017d-47b1-a6e2-82d1999f69d5
+node extension-dev/cli/cc-debug.ts session --id 18263fe8-de5a-4de1-a27d-74cc5eddff1a
+node extension-dev/cli/cc-debug.ts fill --fixture govt-form.html --profile ...\kamaljeet-kumar.profile.json --headless
 ```

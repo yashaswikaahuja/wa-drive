@@ -1,7 +1,7 @@
 {
   "name": "@cc/background",
   "version": "1.0.0",
-  "description": "CyberControl service worker modules — all background.js logic",
+  "description": "CyberControl service worker modules — all background.ts logic",
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",

@@ -122,7 +122,7 @@ runtimes:
           description: "Deciding which profile field maps to which form field"
       - ai_reasoning:
           description: "LLM calls for planning or judgment"
-          note: "TEMPORARY EXCEPTION: mapper.js, ai-resolve.js, executor.js AI fallback remain until service provides /fill-plan endpoint"
+          note: "TEMPORARY EXCEPTION: mapper.ts, ai-resolve.ts, executor.ts AI fallback remain until service provides /fill-plan endpoint"
       - knowledge_storage:
           description: "Storing or managing field mappings, adapters, semantic aliases long-term"
       - learning:
@@ -131,7 +131,7 @@ runtimes:
           description: "Owning or deriving profile data"
       - planning:
           description: "Deciding fill order or cascade dependencies"
-          note: "TEMPORARY EXCEPTION: popup.js inline planning remains until service provides ordered fill plans"
+          note: "TEMPORARY EXCEPTION: popup.ts inline planning remains until service provides ordered fill plans"
 
   extension_service:
     name: "Extension-Service (Brain)"
@@ -179,38 +179,38 @@ temporary_exceptions:
   - id: EXC-001
     description: "AI/LLM calls in page context"
     files:
-      - "extension/autofill/mapper.js"
-      - "extension/autofill/ai-resolve.js"
-      - "extension/autofill/executor.js"
+      - "extension/autofill/mapper.ts"
+      - "extension/autofill/ai-resolve.ts"
+      - "extension/autofill/executor.ts"
     removal_condition: "Phase 4.3 (Cold-Start Semantic Mapping) provides server-side AI field mapping"
     removal_phase: "phase_4_3"
 
   - id: EXC-002
     description: "Strategic mapping in extension"
     files:
-      - "extension/autofill/mapper.js"
-      - "extension/autofill/rule-engine.js"
-      - "extension/shared/label-utils.js"
+      - "extension/autofill/mapper.ts"
+      - "extension/autofill/rule-engine.ts"
+      - "extension/shared/label-utils.ts"
     removal_condition: "Phase 4.1 (Server Fill Planner) provides field→value mapping in fill plan response"
     removal_phase: "phase_4_1"
 
   - id: EXC-003
-    description: "Fill planning in popup.js"
+    description: "Fill planning in popup.ts"
     files:
-      - "extension/popup.js"
+      - "extension/popup.ts"
     removal_condition: "Phase 4.1 (Server Fill Planner) returns ordered, dependency-aware fill plans"
     removal_phase: "phase_4_1"
 
   - id: EXC-004
-    description: "Teach/auto-teach in background.js"
+    description: "Teach/auto-teach in background.ts"
     files:
-      - "extension/background.js"
+      - "extension/background.ts"
     removal_condition: "Phase 5.1 (Server Teach) orchestrates teach sessions via WSS"
     removal_phase: "phase_5_1"
 
   - id: EXC-005
     description: "Derived values in extension"
     files:
-      - "extension/autofill/derive.js"
+      - "extension/autofill/derive.ts"
     removal_condition: "Phase 4.2 (Server-Side Derived Values) computes and includes them in fill plan"
     removal_phase: "phase_4_2"

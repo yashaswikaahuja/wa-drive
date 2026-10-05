@@ -7,12 +7,12 @@
   "entries": [
     {
       "id": "MIG-POPUP-01",
-      "current": "extension/popup.js",
+      "current": "extension/popup.ts",
       "responsibilities": ["UI", "product fill orchestration", "status/progress"],
       "proposed": [
         "extension/ui/popup-view.js",
         "extension/application/fill-orchestrator.js",
-        "extension/popup.js (thin entry)"
+        "extension/popup.ts (thin entry)"
       ],
       "public_boundary": "popup.html event handlers only",
       "dependency_direction": "ui → application → runtime/perception",
@@ -21,14 +21,14 @@
     },
     {
       "id": "MIG-BG-01",
-      "current": "extension/background.js",
+      "current": "extension/background.ts",
       "responsibilities": ["SW lifecycle", "auth", "messaging", "inject", "teach hooks"],
       "proposed": [
         "extension/sw/lifecycle.js",
         "extension/sw/auth.js",
         "extension/sw/messaging.js",
         "extension/sw/inject.js",
-        "extension/background.js (compose)"
+        "extension/background.ts (compose)"
       ],
       "public_boundary": "chrome.runtime.onMessage handlers",
       "dependency_direction": "sw → storage/chrome APIs; no perception imports of planning",
@@ -41,7 +41,7 @@
       "responsibilities": ["observation", "interaction", "binding resolve"],
       "proposed": [
         "extension/runtime/gateway/observation.js",
-        "extension/runtime/gateway/interaction.js",
+        "extension/runtime/gateway/interaction.ts",
         "extension/runtime/gateway/binding-resolve.js",
         "extension/runtime/dom-gateway.js (facade CcDomGateway)"
       ],
@@ -63,7 +63,7 @@
       "public_boundary": "CcNavigationContract frozen semantics",
       "dependency_direction": "navigation → optional visual-context; no service",
       "compatibility_risk": "high — phase_3_5 frozen",
-      "tests": ["test-navigation-contract.mjs", "CHECK-013", "Chromium nav cases"]
+      "tests": ["test-navigation-contract.ts", "CHECK-013", "Chromium nav cases"]
     },
     {
       "id": "MIG-EDGE-01",
@@ -78,7 +78,7 @@
       "public_boundary": "deriveEdges(nodes, contexts, opts)",
       "dependency_direction": "relationships → visual-context helpers optional",
       "compatibility_risk": "medium — phase_3_3 edge authority",
-      "tests": ["test-edge-factory.mjs", "graph invariants"]
+      "tests": ["test-edge-factory.ts", "graph invariants"]
     },
     {
       "id": "MIG-ERR-01",

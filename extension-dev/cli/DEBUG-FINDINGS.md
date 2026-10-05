@@ -11,9 +11,9 @@
 ### What we ran
 
 ```bash
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture perception-native.html --max-steps 2
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture cascade-select.html --max-steps 2
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture perception-native.html --max-steps 1 --force-lie
+node extension-dev/cli/cc-debug.ts fill-e2e --fixture perception-native.html --max-steps 2
+node extension-dev/cli/cc-debug.ts fill-e2e --fixture cascade-select.html --max-steps 2
+node extension-dev/cli/cc-debug.ts fill-e2e --fixture perception-native.html --max-steps 1 --force-lie
 ```
 
 ### Results
@@ -81,11 +81,11 @@ Next debug steps:
 
 ```bash
 # baseline still green?
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture cascade-select.html --max-steps 3
+node extension-dev/cli/cc-debug.ts fill-e2e --fixture cascade-select.html --max-steps 3
 
 # prove truth gate
-node extension-dev/cli/cc-debug.mjs fill-e2e --fixture cascade-select.html --max-steps 1 --force-lie
+node extension-dev/cli/cc-debug.ts fill-e2e --fixture cascade-select.html --max-steps 1 --force-lie
 
 # isolated write physics
-node extension-dev/cli/lib/isolated-probe.mjs
+node extension-dev/cli/lib/isolated-probe.ts
 ```

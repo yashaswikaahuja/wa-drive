@@ -1,3 +1,4 @@
+// Generated from sw.ts — edit sw.ts, then re-copy/emit.
 // Self-destructing service worker â€” clears all caches and unregisters itself
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {

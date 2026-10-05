@@ -8,7 +8,7 @@
     { "from": "extension/application/*", "to": "extension/perception/*" },
     { "from": "extension/runtime/*", "to": "extension/perception/visual-context.js" },
     { "from": "extension/perception/*", "to": "extension/runtime/dom-gateway.js" },
-    { "from": "extension/runtime/action-plan-executor.js", "to": "extension/runtime/navigation-contract.js" }
+    { "from": "extension/runtime/action-plan-executor.ts", "to": "extension/runtime/navigation-contract.js" }
   ],
   "note": "Globs are policy language for CHECK-015; not a runtime require graph yet."
 }

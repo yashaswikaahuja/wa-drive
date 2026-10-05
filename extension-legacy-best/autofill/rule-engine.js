@@ -1,3 +1,4 @@
+// Generated from rule-engine.ts � edit the .ts source, then re-copy/emit.
 // ── Rule engine (runs in page context) ─────────────────────────────────────
 // Pure evaluation of a saved field-mapping entry against a customer profile.
 // Produces a concrete fill ACTION the fill code applies. Shared shape with the
@@ -35,7 +36,7 @@ function ccRuleMet(rule, profile) {
 }
 
 // Match a profile value to one of the field's option texts.
-// Uses shared/option-match.js (window.ccMatchOption) injected before rule-engine runs.
+// Uses shared/option-match.ts (window.ccMatchOption) injected before rule-engine runs.
 
 // Format a date string to a target format inferred from a placeholder/pattern.
 // Handles DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD (+ the same with / or -).

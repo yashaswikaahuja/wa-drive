@@ -2,7 +2,7 @@ name: Architecture Doctrine
 
 # Runs on every PR and push to master.
 # Fails if a new forbidden backend dependency is added.
-# See /ARCHITECTURE.md §5 and /tools/forbidden-deps-check.mjs.
+# See /ARCHITECTURE.md §5 and /tools/forbidden-deps-check.ts.
 #
 # This workflow is fully isolated:
 #   - it does not depend on any other workflow
@@ -27,4 +27,4 @@ jobs:
         # Reports forbidden deps but does NOT fail the build for now.
         # `sharp` is currently used by the backend photo-sheet feature (face crop / passport sheets)
         # and is a known, accepted exception to be cleaned up later. Re-add `--strict` to enforce.
-        run: node tools/forbidden-deps-check.mjs || true
+        run: node tools/forbidden-deps-check.ts || true

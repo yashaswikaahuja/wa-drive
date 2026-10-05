@@ -4,11 +4,11 @@
   "kind": "dependency_policy",
   "expect": "reject",
   "forbidden_edges": [
-    { "from": "extension/perception/*", "to": "extension/autofill/mapper.js" },
-    { "from": "extension/perception/*", "to": "extension/popup.js" },
-    { "from": "extension/runtime/dom-gateway.js", "to": "extension/runtime/action-plan-executor.js" },
+    { "from": "extension/perception/*", "to": "extension/autofill/mapper.ts" },
+    { "from": "extension/perception/*", "to": "extension/popup.ts" },
+    { "from": "extension/runtime/dom-gateway.js", "to": "extension/runtime/action-plan-executor.ts" },
     { "from": "extension/runtime/*", "to": "extension-service/fill-planner.js" },
     { "from": "extension/perception/*", "to": "extension-service/mapping-engine.js" },
-    { "from": "extension/ui/*", "to": "extension/perception/binding-registry.js" }
+    { "from": "extension/ui/*", "to": "extension/perception/binding-registry.ts" }
   ]
 }

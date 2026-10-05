@@ -1,3 +1,4 @@
+// Generated from extractor.ts � edit the .ts source, then re-copy/emit.
 // ── Content script functions (run in page context) ────────────────────────────
 function extractFormFieldsWithFingerprint() {
   const hostname = location.hostname;
@@ -17,7 +18,7 @@ function extractFormFieldsWithFingerprint() {
 
   // ── Get label for an input element ──
   function getLabel(el) {
-    // Delegate to shared/dom-utils.js (injected before extractor runs)
+    // Delegate to shared/dom-utils.ts (injected before extractor runs)
     return window.ccDomUtils.getLabel(el);
   }
 

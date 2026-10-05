@@ -161,7 +161,7 @@ entities:
   field_mapping:
     description: >
       Maps a form field (identified by label/semantic_key) to a profile key.
-      Replaces the hardcoded FIELD_ALIASES in mapper.js.
+      Replaces the hardcoded FIELD_ALIASES in mapper.ts.
     payload:
       field_label:
         type: string
@@ -760,27 +760,27 @@ migration:
     the Phase 2/3 implementation work.
 
   current_state:
-    - location: "extension/autofill/mapper.js:FIELD_ALIASES"
+    - location: "extension/autofill/mapper.ts:FIELD_ALIASES"
       migrates_to: "field_mapping + synonym records (scope: global/country=IN)"
       notes: "~50 profile keys × ~5-10 aliases each = ~300-500 records"
 
-    - location: "extension/autofill/mapper.js:PRIORITY_KEYS"
+    - location: "extension/autofill/mapper.ts:PRIORITY_KEYS"
       migrates_to: "fill_rule records with cascade ordering logic"
       notes: "State/District/Block priority becomes data-driven"
 
-    - location: "extension/autofill/derive.js:ccDeriveProfile"
+    - location: "extension/autofill/derive.ts:ccDeriveProfile"
       migrates_to: "derivation_rule records"
       notes: "~15 derivation rules (age, highest_ed, name_split, etc.)"
 
-    - location: "extension/autofill/plugins/cascade-select.js:CASCADE_FIELDS"
+    - location: "extension/autofill/plugins/cascade-select.ts:CASCADE_FIELDS"
       migrates_to: "portal_definition.forms[].cascade_dependencies"
       notes: "Hardcoded dependency chain becomes portal-specific knowledge"
 
-    - location: "extension/autofill/plugins/keystroke-input.js (Bihar transliteration)"
+    - location: "extension/autofill/plugins/keystroke-input.ts (Bihar transliteration)"
       migrates_to: "portal_definition.behaviors.transliterates_on_tab + component_adapter"
       notes: "Portal-specific behavior becomes knowledge, not code"
 
-    - location: "extension/shared/semantic-aliases.js (empty, loaded from service)"
+    - location: "extension/shared/semantic-aliases.ts (empty, loaded from service)"
       migrates_to: "synonym records resolved and served via /settings/semantic-aliases"
       notes: "Already designed for service-ownership; schema formalizes the shape"
 

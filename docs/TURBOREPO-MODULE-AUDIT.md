@@ -10,7 +10,7 @@ Generated during monorepo hardening (2026-08-25).
 | Top-level `packages/*` | All **USED** by an app or another used package | None |
 | Top-level `apps/*` | All **USED** as product entrypoints | None |
 | Nested `@cc/background-*` package.json names | **ORPHAN names** (source still bundled by path) | **Removed** nested `package.json` files; sources kept under `@cc/background` |
-| `packages/cc-background/bootstrap` | **DEAD** (unbundled duplicate of `background.js`) | **Deleted** |
+| `packages/cc-background/bootstrap` | **DEAD** (unbundled duplicate of `background.ts`) | **Deleted** |
 | `@cybercontrol/svc-teach` beyond `setWsSend` | Soft-dead exports | Optional: wire teach handlers or trim exports later |
 
 ## 2. Dependency independence
@@ -21,10 +21,10 @@ Generated during monorepo hardening (2026-08-25).
 
 | Location | Issue |
 |----------|--------|
-| `apps/*/scripts/build-dist.mjs` | Assumes `packages/<name>` on disk |
-| `packages/cc-mapper/build.mjs` | Fallback path into `apps/extension/scripts/...` |
-| `tools/forbidden-deps-check.mjs` | Still points at pre-`apps/` roots |
-| `corpus/validate.js` | Points at deleted discrete `extractor.js` |
+| `apps/*/scripts/build-dist.ts` | Assumes `packages/<name>` on disk |
+| `packages/cc-mapper/build.ts` | Fallback path into `apps/extension/scripts/...` |
+| `tools/forbidden-deps-check.ts` | Still points at pre-`apps/` roots |
+| `corpus/validate.ts` | Points at deleted discrete `extractor.ts` |
 
 ## 3. Hardcoded company / vendor terms (packages)
 
@@ -36,7 +36,7 @@ Generated during monorepo hardening (2026-08-25).
 | Hardcoded remove.bg API key default | `backend-core` | Empty default (**done** — was a secret leak) |
 | Prod tailnet `WA_SERVICE` default | `backend-core` | Empty — require env (**done**) |
 | `PARENT_URL` → `api.cybercontrol.fun` | `wa-service` | Empty / `API_ORIGIN` (**done**) |
-| Trusted origin `app.cybercontrol.fun` | `cc-background/auth`, `content.js` | Injectable via `__CC_APP_ORIGIN` / `__CC_PUBLIC_DOMAIN` (**done**) |
+| Trusted origin `app.cybercontrol.fun` | `cc-background/auth`, `content.ts` | Injectable via `__CC_APP_ORIGIN` / `__CC_PUBLIC_DOMAIN` (**done**) |
 | `groqKey` / `_cc_groq_key` / `learnedBy: 'groq-ai'` | `cc-mapper`, `cc-executor`, teach | Renamed to `llmKey` / `_cc_llm_key` / `learnedBy: 'llm'` with aliases (**done**) |
 | `/api/settings/groq-key` | `apps/backend` | Alias of `/api/settings/llm` (**done**) |
 | Frontend/CLI/WA hardcoded `api.cybercontrol.fun` | frontend, cyb-cli, wa ecosystem, compose | Driven by `PUBLIC_DOMAIN` / `VITE_PUBLIC_DOMAIN` (**done**) |
@@ -63,5 +63,5 @@ REMOVE_BG_API_KEY=...   # optional; no longer defaulted in source
 
 1. ~~Rename extension LLM identifiers (`groqKey` → `llmKey`)~~ — done with `/api/settings/llm` + compat `/groq-key`.
 2. Vision provider registry in `backend-documents/extraction.ts` (URLs still vendor-specific).
-3. Resolve workspace package roots by name in `build-dist.mjs`.
-4. Retarget `tools/forbidden-deps-check.mjs` + `corpus/validate.js` to `apps/` + `@cc/*`.
+3. Resolve workspace package roots by name in `build-dist.ts`.
+4. Retarget `tools/forbidden-deps-check.ts` + `corpus/validate.ts` to `apps/` + `@cc/*`.

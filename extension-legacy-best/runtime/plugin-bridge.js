@@ -1,12 +1,13 @@
+// Generated from plugin-bridge.ts � edit the .ts source, then re-copy/emit.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Plugin → Capability Bridge
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Phase 1.7: Registers plugin-based capability handlers so the runner
 // can execute ng-dropdown and mat-select through the capability registry
-// instead of falling through to executor.js.
+// instead of falling through to executor.ts.
 //
-// Loaded AFTER plugins are registered (ng-dropdown.js, etc.)
+// Loaded AFTER plugins are registered (ng-dropdown.ts, etc.)
 // Exposes no new globals — just registers capabilities.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

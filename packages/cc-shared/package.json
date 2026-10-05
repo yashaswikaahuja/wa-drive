@@ -17,7 +17,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node tests/dom-utils-humanize.test.mjs"
+    "test": "node tests/dom-utils-humanize.test.ts"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

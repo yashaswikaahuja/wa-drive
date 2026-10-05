@@ -23,13 +23,13 @@
 
 | File | Role |
 |------|------|
-| `autofill/executor.js` | Sequential loop + settle + verify |
-| `autofill/mapper.js` | Label-primary DATA mapping |
-| `autofill/derive.js` | Client-side common-sense derive |
-| `autofill/ai-resolve.js` | Residual AI only (soft timeout) |
-| `autofill/rule-engine.js` | Rule layer |
-| `autofill/extractor.js` | Field extract |
-| `shared/network-idle.js` | Network quiet for settle |
+| `autofill/executor.ts` | Sequential loop + settle + verify |
+| `autofill/mapper.ts` | Label-primary DATA mapping |
+| `autofill/derive.ts` | Client-side common-sense derive |
+| `autofill/ai-resolve.ts` | Residual AI only (soft timeout) |
+| `autofill/rule-engine.ts` | Rule layer |
+| `autofill/extractor.ts` | Field extract |
+| `shared/network-idle.ts` | Network quiet for settle |
 
 Source of truth for behavior: this tree after port from `extension-legacy-best/`.
 

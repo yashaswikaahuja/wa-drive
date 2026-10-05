@@ -1,3 +1,4 @@
+// Generated from content.ts — edit the .ts source, then re-copy/emit.
 ;(function () {
   if (window._ccCSBridgeInit) return;
   window._ccCSBridgeInit = true;

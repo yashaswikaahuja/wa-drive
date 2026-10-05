@@ -38,7 +38,7 @@ $env:CC_ACCESS_TOKEN = (Get-Content extension-dev\cli\out\ramishwar-access.jwt -
 **Terminal A — leave running:**
 
 ```powershell
-node extension-dev\cli\cc-debug.mjs live
+node extension-dev\cli\cc-debug.ts live
 ```
 
 **Operator (any Chrome with the shipped / product extension):**
@@ -61,10 +61,10 @@ extension-dev/cli/out/live-session-<uuid>/session.json
 
 ```powershell
 # list recent fills for this workspace
-node extension-dev\cli\cc-debug.mjs sessions
+node extension-dev\cli\cc-debug.ts sessions
 
 # one fill in detail
-node extension-dev\cli\cc-debug.mjs session --id <session-uuid>
+node extension-dev\cli\cc-debug.ts session --id <session-uuid>
 ```
 
 ---
@@ -91,7 +91,7 @@ Sessions do not always include MAIN-world “page empty” proof. If the UI said
 ## Never do this
 
 - Edit `extension/application/fill-orchestrator.js` for debug  
-- Edit `popup.js` / `background.js` for debug  
+- Edit `popup.ts` / `background.ts` for debug  
 - Merge `debug/cc-cli` into master  
 
 All debug code stays under **`extension-dev/cli/`**.

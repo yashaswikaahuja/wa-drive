@@ -1,6 +1,7 @@
+// Generated from input.ts � edit the .ts source, then re-copy/emit.
 /**
  * Input drivers — keystroke-style typing, clearing, focusing.
- * Wraps window.keystrokeFillSync from autofill/plugins/keystroke-input.js.
+ * Wraps window.keystrokeFillSync from autofill/plugins/keystroke-input.ts.
  *
  * Drivers:
  *   - input.type  → type a value via real keystroke event sequence

@@ -1,4 +1,5 @@
-// ── shared/dom-utils.js ────────────────────────────────────────────────────
+// Generated from dom-utils.ts � edit the .ts source, then re-copy/emit.
+// ── shared/dom-utils.ts ────────────────────────────────────────────────────
 // Single source of truth for DOM utility functions used across the extension.
 // Exposes: window.ccDomUtils = { getLabel, isVisible, isGoodLabel }
 // ────────────────────────────────────────────────────────────────────────────
@@ -49,8 +50,8 @@
 
   /**
    * Resolve the human-readable label for a form element.
-   * This is the most complete implementation, merging extractor.js getLabel
-   * and drivers/dom.js getLabelFor.
+   * This is the most complete implementation, merging extractor.ts getLabel
+   * and drivers/dom.ts getLabelFor.
    *
    * Priority:
    *   1. <label for="id">
@@ -107,7 +108,7 @@
       if (cLbl && isGoodLabel(cLbl.textContent.trim())) return cLbl.textContent.trim();
     }
 
-    // 6. Parent hierarchy label (up to 4 hops — from drivers/dom.js)
+    // 6. Parent hierarchy label (up to 4 hops — from drivers/dom.ts)
     var p = el.parentElement;
     var hop = 0;
     while (p && hop < 4) {

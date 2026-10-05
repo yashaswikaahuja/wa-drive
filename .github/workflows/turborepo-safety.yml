@@ -34,7 +34,7 @@ jobs:
           node-version: 22
 
       - name: Run turborepo safety check
-        run: node tooling/turborepo-safety-check.mjs
+        run: node tooling/turborepo-safety-check.ts
 
   # ── Turbo build smoke (filtered, after guards) ───────────────────────────
   turbo-build:
@@ -111,7 +111,7 @@ jobs:
         continue-on-error: true
 
   # ── Private DNS / MagicDNS live gate (#299) — all service hosts ────────────
-  # File-level contract is enforced in layout-guards (turborepo-safety-check.mjs).
+  # File-level contract is enforced in layout-guards (turborepo-safety-check.ts).
   # On master/main, also run the topology-driven SSH connectivity workflow so
   # backend / extension / WA / future servers cannot silently lose MagicDNS.
   private-dns-connectivity:

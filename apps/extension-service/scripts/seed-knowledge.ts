@@ -37,7 +37,7 @@ const GLOBAL = { level: 'global' };
 const INDIA = { level: 'country', country: 'IN' };
 
 // ══════════════════════════════════════════════════════════════════════
-// 1. FIELD MAPPINGS (from mapper.js FIELD_ALIASES)
+// 1. FIELD MAPPINGS (from mapper.ts FIELD_ALIASES)
 // ══════════════════════════════════════════════════════════════════════
 
 const FIELD_ALIASES = {
@@ -121,7 +121,7 @@ for (const [canonical, variants] of Object.entries(HINDI_SYNONYMS)) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 3. CASCADE DEPENDENCIES (from cascade-select.js)
+// 3. CASCADE DEPENDENCIES (from cascade-select.ts)
 // ══════════════════════════════════════════════════════════════════════
 
 const CASCADE_DEPENDENCIES = {
@@ -146,7 +146,7 @@ for (const [child, parents] of Object.entries(CASCADE_DEPENDENCIES)) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 4. DERIVATION RULES (from derive.js)
+// 4. DERIVATION RULES (from derive.ts)
 // ══════════════════════════════════════════════════════════════════════
 
 records.push(makeRecord('derivation_rule', GLOBAL, {
@@ -235,7 +235,7 @@ records.push(makeRecord('portal_definition',
 ));
 
 // ══════════════════════════════════════════════════════════════════════
-// 6. CAPABILITY REFERENCES (15 capabilities from registry.js)
+// 6. CAPABILITY REFERENCES (15 capabilities from registry.ts)
 // ══════════════════════════════════════════════════════════════════════
 
 const CAPABILITIES = [
@@ -268,7 +268,7 @@ for (const cap of CAPABILITIES) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 7. SEMANTIC ALIASES (from background.js SEMANTIC_ALIASES)
+// 7. SEMANTIC ALIASES (from background.ts SEMANTIC_ALIASES)
 //    Phase 2.8 addition — English label→semantic_key mappings
 // ══════════════════════════════════════════════════════════════════════
 
@@ -297,7 +297,7 @@ for (const [canonical, variants] of Object.entries(BACKGROUND_SEMANTIC_ALIASES))
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 8. FILE UPLOAD MAPPINGS (from mapper.js fileAliases)
+// 8. FILE UPLOAD MAPPINGS (from mapper.ts fileAliases)
 //    Phase 2.8 addition — file input label→profile file key
 // ══════════════════════════════════════════════════════════════════════
 
@@ -324,7 +324,7 @@ for (const [fileKey, labels] of Object.entries(FILE_ALIASES)) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 9. EDUCATION FIELD ALIASES (from mapper.js eduAliases)
+// 9. EDUCATION FIELD ALIASES (from mapper.ts eduAliases)
 //    Phase 2.8 addition — education-context field matching patterns
 // ══════════════════════════════════════════════════════════════════════
 

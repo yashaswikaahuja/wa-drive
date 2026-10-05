@@ -34,7 +34,7 @@ Verify **stabilize single fill path + deploy lock** before opening Phase 1 (CYB-
 With `allowLegacyClientFill` **false**:
 
 1. Side panel **AI / Agent** button is **hidden**.
-2. Dashboard `OPEN_AND_DISPATCH` / `DISPATCH_JOB_DIRECT` (if exercised) returns `legacy_client_fill_disabled` and does **not** inject `autofill/mapper.js`.
+2. Dashboard `OPEN_AND_DISPATCH` / `DISPATCH_JOB_DIRECT` (if exercised) returns `legacy_client_fill_disabled` and does **not** inject `autofill/mapper.ts`.
 3. Pending `_cc_pending_job` on CONTENT_READY is dropped with a console warning (no client fill).
 
 Optional re-enable check (owner only, then disable again):
@@ -48,9 +48,9 @@ chrome.storage.local.set({ allowLegacyClientFill: false })
 ## D. Automated
 
 ```bash
-node extension-dev/tests/test-legacy-fill-gate.mjs
+node extension-dev/tests/test-legacy-fill-gate.ts
 # or full unit CI:
-node extension-dev/tests/ci-unit.mjs
+node extension-dev/tests/ci-unit.ts
 ```
 
 ## Sign-off

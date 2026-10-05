@@ -1,3 +1,4 @@
+// Generated from dispatch.ts � edit the .ts source, then re-copy/emit.
 /**
  * CyberControl driver dispatcher — window.cc.do(action) → result
  *

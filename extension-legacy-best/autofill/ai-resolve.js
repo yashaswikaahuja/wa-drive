@@ -1,3 +1,4 @@
+// Generated from ai-resolve.ts � edit the .ts source, then re-copy/emit.
 // ── AI residual resolver (runs in page context, LAST pass) ──────────────────
 // Direct key matching and the derivation layer handle most fields. Whatever is
 // STILL blank goes here: one batched LLM call that sees the whole profile plus

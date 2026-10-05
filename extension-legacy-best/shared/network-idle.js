@@ -1,10 +1,11 @@
-// ── shared/network-idle.js ─────────────────────────────────────────────────
+// Generated from network-idle.ts � edit the .ts source, then re-copy/emit.
+// ── shared/network-idle.ts ─────────────────────────────────────────────────
 // Single source of truth for waiting on network idle state.
-// Reads counters published by network-monitor.js (which runs in MAIN world).
+// Reads counters published by network-monitor.ts (which runs in MAIN world).
 // Exposes: window.ccWaitForNetworkIdle(quietMs, maxMs)
 //
-// Used by: executor.js, drivers/interaction.js (wait.networkIdle),
-//          drivers/select.js (select.cascade), cascade-select.js plugin
+// Used by: executor.ts, drivers/interaction.ts (wait.networkIdle),
+//          drivers/select.ts (select.cascade), cascade-select.ts plugin
 // ────────────────────────────────────────────────────────────────────────────
 
 ;(function () {

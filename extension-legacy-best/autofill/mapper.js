@@ -1,5 +1,6 @@
+// Generated from mapper.ts � edit the .ts source, then re-copy/emit.
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
-// Server-resolved field mappings (injected by background.js/popup.js from cache)
+// Server-resolved field mappings (injected by background.ts/popup.ts from cache)
 // take precedence over hardcoded FIELD_ALIASES. Merge server mappings on top.
 function _getFieldAliases() {
   var merged = Object.assign({}, FIELD_ALIASES);

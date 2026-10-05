@@ -1,10 +1,11 @@
+// Generated from ir.ts � edit the .ts source, then re-copy/emit.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Intermediate Representation (IR)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Phase 1.1: Formal models that sit between perception and planning.
 //
-// Perception (extractor.js) produces → PageModel
+// Perception (extractor.ts) produces → PageModel
 // Planner consumes → PageModel + Profile
 // Executor receives → ActionPlan (from protocol.yml)
 //
@@ -155,7 +156,7 @@
 
   /**
    * Bridge function: takes the legacy extractor output and produces a
-   * formal PageModel. This allows incremental migration — extractor.js
+   * formal PageModel. This allows incremental migration — extractor.ts
    * continues to work as before, and this function wraps its output.
    *
    * @param {object} extractorOutput - { formFields, formKey, semanticFormKey }

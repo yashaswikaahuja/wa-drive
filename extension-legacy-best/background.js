@@ -1,9 +1,10 @@
+// Generated from background.ts � edit the .ts source, then re-copy/emit.
 // Load knowledge sync client (must be first — other code references ccKnowledgeSync)
-try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.js load failed:', e.message); }
+try { importScripts('knowledge-sync.ts'); } catch (e) { console.warn('[CC] knowledge-sync.ts load failed:', e.message); }
 
-// Helper functions — use shared/label-utils.js as canonical source.
-// These are thin wrappers because background.js (service worker) cannot import
-// page-context scripts directly. Kept in sync with shared/label-utils.js.
+// Helper functions — use shared/label-utils.ts as canonical source.
+// These are thin wrappers because background.ts (service worker) cannot import
+// page-context scripts directly. Kept in sync with shared/label-utils.ts.
 const SEMANTIC_ALIASES = {
   'full name': 'name', 'candidate name': 'name', 'applicant name': 'name',
   'student name': 'name', 'name of candidate': 'name', 'name of applicant': 'name',
@@ -36,11 +37,11 @@ async function getSemanticKeyResolved(label) {
 function calcConfidence(fills, corrections) { if (fills + corrections === 0) return 0.5; return fills / (fills + corrections * 3); }
 function normalizeLabel(label) { return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); }
 
-console.log("[CC] background.js loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
+console.log("[CC] background.ts loaded v" + (chrome.runtime.getManifest && chrome.runtime.getManifest().version));
 
 // ── Knowledge Sync ─────────────────────────────────────────────────────────
 // Start periodic knowledge sync (bootstrap on first run, delta after that).
-// ccKnowledgeSync is defined in knowledge-sync.js (imported via manifest).
+// ccKnowledgeSync is defined in knowledge-sync.ts (imported via manifest).
 if (typeof ccKnowledgeSync !== 'undefined') {
   ccKnowledgeSync.startPeriodicSync();
 }
@@ -176,7 +177,7 @@ async function runJobDispatch(envelope, tabId) {
 
   // Inject runtime + run autofill pipeline (reuse existing executor)
   try {
-    // Inject cached server field mappings into page for mapper.js to pick up
+    // Inject cached server field mappings into page for mapper.ts to pick up
     if (typeof ccKnowledgeSync !== 'undefined') {
       const cachedMappings = await ccKnowledgeSync.getCachedFieldMappings();
       const cachedDerivRules = await ccKnowledgeSync.getCachedDerivationRules();
@@ -191,7 +192,7 @@ async function runJobDispatch(envelope, tabId) {
         });
       }
     }
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.ts', 'autofill/plugins/cascade-select.ts', 'autofill/plugins/ng-dropdown.ts', 'autofill/plugins/button-click.ts', 'autofill/plugins/keystroke-input.ts', 'drivers/dispatch.ts', 'drivers/dom.ts', 'drivers/input.ts', 'drivers/select.ts', 'drivers/interaction.ts', 'autofill/extractor.ts', 'autofill/mapper.ts', 'autofill/executor.ts'] });
 
     const result = await chrome.scripting.executeScript({
       target: { tabId },
@@ -349,7 +350,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'OPEN_AND_DISPATCH') {
     // Persist job to storage BEFORE opening tab so it survives SW termination.
-    // content.js sends CONTENT_READY when the page is ready; background picks up
+    // content.ts sends CONTENT_READY when the page is ready; background picks up
     // the pending job from storage and dispatches it then.
     const { envelope, formUrl } = msg;
     if (!envelope || !formUrl) { sendResponse({ ok: false, error: 'missing envelope or formUrl' }); return; }
@@ -362,7 +363,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'CONTENT_READY') {
-    // content.js fires this when it's injected and ready to receive DISPATCH_JOB.
+    // content.ts fires this when it's injected and ready to receive DISPATCH_JOB.
     // Pick up any pending job for this tab and dispatch it now.
     const tabId = sender?.tab?.id;
     if (!tabId) { sendResponse({ ok: true }); return; }

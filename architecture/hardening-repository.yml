@@ -97,7 +97,7 @@ as_is_inventory:
       role: "unit, governance, security, browser E2E"
   oversized_mixed_candidates:
     # Responsibility-driven, not line-count-only. Lines are evidence of scale.
-    - path: "extension/popup.js"
+    - path: "extension/popup.ts"
       approx_lines: 940
       responsibilities:
         - "operator UI rendering"
@@ -105,7 +105,7 @@ as_is_inventory:
         - "product-path script inject + perceive + fill-plan + execute"
         - "progress/status UX"
       target_split_hint: "ui/popup-ui.js | application/fill-orchestrator.js"
-    - path: "extension/background.js"
+    - path: "extension/background.ts"
       approx_lines: 990
       responsibilities:
         - "service worker lifecycle"
@@ -114,7 +114,7 @@ as_is_inventory:
         - "teach job hooks"
         - "message routing"
       target_split_hint: "sw/lifecycle.js | sw/auth.js | sw/messaging.js | sw/inject.js"
-    - path: "extension/autofill/executor.js"
+    - path: "extension/autofill/executor.ts"
       approx_lines: 1150
       responsibilities:
         - "legacy fill execution"
@@ -126,7 +126,7 @@ as_is_inventory:
         - "observation port (capture facts, geometry)"
         - "interaction port (performAction)"
         - "binding resolve TOCTOU"
-      target_split_hint: "runtime/gateway/observation.js | interaction.js | binding-resolve.js"
+      target_split_hint: "runtime/gateway/observation.js | interaction.ts | binding-resolve.js"
       constraint: "public CcDomGateway API surface MUST remain stable during split"
     - path: "extension/runtime/navigation-contract.js"
       approx_lines: 660
@@ -150,9 +150,9 @@ as_is_inventory:
       target_split_hint: "service-owned follow-on; not browser perception freeze path"
   cohesion_findings:
     - id: FIND-MIX-01
-      summary: "popup.js is the highest-risk mixed orchestrator on the product path"
+      summary: "popup.ts is the highest-risk mixed orchestrator on the product path"
     - id: FIND-MIX-02
-      summary: "background.js mixes SW infrastructure with product messaging"
+      summary: "background.ts mixes SW infrastructure with product messaging"
     - id: FIND-LEG-01
       summary: "autofill/* remains large but is legacy-gated; hardening MUST not re-expand it"
     - id: FIND-GOOD-01
@@ -382,7 +382,7 @@ test_taxonomy:
 implementation_allowed_after_review:
   - "Create runtime/errors catalog mapping to frozen FailureCodes"
   - "Extract popup fill orchestration behind facade without UX behavior change"
-  - "Split background.js by SW concern with message API stability"
+  - "Split background.ts by SW concern with message API stability"
   - "Internal splits of dom-gateway / edge-factory behind stable exports"
   - "Add CHECK-015 mechanical import guards"
   - "Reorganize tests by taxonomy without deleting coverage"
@@ -405,7 +405,7 @@ adrs:
 
 verification:
   check_id: CHECK-015
-  suite: "extension-dev/tests/unit/test-phase37-hardening-governance.mjs"
+  suite: "extension-dev/tests/unit/test-phase37-hardening-governance.ts"
 
 design_answers:
   q_why: "Maintainability and ownership clarity as the repo grows"

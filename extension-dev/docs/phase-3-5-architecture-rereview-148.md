@@ -11,7 +11,7 @@
 
 | Check | Result |
 |---|---|
-| CHECK-013 `test-phase35-navigation-governance.mjs` | **160/160** |
+| CHECK-013 `test-phase35-navigation-governance.ts` | **160/160** |
 | Fixtures under `architecture/fixtures/navigation/` | **15** |
 | Frozen schema churn `page-ir` / ActionPlan / EO / gateway-security in #147 | **None** (`git diff 007e2df..5b7e80f` empty on those files) |
 | Contract version | **0.2.0** `architecture_draft` |

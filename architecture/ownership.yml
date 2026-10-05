@@ -24,9 +24,9 @@ subsystems:
     migration_phase: "phase_3_3"
     legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
     paths:
-      - "extension/autofill/extractor.js"
-      - "extension/shared/dom-utils.js"
-      - "extension/autofill/plugins/interface.js"
+      - "extension/autofill/extractor.ts"
+      - "extension/shared/dom-utils.ts"
+      - "extension/autofill/plugins/interface.ts"
     description: "DOM scanning, label resolution, component detection. Grandfathered structural DOM access; not the frozen Phase 3 perception implementation."
 
   # ── EXTENSION: Execution ───────────────────────────────────────────
@@ -37,13 +37,13 @@ subsystems:
     migration_phase: "phase_3_3"
     legacy_reference: "architecture/dom-access-policy.yml legacy_exceptions"
     paths:
-      - "extension/autofill/executor.js"
-      - "extension/shared/option-match.js"
-      - "extension/shared/network-idle.js"
-      - "extension/shared/select-apply.js"
-      - "extension/autofill/plugins/cascade-select.js"
-      - "extension/autofill/plugins/ng-dropdown.js"
-      - "extension/autofill/plugins/keystroke-input.js"
+      - "extension/autofill/executor.ts"
+      - "extension/shared/option-match.ts"
+      - "extension/shared/network-idle.ts"
+      - "extension/shared/select-apply.ts"
+      - "extension/autofill/plugins/cascade-select.ts"
+      - "extension/autofill/plugins/ng-dropdown.ts"
+      - "extension/autofill/plugins/keystroke-input.ts"
       - "extension/drivers/"
     description: "Fill inputs, click buttons, dispatch events, wait for DOM. Currently performs semantic discovery and fuzzy matching that the Phase 3 execution contract forbids; grandfathered until migrated."
 
@@ -53,7 +53,7 @@ subsystems:
     status: migrating
     migration_target: "ExecutionObservation via the interaction gateway"
     paths:
-      - "extension/autofill/executor.js"  # post-fill observer section
+      - "extension/autofill/executor.ts"  # post-fill observer section
     description: "Correction capture, enrichment detection, session reporting. Emits raw values today; must migrate to redacted ExecutionObservation."
 
   # ── EXTENSION: Orchestration ───────────────────────────────────────
@@ -63,10 +63,10 @@ subsystems:
     security_remediation:
       reference: "architecture/gateway-security.yml message_bridge"
       defects: ["SEC-001", "SEC-002", "SEC-003", "SEC-004"]
-      note: "SEC-001..SEC-004 are resolved by issue #98 and permanently enforced by CHECK-011 (extension-dev/tests/security/run.mjs). Every future extension/browser security fix requires regression-test consideration before issue closure."
+      note: "SEC-001..SEC-004 are resolved by issue #98 and permanently enforced by CHECK-011 (extension-dev/tests/security/run.ts). Every future extension/browser security fix requires regression-test consideration before issue closure."
     paths:
-      - "extension/popup.js"
-      - "extension/background.js"
+      - "extension/popup.ts"
+      - "extension/background.ts"
       - "extension/manifest.json"
     description: "Script injection, auth, tab management, UI"
 
@@ -75,7 +75,7 @@ subsystems:
     owner: extension
     status: correct
     paths:
-      - "extension/shared/llm-client.js"
+      - "extension/shared/llm-client.ts"
     description: "LLM API wrapper (used by both layers during transition)"
 
   # ── SERVICE: Strategic Mapping (TEMPORARY in extension) ────────────
@@ -84,8 +84,8 @@ subsystems:
     status: temporary_violation
     exception: EXC-002
     paths:
-      - "extension/autofill/mapper.js"
-      - "extension/autofill/rule-engine.js"
+      - "extension/autofill/mapper.ts"
+      - "extension/autofill/rule-engine.ts"
     description: "Field→profile key assignment, alias tables, fuzzy matching rules"
     migration_target: "extension-service/mapping-engine.js (Phase 4.1)"
     migration_phase: "phase_4_1"
@@ -96,9 +96,9 @@ subsystems:
     status: temporary_violation
     exception: EXC-001
     paths:
-      - "extension/autofill/ai-resolve.js"
+      - "extension/autofill/ai-resolve.ts"
     description: "LLM-powered value resolution"
-    migration_target: "extension-service/semantic-mapper.js (Phase 4.3)"
+    migration_target: "extension-service/semantic-mapper.ts (Phase 4.3)"
     migration_phase: "phase_4_3"
 
   # ── SERVICE: Knowledge ─────────────────────────────────────────────
@@ -107,8 +107,8 @@ subsystems:
     status: temporary_violation
     exception: EXC-002
     paths:
-      - "extension/shared/label-utils.js"
-      - "extension/autofill/derive.js"
+      - "extension/shared/label-utils.ts"
+      - "extension/autofill/derive.ts"
     description: "Semantic aliases, confidence scoring, derived values"
     migration_target: "extension-service/derivation-engine.js (Phase 4.2)"
     migration_phase: "phase_4_2"
@@ -119,7 +119,7 @@ subsystems:
     status: temporary_violation
     exception: EXC-003
     paths:
-      - "extension/popup.js"  # inline fill-plan construction
+      - "extension/popup.ts"  # inline fill-plan construction
     description: "Fill order, cascade dependency resolution"
     migration_target: "extension-service/fill-planner.js (Phase 4.1)"
     migration_phase: "phase_4_1"
@@ -130,7 +130,7 @@ subsystems:
     status: temporary_violation
     exception: EXC-004
     paths:
-      - "extension/background.js"  # groqAutoTeach, teachOneField
+      - "extension/background.ts"  # groqAutoTeach, teachOneField
     description: "Auto-teach sessions, adapter learning"
     migration_target: "extension-service/teach-orchestrator.js (Phase 5.1)"
     migration_phase: "phase_5_1"
@@ -172,13 +172,13 @@ subsystems:
     status: correct
     paths:
       - "extension-service/knowledge-store.js"
-      - "extension-service/scope-resolver.js"
+      - "extension-service/scope-resolver.ts"
       - "extension-service/validation-engine.js"
       - "extension-service/knowledge-versioning.js"
       - "extension-service/seed-knowledge.js"
       - "extension-service/routes/knowledge.js"
       - "extension-service/routes/resolve.js"
-      - "extension-service/routes/validate.js"
+      - "extension-service/routes/validate.ts"
       - "extension-service/routes/versions.js"
       - "extension-service/routes/sync.js"
       - "extension-service/migrations/003_knowledge_store.sql"
@@ -193,7 +193,7 @@ subsystems:
     owner: extension
     status: correct
     paths:
-      - "extension/knowledge-sync.js"
+      - "extension/knowledge-sync.ts"
     description: "Extension-side sync client — fetches and caches server knowledge"
 
   # ── SHARED CONTRACT: Browser Perception Architecture (Phase 3.0) ──
@@ -288,7 +288,7 @@ subsystems:
       - "architecture/fixtures/hardening/"
       - "extension/runtime/errors.js"
       - "extension/application/fill-orchestrator.js"
-      - "extension/runtime/gateway/interaction.js"
+      - "extension/runtime/gateway/interaction.ts"
     description: >
       Hardening contract + partial runtime (errors catalog, fill orchestrator,
       gateway interaction port). Implemented unfrozen (#166); not frozen.
@@ -302,7 +302,7 @@ subsystems:
       - "extension-service/fill-planner.js"
       - "extension-service/mapping-engine.js"
       - "extension-service/plan-builder.js"
-      - "extension-service/dependency-resolver.js"
+      - "extension-service/dependency-resolver.ts"
     description: "Consume public IR for semantic interpretation and planning; never receive browser-private bindings"
 
   # ── SERVICE: HIM Protocol (Phase 4.0) ──────────────────────────────

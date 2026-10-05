@@ -1,10 +1,11 @@
-// ── shared/select-apply.js ─────────────────────────────────────────────────
+// Generated from select-apply.ts � edit the .ts source, then re-copy/emit.
+// ── shared/select-apply.ts ─────────────────────────────────────────────────
 // Single source of truth for applying a native <select> option with full event
 // dispatch compatibility (ASP.NET, DWR/ServicePlus, jQuery, Angular).
 //
 // Exposes: window.ccApplySelect(el, opt)
 //
-// Used by: executor.js, cascade-select.js
+// Used by: executor.ts, cascade-select.ts
 // ────────────────────────────────────────────────────────────────────────────
 
 ;(function () {

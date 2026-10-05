@@ -1,3 +1,4 @@
+// Generated from interface.ts — edit the .ts source, then re-copy/emit.
 /**
  * PluginInterface â€” contract for interaction plugins.
  *
