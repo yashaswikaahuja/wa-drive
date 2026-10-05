@@ -390,10 +390,15 @@ export function createSessionManager({
         const reauthRequired = !loggedOut && (desynced || nextAttempt >= 3);
 
         session.reconnectAttempts = nextAttempt;
-        session.lastDisconnectReason =
-          session.lastDisconnectReason?.startsWith('desync_while_connected:')
-            ? session.lastDisconnectReason
-            : reason || errorMessage || 'unknown';
+        // reason is a numeric Baileys/Boom statusCode (e.g. 408). Always store a
+        // string — calling .startsWith on a leftover number crashes the process
+        // (uncaught TypeError → Docker restart loop → desync → auth wipe → QR).
+        const priorReason = String(session.lastDisconnectReason ?? '');
+        session.lastDisconnectReason = priorReason.startsWith('desync_while_connected:')
+          ? priorReason
+          : reason != null
+            ? String(reason)
+            : errorMessage || 'unknown';
         session.lastDisconnectAt = new Date().toISOString();
         session.status = loggedOut || reauthRequired ? 'logged_out' : 'disconnected';
         session.socket = null;
