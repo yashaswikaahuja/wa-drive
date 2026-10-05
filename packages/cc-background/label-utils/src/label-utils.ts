@@ -1,9 +1,9 @@
 // @ts-nocheck
 /**
  * cc-background/label-utils — Label normalisation and semantic alias resolution
- * for the service worker (background.js).
+ * for the service worker (background.ts).
  *
- * NOTE: Keep in sync with packages/cc-shared/src/label-utils.js
+ * NOTE: Keep in sync with packages/cc-shared/src/label-utils.ts
  * (page-context version). The SW cannot importScripts page-context
  * scripts so this is a separate copy.
  *

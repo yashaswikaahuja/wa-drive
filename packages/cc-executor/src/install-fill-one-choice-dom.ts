@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * DOM radio / checkbox / file
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  */
 (function (root) {
   'use strict';

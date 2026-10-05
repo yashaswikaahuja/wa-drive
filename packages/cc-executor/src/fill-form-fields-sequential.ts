@@ -1,5 +1,5 @@
 // @ts-nocheck
-/* ==== executor.js (facade) ==== */
+/* ==== executor.ts (facade) ==== */
 /**
  * Sequential fill kernel — thin facade.
  *

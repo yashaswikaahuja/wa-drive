@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * mat-select/checkbox/radio
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  */
 (function (root) {
   'use strict';

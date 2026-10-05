@@ -88,7 +88,7 @@
   // ── wait.networkIdle ─────────────────────────────────────────────────────
   window.cc.registerDriver({
     name: 'wait.networkIdle',
-    description: 'Wait until in-flight fetch + XHR count reaches 0 and stays quiet for `quietMs`. Delegates to shared/network-idle.js.',
+    description: 'Wait until in-flight fetch + XHR count reaches 0 and stays quiet for `quietMs`. Delegates to shared/network-idle.ts.',
     sideEffect: 'observe',
     input: {
       type: 'object',

@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * ng-dropdown shared helpers (score/pick/visible)
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  */
 (function (root) {
   'use strict';
@@ -19,7 +19,7 @@
     } = b;
 
     // CcNgOptionScorer and CcNgSessionManager are guaranteed loaded before
-    // this installer runs (see build-executor-bundle.mjs ORDER).
+    // this installer runs (see build-executor-bundle.ts ORDER).
     var _nos = root.CcNgOptionScorer;
     var _nsm = root.CcNgSessionManager;
 

@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * fillOne dispatcher — resolve el/elType, run handlers in order.
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  */
 (function (root) {
   'use strict';

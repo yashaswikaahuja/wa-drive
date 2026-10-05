@@ -4,7 +4,7 @@
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Maps semantic_key values to label patterns for target resolution.
-// Used by runtime/resolver.js.
+// Used by runtime/resolver.ts.
 //
 // THE EXTENSION DOES NOT OWN THIS DATA.
 // Aliases are loaded from the service at runtime via:

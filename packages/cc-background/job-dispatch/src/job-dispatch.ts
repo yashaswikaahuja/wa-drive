@@ -37,7 +37,7 @@ async function runJobDispatch(envelope, tabId) {
 
   // Inject runtime + run autofill pipeline (reuse existing executor)
   try {
-    // Inject cached server field mappings into page for mapper.js to pick up
+    // Inject cached server field mappings into page for mapper.ts to pick up
     if (typeof ccKnowledgeSync !== 'undefined') {
       const cachedMappings = await ccKnowledgeSync.getCachedFieldMappings();
       const cachedDerivRules = await ccKnowledgeSync.getCachedDerivationRules();

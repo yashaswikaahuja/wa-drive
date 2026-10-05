@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * Live fill_debug emit (port + batch queue)
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  *
  * fill-debug-emitter.js owns the pure event queue + batch logic.
  * This file owns the Chrome transport and wires it to the kernel.
@@ -15,7 +15,7 @@
     k._debugFlushTimer = null;
 
   // ── fill-debug-emitter.js is the single source for queue + event assembly ──
-  // Must be loaded before debug.js (see build-executor-bundle.mjs ORDER).
+  // Must be loaded before debug.js (see build-executor-bundle.ts ORDER).
   var _fde = root.CcFillDebugEmitter || {};
 
   function ensureDebugPort() {

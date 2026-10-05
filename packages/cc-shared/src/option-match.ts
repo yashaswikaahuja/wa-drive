@@ -1,8 +1,8 @@
 // @ts-nocheck
-// ── shared/option-match.js ─────────────────────────────────────────────────
+// ── shared/option-match.ts ─────────────────────────────────────────────────
 // Single source of truth for matching a desired value against a list of options.
-// Used by: executor.js, cascade-select.js, ng-dropdown.js, drivers/select.js,
-// rule-engine.js.
+// Used by: executor.ts, cascade-select.ts, ng-dropdown.ts, drivers/select.ts,
+// rule-engine.ts.
 //
 // Exposes window.ccMatchOption(value, options, config) for page-context callers.
 // config.translations: { profileValue → optionText } lookup

@@ -114,7 +114,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === 'OPEN_AND_DISPATCH') {
     // Persist job to storage BEFORE opening tab so it survives SW termination.
-    // content.js sends CONTENT_READY when the page is ready; background picks up
+    // content.ts sends CONTENT_READY when the page is ready; background picks up
     // the pending job from storage and dispatches it then.
     // Phase 0 (CYB-85): gated.
     const { envelope, formUrl } = msg;
@@ -134,7 +134,7 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'CONTENT_READY') {
-    // content.js fires this when it's injected and ready to receive DISPATCH_JOB.
+    // content.ts fires this when it's injected and ready to receive DISPATCH_JOB.
     // Pick up any pending job for this tab and dispatch it now.
     const tabId = sender?.tab?.id;
     if (!tabId) { sendResponse({ ok: true }); return true; }

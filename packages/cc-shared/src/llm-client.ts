@@ -1,10 +1,10 @@
 // @ts-nocheck
-// ── shared/llm-client.js ───────────────────────────────────────────────────
+// ── shared/llm-client.ts ───────────────────────────────────────────────────
 // Single LLM client for all AI calls across the extension.
 // Exposes: window.ccLLM = { call, parseJSON }
 //
-// All callers (mapper.js aiMatch, ai-resolve.js, executor.js AI select,
-// background.js llmAutoTeach) should use this instead of inline fetch.
+// All callers (mapper.ts aiMatch, ai-resolve.ts, executor.ts AI select,
+// background.ts llmAutoTeach) should use this instead of inline fetch.
 // ────────────────────────────────────────────────────────────────────────────
 
 ;(function () {

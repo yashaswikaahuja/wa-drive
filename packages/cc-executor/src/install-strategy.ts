@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * STRATEGY_REGISTRY + detectStrategy + verifyValue
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  */
 (function (root) {
   'use strict';
@@ -9,7 +9,7 @@
   root.CcExecParts.installStrategy = function (k) {
     const getEl = function () { return k.getEl.apply(k, arguments); };
   // ── detect-fill-strategy.js is the single source for strategy registry ────
-  // Must be loaded before strategy.js (see build-executor-bundle.mjs ORDER).
+  // Must be loaded before strategy.js (see build-executor-bundle.ts ORDER).
   var _dfs = root.CcDetectFillStrategy || {};
   var STRATEGY_REGISTRY = _dfs.STRATEGY_REGISTRY || {};
 
@@ -20,7 +20,7 @@
   }
 
   // verify-fill-value.js is the single source for fill value verification.
-  // Must be loaded before strategy.js (see build-executor-bundle.mjs ORDER).
+  // Must be loaded before strategy.js (see build-executor-bundle.ts ORDER).
   var _vfv = root.CcVerifyFillValue || {};
   var _resolveEl = root.CcResolveCcSelector ? root.CcResolveCcSelector.resolveCcSelector : function(sel) { return document.querySelector(sel); };
   async function verifyValue(selector, expected, settleMs) {

@@ -125,7 +125,7 @@ DOM only: `el.options`, `el.selectedIndex`, `el.tagName`, `el.disabled`, `el.off
 
 All via the kernel before this extraction:
 - `sequential.js` — uses `realOptions`, `readSelectActual`, `selectLoadMode`, `selectIsActive`, `isPlaceholderPlanned`, `sampleOptions`
-- `fill-one-select.js` — destructures all 7 via `bindKernelLocals(k)` (actually uses none directly)
+- `fill-one-select.ts` — destructures all 7 via `bindKernelLocals(k)` (actually uses none directly)
 - All other `fill-one-*.js` files — destructure via `bindKernelLocals(k)` (none actually use them)
 - `post-fill-*.js` files — destructure via `bindKernelLocals(k)` (none actually use them)
 

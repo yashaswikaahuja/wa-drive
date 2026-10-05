@@ -43,12 +43,12 @@ var CascadeSelectPlugin = {
 
   fill(el, value, context) {
     function findOpt(options) {
-      // shared/option-match.js is injected before plugins run
+      // shared/option-match.ts is injected before plugins run
       return window.ccMatchOption(value, options);
     }
 
     function applySelect(el, opt) {
-      // Delegate to shared/select-apply.js
+      // Delegate to shared/select-apply.ts
       return window.ccApplySelect(el, opt);
     }
 

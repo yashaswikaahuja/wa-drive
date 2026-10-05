@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * settleAfterAct + WaitEngine
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  */
 (function (root) {
   'use strict';
@@ -9,7 +9,7 @@
   root.CcExecParts.installSettle = function (k) {
 
     // CcSettleAfterAct and CcWaitForOptions are guaranteed to be loaded
-    // before this installer runs (see build-executor-bundle.mjs ORDER).
+    // before this installer runs (see build-executor-bundle.ts ORDER).
     var _saa = root.CcSettleAfterAct;
     var _wfo = root.CcWaitForOptions;
 

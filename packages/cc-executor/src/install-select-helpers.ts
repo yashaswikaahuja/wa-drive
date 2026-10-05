@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * Select/cascade helpers + pushSelectRecord
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  *
  * select-option-state.js is the single source of truth for the 7 pure select
  * state functions. This file re-exposes them on the kernel (k) for existing
@@ -13,7 +13,7 @@
   root.CcExecParts.installSelectHelpers = function (k) {
 
   // ── Delegate to capabilities/select-option-state.js ──────────────────────
-  // Must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
+  // Must be loaded before select-helpers.js (see build-executor-bundle.ts ORDER).
   var _sos = root.CcSelectOptionState || {};
   var isPlaceholderOption  = _sos.isPlaceholderOption  || function () { return true; };
   var realOptions          = _sos.realOptions          || function () { return []; };
@@ -27,7 +27,7 @@
   var _buildFillRecord = _bfr.buildFillRecord || function (base) { return Object.assign({ ts: Date.now(), rv: k.RUNTIME_VERSION, fillMode: 'sequential' }, base); };
 
   // cascade-field-level.js is the single source of truth for cascade geography.
-  // It must be loaded before select-helpers.js (see build-executor-bundle.mjs ORDER).
+  // It must be loaded before select-helpers.js (see build-executor-bundle.ts ORDER).
   var _cascadeGeo = root.CcCascadeFieldLevel;
   function cascadeSemanticKey(label, profileKey, selector) {
     return _cascadeGeo

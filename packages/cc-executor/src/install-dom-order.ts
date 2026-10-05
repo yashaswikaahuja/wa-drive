@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
  * getEl + PRIORITY_KEYS + DOM-order entries
- * Part of sequential kernel — load before autofill/executor.js
+ * Part of sequential kernel — load before autofill/executor.ts
  */
 (function (root) {
   'use strict';
@@ -9,7 +9,7 @@
   root.CcExecParts.installDomOrder = function (k) {
 
     // resolve-cc-selector.js is the single owner of cc-style selector resolution.
-    // It must be loaded before dom-order.js (see build-executor-bundle.mjs ORDER).
+    // It must be loaded before dom-order.js (see build-executor-bundle.ts ORDER).
     var _resolve = root.CcResolveCcSelector
       ? root.CcResolveCcSelector.resolveCcSelector
       : function (sel) { return document.querySelector(sel); }; // safe fallback
@@ -35,7 +35,7 @@
       'municipal', 'नगर',
     ];
     // sort-fields-by-dom-order.js is the single owner of DOM order sorting.
-    // Must be loaded before dom-order.js (see build-executor-bundle.mjs ORDER).
+    // Must be loaded before dom-order.js (see build-executor-bundle.ts ORDER).
     k.entries = Object.entries(k.mapping || {});
     var _sort = root.CcSortFieldsByDomOrder;
     if (_sort) {
