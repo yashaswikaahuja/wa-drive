@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "CyberControl AutoFill",
-  "version": "5.92.27",
-  "description": "Fill government and portal forms from CyberControl customer profiles — for café operators.",
+  "version": "5.92.28",
+  "description": "Fill government and portal forms from CyberControl customer profiles - for cafe operators.",
   "permissions": [
     "storage",
     "activeTab",
