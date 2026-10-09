@@ -36,26 +36,13 @@ let executablePath = CHROME_PATHS.find(p => existsSync(p)) || undefined;
 
 // ── Build script injection list (mirrors popup.js order) ────────────
 const SHARED_SCRIPTS = [
-  'shared/option-match.js',
-  'shared/dom-utils.js',
-  'shared/network-idle.js',
-  'shared/llm-client.js',
-  'shared/select-apply.js',
-  'shared/semantic-aliases.js',
-  'models/ir.js',
-  'capabilities/registry.js',
-  'runtime/resolver.js',
-  'runtime/runner.js',
-  'autofill/plugins/interface.js',
-  'autofill/plugins/cascade-select.js',
-  'autofill/plugins/ng-dropdown.js',
-  'autofill/plugins/keystroke-input.js',
-  'runtime/plugin-bridge.js',
-  'autofill/rule-engine.js',
-  'autofill/extractor.js',
-  'autofill/mapper.js',
-      'autofill/executor-bundle.js',
-
+  // Monorepo bundles (replaces old discrete shared/*, models/*, runtime/*, autofill/* files)
+  'shared-bundle.js',              // cc-shared: option-match, dom-utils, network-idle, semantic-aliases, select-apply, llm-client
+  'drivers-bundle.js',             // cc-drivers: all form field drivers
+  'autofill/plugins-bundle.js',    // cc-plugins: interface, cascade-select, ng-dropdown, keystroke-input
+  'autofill/extractor-bundle.js',  // cc-extractor: extractFormFieldsWithFingerprint, fingerprint, scan-*
+  'autofill/mapper-bundle.js',     // cc-mapper: field mapping logic
+  'autofill/executor-bundle.js',   // cc-executor: fill kernel, parse-date, fill-one-*, settle
 ];
 
 async function injectExtension(page) {
