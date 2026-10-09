@@ -71,6 +71,7 @@ jobs:
     needs: discover
     if: ${{ needs.discover.outputs.hosts != '[]' }}
     runs-on: ubuntu-latest
+    continue-on-error: true   # one unreachable host must not fail the whole run
     strategy:
       fail-fast: false
       matrix:
