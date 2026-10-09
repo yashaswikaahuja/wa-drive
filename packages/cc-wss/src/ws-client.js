@@ -402,3 +402,5 @@ if (typeof module !== 'undefined' && module.exports) {
   globalThis.CcWsClient = WsClient;
   globalThis.CcWsClientSTATE = STATE;
 }
+
+export { WsClient, STATE };

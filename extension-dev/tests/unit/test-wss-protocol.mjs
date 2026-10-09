@@ -24,8 +24,9 @@ const { WebSocket } = require('ws');
 import { pathToFileURL } from 'node:url';
 const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/server.js')).href);
 const { createHandlers } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/handlers.js')).href);
-const { ReconnectManager, DEFAULTS } = require(resolve(ROOT, 'apps/extension/runtime/reconnect-manager.js'));
-const { WsClient, STATE } = require(resolve(ROOT, 'apps/extension/runtime/ws-client.js'));
+// Moved to packages/cc-wss/ during monorepo migration (ESM package — use import not require)
+const { ReconnectManager, DEFAULTS } = await import(pathToFileURL(resolve(ROOT, 'packages/cc-wss/src/reconnect-manager.js')).href);
+const { WsClient, STATE } = await import(pathToFileURL(resolve(ROOT, 'packages/cc-wss/src/ws-client.js')).href);
 
 let passed = 0;
 let failed = 0;

@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Instead, extract the pure functions we need to test.
 // checkCompatibility and LIFECYCLE_TRANSITIONS are pure — extract them.
 
-const src = readFileSync(resolve(__dirname, '../../extension-service/knowledge-versioning.js'), 'utf8');
+const src = readFileSync(resolve(__dirname, '../../../packages/svc-knowledge/src/knowledge-versioning.js'), 'utf8');
 
 // Extract LIFECYCLE_TRANSITIONS
 const LIFECYCLE_TRANSITIONS = {
