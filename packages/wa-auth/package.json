@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Postgres-backed Baileys auth state + file→DB session migration",
+  "description": "Postgres-backed Baileys auth state + file\u2192DB session migration",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -11,6 +11,7 @@
     "./migrate-files-to-db": "./src/migrate-files-to-db.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "node -e \"console.log('[wa-auth] no package tests yet')\"",
     "typecheck": "node -e \"console.log('[wa-auth] typecheck skipped (JS)')\""
   },

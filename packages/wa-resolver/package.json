@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "wwebjs LID→phone resolver + contact/DP/OTP sender",
+  "description": "wwebjs LID\u2192phone resolver + contact/DP/OTP sender",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
     "./create-app": "./src/createApp.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "node -e \"console.log('[wa-resolver] no package tests yet')\"",
     "typecheck": "node -e \"console.log('[wa-resolver] typecheck skipped (JS)')\""
   },

@@ -10,6 +10,7 @@
     "./create-app": "./src/createApp.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "node -e \"console.log('[wa-service] no package tests yet')\"",
     "typecheck": "node -e \"console.log('[wa-service] typecheck skipped (JS)')\""
   },

@@ -1,7 +1,7 @@
 {
   "name": "@cc/wss",
   "version": "1.0.0",
-  "description": "CyberControl service-worker WSS client — reconnect, session, ws-client",
+  "description": "CyberControl service-worker WSS client \u2014 reconnect, session, ws-client",
   "main": "src/ws-client.js",
   "exports": {
     ".": "./src/ws-client.js",
@@ -10,6 +10,7 @@
     "./wss-session": "./src/wss-session.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "echo 'No unit tests (browser SW required)'"
   },
   "type": "module",

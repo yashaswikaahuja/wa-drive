@@ -1,8 +1,11 @@
 {
   "name": "@cc/background",
   "version": "1.0.0",
-  "description": "CyberControl service worker modules — all background.js logic",
-  "scripts": { "test": "echo 'No unit tests'" },
+  "description": "CyberControl service worker modules \u2014 all background.js logic",
+  "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
+    "test": "echo 'No unit tests'"
+  },
   "license": "UNLICENSED",
   "private": true
 }

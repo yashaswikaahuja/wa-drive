@@ -1,7 +1,7 @@
 {
   "name": "@cc/drivers",
   "version": "1.0.0",
-  "description": "CyberControl browser action drivers — dispatch, DOM, input, select, interaction",
+  "description": "CyberControl browser action drivers \u2014 dispatch, DOM, input, select, interaction",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -12,6 +12,7 @@
     "./select": "./src/select.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "echo 'No unit tests (browser DOM required)'"
   },
   "license": "UNLICENSED",

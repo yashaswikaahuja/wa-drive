@@ -95,6 +95,11 @@ extension-dev/cli/out/
 # Turborepo
 .turbo/
 
+# Stale pre-monorepo root dirs (source now lives under apps/ — these are local artifacts only)
+/backend/
+/extension-service/
+/frontend/
+
 
 # Local issue scratch
 .tmp-issue*/

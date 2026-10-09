@@ -1,7 +1,7 @@
 {
   "name": "@cc/orchestrator",
   "version": "1.0.0",
-  "description": "CyberControl fill orchestrator — sequential kernel + ActionPlan paths",
+  "description": "CyberControl fill orchestrator \u2014 sequential kernel + ActionPlan paths",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -11,6 +11,7 @@
     "./action-plan-fill": "./src/action-plan-fill.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "node ../../tooling/run-package-tests.mjs"
   },
   "type": "module",

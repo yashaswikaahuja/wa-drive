@@ -9,5 +9,8 @@
   },
   "dependencies": {
     "@cybercontrol/svc-knowledge": "workspace:*"
+  },
+  "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'"
   }
 }

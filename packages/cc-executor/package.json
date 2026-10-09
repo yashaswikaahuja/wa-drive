@@ -1,7 +1,7 @@
 {
   "name": "@cc/executor",
   "version": "1.0.0",
-  "description": "CyberControl fill executor — sequential kernel + capability modules",
+  "description": "CyberControl fill executor \u2014 sequential kernel + capability modules",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -28,6 +28,7 @@
     "./post-fill-corrections": "./src/post-fill-corrections.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "node ../../tooling/run-package-tests.mjs"
   },
   "type": "module",

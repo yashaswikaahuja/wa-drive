@@ -1,7 +1,7 @@
 {
   "name": "@cc/plugins",
   "version": "1.0.0",
-  "description": "CyberControl autofill plugins — keystroke, cascade-select, ng-dropdown, button-click",
+  "description": "CyberControl autofill plugins \u2014 keystroke, cascade-select, ng-dropdown, button-click",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
@@ -13,6 +13,7 @@
     "./network-monitor": "./src/network-monitor.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "echo 'No unit tests (browser DOM required)'"
   },
   "license": "UNLICENSED",

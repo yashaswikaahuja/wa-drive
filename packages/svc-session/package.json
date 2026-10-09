@@ -10,5 +10,8 @@
   "dependencies": {
     "@cybercontrol/svc-knowledge": "workspace:*",
     "@cybercontrol/svc-learning": "workspace:*"
+  },
+  "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'"
   }
 }

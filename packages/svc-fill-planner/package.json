@@ -8,6 +8,7 @@
     ".": "./src/index.js"
   },
   "scripts": {
+    "build": "echo 'no build \u2014 ESM source-only package'",
     "test": "node ../../tooling/run-package-tests.mjs"
   },
   "dependencies": {
