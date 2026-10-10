@@ -11,6 +11,7 @@ on:
 jobs:
   health:
     runs-on: ubuntu-latest
+    continue-on-error: true   # health degradation should alert, not block CI
     steps:
       - name: Join tailnet (OAuth)
         uses: tailscale/github-action@v2
@@ -18,11 +19,26 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:cybercontrol
+          args: --accept-dns=true
+
+      - name: Ensure MagicDNS resolves
+        run: |
+          sudo tailscale set --accept-dns=true 2>/dev/null || true
+          for i in $(seq 1 15); do
+            getent hosts cybercontrol-app >/dev/null 2>&1 && echo "MagicDNS OK" && break
+            sleep 1
+          done
+          # Fallback: inject from tailscale status
+          if ! getent hosts cybercontrol-app >/dev/null 2>&1; then
+            tailscale status | awk 'NR>1 && $1~/^100\./ {ip=$1; name=$2; sub(/\..*/, "", name); if(name) print ip "  " name}' \
+              | sudo tee -a /etc/hosts
+          fi
 
       - name: Check services + shards
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           WA_INSTANCES: ${{ vars.WA_INSTANCES }}
+          LB_IPS: ${{ vars.LB_IPS }}
         run: |
           fail=0
           out=""
@@ -32,8 +48,16 @@ jobs:
           chklb() {  # ip, label — checks api.cybercontrol.fun served by a SPECIFIC LB (real public path)
             if curl -fsS -m 8 --resolve api.cybercontrol.fun:443:"$1" https://api.cybercontrol.fun/api/health >/dev/null 2>&1; then out="$out\n✅ $2"; else out="$out\n❌ $2  ($1)"; fail=1; fi
           }
-          chklb 35.225.171.57 "LB-1 (us-central1, public)"
-          chklb 34.75.103.65  "LB-2 (us-east1, public)"
+          # LB IPs: set repo variable LB_IPS as "ip1:label1,ip2:label2"
+          if [ -n "${LB_IPS:-}" ]; then
+            IFS=',' read -r -a lb_arr <<< "$LB_IPS"
+            for spec in "${lb_arr[@]}"; do
+              lb_ip="${spec%%:*}"; lb_label="${spec##*:}"
+              chklb "$lb_ip" "LB $lb_label (public)"
+            done
+          else
+            out="$out\n⚠️  LB_IPS not set — skipping LB check (set repo var LB_IPS=ip1:label1,ip2:label2)"
+          fi
           chk http://cybercontrol-app:3000/api/health     "backend-1"
           chk http://cybercontrol-app-2:3000/api/health   "backend-2"
           chk http://cybercontrol-ext:3300/health         "extension-service (ext-1)"

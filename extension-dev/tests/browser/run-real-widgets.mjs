@@ -45,7 +45,6 @@ let executablePath = CHROME_PATHS.find(p => existsSync(p)) || undefined;
 
 // ── Extension script list ────────────────────────────────────────────
 const SHARED_SCRIPTS = [
-const SHARED_SCRIPTS = [
   // Monorepo bundles (replaces old discrete shared/*, models/*, runtime/*, autofill/* files)
   'shared-bundle.js',              // cc-shared: option-match, dom-utils, network-idle, semantic-aliases, select-apply, llm-client
   'drivers-bundle.js',             // cc-drivers: all form field drivers
