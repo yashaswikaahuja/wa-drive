@@ -264,6 +264,9 @@ jobs:
         working-directory: extension-dev/tests/ratification
         run: npm ci
 
+      - name: Build extension-service emit for WSS unit suite
+        run: pnpm --filter cybercontrol-extension-service run build:tsc
+
       - name: "CHECK-005: Unit and knowledge tests"
         run: node --experimental-strip-types extension-dev/tests/ci-unit.ts
 

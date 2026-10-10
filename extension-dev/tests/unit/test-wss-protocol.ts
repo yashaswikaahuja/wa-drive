@@ -40,10 +40,16 @@ function resolveExtensionServiceWs(name) {
 
 function ensureExtensionServiceEmit() {
   if (resolveExtensionServiceWs('server')) return;
-  execSync('pnpm --filter cybercontrol-extension-service run build:tsc', {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
+  try {
+    execSync('pnpm --filter cybercontrol-extension-service run build:tsc', {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    const detail = `${e.stdout || ''}\n${e.stderr || ''}\n${e.message || e}`;
+    throw new Error(`extension-service build:tsc failed:\n${detail}`);
+  }
   if (!resolveExtensionServiceWs('server')) {
     throw new Error('extension-service build:tsc did not emit .tsbuild/src/ws/server.js');
   }
@@ -57,10 +63,13 @@ const { createHandlers } = await import(
   pathToFileURL(resolveExtensionServiceWs('handlers')).href
 );
 
-async function loadIifeCjs(relTs) {
-  const esbuild = await import('esbuild');
-  const raw = readFileSync(resolve(ROOT, relTs), 'utf8');
-  const { code } = await esbuild.transform(raw, { loader: 'ts', target: 'es2018' });
+function loadIifeCjsSource(relPath) {
+  const requireFromRoot = createRequire(resolve(ROOT, 'package.json'));
+  const esbuild = requireFromRoot('esbuild');
+  const raw = readFileSync(resolve(ROOT, relPath), 'utf8');
+  const code = relPath.endsWith('.ts')
+    ? esbuild.transformSync(raw, { loader: 'ts', target: 'es2018' }).code
+    : raw;
   const module = { exports: {} };
   const sandbox = {
     module,
@@ -75,9 +84,12 @@ async function loadIifeCjs(relTs) {
   vm.runInNewContext(code, sandbox);
   return module.exports;
 }
-const { ReconnectManager, DEFAULTS } = await loadIifeCjs('packages/cc-wss/src/reconnect-manager.ts');
-const { WsClient, STATE } = await loadIifeCjs('packages/cc-wss/src/ws-client.ts');
 
+const { ReconnectManager, DEFAULTS } = loadIifeCjsSource('packages/cc-wss/src/reconnect-manager.ts');
+const { WsClient, STATE } = loadIifeCjsSource('packages/cc-wss/src/ws-client.ts');
+if (!ReconnectManager || !WsClient) {
+  throw new Error('failed to load ReconnectManager/WsClient from packages/cc-wss');
+}
 let passed = 0;
 let failed = 0;
 function ok(cond, msg) { if (cond) { passed++; } else { failed++; console.error(`  ✗ FAIL: ${msg}`); } }
