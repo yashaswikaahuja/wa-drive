@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Label-to-profileKey heuristic mapping. Server-side mirror of the extension's
 // mapper.js FIELD_ALIASES, simplified for backfill use.
 //
@@ -55,7 +54,7 @@ const FIELD_ALIASES = {
 };
 
 // Returns best profileKey for a label, or null
-export function guessProfileKey(label) {
+export function guessProfileKey( label: any) {
   if (!label) return null;
   const norm = label.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!norm) return null;
@@ -63,7 +62,7 @@ export function guessProfileKey(label) {
   // Score each profileKey by alias match strength
   let bestKey = null;
   let bestScore = 0;
-  for (const [key, aliases] of Object.entries(FIELD_ALIASES)) {
+  for (const [key, aliases] of Object.entries(FIELD_ALIASES) as any) {
     for (const alias of aliases) {
       // Exact normalized match: strongest
       if (norm === alias) {

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 // migrate-files-to-db.js — one-time migration of the legacy on-disk extension-service stores
 // (DATA_DIR/form_mappings.json + DATA_DIR/adapters.json) into the shared Postgres ext_kv_store.
 //
@@ -20,13 +19,13 @@ import { ensureSchema, KEYS } from '../src/db/store.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || resolve(__dirname, 'data');
 
-function readJson(path) {
+function readJson( path: any) {
   if (!existsSync(path)) return null;
   try { return JSON.parse(readFileSync(path, 'utf8')); }
   catch (e) { console.error(`[migrate] failed to parse ${path}:`, e.message); return null; }
 }
 
-async function upsert(key, data) {
+async function upsert( key: any, data: any) {
   await pool.query(
     `INSERT INTO ext_kv_store (key, data, updated_at) VALUES ($1, $2::jsonb, now())
      ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Knowledge Sync API (Phase 2.7, Issue #91)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -36,7 +35,7 @@ async function getCurrentManifestVersion() {
 
 // ── Bootstrap ───────────────────────────────────────────────────────
 
-router.post('/bootstrap', authMiddleware, async (req, res) => {
+router.post('/bootstrap', authMiddleware, async ( req: any, res: any) => {
   try {
     await ensureKnowledgeSchema();
     const { context, extension_version, schema_version, capabilities } = req.body || {};
@@ -82,7 +81,7 @@ router.post('/bootstrap', authMiddleware, async (req, res) => {
 
 // ── Delta ───────────────────────────────────────────────────────────
 
-router.post('/delta', authMiddleware, async (req, res) => {
+router.post('/delta', authMiddleware, async ( req: any, res: any) => {
   try {
     await ensureKnowledgeSchema();
     const { manifest_version, context } = req.body || {};
@@ -143,7 +142,7 @@ router.post('/delta', authMiddleware, async (req, res) => {
 
 // ── Cache check ─────────────────────────────────────────────────────
 
-router.post('/check', authMiddleware, async (req, res) => {
+router.post('/check', authMiddleware, async ( req: any, res: any) => {
   try {
     const { manifest_version } = req.body || {};
     if (!manifest_version) {
@@ -174,7 +173,7 @@ router.post('/check', authMiddleware, async (req, res) => {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-function buildArtifacts(records) {
+function buildArtifacts( records: any) {
   const artifacts = {
     semantic_aliases: {},
     field_mappings: [],
@@ -225,7 +224,7 @@ function buildArtifacts(records) {
   return artifacts;
 }
 
-function entityKey(row) {
+function entityKey( row: any) {
   const p = row.payload || {};
   return p.semantic_key || p.canonical || p.component_class || p.capability_name || p.hostname || row.id;
 }

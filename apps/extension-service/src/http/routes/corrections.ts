@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import { pool } from '../../db/db.js';
 import { authMiddleware } from '../auth.js';
@@ -9,7 +8,7 @@ const router = Router();
 const normLabel = l => (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 
 // Label-↔-profileKey similarity score. Higher = more likely the label is asking for that key.
-function labelKeyAffinity(labelLower, profileKey) {
+function labelKeyAffinity( labelLower: any, profileKey: any) {
   const pk = (profileKey || '').toLowerCase();
   if (!pk) return 0;
   const labelStripped = labelLower.replace(/[^a-z0-9]/g, '');
@@ -40,7 +39,7 @@ function labelKeyAffinity(labelLower, profileKey) {
  * T11 — Yes/No / option conditionals map to profile flags by label, not free-string dump.
  * Returns { kind: 'conditional', profileKey, value } or null.
  */
-function findConditionalFlag(operatorValue, fieldLabel) {
+function findConditionalFlag( operatorValue: any, fieldLabel: any) {
   const labelLower = (fieldLabel || '').toLowerCase();
   const val = String(operatorValue || '').trim().toLowerCase();
   if (!val) return null;
@@ -76,7 +75,7 @@ function findConditionalFlag(operatorValue, fieldLabel) {
   return null;
 }
 
-function findProfileKeyForValue(profileData, operatorValue, fieldLabel) {
+function findProfileKeyForValue( profileData: any, operatorValue: any, fieldLabel: any) {
   if (!operatorValue || !profileData || typeof profileData !== 'object') return null;
   const target = String(operatorValue).trim().toLowerCase();
   if (target.length < 2) return null;
@@ -90,7 +89,7 @@ function findProfileKeyForValue(profileData, operatorValue, fieldLabel) {
   const exactMatches = [];
   const fuzzyMatches = [];
 
-  for (const [key, raw] of Object.entries(profileData)) {
+  for (const [key, raw] of Object.entries(profileData) as any) {
     const val = (raw && typeof raw === 'object' && 'value' in raw) ? raw.value : raw;
     if (val == null) continue;
     const cmp = String(val).trim().toLowerCase();
@@ -132,7 +131,7 @@ function findProfileKeyForValue(profileData, operatorValue, fieldLabel) {
 // POST /api/corrections — operator supervised corrections
 // + auto-promote: for each correction whose final value matches a profile field,
 // save a (formKey, fieldLabel) -> profileKey mapping so future autofills get it right.
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, async ( req: any, res: any) => {
   try {
     const { hostname, semanticFormKey, trigger, corrections, runtimeVersion, profileId } = req.body;
     const insR = await pool.query(
@@ -210,10 +209,10 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // GET /api/corrections — list summaries
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, async ( req: any, res: any) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const offset = parseInt(req.query.offset) || 0;
+    const limit = Math.min(parseInt((req.query.limit as any)) || 50, 200);
+    const offset = parseInt((req.query.offset as any)) || 0;
     const { rows } = await pool.query(
       `SELECT id, hostname, semantic_form_key AS "semanticFormKey", trigger,
               jsonb_array_length(corrections) AS "correctionCount",
@@ -232,7 +231,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // GET /api/corrections/:id
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, hostname, semantic_form_key AS "semanticFormKey", trigger,

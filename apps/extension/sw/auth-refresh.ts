@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * SW auth refresh — HTTPS /auth/me + /auth/refresh (token mint stays on hub).
  * Loaded via importScripts from background.js.

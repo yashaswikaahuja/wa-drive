@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * SW WSS bridge — ensure socket + reliable fill_debug outbox.
  * Loaded via importScripts from background.js (MV3 service worker).

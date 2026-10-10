@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { pool } from '../../db/db.js';
@@ -11,7 +10,7 @@ const load = () => loadDoc(KEYS.MAPPINGS);
 const mutate = (fn) => mutateDoc(KEYS.MAPPINGS, fn);
 
 // POST /api/mappings/cleanup — remove junk/short entries from existing mappings
-router.post('/cleanup', authMiddleware, async (_req, res) => {
+router.post('/cleanup', authMiddleware, async ( _req: any, res: any) => {
   let removed = 0;
   await mutate((all) => {
     for (const formKey of Object.keys(all)) {
@@ -37,7 +36,7 @@ router.post('/cleanup', authMiddleware, async (_req, res) => {
 // Reverse-looks-up profileKey from each record's value against that session's
 // profile, so fields are PRE-MAPPED with the best guess. Pre-existing manual
 // assignments are never overwritten.
-router.post('/backfill', authMiddleware, async (req, res) => {
+router.post('/backfill', authMiddleware, async ( req: any, res: any) => {
   const targetFormKey = req.body?.formKey || null;
   let seededTotal = 0;
   let formsSeeded = 0;
@@ -56,31 +55,31 @@ router.post('/backfill', authMiddleware, async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
     await mutate((all) => {
 
-    function normLabel(s) {
+    function normLabel( s: any) {
       return (s || '').toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
     }
     // Flatten profile data jsonb into {key: stringValue} for reverse-lookup
-    function flattenProfile(p) {
+    function flattenProfile( p: any) {
       if (!p) return {};
       const out = {};
-      for (const [k, v] of Object.entries(p)) {
+      for (const [k, v] of Object.entries(p) as any) {
         if (v == null) continue;
         if (typeof v === 'object' && 'value' in v) out[k] = String(v.value);
         else if (typeof v !== 'object') out[k] = String(v);
       }
       return out;
     }
-    function reverseLookup(profile, value) {
+    function reverseLookup( profile: any, value: any) {
       if (!profile || !value) return null;
       const v = String(value);
       const vNorm = v.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (!vNorm) return null;
       // Exact match first
-      for (const [k, pv] of Object.entries(profile)) {
+      for (const [k, pv] of Object.entries(profile) as any) {
         if (String(pv) === v) return k;
       }
       // Normalised match (for spacing/case differences)
-      for (const [k, pv] of Object.entries(profile)) {
+      for (const [k, pv] of Object.entries(profile) as any) {
         const pvNorm = String(pv).toLowerCase().replace(/[^a-z0-9]/g, '');
         if (pvNorm && pvNorm === vNorm) return k;
       }
@@ -159,7 +158,7 @@ router.post('/backfill', authMiddleware, async (req, res) => {
 });
 
 // GET /api/mappings/list — all formKeys with metadata + hostname from sessions
-router.get('/list', authMiddleware, async (_req, res) => {
+router.get('/list', authMiddleware, async ( _req: any, res: any) => {
   const data = await load();
 
   // Backfill hostname/title from sessions table for entries that don't have _meta
@@ -190,8 +189,8 @@ router.get('/list', authMiddleware, async (_req, res) => {
     const unmapped = entries.filter(([, m]) => !m?.profileKey).length;
     return {
       formKey,
-      hostname: fields._meta?.hostname || sessionMeta[formKey]?.hostname || null,
-      title: fields._meta?.title || null,
+      hostname: (fields as any)._meta?.hostname || sessionMeta[formKey]?.hostname || null,
+      title: (fields as any)._meta?.title || null,
       fieldCount: entries.length,
       unmapped,
       fills, corrections, lastSeen,
@@ -201,7 +200,7 @@ router.get('/list', authMiddleware, async (_req, res) => {
 });
 
 // GET /api/mappings — list all form keys (legacy, used by extension)
-router.get('/', async (_req, res) => {
+router.get('/', async ( _req: any, res: any) => {
   res.json(Object.keys(await load()).filter(k => k !== '_meta'));
 });
 
@@ -213,13 +212,13 @@ router.get('/', async (_req, res) => {
 const TRANSLATIONS_KEY = 'value_translations';
 
 // GET /api/mappings/translations — return all translations
-router.get('/translations', async (_req, res) => {
+router.get('/translations', async ( _req: any, res: any) => {
   const data = await loadDoc(TRANSLATIONS_KEY);
   res.json(data || {});
 });
 
 // POST /api/mappings/translations — bulk save translations
-router.post('/translations', authMiddleware, async (req, res) => {
+router.post('/translations', authMiddleware, async ( req: any, res: any) => {
   const { translations } = req.body || {};
   if (!translations || typeof translations !== 'object') return res.status(400).json({ error: 'translations object required' });
   await saveDoc(TRANSLATIONS_KEY, translations);
@@ -227,11 +226,11 @@ router.post('/translations', authMiddleware, async (req, res) => {
 });
 
 // PATCH /api/mappings/translations — add/update individual entries
-router.patch('/translations', authMiddleware, async (req, res) => {
+router.patch('/translations', authMiddleware, async ( req: any, res: any) => {
   const { entries } = req.body || {};
   if (!entries || typeof entries !== 'object') return res.status(400).json({ error: 'entries object required' });
   await mutateDoc(TRANSLATIONS_KEY, (current) => {
-    for (const [key, value] of Object.entries(entries)) {
+    for (const [key, value] of Object.entries(entries) as any) {
       if (value === null || value === '') {
         delete current[key];
       } else {
@@ -244,13 +243,13 @@ router.patch('/translations', authMiddleware, async (req, res) => {
 });
 
 // GET /api/mappings/:formKey
-router.get('/:formKey', async (req, res) => {
+router.get('/:formKey', async ( req: any, res: any) => {
   const mappings = await load();
   res.json(mappings[req.params.formKey] || null);
 });
 
 // POST /api/mappings/:formKey — bulk update with confidence
-router.post('/:formKey', async (req, res) => {
+router.post('/:formKey', async ( req: any, res: any) => {
   const { updates, meta } = req.body || {};
   if (!updates && !meta) return res.status(400).json({ error: 'updates or meta required' });
   const formKey = req.params.formKey;
@@ -268,7 +267,7 @@ router.post('/:formKey', async (req, res) => {
         if (rel.kind === 'identity') return 2;
         return 3;
       };
-      for (const [semanticKey, info] of Object.entries(updates)) {
+      for (const [semanticKey, info] of Object.entries(updates) as any) {
         const { profileKey, delta = {}, label, type, order, options,
                 fillMode, rules, constantValue, fallback, relation } = info;
         const existing = mappings[formKey][semanticKey];
@@ -324,7 +323,7 @@ router.post('/:formKey', async (req, res) => {
 // PATCH /api/mappings/:formKey/:label — update ONE field's mapping/rule config
 // (used by the admin UI's per-row edit + rule builder). Stored as source:'manual'
 // so the extension's background sync never overwrites it.
-router.patch('/:formKey/:label', authMiddleware, async (req, res) => {
+router.patch('/:formKey/:label', authMiddleware, async ( req: any, res: any) => {
   const { profileKey, fillMode, rules, constantValue, fallback, relation } = req.body || {};
   const formKey = req.params.formKey;
   const label = req.params.label;
@@ -354,7 +353,7 @@ router.patch('/:formKey/:label', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/mappings/:formKey/:label — remove ONE bad mapping
-router.delete('/:formKey/:label', authMiddleware, async (req, res) => {
+router.delete('/:formKey/:label', authMiddleware, async ( req: any, res: any) => {
   const formKey = req.params.formKey;
   const label = req.params.label;
   await mutate((mappings) => {
@@ -367,7 +366,7 @@ router.delete('/:formKey/:label', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/mappings/:formKey — remove an entire form's mappings
-router.delete('/:formKey', authMiddleware, async (req, res) => {
+router.delete('/:formKey', authMiddleware, async ( req: any, res: any) => {
   await mutate((mappings) => {
     if (mappings[req.params.formKey]) {
       delete mappings[req.params.formKey];

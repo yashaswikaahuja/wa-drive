@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Knowledge Versioning API (Phase 2.6, Issue #90)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -28,7 +27,7 @@ const router = Router();
 
 // ── Lifecycle ───────────────────────────────────────────────────────
 
-router.post('/publish/:id', authMiddleware, async (req, res) => {
+router.post('/publish/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const result = await publish(req.params.id);
     res.json(result);
@@ -38,7 +37,7 @@ router.post('/publish/:id', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/promote/:id', authMiddleware, async (req, res) => {
+router.post('/promote/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const result = await promote(req.params.id);
     res.json(result);
@@ -48,7 +47,7 @@ router.post('/promote/:id', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/deprecate/:id', authMiddleware, async (req, res) => {
+router.post('/deprecate/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const result = await deprecate(req.params.id);
     res.json(result);
@@ -60,7 +59,7 @@ router.post('/deprecate/:id', authMiddleware, async (req, res) => {
 
 // ── Snapshots ───────────────────────────────────────────────────────
 
-router.post('/snapshot', authMiddleware, async (req, res) => {
+router.post('/snapshot', authMiddleware, async ( req: any, res: any) => {
   try {
     const { name, description } = req.body || {};
     if (!name) return res.status(400).json({ error: 'name is required' });
@@ -71,7 +70,7 @@ router.post('/snapshot', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/snapshots', authMiddleware, async (req, res) => {
+router.get('/snapshots', authMiddleware, async ( req: any, res: any) => {
   try {
     const snapshots = await listSnapshots();
     res.json({ snapshots, count: snapshots.length });
@@ -80,7 +79,7 @@ router.get('/snapshots', authMiddleware, async (req, res) => {
   }
 });
 
-router.post('/restore/:id', authMiddleware, async (req, res) => {
+router.post('/restore/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const result = await restoreSnapshot(req.params.id);
     res.json(result);
@@ -92,7 +91,7 @@ router.post('/restore/:id', authMiddleware, async (req, res) => {
 
 // ── Compatibility ───────────────────────────────────────────────────
 
-router.post('/compatibility', authMiddleware, async (req, res) => {
+router.post('/compatibility', authMiddleware, async ( req: any, res: any) => {
   try {
     const { record, existing_records } = req.body || {};
     if (!record) return res.status(400).json({ error: 'record is required' });
@@ -105,7 +104,7 @@ router.post('/compatibility', authMiddleware, async (req, res) => {
 
 // ── Migration ───────────────────────────────────────────────────────
 
-router.post('/migrate', authMiddleware, async (req, res) => {
+router.post('/migrate', authMiddleware, async ( req: any, res: any) => {
   try {
     const { from_version, to_version, changes } = req.body || {};
     if (!from_version || !to_version) {
@@ -120,7 +119,7 @@ router.post('/migrate', authMiddleware, async (req, res) => {
 
 // ── Lineage ─────────────────────────────────────────────────────────
 
-router.get('/lineage/:id', authMiddleware, async (req, res) => {
+router.get('/lineage/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const result = await getLineageHistory(req.params.id);
     res.json(result);
