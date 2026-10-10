@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * PageDelta apply + composed graph invariants — #133 IMP-P1-02
  */

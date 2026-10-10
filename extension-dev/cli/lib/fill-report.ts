@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Human-readable fill report: what was planned, what ran, what stuck in the DOM.
  */

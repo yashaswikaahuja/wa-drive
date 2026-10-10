@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * T2/T6/T9 mapping-engine classification tests
  * Run: node packages/svc-fill-planner/tests/mapping-engine.t6.test.ts
@@ -9,7 +8,7 @@ import {
   isNodeVisibleActive,
   FieldClassification,
   resolveConditionalValue,
-} from '../src/mapping-engine.js';
+} from '../src/mapping-engine.ts';
 
 let failed = 0;
 function assert(cond, msg) {

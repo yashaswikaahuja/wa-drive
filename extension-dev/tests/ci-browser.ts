@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl CI Runner — Browser Tests (turborepo-aware)
  *

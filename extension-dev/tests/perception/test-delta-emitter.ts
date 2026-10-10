@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Unit tests for apps/extension/perception/delta-emitter.js
  * Phase 3.3 — Perception Completion

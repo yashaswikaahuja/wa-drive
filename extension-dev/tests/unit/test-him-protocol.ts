@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 4.0 HIM protocol conformance tests.
  * Validates fixtures, state machine transitions, anti-replay, and sensitive-field redaction.

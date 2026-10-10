@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * IMP-P1-04 (#133) — Browser relationship lifecycle regression
  *

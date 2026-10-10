@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 3.7 Hardening & Repository Architecture — CHECK-015 semantic governance (#164).
  * Architecture-only: no mass reorg / no freeze.

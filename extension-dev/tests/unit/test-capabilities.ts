@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for Phase 1.2: Capability Registry + Browser Action Primitives.
  * Run: node extension-dev/tests/test-capabilities.ts

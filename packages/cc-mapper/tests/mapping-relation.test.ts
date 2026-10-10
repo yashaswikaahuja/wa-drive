@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * mapping-relation.test.ts — #302 source + relation
  */

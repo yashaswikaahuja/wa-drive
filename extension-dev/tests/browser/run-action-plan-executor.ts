@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * APE-IMPL-P1-03 / APE-P1-08 — Chromium product-path ActionPlanExecutor v3 E2E
  *

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { ROOT } from './chrome.ts';

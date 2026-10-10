@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Minimal argv parser for cc-debug (no external deps).
  */

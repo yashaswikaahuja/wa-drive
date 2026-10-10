@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Regression test for issue-56 consolidated shared modules.
  * Run: node extension-dev/tests/test-shared-modules.ts

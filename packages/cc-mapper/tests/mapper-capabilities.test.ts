@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * mapper-capabilities.test.ts — TypeScript ESM sources via Node strip-types.
  */

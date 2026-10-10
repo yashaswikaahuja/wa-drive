@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Behavior Classifier — Phase 4.3 unit tests
  * Issue #197: Server Static/Dynamic Classification

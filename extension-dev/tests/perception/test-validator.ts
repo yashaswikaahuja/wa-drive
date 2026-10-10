@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Unit tests for apps/extension/perception/validator.js
  */

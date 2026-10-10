@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * CyberControl Perception Unit Test Runner.
  * Runs all pure-logic perception module tests (no browser needed).

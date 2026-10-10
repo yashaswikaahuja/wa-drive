@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 3.2 — Widget Classification & Adapter Contract Browser Tests
  *

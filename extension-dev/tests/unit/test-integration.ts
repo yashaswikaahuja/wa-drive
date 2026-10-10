@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Integration test — verifies shared modules load in browser context
  * and are callable by the extension's callers.

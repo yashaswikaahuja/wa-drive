@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for Phase 1.5: ActionPlan Runner, Resolver, Observation.
  * Run: node extension-dev/tests/test-runner.ts

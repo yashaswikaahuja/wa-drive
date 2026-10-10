@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl — Comprehensive Input Type Tests
  * Exercises ALL input types from the CyberControl Test Portal fixture.
