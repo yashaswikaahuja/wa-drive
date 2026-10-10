@@ -1,17 +1,23 @@
 name: Monitor (health)
 
-# Topology-driven health check — no hardcoded server names or IPs.
-# Everything is discovered from repo variables at run time:
+# Tailscale-driven health check.
+# Active servers = nodes tagged tag:cybercontrol in the tailnet.
+# Add a VM → it gets checked. Remove it from Tailscale → it disappears.
+# No repo variables, no hardcoded names, no code changes ever needed.
 #
-#   BACKEND_HOSTS   csv of backend tailnet names       e.g. cybercontrol-app,cybercontrol-app-2
-#   WA_HOSTS        csv of WA service tailnet names    e.g. cybercontrol-wa,cybercontrol-wa-2
-#   EXT_HOSTS       csv of extension-service names     e.g. cybercontrol-ext
-#   WA_INSTANCES    csv of WA instance names (for DB heartbeat check, may differ from WA_HOSTS)
-#   LB_IPS          csv of LB public IPs for public-path check  e.g. 1.2.3.4:AWS-LB-1,5.6.7.8:AWS-LB-2
-#   PUBLIC_DOMAIN   the public domain                   e.g. cybercontrol.fun
+# Role is inferred from hostname:
+#   *-app* | *-backend*  → backend       :3000/api/health
+#   *-ext*               → ext-service   :3300/health
+#   *-wa*  | *-whatsapp* → wa-service    :3100/health  +  resolver :3200/health
+#   *-db*                → skipped       (DB — no HTTP health endpoint)
+#   *-redis*             → skipped       (Redis — no HTTP health endpoint)
+#   *-lb*                → skipped       (LB — checked via PUBLIC_DOMAIN below)
 #
-# Add/remove VMs by updating the repo variables only — no code change needed.
-# Runs every 15 min; also runnable on demand.
+# Optional:
+#   LB_IPS        repo var  "ip1:label1,ip2:label2"  — public path check
+#   PUBLIC_DOMAIN repo var  default: cybercontrol.fun
+#   DATABASE_URL  secret    — WA shard heartbeat staleness check
+#   WA_INSTANCES  repo var  — for the DB heartbeat query
 on:
   schedule:
     - cron: "*/15 * * * *"
@@ -20,7 +26,7 @@ on:
 jobs:
   health:
     runs-on: ubuntu-latest
-    continue-on-error: true   # health degradation alerts but never blocks CI
+    continue-on-error: true
     steps:
       - name: Join tailnet (OAuth)
         uses: tailscale/github-action@v2
@@ -30,32 +36,31 @@ jobs:
           tags: tag:cybercontrol
           args: --accept-dns=true
 
-      - name: Ensure MagicDNS resolves
+      - name: Discover peers + health check
+        env:
+          DATABASE_URL:  ${{ secrets.DATABASE_URL }}
+          WA_INSTANCES:  ${{ vars.WA_INSTANCES }}
+          LB_IPS:        ${{ vars.LB_IPS }}
+          PUBLIC_DOMAIN: ${{ vars.PUBLIC_DOMAIN }}
         run: |
+          set -euo pipefail
           sudo tailscale set --accept-dns=true 2>/dev/null || true
-          # Wait up to 15s for peers to appear
+
+          # Wait for peers to appear (up to 15s)
           for i in $(seq 1 15); do
-            tailscale status 2>/dev/null | grep -q "^100\." && echo "Tailscale peers visible" && break
+            tailscale status 2>/dev/null | grep -q "^100\." && break
             sleep 1
           done
-          # Inject all tailnet peers into /etc/hosts as fallback for MagicDNS
+
+          # Inject all tailnet peers into /etc/hosts for reliable name resolution
           tailscale status | awk 'NR>1 && $1~/^100\./ {
             ip=$1; name=$2; sub(/\..*/, "", name)
-            if(name) print ip "  " name
-          }' | sudo tee -a /etc/hosts
-          echo "Tailscale status:"
-          tailscale status | head -15
+            if (name) print ip "  " name
+          }' | sudo tee -a /etc/hosts >/dev/null
 
-      - name: Check services
-        env:
-          DATABASE_URL:   ${{ secrets.DATABASE_URL }}
-          BACKEND_HOSTS:  ${{ vars.BACKEND_HOSTS }}
-          WA_HOSTS:       ${{ vars.WA_HOSTS }}
-          EXT_HOSTS:      ${{ vars.EXT_HOSTS }}
-          WA_INSTANCES:   ${{ vars.WA_INSTANCES }}
-          LB_IPS:         ${{ vars.LB_IPS }}
-          PUBLIC_DOMAIN:  ${{ vars.PUBLIC_DOMAIN }}
-        run: |
+          echo "=== Active tailnet nodes (tag:cybercontrol) ==="
+          tailscale status | grep "tagged-devices" || echo "(none found)"
+
           fail=0
           out=""
 
@@ -69,81 +74,68 @@ jobs:
             fi
           }
 
-          chklb() {
-            local ip="$1" label="$2" domain="${PUBLIC_DOMAIN:-cybercontrol.fun}"
-            if curl -fsS -m 8 --resolve "${domain}:443:${ip}" "https://${domain}/api/health" >/dev/null 2>&1; then
-              out="$out\n✅ LB $label (public)"
-            else
-              out="$out\n❌ LB $label (public)  ($ip)"
-              fail=1
-            fi
-          }
+          # Discover all cybercontrol-tagged peers from tailscale status
+          # Format: "100.x.x.x  hostname  tagged-devices  linux  -"
+          while IFS= read -r line; do
+            name=$(echo "$line" | awk '{print $2}')
+            # strip domain suffix if present
+            name="${name%%.*}"
+            [ -z "$name" ] && continue
 
-          # ── Public LB IPs (optional) ───────────────────────────────
+            case "$name" in
+              *app*|*backend*)
+                chk "http://$name:3000/api/health" "backend       $name" ;;
+              *ext*)
+                chk "http://$name:3300/health"     "ext-service   $name" ;;
+              *wa*|*whatsapp*)
+                chk "http://$name:3100/health"     "wa-service    $name"
+                chk "http://$name:3200/health"     "wa-resolver   $name" ;;
+              *db*|*redis*|*lb*)
+                # infrastructure — no HTTP health endpoint, skip
+                out="$out\n⊘  infra (skipped)  $name" ;;
+              *)
+                # unknown role — try backend port as default
+                chk "http://$name:3000/health"     "unknown-role  $name" ;;
+            esac
+          done < <(tailscale status | awk '$3=="tagged-devices" {print}')
+
+          if echo "$out" | grep -q "✅\|❌\|⊘"; then
+            : # at least one node was checked
+          else
+            out="$out\n⚠️  No tag:cybercontrol nodes found in tailnet"
+          fi
+
+          # Optional: public LB check via LB_IPS repo var
           if [ -n "${LB_IPS:-}" ]; then
+            domain="${PUBLIC_DOMAIN:-cybercontrol.fun}"
             IFS=',' read -r -a lb_arr <<< "$LB_IPS"
             for spec in "${lb_arr[@]}"; do
               [ -z "$spec" ] && continue
               lb_ip="${spec%%:*}"; lb_label="${spec##*:}"
-              chklb "$lb_ip" "$lb_label"
+              if curl -fsS -m 8 --resolve "${domain}:443:${lb_ip}" \
+                   "https://${domain}/api/health" >/dev/null 2>&1; then
+                out="$out\n✅ LB $lb_label (public)"
+              else
+                out="$out\n❌ LB $lb_label (public)  ($lb_ip)"
+                fail=1
+              fi
             done
-          else
-            out="$out\n⚠️  LB_IPS not set — skipping public LB check"
           fi
 
-          # ── Backend hosts (:3000/api/health) ─────────────────────
-          if [ -n "${BACKEND_HOSTS:-}" ]; then
-            IFS=',' read -r -a hosts <<< "$BACKEND_HOSTS"
-            for h in "${hosts[@]}"; do
-              h="${h// /}"
-              [ -z "$h" ] && continue
-              chk "http://$h:3000/api/health" "backend  $h"
-            done
-          else
-            out="$out\n⚠️  BACKEND_HOSTS not set — skipping backend check"
-          fi
-
-          # ── Extension-service hosts (:3300/health) ────────────────
-          if [ -n "${EXT_HOSTS:-}" ]; then
-            IFS=',' read -r -a hosts <<< "$EXT_HOSTS"
-            for h in "${hosts[@]}"; do
-              h="${h// /}"
-              [ -z "$h" ] && continue
-              chk "http://$h:3300/health" "extension-service  $h"
-            done
-          else
-            out="$out\n⚠️  EXT_HOSTS not set — skipping extension-service check"
-          fi
-
-          # ── WA hosts: resolver (:3200) + service (:3100) ─────────
-          if [ -n "${WA_HOSTS:-}" ]; then
-            IFS=',' read -r -a hosts <<< "$WA_HOSTS"
-            for h in "${hosts[@]}"; do
-              h="${h// /}"
-              [ -z "$h" ] && continue
-              chk "http://$h:3200/health" "wa-resolver  $h"
-              chk "http://$h:3100/health" "wa-service   $h"
-            done
-          else
-            out="$out\n⚠️  WA_HOSTS not set — skipping WA check"
-          fi
-
-          # ── DB heartbeat: stale WA instances ─────────────────────
+          # Optional: DB heartbeat — WA shards stale >90s
           if [ -n "${DATABASE_URL:-}" ] && [ -n "${WA_INSTANCES:-}" ]; then
             STALE=$(docker run --rm --network host postgres:15 \
               psql "$DATABASE_URL" -tAc \
-              "SELECT coalesce(string_agg(instance, ', '), '')
+              "SELECT coalesce(string_agg(instance,', '),'')
                FROM wa_instances
-               WHERE instance = ANY(string_to_array('${WA_INSTANCES}', ','))
+               WHERE instance = ANY(string_to_array('${WA_INSTANCES}',','))
                AND last_seen < now() - interval '90 seconds'" 2>/dev/null || echo "")
             if [ -n "$STALE" ]; then
               out="$out\n❌ STALE shards (no heartbeat >90s): $STALE"
               fail=1
             else
-              out="$out\n✅ all WA shards fresh (heartbeat <90s)"
+              out="$out\n✅ all WA shards fresh"
             fi
-          else
-            out="$out\n⚠️  DATABASE_URL or WA_INSTANCES not set — skipping heartbeat check"
           fi
 
           echo -e "## CyberControl health\n$out" >> "$GITHUB_STEP_SUMMARY"
