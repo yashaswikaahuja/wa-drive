@@ -6,7 +6,7 @@
 // Run: node extension-dev/tests/test-validation-engine.js
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-import { validate, detectConflicts, validateTransition, VALID_TRANSITIONS } from '../../extension-service/validation-engine.js';
+import { validate, detectConflicts, validateTransition, VALID_TRANSITIONS } from '../../../packages/svc-knowledge/src/validation-engine.ts';
 
 let pass = 0, fail = 0;
 function assert(cond, msg) {

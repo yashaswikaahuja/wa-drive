@@ -21,12 +21,49 @@ process.env.JWT_SECRET = 'test-secret-for-wss-phase-34';
 const jwt = require('jsonwebtoken');
 const { WebSocket } = require('ws');
 
-// Dynamic import of ES modules
+// Dynamic import of ES modules (prefer tsc emit under dist/; sources are .ts).
 import { pathToFileURL } from 'node:url';
-const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/server.js')).href);
-const { createHandlers } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/handlers.js')).href);
-const { ReconnectManager, DEFAULTS } = require(resolve(ROOT, 'apps/extension/runtime/reconnect-manager.js'));
-const { WsClient, STATE } = require(resolve(ROOT, 'apps/extension/runtime/ws-client.js'));
+import { existsSync, readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import vm from 'node:vm';
+
+function ensureExtensionServiceDist() {
+  const serverJs = resolve(ROOT, 'apps/extension-service/dist/src/ws/server.js');
+  if (existsSync(serverJs)) return;
+  execSync('pnpm --filter cybercontrol-extension-service run build:tsc', {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+}
+ensureExtensionServiceDist();
+
+const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(
+  pathToFileURL(resolve(ROOT, 'apps/extension-service/dist/src/ws/server.js')).href
+);
+const { createHandlers } = await import(
+  pathToFileURL(resolve(ROOT, 'apps/extension-service/dist/src/ws/handlers.js')).href
+);
+
+async function loadIifeCjs(relTs) {
+  const esbuild = await import('esbuild');
+  const raw = readFileSync(resolve(ROOT, relTs), 'utf8');
+  const { code } = await esbuild.transform(raw, { loader: 'ts', target: 'es2018' });
+  const module = { exports: {} };
+  const sandbox = {
+    module,
+    exports: module.exports,
+    globalThis,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    console,
+  };
+  vm.runInNewContext(code, sandbox);
+  return module.exports;
+}
+const { ReconnectManager, DEFAULTS } = await loadIifeCjs('packages/cc-wss/src/reconnect-manager.ts');
+const { WsClient, STATE } = await loadIifeCjs('packages/cc-wss/src/ws-client.ts');
 
 let passed = 0;
 let failed = 0;

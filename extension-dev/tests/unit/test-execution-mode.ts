@@ -2,7 +2,7 @@
 /**
  * Unit tests for Phase 4.4 — mergeExecutionMode decision table.
  */
-import { mergeExecutionMode } from '../../../packages/svc-session/src/execution-mode.js';
+import { mergeExecutionMode } from '../../../packages/svc-session/src/execution-mode.ts';
 
 let passed = 0;
 let failed = 0;

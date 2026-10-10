@@ -5,11 +5,23 @@
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, existsSync } from 'fs';
+import vm from 'vm';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-// Prefer package source (CJS). apps/extension is "type":"module" so IIFE+module.exports won't load via require.
-const gate = require(join(__dirname, '../../../packages/cc-shared/src/legacy-fill-gate.js'));
+// IIFE CJS source lives as .ts after migration; eval with a CJS module shim.
+const gatePathTs = join(__dirname, '../../../packages/cc-shared/src/legacy-fill-gate.ts');
+const gatePathJs = join(__dirname, '../../../packages/cc-shared/src/legacy-fill-gate.js');
+let gate;
+if (existsSync(gatePathTs)) {
+  const code = readFileSync(gatePathTs, 'utf8');
+  const module = { exports: {} };
+  vm.runInNewContext(code, { module, exports: module.exports, globalThis });
+  gate = module.exports;
+} else {
+  gate = require(gatePathJs);
+}
 
 let passed = 0;
 let failed = 0;
@@ -42,15 +54,21 @@ assert(typeof denied.error === 'string' && denied.error.includes('DISPATCH_JOB')
 assert(denied.error.includes('side-panel'), 'denied mentions product path');
 
 // Source wiring (Phase 0 must keep gates on production entry points)
-import { readFileSync, existsSync } from 'fs';
 const root = join(__dirname, '../../..');
 // SW entry is thin; gate lives in the bundled service worker (and @cc/shared).
 const bg = readFileSync(join(root, 'apps/extension/sw/bg-bundle.js'), 'utf8');
 const popup = readFileSync(join(root, 'apps/extension/popup.js'), 'utf8');
-const svc = readFileSync(join(root, 'apps/extension-service/index.js'), 'utf8');
+const svcPath = existsSync(join(root, 'apps/extension-service/dist/index.js'))
+  ? join(root, 'apps/extension-service/dist/index.js')
+  : join(root, 'apps/extension-service/index.ts');
+const svc = readFileSync(svcPath, 'utf8');
 assert(bg.includes('isLegacyClientFillAllowed'), 'bg-bundle defines gate helper');
 assert(bg.includes('legacy_client_fill_disabled') || bg.includes('legacyClientFillDenied'), 'bg-bundle uses deny path');
-assert(existsSync(join(root, 'packages/cc-shared/src/legacy-fill-gate.js')), 'shared package has legacy-fill-gate');
+assert(
+  existsSync(join(root, 'packages/cc-shared/src/legacy-fill-gate.ts'))
+    || existsSync(join(root, 'packages/cc-shared/src/legacy-fill-gate.js')),
+  'shared package has legacy-fill-gate',
+);
 assert(popup.includes('allowLegacyClientFill'), 'popup reads allowLegacyClientFill');
 assert(popup.includes('applyAgentVisibility'), 'popup hides agent when gated');
 assert(popup.includes('/extension/health'), 'popup checks service health for deploy lock');
