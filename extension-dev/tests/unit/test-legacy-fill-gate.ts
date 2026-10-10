@@ -9,12 +9,14 @@ import vm from 'vm';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-// IIFE CJS source lives as .ts after migration; eval with a CJS module shim.
+const esbuild = require('esbuild');
+// IIFE CJS source lives as .ts after migration; strip types then eval with a CJS shim.
 const gatePathTs = join(__dirname, '../../../packages/cc-shared/src/legacy-fill-gate.ts');
 const gatePathJs = join(__dirname, '../../../packages/cc-shared/src/legacy-fill-gate.js');
 let gate;
 if (existsSync(gatePathTs)) {
-  const code = readFileSync(gatePathTs, 'utf8');
+  const raw = readFileSync(gatePathTs, 'utf8');
+  const code = esbuild.transformSync(raw, { loader: 'ts', target: 'es2018', format: 'cjs' }).code;
   const module = { exports: {} };
   vm.runInNewContext(code, { module, exports: module.exports, globalThis });
   gate = module.exports;
