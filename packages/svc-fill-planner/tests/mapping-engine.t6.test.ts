@@ -9,7 +9,7 @@ import {
   isNodeVisibleActive,
   FieldClassification,
   resolveConditionalValue,
-} from '../src/mapping-engine.js';
+} from '../src/mapping-engine.ts';
 
 let failed = 0;
 function assert(cond, msg) {
