@@ -1,4 +1,3 @@
-// @ts-nocheck
 const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
@@ -525,7 +524,7 @@ async function init() {
 }
 
 /** Prefer WSS profiles_list; HTTPS /profiles only as fallback. */
-async function loadProfilesHttps(data) {
+async function loadProfilesHttps(data?: any) {
   const creds = data || (await chrome.storage.local.get(['accessToken', 'backendUrl']));
   if (!creds.accessToken || !creds.backendUrl) {
     profilesEl.innerHTML = '<div class="empty">Login to CyberControl first</div>';
@@ -538,7 +537,7 @@ async function loadProfilesHttps(data) {
 
   // 1) WSS first
   try {
-    const wssResp = await new Promise((resolve) => {
+    const wssResp: any = await new Promise((resolve: (v?: any) => void) => {
       const timer = setTimeout(() => resolve({ ok: false, error: 'wss_profiles_timeout' }), 12000);
       chrome.runtime.sendMessage({ type: 'WSS_PROFILES_LIST' }, (resp) => {
         clearTimeout(timer);
@@ -629,7 +628,7 @@ fillBtn.addEventListener('click', async () => {
     const warn = document.getElementById('completeness-warn');
     warn.innerHTML = `<span>⚠️ ${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
     warn.style.display = 'flex';
-    await new Promise(resolve => {
+    await new Promise<void>((resolve) => {
       document.getElementById('fill-anyway').onclick = () => { warn.style.display = 'none'; resolve(); };
     });
   }
@@ -663,7 +662,7 @@ fillBtn.addEventListener('click', async () => {
     });
 
     const data = await chrome.storage.local.get(['backendUrl', 'accessToken']);
-    let fullProfile = _prefetchedProfile?.id === selectedProfile.id ? _prefetchedProfile : selectedProfile;
+    let fullProfile: any = _prefetchedProfile?.id === selectedProfile.id ? _prefetchedProfile : selectedProfile;
     if (fullProfile === selectedProfile) {
       try {
         const fr = await fetch(data.backendUrl + '/profiles/' + selectedProfile.id, {
@@ -733,7 +732,7 @@ undoBtn.addEventListener('click', async () => {
       target: { tabId: _lastFillTabId },
       func: () => {
         const snapshot = (window.__ccUndoSnapshot || {});
-        for (const [key, info] of Object.entries(snapshot)) {
+        for (const [key, info] of Object.entries(snapshot) as any) {
           const el = document.querySelector(info.selector);
           if (el) { el.value = info.value; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
         }
@@ -822,7 +821,7 @@ agentBtn.addEventListener('click', async () => {
     if (pageData.error) throw new Error(pageData.error);
 
     // Fetch FULL profile detail (list endpoint only returns summary {id,name,phone})
-    let fullProfile = selectedProfile;
+    let fullProfile: any = selectedProfile;
     try {
       const detailRes = await fetch(data.backendUrl + '/profiles/' + selectedProfile.id, {
         headers: { 'Authorization': 'Bearer ' + data.accessToken },
@@ -835,7 +834,7 @@ agentBtn.addEventListener('click', async () => {
 
     // Flatten data — strip metadata keys
     const META_KEYS = new Set(['id', 'displayLabel', 'displayName', 'relationship', 'createdAt', 'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId', 'confirmedAt', 'confirmedBy', 'source', 'confidence']);
-    const flatProfile = {};
+    const flatProfile: any = {};
     const raw = fullProfile.data || fullProfile;
     for (const [k, v] of Object.entries(raw)) {
       if (META_KEYS.has(k)) continue;

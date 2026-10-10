@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import { pool } from '../../db/db.js';
 import { authMiddleware } from '../auth.js';
@@ -7,9 +6,9 @@ const router = Router();
 
 // GET /api/training/episodes — convert sessions + corrections into trainable episodes
 // (workspace-scoped — only this operator's data)
-router.get('/episodes', authMiddleware, async (req, res) => {
+router.get('/episodes', authMiddleware, async ( req: any, res: any) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+    const limit = Math.min(parseInt((req.query.limit as any)) || 100, 500);
     const sessionsR = await pool.query(
       `SELECT id, hostname, semantic_form_key AS "semanticFormKey",
               runtime_version AS "runtimeVersion",

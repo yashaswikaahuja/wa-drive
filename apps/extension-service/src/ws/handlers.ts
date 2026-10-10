@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl WebSocket Message Handlers — extension-service/ws-handlers.js
  * Phase 3.4 — WSS Protocol
@@ -46,13 +45,13 @@ const handlers = new Map();
  * @param {HandlerContext} [ctx] — service functions (injected for testability)
  * @returns {{ onMessage: function, onConnection: function, onClose: function }}
  */
-export function createHandlers(ctx = {}) {
+export function createHandlers( ctx: any= {}) {
   /**
    * Handle an incoming message from a connected extension.
    * @param {object} session — from ws-server (sessionId, workspaceId, ws, etc.)
    * @param {object} message — parsed JSON with `type` field
    */
-  function onMessage(session, message) {
+  function onMessage( session: any, message: any) {
     const handler = handlers.get(message.type);
     if (handler) {
       Promise.resolve()
@@ -79,14 +78,14 @@ export function createHandlers(ctx = {}) {
   /**
    * Handle new connection.
    */
-  function onConnection(session) {
+  function onConnection( session: any) {
     console.log(`[ws] Connected: ${session.sessionId} (workspace: ${session.workspaceId.slice(0, 8)}...)`);
   }
 
   /**
    * Handle connection close.
    */
-  function onClose(session, code, reason) {
+  function onClose( session: any, code: any, reason: any) {
     console.log(`[ws] Disconnected: ${session.sessionId} (code=${code}, reason=${reason || 'none'})`);
   }
 
@@ -324,7 +323,7 @@ handlers.set('resume', (session, message) => {
  * fill_request — Stage C: plan sequential fill over WSS (replaces HTTPS /mappings during fill).
  * Response type fill_mapping (matched by ref).
  */
-handlers.set('fill_request', async (session, message) => {
+handlers.set('fill_request', async ( session: any, message: any) => {
   try {
     const plan = await buildFillMapping(message, session.workspaceId);
     send(session.sessionId, {
@@ -349,7 +348,7 @@ handlers.set('fill_request', async (session, message) => {
 /**
  * fill_session — Stage C: durable session evidence over WSS (replaces HTTPS POST /sessions).
  */
-handlers.set('fill_session', async (session, message) => {
+handlers.set('fill_session', async ( session: any, message: any) => {
   try {
     const saved = await persistFillSession(message, session.workspaceId, session.userId);
     send(session.sessionId, {
@@ -387,7 +386,7 @@ handlers.set('fill_session', async (session, message) => {
 /**
  * profiles_list — list workspace profiles over WSS (replaces HTTPS GET /profiles for extension UI).
  */
-handlers.set('profiles_list', async (session, message) => {
+handlers.set('profiles_list', async ( session: any, message: any) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import { authMiddleware } from '../auth.js';
 import { generateFillPlan, handleObservation, validateSnapshot, deriveScope } from '@cybercontrol/svc-fill-planner';
@@ -11,7 +10,7 @@ const router = Router();
 // ── POST /api/fill-plan ─────────────────────────────────────────────────
 // Extension sends PageSnapshot + profile → server returns ActionPlan.
 // Architecture: Extension = Eyes + Hands, Server = Brain + Memory + Knowledge.
-router.post('/fill-plan', authMiddleware, async (req, res) => {
+router.post('/fill-plan', authMiddleware, async ( req: any, res: any) => {
   const startTime = Date.now();
   try {
     const { snapshot, profileId, profile } = req.body;
@@ -53,7 +52,7 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
       // Extract only planner-confirmed unresolved nodes for AI mapping.
       const nodes = snapshot.nodes || {};
       const unmappedNodeIds = new Set(planResult.diagnostics?.unmapped_node_ids || []);
-      const unmappedFields = Object.values(nodes).filter(node => unmappedNodeIds.has(node.node_id));
+      const unmappedFields = Object.values(nodes).filter((node: any) => unmappedNodeIds.has(node.node_id));
 
       if (unmappedFields.length > 0) {
         const pageContext = {
@@ -217,7 +216,7 @@ router.post('/fill-plan', authMiddleware, async (req, res) => {
 // ── POST /api/fill-observation ──────────────────────────────────────────
 // Extension reports an ExecutionObservation v3. The fill-session identifier
 // is transport metadata (query param), not part of the public observation IR.
-router.post('/fill-observation', authMiddleware, async (req, res) => {
+router.post('/fill-observation', authMiddleware, async ( req: any, res: any) => {
   try {
     const body = req.body || {};
     const isV3 = body.kind === 'execution_observation';
@@ -256,7 +255,7 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       return res.status(422).json({ error: 'Invalid ExecutionObservation v3', details: missing });
     }
 
-    const sessionId = req.query.sessionId || body.sessionId || null;
+    const sessionId = (req.query.sessionId as any) || body.sessionId || null;
     const internalObservation = {
       ...observation,
       // Phase 4.2: pass through DOM evidence for server classification (M4.3)
@@ -281,7 +280,7 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
         observation,
         workspaceId: req.user.workspaceId,
         userId: req.user.userId,
-        runtimeVersion: String(req.query.runtimeVersion || 'unknown').slice(0, 20),
+        runtimeVersion: String((req.query.runtimeVersion as any) || 'unknown').slice(0, 20),
       });
     }
 
@@ -294,8 +293,8 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
       try {
         const { mutateDoc, KEYS } = await import('../../db/store.js');
         // Use stable form scope key: portal_id:form_key from correlation context
-        const portalId = req.query.portal_id || '';
-        const formKey = req.query.form_key || req.query.correlation_id || req.query.plan_id || '';
+        const portalId = (req.query.portal_id as any) || '';
+        const formKey = (req.query.form_key as any) || (req.query.correlation_id as any) || (req.query.plan_id as any) || '';
         const behaviorKey = portalId ? `${portalId}:${formKey}` : formKey;
         if (behaviorKey) {
           await mutateDoc(KEYS.MAPPINGS, (all) => {
@@ -334,7 +333,7 @@ router.post('/fill-observation', authMiddleware, async (req, res) => {
 // Lightweight cold-start for AUTO/sequential fill: map unmapped extracted
 // fields → profile keys via OpenRouter (server-side only). Mistral is OCR-only.
 // Prefer taught form_mappings: never re-AI fields that already have profileKey.
-router.post('/semantic-map', authMiddleware, async (req, res) => {
+router.post('/semantic-map', authMiddleware, async ( req: any, res: any) => {
   const startTime = Date.now();
   try {
     const { fields, pageContext, hostname, formKey } = req.body || {};
@@ -361,7 +360,7 @@ router.post('/semantic-map', authMiddleware, async (req, res) => {
       const formKeyResolved = scope.form_key || '';
       let saved = (formKeyResolved && allMappings[formKeyResolved]) || {};
       const countTaught = (entry) =>
-        Object.entries(entry || {}).filter(([k, v]) => !k.startsWith('_') && v?.profileKey).length;
+        Object.entries(entry || {}).filter(([k, v]: [string, any]) => !k.startsWith('_') && v?.profileKey).length;
       exactTaughtCount = countTaught(saved);
       formTaughtCount = exactTaughtCount;
 
@@ -387,8 +386,8 @@ router.post('/semantic-map', authMiddleware, async (req, res) => {
       if (host) {
         for (const entry of Object.values(allMappings || {})) {
           if (!entry || typeof entry !== 'object') continue;
-          if (entry._meta?.hostname && entry._meta.hostname !== host) continue;
-          for (const [lk, lv] of Object.entries(entry)) {
+          if ((entry as any)._meta?.hostname && (entry as any)._meta.hostname !== host) continue;
+          for (const [lk, lv] of Object.entries(entry) as any) {
             if (lk.startsWith('_') || !lv?.profileKey) continue;
             if (!saved[lk]) saved = { ...saved, [lk]: lv };
           }
@@ -484,7 +483,7 @@ router.post('/semantic-map', authMiddleware, async (req, res) => {
  * Adapt sequential-kernel extracted fields into pseudo PageSnapshot nodes
  * so mapUnknownFields / classifyField treat them as fillable.
  */
-function sequentialFieldToPseudoNode(field, idx) {
+function sequentialFieldToPseudoNode( field: any, idx: any) {
   const type = String(field.type || 'text').toLowerCase();
   let affordances = ['type_text'];
   if (/select|dropdown/.test(type)) affordances = ['select_one'];

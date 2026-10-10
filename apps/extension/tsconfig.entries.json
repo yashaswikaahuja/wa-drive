@@ -2,14 +2,16 @@
   "compilerOptions": {
     "target": "ES2018",
     "module": "None",
-    "lib": ["ES2018", "DOM", "WebWorker"],
-    "strict": true,
+    "lib": ["ES2018", "DOM", "DOM.Iterable", "WebWorker"],
+    "strict": false,
+    "noImplicitAny": false,
     "noEmit": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "types": []
   },
   "include": [
+    "globals.d.ts",
     "background.ts",
     "content.ts",
     "popup.ts",

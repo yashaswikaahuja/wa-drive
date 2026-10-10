@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Build a runnable dist/ for extension-service.
  *
@@ -39,7 +38,7 @@ const ccPackageNames = ['cc-mapper'];
 // Include package dist/ (compiled TS). Only skip nested node_modules.
 const copyFilter = (source) => path.basename(source) !== 'node_modules';
 
-function buildPackage(packageName) {
+function buildPackage( packageName: any) {
   const source = path.join(repositoryRoot, 'packages', packageName);
   const pkgJson = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
   const main = String(pkgJson.main || '');
@@ -121,7 +120,7 @@ for (const packageName of packageNames) {
   // Sibling file: links inside vendor/
   const nestedPkgPath = path.join(destination, 'package.json');
   const nestedPkg = JSON.parse(fs.readFileSync(nestedPkgPath, 'utf8'));
-  for (const [name, version] of Object.entries(nestedPkg.dependencies || {})) {
+  for (const [name, version] of Object.entries(nestedPkg.dependencies || {}) as any) {
     if (
       typeof version === 'string' &&
       version.startsWith('workspace:') &&
@@ -172,7 +171,7 @@ for (const packageName of ccPackageNames) {
   const scopeName = packageName === 'cc-mapper' ? '@cc/mapper' : `@cc/${packageName.replace(/^cc-/, '')}`;
   nextDeps[scopeName] = `file:./vendor/${packageName}`;
 }
-for (const [name, version] of Object.entries(nextDeps)) {
+for (const [name, version] of Object.entries(nextDeps) as any) {
   if (typeof version === 'string' && version.startsWith('workspace:')) {
     delete nextDeps[name];
   }

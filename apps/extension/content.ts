@@ -1,4 +1,3 @@
-// @ts-nocheck
 ;(function() {
   if (window._ccCSBridgeInit) return;
   window._ccCSBridgeInit = true;

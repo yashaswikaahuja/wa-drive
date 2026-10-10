@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Knowledge Store REST API (Phase 2.2, Issue #86)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -22,7 +21,7 @@ import * as store from '@cybercontrol/svc-knowledge';
 const router = Router();
 
 // ── Create ──────────────────────────────────────────────────────────
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, async ( req: any, res: any) => {
   try {
     const record = req.body;
     if (!record || !record.kind) {
@@ -37,7 +36,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // ── Get by ID ───────────────────────────────────────────────────────
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const record = await store.getById(req.params.id);
     if (!record) return res.status(404).json({ error: 'Not found' });
@@ -48,7 +47,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 // ── Query (filtered) ────────────────────────────────────────────────
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, async ( req: any, res: any) => {
   try {
     const { kind, status, portal_id, form_key, organization_id, country, tags, limit, offset } = req.query;
     const results = await store.query({
@@ -66,7 +65,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // ── Update (creates new version) ────────────────────────────────────
-router.patch('/:id', authMiddleware, async (req, res) => {
+router.patch('/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const changes = req.body;
     if (!changes || typeof changes !== 'object') {
@@ -81,7 +80,7 @@ router.patch('/:id', authMiddleware, async (req, res) => {
 });
 
 // ── Deprecate (soft delete) ─────────────────────────────────────────
-router.delete('/:id', authMiddleware, async (req, res) => {
+router.delete('/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const result = await store.deprecate(req.params.id);
     res.json(result);
@@ -92,7 +91,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 // ── Hard delete (drafts only) ───────────────────────────────────────
-router.delete('/:id/hard', authMiddleware, async (req, res) => {
+router.delete('/:id/hard', authMiddleware, async ( req: any, res: any) => {
   try {
     const result = await store.remove(req.params.id);
     res.json(result);
@@ -103,7 +102,7 @@ router.delete('/:id/hard', authMiddleware, async (req, res) => {
 });
 
 // ── Lineage (version history) ───────────────────────────────────────
-router.get('/lineage/:lineageId', authMiddleware, async (req, res) => {
+router.get('/lineage/:lineageId', authMiddleware, async ( req: any, res: any) => {
   try {
     const records = await store.getByLineage(req.params.lineageId);
     res.json({ records, count: records.length });
@@ -113,7 +112,7 @@ router.get('/lineage/:lineageId', authMiddleware, async (req, res) => {
 });
 
 // ── Resolve (scope-aware best match) ────────────────────────────────
-router.post('/resolve', authMiddleware, async (req, res) => {
+router.post('/resolve', authMiddleware, async ( req: any, res: any) => {
   try {
     const { kind, portal_id, form_key, organization_id, country, single } = req.body;
     if (!kind) return res.status(400).json({ error: 'kind is required' });
