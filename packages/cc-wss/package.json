@@ -12,7 +12,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node -e \"console.log('[cc-wss] no unit tests (browser SW required)')\""
+    "test": "node -e \"console.log('[cc-wss] no unit tests (browser SW required)')\"",
+    "build": "echo 'no build — ESM source-only package'"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

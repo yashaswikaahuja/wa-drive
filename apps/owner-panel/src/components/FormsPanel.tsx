@@ -37,39 +37,28 @@ export function FormsPanel({ cfg }: { cfg: Config }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
-  const [lifecycle, setLifecycle] = useState<string>('');
   const [editing, setEditing] = useState<CatalogForm | null>(null);
 
-  const load = useCallback(async (search: string, life: string) => {
+  const load = useCallback(async (search: string) => {
     setLoading(true); setError('');
-    try { setForms(await fetchOwnerForms(cfg, search, life || undefined)); }
+    try { setForms(await fetchOwnerForms(cfg, search)); }
     catch (e) { const err = e as ApiError; setError(err.message || `Failed (${err.status})`); setForms([]); }
     setLoading(false);
   }, [cfg]);
 
-  useEffect(() => { load('', ''); }, [load]);
-  useEffect(() => { const t = setTimeout(() => load(q, lifecycle), 300); return () => clearTimeout(t); }, [q, lifecycle, load]);
+  useEffect(() => { load(''); }, [load]);
+  useEffect(() => { const t = setTimeout(() => load(q), 300); return () => clearTimeout(t); }, [q, load]);
 
   return (
-    <section>
+    <section style={{ marginTop: 16 }}>
       {/* Header */}
-      <div className="row between" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+      <div className="row between" style={{ marginBottom: 16 }}>
         <div className="row" style={{ gap: 10 }}>
           <FileText size={20} weight="duotone" style={{ color: 'hsl(var(--marigold-deep))' }} />
           <h2 className="display" style={{ fontSize: 17, fontWeight: 700 }}>Form Catalog</h2>
           <span className="muted num" style={{ fontSize: 12 }}>{forms.length}</span>
         </div>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-          <select
-            className="input"
-            value={lifecycle}
-            onChange={(e) => setLifecycle(e.target.value)}
-            style={{ width: 140, fontSize: 13 }}
-            title="Filter by lifecycle"
-          >
-            <option value="">All statuses</option>
-            {LIFECYCLE_OPTS.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
+        <div className="row" style={{ gap: 8 }}>
           <div style={{ position: 'relative' }}>
             <MagnifyingGlass size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'hsl(var(--muted))' }} />
             <input className="input" placeholder="Search…" value={q} onChange={e => setQ(e.target.value)}
@@ -82,7 +71,7 @@ export function FormsPanel({ cfg }: { cfg: Config }) {
       {error && (
         <div className="banner" role="alert" style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ flex: 1 }}>{error}</span>
-          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => load(q, lifecycle)}>
+          <button className="btn" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => load(q)}>
             <ArrowClockwise size={12} weight="bold" /> Retry
           </button>
         </div>

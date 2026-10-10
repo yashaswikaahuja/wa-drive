@@ -7,16 +7,8 @@ export function AiSettingsPanel({ cfg }: { cfg: Config }) {
   const [ai, setAi] = useState<AiSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
 
-  useEffect(() => {
-    setLoading(true); setLoadError('');
-    fetchAiSettings(cfg)
-      .then(setAi)
-      .catch((e: any) => setLoadError(e.message || 'Failed to load AI settings'))
-      .finally(() => setLoading(false));
-  }, [cfg]);
+  useEffect(() => { fetchAiSettings(cfg).then(setAi).catch(() => {}); }, [cfg]);
 
   const save = async () => {
     if (!ai) return;
@@ -29,41 +21,18 @@ export function AiSettingsPanel({ cfg }: { cfg: Config }) {
     finally { setSaving(false); }
   };
 
-  if (loading) {
-    return (
-      <section className="card" style={{ padding: 20 }}>
-        <div className="skeleton" style={{ height: 20, width: 180, marginBottom: 16 }} />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-          <div className="skeleton" style={{ height: 160, borderRadius: 10 }} />
-          <div className="skeleton" style={{ height: 160, borderRadius: 10 }} />
-        </div>
-      </section>
-    );
-  }
-
-  if (loadError || !ai) {
-    return (
-      <section className="card" style={{ padding: 20 }}>
-        <p className="banner" role="alert">{loadError || 'AI settings unavailable'}</p>
-      </section>
-    );
-  }
+  if (!ai) return null;
 
   return (
-    <section className="card" style={{ padding: '20px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+    <section className="card" style={{ padding: '20px', marginTop: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
         <div style={{ width: 30, height: 30, borderRadius: 8, background: 'hsl(210 60% 50% / 0.1)', display: 'grid', placeItems: 'center' }}>
           <Brain size={16} weight="duotone" style={{ color: 'hsl(210 60% 45%)' }} />
         </div>
-        <div style={{ flex: 1 }}>
-          <h2 className="display" style={{ fontSize: 15, fontWeight: 700 }}>AI Models & Keys</h2>
-          <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-            Shared across cafés. Keys are masked after save; paste a new value to rotate.
-          </p>
-        </div>
+        <h2 className="display" style={{ fontSize: 15, fontWeight: 700 }}>AI Models & Keys</h2>
       </div>
 
-      <div className="ai-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20, marginTop: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
         {/* Extraction */}
         <div style={{ background: 'hsl(var(--bg))', borderRadius: 10, padding: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>

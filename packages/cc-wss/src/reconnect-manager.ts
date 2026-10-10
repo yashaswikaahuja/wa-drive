@@ -147,3 +147,5 @@ if (typeof module !== 'undefined' && module.exports) {
 } else if (typeof globalThis !== 'undefined') {
   globalThis.CcReconnectManager = ReconnectManager;
 }
+
+export { ReconnectManager, DEFAULTS };

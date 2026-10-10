@@ -1,13 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ChartLine, Buildings, FileText, Brain, Gear, ArrowClockwise,
-  Broadcast, PencilSimple, Stack,
-} from '@phosphor-icons/react';
-import {
-  ApiError, fetchMetrics, fetchFunnel, fetchTrends, fetchWorkspaces,
-  fetchLearningStats, loadConfig, saveConfig,
-} from './api';
-import type { Config, Metrics, Funnel, Trends, Workspace, LearningStats } from './api';
+import { ChartLine, Buildings, FileText, Brain, Gear, ArrowClockwise } from '@phosphor-icons/react';
+import { ApiError, fetchMetrics, fetchFunnel, fetchTrends, fetchWorkspaces, loadConfig, saveConfig } from './api';
+import type { Config, Metrics, Funnel, Trends, Workspace } from './api';
 import { MetricsGrid, MetricsSkeleton } from './components/StatCards';
 import { FunnelWidget } from './components/Funnel';
 import { TrendsPanel } from './components/Trends';
@@ -15,23 +9,16 @@ import { WorkspacesTable, TableSkeleton } from './components/WorkspacesTable';
 import { WorkspaceDrawer } from './components/WorkspaceDrawer';
 import { Setup } from './components/Setup';
 import { AiSettingsPanel } from './components/AiSettings';
-import { DocumentExtractMapsPanel } from './components/DocumentExtractMaps';
 import { FormsPanel } from './components/FormsPanel';
-import { MappingsPanel } from './components/MappingsPanel';
-import { SessionsPanel } from './components/SessionsPanel';
-import { CorrectionsPanel } from './components/CorrectionsPanel';
 import { exportWorkspacesCsv } from './lib/csv';
 
-type Section = 'overview' | 'workspaces' | 'forms' | 'mappings' | 'sessions' | 'corrections' | 'ai' | 'settings';
+type Section = 'overview' | 'workspaces' | 'forms' | 'ai' | 'settings';
 type Sort = 'last_active' | 'created' | 'files' | 'health';
 
 const NAV_ITEMS: { key: Section; label: string; icon: typeof ChartLine }[] = [
   { key: 'overview', label: 'Overview', icon: ChartLine },
   { key: 'workspaces', label: 'Workspaces', icon: Buildings },
   { key: 'forms', label: 'Forms', icon: FileText },
-  { key: 'mappings', label: 'Mappings', icon: Stack },
-  { key: 'sessions', label: 'Sessions', icon: Broadcast },
-  { key: 'corrections', label: 'Corrections', icon: PencilSimple },
   { key: 'ai', label: 'AI', icon: Brain },
   { key: 'settings', label: 'Settings', icon: Gear },
 ];
@@ -53,7 +40,6 @@ export function App() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [funnel, setFunnel] = useState<Funnel | null>(null);
   const [trends, setTrends] = useState<Trends | null>(null);
-  const [learning, setLearning] = useState<LearningStats | null>(null);
 
   // Workspaces data
   const [rows, setRows] = useState<Workspace[] | null>(null);
@@ -87,12 +73,8 @@ export function App() {
   const loadOverview = useCallback(async (c: Config) => {
     setLoading(true); setError('');
     try {
-      const [m, fn, tr, learn] = await Promise.all([
-        fetchMetrics(c), fetchFunnel(c), fetchTrends(c),
-        fetchLearningStats(c).catch(() => null),
-      ]);
-      setMetrics(m); setFunnel(fn); setTrends(tr); setLearning(learn);
-      setUpdatedAt(new Date()); setNeedsSetup(false);
+      const [m, fn, tr] = await Promise.all([fetchMetrics(c), fetchFunnel(c), fetchTrends(c)]);
+      setMetrics(m); setFunnel(fn); setTrends(tr); setUpdatedAt(new Date()); setNeedsSetup(false);
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 401) { setNeedsSetup(true); setSetupError(err.message); }
@@ -126,7 +108,7 @@ export function App() {
     if (!cfg.key || needsSetup) return;
     if (section === 'overview' && !metrics) void loadOverview(cfg);
     if (section === 'workspaces' && !rows) void loadWorkspaces(cfg, '', 'last_active');
-    // Forms / mappings / sessions / corrections / AI load their own data on mount
+    // Forms/AI load their own data internally on mount
   }, [section, cfg, needsSetup, metrics, rows, loadOverview, loadWorkspaces]);
 
   // Debounced workspaces refetch on search/sort
@@ -211,41 +193,6 @@ export function App() {
         {section === 'overview' && (
           <div className="section-body">
             {metrics ? <MetricsGrid m={metrics} /> : <MetricsSkeleton />}
-            {learning && (
-              <div className="card" style={{ padding: 16, marginTop: 14 }}>
-                <div className="row between" style={{ marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
-                  <div className="label">Learning (fills across cafés)</div>
-                  <span className="muted" style={{ fontSize: 11 }}>Click a card to open that section</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
-                  {([
-                    { label: 'Sessions', value: learning.sessions, section: 'sessions' as Section },
-                    { label: 'Filled', value: learning.filled, section: 'sessions' as Section },
-                    { label: 'Failed', value: learning.failed, section: 'sessions' as Section },
-                    { label: 'Corrections', value: learning.corrections, section: 'corrections' as Section },
-                    { label: 'Forms mapped', value: learning.forms, section: 'mappings' as Section },
-                    { label: 'Unmapped', value: learning.unmapped, section: 'mappings' as Section },
-                  ]).map((c) => (
-                    <button
-                      key={c.label}
-                      type="button"
-                      className="card"
-                      onClick={() => navigate(c.section)}
-                      style={{
-                        padding: 12,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        border: '1px solid hsl(var(--border-soft))',
-                        background: 'hsl(var(--bg))',
-                      }}
-                    >
-                      <div className="muted" style={{ fontSize: 11 }}>{c.label}</div>
-                      <div className="num display" style={{ fontSize: 20, fontWeight: 700 }}>{c.value}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
             {funnel && <FunnelWidget f={funnel} />}
             {trends && <TrendsPanel t={trends} />}
           </div>
@@ -271,28 +218,9 @@ export function App() {
           </div>
         )}
 
-        {section === 'mappings' && (
-          <div className="section-body">
-            <MappingsPanel cfg={cfg} />
-          </div>
-        )}
-
-        {section === 'sessions' && (
-          <div className="section-body">
-            <SessionsPanel cfg={cfg} />
-          </div>
-        )}
-
-        {section === 'corrections' && (
-          <div className="section-body">
-            <CorrectionsPanel cfg={cfg} />
-          </div>
-        )}
-
         {section === 'ai' && (
           <div className="section-body">
             <AiSettingsPanel cfg={cfg} />
-            <DocumentExtractMapsPanel cfg={cfg} />
           </div>
         )}
 

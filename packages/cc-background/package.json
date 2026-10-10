@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node -e \"console.log('[cc-background] no unit tests')\""
+    "test": "node -e \"console.log('[cc-background] no unit tests')\"",
+    "build": "echo 'no build — ESM source-only package'"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

@@ -23,6 +23,10 @@ auth_info/
 sessions/
 upload_queue/
 
+# Chromium / wwebjs browser session data (never commit — contains cookies, login data)
+apps/whatsapp-resolver/session/
+apps/whatsapp-service/session/
+
 # Binaries/artifacts
 *.zip
 *.heapsnapshot
@@ -52,6 +56,8 @@ stop.sh
 start-windows.bat
 deploy.sh
 setup-gcp.sh
+setup-gcp2.sh
+setup-gcp*.sh
 health-check.*
 live-logs*
 smoke-test*
@@ -94,6 +100,11 @@ extension-dev/cli/out/
 
 # Turborepo
 .turbo/
+
+# Stale pre-monorepo root dirs (source now lives under apps/ — these are local artifacts only)
+/backend/
+/extension-service/
+/frontend/
 
 # tsc emit staging (extension-service and similar)
 .tsbuild/

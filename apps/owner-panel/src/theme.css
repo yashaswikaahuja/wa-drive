@@ -244,18 +244,6 @@ tbody tr:hover { background: hsl(var(--bg) / 0.6); }
   animation: fadeIn 200ms ease;
 }
 
-/* Learning / AI panels — stack on narrow screens */
-@media (max-width: 720px) {
-  .extract-maps-layout {
-    grid-template-columns: 1fr !important;
-  }
-  .extract-maps-layout > div:first-child {
-    max-height: 180px !important;
-    flex-direction: row !important;
-    flex-wrap: wrap !important;
-  }
-}
-
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }

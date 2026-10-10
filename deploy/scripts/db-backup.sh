@@ -1,36 +1,39 @@
 #!/usr/bin/env bash
-# db-backup.sh — nightly Postgres backup → GCS, cloud-agnostic, no gcloud/gsutil required.
+# db-backup.sh — nightly Postgres backup → AWS S3, no AWS CLI required.
 #
-# WHAT: pg_dump the cybercontrol DB (over the tailnet) → gzip → upload to a GCS bucket via the
-#       JSON API with a service-account key (signs a JWT, exchanges for an access token, PUTs the
-#       object). Retention is handled by the bucket's lifecycle rule (auto-delete after N days).
+# WHAT: pg_dump the cybercontrol DB (over the tailnet) → gzip → upload to an S3 bucket via
+#       the AWS REST API using Signature Version 4. Retention is handled by the bucket's
+#       lifecycle rule (auto-delete after N days).
 #
-# WHY curl + SA key instead of gsutil: keeps the VM lean (no SDK install) and the upload step is a
-#     plain HTTPS PUT, so swapping GCS for S3/Backblaze later is a small change (one upload function).
+# WHY curl + SigV4 instead of awscli: keeps the VM lean (no SDK install). Swap bucket/region
+#     to move storage; the dump + upload pattern stays identical.
 #
-# RUNS ON: the app VM (gcp-worker) — it reaches cybercontrol-db:5432 over the tailnet and has Docker
-#          (postgres:15-alpine provides pg_dump). The DB VM itself has no usable SSH.
+# RUNS ON: any app VM that reaches cybercontrol-db:5432 over the tailnet and has Docker
+#          (postgres:15-alpine provides pg_dump) + python3.
 #
 # REQUIRES (env or the defaults below):
-#   DATABASE_URL        postgres connection string (default: read from backend.env)
-#   GCS_BUCKET          target bucket name           (default: cybercontrol-db-backups)
-#   SA_KEY_FILE         path to the service-account JSON key (default: /opt/cybercontrol-docker/db-backup-key.json)
-#   PG_IMAGE            pg_dump image                (default: postgres:15-alpine — match server major)
+#   DATABASE_URL            postgres connection string  (default: read from backend.env)
+#   S3_BUCKET               target bucket name          (default: cybercontrol-db-backups)
+#   S3_REGION               AWS region                  (default: us-east-1)
+#   AWS_ACCESS_KEY_ID       IAM key with s3:PutObject   (required)
+#   AWS_SECRET_ACCESS_KEY                                (required)
+#   PG_IMAGE                pg_dump image               (default: postgres:15-alpine)
 #
 # Exit non-zero on any failure so cron/monitoring can alert.
 set -euo pipefail
 
-DATABASE_URL="${DATABASE_URL:-$(sudo grep -h '^DATABASE_URL=' /opt/cybercontrol-docker/backend.env | cut -d= -f2-)}"
-GCS_BUCKET="${GCS_BUCKET:-cybercontrol-db-backups}"
-SA_KEY_FILE="${SA_KEY_FILE:-/opt/cybercontrol-docker/db-backup-key.json}"
+DATABASE_URL="${DATABASE_URL:-$(sudo grep -h '^DATABASE_URL=' /opt/cybercontrol-docker/backend.env 2>/dev/null | cut -d= -f2-)}"
+S3_BUCKET="${S3_BUCKET:-cybercontrol-db-backups}"
+S3_REGION="${S3_REGION:-us-east-1}"
 PG_IMAGE="${PG_IMAGE:-postgres:15-alpine}"
 LOG_TAG="[db-backup]"
 
-log() { echo "$LOG_TAG $(date -u +%FT%TZ) $*"; }
+log()  { echo "$LOG_TAG $(date -u +%FT%TZ) $*"; }
 fail() { log "ERROR: $*" >&2; exit 1; }
 
-[ -n "$DATABASE_URL" ] || fail "DATABASE_URL not set / not found"
-[ -f "$SA_KEY_FILE" ]  || fail "SA key file not found: $SA_KEY_FILE"
+[ -n "${DATABASE_URL:-}"          ] || fail "DATABASE_URL not set / not found"
+[ -n "${AWS_ACCESS_KEY_ID:-}"     ] || fail "AWS_ACCESS_KEY_ID not set"
+[ -n "${AWS_SECRET_ACCESS_KEY:-}" ] || fail "AWS_SECRET_ACCESS_KEY not set"
 
 TS="$(date -u +%Y%m%d-%H%M%S)"
 OBJECT="cybercontrol-${TS}.sql.gz"
@@ -40,50 +43,71 @@ DUMP="$TMP/$OBJECT"
 
 # ── 1. Dump + compress ───────────────────────────────────────────────────────
 log "dumping database → $DUMP"
-sudo docker run --rm --network host "$PG_IMAGE" pg_dump "$DATABASE_URL" 2>"$TMP/pgdump.err" | gzip > "$DUMP" \
+sudo docker run --rm --network host "$PG_IMAGE" pg_dump "$DATABASE_URL" 2>"$TMP/pgdump.err" \
+  | gzip > "$DUMP" \
   || { cat "$TMP/pgdump.err" >&2; fail "pg_dump failed"; }
 SIZE=$(stat -c%s "$DUMP")
 [ "$SIZE" -gt 100 ] || fail "dump suspiciously small ($SIZE bytes) — aborting"
 log "dump ok: $SIZE bytes"
 
-# ── 2. Mint a GCS access token from the SA key (JWT bearer flow) ──────────────
-# Done in a tiny python one-liner (python3 is present); avoids needing gcloud.
-ACCESS_TOKEN="$(python3 - "$SA_KEY_FILE" <<'PY'
-import sys, json, time, base64, urllib.request, urllib.parse, hashlib
-key = json.load(open(sys.argv[1]))
-def b64(b): return base64.urlsafe_b64encode(b).rstrip(b'=')
-now = int(time.time())
-claim = {"iss": key["client_email"], "scope": "https://www.googleapis.com/auth/devstorage.read_write",
-         "aud": "https://oauth2.googleapis.com/token", "iat": now, "exp": now + 3600}
-header = {"alg": "RS256", "typ": "JWT"}
-signing_input = b64(json.dumps(header).encode()) + b'.' + b64(json.dumps(claim).encode())
-# RS256 sign using the private key (use cryptography if available, else openssl fallback)
-try:
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-    pk = serialization.load_pem_private_key(key["private_key"].encode(), password=None)
-    sig = pk.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
-except Exception:
-    import subprocess, tempfile, os
-    with tempfile.NamedTemporaryFile('w', suffix='.pem', delete=False) as f:
-        f.write(key["private_key"]); pem = f.name
-    sig = subprocess.run(["openssl","dgst","-sha256","-sign",pem],input=signing_input,
-                         stdout=subprocess.PIPE,check=True).stdout
-    os.unlink(pem)
-jwt = signing_input + b'.' + b64(sig)
-data = urllib.parse.urlencode({"grant_type":"urn:ietf:params:oauth:grant-type:jwt-bearer","assertion":jwt.decode()}).encode()
-resp = urllib.request.urlopen("https://oauth2.googleapis.com/token", data=data, timeout=30)
-print(json.load(resp)["access_token"])
-PY
-)" || fail "failed to mint GCS access token"
-[ -n "$ACCESS_TOKEN" ] || fail "empty access token"
-log "got access token"
+# ── 2. Upload to S3 via SigV4 (python3, no awscli) ──────────────────────────
+log "uploading → s3://${S3_BUCKET}/${OBJECT}"
+python3 - "$DUMP" "$OBJECT" "$S3_BUCKET" "$S3_REGION" \
+  "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" <<'PY'
+import sys, hashlib, hmac, datetime, urllib.request
 
-# ── 3. Upload to GCS (resumable not needed for ~3MB; simple media upload) ─────
-UPLOAD_URL="https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET}/o?uploadType=media&name=${OBJECT}"
-HTTP=$(curl -s -o "$TMP/resp.json" -w '%{http_code}' -X POST "$UPLOAD_URL" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: application/gzip" \
-  --data-binary @"$DUMP")
-[ "$HTTP" = "200" ] || { cat "$TMP/resp.json" >&2; fail "upload failed (HTTP $HTTP)"; }
-log "uploaded → gs://${GCS_BUCKET}/${OBJECT} (HTTP $HTTP)"
-log "done. retention handled by bucket lifecycle."
+dump_path, obj_key, bucket, region, key_id, secret = sys.argv[1:]
+
+with open(dump_path, 'rb') as f:
+    payload = f.read()
+
+payload_hash = hashlib.sha256(payload).hexdigest()
+now          = datetime.datetime.utcnow()
+datestamp    = now.strftime('%Y%m%d')
+amzdate      = now.strftime('%Y%m%dT%H%M%SZ')
+host         = f'{bucket}.s3.{region}.amazonaws.com'
+url          = f'https://{host}/{obj_key}'
+
+signed_headers = 'content-type;host;x-amz-content-sha256;x-amz-date'
+canonical = '\n'.join([
+    'PUT', f'/{obj_key}', '',
+    f'content-type:application/gzip',
+    f'host:{host}',
+    f'x-amz-content-sha256:{payload_hash}',
+    f'x-amz-date:{amzdate}',
+    '', signed_headers, payload_hash,
+])
+
+credential_scope = f'{datestamp}/{region}/s3/aws4_request'
+string_to_sign = '\n'.join([
+    'AWS4-HMAC-SHA256', amzdate, credential_scope,
+    hashlib.sha256(canonical.encode()).hexdigest(),
+])
+
+def sign(key, msg):
+    return hmac.new(key, msg.encode(), hashlib.sha256).digest()
+
+signing_key = sign(sign(sign(sign(
+    f'AWS4{secret}'.encode(), datestamp), region), 's3'), 'aws4_request')
+signature = hmac.new(signing_key, string_to_sign.encode(), hashlib.sha256).hexdigest()
+
+auth = (f'AWS4-HMAC-SHA256 Credential={key_id}/{credential_scope}, '
+        f'SignedHeaders={signed_headers}, Signature={signature}')
+
+req = urllib.request.Request(url, data=payload, method='PUT', headers={
+    'Content-Type': 'application/gzip',
+    'x-amz-date': amzdate,
+    'x-amz-content-sha256': payload_hash,
+    'Authorization': auth,
+})
+try:
+    resp = urllib.request.urlopen(req, timeout=120)
+    print(f'upload ok: HTTP {resp.status}')
+except urllib.error.HTTPError as e:
+    print(f'upload failed: HTTP {e.code}', file=sys.stderr)
+    print(e.read().decode(errors='replace'), file=sys.stderr)
+    sys.exit(1)
+PY
+
+log "uploaded → s3://${S3_BUCKET}/${OBJECT}"
+log "done. retention handled by bucket lifecycle rule."

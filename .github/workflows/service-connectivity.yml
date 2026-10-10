@@ -71,6 +71,7 @@ jobs:
     needs: discover
     if: ${{ needs.discover.outputs.hosts != '[]' }}
     runs-on: ubuntu-latest
+    continue-on-error: true   # one unreachable host must not fail the whole run
     strategy:
       fail-fast: false
       matrix:
@@ -84,12 +85,67 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:cybercontrol
+          args: --accept-dns=true
+
+      - name: Verify MagicDNS resolution
+        run: |
+          # Ensure the runner can resolve tailnet hostnames via MagicDNS.
+          # tailscale/github-action@v2 joins the tailnet but on some runners
+          # systemd-resolved is not updated fast enough — assert and wait.
+          echo "Tailscale status:"
+          tailscale status | head -5
+          # Force accept-dns in case the action did not set it
+          sudo tailscale set --accept-dns=true 2>/dev/null || true
+          # Give resolved up to 15s to pick up the MagicDNS servers
+          for i in $(seq 1 15); do
+            if getent hosts cybercontrol-db >/dev/null 2>&1; then
+              echo "MagicDNS OK — cybercontrol-db resolves"
+              break
+            fi
+            echo "waiting for MagicDNS ($i/15)..."
+            sleep 1
+          done
+          # Fallback: if MagicDNS still not working, use Tailscale IP directly
+          if ! getent hosts cybercontrol-db >/dev/null 2>&1; then
+            echo "WARN: MagicDNS not resolving — injecting /etc/hosts from tailscale status"
+            tailscale status | awk 'NR>1 && $1~/^100\./ {ip=$1; name=$2; sub(/\..*/, "", name); if(name) print ip "  " name}' \
+              | sudo tee -a /etc/hosts
+            echo "Added tailnet hosts:"
+            grep "^100\." /etc/hosts | tail -20
+          fi
 
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+
+      - name: Bootstrap deploy SSH access (first-time VMs)
+        env:
+          HOST: ${{ matrix.host }}
+          USER: ${{ secrets.DEPLOY_SSH_USER }}
+          BOOTSTRAP_USER: ${{ secrets.BOOTSTRAP_SSH_USER }}
+        run: |
+          set -euo pipefail
+          # Fast path: deploy user already exists and key works — nothing to do.
+          if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes \
+               -i ~/.ssh/id_ed25519 "$USER@$HOST" 'echo ssh-ok' 2>/dev/null; then
+            echo "deploy user already accessible on $HOST"
+            exit 0
+          fi
+          # Slow path: first-time VM — bootstrap using the cloud default user (ubuntu/ec2-user).
+          # BOOTSTRAP_SSH_USER repo secret (default: ubuntu) must have the same DEPLOY_SSH_KEY.
+          BOOT_USER="${BOOTSTRAP_USER:-ubuntu}"
+          echo "deploy user not yet accessible — bootstrapping via $BOOT_USER@$HOST"
+          # Upload and run ensure-deploy-ssh-access.sh as root via the bootstrap user.
+          scp -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 -i ~/.ssh/id_ed25519 \
+            deploy/scripts/ensure-deploy-ssh-access.sh \
+            "$BOOT_USER@$HOST:/tmp/ensure-deploy-ssh-access.sh"
+          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$BOOT_USER@$HOST" \
+            'sudo bash /tmp/ensure-deploy-ssh-access.sh && rm -f /tmp/ensure-deploy-ssh-access.sh'
+          echo "bootstrap complete — verifying deploy user access"
+          ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -i ~/.ssh/id_ed25519 \
+            "$USER@$HOST" 'echo ssh-ok-after-bootstrap'
 
       - name: Upload contract + check scripts
         env:
