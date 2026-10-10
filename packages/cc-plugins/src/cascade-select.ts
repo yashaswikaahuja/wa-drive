@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cascade-select plugin — handles dependent <select> chains (state→district→block→village).
  * 
@@ -42,12 +41,12 @@ var CascadeSelectPlugin = {
   },
 
   fill(el, value, context) {
-    function findOpt(options) {
+    function findOpt(options: any) {
       // shared/option-match.ts is injected before plugins run
       return window.ccMatchOption(value, options);
     }
 
-    function applySelect(el, opt) {
+    function applySelect(el: any, opt: any) {
       // Delegate to shared/select-apply.ts
       return window.ccApplySelect(el, opt);
     }
@@ -61,7 +60,7 @@ var CascadeSelectPlugin = {
     }
 
     // No options yet — need to wait (runtime should have waited, but report not settled)
-    var realOpts = allOpts.filter(o => o.value && o.value !== '0' && o.value !== '-1' && o.value !== '');
+    var realOpts = allOpts.filter((o: any) => o.value && o.value !== '0' && o.value !== '-1' && o.value !== '');
     if (realOpts.length === 0) {
       return { success: false, settled: false, reason: 'no-options-loaded' };
     }

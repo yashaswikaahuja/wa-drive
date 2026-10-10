@@ -62,7 +62,7 @@ console.log('\nExact match:');
 {
   _timers = [];
   const el = makeSelect([{ v: '', t: 'Select...' }, { v: 'BR', t: 'Bihar' }]);
-  globalLike.window.ccMatchOption = (val, opts) => opts.find(o => o.text.trim().toLowerCase() === val.toLowerCase()) || null;
+  globalLike.window.ccMatchOption = (val, opts) => opts.find((o: any) => o.text.trim().toLowerCase() === val.toLowerCase()) || null;
   const r = fillSelect(el, '#s', 'Bihar', {});
   is('returns 1', r, 1);
   ok('selectedIndex set', el.selectedIndex === 1);

@@ -1,12 +1,11 @@
-// @ts-nocheck
 // ── extractFormFieldsWithFingerprint ──────────────────────────────────────────
 function extractFormFieldsWithFingerprint() {
-  var _fc  = globalThis.CcFormContext        || {};
-  var _ssf = globalThis.CcScanStandardFields || {};
-  var _smw = globalThis.CcScanMatWidgets     || {};
-  var _sng = globalThis.CcScanNgDropdowns    || {};
-  var _sfv = globalThis.CcSortFieldsVisual   || {};
-  var _fp  = globalThis.CcFingerprintForm    || {};
+  var _fc  = (globalThis as any).CcFormContext        || {};
+  var _ssf = (globalThis as any).CcScanStandardFields || {};
+  var _smw = (globalThis as any).CcScanMatWidgets     || {};
+  var _sng = (globalThis as any).CcScanNgDropdowns    || {};
+  var _sfv = (globalThis as any).CcSortFieldsVisual   || {};
+  var _fp  = (globalThis as any).CcFingerprintForm    || {};
 
   var ccDomUtils = window.ccDomUtils || {};
   var doc = document;
@@ -89,8 +88,8 @@ function extractFormFieldsWithFingerprint() {
 }
 
 // ── injectCorrectionObserver ──────────────────────────────────────────────────
-function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, formKey) {
-  var _co = globalThis.CcCorrectionObserver || {};
+function injectCorrectionObserver(mapping: any, filledBySource: any, profile: any, backendUrl: any, formKey: any) {
+  var _co = (globalThis as any).CcCorrectionObserver || {};
   if (_co.inject) {
     _co.inject(mapping, filledBySource, profile, backendUrl, formKey, document);
   }

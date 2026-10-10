@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * fillOne dispatcher — resolve el/elType, run handlers in order.
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOne = function (k) {
@@ -14,11 +13,11 @@
       ? root.CcResolveCcSelector.resolveCcSelector
       : function (sel) { return document.querySelector(sel); }; // safe fallback
 
-    function resolveEl(selector) {
+    function resolveEl(selector: any) {
       return _resolve(selector);
     }
 
-    function detectElType(el, type) {
+    function detectElType(el: any, type: any) {
       const tagName = el.tagName.toLowerCase();
       if (tagName === 'select') return 'select';
       if (tagName === 'ng-select') return 'ng-dropdown';
@@ -30,7 +29,7 @@
       return el.type || type || 'text';
     }
 
-    k.fillOne = function fillOne(selector, value, type) {
+    k.fillOne = function fillOne(selector: any, value: any, type: any) {
       try {
         const el = resolveEl(selector);
         if (!el) return 0;

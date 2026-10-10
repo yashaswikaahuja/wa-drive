@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cc-background/label-utils — Label normalisation and semantic alias resolution
  * for the service worker (background.ts).
@@ -47,7 +46,8 @@ async function getSemanticKeyResolved(label) {
   if (typeof ccKnowledgeSync !== 'undefined') {
     const aliases = await ccKnowledgeSync.getCachedAliases();
     for (const [canonical, variants] of Object.entries(aliases)) {
-      if (variants.includes(n) || variants.includes(label)) return canonical;
+      const vs: any = variants;
+      if (vs.includes(n) || vs.includes(label)) return canonical;
     }
   }
   return n;
@@ -59,8 +59,8 @@ function calcConfidence(fills, corrections) {
 }
 
 // Expose as globals for service worker scope
-globalThis.BG_SEMANTIC_ALIASES = BG_SEMANTIC_ALIASES;
-globalThis.normalizeLabel           = normalizeLabel;
-globalThis.getSemanticKey           = getSemanticKey;
-globalThis.getSemanticKeyResolved   = getSemanticKeyResolved;
-globalThis.calcConfidence           = calcConfidence;
+(globalThis as any).BG_SEMANTIC_ALIASES = BG_SEMANTIC_ALIASES;
+(globalThis as any).normalizeLabel           = normalizeLabel;
+(globalThis as any).getSemanticKey           = getSemanticKey;
+(globalThis as any).getSemanticKeyResolved   = getSemanticKeyResolved;
+(globalThis as any).calcConfidence           = calcConfidence;

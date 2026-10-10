@@ -1,11 +1,10 @@
-// @ts-nocheck
 /**
  * scan-mat-widgets — Angular Material widget scanner
  *
  * Scans mat-select, mat-checkbox, mat-radio-button elements not captured
  * by the standard input scan. Assigns data-cc-id when no id is present.
  *
- * Public API (on globalThis.CcScanMatWidgets):
+ * Public API (on (globalThis as any).CcScanMatWidgets):
  *   scan(doc, existingFields, helpers, startIdx) => { formFields, labelList }
  *
  * helpers: { isInSkipContext, getLabel, isGoodLabel }
@@ -13,20 +12,20 @@
  *
  * See docs/scan-mat-widgets.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  function makeSelector(el, fallbackId) {
+  function makeSelector(el: any, fallbackId: any) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
     return '[data-cc-id="' + fallbackId + '"]';
   }
 
-  function isAlreadyCaptured(el, existingFields) {
+  function isAlreadyCaptured(el: any, existingFields: any) {
     var sel = el.id
       ? (el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id)
       : (el.name ? '[name="' + el.name + '"]' : null);
     if (!sel) return false;
-    return existingFields.some(function (f) { return f.selector === sel; });
+    return existingFields.some(function (f: any) { return f.selector === sel; });
   }
 
   /**
@@ -36,7 +35,7 @@
    * @param {number} startIdx — starting index (default 10000)
    * @returns {{ formFields: Array, labelList: Array }}
    */
-  function scan(doc, existingFields, helpers, startIdx) {
+  function scan(doc: any, existingFields: any, helpers: any, startIdx: any) {
     var isInSkipContext = helpers.isInSkipContext;
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
@@ -44,7 +43,7 @@
     var formFields = [];
     var labelList = [];
 
-    function matFieldLabel(el) {
+    function matFieldLabel(el: any) {
       var label = getLabel(el) || el.getAttribute('aria-label') || '';
       if (isGoodLabel(label)) return label.trim();
       var field = el.closest && el.closest('mat-form-field, mat-radio-group');
@@ -69,7 +68,7 @@
     }
 
     // ── mat-select and mat-form-field select ──
-    doc.querySelectorAll('mat-select,mat-form-field select').forEach(function (el) {
+    doc.querySelectorAll('mat-select,mat-form-field select').forEach(function (el: any) {
       if (isInSkipContext(el)) return;
       if (el.tagName === 'SELECT' && isAlreadyCaptured(el, existingFields)) return;
       var label = matFieldLabel(el);
@@ -87,7 +86,7 @@
     });
 
     // ── mat-checkbox ──
-    doc.querySelectorAll('mat-checkbox').forEach(function (el) {
+    doc.querySelectorAll('mat-checkbox').forEach(function (el: any) {
       if (isInSkipContext(el)) return;
       var label = matFieldLabel(el) || el.textContent.trim().slice(0, 40);
       if (!isGoodLabel(label)) return;
@@ -103,7 +102,7 @@
     // ── mat-radio-button ──
     // Prefer the GROUP question (mat-radio-group / mat-label / legend) over the
     // option text ("Yes"/"Male") so sessions/mappings stay organised like older fills.
-    doc.querySelectorAll('mat-radio-button').forEach(function (el) {
+    doc.querySelectorAll('mat-radio-button').forEach(function (el: any) {
       if (isInSkipContext(el)) return;
       var optionText = el.textContent.trim().slice(0, 40);
       if (!isGoodLabel(optionText)) return;

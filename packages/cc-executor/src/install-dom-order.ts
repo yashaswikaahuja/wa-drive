@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * getEl + PRIORITY_KEYS + DOM-order entries
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installDomOrder = function (k) {
@@ -14,7 +13,7 @@
       ? root.CcResolveCcSelector.resolveCcSelector
       : function (sel) { return document.querySelector(sel); }; // safe fallback
 
-    function getEl(sel) {
+    function getEl(sel: any) {
       return _resolve(sel);
     }
     k.getEl = getEl;

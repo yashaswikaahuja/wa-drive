@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * build-fill-record — Fill Record Assembler
  *
@@ -13,14 +12,14 @@
  *
  * Pure JS — no DOM, no Chrome, no kernel. Deterministic (ts injected via opts.now).
  *
- * Public API (on globalThis.CcBuildFillRecord):
+ * Public API (on (globalThis as any).CcBuildFillRecord):
  *   buildFillRecord(base, opts?) => CcRecord
  *
  * opts: { rv?, fillMode?, now? }  — all optional, primarily used for testing
  *
  * See build-fill-record.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -33,7 +32,7 @@
    * @param {function(): number} [opts.now] — timestamp fn (default: Date.now)
    * @returns {object} stamped record
    */
-  function buildFillRecord(base, opts) {
+  function buildFillRecord(base: any, opts: any) {
     opts = opts || {};
     var rv       = (opts.rv !== undefined)       ? opts.rv       : '';
     var fillMode = (opts.fillMode !== undefined) ? opts.fillMode : 'sequential';

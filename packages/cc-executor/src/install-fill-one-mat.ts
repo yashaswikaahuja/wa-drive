@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * mat-select/checkbox/radio
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneMat = function (k) {
@@ -31,10 +30,10 @@
                 setTimeout(() => {
                   const v = value.toLowerCase().trim();
                   const opts = Array.from(document.querySelectorAll('mat-option,.mat-option,.mat-mdc-option'));
-                  const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
-                              opts.find(o => o.textContent.trim().toLowerCase().startsWith(v)) ||
-                              opts.find(o => v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2) ||
-                              opts.find(o => o.textContent.trim().toLowerCase().includes(v));
+                  const opt = opts.find((o: any) => o.textContent.trim().toLowerCase() === v) ||
+                              opts.find((o: any) => o.textContent.trim().toLowerCase().startsWith(v)) ||
+                              opts.find((o: any) => v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2) ||
+                              opts.find((o: any) => o.textContent.trim().toLowerCase().includes(v));
                   if (opt) opt.click(); else document.body.click();
                 }, 400);
                 return 1; // fire-and-forget, count as filled

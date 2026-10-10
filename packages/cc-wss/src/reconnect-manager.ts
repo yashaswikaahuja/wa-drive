@@ -145,7 +145,7 @@ class ReconnectManager {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { ReconnectManager, DEFAULTS };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcReconnectManager = ReconnectManager;
+  (globalThis as any).CcReconnectManager = ReconnectManager;
 }
 
 export { ReconnectManager, DEFAULTS };

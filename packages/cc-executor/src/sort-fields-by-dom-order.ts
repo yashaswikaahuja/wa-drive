@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * sort-fields-by-dom-order — Fill Entry DOM Order Sorter
  *
@@ -12,12 +11,12 @@
  * The resolver function is injected so this capability is testable without a
  * real browser document.
  *
- * Public API (on globalThis.CcSortFieldsByDomOrder):
+ * Public API (on (globalThis as any).CcSortFieldsByDomOrder):
  *   sortFieldsByDomOrder(entries, resolveEl) => entries (sorted in place)
  *
  * See sort-fields-by-dom-order.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -38,7 +37,7 @@
    *
    * @returns {Array<[string, object]>} The same array, sorted in place.
    */
-  function sortFieldsByDomOrder(entries, resolveEl) {
+  function sortFieldsByDomOrder(entries: any, resolveEl: any) {
     if (!Array.isArray(entries) || entries.length < 2) return entries;
     var FOLLOWING = (typeof Node !== 'undefined' && Node.DOCUMENT_POSITION_FOLLOWING) || 4;
     entries.sort(function (pairA, pairB) {

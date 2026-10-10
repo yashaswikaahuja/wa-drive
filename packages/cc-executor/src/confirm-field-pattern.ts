@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * confirm-field-pattern — Confirm/Retype Field Identifier
  *
@@ -10,13 +9,13 @@
  *
  * No DOM, no kernel, no Chrome APIs. Pure string/pattern matching.
  *
- * Public API (on globalThis.CcConfirmFieldPattern):
+ * Public API (on (globalThis as any).CcConfirmFieldPattern):
  *   isConfirmField(id, label?) => boolean
  *   getBaseId(id) => string
  *
  * See confirm-field-pattern.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -42,7 +41,7 @@
    * @param {string} [label]  Optional label text
    * @returns {boolean}
    */
-  function isConfirmField(id, label) {
+  function isConfirmField(id: any, label: any) {
     var idStr = String(id || '').toLowerCase();
     if (!idStr) return false;
     if (CONFIRM_PREFIX_PATTERN.test(idStr)) return true;
@@ -63,7 +62,7 @@
    * @param {string} id
    * @returns {string}
    */
-  function getBaseId(id) {
+  function getBaseId(id: any) {
     return String(id || '')
       .replace(/^c(?=[a-z])/, '')
       .replace(/^confirm_?/i, '')

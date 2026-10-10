@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Input drivers — keystroke-style typing, clearing, focusing.
  * Wraps window.keystrokeFillSync from autofill/plugins/keystroke-input.ts.
@@ -11,12 +10,12 @@
 ;(function () {
   if (!window.cc || !window.cc.registerDriver) return;
 
-  function findEl(args) {
+  function findEl(args: any) {
     if (!args.target) return null;
     return document.querySelector(args.target);
   }
 
-  function readActual(el) {
+  function readActual(el: any) {
     if (!el) return '';
     if (el.tagName === 'SELECT') {
       const o = el.options[el.selectedIndex];

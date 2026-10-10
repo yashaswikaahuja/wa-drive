@@ -29,7 +29,7 @@ function ok(desc, val) {
 function makeSelect(values) {
   return {
     tagName: 'SELECT',
-    options: values.map(v => ({ value: v, text: v })),
+    options: values.map((v: any) => ({ value: v, text: v })),
   };
 }
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * detect-fill-strategy — Fill Strategy Detector
  *
@@ -11,13 +10,13 @@
  * No kernel, no CcExecParts, no Chrome APIs, no async behavior.
  * Strategy detection is pure synchronous DOM property inspection.
  *
- * Public API (on globalThis.CcDetectFillStrategy):
+ * Public API (on (globalThis as any).CcDetectFillStrategy):
  *   detectFillStrategy(el, type) => string
  *   STRATEGY_REGISTRY: Record<string, StrategyEntry>
  *
  * See detect-fill-strategy.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -144,7 +143,7 @@
    * @param {string} type       Type hint from the fill mapping
    * @returns {string}          Strategy name
    */
-  function detectFillStrategy(el, type) {
+  function detectFillStrategy(el: any, type: any) {
     var keys = Object.keys(STRATEGY_REGISTRY);
     for (var i = 0; i < keys.length; i++) {
       try {

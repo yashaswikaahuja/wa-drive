@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/llm-client.ts ───────────────────────────────────────────────────
 // Single LLM client for all AI calls across the extension.
 // Exposes: window.ccLLM = { call, parseJSON }
@@ -29,7 +28,7 @@
    * @param {number} [opts.timeout]      - Request timeout in ms
    * @returns {Promise<{text: string, usage: Object|null, raw: Object}>}
    */
-  async function call(opts) {
+  async function call(opts: any) {
     if (!opts || !opts.apiKey) {
       return { text: '', usage: null, raw: null, error: 'no-api-key' };
     }
@@ -45,7 +44,7 @@
     }
     messages.push({ role: 'user', content: opts.userPrompt });
 
-    var body = {
+    var body: any = {
       model: model,
       messages: messages,
       max_tokens: maxTokens,
@@ -93,7 +92,7 @@
    * @param {string} text - Raw LLM response
    * @returns {Object|null} Parsed JSON or null
    */
-  function parseJSON(text) {
+  function parseJSON(text: any) {
     if (!text) return null;
     // Strip markdown code fences if present
     var stripped = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '');

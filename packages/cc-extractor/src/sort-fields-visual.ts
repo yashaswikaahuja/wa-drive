@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * sort-fields-visual — Visual position sort for form fields
  *
@@ -10,17 +9,17 @@
  * Reassigns .index after sort. Requires _el references to be present.
  * _el refs are stripped by the fingerprint step after this runs.
  *
- * Public API (on globalThis.CcSortFieldsVisual):
+ * Public API (on (globalThis as any).CcSortFieldsVisual):
  *   sort(formFields) — mutates in-place, reassigns .index, returns formFields
  *
  * See docs/sort-fields-visual.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var ROW_BAND = 8; // px — fields within this vertical distance are the same row
 
-  function visualPos(el) {
+  function visualPos(el: any) {
     if (!el || typeof el.getBoundingClientRect !== 'function') {
       return { row: 1e9, left: 1e9 };
     }
@@ -41,12 +40,12 @@
    * @param {Array} formFields
    * @returns {Array} formFields (same reference)
    */
-  function sort(formFields) {
-    formFields.forEach(function (f) { f._pos = visualPos(f._el); });
+  function sort(formFields: any) {
+    formFields.forEach(function (f: any) { f._pos = visualPos(f._el); });
     formFields.sort(function (a, b) {
       return (a._pos.row - b._pos.row) || (a._pos.left - b._pos.left);
     });
-    formFields.forEach(function (f, i) { f.index = i; delete f._pos; });
+    formFields.forEach(function (f: any, i: any) { f.index = i; delete f._pos; });
     return formFields;
   }
 

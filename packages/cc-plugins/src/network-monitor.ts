@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * network-monitor.ts — runs in PAGE world (chrome.scripting world: 'MAIN')
  *

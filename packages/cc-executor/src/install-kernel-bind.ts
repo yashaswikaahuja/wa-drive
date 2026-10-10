@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * Shared kernel locals for executor task modules.
  * Avoids repeating 35-line alias blocks in every file (keeps parts ≤200 lines).
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
 
@@ -11,7 +10,7 @@
    * @param {object} k — fill kernel
    * @returns {object} local aliases matching the old closure names
    */
-  root.CcExecParts.bindKernelLocals = function bindKernelLocals(k) {
+  root.CcExecParts.bindKernelLocals = function bindKernelLocals(k: any) {
     return {
       portalAdapters: k.portalAdapters,
       filledBySource: k.filledBySource,

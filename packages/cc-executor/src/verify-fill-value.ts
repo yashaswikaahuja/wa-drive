@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * verify-fill-value — Fill Value Verifier
  *
@@ -12,14 +11,14 @@
  * The element resolver is injected so this capability is testable without
  * a real browser document.
  *
- * Public API (on globalThis.CcVerifyFillValue):
+ * Public API (on (globalThis as any).CcVerifyFillValue):
  *   verifyFillValue(selector, expected, resolveEl, settleMs?) => Promise<VerifyResult>
  *
  * VerifyResult: { ok, actualValue, normExpected, normActual, reason?, partial?, masked? }
  *
  * See verify-fill-value.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -35,7 +34,7 @@
    *
    * @returns {Promise<{ok, actualValue, normExpected, normActual, reason?, partial?, masked?}>}
    */
-  async function verifyFillValue(selector, expected, resolveEl, settleMs) {
+  async function verifyFillValue(selector: any, expected: any, resolveEl: any, settleMs: any) {
     settleMs = (typeof settleMs === 'number') ? settleMs : 150;
 
     // Wait for framework to react

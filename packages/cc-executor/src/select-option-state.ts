@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * select-option-state — Native Select Element State Reader
  *
@@ -8,7 +7,7 @@
  * No kernel, no CcExecParts, no Chrome APIs, no cascade knowledge.
  * Safe to use in any browser context.
  *
- * Public API (on globalThis.CcSelectOptionState):
+ * Public API (on (globalThis as any).CcSelectOptionState):
  *   isPlaceholderOption(option) => boolean
  *   realOptions(el) => HTMLOptionElement[]
  *   sampleOptions(el, n?) => {value, text}[]
@@ -19,7 +18,7 @@
  *
  * See select-option-state.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -34,7 +33,7 @@
    * @param {HTMLOptionElement|null|undefined} o
    * @returns {boolean}
    */
-  function isPlaceholderOption(o) {
+  function isPlaceholderOption(o: any) {
     if (!o) return true;
     var v = String(o.value == null ? '' : o.value).trim();
     var t = String(o.text || '').trim().toLowerCase();
@@ -50,9 +49,9 @@
    * @param {HTMLSelectElement|null|undefined} el
    * @returns {HTMLOptionElement[]}
    */
-  function realOptions(el) {
+  function realOptions(el: any) {
     if (!el || !el.options) return [];
-    return Array.from(el.options).filter(function (o) { return !isPlaceholderOption(o); });
+    return Array.from(el.options as any).filter(function (o: any) { return !isPlaceholderOption(o); });
   }
 
   /**
@@ -63,9 +62,9 @@
    * @param {number} [n=8]
    * @returns {{value: string, text: string}[]}
    */
-  function sampleOptions(el, n) {
+  function sampleOptions(el: any, n: any) {
     n = n || 8;
-    return realOptions(el).slice(0, n).map(function (o) {
+    return realOptions(el).slice(0, n).map(function (o: any) {
       return {
         value: String(o.value || '').slice(0, 40),
         text: String(o.text || '').trim().slice(0, 60),
@@ -84,7 +83,7 @@
    * @param {HTMLSelectElement|null|undefined} el
    * @returns {{actualValue: string|null, actualOptionValue: string|null}}
    */
-  function readSelectActual(el) {
+  function readSelectActual(el: any) {
     if (!el || el.tagName !== 'SELECT') return { actualValue: null, actualOptionValue: null };
     var opt = el.options && el.options[el.selectedIndex];
     if (!opt || isPlaceholderOption(opt)) {
@@ -106,7 +105,7 @@
    * @param {HTMLSelectElement|null|undefined} el
    * @returns {'static'|'ajax'|'unknown'}
    */
-  function selectLoadMode(el) {
+  function selectLoadMode(el: any) {
     if (!el || el.tagName !== 'SELECT') return 'unknown';
     return realOptions(el).length > 0 ? 'static' : 'ajax';
   }
@@ -122,7 +121,7 @@
    * @param {HTMLSelectElement|null|undefined} el
    * @returns {boolean}
    */
-  function selectIsActive(el) {
+  function selectIsActive(el: any) {
     if (!el) return false;
     if (el.disabled) return false;
     try {
@@ -142,7 +141,7 @@
    * @param {string|null|undefined} v
    * @returns {boolean}
    */
-  function isPlaceholderPlanned(v) {
+  function isPlaceholderPlanned(v: any) {
     var t = String(v == null ? '' : v).toLowerCase().trim();
     return !t || t === '--' || t === '0' || t.includes('please select') || t === 'select' || t.startsWith('select ');
   }

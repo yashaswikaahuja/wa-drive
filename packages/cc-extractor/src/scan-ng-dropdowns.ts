@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * scan-ng-dropdowns — ng-select / combobox / custom dropdown scanner
  *
@@ -13,19 +12,19 @@
  * Assigns unique data-cc-id (ng-dd-N) to force unique selectors.
  * Skips elements already captured in existingFields.
  *
- * Public API (on globalThis.CcScanNgDropdowns):
+ * Public API (on (globalThis as any).CcScanNgDropdowns):
  *   scan(doc, existingFields, helpers, startIdx) => { formFields, labelList }
  *
  * See docs/scan-ng-dropdowns.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var NG_TRIGGER_SEL = '.value-area, .select-type, .ng-value-container, .ng-select-container';
   var NG_CONTAINER_SEL = 'ng-select, ng-dropdown, .ng-select, .ng-dropdown, [class*="custom-dropdown"], [class*="select-control"]';
 
-  function isAlreadyCaptured(el, existingFields) {
-    return existingFields.some(function (f) {
+  function isAlreadyCaptured(el: any, existingFields: any) {
+    return existingFields.some(function (f: any) {
       try {
         if (el.matches && el.matches(f.selector)) return true;
         if (el.querySelector && el.querySelector(f.selector)) return true;
@@ -35,21 +34,21 @@
     });
   }
 
-  function resolveLabel(el, getLabel) {
+  function resolveLabel(el: any, getLabel: any) {
     var label = (getLabel(el) || el.getAttribute('aria-label') || '').trim();
     if (!label) {
       var childLabel = el.querySelector && el.querySelector(
         ':scope > .label, :scope > label, :scope > .field-label, :scope > [class*="label"]'
       );
-      if (childLabel) label = childLabel.textContent.trim();
+      if (childLabel) label = (childLabel as any).textContent.trim();
     }
     if (!label) {
       var all = el.querySelectorAll && el.querySelectorAll('.label, .field-label, [class*="label"]');
       if (all) {
-        var dl = Array.from(all).find(function (n) {
+        var dl = Array.from(all).find(function (n: any) {
           return !(n.closest && n.closest('.value-area, .options-list, .ng-dropdown-panel, .dropdown-options'));
         });
-        if (dl) label = dl.textContent.trim();
+        if (dl) label = (dl as any).textContent.trim();
       }
     }
     return (label || '').replace(/\s+/g, ' ').trim();
@@ -62,7 +61,7 @@
    * @param {number} startIdx
    * @returns {{ formFields: Array, labelList: Array }}
    */
-  function scan(doc, existingFields, helpers, startIdx) {
+  function scan(doc: any, existingFields: any, helpers: any, startIdx: any) {
     var isInSkipContext = helpers.isInSkipContext;
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
@@ -72,7 +71,7 @@
 
     // ── role=combobox / role=listbox ──
     var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|city|date)\b/i;
-    doc.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(function (el) {
+    doc.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(function (el: any) {
       // INPUT/SELECT comboboxes are handled by the standard scanner (incl. type=search #311)
       if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
       if (isInSkipContext(el)) return;
@@ -101,8 +100,8 @@
 
     // ── ng-select / custom dropdown containers ──
     var ngCandidates = new Set();
-    doc.querySelectorAll(NG_CONTAINER_SEL).forEach(function (el) { ngCandidates.add(el); });
-    doc.querySelectorAll(NG_TRIGGER_SEL).forEach(function (trigger) {
+    doc.querySelectorAll(NG_CONTAINER_SEL).forEach(function (el: any) { ngCandidates.add(el); });
+    doc.querySelectorAll(NG_TRIGGER_SEL).forEach(function (trigger: any) {
       var container = trigger.closest && trigger.closest(
         'mat-form-field, .form-field, .form-group, [class*="dropdown"], [class*="select"]'
       );
@@ -110,7 +109,7 @@
       if (container && container !== doc.body) ngCandidates.add(container);
     });
 
-    ngCandidates.forEach(function (el) {
+    ngCandidates.forEach(function (el: any) {
       if (isInSkipContext(el)) return;
       if (isAlreadyCaptured(el, existingFields.concat(formFields))) return;
       var label = resolveLabel(el, getLabel);

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fill-one-date — Date Field Fill Handler
  *
@@ -10,17 +9,17 @@
  *
  * Delegates date parsing to CcParseDateValue (already extracted).
  *
- * Public API (on globalThis.CcFillOneDate):
+ * Public API (on (globalThis as any).CcFillOneDate):
  *   fillDate(el, selector, value) => 1 | 0 | null
  *
  * Returns null if element is not a date widget (pass-through).
  *
  * See fill-one-date.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  function fillDate(el, selector, value) {
+  function fillDate(el: any, selector: any, value: any) {
     var _pdv = root.CcParseDateValue || {};
     var parseDateValue = _pdv.parseDateValue || function (v) { return { dateObj: new Date(v) }; };
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Live fill_debug emit (port + batch queue)
  * Part of sequential kernel — load before autofill/executor.ts
@@ -6,7 +5,7 @@
  * fill-debug-emitter.js owns the pure event queue + batch logic.
  * This file owns the Chrome transport and wires it to the kernel.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installDebug = function (k) {
@@ -32,7 +31,7 @@
     return k._debugPort;
   }
 
-  function chromeSend(batch) {
+  function chromeSend(batch: any) {
     try {
       var port = ensureDebugPort();
       if (port) {
@@ -61,7 +60,7 @@
     });
   }
 
-  function emitFillDebug(event, payload) {
+  function emitFillDebug(event: any, payload: any) {
     if (_emitter) { _emitter.emit(event, payload); return; }
     // Safe fallback if emitter not loaded
     console.warn('[CC] fill-debug-emitter not loaded, event dropped:', event);
