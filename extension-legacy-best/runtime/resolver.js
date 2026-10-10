@@ -1,3 +1,4 @@
+// Generated from resolver.ts � edit the .ts source, then re-copy/emit.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Semantic Target Resolver
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -31,7 +32,7 @@
   var _resolutionLog = [];   // Audit trail of resolution attempts
 
   // ══════════════════════════════════════════════════════════════════════
-  // Semantic aliases: loaded from shared/semantic-aliases.js
+  // Semantic aliases: loaded from shared/semantic-aliases.ts
   // ══════════════════════════════════════════════════════════════════════
 
   function _getAliases() {

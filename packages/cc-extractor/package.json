@@ -1,23 +1,32 @@
 {
   "name": "@cc/extractor",
   "version": "1.0.0",
-  "description": "CyberControl form extractor \u2014 DOM scan, fingerprint, correction observer",
-  "main": "src/index.js",
+  "description": "CyberControl form extractor — DOM scan, fingerprint, correction observer",
+  "type": "module",
+  "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./form-context": "./src/form-context.js",
-    "./scan-standard-fields": "./src/scan-standard-fields.js",
-    "./scan-mat-widgets": "./src/scan-mat-widgets.js",
-    "./scan-ng-dropdowns": "./src/scan-ng-dropdowns.js",
-    "./sort-fields-visual": "./src/sort-fields-visual.js",
-    "./fingerprint-form": "./src/fingerprint-form.js",
-    "./correction-observer": "./src/correction-observer.js"
+    ".": "./src/index.ts",
+    "./form-context": "./src/form-context.ts",
+    "./scan-standard-fields": "./src/scan-standard-fields.ts",
+    "./scan-mat-widgets": "./src/scan-mat-widgets.ts",
+    "./scan-ng-dropdowns": "./src/scan-ng-dropdowns.ts",
+    "./sort-fields-visual": "./src/sort-fields-visual.ts",
+    "./fingerprint-form": "./src/fingerprint-form.ts",
+    "./correction-observer": "./src/correction-observer.ts",
+    "./extract-form-fields": "./src/extract-form-fields.ts"
   },
   "scripts": {
-    "build": "echo 'no build \u2014 ESM source-only package'",
-    "test": "node ../../tooling/run-package-tests.mjs"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --experimental-strip-types ../../tooling/run-package-tests.ts",
+    "build": "echo 'no build — ESM source-only package'"
   },
-  "type": "module",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
+  },
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
 }

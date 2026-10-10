@@ -1,3 +1,4 @@
+// Generated from popup.ts � edit the .ts source, then re-copy/emit.
 const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
@@ -464,7 +465,7 @@ fillBtn.addEventListener('click', async () => {
     }
     // Inject all autofill scripts in ONE call — they must share the same scope (ISOLATED world)
     // Shared modules are listed FIRST so they're available when callers run.
-    // First: inject cached server field mappings for mapper.js to pick up
+    // First: inject cached server field mappings for mapper.ts to pick up
     try {
       const _cachedMappings = await chrome.storage.local.get('_cc_knowledge_cache');
       const _fm = _cachedMappings?._cc_knowledge_cache?.artifacts?.field_mappings || [];

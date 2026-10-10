@@ -112,6 +112,16 @@ router.get('/status', authMiddleware, async (req: any, res) => {
   const base = await waBase(wsId);
   // Snapshot cache state BEFORE worker call (we need ageMs for staleness check)
   const before = await getWorkspaceQRWithAge(wsId);
+  let lastUploadAt: string | null = null;
+  try {
+    const upload = await pool.query(
+      'SELECT max(uploaded_at) AS last_upload_at FROM drive_files WHERE workspace_id = $1 AND source = \'whatsapp\'',
+      [wsId],
+    );
+    lastUploadAt = upload.rows[0]?.last_upload_at?.toISOString?.() || upload.rows[0]?.last_upload_at || null;
+  } catch {
+    // Observability must never make the connection-status endpoint fail.
+  }
   try {
     const r = await fetch(base + '/sessions/' + wsId + '/status', { headers: { 'x-service-secret': WA_SECRET } });
     const data: any = await r.json();
@@ -145,9 +155,15 @@ router.get('/status', authMiddleware, async (req: any, res) => {
       status: data.status || 'unknown',
       phone: data.phone || null,
       qr: data.qr || before.qr || null,
+      lastUploadAt,
+      reconnectAttempts: data.reconnectAttempts || 0,
+      lastDisconnectReason: data.lastDisconnectReason || null,
+      lastDisconnectAt: data.lastDisconnectAt || null,
+      lastDesyncAt: data.lastDesyncAt || null,
+      failedMediaDownloads: data.failedMediaDownloads || 0,
     });
   } catch {
-    res.json({ connected: false, status: 'service_down', qr: before.qr || null });
+    res.json({ connected: false, status: 'service_down', qr: before.qr || null, lastUploadAt });
   }
 });
 
@@ -227,39 +243,27 @@ router.post('/instance-heartbeat', async (req, res) => {
   res.json({ ok: true });
 });
 
-// Instance heartbeat (whatsapp-service → hub). Drives the sticky-shard health check:
-// an instance that stops heartbeating (off the tailnet) is treated as dead → its workspaces fail over.
-router.post('/instance-heartbeat', async (req, res) => {
-  const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
-  if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
-  const { instance, mem_pct, sessions, accepting } = req.body || {};
-  if (!instance) return res.status(400).json({ error: 'instance required' });
-  try {
-    await pool.query(
-      `INSERT INTO wa_instances(instance, last_seen, status, mem_pct, sessions, accepting)
-       VALUES($1, now(), 'up', COALESCE($2,0), COALESCE($3,0), COALESCE($4,true))
-       ON CONFLICT (instance) DO UPDATE SET
-         last_seen = now(), status = 'up',
-         mem_pct   = COALESCE(EXCLUDED.mem_pct, wa_instances.mem_pct),
-         sessions  = COALESCE(EXCLUDED.sessions, wa_instances.sessions),
-         accepting = COALESCE(EXCLUDED.accepting, wa_instances.accepting)`,
-      [instance, mem_pct ?? null, sessions ?? null, accepting ?? null]
-    );
-  } catch { /* health table absent → ignore (single-instance mode) */ }
-  res.json({ ok: true });
-});
-
 // Worker event relay (WhatsApp service → hub).
 // QR is cached only — frontend polls /status to retrieve it (no socket.io).
 // Other events (connected/disconnected) still emit via socket for UI quickness.
 router.post('/event', async (req, res) => {
   const secret = req.headers['x-worker-secret'] || req.headers['x-service-secret'];
   if (secret !== WA_SECRET) return res.status(401).json({ error: 'unauthorized' });
-  const { workspaceId, event, qr, phone } = req.body;
+  const { workspaceId, event, qr, phone, reason, attempt, desynced } = req.body;
   if (!workspaceId) return res.status(400).json({ error: 'workspaceId required' });
   const io = getIO();
+  // Owner-panel "Connected" is whatsapp_numbers.disconnected_at IS NULL.
+  // Any non-connected WA lifecycle event must stamp disconnected_at or the panel stays green.
+  const markWhatsAppOffline = () =>
+    pool.query(
+      'UPDATE whatsapp_numbers SET disconnected_at = now() WHERE workspace_id = $1 AND is_current = true AND disconnected_at IS NULL',
+      [workspaceId],
+    ).catch(() => {});
+
   if (event === 'qr') {
     await setWorkspaceQR(workspaceId, qr);
+    // QR means the café is not online — clear the owner-panel connected flag.
+    markWhatsAppOffline();
     console.log(`[Hub] QR cached for workspace ${workspaceId.slice(0, 8)} (qr_len=${qr?.length || 0})`);
   } else if (event === 'connected') {
     await setWorkspaceQR(workspaceId, null);
@@ -278,11 +282,24 @@ router.post('/event', async (req, res) => {
         .catch(() => {});
       logActivity(workspaceId, 'whatsapp.connected', { phone });
     }
+  } else if (event === 'reauth_required') {
+    io.to(workspaceId).emit('connection:status', {
+      connected: false,
+      status: 'reauth_required',
+      workspaceId,
+    });
+    markWhatsAppOffline();
+    console.warn(`[Hub] WhatsApp re-auth required (${workspaceId.slice(0, 8)}) reason=${reason || 'unknown'} attempt=${attempt || 0}`);
+    logActivity(workspaceId, 'whatsapp.reauth_required', {
+      reason: reason || null,
+      attempt: attempt || 0,
+      desynced: !!desynced,
+    });
   } else if (event === 'disconnected') {
     io.to(workspaceId).emit('connection:status', { connected: false, workspaceId });
     console.log(`[Hub] Disconnected (${workspaceId.slice(0, 8)})`);
     // Mark the current number offline (keeps it as the current number, just disconnected). Best-effort.
-    pool.query('UPDATE whatsapp_numbers SET disconnected_at = now() WHERE workspace_id = $1 AND is_current = true AND disconnected_at IS NULL', [workspaceId]).catch(() => {});
+    markWhatsAppOffline();
     logActivity(workspaceId, 'whatsapp.disconnected');
   }
   res.json({ ok: true });

@@ -1,3 +1,4 @@
+// Generated from cascade-select.ts � edit the .ts source, then re-copy/emit.
 /**
  * cascade-select plugin — handles dependent <select> chains (state→district→block→village).
  * 
@@ -42,7 +43,7 @@ var CascadeSelectPlugin = {
 
   fill(el, value, context) {
     function findOpt(options) {
-      // shared/option-match.js is injected before plugins run
+      // shared/option-match.ts is injected before plugins run
       return window.ccMatchOption(value, options, {
         synonymGroups: [
           ['bihar', 'br'],
@@ -53,7 +54,7 @@ var CascadeSelectPlugin = {
     }
 
     function applySelect(el, opt) {
-      // Delegate to shared/select-apply.js
+      // Delegate to shared/select-apply.ts
       return window.ccApplySelect(el, opt);
     }
 

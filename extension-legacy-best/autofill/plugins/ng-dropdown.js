@@ -1,3 +1,4 @@
+// Generated from ng-dropdown.ts — edit the .ts source, then re-copy/emit.
 /**
  * ng-dropdown plugin â€” handles Angular custom dropdown widgets.
  *
@@ -131,7 +132,7 @@ var NgDropdownPlugin = {
 
         if (opts.length === 0 && attempts < 15) return; // keep waiting
 
-        // Match option using shared/option-match.js (injected before plugins)
+        // Match option using shared/option-match.ts (injected before plugins)
         var match = null;
         var optTexts = opts.map(function(o) { return o.textContent.trim(); });
         var matched = window.ccMatchOption(value, optTexts);

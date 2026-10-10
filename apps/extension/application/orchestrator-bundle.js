@@ -4,379 +4,705 @@
  * Rebuild: pnpm --filter cybercontrol-extension build
  */
 
-/* ==== script-manifests.js ==== */
-/**
- * script-manifests — Injection script lists for the sequential fill path
- *
- * SEQUENTIAL_KERNEL_SCRIPTS — scripts injected into the page for autofill
- *
- * Public API (on globalThis.CcScriptManifests):
- *   SEQUENTIAL_KERNEL_SCRIPTS
- */
-(function (root) {
-  'use strict';
-
+/* ==== script-manifests.ts ==== */
+(function(root2) {
+  "use strict";
   var SEQUENTIAL_KERNEL_SCRIPTS = Object.freeze([
-    'shared-bundle.js',           // @cc/shared — dom-utils, option-match, network-idle
-    'autofill/plugins-bundle.js', // @cc/plugins — interface, cascade-select, ng-dropdown, keystroke
-    'drivers-bundle.js',          // @cc/drivers — dispatch, dom, input, select, interaction
-    'autofill/extractor-bundle.js', // @cc/extractor
-    'autofill/mapper-bundle.js',    // @cc/mapper
-    'autofill/executor-bundle.js',  // @cc/executor
+    "shared-bundle.js",
+    // @cc/shared — dom-utils, option-match, network-idle
+    "autofill/plugins-bundle.js",
+    // @cc/plugins — interface, cascade-select, ng-dropdown, keystroke
+    "drivers-bundle.js",
+    // @cc/drivers — dispatch, dom, input, select, interaction
+    "autofill/extractor-bundle.js",
+    // @cc/extractor
+    "autofill/mapper-bundle.js",
+    // @cc/mapper
+    "autofill/executor-bundle.js"
+    // @cc/executor
   ]);
-
-  root.CcScriptManifests = {
-    SEQUENTIAL_KERNEL_SCRIPTS: SEQUENTIAL_KERNEL_SCRIPTS,
+  root2.CcScriptManifests = {
+    SEQUENTIAL_KERNEL_SCRIPTS
   };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = root.CcScriptManifests;
 
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-if (typeof module !== 'undefined') module.exports = root.CcScriptManifests;
-
-/* ==== flatten-profile.js ==== */
-/**
- * flatten-profile — Profile data flattener
- *
- * Converts a nested profile (profile.data or profile) where values may be
- * { value: ... } objects into a flat { key: value } map for use by the
- * sequential fill kernel.
- *
- * Public API (on globalThis.CcFlattenProfile):
- *   flattenProfile(profile) => flat object
- *
- * See docs/flatten-profile.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  /**
-   * @param {object} profile — raw profile, may have .data or { value } wrappers
-   * @returns {object} flat key→value map
-   */
+/* ==== flatten-profile.ts ==== */
+(function(root2) {
+  "use strict";
   function flattenProfile(profile) {
     var flat = {};
-    var raw = (profile && (profile.data || profile)) || {};
+    var raw = profile && (profile.data || profile) || {};
     for (var k in raw) {
       var v = raw[k];
-      flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
+      flat[k] = v && typeof v === "object" && "value" in v ? v.value : v;
     }
     if (profile && profile.name) flat.name = flat.name || profile.name;
     return flat;
   }
+  root2.CcFlattenProfile = { flattenProfile };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = root.CcFlattenProfile;
 
-  root.CcFlattenProfile = { flattenProfile: flattenProfile };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
-
-/* ==== sequential-kernel-fill.js ==== */
-/**
- * sequential-kernel-fill — Sequential kernel fill path
- *
- * The default (legacy-best) fill path:
- *   1. Inject SEQUENTIAL_KERNEL_SCRIPTS into tab
- *   2. Extract form fields + derive profile
- *   3. Plan via WSS (30s timeout), HTTPS fallback
- *   4. Execute in page: apply WSS mapping + local fuzzyMatch residual
- *   5. Save session via WSS, HTTPS fallback
- *
- * Depends on: CcScriptManifests, CcFlattenProfile
- *
- * Public API (on globalThis.CcSequentialKernelFill):
- *   run(ctx) => Promise<result>
- *
- * ctx: { tabId, profile, backendUrl, accessToken, runtimeVersion, onProgress }
- *
- * See docs/sequential-kernel-fill.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
-  async function run(ctx) {
-    var tabId          = ctx.tabId;
-    var profile        = ctx.profile;
-    var backendUrl     = ctx.backendUrl;
-    var accessToken    = ctx.accessToken;
-    var runtimeVersion = ctx.runtimeVersion;
-    var onProgress     = ctx.onProgress;
-
-    var progress = function (t, p) { if (typeof onProgress === 'function') onProgress(t, p); };
-    var errors = (typeof globalThis !== 'undefined' && globalThis.CcRuntimeErrors) || null;
-    var opMsg = function (code, detail) {
-      return errors && errors.operatorMessageFor
-        ? errors.operatorMessageFor(code, detail)
-        : (detail || code || 'Something went wrong');
-    };
-
-    if (!tabId) {
-      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', 'No active tab'), error: 'no_tab' };
+/* ==== mapping-relation.ts ==== */
+(function(root) {
+  "use strict";
+  var MONTH_NAMES = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  function parseDobParts(dob) {
+    if (dob == null) return null;
+    var dobStr = String(dob).trim();
+    if (!dobStr) return null;
+    var m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    var m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (m1) return { day: m1[1].padStart(2, "0"), month: m1[2].padStart(2, "0"), year: m1[3] };
+    if (m2) return { day: m2[3].padStart(2, "0"), month: m2[2].padStart(2, "0"), year: m2[1] };
+    return null;
+  }
+  function profileAtom(profile, key) {
+    if (!profile || key == null) return null;
+    var entry = profile[key];
+    if (entry == null) return null;
+    var v = typeof entry === "object" && entry && "value" in entry ? entry.value : entry;
+    if (v == null) return null;
+    var s = String(v).trim();
+    return s === "" ? null : s;
+  }
+  function normLoose(s) {
+    return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+  function fieldBlob(field) {
+    if (!field || typeof field !== "object") return "";
+    return (field.label || "") + " " + (field.name || "") + " " + (field.id || "") + " " + (field.placeholder || "");
+  }
+  function isCompoundAtom(profileKey) {
+    return /^(dob|date_of_birth|phone|mobile|email|email_id|name|full_name|aadhaar_number|aadhaar|pan_number)$/i.test(String(profileKey || ""));
+  }
+  function looksLikePartField(field) {
+    var blob = fieldBlob(field).toLowerCase();
+    var label = String(field && field.label || "").trim();
+    if (/^dd$|^day$|^mm$|^month$|^yyyy$|^yyy$|^year$/i.test(label)) return true;
+    if (/\b(dob_?day|birth_?day|day_of_birth|ddl_?day)\b/.test(blob)) return true;
+    if (/\b(dob_?month|birth_?month|month_of_birth|ddl_?month)\b/.test(blob)) return true;
+    if (/\b(dob_?year|birth_?year|year_of_birth|ddl_?year)\b/.test(blob)) return true;
+    if (/last\s*4|last\s*four|last\s*6|first\s*4|first\s*3|last\s*digits|otp|suffix/i.test(blob)) return true;
+    if (/email\s*(user|id|name)|username|local.?part/i.test(blob)) return true;
+    return false;
+  }
+  function shapeCompatible(field, value) {
+    if (value == null) return false;
+    var s = String(value);
+    var maxLen = Number(field && (field.maxLength || field.maxlength) || 0);
+    if (maxLen > 0 && s.length > maxLen) return false;
+    return true;
+  }
+  function normalizeRelation(entry, field) {
+    if (entry && entry.relation && entry.relation.kind) return Object.assign({}, entry.relation);
+    var pk = entry && entry.profileKey;
+    if (!pk) return { kind: "unknown" };
+    if (looksLikePartField(field) && isCompoundAtom(pk)) return { kind: "unknown" };
+    return { kind: "identity" };
+  }
+  function applyDatePart(atom, part, field) {
+    var dp = parseDobParts(atom);
+    if (!dp) return null;
+    var monthNum = parseInt(dp.month, 10) || 0;
+    if (part === "day") {
+      var preferPadded = /^dd$/i.test(String(field && field.label || "")) || /^dd$/i.test(String(field && field.placeholder || "")) || (field && field.type || "") === "text";
+      return preferPadded ? dp.day : String(parseInt(dp.day, 10));
     }
+    if (part === "month") {
+      var t = String(field && field.type || "").toLowerCase();
+      if (t === "select" || t === "dropdown" || t === "mat-select" || t === "ng-dropdown") return MONTH_NAMES[monthNum] || dp.month;
+      return dp.month;
+    }
+    if (part === "year") return dp.year;
+    return null;
+  }
+  function applyRelation(relation, profile, profileKey, field) {
+    var kind = relation && relation.kind || "unknown";
+    if (kind === "unknown") return null;
+    var atom = profileAtom(profile, profileKey);
+    if (atom == null) return null;
+    var value = null;
+    if (kind === "identity") value = atom;
+    else if (kind === "last_n") {
+      var n1 = Math.max(1, Number(relation.n) || 0);
+      if (!n1 || atom.length < n1) return null;
+      value = atom.slice(-n1);
+    } else if (kind === "first_n") {
+      var n2 = Math.max(1, Number(relation.n) || 0);
+      if (!n2 || atom.length < n2) return null;
+      value = atom.slice(0, n2);
+    } else if (kind === "date_part") value = applyDatePart(atom, relation.part, field);
+    else if (kind === "email_local") {
+      var at = atom.indexOf("@");
+      if (at <= 0) return null;
+      value = atom.slice(0, at);
+    } else if (kind === "name_part") {
+      var parts = atom.split(/\s+/).filter(Boolean);
+      if (!parts.length) return null;
+      if (relation.part === "first") value = parts[0];
+      else if (relation.part === "last") value = parts[parts.length - 1];
+      else if (relation.part === "middle") value = parts.length >= 3 ? parts.slice(1, -1).join(" ") : "";
+      else return null;
+    } else return null;
+    if (value == null || String(value).trim() === "") return null;
+    if (!shapeCompatible(field, value)) return null;
+    return String(value);
+  }
+  function induceRelation(profile, profileKey, actualOrPlanned, field) {
+    if (!profileKey) return { kind: "unknown" };
+    var atom = profileAtom(profile, profileKey);
+    var sample = actualOrPlanned == null ? "" : String(actualOrPlanned).trim();
+    if (!atom || !sample) {
+      if (looksLikePartField(field) && isCompoundAtom(profileKey)) return { kind: "unknown" };
+      return profileKey ? { kind: "identity" } : { kind: "unknown" };
+    }
+    if (normLoose(sample) === normLoose(atom) && shapeCompatible(field, atom)) return { kind: "identity" };
+    var blob = fieldBlob(field);
+    var partish = looksLikePartField(field);
+    var dateish = partish || /\b(date|dob|birth|day|month|year|dd|mm|yyyy)\b/i.test(blob);
+    var nameish = partish || /\b(name|first|middle|last|surname|fname|lname)\b/i.test(blob);
+    var sliceish = partish || /last\s*\d|first\s*\d|last\s*digit|suffix|prefix/i.test(blob);
+    var dp = parseDobParts(atom);
+    if (dp && dateish) {
+      var sn = normLoose(sample);
+      var dayN = String(parseInt(dp.day, 10));
+      var monthN = String(parseInt(dp.month, 10));
+      if (sn === normLoose(dp.day) || sn === normLoose(dayN)) return { kind: "date_part", part: "day", pad: dp.day.indexOf("0") === 0 ? 2 : void 0 };
+      if (sn === normLoose(dp.month) || sn === normLoose(monthN) || sn === normLoose(MONTH_NAMES[parseInt(dp.month, 10)] || "")) return { kind: "date_part", part: "month" };
+      if (sn === normLoose(dp.year)) return { kind: "date_part", part: "year" };
+    }
+    if (atom.indexOf("@") > 0 && (partish || /email|user|local/i.test(blob))) {
+      var local = atom.slice(0, atom.indexOf("@"));
+      if (normLoose(sample) === normLoose(local)) return { kind: "email_local" };
+    }
+    if (sliceish) {
+      if (atom.lastIndexOf(sample) === atom.length - sample.length && sample.length < atom.length && sample.length <= 8) return { kind: "last_n", n: sample.length };
+      if (atom.indexOf(sample) === 0 && sample.length < atom.length && sample.length <= 8) return { kind: "first_n", n: sample.length };
+    }
+    if (nameish) {
+      var nameParts = atom.split(/\s+/).filter(Boolean);
+      if (nameParts.length >= 2) {
+        if (normLoose(sample) === normLoose(nameParts[0])) return { kind: "name_part", part: "first" };
+        if (normLoose(sample) === normLoose(nameParts[nameParts.length - 1])) return { kind: "name_part", part: "last" };
+      }
+    }
+    return { kind: "unknown" };
+  }
+  function gsk(l) {
+    return String(l || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  }
+  function labelKeys(label) {
+    var raw = String(label || "").toLowerCase().trim();
+    if (!raw) return [];
+    var stripped = raw.replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+    var spaced = raw.replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+    var out = [];
+    if (stripped) out.push(stripped);
+    if (spaced && spaced !== stripped) out.push(spaced);
+    return out;
+  }
+  function lookupSavedEntry(savedMap, field) {
+    if (!savedMap || !field) return null;
+    var keys = labelKeys(field.label).concat(labelKeys(field.name));
+    var i;
+    for (i = 0; i < keys.length; i++) {
+      if (savedMap[keys[i]] && savedMap[keys[i]].profileKey) return savedMap[keys[i]];
+    }
+    for (i = 0; i < keys.length; i++) {
+      if (savedMap[keys[i]]) return savedMap[keys[i]];
+    }
+    return null;
+  }
+  function isTravelJourneyField(field) {
+    var raw = [field && field.label, field && field.name, field && field.id, field && field.placeholder, field && field.selector].filter(Boolean).join(" ").toLowerCase();
+    if (!raw.trim()) return false;
+    if (/police[_\s-]?station|\bthana\b/.test(raw)) return false;
+    return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota)\b/.test(raw) || /\b(from|to)[_\s-]?station\b/.test(raw) || /\bstation\b/.test(raw);
+  }
+  var IDENTITY_PROFILE_KEYS = {
+    dob: 1,
+    date_of_birth: 1,
+    dob__day: 1,
+    dob__month: 1,
+    dob__year: 1,
+    name: 1,
+    first_name: 1,
+    last_name: 1,
+    middle_name: 1,
+    full_name: 1,
+    father_name: 1,
+    mother_name: 1,
+    aadhaar: 1,
+    aadhaar_number: 1,
+    aadhar: 1,
+    pan: 1,
+    pan_number: 1,
+    gender: 1,
+    sex: 1,
+    email: 1,
+    phone: 1,
+    mobile: 1,
+    mobile_number: 1
+  };
+  function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
+    if (!savedMap || typeof savedMap !== "object") return 0;
+    var added = 0;
+    var map = mapping || {};
+    var fbs = filledBySource || {};
+    for (var i = 0; i < (fields || []).length; i++) {
+      var f = fields[i];
+      if (!f || !f.selector || map[f.selector]) continue;
+      if (/radio|checkbox/i.test(String(f.type || ""))) continue;
+      var entry = lookupSavedEntry(savedMap, f);
+      if (!entry || !entry.profileKey) continue;
+      if (isTravelJourneyField(f) && IDENTITY_PROFILE_KEYS[String(entry.profileKey)]) continue;
+      var relation = normalizeRelation(entry, f);
+      var value = applyRelation(relation, profile, entry.profileKey, f);
+      if (value == null) continue;
+      map[f.selector] = { value, type: f.type, label: f.label, profileKey: entry.profileKey, relation, matchBy: sourceTag || "saved-relation" };
+      fbs[f.selector] = { label: f.label || "", profileKey: entry.profileKey, relation, source: sourceTag || "saved-relation" };
+      added++;
+    }
+    return added;
+  }
+  root.CcMappingRelation = {
+    profileAtom,
+    normalizeRelation,
+    applyRelation,
+    induceRelation,
+    looksLikePartField,
+    isCompoundAtom,
+    materializeSavedRelations
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = (typeof globalThis !== "undefined" ? globalThis : this).CcMappingRelation;
 
-    var manifests = (root.CcScriptManifests) || {};
+/* ==== sequential-kernel-fill.ts ==== */
+(function(root2) {
+  "use strict";
+  async function run(ctx) {
+    var tabId = ctx.tabId;
+    var profile = ctx.profile;
+    var backendUrl = ctx.backendUrl;
+    var accessToken = ctx.accessToken;
+    var runtimeVersion = ctx.runtimeVersion;
+    var onProgress = ctx.onProgress;
+    var progress = function(t, p) {
+      if (typeof onProgress === "function") onProgress(t, p);
+    };
+    var errors = typeof globalThis !== "undefined" && globalThis.CcRuntimeErrors || null;
+    var opMsg = function(code, detail) {
+      return errors && errors.operatorMessageFor ? errors.operatorMessageFor(code, detail) : detail || code || "Something went wrong";
+    };
+    if (!tabId) {
+      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", "No active tab"), error: "no_tab" };
+    }
+    var manifests = root2.CcScriptManifests || {};
     var SCRIPTS = manifests.SEQUENTIAL_KERNEL_SCRIPTS || [];
-
-    var _fp = root.CcFlattenProfile || {};
-    var flat = _fp.flattenProfile ? _fp.flattenProfile(profile) : (profile && (profile.data || profile)) || {};
-
-    // ── Stage 1: Inject + Extract ──────────────────────────────────────────────
-    progress('Loading sequential fill kernel...', 25);
+    var _fp = root2.CcFlattenProfile || {};
+    var flat = _fp.flattenProfile ? _fp.flattenProfile(profile) : profile && (profile.data || profile) || {};
+    progress("Loading sequential fill kernel...", 25);
     await chrome.scripting.executeScript({ target: { tabId }, files: SCRIPTS.slice() });
-
-    progress('Extracting fields...', 35);
+    progress("Extracting fields...", 35);
     var extractResults = await chrome.scripting.executeScript({
       target: { tabId },
       args: [flat],
-      func: function (prof) {
-        if (typeof extractFormFieldsWithFingerprint !== 'function') return { ok: false, error: 'extractor_not_loaded' };
-        if (typeof ccDeriveProfile === 'function') {
-          try { var d = ccDeriveProfile(prof); if (d && typeof d === 'object') Object.assign(prof, d); } catch (e) {}
+      func: function(prof) {
+        if (typeof extractFormFieldsWithFingerprint !== "function") return { ok: false, error: "extractor_not_loaded" };
+        if (typeof ccDeriveProfile === "function") {
+          try {
+            var d = ccDeriveProfile(prof);
+            if (d && typeof d === "object") Object.assign(prof, d);
+          } catch (e) {
+          }
         }
-        var extracted = extractFormFieldsWithFingerprint();
-        var formFields = extracted.formFields, formKey = extracted.formKey, semanticFormKey = extracted.semanticFormKey;
-        if (!formFields.length) return { ok: false, error: 'no fields detected' };
-        var visible = formFields.filter(function (f) { return f.visible !== false && f.hidden !== true; });
-        var fields = (visible.length ? visible : formFields).map(function (f) {
-          return { selector: f.selector, id: f.id || '', name: f.name || '', label: f.label || '', type: f.type || 'text', options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '' };
+        var extracted2 = extractFormFieldsWithFingerprint();
+        var formFields = extracted2.formFields, formKey = extracted2.formKey, semanticFormKey = extracted2.semanticFormKey;
+        if (!formFields.length) return { ok: false, error: "no fields detected" };
+        var visible = formFields.filter(function(f2) {
+          return f2.visible !== false && f2.hidden !== true;
         });
-        return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href };
-      },
+        var fields = (visible.length ? visible : formFields).map(function(f2) {
+          return { selector: f2.selector, id: f2.id || "", name: f2.name || "", label: f2.label || "", type: f2.type || "text", options: f2.options || null, optionSelectors: f2.optionSelectors || null, placeholder: f2.placeholder || "" };
+        });
+        return { ok: true, fields, profile: prof, formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href };
+      }
     });
-
     var extracted = extractResults && extractResults[0] && extractResults[0].result;
     if (!extracted || !extracted.ok) {
-      return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', (extracted && extracted.error) || 'Extract failed'), error: (extracted && extracted.error) || 'extract_failed' };
+      return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", extracted && extracted.error || "Extract failed"), error: extracted && extracted.error || "extract_failed" };
     }
-
-    // ── Stage 2: WSS Plan (HTTPS fallback) ────────────────────────────────────
-    progress('Planning over WSS...', 50);
-    var transport = 'wss';
+    progress("Planning over WSS...", 50);
+    var transport = "wss";
     var wssPlan = null;
     try {
-      var planResp = await new Promise(function (resolve) {
-        var timer = setTimeout(function () { resolve({ ok: false, error: 'wss_plan_timeout' }); }, 30000);
+      var planResp = await new Promise(function(resolve) {
+        var timer = setTimeout(function() {
+          resolve({ ok: false, error: "wss_plan_timeout" });
+        }, 3e4);
         chrome.runtime.sendMessage(
-          { type: 'WSS_FILL_REQUEST', formKey: extracted.semanticFormKey || extracted.formKey, semanticFormKey: extracted.semanticFormKey || extracted.formKey, hostname: extracted.hostname, fields: extracted.fields, profile: extracted.profile, profileId: (profile && profile.id) || null },
-          function (resp) {
+          { type: "WSS_FILL_REQUEST", formKey: extracted.semanticFormKey || extracted.formKey, semanticFormKey: extracted.semanticFormKey || extracted.formKey, hostname: extracted.hostname, fields: extracted.fields, profile: extracted.profile, profileId: profile && profile.id || null },
+          function(resp) {
             clearTimeout(timer);
             if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
-            else resolve(resp || { ok: false, error: 'no_response' });
+            else resolve(resp || { ok: false, error: "no_response" });
           }
         );
       });
       if (planResp && planResp.ok && planResp.plan) {
-        wssPlan = planResp.plan; transport = 'wss';
+        wssPlan = planResp.plan;
+        transport = "wss";
       } else {
-        throw new Error((planResp && planResp.error) || 'wss_plan_failed');
+        throw new Error(planResp && planResp.error || "wss_plan_failed");
       }
     } catch (e) {
-      console.warn('[CC] WSS fill plan failed, HTTPS fallback:', e.message);
-      transport = 'https-fallback';
-      progress('WSS unavailable — HTTPS fallback...', 52);
+      console.warn("[CC] WSS fill plan failed, HTTPS fallback:", e.message);
+      transport = "https-fallback";
+      progress("WSS unavailable \u2014 HTTPS fallback...", 52);
       try {
-        var headers = { Authorization: 'Bearer ' + accessToken };
+        var headers = { Authorization: "Bearer " + accessToken };
         var pk = extracted.semanticFormKey || extracted.formKey;
         var saved = {};
-        var mr = await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), { headers: headers });
+        var mr = await fetch(backendUrl + "/mappings/" + encodeURIComponent(pk), { headers });
         if (mr.ok) saved = await mr.json();
         var adapters = {};
         try {
-          var ar = await fetch(backendUrl + '/adapters/' + encodeURIComponent(extracted.hostname), { headers: headers });
+          var ar = await fetch(backendUrl + "/adapters/" + encodeURIComponent(extracted.hostname), { headers });
           if (ar.ok) adapters = await ar.json();
-        } catch (e2) {}
-        wssPlan = { mapping: {}, filledBySource: {}, adapters: adapters, savedMappings: saved, transport: 'https-fallback' };
+        } catch (e2) {
+        }
+        wssPlan = { mapping: {}, filledBySource: {}, adapters, savedMappings: saved, transport: "https-fallback" };
       } catch (e3) {
-        return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', 'Plan failed: ' + (e3.message || e.message)), error: 'plan_failed' };
+        return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", "Plan failed: " + (e3.message || e.message)), error: "plan_failed" };
       }
     }
-
-    // Keep WSS hot for fill debug events
     try {
-      await new Promise(function (resolve) {
-        chrome.runtime.sendMessage({ type: 'ENSURE_WSS' }, function () { resolve(); });
+      await new Promise(function(resolve) {
+        chrome.runtime.sendMessage({ type: "ENSURE_WSS" }, function() {
+          resolve();
+        });
         setTimeout(resolve, 1500);
       });
-    } catch (e) {}
-
-    // ── Stage 2b: Server AI for fields not covered by WSS/saved plan ──────────
-    // OpenRouter (extension-service /semantic-map). Mistral is OCR-only on hub.
+    } catch (e) {
+    }
+    var relApi = root2.CcMappingRelation || {};
     try {
-      var planned = wssPlan.mapping || {};
-      var savedMap = wssPlan.savedMappings || {};
-      var gskPre = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
-      var covered = {};
-      Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
-      if (savedMap && typeof savedMap === 'object') {
-        for (var si = 0; si < extracted.fields.length; si++) {
-          var sf = extracted.fields[si];
-          var sEntry = savedMap[gskPre(sf.label)] || savedMap[gskPre(sf.name)] || null;
-          if (sEntry && sEntry.profileKey) covered[sf.selector] = true;
-        }
+      if (!wssPlan.mapping) wssPlan.mapping = {};
+      if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
+      if (typeof relApi.materializeSavedRelations === "function") {
+        relApi.materializeSavedRelations(
+          extracted.fields,
+          extracted.profile,
+          wssPlan.savedMappings || {},
+          wssPlan.mapping,
+          wssPlan.filledBySource,
+          "client-saved-relation"
+        );
       }
-      var aiCandidates = extracted.fields.filter(function (f) { return !covered[f.selector]; });
-      if (aiCandidates.length > 0 && backendUrl && accessToken) {
-        progress('AI mapping ' + aiCandidates.length + ' unknown fields...', 58);
-        var aiRes = await fetch(backendUrl + '/semantic-map', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + accessToken,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            fields: aiCandidates,
-            hostname: extracted.hostname,
-            formKey: extracted.semanticFormKey || extracted.formKey,
-            pageContext: {
-              page_url: extracted.url || '',
-              page_title: '',
-              portal_id: extracted.hostname,
-              form_key: extracted.semanticFormKey || extracted.formKey,
-            },
-          }),
+    } catch (relErr) {
+      console.warn("[CC] saved-relation materialize skipped:", relErr && relErr.message ? relErr.message : relErr);
+    }
+    try {
+      let labelKeys = function(label) {
+        var raw = String(label || "").toLowerCase().trim();
+        if (!raw) return [];
+        var gsk = raw.replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+        var spaced = raw.replace(/[^a-z0-9]/g, " ").replace(/\s+/g, " ").trim();
+        var out = [];
+        if (gsk) out.push(gsk);
+        if (spaced && spaced !== gsk) out.push(spaced);
+        return out;
+      }, hasTaughtMapping = function(f2) {
+        var keys = labelKeys(f2 && f2.label).concat(labelKeys(f2 && f2.name));
+        for (var i2 = 0; i2 < keys.length; i2++) {
+          var entry = savedMaps[keys[i2]];
+          if (entry && entry.profileKey) return true;
+        }
+        return false;
+      };
+      var planned = wssPlan.mapping || {};
+      var covered = {};
+      Object.keys(planned).forEach(function(sel) {
+        covered[sel] = true;
+      });
+      var savedMaps = wssPlan.savedMappings || {};
+      var exactTaughtCount = typeof wssPlan.exactTaughtCount === "number" ? wssPlan.exactTaughtCount : 0;
+      var preferMapsOnly = wssPlan.preferMapsOnly === true || wssPlan.mappingSource === "exact" && exactTaughtCount > 0;
+      if (preferMapsOnly) {
+        var residual = extracted.fields.filter(function(f2) {
+          return !covered[f2.selector];
+        }).length;
+        console.log("[CC] prefer taught mappings: exact form trained (", exactTaughtCount || "n", "keys); skipping AI (", residual, "residual \u2192 fuzzy/skip)");
+        progress("Using taught mappings\u2026", 58);
+      } else {
+        var aiCandidates = extracted.fields.filter(function(f2) {
+          if (covered[f2.selector]) return false;
+          if (hasTaughtMapping(f2)) return false;
+          return true;
         });
-        if (aiRes.ok) {
-          var aiData = await aiRes.json();
-          var aiMaps = (aiData && aiData.mappings) || [];
-          var flatProf = extracted.profile || {};
-          if (!wssPlan.mapping) wssPlan.mapping = {};
-          if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
-          for (var ai = 0; ai < aiMaps.length; ai++) {
-            var am = aiMaps[ai];
-            if (!am || !am.selector || !am.profile_key) continue;
-            if (am.disposition === 'reject') continue;
-            var pval = flatProf[am.profile_key];
-            if (pval == null || String(pval).trim() === '') continue;
-            if (typeof pval === 'object' && pval && 'value' in pval) pval = pval.value;
-            if (pval == null || String(pval).trim() === '') continue;
-            if (wssPlan.mapping[am.selector]) continue;
-            var fieldMeta = aiCandidates.find(function (f) { return f.selector === am.selector; }) || {};
-            wssPlan.mapping[am.selector] = {
-              value: pval,
-              type: fieldMeta.type || 'text',
-              label: fieldMeta.label || '',
-              profileKey: am.profile_key,
+        var taughtSkipped = extracted.fields.filter(function(f2) {
+          return !covered[f2.selector] && hasTaughtMapping(f2);
+        }).length;
+        if (taughtSkipped > 0) {
+          console.log("[CC] prefer taught mappings: skipping AI for", taughtSkipped, "already-mapped field(s)");
+        }
+        if (aiCandidates.length > 0 && backendUrl && accessToken) {
+          progress("AI mapping " + aiCandidates.length + " unknown fields...", 58);
+          var aiRes = await fetch(backendUrl + "/semantic-map", {
+            method: "POST",
+            headers: {
+              "Authorization": "Bearer " + accessToken,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              fields: aiCandidates,
+              hostname: extracted.hostname,
+              formKey: extracted.semanticFormKey || extracted.formKey,
+              pageContext: {
+                page_url: extracted.url || "",
+                page_title: "",
+                portal_id: extracted.hostname,
+                form_key: extracted.semanticFormKey || extracted.formKey
+              }
+            })
+          });
+          if (aiRes.ok) {
+            var aiData = await aiRes.json();
+            var aiMaps = aiData && aiData.mappings || [];
+            var flatProf = extracted.profile || {};
+            if (!wssPlan.mapping) wssPlan.mapping = {};
+            if (!wssPlan.filledBySource) wssPlan.filledBySource = {};
+            var travelRe = /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota|station)\b/i;
+            var policeRe = /police[_\s-]?station|\bthana\b/i;
+            var identityKeys = {
+              dob: 1,
+              date_of_birth: 1,
+              dob__day: 1,
+              dob__month: 1,
+              dob__year: 1,
+              name: 1,
+              first_name: 1,
+              last_name: 1,
+              middle_name: 1,
+              full_name: 1,
+              father_name: 1,
+              mother_name: 1,
+              aadhaar: 1,
+              aadhaar_number: 1,
+              aadhar: 1,
+              pan: 1,
+              pan_number: 1,
+              gender: 1,
+              sex: 1,
+              email: 1,
+              phone: 1,
+              mobile: 1,
+              mobile_number: 1
             };
-            wssPlan.filledBySource[am.selector] = {
-              label: fieldMeta.label || '',
-              profileKey: am.profile_key,
-              source: 'server-ai',
-            };
+            for (var ai = 0; ai < aiMaps.length; ai++) {
+              var am = aiMaps[ai];
+              if (!am || !am.selector || !am.profile_key) continue;
+              if (am.disposition === "reject") continue;
+              if (wssPlan.mapping[am.selector]) continue;
+              var fieldMeta = aiCandidates.find(function(f2) {
+                return f2.selector === am.selector;
+              }) || {};
+              var travelBlob = [fieldMeta.label, fieldMeta.name, fieldMeta.id, fieldMeta.placeholder].filter(Boolean).join(" ");
+              if (travelRe.test(travelBlob) && !policeRe.test(travelBlob) && identityKeys[String(am.profile_key)]) continue;
+              var aiKey = am.profile_key;
+              var aiRelation = { kind: "identity" };
+              var pval = null;
+              if (aiKey === "dob__day" || aiKey === "dob__month" || aiKey === "dob__year") {
+                aiRelation = { kind: "date_part", part: aiKey.split("__")[1] };
+                aiKey = "dob";
+                pval = typeof relApi.applyRelation === "function" ? relApi.applyRelation(aiRelation, flatProf, aiKey, fieldMeta) : null;
+              } else if (typeof relApi.looksLikePartField === "function" && typeof relApi.isCompoundAtom === "function" && relApi.looksLikePartField(fieldMeta) && relApi.isCompoundAtom(aiKey)) {
+                var lbl = String(fieldMeta.label || "").trim();
+                var guessed = null;
+                if (/^(dob|date_of_birth)$/i.test(aiKey)) {
+                  if (/^dd$|^day$/i.test(lbl) || /dob_?day|birth_?day/i.test(lbl)) guessed = { kind: "date_part", part: "day" };
+                  else if (/^mm$|^month$/i.test(lbl) || /dob_?month|birth_?month/i.test(lbl)) guessed = { kind: "date_part", part: "month" };
+                  else if (/^yyyy$|^year$/i.test(lbl) || /dob_?year|birth_?year/i.test(lbl)) guessed = { kind: "date_part", part: "year" };
+                }
+                if (guessed && typeof relApi.applyRelation === "function") {
+                  aiRelation = guessed;
+                  pval = relApi.applyRelation(guessed, flatProf, aiKey === "date_of_birth" ? "dob" : aiKey, fieldMeta);
+                  if (aiKey === "date_of_birth") aiKey = "dob";
+                } else {
+                  continue;
+                }
+              } else {
+                pval = flatProf[aiKey];
+                if (pval != null && typeof pval === "object" && "value" in pval) pval = pval.value;
+                if (pval == null || String(pval).trim() === "") continue;
+                if (typeof relApi.applyRelation === "function") {
+                  var shaped = relApi.applyRelation(aiRelation, flatProf, aiKey, fieldMeta);
+                  if (shaped == null) continue;
+                  pval = shaped;
+                }
+              }
+              if (pval == null || String(pval).trim() === "") continue;
+              wssPlan.mapping[am.selector] = {
+                value: pval,
+                type: fieldMeta.type || "text",
+                label: fieldMeta.label || "",
+                profileKey: aiKey,
+                relation: aiRelation
+              };
+              wssPlan.filledBySource[am.selector] = {
+                label: fieldMeta.label || "",
+                profileKey: aiKey,
+                relation: aiRelation,
+                source: "server-ai"
+              };
+            }
+            console.log("[CC] semantic-map strategy=", aiData.strategy, "applied=", Object.keys(wssPlan.filledBySource).filter(function(k) {
+              return wssPlan.filledBySource[k].source === "server-ai";
+            }).length);
+          } else {
+            console.warn("[CC] semantic-map HTTP", aiRes.status);
           }
-          console.log('[CC] semantic-map strategy=', aiData.strategy, 'applied=', Object.keys(wssPlan.filledBySource).filter(function (k) { return wssPlan.filledBySource[k].source === 'server-ai'; }).length);
-        } else {
-          console.warn('[CC] semantic-map HTTP', aiRes.status);
         }
       }
     } catch (aiErr) {
-      console.warn('[CC] semantic-map skipped:', aiErr && aiErr.message ? aiErr.message : aiErr);
+      console.warn("[CC] semantic-map skipped:", aiErr && aiErr.message ? aiErr.message : aiErr);
     }
-
-    // ── Stage 3: Execute in page ───────────────────────────────────────────────
-    progress('Filling form (sequential)...', 70);
+    progress("Filling form (sequential)...", 70);
     var execResults = await chrome.scripting.executeScript({
       target: { tabId },
-      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, wssPlan.savedMappings || {}, (profile && profile.id) || null, transport],
-      func: async function (prof, fields, wssMapping, wssFbs, adapters, saved, profileId, fillTransport) {
-        if (typeof fillFormFieldsSequential !== 'function') return { ok: false, error: 'sequential_kernel_not_loaded' };
-        try { window._ccProfileId = profileId; } catch (e) {}
+      args: [extracted.profile, extracted.fields, wssPlan.mapping || {}, wssPlan.filledBySource || {}, wssPlan.adapters || {}, profile && profile.id || null, transport],
+      func: async function(prof, fields, wssMapping, wssFbs, adapters2, profileId, fillTransport) {
+        if (typeof fillFormFieldsSequential !== "function") return { ok: false, error: "sequential_kernel_not_loaded" };
+        try {
+          window._ccProfileId = profileId;
+        } catch (e) {
+        }
         var mapping = Object.assign({}, wssMapping || {});
         var fbs = Object.assign({}, wssFbs || {});
-        var gsk = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
-        var isChoiceType = function (t) { return /radio|checkbox/i.test(String(t || '')); };
-        function choiceCovered(f) {
-          if (mapping[f.selector]) return true;
-          if (f.optionSelectors) { for (var i = 0; i < f.optionSelectors.length; i++) { if (mapping[f.optionSelectors[i]]) return true; } }
-          return false;
-        }
-        if (saved && Object.keys(mapping).length === 0) {
-          for (var i = 0; i < fields.length; i++) {
-            var f = fields[i];
-            var sk = gsk(f.label);
-            var s = saved[sk] || saved[gsk(f.name)] || null;
-            if (!s) continue;
-            if (s.profileKey && prof[s.profileKey] != null && String(prof[s.profileKey]).trim() !== '') {
-              if (isChoiceType(f.type) && typeof resolveChoiceToOption === 'function') {
-                var resolved = resolveChoiceToOption(f, prof[s.profileKey], s.profileKey);
-                if (resolved) { mapping[resolved.selector] = resolved.entry; fbs[resolved.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' }; }
-              } else {
-                mapping[f.selector] = { value: prof[s.profileKey], type: f.type, label: f.label, profileKey: s.profileKey };
-                fbs[f.selector] = { label: f.label, profileKey: s.profileKey, source: 'https-saved' };
-              }
+        function choiceCovered(f2) {
+          if (mapping[f2.selector]) return true;
+          if (f2.optionSelectors) {
+            for (var i2 = 0; i2 < f2.optionSelectors.length; i2++) {
+              if (mapping[f2.optionSelectors[i2]]) return true;
             }
           }
+          return false;
         }
-        var unmapped = fields.filter(function (f) { return !choiceCovered(f); });
-        if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
+        var unmapped = fields.filter(function(f2) {
+          return !choiceCovered(f2);
+        });
+        if (unmapped.length > 0 && typeof fuzzyMatch === "function") {
           var fz = fuzzyMatch(unmapped, prof);
-          for (var sel in (fz || {})) {
+          for (var sel in fz || {}) {
             if (mapping[sel]) continue;
             mapping[sel] = fz[sel];
-            fbs[sel] = { label: (fz[sel] && fz[sel].label) || '', source: 'label-primary', profileKey: (fz[sel] && fz[sel].profileKey) || null };
+            fbs[sel] = { label: fz[sel] && fz[sel].label || "", source: "label-primary", profileKey: fz[sel] && fz[sel].profileKey || null };
           }
         }
-        var filledCount = await fillFormFieldsSequential(mapping, fbs, adapters || {}, fields);
+        var filledCount = await fillFormFieldsSequential(mapping, fbs, adapters2 || {}, fields);
         var records = [];
-        try { var raw = document.body.getAttribute('data-cc-records'); if (raw) records = JSON.parse(raw); } catch (e) {}
+        try {
+          var raw = document.body.getAttribute("data-cc-records");
+          if (raw) records = JSON.parse(raw);
+        } catch (e) {
+        }
         if (!records.length && Array.isArray(window.__ccFillRecords)) records = window.__ccFillRecords;
-        var failed  = records.filter(function (r) { return (r.result === 'failed' || r.result === 'error') || (r.failReason && r.result !== 'skipped' && r.result !== 'waiting_human' && r.result !== 'filled'); }).length;
-        var skipped = records.filter(function (r) { return r.result === 'skipped' || r.result === 'waiting_human'; }).length;
-        var filled  = records.filter(function (r) { return r.result === 'filled'; }).length || filledCount || 0;
-        records = records.map(function (r) { return Object.assign({}, r, { hostname: r.hostname || location.hostname, plannedValue: r.plannedValue != null ? r.plannedValue : r.value, actualValue: r.actualValue != null ? r.actualValue : r.actual, transport: fillTransport }); });
-        return { ok: true, filled: filled, failed: failed, skipped: skipped, fields: Object.keys(mapping).length, records: records, hostname: location.hostname, url: location.href, _mapping: mapping, _fbs: fbs, _fields: fields };
-      },
+        var failed = records.filter(function(r2) {
+          return r2.result === "failed" || r2.result === "error" || r2.failReason && r2.result !== "skipped" && r2.result !== "waiting_human" && r2.result !== "filled";
+        }).length;
+        var skipped = records.filter(function(r2) {
+          return r2.result === "skipped" || r2.result === "waiting_human";
+        }).length;
+        var filled = records.filter(function(r2) {
+          return r2.result === "filled";
+        }).length || filledCount || 0;
+        records = records.map(function(r2) {
+          return Object.assign({}, r2, { hostname: r2.hostname || location.hostname, plannedValue: r2.plannedValue != null ? r2.plannedValue : r2.value, actualValue: r2.actualValue != null ? r2.actualValue : r2.actual, transport: fillTransport });
+        });
+        return { ok: true, filled, failed, skipped, fields: Object.keys(mapping).length, records, hostname: location.hostname, url: location.href, _mapping: mapping, _fbs: fbs, _fields: fields };
+      }
     });
-
-    var r = (execResults && execResults[0] && execResults[0].result) || { ok: false, error: 'no_result' };
+    var r = execResults && execResults[0] && execResults[0].result || { ok: false, error: "no_result" };
     if (!r.ok) {
-      return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', r.error || 'Sequential fill failed'), error: r.error || 'sequential_failed' };
+      return { ok: false, filled: 0, failed: 1, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", r.error || "Sequential fill failed"), error: r.error || "sequential_failed" };
     }
-
-    // ── Stage 3b: Sync mappings to backend ───────────────────────────────────
-    // Post form field metadata + profileKey mappings so the backend learns
-    // new forms. This is what makes new forms appear in the mapping portal.
     try {
       var pk = extracted.semanticFormKey || extracted.formKey;
       var syncMapping = r._mapping || {};
-      var syncFbs     = r._fbs     || {};
-      var syncFields  = r._fields  || [];
-      var syncRecords = r.records  || [];
+      var syncFbs = r._fbs || {};
+      var syncFields = r._fields || [];
+      var syncRecords = r.records || [];
+      var syncProfile = extracted.profile || {};
       var updates = {};
-      var gsk2 = function (l) { return (l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim(); };
+      var gsk2 = function(l) {
+        return (l || "").toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      };
       for (var i = 0; i < syncFields.length; i++) {
         var f = syncFields[i];
         var sk = gsk2(f.label);
+        if (!sk || sk.length < 2) sk = gsk2(f.name);
+        if (!sk || sk.length < 2) sk = gsk2(f.id);
         if (!sk || sk.length < 2) continue;
         var info = syncFbs[f.selector];
-        var profileKey = (info && info.profileKey) || (syncMapping[f.selector] && syncMapping[f.selector].profileKey) || null;
-        var wasFilled = syncRecords.some(function (rec) { return rec.selector === f.selector && rec.result === 'filled'; });
-        updates[sk] = { profileKey: profileKey, label: f.label, type: f.type, order: i, options: f.options || null, delta: { fills: wasFilled ? 1 : 0, corrections: 0 } };
+        var mapEntry = syncMapping[f.selector];
+        var profileKey = info && info.profileKey || mapEntry && mapEntry.profileKey || null;
+        var filledRec = syncRecords.find(function(rec) {
+          return rec.selector === f.selector && rec.result === "filled";
+        });
+        var wasFilled = !!filledRec;
+        var evidence = null;
+        if (filledRec) {
+          evidence = filledRec.actualValue != null ? filledRec.actualValue : filledRec.actual != null ? filledRec.actual : filledRec.plannedValue != null ? filledRec.plannedValue : filledRec.value;
+        } else if (mapEntry && mapEntry.value != null) {
+          evidence = mapEntry.value;
+        }
+        var relation = info && info.relation || mapEntry && mapEntry.relation || null;
+        if ((!relation || !relation.kind || relation.kind === "unknown") && profileKey && typeof relApi.induceRelation === "function") {
+          var induced = relApi.induceRelation(syncProfile, profileKey, evidence, f);
+          if (induced && induced.kind && induced.kind !== "unknown") relation = induced;
+          else if (!relation || !relation.kind) relation = induced || { kind: "unknown" };
+        }
+        if (!relation || !relation.kind) {
+          relation = { kind: "unknown" };
+        }
+        updates[sk] = {
+          profileKey,
+          relation,
+          label: f.label || f.name || f.id || sk,
+          type: f.type,
+          order: i,
+          options: f.options || null,
+          delta: { fills: wasFilled ? 1 : 0, corrections: 0 }
+        };
       }
       if (Object.keys(updates).length > 0 && backendUrl && accessToken && pk) {
-        await fetch(backendUrl + '/mappings/' + encodeURIComponent(pk), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
-          body: JSON.stringify({ updates: updates, meta: { hostname: r.hostname || extracted.hostname, title: '', lastSeen: new Date().toISOString().slice(0, 10), syncVersion: 2 } }),
+        await fetch(backendUrl + "/mappings/" + encodeURIComponent(pk), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + accessToken },
+          body: JSON.stringify({ updates, meta: { hostname: r.hostname || extracted.hostname, title: "", lastSeen: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), syncVersion: 3 } })
         });
       }
-    } catch (e) { console.warn('[CC] mapping sync failed:', e.message); }
-
-    // ── Stage 4: Save session ─────────────────────────────────────────────────
-    progress('Saving session over WSS...', 92);
+    } catch (e) {
+      console.warn("[CC] mapping sync failed:", e.message);
+    }
+    progress("Saving session over WSS...", 92);
     var sessionId = null;
     var sessionPayload = {
       hostname: r.hostname || extracted.hostname,
       url: r.url || extracted.url,
       semanticFormKey: extracted.semanticFormKey || extracted.formKey,
       formKey: extracted.formKey,
-      runtimeVersion: runtimeVersion || '',
+      runtimeVersion: runtimeVersion || "",
       totalFilled: r.filled || 0,
       totalFailed: r.failed || 0,
       totalSkipped: r.skipped || 0,
-      records: r.records || [],
+      records: r.records || []
     };
     try {
-      var sessResp = await new Promise(function (resolve) {
-        chrome.runtime.sendMessage(Object.assign({ type: 'WSS_FILL_SESSION' }, sessionPayload), function (resp) {
+      var sessResp = await new Promise(function(resolve) {
+        chrome.runtime.sendMessage(Object.assign({ type: "WSS_FILL_SESSION" }, sessionPayload), function(resp) {
           if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
           else resolve(resp || { ok: false });
         });
@@ -384,22 +710,27 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
       if (sessResp && sessResp.ok) {
         sessionId = sessResp.id || null;
       } else {
-        throw new Error((sessResp && sessResp.error) || 'wss_session_failed');
+        throw new Error(sessResp && sessResp.error || "wss_session_failed");
       }
     } catch (e) {
-      console.warn('[CC] WSS session failed, HTTPS fallback:', e.message);
+      console.warn("[CC] WSS session failed, HTTPS fallback:", e.message);
       try {
-        var sRes = await fetch(backendUrl + '/sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-          body: JSON.stringify(sessionPayload),
+        var sRes = await fetch(backendUrl + "/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+          body: JSON.stringify(sessionPayload)
         });
-        if (sRes.ok) { var body = await sRes.json().catch(function () { return {}; }); sessionId = body.id || null; }
-        transport = 'https-fallback';
-      } catch (e2) { /* soft */ }
+        if (sRes.ok) {
+          var body = await sRes.json().catch(function() {
+            return {};
+          });
+          sessionId = body.id || null;
+        }
+        transport = "https-fallback";
+      } catch (e2) {
+      }
     }
-
-    progress('Fill done (' + transport + '): ' + (r.filled || 0) + ' filled', 100);
+    progress("Fill done (" + transport + "): " + (r.filled || 0) + " filled", 100);
     return {
       ok: (r.failed || 0) === 0,
       filled: r.filled || 0,
@@ -407,113 +738,79 @@ if (typeof module !== 'undefined') module.exports = root.CcFlattenProfile;
       skipped: r.skipped || 0,
       records: r.records || [],
       observationError: null,
-      operatorMessage: 'Fill complete: ' + (r.filled || 0) + ' ok, ' + (r.failed || 0) + ' failed, ' + (r.skipped || 0) + ' skipped (' + transport + ')',
-      sessionId: sessionId,
-      hostname: r.hostname || extracted.hostname || '',
-      path: 'sequential-kernel',
-      transport: transport,
+      operatorMessage: "Fill complete: " + (r.filled || 0) + " ok, " + (r.failed || 0) + " failed, " + (r.skipped || 0) + " skipped (" + transport + ")",
+      sessionId,
+      hostname: r.hostname || extracted.hostname || "",
+      path: "sequential-kernel",
+      transport
     };
   }
+  root2.CcSequentialKernelFill = { run };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = root.CcSequentialKernelFill;
 
-  root.CcSequentialKernelFill = { run: run };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-if (typeof module !== 'undefined') module.exports = root.CcSequentialKernelFill;
-
-/* ==== action-plan-fill.js ==== */
-/**
- * action-plan-fill — ActionPlan (APE) fill path
- *
- * Product DYNAMIC fill path:
- *   1. Inject PRODUCT_PATH_SCRIPTS if not already loaded
- *   2. Seed navigation origin allowlist
- *   3. Perceive page via CcPerception
- *   4. POST /fill-plan → get ActionPlan
- *   5. Execute via CcActionPlanExecutor (+ DOM evidence)
- *   6. POST /fill-observation
- *   7. POST /sessions
- *
- * Depends on: CcScriptManifests, CcFlattenProfile
- *
- * Public API (on globalThis.CcActionPlanFill):
- *   run(ctx) => Promise<result>
- *
- * See docs/action-plan-fill.md for full documentation.
- */
-(function (root) {
-  'use strict';
-
+/* ==== action-plan-fill.ts ==== */
+(function(root2) {
+  "use strict";
   async function run(ctx) {
-    var tabId              = ctx.tabId;
-    var profile            = ctx.profile;
-    var backendUrl         = ctx.backendUrl;
-    var accessToken        = ctx.accessToken;
-    var runtimeVersion     = ctx.runtimeVersion;
+    var tabId = ctx.tabId;
+    var profile = ctx.profile;
+    var backendUrl = ctx.backendUrl;
+    var accessToken = ctx.accessToken;
+    var runtimeVersion = ctx.runtimeVersion;
     var executionPreference = ctx.executionPreference;
-    var onProgress         = ctx.onProgress;
-
-    var progress = function (t, p) { if (typeof onProgress === 'function') onProgress(t, p); };
-    var errors = (typeof globalThis !== 'undefined' && globalThis.CcRuntimeErrors) || null;
-    var opMsg = function (code, detail) {
-      return errors && errors.operatorMessageFor
-        ? errors.operatorMessageFor(code, detail)
-        : (detail || code || 'Something went wrong');
+    var onProgress = ctx.onProgress;
+    var progress = function(t, p) {
+      if (typeof onProgress === "function") onProgress(t, p);
     };
-
+    var errors = typeof globalThis !== "undefined" && globalThis.CcRuntimeErrors || null;
+    var opMsg = function(code, detail) {
+      return errors && errors.operatorMessageFor ? errors.operatorMessageFor(code, detail) : detail || code || "Something went wrong";
+    };
     if (!tabId) {
-      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', 'No active tab'), error: 'no_tab' };
+      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", "No active tab"), error: "no_tab" };
     }
-
-    var manifests = root.CcScriptManifests || {};
+    var manifests = root2.CcScriptManifests || {};
     var PRODUCT_SCRIPTS = manifests.PRODUCT_PATH_SCRIPTS || [];
-
-    var _fp = root.CcFlattenProfile || {};
-    var flatProfile = _fp.flattenProfile ? _fp.flattenProfile(profile) : (profile && (profile.data || profile)) || {};
-
-    progress('Perceiving page structure...', 30);
-
-    // Inject product scripts if not already loaded
+    var _fp = root2.CcFlattenProfile || {};
+    var flatProfile = _fp.flattenProfile ? _fp.flattenProfile(profile) : profile && (profile.data || profile) || {};
+    progress("Perceiving page structure...", 30);
     var loadedCheck = await chrome.scripting.executeScript({
       target: { tabId },
-      func: function () {
+      func: function() {
         return !!(globalThis.CcDomGateway && globalThis.CcBindingRegistry && globalThis.CcPerception && globalThis.CcActionPlanExecutor);
-      },
+      }
     });
     if (!loadedCheck[0].result) {
       await chrome.scripting.executeScript({ target: { tabId }, files: PRODUCT_SCRIPTS.slice() });
     }
-
-    // Seed navigation origin allowlist
     try {
-      var allowStore = await chrome.storage.local.get('navigationOriginAllowlist');
-      var originAllowlist = Array.isArray(allowStore.navigationOriginAllowlist)
-        ? allowStore.navigationOriginAllowlist.filter(function (x) { return typeof x === 'string' && x.length > 0; })
-        : [];
+      var allowStore = await chrome.storage.local.get("navigationOriginAllowlist");
+      var originAllowlist = Array.isArray(allowStore.navigationOriginAllowlist) ? allowStore.navigationOriginAllowlist.filter(function(x) {
+        return typeof x === "string" && x.length > 0;
+      }) : [];
       await chrome.scripting.executeScript({
         target: { tabId },
-        func: function (list) {
+        func: function(list) {
           if (globalThis.CcNavigationContract && globalThis.CcNavigationContract.setOriginAllowlist) {
             globalThis.CcNavigationContract.setOriginAllowlist(list);
           } else {
             globalThis.__ccNavigationOriginAllowlist = Array.isArray(list) ? list : [];
           }
         },
-        args: [originAllowlist],
+        args: [originAllowlist]
       });
     } catch (e) {
-      console.warn('[CC] navigation origin allowlist seed failed:', e.message);
+      console.warn("[CC] navigation origin allowlist seed failed:", e.message);
     }
-
-    // Perceive
     var percResults = await chrome.scripting.executeScript({
       target: { tabId },
-      func: async function () {
+      func: async function() {
         try {
-          if (typeof CcPerception === 'undefined') return { error: 'CcPerception not loaded' };
-          if (typeof CcDomGateway === 'undefined') return { error: 'CcDomGateway not loaded' };
-          if (typeof CcContextDiscovery !== 'undefined' && CcContextDiscovery.resetContextCounter) CcContextDiscovery.resetContextCounter();
-          if (typeof CcNodeFactory !== 'undefined' && CcNodeFactory.resetNodeCounter) CcNodeFactory.resetNodeCounter();
+          if (typeof CcPerception === "undefined") return { error: "CcPerception not loaded" };
+          if (typeof CcDomGateway === "undefined") return { error: "CcDomGateway not loaded" };
+          if (typeof CcContextDiscovery !== "undefined" && CcContextDiscovery.resetContextCounter) CcContextDiscovery.resetContextCounter();
+          if (typeof CcNodeFactory !== "undefined" && CcNodeFactory.resetNodeCounter) CcNodeFactory.resetNodeCounter();
           await CcPerception.initPerception({
             gateway: CcDomGateway,
             bindingRegistry: new CcBindingRegistry(),
@@ -526,44 +823,39 @@ if (typeof module !== 'undefined') module.exports = root.CcSequentialKernelFill;
             canonicalHash: CcCanonicalHash,
             snapshotBuilder: CcSnapshotBuilder,
             validator: CcValidator,
-            validatorOptions: { schema: null },
+            validatorOptions: { schema: null }
           });
           if (CcValidator && !CcValidator.isInitialized()) await CcValidator.initValidator({ schema: null });
-          return await CcPerception.perceivePage({ mode: 'snapshot', includeGeometry: true });
+          return await CcPerception.perceivePage({ mode: "snapshot", includeGeometry: true });
         } catch (err) {
-          return { error: err.message, stack: (err.stack || '').slice(0, 300) };
+          return { error: err.message, stack: (err.stack || "").slice(0, 300) };
         }
-      },
+      }
     });
-
     var pageSnapshot = percResults && percResults[0] && percResults[0].result;
-    if (!pageSnapshot || pageSnapshot.kind !== 'page_snapshot') {
-      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', 'Perception failed'), error: String((pageSnapshot && pageSnapshot.error) || 'perception_failed').slice(0, 120) };
+    if (!pageSnapshot || pageSnapshot.kind !== "page_snapshot") {
+      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", "Perception failed"), error: String(pageSnapshot && pageSnapshot.error || "perception_failed").slice(0, 120) };
     }
-
-    // Plan
-    progress('Server planning fill...', 55);
-    var planResponse = await fetch(backendUrl + '/fill-plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-      body: JSON.stringify({ snapshot: pageSnapshot, profileId: profile.id, operator_execution_preference: executionPreference || 'AUTO', profile: flatProfile }),
+    progress("Server planning fill...", 55);
+    var planResponse = await fetch(backendUrl + "/fill-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+      body: JSON.stringify({ snapshot: pageSnapshot, profileId: profile.id, operator_execution_preference: executionPreference || "AUTO", profile: flatProfile })
     });
     if (!planResponse.ok) {
-      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', 'Server plan failed'), error: 'plan_http_' + planResponse.status, pageSnapshot: pageSnapshot };
+      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", "Server plan failed"), error: "plan_http_" + planResponse.status, pageSnapshot };
     }
     var planBody = await planResponse.json();
     var plan = planBody.plan || planBody.action_plan || planBody;
     if (!plan || !plan.steps || plan.steps.length === 0) {
-      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: 'No fields could be mapped for this form.', error: 'empty_plan', pageSnapshot: pageSnapshot };
+      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: "No fields could be mapped for this form.", error: "empty_plan", pageSnapshot };
     }
-
-    // Execute
-    progress('Executing ' + plan.steps.length + ' steps...', 70);
+    progress("Executing " + plan.steps.length + " steps...", 70);
     var execResults = await chrome.scripting.executeScript({
       target: { tabId },
-      func: async function (actionPlan) {
-        if (!globalThis.CcActionPlanExecutor || !globalThis.CcActionPlanExecutor.execute) throw new Error('ActionPlan executor not loaded');
-        if (typeof globalThis.ccExecutor === 'function' || globalThis.__ccLegacyFillActive) throw new Error('Legacy fill path must not run with ActionPlan v3');
+      func: async function(actionPlan) {
+        if (!globalThis.CcActionPlanExecutor || !globalThis.CcActionPlanExecutor.execute) throw new Error("ActionPlan executor not loaded");
+        if (typeof globalThis.ccExecutor === "function" || globalThis.__ccLegacyFillActive) throw new Error("Legacy fill path must not run with ActionPlan v3");
         if (globalThis.CcDomEvidence && globalThis.CcDomEvidence.startObserving) {
           var registry = globalThis.CcPerception && globalThis.CcPerception.getBindingRegistry && globalThis.CcPerception.getBindingRegistry();
           globalThis.CcDomEvidence.startObserving(actionPlan, registry);
@@ -574,80 +866,122 @@ if (typeof module !== 'undefined') module.exports = root.CcSequentialKernelFill;
         } finally {
           if (globalThis.CcDomEvidence && globalThis.CcDomEvidence.stopObserving) {
             globalThis.CcDomEvidence.stopObserving();
-            var evidence = (globalThis.CcDomEvidence.getEvidence && globalThis.CcDomEvidence.getEvidence()) || [];
+            var evidence = globalThis.CcDomEvidence.getEvidence && globalThis.CcDomEvidence.getEvidence() || [];
             if (evidence.length > 0 && observation) observation.dom_evidence = evidence;
           }
         }
         return observation;
       },
-      args: [plan],
+      args: [plan]
     });
-
     var executionObservation = execResults && execResults[0] && execResults[0].result;
-    if (!executionObservation || executionObservation.kind !== 'execution_observation') {
-      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg('gateway_error', 'Execution failed'), error: 'invalid_observation', pageSnapshot: pageSnapshot, plan: plan };
+    if (!executionObservation || executionObservation.kind !== "execution_observation") {
+      return { ok: false, filled: 0, failed: 0, skipped: 0, records: [], observationError: null, operatorMessage: opMsg("gateway_error", "Execution failed"), error: "invalid_observation", pageSnapshot, plan };
     }
-
-    // Report observation
     var observationError = null;
     try {
-      var query = new URLSearchParams({ plan_id: plan.plan_id || '', correlation_id: plan.correlation_id || '', runtimeVersion: runtimeVersion || '' });
-      var reportResponse = await fetch(backendUrl + '/fill-observation?' + query.toString(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-        body: JSON.stringify(executionObservation),
+      var query = new URLSearchParams({ plan_id: plan.plan_id || "", correlation_id: plan.correlation_id || "", runtimeVersion: runtimeVersion || "" });
+      var reportResponse = await fetch(backendUrl + "/fill-observation?" + query.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+        body: JSON.stringify(executionObservation)
       });
-      if (!reportResponse.ok) observationError = 'HTTP ' + reportResponse.status;
-    } catch (e) { observationError = e.message; }
-
+      if (!reportResponse.ok) observationError = "HTTP " + reportResponse.status;
+    } catch (e) {
+      observationError = e.message;
+    }
     var stepResults = executionObservation.steps || [];
-    var filled  = stepResults.filter(function (r) { return r.status === 'succeeded'; }).length;
-    var failed  = stepResults.filter(function (r) { return r.status === 'failed'; }).length;
-    var skipped = stepResults.filter(function (r) { return r.status === 'skipped'; }).length;
-
-    var resultByStep = new Map(stepResults.map(function (r) { return [r.step_id, r]; }));
-    var hostFromSnap = (function () {
-      try { var origin = (pageSnapshot.page && pageSnapshot.page.origin) || (pageSnapshot.page && pageSnapshot.page.url) || ''; return origin ? new URL(origin).hostname : ''; } catch (e) { return ''; }
-    }());
-
-    var records = (plan.steps || []).map(function (step) {
+    var filled = stepResults.filter(function(r) {
+      return r.status === "succeeded";
+    }).length;
+    var failed = stepResults.filter(function(r) {
+      return r.status === "failed";
+    }).length;
+    var skipped = stepResults.filter(function(r) {
+      return r.status === "skipped";
+    }).length;
+    var resultByStep = new Map(stepResults.map(function(r) {
+      return [r.step_id, r];
+    }));
+    var hostFromSnap = (function() {
+      try {
+        var origin = pageSnapshot.page && pageSnapshot.page.origin || pageSnapshot.page && pageSnapshot.page.url || "";
+        return origin ? new URL(origin).hostname : "";
+      } catch (e) {
+        return "";
+      }
+    })();
+    var nodesById = pageSnapshot && pageSnapshot.nodes || {};
+    var humanLabelFor = function(step) {
+      var target = step && step.target || {};
+      var nodeId = target.node_id || null;
+      var node = nodeId && nodesById[nodeId] || null;
+      var observed = node && node.observed || {};
+      var label = target.label || observed.accessible_name || node && (node.semantic_label || node.label) || target.semantic_key || null;
+      if (label && label !== nodeId && label !== (step && step.step_id)) return label;
+      if (target.semantic_key) return target.semantic_key;
+      return label || "Field";
+    };
+    var records = (plan.steps || []).map(function(step) {
       var result = resultByStep.get(step.step_id);
-      var planned = (step.action && step.action.value != null) ? step.action.value : ((step.action && step.action.text != null) ? step.action.text : '');
-      var actual = (result && result.observed_value_state) || (result && result.actual_value) || (result && result.actualValue) || null;
-      return { label: step.target && step.target.node_id || step.step_id, result: result && result.status === 'succeeded' ? 'filled' : ((result && result.status) || 'skipped'), value: planned, plannedValue: planned, actualValue: actual, failReason: (result && result.failure_code) || null, source: 'server-plan', fillMode: 'sequential-ape', hostname: hostFromSnap, verified: result && result.postcondition_met === true };
+      var planned = step.action && step.action.value != null ? step.action.value : step.action && step.action.text != null ? step.action.text : "";
+      var actual = result && result.observed_value_state || result && result.actual_value || result && result.actualValue || null;
+      var target = step && step.target || {};
+      return {
+        label: humanLabelFor(step),
+        selector: target.node_id || null,
+        nodeId: target.node_id || null,
+        semanticKey: target.semantic_key || null,
+        result: result && result.status === "succeeded" ? "filled" : result && result.status || "skipped",
+        value: planned,
+        plannedValue: planned,
+        actualValue: actual,
+        failReason: result && result.failure_code || null,
+        source: "server-plan",
+        fillMode: "sequential-ape",
+        hostname: hostFromSnap,
+        verified: result && result.postcondition_met === true
+      };
     });
-
-    // Session
     var sessionId = null;
     try {
-      var sessRes = await fetch(backendUrl + '/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + accessToken },
-        body: JSON.stringify({ hostname: hostFromSnap, url: (pageSnapshot.page && pageSnapshot.page.url) || (pageSnapshot.page && pageSnapshot.page.origin) || '', semanticFormKey: (pageSnapshot.page && pageSnapshot.page.route_key) || null, runtimeVersion: runtimeVersion || '', totalFilled: filled, totalFailed: failed, totalSkipped: skipped, records: records }),
+      var sessRes = await fetch(backendUrl + "/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + accessToken },
+        body: JSON.stringify({ hostname: hostFromSnap, url: pageSnapshot.page && pageSnapshot.page.url || pageSnapshot.page && pageSnapshot.page.origin || "", semanticFormKey: pageSnapshot.page && pageSnapshot.page.route_key || null, runtimeVersion: runtimeVersion || "", totalFilled: filled, totalFailed: failed, totalSkipped: skipped, records })
       });
-      if (sessRes.ok) { var sb = await sessRes.json().catch(function () { return {}; }); sessionId = sb.id || null; }
-    } catch (e) { console.warn('[CC] session post failed:', e.message); }
-
-    var operatorMessage = null;
-    if (executionObservation.outcome === 'rejected' || executionObservation.outcome === 'aborted') {
-      operatorMessage = opMsg(executionObservation.rejection_reason || 'plan rejected', null);
-    } else if (observationError) {
-      operatorMessage = 'Fields changed, but session evidence was not saved.';
-    } else {
-      operatorMessage = 'Fill complete: ' + filled + ' ok, ' + failed + ' failed, ' + skipped + ' skipped';
+      if (sessRes.ok) {
+        var sb = await sessRes.json().catch(function() {
+          return {};
+        });
+        sessionId = sb.id || null;
+      }
+    } catch (e) {
+      console.warn("[CC] session post failed:", e.message);
     }
-
+    var operatorMessage = null;
+    if (executionObservation.outcome === "rejected" || executionObservation.outcome === "aborted") {
+      operatorMessage = opMsg(executionObservation.rejection_reason || "plan rejected", null);
+    } else if (observationError) {
+      operatorMessage = "Fields changed, but session evidence was not saved.";
+    } else {
+      operatorMessage = "Fill complete: " + filled + " ok, " + failed + " failed, " + skipped + " skipped";
+    }
     return {
-      ok: failed === 0 && executionObservation.outcome !== 'aborted' && executionObservation.outcome !== 'rejected',
-      pageSnapshot: pageSnapshot, plan: plan, executionObservation: executionObservation,
-      filled: filled, failed: failed, skipped: skipped, records: records,
-      observationError: observationError, operatorMessage: operatorMessage,
-      sessionId: sessionId, hostname: hostFromSnap,
+      ok: failed === 0 && executionObservation.outcome !== "aborted" && executionObservation.outcome !== "rejected",
+      pageSnapshot,
+      plan,
+      executionObservation,
+      filled,
+      failed,
+      skipped,
+      records,
+      observationError,
+      operatorMessage,
+      sessionId,
+      hostname: hostFromSnap
     };
   }
-
-  root.CcActionPlanFill = { run: run };
-
-})(typeof globalThis !== 'undefined' ? globalThis : this);
-
-if (typeof module !== 'undefined') module.exports = root.CcActionPlanFill;
+  root2.CcActionPlanFill = { run };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+if (typeof module !== "undefined") module.exports = root.CcActionPlanFill;

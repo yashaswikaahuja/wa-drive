@@ -6,11 +6,12 @@
   "description": "CyberControl WhatsApp Baileys worker (thin entry). Logic in @cybercontrol/wa-service + wa-auth.",
   "main": "index.js",
   "scripts": {
-    "build": "node scripts/build-dist.mjs",
-    "start": "node index.js",
+    "build:entry": "node --experimental-strip-types scripts/build-entry.ts",
+    "build": "pnpm --filter @cybercontrol/wa-auth run build && pnpm --filter @cybercontrol/wa-service run build && node --experimental-strip-types scripts/build-dist.ts",
+    "start": "node --experimental-strip-types scripts/build-entry.ts && node index.js",
     "start:dist": "node dist/index.js",
-    "dev": "node --watch index.js",
-    "typecheck": "node -e \"console.log('[whatsapp-service] typecheck skipped (JS)')\"",
+    "dev": "node --experimental-strip-types scripts/build-entry.ts && node --watch index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node -e \"console.log('[whatsapp-service] no package tests yet')\""
   },
   "dependencies": {
@@ -23,6 +24,12 @@
     "pg": "^8.13.1",
     "pino": "^8.17.2",
     "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/pg": "^8.11.10",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=20"

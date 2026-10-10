@@ -36,7 +36,7 @@ planned_gateway:
         - "choose semantic meanings"
         - "return live nodes to service-facing code"
     interaction:
-      consumers: ["extension/execution/", "extension/runtime/runner.js during migration"]
+      consumers: ["extension/execution/", "extension/runtime/runner.ts during migration"]
       side_effect: mechanical
       allowed_operations:
         - "focus, scroll, type, clear, activate, toggle, select, upload"
@@ -94,18 +94,18 @@ legacy_exceptions:
   status: grandfathered_not_approved_for_expansion
   removal_target: "Phase 3.9 migration completion"
   paths:
-    - "extension/autofill/extractor.js"
-    - "extension/models/ir.js"
-    - "extension/autofill/executor.js"
+    - "extension/autofill/extractor.ts"
+    - "extension/models/ir.ts"
+    - "extension/autofill/executor.ts"
     - "extension/autofill/plugins/"
-    - "extension/runtime/resolver.js"
-    - "extension/runtime/runner.js"
-    - "extension/runtime/plugin-bridge.js"
-    - "extension/capabilities/registry.js"
+    - "extension/runtime/resolver.ts"
+    - "extension/runtime/runner.ts"
+    - "extension/runtime/plugin-bridge.ts"
+    - "extension/capabilities/registry.ts"
     - "extension/drivers/"
-    - "extension/shared/dom-utils.js"
-    - "extension/popup.js injected page functions"
-    - "extension/background.js injected page functions"
+    - "extension/shared/dom-utils.ts"
+    - "extension/popup.ts injected page functions"
+    - "extension/background.ts injected page functions"
   rules:
     - "Existing access may remain until its migration issue is completed."
     - "New structural discovery logic MUST NOT be added to a legacy exception path."

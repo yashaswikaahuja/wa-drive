@@ -1,3 +1,4 @@
+// Generated from button-click.ts — edit the .ts source, then re-copy/emit.
 /**
  * button-click plugin â€” workflow transition primitive.
  *

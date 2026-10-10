@@ -358,4 +358,4 @@ non_goals_at_freeze:
 
 verification:
   check_id: CHECK-014
-  suite: "extension-dev/tests/test-phase36-visual-context-governance.mjs"
+  suite: "extension-dev/tests/test-phase36-visual-context-governance.ts"

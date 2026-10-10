@@ -1,3 +1,4 @@
+// Generated from keystroke-input.ts — edit the .ts source, then re-copy/emit.
 /**
  * keystroke-input plugin â€” types values char-by-char with full key+input event sequence.
  *

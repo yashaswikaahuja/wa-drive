@@ -13,7 +13,15 @@ export function tailnetOnly(req: Request, res: Response, next: NextFunction) {
   // 100.64.0.0/10  → first octet 100, second octet 64–127.
   const m = raw.match(/^100\.(\d+)\./);
   const isTailnet = !!m && Number(m[1]) >= 64 && Number(m[1]) <= 127;
-  if (isLoopback || isTailnet) return next();
+  // Single-host Docker MVP: Tailscale hits a published host port and docker-proxy
+  // SNATs the peer to a private bridge IP (172.16/12, 10/8, 192.168/16). Allow
+  // those only when explicitly opted in — SG must still keep OWNER_PORT closed.
+  const allowPrivate = process.env.OWNER_ALLOW_PRIVATE === '1';
+  const isPrivate =
+    /^10\./.test(raw) ||
+    /^192\.168\./.test(raw) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(raw);
+  if (isLoopback || isTailnet || (allowPrivate && isPrivate)) return next();
   return res.status(403).json({ error: 'Forbidden: off-tailnet' });
 }
 

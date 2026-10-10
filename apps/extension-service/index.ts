@@ -1,0 +1,128 @@
+// @ts-nocheck
+import 'dotenv/config';
+import express from 'express';
+import http from 'http';
+import { createRequire } from 'module';
+import { attachWebSocket, send as wsSend } from './src/ws/server.js';
+import { createHandlers } from './src/ws/handlers.js';
+
+// Architecture doctrine runtime check (see /ARCHITECTURE.md §5).
+// Non-blocking, fail-silent. Logs a warning if forbidden deps are installed.
+// Deleting this block disables runtime warnings; CI still enforces.
+setTimeout(() => {
+  try {
+    const __req = createRequire(import.meta.url);
+    const FORBIDDEN = ['jimp','puppeteer','puppeteer-core','playwright','canvas','pdfkit','pdf-lib','tesseract.js','ffmpeg-static','fluent-ffmpeg','@tensorflow/tfjs-node','onnxruntime-node','node-poppler','pdf2pic','pdf-image','html-pdf','html-pdf-node','gm','sharp'];
+    const found = FORBIDDEN.filter(n => { try { __req.resolve(n); return true; } catch { return false; } });
+    if (found.length) console.error('[ARCHITECTURE] forbidden deps installed:', found.join(', '), '— see /ARCHITECTURE.md §5');
+  } catch {}
+}, 1000);
+
+import profilesRouter from './src/http/routes/profiles.js';
+import mappingsRouter from './src/http/routes/mappings.js';
+import adaptersRouter from './src/http/routes/adapters.js';
+import sessionsRouter from './src/http/routes/sessions.js';
+import correctionsRouter from './src/http/routes/corrections.js';
+import trainingRouter from './src/http/routes/training.js';
+import agentRouter from './src/http/routes/agent.js';
+import knowledgeRouter from './src/http/routes/knowledge.js';
+import resolveRouter from './src/http/routes/resolve.js';
+import validateRouter from './src/http/routes/validate.js';
+import versionsRouter from './src/http/routes/versions.js';
+import syncRouter from './src/http/routes/sync.js';
+import fillRouter from './src/http/routes/fill.js';
+import { ensureSchema } from './src/db/store.js';
+import { pool } from './src/db/db.js';
+import { mutateDoc, KEYS } from './src/db/store.js';
+import {
+  setPool,
+  setStoreAdapter,
+  ensureKnowledgeSchema,
+} from '@cybercontrol/svc-knowledge';
+import { setPool as setAiKeyPool } from '@cybercontrol/svc-ai-mapper';
+import { setWsSend as setRuntimeWsSend } from '@cybercontrol/svc-runtime';
+import { setWsSend as setTeachWsSend } from '@cybercontrol/svc-teach';
+
+setPool(pool);
+setStoreAdapter({ mutateDoc, KEYS });
+setAiKeyPool(pool); // owner-panel AI keys (workspaces.settings.ai)
+
+const PORT = Number(process.env.PORT) || 3300;
+const app = express();
+
+// CORS — same as hub (extension hits this via public API host → nginx → here)
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+app.use(express.json({ limit: '5mb' }));
+
+// Health endpoint (unauthenticated, for nginx + smoke tests + deploy lock)
+const healthPayload = () => ({
+  status: 'ok',
+  service: 'extension-service',
+  version: '1.0.0',
+  commit: process.env.BUILD_SHA || 'development',
+});
+app.get('/health', (_req, res) => res.json(healthPayload()));
+// Public via API host (nginx → extension-service). Used by side panel deploy lock (CYB-85).
+app.get('/api/extension/health', (_req, res) => res.json(healthPayload()));
+
+// Routes are mounted at the SAME paths the hub used to expose them at,
+// so nginx can transparently route /api/profiles, /api/mappings, /api/adapters here.
+app.use('/api/profiles', profilesRouter);
+app.use('/api/mappings', mappingsRouter);
+app.use('/api/adapters', adaptersRouter);
+app.use('/api/sessions', sessionsRouter);
+app.use('/api/corrections', correctionsRouter);
+app.use('/api/training', trainingRouter);
+app.use('/api/agent', agentRouter);
+app.use('/api/knowledge', knowledgeRouter);
+app.use('/api/resolve', resolveRouter);
+app.use('/api/validate', validateRouter);
+app.use('/api/versions', versionsRouter);
+app.use('/api/sync', syncRouter);
+// ActionPlan v3 product path: POST /api/fill-plan, POST /api/fill-observation
+app.use('/api', fillRouter);
+
+// 404 fallthrough
+app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
+
+// Error handler (last)
+app.use((err, _req, res, _next) => {
+  console.error('[extension-service]', err);
+  res.status(500).json({ error: err.message });
+});
+
+// Crash safety
+process.on('uncaughtException', (err) => console.error('[FATAL] Uncaught:', err.message));
+process.on('unhandledRejection', (err) => console.error('[FATAL] Unhandled:', err?.message || err));
+
+// ── HTTP + WebSocket server ──────────────────────────────────────────────
+const server = http.createServer(app);
+const wsHandlers = createHandlers();
+const wsServer = attachWebSocket(server, {
+  onConnection: wsHandlers.onConnection,
+  onMessage: wsHandlers.onMessage,
+  onClose: wsHandlers.onClose,
+});
+
+// Inject WSS send into packages that must not import this app.
+setRuntimeWsSend(wsSend);
+setTeachWsSend(wsSend);
+
+export { server, wsServer };
+
+server.listen(PORT, () => {
+  const jwtPrefix = (process.env.JWT_SECRET || '').slice(0, 4);
+  console.log(`[extension-service] listening on :${PORT} (HTTP + WSS)`);
+  console.log(`[extension-service] JWT_SECRET starts with: ${jwtPrefix}***`);
+  console.log(`[extension-service] DATABASE_URL present: ${!!process.env.DATABASE_URL}`);
+  console.log(`[extension-service] DATA_DIR: ${process.env.DATA_DIR || 'default ./data'}`);
+  ensureSchema().catch((e) => console.error('[extension-service] ensureSchema on boot failed:', e.message));
+  ensureKnowledgeSchema().catch((e) => console.error('[extension-service] knowledge schema on boot failed:', e.message));
+});

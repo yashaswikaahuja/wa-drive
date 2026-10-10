@@ -3,6 +3,7 @@ import { tailnetOnly, requireOwner } from './gate.js';
 import { computeHealth } from './health.js';
 import { runHealthSweep } from '@cybercontrol/backend-operations';
 import ownerFormsRouter from './forms.js';
+import ownerLearningRouter from './learning.js';
 
 const router: ExpressRouter = Router();
 
@@ -11,6 +12,9 @@ router.use(tailnetOnly, requireOwner);
 
 // Forms catalog editor (owner-panel Forms section)
 router.use('/forms', ownerFormsRouter);
+
+// Learning/config formerly on Hub /admin (mappings, sessions, corrections)
+router.use('/learning', ownerLearningRouter);
 
 /**
  * GET /owner/metrics — the top-line Level-1 customer numbers.
@@ -55,7 +59,8 @@ router.get('/funnel', async (req: any, res) => {
       SELECT
         count(*) FILTER (WHERE w.deleted_at IS NULL)                                            AS signed_up,
         count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
-            SELECT 1 FROM whatsapp_numbers wn WHERE wn.workspace_id = w.id))                    AS connected,
+            SELECT 1 FROM whatsapp_numbers wn
+             WHERE wn.workspace_id = w.id AND wn.is_current = true AND wn.disconnected_at IS NULL)) AS connected,
         count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
             SELECT 1 FROM drive_files df WHERE df.workspace_id = w.id))                         AS activated,
         count(*) FILTER (WHERE w.deleted_at IS NULL AND EXISTS(
@@ -414,6 +419,61 @@ router.patch('/ai-settings', async (req: any, res) => {
     // Fill AI on extension-service caches keys for 5m — note for operators
     res.json({ ok: true, note: 'Keys saved to workspaces.settings.ai (fill AI reads these; cache ≤5m)' });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /owner/document-extract-maps — which fields to extract per document type
+router.get('/document-extract-maps', async (req: any, res) => {
+  try {
+    const {
+      DOC_TYPES, DOC_TYPE_LABELS, DEFAULT_EXTRACT_MAPS, loadOwnerExtractMaps, mergeExtractMaps,
+    } = await import('@cybercontrol/backend-documents');
+    const effective = await loadOwnerExtractMaps();
+    res.json({
+      docTypes: DOC_TYPES,
+      labels: DOC_TYPE_LABELS,
+      defaults: DEFAULT_EXTRACT_MAPS,
+      maps: effective,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PUT /owner/document-extract-maps — save owner overrides (written to all workspaces.ai like AI keys)
+router.put('/document-extract-maps', async (req: any, res) => {
+  const maps = req.body?.maps;
+  if (!maps || typeof maps !== 'object') return res.status(400).json({ error: 'maps object required' });
+  try {
+    const { invalidateExtractMapsCache, mergeExtractMaps, DOC_TYPES } = await import('@cybercontrol/backend-documents');
+    const cleaned: Record<string, string[]> = {};
+    for (const t of DOC_TYPES) {
+      const arr = maps[t];
+      if (!Array.isArray(arr)) continue;
+      cleaned[t] = [...new Set(arr.map((k: any) => String(k).trim()).filter(Boolean))];
+    }
+    const json = JSON.stringify(cleaned).replace(/'/g, "''");
+    await req.pool.query(
+      `UPDATE workspaces SET settings = jsonb_set(COALESCE(settings, '{}'::jsonb), '{ai}', COALESCE(settings->'ai', '{}'::jsonb))`
+    );
+    await req.pool.query(
+      `UPDATE workspaces
+       SET settings = jsonb_set(settings, '{ai,documentExtractMaps}', $1::jsonb)`,
+      [JSON.stringify(cleaned)],
+    );
+    invalidateExtractMapsCache();
+    const {
+      DOC_TYPES: types, DOC_TYPE_LABELS: labels, DEFAULT_EXTRACT_MAPS: defaults,
+    } = await import('@cybercontrol/backend-documents');
+    res.json({
+      ok: true,
+      docTypes: types,
+      labels,
+      defaults,
+      maps: mergeExtractMaps(cleaned),
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 export default router;

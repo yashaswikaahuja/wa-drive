@@ -75,9 +75,9 @@ packages/wa-resolver/     # @cybercontrol/wa-resolver — wwebjs createApp
 whatsapp-service/         # thin entry + Docker/CD root (path stable)
 ├── index.js              # imports createApp from @cybercontrol/wa-service
 ├── migrate-sessions-to-db.js  # CLI → @cybercontrol/wa-auth migrate
-├── scripts/build-dist.mjs
+├── scripts/build-dist.ts
 ├── package.json
-├── ecosystem.config.cjs
+├── ecosystem.config.ts
 ├── setup-gcp2.sh
 ├── WHATSAPP_SERVICE.md
 ├── sessions/             # Auth data per workspace (gitignored)
@@ -85,7 +85,7 @@ whatsapp-service/         # thin entry + Docker/CD root (path stable)
 
 whatsapp-resolver/        # thin entry + Docker/CD root (path stable)
 ├── index.js              # imports createApp from @cybercontrol/wa-resolver
-├── scripts/build-dist.mjs
+├── scripts/build-dist.ts
 ├── package.json
 └── session/              # wwebjs LocalAuth data (gitignored)
 ```

@@ -51,9 +51,9 @@ checks:
       jobs plus the Phase 3 governance test.
     method: "run_tests"
     commands:
-      - "node extension-dev/tests/ci-unit.mjs"
-      - "node extension-dev/tests/ci-browser.mjs"
-      - "node extension-dev/tests/test-phase3-governance.mjs"
+      - "node extension-dev/tests/ci-unit.ts"
+      - "node extension-dev/tests/ci-browser.ts"
+      - "node extension-dev/tests/test-phase3-governance.ts"
 
   - id: CHECK-008
     name: "Phase 3 architecture contracts"
@@ -66,7 +66,7 @@ checks:
       repository Phase 3 registry reports phase_3_1..phase_3_4 with the
       authoritative numbering policy (repo keys win; no conceptual renumber).
     method: "run_governance_test"
-    command: "node extension-dev/tests/test-phase3-governance.mjs"
+    command: "node extension-dev/tests/test-phase3-governance.ts"
 
   - id: CHECK-009
     name: "No new DOM access outside gateway"
@@ -90,7 +90,7 @@ checks:
       fuzzy/selector plan targets, raw value leaks) MUST be rejected. This is
       the enforceability proof required to ratify the Phase 3.0 freeze.
     method: "run_conformance"
-    command: "node extension-dev/tests/ratification/run-conformance.mjs"
+    command: "node extension-dev/tests/ratification/run-conformance.ts"
 
   - id: CHECK-011
     name: "Extension and browser boundary security"
@@ -104,7 +104,7 @@ checks:
       schemas. Every future extension/browser security fix adds exploit-shaped
       regression coverage here before its issue is closed.
     method: "run_security_regressions"
-    command: "node extension-dev/tests/security/run.mjs"
+    command: "node extension-dev/tests/security/run.ts"
     ci_job: "extension-security"
     scope: "full_tree"
 
@@ -131,7 +131,7 @@ checks:
       and that phase_3_5 is frozen via independent gate #156 without renaming
       prior phase_3_* keys. Draft additives remain non-frozen.
     method: "run_governance_test"
-    command: "node extension-dev/tests/test-phase35-navigation-governance.mjs"
+    command: "node extension-dev/tests/test-phase35-navigation-governance.ts"
     issue: "#156"
     ci_job: "architecture"
     scope: "full_tree"
@@ -147,7 +147,7 @@ checks:
       #163 without renaming prior phase_3_* keys. Draft additives remain
       non-frozen.
     method: "run_governance_test"
-    command: "node extension-dev/tests/test-phase36-visual-context-governance.mjs"
+    command: "node extension-dev/tests/test-phase36-visual-context-governance.ts"
     issue: "#163"
     ci_job: "architecture"
     scope: "full_tree"
@@ -162,7 +162,7 @@ checks:
       and that phase_3_7 is not frozen and does not rename prior phase_3_* keys.
       Architecture-only; does not require repository decomposition implementation.
     method: "run_governance_test"
-    command: "node extension-dev/tests/test-phase37-hardening-governance.mjs"
+    command: "node extension-dev/tests/test-phase37-hardening-governance.ts"
     issue: "#164"
     ci_job: "architecture"
     scope: "full_tree"
@@ -176,7 +176,7 @@ checks:
       malicious fixtures (forged nonce, expired confirmation, replayed nonce,
       page-injected fake, sensitive value leak) must be rejected.
     method: "run_conformance"
-    command: "node extension-dev/tests/test-him-protocol.mjs"
+    command: "node extension-dev/tests/test-him-protocol.ts"
     ci_job: "architecture"
     scope: "full_tree"
     added_in: "phase_4_0"

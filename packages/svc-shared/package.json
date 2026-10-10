@@ -1,0 +1,31 @@
+{
+  "name": "@cybercontrol/svc-shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tiny shared helpers for svc-* packages (ws-bridge factory)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./ws-bridge": {
+      "types": "./dist/ws-bridge.d.ts",
+      "import": "./dist/ws-bridge.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"console.log('[svc-shared] no package tests yet')\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

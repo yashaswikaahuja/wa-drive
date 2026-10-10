@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
   Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
-import { PROFILE_SCHEMA, getCompleteness, flattenProfileData, SECTION_FOR_DOCTYPE } from '../../shared/profileSchema';
+import { toast } from '../../shared/toast';
+import { getCompleteness, flattenProfileData, buildVisibleSections } from '../../shared/profileSchema';
+import { ProvenanceChip } from '../../shared/DocTypePicker';
+import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
@@ -28,17 +31,19 @@ function DocThumb({ src, isPdf }: { src: string; isPdf: boolean }) {
 
 export default function CustomerDetail() {
   const { id: phoneParam } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const phone = decodeURIComponent(phoneParam || '');
+  const personFromQuery = searchParams.get('person');
 
   const [household, setHousehold] = useState<Household | null>(null);
   const [documents, setDocuments] = useState<DriveFile[]>([]);
-  const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<string | null>(personFromQuery);
   const [personDetail, setPersonDetail] = useState<PersonDetail | null>(null);
   const [showAddPerson, setShowAddPerson] = useState(false);
   const [extracting, setExtracting] = useState<string | null>(null);
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
-  const [extractDocId, setExtractDocId] = useState<string | null>(null);
+  const [, setExtractDocId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [extractError, setExtractError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -58,21 +63,65 @@ export default function CustomerDetail() {
   const [showImport, setShowImport] = useState(false);
   const [importToken, setImportToken] = useState('');
   const [importMsg, setImportMsg] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+
+  /** Digits-only phone compare so +91 / 0 / spaces still match (#305). */
+  const phoneDigits = (p: string) => String(p || '').replace(/\D/g, '');
+  const phonesMatch = (a: string, b: string) => {
+    const da = phoneDigits(a);
+    const db = phoneDigits(b);
+    if (!da || !db) return false;
+    if (da === db) return true;
+    // Last-10 match (India mobile without country code).
+    return da.slice(-10) === db.slice(-10) && da.slice(-10).length === 10;
+  };
 
   const loadHousehold = async () => {
-    const r = await api.get('/customers/households');
-    const h = r.data.find((x: Household) => x.phone === phone);
-    setHousehold(h || null);
-    if (h && h.persons.length > 0 && !selectedPerson) setSelectedPerson(h.persons[0].id);
+    setLoading(true);
+    setNotFound(false);
+    try {
+      const r = await api.get('/customers/households');
+      const h = (r.data || []).find((x: Household) => phonesMatch(x.phone, phone)) || null;
+      setHousehold(h);
+      setNotFound(!h);
+      if (h && h.persons.length > 0) {
+        // Prefer ?person= from Customers list (so searching Shubham opens Shubham, not Kamaljeet).
+        const fromQuery = personFromQuery && h.persons.some((p: Person) => p.id === personFromQuery)
+          ? personFromQuery
+          : null;
+        setSelectedPerson((prev) => {
+          if (fromQuery) return fromQuery;
+          if (prev && h.persons.some((p: Person) => p.id === prev)) return prev;
+          return h.persons[0].id;
+        });
+      }
+    } catch (e: any) {
+      setHousehold(null);
+      setNotFound(true);
+      setError(e?.response?.data?.error || e?.message || 'Could not load customer');
+    } finally {
+      setLoading(false);
+    }
   };
   const loadDocuments = async () => {
-    try { const r = await api.get('/drive/files/ws'); setDocuments(r.data.filter((d: any) => d.customerId === phone)); } catch {}
+    try {
+      const r = await api.get('/drive/files/ws');
+      setDocuments(r.data.filter((d: any) => phonesMatch(d.customerId, phone)));
+    } catch {}
   };
   const loadPerson = async (personId: string) => {
     try { const r = await api.get(`/customers/persons/${personId}`); setPersonDetail(r.data); } catch {}
   };
 
   useEffect(() => { loadHousehold(); loadDocuments(); loadReadiness(); }, [phone]);
+  // Same phone + new ?person= does NOT remount this page — must react to query changes
+  // (otherwise list click "Shubham" keeps showing Kamaljeet).
+  useEffect(() => {
+    if (!personFromQuery) return;
+    setSelectedPerson((prev) => (prev === personFromQuery ? prev : personFromQuery));
+    setPersonDetail(null);
+  }, [personFromQuery]);
   useEffect(() => { if (selectedPerson) loadPerson(selectedPerson); }, [selectedPerson]);
 
   const loadReadiness = async () => {
@@ -155,24 +204,75 @@ export default function CustomerDetail() {
     } catch (e: any) { setError(e.response?.data?.error || e.message || 'Extraction failed'); }
     finally { setExtracting(null); }
   };
-  const confirmExtraction = async (acceptedFields: Record<string, any>) => {
+  const confirmExtraction = async (acceptedFields: Record<string, any>, target?: ExtractSaveTarget) => {
     if (!selectedPerson) { setExtractError('No person selected'); return; }
+    if (target?.chooseProfile && !target.chosenPersonId) {
+      setExtractError('Select a profile from the list, or uncheck “Choose which profile…”');
+      return;
+    }
     setExtractError('');
     setSaving(true);
     try {
       const fields: Record<string, any> = {};
+      const docTypeHint =
+        acceptedFields?.document_type?.value ||
+        acceptedFields?.document_type ||
+        null;
       for (const [k, v] of Object.entries(acceptedFields)) {
-        if (k === 'document_type') continue;
-        fields[k] = { ...v, source: 'document_corrected' };
+        if (k === 'document_type' || k === 'needs_type') continue;
+        const base = v && typeof v === 'object' ? { ...v } : { value: v };
+        fields[k] = {
+          ...base,
+          source: 'document_corrected',
+          // Keep type for doc-card organisation (otherwise everything looks empty / "manual")
+          documentType: base.documentType || docTypeHint || undefined,
+        };
       }
-      await api.patch(`/customers/persons/${selectedPerson}`, { fields });
+      const extractedName = fields?.name?.value || fields?.account_holder_name?.value || '';
+      // Explicit picker wins — save exactly onto that profile (no name-mismatch redirect).
+      const forceId = target?.chooseProfile ? target.chosenPersonId! : selectedPerson;
+      const r = await api.patch(`/customers/persons/${forceId}`, {
+        fields,
+        phone,
+        name: extractedName,
+        // When operator picked a profile, do not auto-create/redirect away from it.
+        createIfMissing: !target?.chooseProfile,
+      }, { skipErrorToast: true } as any);
       setExtractedSuggestions(null); setExtractDocId(null);
-      await loadPerson(selectedPerson); loadReadiness();
+      const savedId = r.data?.id || forceId;
+      if (savedId !== selectedPerson) {
+        setSelectedPerson(savedId);
+        await loadHousehold();
+        await loadPerson(savedId);
+        toast.success(
+          target?.chooseProfile
+            ? `Saved to ${target.chosenLabel || 'selected profile'}`
+            : r.data?.created
+              ? `Created profile for ${r.data?.name || extractedName} (name did not match open person)`
+              : `Saved to ${r.data?.name || 'matching person'} instead of open profile`,
+        );
+      } else {
+        await loadPerson(selectedPerson);
+        if (target?.chooseProfile) toast.success(`Saved to ${target.chosenLabel || 'selected profile'}`);
+      }
+      loadReadiness();
     } catch (e: any) { setExtractError(e.response?.data?.error || e.message || 'Save failed'); }
     finally { setSaving(false); }
   };
 
-  if (!household) return (
+  // Compute after hooks only — never useMemo after conditional returns (blank-page crash).
+  let visibleSections: ReturnType<typeof buildVisibleSections> = [];
+  let flat: Record<string, string> = {};
+  let completeness = { filled: 0, total: 0, percent: 0, missing: [] as string[] };
+  try {
+    flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
+    completeness = getCompleteness(flat);
+    visibleSections = personDetail ? buildVisibleSections(personDetail.data || {}) : [];
+  } catch (e) {
+    console.error('[CustomerDetail] section build failed', e);
+  }
+
+  if (loading && !household) return (
     <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse">
       <div className="h-6 w-24 rounded bg-white/[0.03]" />
       <div className="h-16 rounded-2xl bg-white/[0.03]" />
@@ -180,9 +280,26 @@ export default function CustomerDetail() {
     </div>
   );
 
-  const primaryName = household.persons[0]?.displayLabel || household.persons[0]?.name || phone;
-  const flat = personDetail ? flattenProfileData(personDetail.data || {}) : {};
-  const completeness = getCompleteness(flat);
+  if (notFound || !household) return (
+    <div className="max-w-4xl mx-auto pt-4">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0 text-gray-400">
+        <ArrowLeft size={15} /> Customers
+      </button>
+      <div className="rounded-2xl border border-[hsl(var(--pt-border))] p-6 text-center">
+        <p className="text-sm text-gray-200 mb-1">Customer not found</p>
+        <p className="text-xs text-gray-500 mb-4">
+          No household matches <span className="font-mono text-gray-400">{phone}</span>.
+          It may use a different phone format, or the profile was never created.
+        </p>
+        {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+        <button onClick={() => navigate('/app/customers')} className="btn-primary text-xs">Back to Customers</button>
+      </div>
+    </div>
+  );
+
+  // Header must follow the selected tab — not always persons[0] (was confusing/wrong person).
+  const selectedMeta = household.persons.find((p) => p.id === selectedPerson) || household.persons[0];
+  const primaryName = selectedMeta?.displayLabel || selectedMeta?.name || phone;
 
   return (
     <div className="max-w-4xl mx-auto pt-4">
@@ -216,13 +333,21 @@ export default function CustomerDetail() {
       {household.persons.length > 1 && (
         <div className="flex items-center gap-2 mb-6 flex-wrap">
           {household.persons.map(p => (
-            <button key={p.id} onClick={() => setSelectedPerson(p.id)}
+            <button
+              key={p.id}
+              onClick={() => {
+                if (p.id === selectedPerson) return;
+                setPersonDetail(null); // avoid showing previous person's fields under new tab
+                setSelectedPerson(p.id);
+                setSearchParams({ person: p.id }, { replace: true });
+              }}
               className="group flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full text-sm transition-all active:scale-[0.97]"
               style={{
                 background: selectedPerson === p.id ? 'hsl(var(--pt-marigold) / 0.14)' : 'hsl(var(--pt-secondary))',
                 color: selectedPerson === p.id ? 'hsl(var(--pt-marigold-deep))' : 'hsl(var(--pt-muted))',
                 transitionTimingFunction: EASE, transitionDuration: '200ms',
-              }}>
+              }}
+            >
               {p.displayLabel || p.name}
               <span className="text-[10px] opacity-50 capitalize">{p.relationship}</span>
               <span onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
@@ -282,91 +407,72 @@ export default function CustomerDetail() {
             )}
           </section>
 
-          {/* Profile data — grouped sections */}
+          {/* Classic sections: Personal / Identity / Contact / Education / Bank / Travel */}
           <section className="mb-6">
             <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Profile data</h2>
             <div className="space-y-3">
-              {PROFILE_SCHEMA.map(section => {
+              {visibleSections.map((section) => {
                 const raw = personDetail.data || {};
                 const sflat = flattenProfileData(raw);
-                const schemaKeysAll = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
-                // extra fields (not in any schema section) whose source document maps to THIS section
-                const GENERIC_NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name']);
-                const extras = Object.entries(raw).filter(([k, v]: any) => {
-                  if (schemaKeysAll.has(k) || k === 'document_type') return false;
-                  if (GENERIC_NOISE.has(k)) return false; // unsuffixed generic — its level-specific key is shown instead
-                  const val = v && typeof v === 'object' ? v.value : v;
-                  if (!val) return false;
-                  // Level suffix wins over documentType: a 12th certificate's keys (_12th) must show under 12th, not Graduation.
-                  if (/_10th$/.test(k)) return section.id === 'education_10th';
-                  if (/_12th$/.test(k)) return section.id === 'education_12th';
-                  if (/_grad$/.test(k)) return section.id === 'education_grad';
-                  const dt = v && typeof v === 'object' ? v.documentType : null;
-                  return dt && SECTION_FOR_DOCTYPE[dt] === section.id;
-                });
-                const hasAny = section.fields.some(f => sflat[f.key]) || extras.length > 0;
-                const visibleFields = section.fields;
-                if (!hasAny && !extras.length) return null;
+                // Schema sections: filled + required missing. Dynamic: filled only.
+                const rows = section.dynamic
+                  ? section.fields.filter((f) => !!sflat[f.key])
+                  : section.fields.filter((f) => !!sflat[f.key] || f.required).concat(
+                      section.extraKeys
+                        .filter((k) => !!sflat[k] && !section.fields.some((f) => f.key === k))
+                        .map((k) => ({
+                          key: k,
+                          label: k.replace(/_(10th|12th|grad)$/, '').replace(/_/g, ' '),
+                        })),
+                    );
+                if (!rows.length) return null;
                 return (
                   <div key={section.id} className="card">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{section.title}</p>
-                    {!hasAny ? (
-                      <p className="text-xs text-gray-600">No data yet</p>
-                    ) : (
-                      <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                        {visibleFields.map(f => {
-                          const val = sflat[f.key];
-                          const rawVal = raw[f.key];
-                          const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
-                          const isEditing = editingField === f.key;
-                          return (
-                            <div key={f.key} className="flex flex-col gap-0.5">
-                              <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
-                                {f.label}{f.required && !val ? ' *' : ''}
-                              </span>
-                              {isEditing ? (
-                                <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                                  onBlur={() => { if (editValue !== (val || '')) saveField(f.key, editValue); else setEditingField(null); }}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveField(f.key, editValue); if (e.key === 'Escape') setEditingField(null); }}
-                                  className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
-                              ) : (
-                                <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
-                                  className="flex items-center gap-1.5 group text-left">
-                                  <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-700 italic'}`} title={val || ''}>{val || 'missing'}</span>
-                                  {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
-                                  <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                        {extras.map(([k, v]: any) => {
-                          const val = v && typeof v === 'object' ? v.value : v;
-                          const isEditing = editingField === k;
-                          return (
-                            <div key={k} className="flex flex-col gap-0.5">
-                              <span className="text-[10px] uppercase tracking-wide text-gray-500 capitalize">{k.replace(/_(10th|12th|grad)$/, '').replace(/_/g, ' ')}</span>
-                              {isEditing ? (
-                                <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                                  onBlur={() => { if (editValue !== (val || '')) saveField(k, editValue); else setEditingField(null); }}
-                                  onKeyDown={e => { if (e.key === 'Enter') saveField(k, editValue); if (e.key === 'Escape') setEditingField(null); }}
-                                  className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
-                              ) : (
-                                <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
-                                  <span className="text-sm text-gray-100 truncate" title={val || ''}>{val}</span>
-                                  <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />
-                                  <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">
+                      {section.icon ? `${section.icon} ` : ''}{section.title}
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                      {rows.map((f) => {
+                        const val = sflat[f.key];
+                        const rawVal = raw[f.key];
+                        const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
+                        const isEditing = editingField === f.key;
+                        return (
+                          <div key={f.key} className="flex flex-col gap-0.5">
+                            <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
+                              {f.label}{f.required && !val ? ' *' : ''}
+                            </span>
+                            {isEditing ? (
+                              <input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                                onBlur={() => { if (editValue !== (val || '')) saveField(f.key, editValue); else setEditingField(null); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') saveField(f.key, editValue); if (e.key === 'Escape') setEditingField(null); }}
+                                className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
+                            ) : (
+                              <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
+                                className="flex items-center gap-1.5 group text-left">
+                                <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-600'}`} title={val || ''}>
+                                  {val ? (typeof val === 'string' ? val : String(val)) : '—'}
+                                </span>
+                                {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
+                                {rawVal && typeof rawVal === 'object' && (
+                                  <ProvenanceChip
+                                    source={rawVal.source}
+                                    documentType={rawVal.documentType}
+                                    confidence={rawVal.confidence}
+                                    needsReview={rawVal.needsReview}
+                                  />
+                                )}
+                                <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                     {addingInSection === section.id ? (
                       <div className="flex gap-2 mt-3">
-                        <input placeholder="Field name" value={newFieldKey} onChange={e => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
-                        <input placeholder="Value" value={newFieldValue} onChange={e => setNewFieldValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
+                        <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
+                        <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
                         <button onClick={handleAddField} className="text-xs text-[#30d158] px-2">Save</button>
                         <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
                       </div>
@@ -378,52 +484,9 @@ export default function CustomerDetail() {
                   </div>
                 );
               })}
-
-              {/* Fields whose source document has NO dedicated section → DYNAMIC section per document */}
-              {(() => {
-                const schemaKeys = new Set(PROFILE_SCHEMA.flatMap(s => s.fields.map(f => f.key)));
-                const raw = personDetail.data || {};
-                const NOISE = new Set(['stream','subject','course','division','percentage','marks_obtained','total_marks','marks','marks_10th','marks_graduation','percentage_graduation','passing_year_graduation','roll_number','registration_number','enrollment_number','exam_date','exam_name','graduation_subject','board_name','document_label']);
-                const humanize = (dt: string) => dt.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                // group fields (whose docType has no schema section) by a TITLE derived from document_label
-                const groups: Record<string, { title: string; fields: [string, string][] }> = {};
-                for (const [k, val] of Object.entries(flat)) {
-                  if (schemaKeys.has(k) || k === 'document_type' || !val || NOISE.has(k)) continue;
-                  const rv = raw[k];
-                  const dt = (rv && typeof rv === 'object' && rv.documentType) || 'other';
-                  if (SECTION_FOR_DOCTYPE[dt]) continue; // already shown inside its schema section
-                  // title: the document's own label if present, else humanized docType
-                  const labelEntry = Object.entries(raw).find(([kk, vv]: any) => kk === 'document_label' && vv?.documentType === dt);
-                  const title = (labelEntry && (labelEntry[1] as any).value) || (dt === 'other' ? 'Other Details' : humanize(dt));
-                  (groups[title] ||= { title, fields: [] }).fields.push([k, val]);
-                }
-                return Object.values(groups).map(g => (
-                  <div key={g.title} className="card">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">{g.title}</p>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                      {g.fields.map(([k, val]) => {
-                        const isEditing = editingField === k;
-                        return (
-                          <div key={k} className="flex flex-col gap-0.5">
-                            <span className="text-[10px] uppercase tracking-wide text-gray-500">{k.replace(/_/g, ' ')}</span>
-                            {isEditing ? (
-                              <input autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
-                                onBlur={() => { if (editValue !== (val || '')) saveField(k, editValue); else setEditingField(null); }}
-                                onKeyDown={e => { if (e.key === 'Enter') saveField(k, editValue); if (e.key === 'Escape') setEditingField(null); }}
-                                className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
-                            ) : (
-                              <button onClick={() => { setEditingField(k); setEditValue(val || ''); }} className="flex items-center gap-1.5 group text-left">
-                                <span className="text-sm text-gray-100 truncate">{val}</span>
-                                <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity" />
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ));
-              })()}
+              {visibleSections.length === 0 && (
+                <p className="text-xs text-gray-600 px-1">No profile details yet — extract from Documents.</p>
+              )}
             </div>
           </section>
         </>
@@ -492,8 +555,14 @@ export default function CustomerDetail() {
 
       {/* Extraction confirm */}
       {extractedSuggestions && (
-        <ExtractionConfirm suggestions={extractedSuggestions} documentId={extractDocId || ''} error={extractError} saving={saving}
-          onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }} onConfirm={confirmExtraction} />
+        <ExtractionConfirm
+          suggestions={extractedSuggestions}
+          phone={phone}
+          error={extractError}
+          saving={saving}
+          onCancel={() => { setExtractedSuggestions(null); setExtractDocId(null); setExtractError(''); }}
+          onConfirm={confirmExtraction}
+        />
       )}
 
       {/* Share modal */}
@@ -597,8 +666,27 @@ function AddPersonForm({ onSubmit, onCancel }: { onSubmit: (f: any) => void; onC
   );
 }
 
-function ExtractionConfirm({ suggestions, onCancel, onConfirm, error, saving }: any) {
+function ExtractionConfirm({
+  suggestions,
+  phone,
+  onCancel,
+  onConfirm,
+  error,
+  saving,
+}: {
+  suggestions: Record<string, any>;
+  phone?: string;
+  onCancel: () => void;
+  onConfirm: (fields: Record<string, any>, target?: ExtractSaveTarget) => void;
+  error?: string;
+  saving?: boolean;
+}) {
   const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
+  const [target, setTarget] = useState<ExtractSaveTarget>({
+    chooseProfile: false,
+    chosenPersonId: null,
+    chosenLabel: null,
+  });
   const toggle = (key: string) => setAccepted((prev: any) => {
     const next = { ...prev };
     if (next[key]) delete next[key]; else next[key] = suggestions[key];
@@ -614,7 +702,13 @@ function ExtractionConfirm({ suggestions, onCancel, onConfirm, error, saving }: 
             <Sparkle size={18} weight="fill" className="text-[#0a84ff]" />
             <p className="text-base font-semibold text-white">Review extracted data</p>
           </div>
-          <p className="text-xs text-gray-500 mb-4">Uncheck to skip. Edit values inline. Confirm to save.</p>
+          <p className="text-xs text-gray-500 mb-3">Uncheck to skip. Edit values inline. Confirm to save.</p>
+          <ExtractProfileTarget
+            value={target}
+            onChange={setTarget}
+            phone={phone}
+            hint="Only family members on this phone — pick who these details belong to (e.g. bank passbook with no name)."
+          />
           <div className="space-y-2 mb-4 overflow-y-auto flex-1">
             {Object.entries(suggestions).map(([k, v]: [string, any]) => (
               <label key={k} className="flex items-center gap-3 cursor-pointer">
@@ -627,7 +721,11 @@ function ExtractionConfirm({ suggestions, onCancel, onConfirm, error, saving }: 
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => onConfirm(accepted)} disabled={saving} className="btn-primary flex items-center gap-2 flex-1 justify-center disabled:opacity-50">
+            <button
+              onClick={() => onConfirm(accepted, target)}
+              disabled={saving || (target.chooseProfile && !target.chosenPersonId)}
+              className="btn-primary flex items-center gap-2 flex-1 justify-center disabled:opacity-50"
+            >
               <CheckCircle size={16} weight="fill" /> {saving ? 'Saving…' : 'Confirm & Save'}
             </button>
             <button onClick={onCancel} disabled={saving} className="btn-secondary disabled:opacity-50">Cancel</button>

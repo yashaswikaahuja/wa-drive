@@ -3,21 +3,36 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Postgres-backed Baileys auth state + file\u2192DB session migration",
-  "main": "src/index.js",
+  "description": "Postgres-backed Baileys auth state + file→DB session migration",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./postgres": "./src/postgres.js",
-    "./migrate-files-to-db": "./src/migrate-files-to-db.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./postgres": {
+      "types": "./dist/postgres.d.ts",
+      "import": "./dist/postgres.js"
+    },
+    "./migrate-files-to-db": {
+      "types": "./dist/migrate-files-to-db.d.ts",
+      "import": "./dist/migrate-files-to-db.js"
+    }
   },
   "scripts": {
-    "build": "echo 'no build \u2014 ESM source-only package'",
-    "test": "node -e \"console.log('[wa-auth] no package tests yet')\"",
-    "typecheck": "node -e \"console.log('[wa-auth] typecheck skipped (JS)')\""
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"console.log('[wa-auth] no package tests yet')\""
   },
   "dependencies": {
     "baileys": "^6.7.16",
     "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=20"

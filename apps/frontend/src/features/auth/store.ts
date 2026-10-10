@@ -7,6 +7,8 @@ interface User {
   name: string;
   email?: string;
   role: string;
+  /** False for Google-only accounts until they set a password in Settings. */
+  hasPassword?: boolean;
 }
 
 interface AuthState {

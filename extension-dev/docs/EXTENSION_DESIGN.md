@@ -15,23 +15,23 @@ A Chrome extension that auto-fills government exam registration forms from stude
 ```
 extension/
 ├── manifest.json                  — MV3, service_worker, permissions
-├── background.js                  — Service worker: owns teach session lifecycle
-├── popup.html / popup.js          — UI orchestrator (Steps 1–7)
-├── content.js                     — Minimal: ping handler only
+├── background.ts                  — Service worker: owns teach session lifecycle
+├── popup.html / popup.ts          — UI orchestrator (Steps 1–7)
+├── content.ts                     — Minimal: ping handler only
 ├── shared/
-│   └── label-utils.js             — normalizeLabel, getSemanticKey, calcConfidence
+│   └── label-utils.ts             — normalizeLabel, getSemanticKey, calcConfidence
 ├── autofill/
-│   ├── extractor.js               — extractFormFieldsWithFingerprint
-│   ├── mapper.js                  — fuzzyMatch, aiMatch (Groq)
-│   └── executor.js                — fillFormFieldsSequential
+│   ├── extractor.ts               — extractFormFieldsWithFingerprint
+│   ├── mapper.ts                  — fuzzyMatch, aiMatch (Groq)
+│   └── executor.ts                — fillFormFieldsSequential
 └── runtime/
-    ├── teach-runtime.js           — Legacy (not used by background.js)
+    ├── teach-runtime.js           — Legacy (not used by background.ts)
     └── correction-runtime.js      — injectCorrectionObserver
 ```
 
 ---
 
-## Autofill Pipeline (popup.js Steps 1–7)
+## Autofill Pipeline (popup.ts Steps 1–7)
 
 ### Step 1 — Extract Form Fields
 `extractFormFieldsWithFingerprint()` injected via `executeScript` into the active tab.
@@ -59,7 +59,7 @@ Confidence formula: `fills / (fills + corrections * 3)`. Threshold: `>= 0.4` to 
 ### Step 3 — Apply Saved Mappings
 High-confidence saved mappings applied first.
 
-### Step 4 — Fuzzy Match (mapper.js)
+### Step 4 — Fuzzy Match (mapper.ts)
 `fuzzyMatch(unmappedFields, profile)` — rule-based matching using `FIELD_ALIASES`.
 
 Key behaviors:
@@ -107,7 +107,7 @@ const LABEL_MAP = {
 };
 ```
 
-### Step 6 — Execute Fill (executor.js)
+### Step 6 — Execute Fill (executor.ts)
 `fillFormFieldsSequential(mapping, filledBySource, portalAdapters)` injected into page.
 
 **Sort order:** state → district → block → panchayat (dependent dropdowns filled first)
@@ -156,7 +156,7 @@ Triggered when autofill finds unresolved interactive fields (`ng-dropdown`, `mat
 ### Flow
 
 ```
-popup.js                    background.js (SW)              Page
+popup.ts                    background.ts (SW)              Page
    |                               |                          |
    |-- write _cc_teach_job ------->|                          |
    |   { tabId, fields,            |                          |

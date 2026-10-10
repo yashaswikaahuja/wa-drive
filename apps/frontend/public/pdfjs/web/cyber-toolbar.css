@@ -1,0 +1,68 @@
+/* Horizontal scroll so all toolbar controls stay reachable */
+#toolbarContainer {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+}
+
+#toolbarViewer {
+  flex-wrap: nowrap !important;
+  width: max-content !important;
+  min-width: 100%;
+  padding-right: 8px;
+}
+
+#toolbarViewerLeft,
+#toolbarViewerMiddle,
+#toolbarViewerRight {
+  flex-wrap: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+/*
+ * Our buttons must look native: same .toolbarButton shell,
+ * no extra box/border — only an icon like Sidebar/Find/Zoom.
+ */
+.toolbarButton.cyberIconBtn {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 2px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  aspect-ratio: 1 !important;
+  height: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Kill PDF.js icon mask slot — we supply an inline SVG instead */
+.toolbarButton.cyberIconBtn::before {
+  display: none !important;
+  content: none !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+
+.toolbarButton.cyberIconBtn > span {
+  display: none !important;
+}
+
+.toolbarButton.cyberIconBtn svg {
+  display: block;
+  width: var(--icon-size, 16px);
+  height: var(--icon-size, 16px);
+  opacity: var(--toolbar-icon-opacity, 0.7);
+  fill: var(--toolbar-icon-bg-color, currentColor);
+  pointer-events: none;
+}
+
+.toolbarButton.cyberIconBtn:is(:hover, :focus-visible) {
+  background-color: var(--button-hover-color, rgba(255, 255, 255, 0.08)) !important;
+}
+
+.toolbarButton.cyberIconBtn:is(:hover, :focus-visible) svg {
+  opacity: 1;
+}

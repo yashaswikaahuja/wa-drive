@@ -1,3 +1,4 @@
+// Generated from knowledge-sync.ts � edit the .ts source, then re-copy/emit.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Knowledge Sync Client (Phase 2.8, Issue #92)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -12,7 +13,7 @@
 //     artifacts: { semantic_aliases, field_mappings, option_translations, ... }
 //   }
 //
-// Usage from background.js:
+// Usage from background.ts:
 //   - ccKnowledgeSync.bootstrap(context?) — full sync
 //   - ccKnowledgeSync.delta(context?) — incremental update
 //   - ccKnowledgeSync.check() — check freshness
@@ -21,7 +22,7 @@
 //   - ccKnowledgeSync.getCachedFieldMappings() — get field_mappings array
 //   - ccKnowledgeSync.getCachedDerivationRules() — get derivation_rules array
 //
-// Runs in service worker context (background.js).
+// Runs in service worker context (background.ts).
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 const CACHE_KEY = '_cc_knowledge_cache';
@@ -202,7 +203,7 @@ const ccKnowledgeSync = {
   },
 
   /**
-   * Schedule periodic sync. Call once from background.js on startup.
+   * Schedule periodic sync. Call once from background.ts on startup.
    */
   startPeriodicSync() {
     // Initial sync after 10 seconds (don't block startup)

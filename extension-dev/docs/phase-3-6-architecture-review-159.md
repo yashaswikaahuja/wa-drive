@@ -85,7 +85,7 @@
 
 | ID | Finding | Disposition |
 |---|---|---|
-| **GOV-P1-01** | `test-phase3-governance.mjs` still required `phase_3_5` **not** frozen after #156 freeze, failing Phase 3 governance (2 asserts) and contradicting CHECK-013 | **Remediated in-review** by updating expects to frozen #156 and registering `phase_3_6` architecture_draft |
+| **GOV-P1-01** | `test-phase3-governance.ts` still required `phase_3_5` **not** frozen after #156 freeze, failing Phase 3 governance (2 asserts) and contradicting CHECK-013 | **Remediated in-review** by updating expects to frozen #156 and registering `phase_3_6` architecture_draft |
 
 ### P2 (progressive / non-blocking for opening implementation issue)
 

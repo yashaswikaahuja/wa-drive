@@ -2,7 +2,7 @@
     "name":  "corpus",
     "version":  "1.0.0",
     "description":  "Test corpus for the autofill extension. Each entry captures a real govt/exam form page so the extractor can be validated against it without re-loading the live site every time.",
-    "main":  "snapshot.js",
+    "main":  "snapshot.ts",
     "scripts":  {
                     "test":  "echo \"Error: no test specified\" \u0026\u0026 exit 1"
                 },

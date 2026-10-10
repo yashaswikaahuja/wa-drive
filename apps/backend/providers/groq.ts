@@ -1,0 +1,87 @@
+/**
+ * LLM Provider Adapter (OpenRouter)
+ * Normalizes observation -> LLM prompt, LLM response -> action plan.
+ * Schema: EXECUTION_SCHEMA v1.0
+ */
+
+const LLM_API = process.env.OPENROUTER_API_KEY
+  ? 'https://openrouter.ai/api/v1/chat/completions'
+  : 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL = process.env.OPENROUTER_API_KEY
+  ? 'meta-llama/llama-3.3-70b-instruct'
+  : 'llama-3.3-70b-versatile';
+
+interface ObservationField {
+  label: string;
+  type: string;
+  selector: string;
+}
+
+interface Observation {
+  fields: ObservationField[];
+  profile: Record<string, unknown>;
+  formKey: string;
+  hostname: string;
+}
+
+interface LlmAction {
+  type: string;
+  target?: string;
+  value?: string;
+  reason?: string;
+}
+
+interface LlmChatResponse {
+  choices?: Array<{ message?: { content?: string } }>;
+  usage?: { total_tokens?: number };
+}
+
+function normalizeObservation(observation: Observation) {
+  const { fields, profile, formKey, hostname } = observation;
+  const fieldList = fields.map(f =>
+    `- ${f.label} (type: ${f.type}, selector: ${f.selector})`
+  ).join('\n');
+  const profileKeys = Object.entries(profile)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join('\n');
+
+  return {
+    model: MODEL,
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a form-filling assistant. Given form fields and a user profile, return a JSON array of actions to fill the form. Use ONLY these action types: fill_text, select_option, skip. Return ONLY valid JSON array, no explanation.\n\nRules:\n- If field label contains name and profile has full name, split into first/last if needed\n- For DOB fields: use dd/mm/yyyy or split into day/month/year\n- Skip fields with no matching profile data\n- Skip captcha, OTP, password fields\n- Each action: {"type":"fill_text"|"select_option"|"skip","target":"<selector>","value":"<value>","reason":"<why>"}'
+      },
+      {
+        role: 'user',
+        content: `Form: ${hostname} (${formKey})\n\nFields:\n${fieldList}\n\nProfile:\n${profileKeys}\n\nReturn JSON array of actions.`
+      }
+    ],
+    max_tokens: 2000,
+    temperature: 0.1
+  };
+}
+
+function normalizeResponse(groqResponse: LlmChatResponse) {
+  try {
+    const content = groqResponse.choices?.[0]?.message?.content || '';
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return { actions: [] as LlmAction[], confidence: 0, error: 'no-json-in-response' };
+    const actions = JSON.parse(jsonMatch[0]) as LlmAction[];
+    const VALID_TYPES = ['fill_text', 'select_option', 'click_dropdown', 'click_option', 'click_button', 'scroll_to', 'wait', 'skip'];
+    const validated = actions.filter(a => VALID_TYPES.includes(a.type));
+    return {
+      actions: validated,
+      confidence: validated.length / Math.max(actions.length, 1),
+      provider: 'openrouter',
+      model: MODEL,
+      rawTokens: groqResponse.usage?.total_tokens || 0
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { actions: [] as LlmAction[], confidence: 0, error: message };
+  }
+}
+
+export { normalizeObservation, normalizeResponse, LLM_API as GROQ_API };

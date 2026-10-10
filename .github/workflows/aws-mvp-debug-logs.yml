@@ -1,0 +1,42 @@
+﻿name: AWS MVP debug logs
+
+on:
+  workflow_dispatch:
+    inputs:
+      workspace_prefix:
+        description: "Workspace id prefix to filter (8 hex)"
+        required: false
+        default: "d905b2fa"
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump WA + backend logs
+        env:
+          SSH_KEY: ${{ secrets.AWS_MVP_SSH_KEY }}
+          HOST: ubuntu@44.219.62.198
+          WS: ${{ github.event.inputs.workspace_prefix }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/aws.pem
+          chmod 600 ~/.ssh/aws.pem
+          ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "WS='$WS' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/cybercontrol-docker
+          echo "=== compose ps ==="
+          docker compose ps
+          echo "=== WA logs for WS=$WS (and errors) ==="
+          docker compose logs --tail=800 whatsapp-service 2>&1 | grep -E "$WS|Uploaded|Media error|Disconnected|Connected|Session error|resolver" | tail -n 120 || true
+          echo "=== backend upload lines ==="
+          docker compose logs --tail=500 backend 2>&1 | grep -E "Upload|DB:|Drive|Not connected|workspace|✓|✗" | tail -n 80 || true
+          echo "=== drive_files for workspace ==="
+          docker compose exec -T postgres sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \"SELECT left(id::text,22) id, left(file_name,40) file_name, customer_id, source, uploaded_at FROM drive_files WHERE workspace_id::text LIKE '${WS}%' ORDER BY uploaded_at DESC NULLS LAST LIMIT 20;\""
+          echo "=== all workspaces recent uploads count 24h ==="
+          docker compose exec -T postgres sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \"SELECT left(workspace_id::text,8) ws, count(*) n, max(uploaded_at) last_up FROM drive_files WHERE uploaded_at > now() - interval '2 days' GROUP BY 1 ORDER BY last_up DESC;\""
+          echo "=== wa_auth_creds workspaces ==="
+          docker compose exec -T postgres sh -c "psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -c \"SELECT left(workspace_id::text,8) ws, updated_at FROM wa_auth_creds ORDER BY updated_at DESC LIMIT 20;\""
+          echo "=== whatsapp status endpoints via service ==="
+          docker compose exec -T whatsapp-service sh -c 'wget -qO- http://127.0.0.1:3100/health; echo'
+          REMOTE

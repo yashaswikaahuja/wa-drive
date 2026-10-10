@@ -5,7 +5,7 @@ schema_version: "2.0.0"
 status: frozen_contract
 frozen_date: "2026-08-05"
 canonical_schema: "architecture/page-ir.schema.json"
-replaces_runtime_model: "extension/models/ir.js v1.0.0 after Phase 3 migration"
+replaces_runtime_model: "extension/models/ir.ts v1.0.0 after Phase 3 migration"
 
 purpose: >
   Page IR is the public, service-safe language between browser perception and

@@ -18,18 +18,17 @@ const NewJob = lazy(() => import('./features/jobs/NewJob'));
 const JobDetail = lazy(() => import('./features/jobs/JobDetail'));
 const WhatsApp = lazy(() => import('./features/whatsapp/WhatsApp'));
 const FormDirectory = lazy(() => import('./features/forms/FormDirectory'));
-const FormPhotoTool = lazy(() => import('./features/forms/FormPhotoTool'));
-const Stitch = lazy(() => import('./features/services/Stitch'));
-const PhotoTool = lazy(() => import('./features/photo-tool/PhotoTool'));
+const FileManager = lazy(() => import('./features/files/FileManager'));
 const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
+const MediaDeskHome = lazy(() => import('./features/media-tools/MediaDeskHome'));
+const PassportEditor = lazy(() => import('./features/media-tools/PassportEditor'));
+const PrintSheet = lazy(() => import('./features/media-tools/PrintSheet'));
+const PdfScan = lazy(() => import('./features/media-tools/PdfScan'));
+const AadhaarLayout = lazy(() => import('./features/media-tools/AadhaarLayout'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
 const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
 const SharedProfile = lazy(() => import('./features/customers/SharedProfile'));
 const Settings = lazy(() => import('./features/settings/Settings'));
-const Overview = lazy(() => import('./features/admin/Overview'));
-const Sessions = lazy(() => import('./features/admin/Sessions'));
-const Corrections = lazy(() => import('./features/admin/Corrections'));
-const Mappings = lazy(() => import('./features/admin/Mappings'));
 const Operators = lazy(() => import('./features/admin/Operators'));
 
 function PageLoader() {
@@ -64,7 +63,14 @@ export default function App() {
         if (!alive) return;
         const u = r.data;
         if (u?.status && u.status !== 'active') { logout(); return; }
-        setUser({ id: u.id, workspaceId: u.workspace_id, name: u.name, email: u.email, role: u.role });
+        setUser({
+          id: u.id,
+          workspaceId: u.workspace_id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          hasPassword: !!u.has_password,
+        });
       })
       .catch(() => { /* interceptor handles 401; ignore transient/offline errors */ });
     return () => { alive = false; };
@@ -92,25 +98,34 @@ export default function App() {
           <Route path="/app/jobs/:id" element={<Suspense fallback={<PageLoader />}><JobDetail /></Suspense>} />
           <Route path="/app/whatsapp" element={<Suspense fallback={<PageLoader />}><WhatsApp /></Suspense>} />
           <Route path="/app/forms" element={<Suspense fallback={<PageLoader />}><FormDirectory /></Suspense>} />
-          {/* Unified Photos hub (mode tabs) */}
+          <Route path="/app/files" element={<Suspense fallback={<PageLoader />}><FileManager /></Suspense>} />
+          {/* Photos = Photo Editor + PDF Tool (#317) */}
           <Route path="/app/photos" element={<Suspense fallback={<PageLoader />}><PhotosHub /></Suspense>}>
-            <Route index element={<Navigate to="/app/photos/prints" replace />} />
-            <Route path="prints" element={<Suspense fallback={<PageLoader />}><PhotoTool /></Suspense>} />
-            <Route path="process" element={<Suspense fallback={<PageLoader />}><Stitch /></Suspense>} />
-            <Route path="form" element={<Suspense fallback={<PageLoader />}><FormPhotoTool /></Suspense>} />
+            <Route index element={<Suspense fallback={<PageLoader />}><MediaDeskHome /></Suspense>} />
+            <Route path="portal" element={<Suspense fallback={<PageLoader />}><PassportEditor /></Suspense>} />
+            <Route path="editor" element={<RedirectWithSearch to="/app/photos/portal" />} />
+            <Route path="print" element={<Suspense fallback={<PageLoader />}><PrintSheet /></Suspense>} />
+            <Route path="scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
+            <Route path="aadhaar" element={<Suspense fallback={<PageLoader />}><AadhaarLayout /></Suspense>} />
           </Route>
-          {/* Back-compat redirects (preserve query string) */}
-          <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/prints" />} />
-          <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/process" />} />
-          <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/form" />} />
+          {/* Back-compat redirects */}
+          <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/photos/passport" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/photos/pdf-scan" element={<RedirectWithSearch to="/app/photos/scan" />} />
+          <Route path="/app/photos/prints" element={<RedirectWithSearch to="/app/photos/print" />} />
+          <Route path="/app/photos/process" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/photos/form" element={<RedirectWithSearch to="/app/photos/portal" />} />
+          <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/aadhaar" />} />
+          <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/portal" />} />
           <Route path="/app/documents" element={<Placeholder title="Documents" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
           <Route element={<AdminOnly />}>
-            <Route path="/admin" element={<Suspense fallback={<PageLoader />}><Overview /></Suspense>} />
-            <Route path="/admin/corrections" element={<Suspense fallback={<PageLoader />}><Corrections /></Suspense>} />
-            <Route path="/admin/sessions" element={<Suspense fallback={<PageLoader />}><Sessions /></Suspense>} />
-            <Route path="/admin/mappings" element={<Suspense fallback={<PageLoader />}><Mappings /></Suspense>} />
             <Route path="/admin/operators" element={<Suspense fallback={<PageLoader />}><Operators /></Suspense>} />
+            {/* Learning/config moved to owner-panel — keep old bookmarks from landing on a blank admin home */}
+            <Route path="/admin" element={<Navigate to="/admin/operators" replace />} />
+            <Route path="/admin/corrections" element={<Navigate to="/admin/operators" replace />} />
+            <Route path="/admin/sessions" element={<Navigate to="/admin/operators" replace />} />
+            <Route path="/admin/mappings" element={<Navigate to="/admin/operators" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Route>

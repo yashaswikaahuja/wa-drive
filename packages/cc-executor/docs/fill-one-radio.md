@@ -21,5 +21,5 @@
 
 ## Consumers
 
-- `fill-one-choice-dom.js` (executor) — radio DOM + checkbox + file handlers
+- `fill-one-choice-dom.ts` (executor) — radio DOM + checkbox + file handlers
 - `fill-one-radio-planned.js` (executor) — radio-click + radio-group handlers

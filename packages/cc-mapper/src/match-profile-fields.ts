@@ -2,6 +2,8 @@
  * match-profile-fields — Name parts, DOB split, longest-alias win
  */
 import type { FormField, Mapping, MatchHelpers, NameParts, Profile } from './types.ts';
+import { parseDobParts } from './split-dob.ts';
+import { isTravelJourneyField } from './field-ident.ts';
 
 export function tryMatchNameParts(
   field: FormField,
@@ -39,18 +41,23 @@ export function tryMatchDob(
   mapping: Mapping,
 ): boolean {
   if (!profile.dob) return false;
-  const dobParts = String(profile.dob).split('/');
-  const dobDay = dobParts[0], dobMonth = dobParts[1], dobYear = dobParts[2];
+  // Never dump DOB into From/To/station/journey fields (#308 IRCTC).
+  if (isTravelJourneyField(field)) return false;
+  // Support DD/MM/YYYY and YYYY-MM-DD (do not blindly split on '/')
+  const dp = parseDobParts(profile.dob);
+  if (!dp) return false;
+  const dobDay = dp.day, dobMonth = dp.month, dobYear = dp.year;
   const monthNames = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
   const monthShort = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthNum = parseInt(dobMonth);
+  const monthNum = parseInt(dobMonth, 10) || 0;
   const selLower = matchBy === 'dom-fallback' ? (field.selector || '').toLowerCase() : '';
+  const t = (field.type || '').toLowerCase();
   if (ident.includes('day') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || ident.replace(/[_\s]/g,'') === 'day' || selLower.includes('ddl_day') || selLower.includes('_day'))) {
-    mapping[field.selector] = { value: parseInt(dobDay).toString(), type: field.type || '', matchBy: matchBy, profileKey: 'dob' };
+    mapping[field.selector] = { value: parseInt(dobDay, 10).toString(), type: field.type || '', matchBy: matchBy, profileKey: 'dob' };
     return true;
   }
   if (ident.includes('month') && (ident.includes('birth') || ident.includes('dob') || ident.includes('born') || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1 || selLower.includes('ddl_month') || selLower.includes('_month'))) {
-    const monthVal = field.type === 'select' ? monthNames[monthNum] : dobMonth;
+    const monthVal = (t === 'select' || t === 'dropdown' || t === 'mat-select') ? monthNames[monthNum] : dobMonth;
     mapping[field.selector] = { value: monthVal, type: field.type || '', monthNum: monthNum, monthShort: monthShort[monthNum], matchBy: matchBy, profileKey: 'dob' };
     return true;
   }
@@ -59,7 +66,7 @@ export function tryMatchDob(
     return true;
   }
   if ((field.placeholder === 'dd-mm-yyyy' || field.placeholder === 'DD-MM-YYYY' || /^dd[-/]mm[-/]yyyy$/i.test(field.label||''))) {
-    mapping[field.selector] = { value: String(profile.dob).split('/').join('-'), type: field.type || '', matchBy: 'label', profileKey: 'dob' };
+    mapping[field.selector] = { value: `${dobDay}-${dobMonth}-${dobYear}`, type: field.type || '', matchBy: 'label', profileKey: 'dob' };
     return true;
   }
   if (ident.includes('dob') || ident.includes('date_of_birth') || ident.includes('dateofbirth') || ident.includes('birth_date') || (ident.includes('date') && ident.includes('birth'))) {
@@ -136,6 +143,8 @@ export function tryMatch(
   helpers: MatchHelpers,
   mapping: Mapping,
 ): boolean {
+  // Travel/journey widgets: leave blank — never bind identity atoms (#308).
+  if (isTravelJourneyField(field)) return true;
   if (ident.includes('hindi') || ident.includes('_hindi') || (field.label||'').includes('हिंदी') || (field.label||'').includes('(Hindi)')) return true;
   const isChangedName = ident.includes('new_name') || ident.includes('changed_name') || ident.includes('newname') || ident.includes('changedname') || (field.label||'').toLowerCase().includes('new name') || (field.label||'').toLowerCase().includes('changed name');
   if (isChangedName && !profile.changed_name) return true;

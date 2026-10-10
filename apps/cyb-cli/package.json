@@ -12,15 +12,21 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node --check bin/cyb.js",
-    "test": "node src/report.test.mjs",
-    "typecheck": "node -e \"console.log('[cyb-cli] typecheck skipped (JS)')\""
+    "build": "node --experimental-strip-types scripts/build-entry.ts && node --check bin/cyb.js",
+    "build:entry": "node --experimental-strip-types scripts/build-entry.ts",
+    "test": "node --experimental-strip-types scripts/run-test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "ws": "^8.21.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.39",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
   },
   "keywords": [
     "cybercontrol",

@@ -1,0 +1,85 @@
+name: AWS MVP Tailscale join
+
+# Installs Tailscale on the AWS MVP EC2 host using repo secret TS_AUTHKEY
+# (host agent — not inside app Docker images).
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: "SSH host (ubuntu@EIP)"
+        type: string
+        default: "ubuntu@44.219.62.198"
+      hostname:
+        description: "Tailscale hostname"
+        type: string
+        default: "cybercontrol-mvp"
+
+jobs:
+  join:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write SSH key
+        env:
+          KEY: ${{ secrets.AWS_MVP_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/aws.pem
+          chmod 600 ~/.ssh/aws.pem
+
+      - name: Install Tailscale on EC2 and join tailnet
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          HOST: ${{ inputs.host }}
+          TS_HOSTNAME: ${{ inputs.hostname }}
+        run: |
+          set -euo pipefail
+          KEY="${TS_AUTHKEY:-}"
+          if [ -z "$KEY" ]; then KEY="${TS_OAUTH_SECRET:-}"; fi
+          if [ -z "$KEY" ]; then
+            echo "ERROR: neither TS_AUTHKEY nor TS_OAUTH_SECRET is set in repo secrets"
+            exit 1
+          fi
+
+          {
+            echo 'set -euo pipefail'
+            echo 'export DEBIAN_FRONTEND=noninteractive'
+            printf 'export TS_KEY=%q\n' "$KEY"
+            printf 'export TS_HOSTNAME=%q\n' "$TS_HOSTNAME"
+            cat <<'REMOTE'
+          command -v tailscale >/dev/null || curl -fsSL https://tailscale.com/install.sh | sh
+          systemctl enable --now tailscaled
+          for i in $(seq 1 30); do
+            if tailscale status >/dev/null 2>&1 || tailscale status 2>&1 | grep -qiE 'logged out|stopped|NeedsLogin'; then
+              echo "tailscaled ready"
+              break
+            fi
+            sleep 1
+          done
+          TAGFLAG="--advertise-tags=tag:cybercontrol"
+          set +e
+          case "$TS_KEY" in
+            tskey-client-*)
+              echo "joining via OAuth client secret"
+              tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$TS_HOSTNAME" --accept-dns=true --ssh=true
+              rc=$?
+              ;;
+            *)
+              echo "joining via auth key"
+              tailscale up --auth-key="$TS_KEY" $TAGFLAG --hostname="$TS_HOSTNAME" --accept-dns=true --ssh=true
+              rc=$?
+              ;;
+          esac
+          if [ "$rc" -ne 0 ]; then
+            echo "retry without advertise-tags"
+            tailscale up --auth-key="$TS_KEY" --hostname="$TS_HOSTNAME" --accept-dns=true --ssh=true
+            rc=$?
+          fi
+          set -e
+          echo "=== tailscale status ==="
+          tailscale status | head -50
+          echo "=== tailscale ip -4 ==="
+          tailscale ip -4 || true
+          exit "$rc"
+          REMOTE
+          } | ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/aws.pem "$HOST" "sudo bash -s"

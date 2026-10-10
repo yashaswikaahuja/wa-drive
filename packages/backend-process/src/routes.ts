@@ -1,17 +1,55 @@
 import { Router, Request, Response, type Router as ExpressRouter } from 'express';
 import { google } from 'googleapis';
 import multer from 'multer';
+import { pool, REMOVE_BG_KEY } from '@cybercontrol/backend-core';
 import { generateAadhaarLayout, generatePassportSheet, generateSingleSheet, SheetPreset, PhotoSpec, cropAndAlignFace, setLastImage, getLastImage } from '@cybercontrol/backend-documents';
 import { getDriveForWorkspace } from '@cybercontrol/backend-drive';
 
 const router: ExpressRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
 
+/** Resolve Hub UUID → Google Drive file id when needed. */
+async function resolveGoogleFileId(fileId: string, workspaceId?: string): Promise<string> {
+  // Google ids are not UUIDs; our drive_files.id is.
+  const looksUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(fileId);
+  if (!looksUuid) return fileId;
+  if (!workspaceId) return fileId;
+  const row = (await pool.query(
+    'SELECT drive_file_id FROM drive_files WHERE id::text = $1 AND workspace_id = $2 LIMIT 1',
+    [fileId, workspaceId],
+  )).rows[0];
+  if (!row?.drive_file_id) throw new Error(`Document not found for id ${fileId}`);
+  return row.drive_file_id;
+}
+
 async function downloadDriveFile(fileId: string, req: any): Promise<Buffer> {
   const drive = await getDriveForWorkspace(req.user?.workspaceId);
   if (!drive) throw new Error('Drive not connected for this workspace');
-  const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
-  return Buffer.from(res.data as ArrayBuffer);
+  const googleId = await resolveGoogleFileId(fileId, req.user?.workspaceId);
+  try {
+    const res = await drive.files.get(
+      { fileId: googleId, alt: 'media', supportsAllDrives: true },
+      { responseType: 'arraybuffer' },
+    );
+    const buf = Buffer.from(res.data as ArrayBuffer);
+    // Google returns JSON error bodies with HTTP 200 in some edge cases / wrong clients.
+    if (buf.length < 500) {
+      const text = buf.toString('utf8');
+      if (text.startsWith('{') && /"error"/.test(text)) {
+        throw new Error(`Drive download failed for ${googleId}: ${text.slice(0, 180)}`);
+      }
+    }
+    return buf;
+  } catch (e: any) {
+    const status = e?.code || e?.response?.status;
+    const detail = e?.response?.data
+      ? (typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 200)
+      : '';
+    if (status === 404) throw new Error(`Drive file not found or deleted: ${googleId}`);
+    if (status === 401 || status === 403) throw new Error('Drive authorization failed — reconnect Google Drive in Settings');
+    if (status === 400) throw new Error(`Drive download rejected (400) for ${googleId}${detail ? `: ${detail}` : ''}`);
+    throw e;
+  }
 }
 
 router.post('/', async (req: Request, res: Response) => {
@@ -123,37 +161,135 @@ router.get('/debug/last-image', async (req: Request, res: Response) => {
   }
 });
 
-export default router;
+/**
+ * POST /api/process/remove-bg
+ * Multipart `image_file` OR JSON `{ fileId }` → transparent PNG via remove.bg
+ * (also mounted at /api/remove-bg for older clients).
+ */
+router.post('/remove-bg', upload.single('image_file') as any, async (req: any, res: Response) => {
+  if (!REMOVE_BG_KEY) {
+    res.status(503).json({ error: 'Background removal not configured (REMOVE_BG_API_KEY)' });
+    return;
+  }
+  try {
+    let imageBuffer: Buffer;
+    if (req.file) {
+      imageBuffer = req.file.buffer;
+    } else if (req.body?.fileId) {
+      imageBuffer = await downloadDriveFile(String(req.body.fileId), req);
+    } else {
+      res.status(400).json({ error: 'Provide image_file (multipart) or fileId' });
+      return;
+    }
+    const form = new FormData();
+    form.append('size', 'auto');
+    form.append('format', 'png');
+    // Base64 field avoids Node Buffer↔Blob typing friction in tsc
+    form.append('image_file_b64', imageBuffer.toString('base64'));
+    const upstream = await fetch('https://api.remove.bg/v1.0/removebg', {
+      method: 'POST',
+      headers: { 'X-Api-Key': REMOVE_BG_KEY },
+      body: form,
+    });
+    if (!upstream.ok) {
+      const errText = await upstream.text().catch(() => '');
+      res.status(upstream.status === 402 ? 402 : 502).json({
+        error: `remove.bg failed (${upstream.status})${errText ? `: ${errText.slice(0, 180)}` : ''}`,
+      });
+      return;
+    }
+    const png = Buffer.from(await upstream.arrayBuffer());
+    res.set('Content-Type', 'image/png');
+    res.set('Content-Disposition', 'inline; filename="cutout.png"');
+    res.send(png);
+  } catch (e: any) {
+    console.error('[Process] remove-bg error:', e.message);
+    res.status(500).json({ error: e.message || 'Background removal failed' });
+  }
+});
 
-// POST /api/process/extract
+// POST /api/process/set-document-type — operator confirms type → typed field extract
+router.post('/set-document-type', async (req: any, res: Response) => {
+  const { fileId, documentType } = req.body as { fileId?: string; documentType?: string };
+  if (!fileId || !documentType) {
+    res.status(400).json({ error: 'fileId and documentType required' });
+    return;
+  }
+  try {
+    const {
+      normalizeDocTypeKey, applyConfirmedDocumentType, DOC_TYPE_LABELS,
+    } = await import('@cybercontrol/backend-documents');
+    const typeKey = normalizeDocTypeKey(String(documentType));
+    if (!typeKey) { res.status(400).json({ error: 'Unknown document type' }); return; }
+    const wsId = req.user?.workspaceId;
+    if (!wsId) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    const row = (await pool.query(
+      'SELECT id, drive_file_id, customer_id FROM drive_files WHERE (id::text = $1 OR drive_file_id = $1) AND workspace_id = $2 LIMIT 1',
+      [fileId, wsId],
+    )).rows[0];
+    if (!row) { res.status(404).json({ error: 'Document not found' }); return; }
+    // Some rows store the Google id in `id` and leave drive_file_id empty.
+    const googleId = String(row.drive_file_id || row.id || '').trim();
+    if (!googleId) { res.status(400).json({ error: 'Document has no Drive file id' }); return; }
+    const phone = row.customer_id as string | null;
+    const buffer = await downloadDriveFile(googleId, req);
+    const result = await applyConfirmedDocumentType({
+      fileId: String(row.id),
+      workspaceId: wsId,
+      documentType: typeKey,
+      phone,
+      operatorId: req.user?.userId,
+      download: async () => ({ buffer }),
+    });
+    res.json({
+      ok: true,
+      documentType: typeKey,
+      tag: DOC_TYPE_LABELS[typeKey] || typeKey,
+      needsType: result.needsType,
+      suggested: result.suggested,
+      fieldCount: Object.keys(result.suggested || {}).filter((k) => !['document_type', 'document_label', 'needs_type'].includes(k)).length,
+    });
+  } catch (e: any) {
+    const msg = e?.message || e?.response?.data?.error || 'Failed to set document type';
+    console.error('[Process] set-document-type:', msg);
+    const status = /not found/i.test(msg) ? 404 : /authoriz|reconnect/i.test(msg) ? 401 : 500;
+    res.status(status).json({ error: msg });
+  }
+});
+
+// POST /api/process/extract — type-first: cache hit OK; else classify→typed extract (or needsType)
 router.post('/extract', async (req: any, res: Response) => {
-  const { fileId } = req.body as { fileId?: string };
+  const { fileId, documentType, force } = req.body as { fileId?: string; documentType?: string; force?: boolean };
   if (!fileId) { res.status(400).json({ error: 'fileId required' }); return; }
 
-  // Instant path: return cached extraction if auto-extract already ran on arrival
   try {
     const { getCachedExtraction } = await import('@cybercontrol/backend-documents');
     const cached = await getCachedExtraction(fileId);
-    if (cached && Object.keys(cached).length > 0) {
-      res.json({ ok: true, suggested: cached, cached: true });
+    const needsType = !!(cached?.needs_type || cached?.document_type?.needsReview || cached?.document_type?.decision === 'unknown' || cached?.document_type?.decision === 'uncertain');
+    // Return cache when we have real fields, or when waiting on type (unless force / forcedType)
+    if (!force && !documentType && cached && Object.keys(cached).length > 0) {
+      res.json({ ok: true, suggested: cached, cached: true, needsType });
       return;
     }
   } catch {}
 
-  // Use the shared extraction pipeline (normalizeKeys → correct sections, provenance, validation)
   try {
     const buffer = await downloadDriveFile(fileId, req);
     const { extractFromBuffer, cacheExtraction } = await import('@cybercontrol/backend-documents');
-    const { suggested } = await extractFromBuffer(buffer, fileId);
+    const { suggested, needsType, ruleLearned } = await extractFromBuffer(buffer, fileId, {
+      forcedType: documentType || undefined,
+      workspaceId: req.user?.workspaceId,
+    });
     if (req.user?.workspaceId && Object.keys(suggested).length > 0) {
       try { await cacheExtraction(fileId, req.user.workspaceId, suggested); } catch {}
     }
-    res.json({ ok: true, suggested });
+    res.json({ ok: true, suggested, needsType: !!needsType, ruleLearned: !!ruleLearned });
     return;
   } catch (e: any) {
     console.error('[Process] extract error:', e.message);
     res.status(500).json({ error: e.message ?? 'Extraction failed' });
     return;
   }
-
 });
+
+export default router;

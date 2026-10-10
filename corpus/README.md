@@ -14,16 +14,16 @@ corpus/
 │   ├── serviceonline.bihar.gov.in/
 │   │   └── ...
 │   └── ...
-├── snapshot.js                      ← script that pulls DOM via CDP
-└── validate.js                      ← runs current extractor on each snapshot, diffs vs expected
+├── snapshot.ts                      ← script that pulls DOM via CDP
+└── validate.ts                      ← runs current extractor on each snapshot, diffs vs expected
 ```
 
 ## How to add a site
 
 1. Open the form in a Chrome with the extension loaded + `--remote-debugging-port=9222`
-2. Run `node corpus/snapshot.js <slug>` — saves the DOM
+2. Run `node corpus/snapshot.ts <slug>` — saves the DOM
 3. Manually edit `corpus/sites/<slug>/<form>.expected.json` with what the extractor should return
-4. Run `node corpus/validate.js` — ensures all corpus entries still extract correctly
+4. Run `node corpus/validate.ts` — ensures all corpus entries still extract correctly
 
 ## Tech-stack coverage we want
 

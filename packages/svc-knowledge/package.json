@@ -3,13 +3,32 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./db-adapter": "./src/db-adapter.js",
-    "./store-adapter": "./src/store-adapter.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./db-adapter": {
+      "types": "./dist/db-adapter.d.ts",
+      "import": "./dist/db-adapter.js"
+    },
+    "./store-adapter": {
+      "types": "./dist/store-adapter.d.ts",
+      "import": "./dist/store-adapter.js"
+    }
   },
   "scripts": {
-    "build": "echo 'no build \u2014 ESM source-only package'"
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node -e \"console.log('[svc-knowledge] no package tests yet')\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

@@ -1,3 +1,0 @@
-# Placeholder so the Docker COPY target always exists.
-# CI (docker-publish.yml) builds owner-panel and overwrites this directory with the real bundle
-# (index.html + assets/). In local builds without that step, the backend simply skips serving the panel.

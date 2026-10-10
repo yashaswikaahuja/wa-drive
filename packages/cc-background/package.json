@@ -1,11 +1,19 @@
 {
   "name": "@cc/background",
   "version": "1.0.0",
-  "description": "CyberControl service worker modules \u2014 all background.js logic",
+  "description": "CyberControl service worker modules — all background.ts logic",
+  "type": "module",
   "scripts": {
-    "build": "echo 'no build \u2014 ESM source-only package'",
-    "test": "echo 'No unit tests'"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node -e \"console.log('[cc-background] no unit tests')\"",
+    "build": "echo 'no build — ESM source-only package'"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
   },
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
 }

@@ -1,3 +1,4 @@
+// Generated from executor.ts — edit the .ts source, then re-copy/emit.
 async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters, allFields) {
   portalAdapters = portalAdapters || {};
   console.log('[CC] fillFormFieldsSequential started v' + ((typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj') + ', fields:', Object.keys(mapping).length);
@@ -327,7 +328,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
   /**
    * Resolve when the page network has been idle for `quietMs` consecutive
-   * milliseconds. Delegates to shared/network-idle.js.
+   * milliseconds. Delegates to shared/network-idle.ts.
    */
   function waitForNetworkIdle(quietMs, maxMs) {
     return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
@@ -674,7 +675,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         if (mapping[selector]?.monthNum) { extraValues.push(mapping[selector].monthNum.toString()); if (mapping[selector].monthShort) extraValues.push(mapping[selector].monthShort.toLowerCase()); }
 
         function findOpt(options) {
-          // shared/option-match.js is injected before executor.js runs
+          // shared/option-match.ts is injected before executor.ts runs
           return window.ccMatchOption(value, options, { extraValues: extraValues });
         }
 

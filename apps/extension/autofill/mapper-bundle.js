@@ -52,7 +52,17 @@
     sub_division: ["sub_division", "subdivision", "sub_div", "anumandal", "anchal", "circle", "txt_subdiv", "ddl_subdiv", "sub-division", "\u0905\u0928\u0941\u092E\u0902\u0921\u0932"],
     block: ["block", "block_name", "taluka", "tehsil", "prakhnd", "txt_block", "ddl_block", "\u092A\u094D\u0930\u0916\u0902\u0921"],
     house_no: ["house_no", "house_number", "house", "flat_no", "door_no", "txt_house"],
-    street: ["street", "street_name", "road", "lane", "txt_street"]
+    street: ["street", "street_name", "road", "lane", "txt_street"],
+    // Travel / journey (#312) — do not confuse with police_station
+    departure: ["departure", "depart", "from", "from_city", "source", "origin", "boarding", "leaving_from", "start_city"],
+    arrival: ["arrival", "arrive", "to", "to_city", "destination", "going_to", "end_city"],
+    from_station: ["from_station", "source_station", "boarding_station", "origin_station", "from_stn"],
+    to_station: ["to_station", "destination_station", "arrival_station", "to_stn"],
+    journey_date: ["journey_date", "travel_date", "departure_date", "date_of_journey", "doj", "onward_date", "going_date"],
+    return_date: ["return_date", "return_journey_date", "coming_date"],
+    travel_class: ["travel_class", "class", "coach_class", "reservation_class"],
+    quota: ["quota", "reservation_quota"],
+    passenger_count: ["passenger_count", "passengers", "no_of_passengers", "travellers", "adults"]
   };
   function getFieldAliases(serverMappings) {
     const merged = Object.assign({}, FIELD_ALIASES);
@@ -79,6 +89,44 @@
   };
 
   // ../../packages/cc-mapper/src/field-ident.ts
+  function isTravelJourneyField(field) {
+    const raw = [field == null ? void 0 : field.label, field == null ? void 0 : field.name, field == null ? void 0 : field.id, field == null ? void 0 : field.placeholder, field == null ? void 0 : field.selector].filter(Boolean).join(" ").toLowerCase();
+    if (!raw.trim()) return false;
+    if (/police[_\s-]?station|\bthana\b|\bps\b/.test(raw)) return false;
+    return /\b(from|to|destination|origin|boarding|departure|arrival|journey|train|flight|airport|pnr|berth|quota|class)\b/.test(raw) || /\b(from|to)[_\s-]?station\b/.test(raw) || /\bstation\b/.test(raw) || /\b(depart|arrive|travel)[_\s-]?(date|time|city|from|to)\b/.test(raw);
+  }
+  var IDENTITY_PROFILE_KEYS = /* @__PURE__ */ new Set([
+    "dob",
+    "date_of_birth",
+    "dob__day",
+    "dob__month",
+    "dob__year",
+    "name",
+    "first_name",
+    "last_name",
+    "middle_name",
+    "full_name",
+    "father_name",
+    "mother_name",
+    "husband_name",
+    "guardian_name",
+    "aadhaar",
+    "aadhaar_number",
+    "aadhar",
+    "pan",
+    "pan_number",
+    "voter_id",
+    "passport",
+    "driving_licence",
+    "dl_number",
+    "gender",
+    "sex",
+    "email",
+    "email_id",
+    "phone",
+    "mobile",
+    "mobile_number"
+  ]);
   function normalizeIdent(s) {
     return String(s || "").toLowerCase().replace(/[-\s:*()'./\\]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
   }
@@ -404,6 +452,67 @@
     isEducationRow
   };
 
+  // ../../packages/cc-mapper/src/split-dob.ts
+  function parseDobParts(dob) {
+    if (dob == null) return null;
+    const dobStr = String(dob).trim();
+    if (!dobStr) return null;
+    const m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+    const m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+    if (m1) return { day: m1[1].padStart(2, "0"), month: m1[2].padStart(2, "0"), year: m1[3] };
+    if (m2) return { day: m2[3].padStart(2, "0"), month: m2[2].padStart(2, "0"), year: m2[1] };
+    return null;
+  }
+  function applySplitDob(formFields, profile, mapping) {
+    if (!profile || profile.dob == null || profile.dob === "") return;
+    const dp = parseDobParts(profile.dob);
+    if (!dp) return;
+    const monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const monthShort = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthNum = parseInt(dp.month, 10) || 0;
+    for (let di = 0; di < formFields.length; di++) {
+      const df = formFields[di];
+      if (!df || !df.selector || mapping[df.selector]) continue;
+      const lbl = String(df.label || "").trim();
+      const idn = `${df.id || ""} ${df.name || ""}`.toLowerCase();
+      const ph = String(df.placeholder || "").trim();
+      const combined = `${lbl} ${ph} ${idn}`.toLowerCase();
+      const isDay = /^dd$|^day$|^(\(?day\)?)$|day_of_birth|dob_day|birth_day|birthday_dd/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth|birthday_?dd|ddl_?day)(?:[^a-z]|$)/i.test(idn) || /\bdd\b/.test(combined) && !/\bdd[\s_-]*mm/.test(combined);
+      const isMonth = /^mm$|^month$|^(\(?month\)?)$|month_of_birth|dob_month|birth_month/i.test(lbl) || /^mm$|^month$/i.test(ph) || /(?:^|[^a-z])(dob_?month|birth_?month|month_of_birth|ddl_?month)(?:[^a-z]|$)/i.test(idn) || /\bmm\b/.test(combined) && !/\bdd[\s_-]*mm[\s_-]*yyyy/.test(combined) && !isDay;
+      const isYear = /^yyyy$|^yyy$|^year$|^(\(?year\)?)$|year_of_birth|dob_year|birth_year/i.test(lbl) || /^yyyy$|^year$/i.test(ph) || /(?:^|[^a-z])(dob_?year|birth_?year|year_of_birth|ddl_?year)(?:[^a-z]|$)/i.test(idn);
+      if (isDay) {
+        const preferPadded = /^dd$/i.test(lbl) || /^dd$/i.test(ph) || (df.type || "") === "text";
+        mapping[df.selector] = {
+          value: preferPadded ? dp.day : String(parseInt(dp.day, 10)),
+          type: df.type || "",
+          label: df.label || null,
+          profileKey: "dob",
+          matchBy: "split-dob"
+        };
+      } else if (isMonth) {
+        const t = String(df.type || "").toLowerCase();
+        const monthVal = t === "select" || t === "dropdown" || t === "mat-select" || t === "ng-dropdown" ? monthNames[monthNum] || dp.month : dp.month;
+        mapping[df.selector] = {
+          value: monthVal,
+          type: df.type || "",
+          label: df.label || null,
+          profileKey: "dob",
+          matchBy: "split-dob",
+          monthNum,
+          monthShort: monthShort[monthNum]
+        };
+      } else if (isYear) {
+        mapping[df.selector] = {
+          value: dp.year,
+          type: df.type || "",
+          label: df.label || null,
+          profileKey: "dob",
+          matchBy: "split-dob"
+        };
+      }
+    }
+  }
+
   // ../../packages/cc-mapper/src/match-profile-fields.ts
   function tryMatchNameParts(field, ident, matchBy, nameParts, mapping) {
     const isFatherMother = ident.includes("father") || ident.includes("mother") || ident.includes("pita") || ident.includes("mata");
@@ -428,18 +537,21 @@
   }
   function tryMatchDob(field, ident, matchBy, profile, mapping) {
     if (!profile.dob) return false;
-    const dobParts = String(profile.dob).split("/");
-    const dobDay = dobParts[0], dobMonth = dobParts[1], dobYear = dobParts[2];
+    if (isTravelJourneyField(field)) return false;
+    const dp = parseDobParts(profile.dob);
+    if (!dp) return false;
+    const dobDay = dp.day, dobMonth = dp.month, dobYear = dp.year;
     const monthNames = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const monthShort = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const monthNum = parseInt(dobMonth);
+    const monthNum = parseInt(dobMonth, 10) || 0;
     const selLower = matchBy === "dom-fallback" ? (field.selector || "").toLowerCase() : "";
+    const t = (field.type || "").toLowerCase();
     if (ident.includes("day") && (ident.includes("birth") || ident.includes("dob") || ident.includes("born") || ident.replace(/[_\s]/g, "") === "day" || selLower.includes("ddl_day") || selLower.includes("_day"))) {
-      mapping[field.selector] = { value: parseInt(dobDay).toString(), type: field.type || "", matchBy, profileKey: "dob" };
+      mapping[field.selector] = { value: parseInt(dobDay, 10).toString(), type: field.type || "", matchBy, profileKey: "dob" };
       return true;
     }
     if (ident.includes("month") && (ident.includes("birth") || ident.includes("dob") || ident.includes("born") || new Set(ident.split(/[_\s]+/).filter(Boolean)).size === 1 || selLower.includes("ddl_month") || selLower.includes("_month"))) {
-      const monthVal = field.type === "select" ? monthNames[monthNum] : dobMonth;
+      const monthVal = t === "select" || t === "dropdown" || t === "mat-select" ? monthNames[monthNum] : dobMonth;
       mapping[field.selector] = { value: monthVal, type: field.type || "", monthNum, monthShort: monthShort[monthNum], matchBy, profileKey: "dob" };
       return true;
     }
@@ -448,7 +560,7 @@
       return true;
     }
     if (field.placeholder === "dd-mm-yyyy" || field.placeholder === "DD-MM-YYYY" || /^dd[-/]mm[-/]yyyy$/i.test(field.label || "")) {
-      mapping[field.selector] = { value: String(profile.dob).split("/").join("-"), type: field.type || "", matchBy: "label", profileKey: "dob" };
+      mapping[field.selector] = { value: `${dobDay}-${dobMonth}-${dobYear}`, type: field.type || "", matchBy: "label", profileKey: "dob" };
       return true;
     }
     if (ident.includes("dob") || ident.includes("date_of_birth") || ident.includes("dateofbirth") || ident.includes("birth_date") || ident.includes("date") && ident.includes("birth")) {
@@ -513,6 +625,7 @@
     }
   }
   function tryMatch2(field, ident, matchBy, profile, nameParts, helpers, mapping) {
+    if (isTravelJourneyField(field)) return true;
     if (ident.includes("hindi") || ident.includes("_hindi") || (field.label || "").includes("\u0939\u093F\u0902\u0926\u0940") || (field.label || "").includes("(Hindi)")) return true;
     const isChangedName = ident.includes("new_name") || ident.includes("changed_name") || ident.includes("newname") || ident.includes("changedname") || (field.label || "").toLowerCase().includes("new name") || (field.label || "").toLowerCase().includes("changed name");
     if (isChangedName && !profile.changed_name) return true;
@@ -581,27 +694,6 @@
       }
     }
   }
-  function applySplitDob(formFields, profile, mapping) {
-    if (!profile.dob) return;
-    const dobStr = String(profile.dob).trim();
-    const m1 = dobStr.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
-    const m2 = dobStr.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
-    let dp = null;
-    if (m1) dp = { day: m1[1].padStart(2, "0"), month: m1[2].padStart(2, "0"), year: m1[3] };
-    else if (m2) dp = { day: m2[3].padStart(2, "0"), month: m2[2].padStart(2, "0"), year: m2[1] };
-    if (!dp) return;
-    for (let di = 0; di < formFields.length; di++) {
-      const df = formFields[di];
-      if (mapping[df.selector]) continue;
-      const lbl = (df.label || "").trim(), idn = (df.id || df.name || "").toLowerCase(), ph = (df.placeholder || "").trim();
-      const isDay = /^dd$|^day$|day_of_birth|dob_day|birth_day/i.test(lbl) || /^dd$|^day$/i.test(ph) || /(?:^|[^a-z])(dob_?day|birth_?day|day_of_birth)(?:[^a-z]|$)/.test(idn);
-      const isMonth = /^mm$|^month$|month_of_birth|dob_month|birth_month/i.test(lbl) || /^mm$|^month$/i.test(ph) || /(?:^|[^a-z])(dob_?month|birth_?month|month_of_birth)(?:[^a-z]|$)/.test(idn);
-      const isYear = /^yyyy$|^year$|year_of_birth|dob_year|birth_year/i.test(lbl) || /^yyyy$|^year$/i.test(ph) || /(?:^|[^a-z])(dob_?year|birth_?year|year_of_birth)(?:[^a-z]|$)/.test(idn);
-      if (isDay) mapping[df.selector] = { value: dp.day, type: df.type || "", profileKey: "dob" };
-      else if (isMonth) mapping[df.selector] = { value: dp.month, type: df.type || "", profileKey: "dob" };
-      else if (isYear) mapping[df.selector] = { value: dp.year, type: df.type || "", profileKey: "dob" };
-    }
-  }
   function applyAll(formFields, profile, helpers, mapping) {
     applyConditionalPost(formFields, profile, helpers, mapping);
     applyTwinMirror(formFields, mapping);
@@ -651,7 +743,7 @@
       (f, i) => i + ': label="' + (f.label || "") + '" id="' + (f.id || "") + '" name="' + (f.name || "") + '" placeholder="' + (f.placeholder || "") + '"'
     ).join("\n");
     const profileKeys = Object.entries(profile).filter((kv) => kv[1] && kv[0] !== "phone" && kv[0] !== "updatedAt").map((kv) => kv[0] + ': "' + kv[1] + '"').join("\n");
-    const prompt = 'You are a form field mapper. Given form fields and a student profile, return a JSON object mapping field index to profile key.\n\nRULES:\n- Return ONLY a valid JSON object, nothing else\n- Map each field to the profile key whose VALUE should fill that field\n- "first name" fields \u2192 use "first_name" profile key\n- "last name" / "surname" fields \u2192 use "last_name" profile key\n- "middle name" fields \u2192 use "middle_name" profile key\n- "full name" / "candidate name" fields \u2192 use "name" profile key\n- Separate day/month/year dropdowns \u2192 use "dob__day", "dob__month", "dob__year"\n- Single "date of birth" text field \u2192 use "dob"\n- For address parts: use "village", "post_office", "police_station", "block", "sub_division", "district", "state", "pincode" as available\n- Only use "address" for full address text fields\n- Confirm/retype fields \u2192 same key as primary field\n- Skip: captcha, OTP, verification code, password\n- Use EXACT profile key names from the list below\n\nForm fields:\n' + fieldDescriptions + "\n\nAvailable profile keys and values:\n" + profileKeys + '\n\nReturn JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}';
+    const prompt = 'You are a form field mapper. Given form fields and a student profile, return a JSON object mapping field index to profile key.\n\nRULES:\n- Return ONLY a valid JSON object, nothing else\n- Map each field to the profile key whose VALUE should fill that field\n- "first name" fields \u2192 use "first_name" profile key\n- "last name" / "surname" fields \u2192 use "last_name" profile key\n- "middle name" fields \u2192 use "middle_name" profile key\n- "full name" / "candidate name" fields \u2192 use "name" profile key\n- Separate day/month/year dropdowns \u2192 use "dob__day", "dob__month", "dob__year"\n- Single "date of birth" text field \u2192 use "dob"\n- For address parts: use "village", "post_office", "police_station", "block", "sub_division", "district", "state", "pincode" as available\n- Only use "address" for full address text fields\n- Confirm/retype fields \u2192 same key as primary field\n- Skip: captcha, OTP, verification code, password\n- NEVER map From/To/station/journey/train/flight/airport/PNR/boarding fields to dob, name, aadhaar, phone, or any identity key\n- For travel fields use: departure/from_station (From), arrival/to_station (To), journey_date (travel date), return_date, travel_class, quota\n- Use EXACT profile key names from the list below\n\nForm fields:\n' + fieldDescriptions + "\n\nAvailable profile keys and values:\n" + profileKeys + '\n\nReturn JSON only: {"0": "name", "2": "dob", "5": "departure", "7": "journey_date"}';
     try {
       const ccLLM = typeof window !== "undefined" ? window.ccLLM : void 0;
       if (!ccLLM) return {};
@@ -693,6 +785,7 @@
         if ((profileKey === "name" || profileKey === "first_name" || profileKey === "last_name" || profileKey === "middle_name") && isRelativeField) continue;
         if (profileKey === "father_name" && !isFatherField) continue;
         if (profileKey === "mother_name" && !isMotherField) continue;
+        if (isTravelJourneyField(field) && IDENTITY_PROFILE_KEYS.has(String(profileKey))) continue;
         mapping[field.selector] = { value, type: field.type || "" };
       }
       return mapping;

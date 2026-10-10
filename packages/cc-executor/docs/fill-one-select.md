@@ -21,4 +21,4 @@ Returns `null` if `el.tagName !== 'select'`.
 
 ## Consumer
 
-`fill-one-select.js` (executor) — registered in `k.fillOneHandlers`.
+`fill-one-select.ts` (executor) — registered in `k.fillOneHandlers`.

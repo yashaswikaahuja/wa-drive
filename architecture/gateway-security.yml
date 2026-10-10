@@ -77,15 +77,15 @@ message_bridge:
   current_defects:
     - id: SEC-001
       severity: critical
-      location: "extension/content.js"
+      location: "extension/content.ts"
       description: "Content script forwards page postMessage payloads to the background without verifying event.source === window, origin, message type, or an authentication token."
     - id: SEC-002
       severity: critical
-      location: "extension/popup.js (data-cc-token / data-cc-backend body attributes)"
+      location: "extension/popup.ts (data-cc-token / data-cc-backend body attributes)"
       description: "Bearer access token and backend URL are written into page DOM attributes, readable by any page script."
     - id: SEC-003
       severity: critical
-      location: "extension/background.js CONNECT handler"
+      location: "extension/background.ts CONNECT handler"
       description: "CONNECT can overwrite stored access token, refresh token, user, and backend URL from a message that originates through the unauthenticated bridge."
     - id: SEC-004
       severity: high
@@ -124,7 +124,7 @@ enforcement:
     to owner-panel configuration, not a static manifest list.
   security_regression_policy:
     check_id: CHECK-011
-    suite: "extension-dev/tests/security/run.mjs"
+    suite: "extension-dev/tests/security/run.ts"
     ci_job: extension-security
     permanence: "This is a required long-lived CI pillar, not a one-time verification step."
     issue_closure_rule: >

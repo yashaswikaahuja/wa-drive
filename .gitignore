@@ -1,6 +1,9 @@
 node_modules/
 dist/
 build/
+# Keep Mozilla PDF.js engine (public/pdfjs/build) — required for in-app viewer
+!apps/frontend/public/pdfjs/build/
+!apps/frontend/public/pdfjs/build/**
 .env
 .env.local
 .env.*.local
@@ -36,14 +39,17 @@ storage/
 inbox/
 data/
 tools/*
-!tools/forbidden-deps-check.mjs
-!tools/dom-boundary-check.mjs
+!tools/forbidden-deps-check.ts
+!tools/dom-boundary-check.ts
+!tools/*.ts
 /tests/
 worker/
 
 # Old scripts/configs
 ecosystem.config.js
 ecosystem.config.cjs
+!apps/**/ecosystem.config.cjs
+!apps/**/ecosystem.config.ts
 render.yaml
 start.sh
 stop.sh
@@ -99,6 +105,10 @@ extension-dev/cli/out/
 /backend/
 /extension-service/
 /frontend/
+
+# tsc emit staging (extension-service and similar)
+.tsbuild/
+**/.tsbuild/
 
 
 # Local issue scratch

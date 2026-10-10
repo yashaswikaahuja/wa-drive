@@ -20,7 +20,7 @@ on:
       - '.github/workflows/service-connectivity.yml'
       - '.github/workflows/deploy.yml'
       - '.github/workflows/_deploy.yml'
-      - 'tooling/turborepo-safety-check.mjs'
+      - 'tooling/turborepo-safety-check.ts'
       - '.github/workflows/turborepo-safety.yml'
 
 jobs:

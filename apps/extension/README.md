@@ -12,12 +12,12 @@ Rebuild bundles: `pnpm --filter cybercontrol-extension build` (or root `pnpm bui
 |------|------|
 | `perception/`, `runtime/` | Product ActionPlan path (perceive → execute) |
 | `autofill/`, `drivers/` | **Sequential kernel** (café default Fill) — **keep paths stable** |
-| `autofill/executor/*.js` | Task-split of the old monolith (`debug`, `fill-one`, `sequential`, …); facade `autofill/executor.js` |
+| `autofill/executor/*.js` | Task-split of the old monolith (`debug`, `fill-one`, `sequential`, …); facade `autofill/executor.ts` |
 | `application/fill-orchestrator.js` | Popup-side orchestration + inject lists |
 | `shared/` | Utilities used by both stacks |
-| `sw/` | Service-worker helpers (`importScripts` from `background.js`) |
-| `popup.html` / `popup.js` | Operator UI |
-| `background.js` | Service worker **entry** (manifest) |
+| `sw/` | Service-worker helpers (`importScripts` from `background.ts`) |
+| `popup.html` / `popup.ts` | Operator UI |
+| `background.ts` | Service worker **entry** (manifest) |
 | `runtime/ws-client.js`, `runtime/wss-session.js` | Authenticated WSS after HTTPS JWT |
 
 ## Inject lists (do not casual-rename)
@@ -27,7 +27,7 @@ Canonical lists: `application/fill-orchestrator.js`
 - `SEQUENTIAL_KERNEL_SCRIPTS` — default café fill  
 - `PRODUCT_PATH_SCRIPTS` — ActionPlan / perception stack  
 
-Also duplicated in places inside `background.js` / `popup.js` for legacy/agent inject — update all if paths change.
+Also duplicated in places inside `background.ts` / `popup.ts` for legacy/agent inject — update all if paths change.
 
 ## Auth
 

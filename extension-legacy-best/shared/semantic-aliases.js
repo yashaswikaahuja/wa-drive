@@ -1,9 +1,10 @@
+// Generated from semantic-aliases.ts � edit the .ts source, then re-copy/emit.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Semantic Aliases (Service-Provided)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //
 // Maps semantic_key values to label patterns for target resolution.
-// Used by runtime/resolver.js.
+// Used by runtime/resolver.ts.
 //
 // THE EXTENSION DOES NOT OWN THIS DATA.
 // Aliases are loaded from the service at runtime via:

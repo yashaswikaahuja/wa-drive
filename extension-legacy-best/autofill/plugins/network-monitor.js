@@ -1,5 +1,6 @@
+// Generated from network-monitor.ts � edit the .ts source, then re-copy/emit.
 /**
- * network-monitor.js — runs in PAGE world (chrome.scripting world: 'MAIN')
+ * network-monitor.ts — runs in PAGE world (chrome.scripting world: 'MAIN')
  *
  * Wraps fetch + XMLHttpRequest to track in-flight requests. Publishes counts
  * to document.body.dataset so the autofill executor (in ISOLATED world) can

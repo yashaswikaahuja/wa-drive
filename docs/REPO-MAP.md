@@ -57,12 +57,12 @@ extension-dev/   # tests & tooling (not an app)
 |--------|------|
 | `perception/` + `runtime/` (APE, gateway, WSS client) | **Product path** (ActionPlan) |
 | `autofill/` + `drivers/` | **Sequential kernel** — café default fill; **path-stable** (inject lists) |
-| `autofill/executor/` | Task-split fill kernel (`debug`, `fill-one`, `sequential`, …) + thin `executor.js` facade |
+| `autofill/executor/` | Task-split fill kernel (`debug`, `fill-one`, `sequential`, …) + thin `executor.ts` facade |
 | `application/` | Orchestration (`fill-orchestrator.js`) |
 | `shared/` | Shared utils for both stacks |
-| `sw/` | Service-worker helpers composed by `background.js` |
-| `popup.html` / `popup.js` | Operator UI entry |
-| `background.js` | MV3 service worker entry (do not rename in manifest) |
+| `sw/` | Service-worker helpers composed by `background.ts` |
+| `popup.html` / `popup.ts` | Operator UI entry |
+| `background.ts` | MV3 service worker entry (do not rename in manifest) |
 
 Do **not** rename `autofill/` or `drivers/` without updating every `executeScript({ files })` list and governance tests.
 
@@ -72,13 +72,13 @@ Frozen reference copy: `extension-legacy-best/` (read-only snapshot ~5.91.5).
 
 | Location | Role |
 |----------|------|
-| `packages/<pkg>/tests/*.test.mjs` | Unit tests colocated with the library (`pnpm --filter <pkg> test`) |
+| `packages/<pkg>/tests/*.test.ts` | Unit tests colocated with the library (`pnpm --filter <pkg> test`) |
 | `extension-dev/tests/unit/` | Extension/governance unit suites |
 | `extension-dev/tests/browser/` | Playwright / real-widget suites |
 | `extension-dev/tests/perception/` | Perception unit suites |
 | `extension-dev/tests/ratification/` | Schema conformance |
 | `extension-dev/tests/security/` | Boundary / security guards |
-| `extension-dev/tests/ci-unit.mjs` | CI entry for non-browser suites |
+| `extension-dev/tests/ci-unit.ts` | CI entry for non-browser suites |
 
 Build `.mjs` scripts for Chrome bundles live only under `apps/extension/scripts/`.
 

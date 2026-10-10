@@ -1,3 +1,4 @@
+// Generated from dom.ts � edit the .ts source, then re-copy/emit.
 /**
  * DOM observation drivers — read-only primitives.
  *
@@ -12,7 +13,7 @@
   if (!window.cc || !window.cc.registerDriver) return;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  // Delegate to shared/dom-utils.js (injected before drivers run)
+  // Delegate to shared/dom-utils.ts (injected before drivers run)
   function isVisible(el) {
     return window.ccDomUtils.isVisible(el);
   }

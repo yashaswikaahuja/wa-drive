@@ -15,12 +15,27 @@
     "./fuzzy-post-passes": "./src/fuzzy-post-passes.ts",
     "./fuzzy-match": "./src/fuzzy-match.ts",
     "./ai-match": "./src/ai-match.ts",
+    "./split-dob": {
+      "types": "./src/split-dob.ts",
+      "node": "./dist/split-dob.js",
+      "default": "./src/split-dob.ts"
+    },
+    "./mapping-relation": {
+      "types": "./src/mapping-relation.ts",
+      "node": "./dist/mapping-relation.js",
+      "default": "./src/mapping-relation.ts"
+    },
     "./inject": "./src/inject.ts"
   },
   "scripts": {
-    "build": "node build.mjs",
+    "build": "node --experimental-strip-types scripts/build-node.ts && node --experimental-strip-types build.ts",
+    "build:node": "node --experimental-strip-types scripts/build-node.ts",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "node --experimental-strip-types tests/mapper-capabilities.test.mjs && node --experimental-strip-types tests/fuzzy-match.test.mjs"
+    "test": "node --experimental-strip-types tests/split-dob.test.ts && node --experimental-strip-types tests/mapping-relation.test.ts && node --experimental-strip-types tests/mapper-capabilities.test.ts && node --experimental-strip-types tests/fuzzy-match.test.ts"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=22"

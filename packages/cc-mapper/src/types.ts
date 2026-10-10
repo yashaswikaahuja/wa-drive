@@ -22,6 +22,13 @@ export interface MappingEntry {
   label?: string | null;
   monthNum?: number;
   monthShort?: string;
+  /** Present when planned via mapping-relation (#302). */
+  relation?: {
+    kind: string;
+    n?: number;
+    part?: string;
+    pad?: number;
+  };
 }
 
 export type Mapping = Record<string, MappingEntry>;

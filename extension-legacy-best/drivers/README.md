@@ -110,7 +110,7 @@ await cc.do({ name: 'click', args: { target: 'button[type="submit"]' } })
 Wait for selector to appear and be visible. Default timeout 8000ms.
 
 #### `wait.networkIdle`
-Wait until in-flight fetch+XHR count is 0 and stays quiet for `quietMs`. Reads counters from `network-monitor.js` running in MAIN world.
+Wait until in-flight fetch+XHR count is 0 and stays quiet for `quietMs`. Reads counters from `network-monitor.ts` running in MAIN world.
 
 #### `wait.ms`
 Fixed delay. Use sparingly — prefer state-based waits.
@@ -163,7 +163,7 @@ window.cc.registerDriver({
 });
 ```
 
-Place the file under `extension/drivers/<category>.js` (one file per logical group). Add it to `popup.js` and `background.js` injection lists.
+Place the file under `extension/drivers/<category>.js` (one file per logical group). Add it to `popup.ts` and `background.ts` injection lists.
 
 ## Versioning
 

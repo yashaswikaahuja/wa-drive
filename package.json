@@ -7,12 +7,13 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "build:bundles": "node build-all.mjs",
-    "safety": "node tooling/turborepo-safety-check.mjs",
-    "safety:dns": "node tooling/turborepo-safety-check.mjs"
+    "build:bundles": "node --experimental-strip-types build-all.ts",
+    "safety": "node --experimental-strip-types tooling/turborepo-safety-check.ts",
+    "safety:dns": "node --experimental-strip-types tooling/turborepo-safety-check.ts"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
+    "ts-migrate": "^0.1.35",
     "turbo": "^2.5.4",
     "typescript": "^5.8.3"
   },

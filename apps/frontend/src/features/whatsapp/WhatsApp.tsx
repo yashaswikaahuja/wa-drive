@@ -2,10 +2,13 @@ import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { SOCKET_URL } from '../../shared/api';
+import { DocTypePickerModal } from '../../shared/DocTypePicker';
+import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
+import MediaViewer from '../../shared/MediaViewer';
 import { useAuthStore } from '../auth/store';
-import { Printer, Camera, X, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle, PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise } from '@phosphor-icons/react';
+import { Printer, Camera, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle, PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise } from '@phosphor-icons/react';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -91,13 +94,16 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
   );
 });
 
-const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete }: any) => {
+const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete, onSetType }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w600' : (msg.fileUrl?.replace('sz=w200','sz=w600') || msg.fileUrl);
   const { title, badge } = docTitle(msg.fileName || '');
-  const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
-  const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag); // Photo / Other / Signature / Form
-  const category = msg.tag
+  const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+  const needsType = msg.tag === 'Needs type' || msg.needsType;
+  const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag) && !needsType;
+  const category = needsType
+    ? { category: 'Needs type', color: 'bg-amber-500/20 text-amber-400' }
+    : msg.tag
     ? { category: msg.tag, color: isJunkTag ? 'bg-white/10 text-gray-500' : 'bg-green-500/15 text-green-400' }
     : docCategory(msg.fileName || '');
 
@@ -129,7 +135,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         {!selectionMode && (
           <div className="flex flex-wrap gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition">
             <button onClick={() => onClick(msg)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Open"><Eye size={14} /></button>
-            <button onClick={(e) => { e.stopPropagation(); const cats = ['Aadhaar','PAN','Passport','Marksheet','Photo','Voter ID','Driving License','Caste Cert','Income','Bank','Signature','Other']; const pick = prompt('Tag this document:\\n' + cats.map((c,i)=>(i+1)+'. '+c).join('\\n') + '\\n\\nEnter number:'); if(pick){const tag=cats[parseInt(pick)-1]; if(tag){ api.patch('/drive/files/'+msg.id+'/tag',{tag}).then(()=>{msg.tag=tag;toast.success(tag)}).catch(()=>toast.error('Failed'));}} }} className="p-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" title="Tag"><Tag size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); onSetType?.(msg); }} className={`p-1.5 rounded-md border ${needsType ? 'border-amber-500/50 bg-amber-500/20 text-amber-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-400'} hover:bg-amber-500/20`} title={needsType ? 'Set document type' : 'Tag / set type'}><Tag size={14} /></button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="p-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" title="Print"><Printer size={14} /></button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Photo Tool"><Camera size={14} /></button>
             <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Download"><DownloadSimple size={14} /></button>
@@ -172,6 +178,7 @@ export default function WhatsApp() {
   const [reconnecting, setReconnecting] = useState(false);
   const [qrExpired, setQrExpired] = useState(false);
   const qrStartRef = useRef<number | null>(null);
+  const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const QR_TIMEOUT_MS = 120_000; // 2 minutes
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
@@ -186,6 +193,7 @@ export default function WhatsApp() {
   });
   const [msgSearch, setMsgSearch] = useState('');
   const [dpPreview, setDpPreview] = useState<string | null>(null);
+  const [typePickerFile, setTypePickerFile] = useState<Message | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractedSuggestions, setExtractedSuggestions] = useState<any | null>(null);
@@ -217,7 +225,7 @@ export default function WhatsApp() {
     if (cached) {
       try { const msgs = JSON.parse(cached); groupMessages(msgs); } catch {}
     }
-    api.get('/drive/files/ws').then(r => {
+    api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then(r => {
       const msgs: Message[] = r.data.map((f: any) => ({
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
         fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
@@ -240,22 +248,29 @@ export default function WhatsApp() {
     socketRef.current = socket;
     // ── QR delivery via HTTP polling (no Socket.IO) ──
     // Polls /whatsapp/status every 3s. Stops when connected. Resumes if disconnected.
+    // #306: never restart polling after unmount (mounted flag).
+    let mounted = true;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const stopPolling = () => {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    };
     const pollStatus = async () => {
+      if (!mounted) return;
       try {
         const r = await api.get('/whatsapp/status');
+        if (!mounted) return;
         if (r.data.connected) {
           setConnected(true); setQrCode(null); setReconnecting(false); setQrExpired(false);
           qrStartRef.current = null;
           localStorage.setItem('cc-wa-connected', 'true');
-          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          stopPolling();
         } else {
           if (r.data.qr) {
             // Track when QR first appeared; expire after 2 min
             if (!qrStartRef.current) qrStartRef.current = Date.now();
             if (Date.now() - qrStartRef.current > QR_TIMEOUT_MS) {
               setQrExpired(true);
-              if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+              stopPolling();
             } else {
               setQrCode(r.data.qr);
             }
@@ -267,7 +282,7 @@ export default function WhatsApp() {
       }
     };
     const startPolling = () => {
-      if (pollTimer) return;
+      if (!mounted || pollTimer) return;
       pollStatus();
       pollTimer = setInterval(pollStatus, 3000);
     };
@@ -275,16 +290,18 @@ export default function WhatsApp() {
     startPolling();
     // Connection events still come via socket (single emit, low cost) — these toggle polling
     socket.on('connection:status', (data: any) => {
+      if (!mounted) return;
       if (data.connected) {
         setConnected(true); setQrCode(null); setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
-        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        stopPolling();
       } else {
-        // Resumed disconnect → restart polling for fresh QR
+        // Resumed disconnect → restart polling for fresh QR (only while mounted)
         startPolling();
       }
     });
     socket.on('new_whatsapp_file', (file: any) => {
+      if (!mounted) return;
       const phone = file.phoneNumber || file.customerId || 'unknown';
       const name = file.customerName || file.phoneNumber || 'Unknown';
       addMessage({ id: file.id || Date.now().toString(), phone, name, fileName: file.fileName,
@@ -300,8 +317,12 @@ export default function WhatsApp() {
     // Request notification permission
     if (Notification.permission === 'default') Notification.requestPermission();
     return () => {
+      mounted = false;
+      stopPolling();
+      if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+      socket.removeAllListeners();
       socket.disconnect();
-      if (pollTimer) clearInterval(pollTimer);
+      socketRef.current = null;
     };
   }, []);
 
@@ -338,18 +359,28 @@ export default function WhatsApp() {
     setReconnecting(true);
     setQrExpired(false);
     qrStartRef.current = null;
+    if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
     // Force start a new session — this generates a fresh QR
     await api.post('/whatsapp/connect').catch(() => {});
-    // Poll for QR (takes 3-10s for Baileys to generate)
+    // Poll for QR (takes 3-10s for Baileys to generate). Cleared on unmount (#306).
     let attempts = 0;
-    const poll = setInterval(async () => {
+    qrPollRef.current = setInterval(async () => {
       attempts++;
       try {
         const r = await api.get('/whatsapp/status');
-        if (r.data.connected) { clearInterval(poll); setConnected(true); setQrCode(null); setReconnecting(false); return; }
-        if (r.data.qr) { clearInterval(poll); setQrCode(r.data.qr); setReconnecting(false); qrStartRef.current = Date.now(); }
+        if (r.data.connected) {
+          if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+          setConnected(true); setQrCode(null); setReconnecting(false); return;
+        }
+        if (r.data.qr) {
+          if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+          setQrCode(r.data.qr); setReconnecting(false); qrStartRef.current = Date.now();
+        }
       } catch {}
-      if (attempts > 15) { clearInterval(poll); setReconnecting(false); }
+      if (attempts > 15) {
+        if (qrPollRef.current) { clearInterval(qrPollRef.current); qrPollRef.current = null; }
+        setReconnecting(false);
+      }
     }, 2000);
   }, []);
 
@@ -363,7 +394,7 @@ export default function WhatsApp() {
           if (!connected) { setConnected(true); setQrCode(null); setReconnecting(false); }
           localStorage.setItem('cc-wa-connected', 'true');
           // Refresh files when connected
-          api.get('/drive/files/ws').then(fr => {
+          api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then(fr => {
             const msgs: Message[] = fr.data.map((f: any) => ({
               id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
               fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
@@ -545,6 +576,10 @@ export default function WhatsApp() {
           continue;
         }
         if (!r.result?.suggested) continue;
+        if (r.result.needsType || r.result.suggested.needs_type || r.result.suggested.document_type?.needsReview) {
+          errors.push(r.doc.fileName + ': needs document type — use the Tag button to set it before Build Profile');
+          continue;
+        }
         const docType = r.result.suggested.document_type?.value || 'other';
         const docPriority = TYPE_PRIORITY[docType] || 30;
 
@@ -606,17 +641,45 @@ export default function WhatsApp() {
     }
   };
 
-  const onConfirmExtraction = async (acceptedFields: Record<string, any>) => {
-    const pid = targetPersonIdRef.current || targetPersonId;
-    console.log('[Save] personId:', pid, 'fields:', Object.keys(acceptedFields).length);
+  const onConfirmExtraction = async (acceptedFields: Record<string, any>, target?: ExtractSaveTarget) => {
+    const defaultPid = targetPersonIdRef.current || targetPersonId;
+    if (target?.chooseProfile && !target.chosenPersonId) {
+      setExtractError('Select a profile from the list, or uncheck “Choose which profile…”');
+      return;
+    }
+    const pid = target?.chooseProfile ? target.chosenPersonId! : defaultPid;
+    console.log('[Save] personId:', pid, 'fields:', Object.keys(acceptedFields).length, 'chooseProfile:', !!target?.chooseProfile);
     if (!pid) { setExtractError('No target person — pick a person first'); return; }
     try {
-      await api.patch(`/customers/persons/${pid}`, { fields: acceptedFields });
+      const phoneFromDocs = Array.from(selectedDocs.values()).map((d) => d.phone).find(Boolean)
+        || selectedChat
+        || '';
+      const nameFromFields = acceptedFields?.name?.value || acceptedFields?.name || '';
+      const r = await api.patch(`/customers/persons/${pid}`, {
+        fields: acceptedFields,
+        phone: phoneFromDocs,
+        name: nameFromFields,
+        createIfMissing: !target?.chooseProfile,
+      }, { skipErrorToast: true } as any);
+      if (r.data?.id) {
+        targetPersonIdRef.current = r.data.id;
+        setTargetPersonId(r.data.id);
+      }
       setExtractedSuggestions(null);
       setTargetPersonId(null);
       exitSelectionMode();
-      toast.success('✅ Profile updated! Open a govt form and use the extension to fill.');
-    } catch (e: any) { setExtractError(e.message); }
+      if (target?.chooseProfile) {
+        toast.success(`✅ Saved to ${target.chosenLabel || 'selected profile'}`);
+      } else if (r.data?.created || r.data?.redirected) {
+        toast.success(
+          `✅ Saved to ${r.data?.name || 'new profile'}${r.data?.created ? ' (created — name did not match selected person)' : ' (matched existing person)'}.`,
+        );
+      } else {
+        toast.success('✅ Profile updated! Open a govt form and use the extension to fill.');
+      }
+    } catch (e: any) {
+      setExtractError(e.response?.data?.error || e.message || 'Save failed');
+    }
   };
 
   const sortedChats = useMemo(() => Array.from(chats.values()).sort((a, b) => b.lastTime.localeCompare(a.lastTime)), [chats]);
@@ -634,6 +697,19 @@ export default function WhatsApp() {
     });
   }, [sortedChats, chatSearch, pinnedChats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
+  const viewerMessages = useMemo(() => activeChat ? activeChat.messages.filter((m) => !!m.fileName) : [], [activeChat]);
+  const handlePrevViewer = useCallback(() => {
+    if (!viewerFile || !viewerMessages.length) return;
+    const idx = viewerMessages.findIndex((msg) => msg.id === viewerFile.id);
+    if (idx <= 0) return;
+    setViewerFile(viewerMessages[idx - 1]);
+  }, [viewerFile, viewerMessages]);
+  const handleNextViewer = useCallback(() => {
+    if (!viewerFile || !viewerMessages.length) return;
+    const idx = viewerMessages.findIndex((msg) => msg.id === viewerFile.id);
+    if (idx < 0 || idx >= viewerMessages.length - 1) return;
+    setViewerFile(viewerMessages[idx + 1]);
+  }, [viewerFile, viewerMessages]);
   const reversedMessages = useMemo(() => {
     if (!activeChat) return [];
     let msgs = [...activeChat.messages].reverse();
@@ -699,7 +775,7 @@ export default function WhatsApp() {
   }
 
   return (
-    <div className="h-full md:h-[calc(100vh-48px)] flex w-full min-w-0 overflow-hidden">
+    <div className="h-full flex w-full min-w-0 overflow-hidden">
       <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
         <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -746,7 +822,7 @@ export default function WhatsApp() {
                 <div className="flex items-center gap-2">
                   <button onClick={() => {
                     // Smart-select only document-type files (skip greetings/photos/junk)
-                    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+                    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
                     const msgs = activeChat?.messages || [];
                     const next = new Map(selectedDocs);
                     let n = 0;
@@ -777,6 +853,7 @@ export default function WhatsApp() {
                     selected={selectedDocs.has(msg.id)}
                     onToggleSelect={toggleDocSelection}
                     onDelete={handleDeleteDoc}
+                    onSetType={(m: Message) => setTypePickerFile(m)}
                   />
                 </>);
               })}
@@ -791,9 +868,27 @@ export default function WhatsApp() {
                   className="px-3 py-1 bg-white text-gray-900 rounded-full text-xs font-bold hover:bg-gray-100">
                   Build Profile
                 </button>
-                <button onClick={() => { const files = Array.from(selectedDocs.values()).map(m => ({ id: m.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || m.id, fileName: m.fileName || '', fileUrl: m.fileUrl || '', customerName: m.name })); window.location.href = '/app/stitch?files=' + encodeURIComponent(JSON.stringify(files)); }}
+                <button onClick={() => {
+                  const first = Array.from(selectedDocs.values())[0];
+                  const driveId = first?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || first?.id;
+                  const phone = first?.phone || '';
+                  const name = first?.name || '';
+                  const q = new URLSearchParams();
+                  if (driveId) q.set('fileId', String(driveId));
+                  if (phone) q.set('phone', String(phone));
+                  if (name) q.set('name', String(name));
+                  window.location.href = '/app/photos/portal?' + q.toString();
+                }}
                   className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  Photo Tool
+                  Portal photo
+                </button>
+                <button onClick={() => { window.location.href = '/app/photos/scan'; }}
+                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                  Scan PDF
+                </button>
+                <button onClick={() => { window.location.href = '/app/photos/aadhaar'; }}
+                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                  Aadhaar
                 </button>
               </div>
             )}
@@ -834,6 +929,11 @@ export default function WhatsApp() {
       {extractedSuggestions && (
         <ExtractionConfirmModal
           suggestions={extractedSuggestions}
+          phone={
+            Array.from(selectedDocs.values()).map((d) => d.phone).find(Boolean)
+            || selectedChat
+            || undefined
+          }
           onCancel={() => { setExtractedSuggestions(null); setTargetPersonId(null); }}
           onConfirm={onConfirmExtraction}
         />
@@ -846,46 +946,53 @@ export default function WhatsApp() {
         </div>
       )}
 
-      {/* Document viewer */}
-      {viewerFile && (
-        <div ref={viewerRef} className="fixed inset-0 z-50 bg-black/90 flex flex-col" onClick={handleCloseViewer} role="dialog" aria-modal="true">
-          <div onClick={e => e.stopPropagation()} className="flex items-center gap-2 px-3 py-2.5 border-b border-white/10">
-            <span className="text-white/90 text-sm font-medium truncate flex-1 min-w-0">{viewerFile.fileName}</span>
-            <button
-              onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load: ' + (err.message || 'unknown')); }); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shrink-0"
-              style={{ background: 'linear-gradient(180deg, hsl(27 95% 58%), hsl(22 92% 50%))' }}
-              title="Print"
-            >
-              <Printer size={15} weight="bold" /><span className="hidden sm:inline">Print</span>
-            </button>
-            <button
-              onClick={() => { const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white shrink-0"
-              style={{ background: 'linear-gradient(180deg, hsl(210 90% 56%), hsl(220 85% 48%))' }}
-              title="Open in Photo Tool"
-            >
-              <Camera size={15} weight="bold" /><span className="hidden sm:inline">Photo Tool</span>
-            </button>
-            <button onClick={handleCloseViewer} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-red-500/80 hover:bg-red-500 shrink-0" title="Close">
-              <X size={15} weight="bold" /><span className="hidden sm:inline">Close</span>
-            </button>
-          </div>
-          <div className="flex-1 flex items-center justify-center p-3 overflow-auto" onClick={handleCloseViewer}>
-            <div onClick={e => e.stopPropagation()} className="flex items-center justify-center max-w-full max-h-full">
-              {(() => {
-                const ext = viewerFile.fileName?.split('.').pop()?.toLowerCase() || '';
-                const driveId = viewerFile.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || '';
-                const imgUrl = driveId ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w1200` : viewerFile.fileUrl || '';
-                const previewUrl = driveId ? `https://drive.google.com/file/d/${driveId}/preview` : '';
-                if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return <img src={imgUrl} className="max-w-full max-h-[80vh] object-contain rounded-lg" />;
-                if (['mp4','3gp','mov','avi','webm'].includes(ext)) return previewUrl ? <iframe src={previewUrl} className="w-[92vw] max-w-3xl h-[72vh] rounded-lg border-0" /> : null;
-                if (ext === 'pdf') return previewUrl ? <iframe src={previewUrl} className="w-[92vw] max-w-3xl h-[80vh] rounded-lg border-0" title="PDF" /> : null;
-                return <div className="bg-white/10 rounded-xl p-8 text-center"><p className="text-white">{viewerFile.fileName}</p></div>;
-              })()}
-            </div>
-          </div>
-        </div>
+      <MediaViewer
+        item={viewerFile}
+        onClose={handleCloseViewer}
+        onPrint={() => {
+          const driveId = viewerFile?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+          if (!driveId) return;
+          void getCachedBlob(driveId, async () => {
+            const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+            return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });
+          }).then(blob => {
+            printBlob(blob);
+          }).catch((err) => {
+            toast.error('Failed to load: ' + (err.message || 'unknown'));
+          });
+        }}
+        onOpenInPhotoTool={() => {
+          const driveId = viewerFile?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+          if (!driveId) return;
+          window.open('/app/photo?fileId=' + driveId, '_blank');
+        }}
+        onDelete={() => {
+          if (!viewerFile) return;
+          handleDeleteDoc(viewerFile.id);
+          setViewerFile(null);
+        }}
+        onPrev={handlePrevViewer}
+        onNext={handleNextViewer}
+        showDelete={!!viewerFile}
+        showNavigator={viewerMessages.length > 1}
+      />
+      {typePickerFile && (
+        <DocTypePickerModal
+          fileId={typePickerFile.id}
+          onClose={() => setTypePickerFile(null)}
+          onDone={(tag) => {
+            setChats((prev) => {
+              const next = new Map(prev);
+              for (const [phone, chat] of next) {
+                const msgs = chat.messages.map((m) =>
+                  m.id === typePickerFile.id ? { ...m, tag, needsType: false } : m
+                );
+                next.set(phone, { ...chat, messages: msgs });
+              }
+              return next;
+            });
+          }}
+        />
       )}
     </div>
   );
@@ -977,8 +1084,23 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
   );
 }
 
-function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
+function ExtractionConfirmModal({
+  suggestions,
+  phone,
+  onCancel,
+  onConfirm,
+}: {
+  suggestions: Record<string, any>;
+  phone?: string;
+  onCancel: () => void;
+  onConfirm: (fields: Record<string, any>, target?: ExtractSaveTarget) => void;
+}) {
   const [accepted, setAccepted] = useState<Record<string, any>>({ ...suggestions });
+  const [target, setTarget] = useState<ExtractSaveTarget>({
+    chooseProfile: false,
+    chosenPersonId: null,
+    chosenLabel: null,
+  });
 
   const toggle = (key: string) => {
     setAccepted((prev: any) => {
@@ -996,7 +1118,13 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
       <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-blue-500/30 rounded-xl p-5 max-w-lg w-full max-h-[85vh] overflow-y-auto">
         <p className="text-sm font-medium text-blue-400 mb-3">Review extracted fields</p>
-        <p className="text-xs text-gray-500 mb-4">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
+        <p className="text-xs text-gray-500 mb-3">Uncheck fields to skip. Edit values inline. Confirm to save with provenance.</p>
+        <ExtractProfileTarget
+          value={target}
+          onChange={setTarget}
+          phone={phone}
+          hint="Only family members on this phone — pick who these details belong to (e.g. bank passbook with no name)."
+        />
         <div className="space-y-2 mb-4">
           {Object.entries(suggestions).map(([k, v]: [string, any]) => (
             <div key={k} className="flex items-center gap-2">
@@ -1011,7 +1139,13 @@ function ExtractionConfirmModal({ suggestions, onCancel, onConfirm }: any) {
           ))}
         </div>
         <div className="flex gap-2">
-          <button onClick={() => onConfirm(accepted)} className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded">Confirm & Save</button>
+          <button
+            onClick={() => onConfirm(accepted, target)}
+            disabled={target.chooseProfile && !target.chosenPersonId}
+            className="flex-1 px-3 py-1.5 bg-green-600 text-white text-sm rounded disabled:opacity-50"
+          >
+            Confirm & Save
+          </button>
           <button onClick={onCancel} className="px-3 py-1.5 bg-white/5 text-gray-400 text-sm rounded">Cancel</button>
         </div>
       </div>

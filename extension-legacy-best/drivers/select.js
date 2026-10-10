@@ -1,3 +1,4 @@
+// Generated from select.ts — edit the .ts source, then re-copy/emit.
 /**
  * Select drivers â€” pick options from native <select>, ng-select, mat-select,
  * and custom JS-driven dropdowns.
@@ -14,7 +15,7 @@
     return document.querySelector(target);
   }
 
-  // Native <select>: find option using shared/option-match.js
+  // Native <select>: find option using shared/option-match.ts
   function pickNativeOption(sel, value) {
     return window.ccMatchOption(value, Array.from(sel.options), { excludePlaceholders: false });
   }

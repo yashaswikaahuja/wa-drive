@@ -1,20 +1,29 @@
 {
   "name": "@cc/orchestrator",
   "version": "1.0.0",
-  "description": "CyberControl fill orchestrator \u2014 sequential kernel + ActionPlan paths",
-  "main": "src/index.js",
+  "description": "CyberControl fill orchestrator — sequential kernel + ActionPlan paths",
+  "type": "module",
+  "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js",
-    "./script-manifests": "./src/script-manifests.js",
-    "./flatten-profile": "./src/flatten-profile.js",
-    "./sequential-kernel-fill": "./src/sequential-kernel-fill.js",
-    "./action-plan-fill": "./src/action-plan-fill.js"
+    ".": "./src/index.ts",
+    "./script-manifests": "./src/script-manifests.ts",
+    "./flatten-profile": "./src/flatten-profile.ts",
+    "./sequential-kernel-fill": "./src/sequential-kernel-fill.ts",
+    "./action-plan-fill": "./src/action-plan-fill.ts",
+    "./mapping-relation": "./src/mapping-relation.ts"
   },
   "scripts": {
-    "build": "echo 'no build \u2014 ESM source-only package'",
-    "test": "node ../../tooling/run-package-tests.mjs"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "node --experimental-strip-types ../../tooling/run-package-tests.ts",
+    "build": "echo 'no build — ESM source-only package'"
   },
-  "type": "module",
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "typescript": "^5.8.3"
+  },
   "license": "UNLICENSED",
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
 }

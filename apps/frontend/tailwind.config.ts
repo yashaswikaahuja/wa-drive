@@ -1,0 +1,52 @@
+// @ts-nocheck
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        cc: {
+          bg: 'var(--cc-bg)',
+          surface: 'var(--cc-surface)',
+          'surface-hover': 'var(--cc-surface-hover)',
+          'surface-pressed': 'var(--cc-surface-pressed)',
+          border: 'var(--cc-border)',
+          'border-strong': 'var(--cc-border-strong)',
+          text: 'var(--cc-text)',
+          'text-secondary': 'var(--cc-text-secondary)',
+          'text-tertiary': 'var(--cc-text-tertiary)',
+          'text-disabled': 'var(--cc-text-disabled)',
+          primary: {
+            DEFAULT: 'var(--cc-primary)',
+            hover: 'var(--cc-primary-hover)',
+            pressed: 'var(--cc-primary-pressed)',
+            soft: 'var(--cc-primary-soft)',
+            bg: 'var(--cc-primary-bg)',
+          },
+          success: { DEFAULT: 'var(--cc-success)', soft: 'var(--cc-success-soft)' },
+          warning: { DEFAULT: 'var(--cc-warning)', soft: 'var(--cc-warning-soft)' },
+          danger:  { DEFAULT: 'var(--cc-danger)',  soft: 'var(--cc-danger-soft)' },
+          info:    { DEFAULT: 'var(--cc-info)',    soft: 'var(--cc-info-soft)' },
+        },
+        background: 'var(--background)',
+        foreground: 'var(--foreground)',
+        card: { DEFAULT: 'var(--card)', foreground: 'var(--card-foreground)' },
+        popover: { DEFAULT: 'var(--popover)', foreground: 'var(--popover-foreground)' },
+        primary: { DEFAULT: 'var(--primary)', foreground: 'var(--primary-foreground)' },
+        secondary: { DEFAULT: 'var(--secondary)', foreground: 'var(--secondary-foreground)' },
+        muted: { DEFAULT: 'var(--muted)', foreground: 'var(--muted-foreground)' },
+        accent: { DEFAULT: 'var(--accent)', foreground: 'var(--accent-foreground)' },
+        destructive: { DEFAULT: 'var(--destructive)', foreground: 'var(--destructive-foreground)' },
+        border: 'var(--border)',
+        input: 'var(--input)',
+        ring: 'var(--ring)',
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+      },
+    },
+  },
+  plugins: [],
+};

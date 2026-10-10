@@ -1,7 +1,7 @@
 /**
  * LocationBanner — the location-capture waterfall UI for logged-in operators.
  *   Tier ① "Use exact location" → browser geolocation popup → reverse-geocode (Google) → save as gps
- *   Tier ③ manual field → Places Autocomplete (if Maps key) else plain text → save as manual
+ *   Tier ③ manual field → PlaceAutocompleteElement (if Maps key) else plain text → save as manual
  * Tier ② (silent IP) already runs server-side at login. The banner shows only while the café has no
  * location or just a coarse IP one — so we nudge for something more precise — and hides otherwise.
  */
@@ -13,12 +13,23 @@ import { hasMapsKey, loadGoogleMaps } from './googleMaps';
 
 type Payload = { location: string | null; lat?: number | null; lng?: number | null; source: 'gps' | 'manual' };
 
+function latLngParts(loc: any): { lat: number | null; lng: number | null } {
+  if (!loc) return { lat: null, lng: null };
+  const lat = typeof loc.lat === 'function' ? loc.lat() : loc.lat;
+  const lng = typeof loc.lng === 'function' ? loc.lng() : loc.lng;
+  return {
+    lat: typeof lat === 'number' ? lat : null,
+    lng: typeof lng === 'number' ? lng : null,
+  };
+}
+
 export default function LocationBanner() {
   const [needed, setNeeded] = useState(false);
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const maps = hasMapsKey();
 
   // Show only when there's no location yet or it's a coarse IP guess (nudge to improve it).
   useEffect(() => {
@@ -27,25 +38,50 @@ export default function LocationBanner() {
       .catch(() => { /* old backend → don't nag */ });
   }, []);
 
-  // Attach Places Autocomplete to the manual field when a Maps key is present.
+  // New Places UI: PlaceAutocompleteElement (legacy Autocomplete is deprecated for new customers).
   useEffect(() => {
-    if (!needed || !hasMapsKey()) return;
-    let ac: any;
-    loadGoogleMaps().then(g => {
-      if (!g?.maps?.places || !inputRef.current) return;
-      ac = new g.maps.places.Autocomplete(inputRef.current, {
-        fields: ['formatted_address', 'geometry', 'name'],
-        componentRestrictions: { country: 'in' },
-      });
-      ac.addListener('place_changed', () => {
-        const p = ac.getPlace();
-        const loc = p.formatted_address || p.name || inputRef.current?.value || '';
-        const lat = p.geometry?.location?.lat?.() ?? null;
-        const lng = p.geometry?.location?.lng?.() ?? null;
-        if (loc) void save({ location: loc, lat, lng, source: 'manual' });
-      });
+    if (!needed || !maps || !hostRef.current) return;
+    let disposed = false;
+    let el: HTMLElement | null = null;
+
+    loadGoogleMaps().then(async (g) => {
+      if (disposed || !g?.maps || !hostRef.current) return;
+      try {
+        const lib = await g.maps.importLibrary('places');
+        const PlaceAutocompleteElement = lib.PlaceAutocompleteElement;
+        if (!PlaceAutocompleteElement || disposed || !hostRef.current) return;
+
+        el = new PlaceAutocompleteElement({ includedRegionCodes: ['in'] }) as unknown as HTMLElement;
+        el.id = 'cc-place-autocomplete';
+        el.setAttribute('placeholder', 'type city / area');
+        el.className = 'cc-place-autocomplete';
+        hostRef.current.innerHTML = '';
+        hostRef.current.appendChild(el);
+
+        el.addEventListener('gmp-select', async (event: any) => {
+          try {
+            const prediction = event.placePrediction;
+            if (!prediction?.toPlace) return;
+            const place = prediction.toPlace();
+            await place.fetchFields({ fields: ['formattedAddress', 'displayName', 'location'] });
+            const loc = place.formattedAddress || place.displayName || '';
+            const { lat, lng } = latLngParts(place.location);
+            if (loc) void save({ location: loc, lat, lng, source: 'manual' });
+          } catch (err: any) {
+            toast.error(err?.message || 'Could not read place');
+          }
+        });
+      } catch {
+        /* Maps library unavailable → plain text field remains usable via fallback UI */
+      }
     });
-  }, [needed]);
+
+    return () => {
+      disposed = true;
+      el?.remove();
+      if (hostRef.current) hostRef.current.innerHTML = '';
+    };
+  }, [needed, maps]);
 
   if (!needed || dismissed) return null;
 
@@ -79,15 +115,32 @@ export default function LocationBanner() {
         <Crosshair size={13} weight="bold" /> {busy ? '…' : 'Use exact location'}
       </button>
       <span className="text-xs pt-muted shrink-0">or</span>
-      <input
-        ref={inputRef} value={value} onChange={e => setValue(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter' && value.trim()) save({ location: value.trim(), source: 'manual' }); }}
-        className="input-field text-sm flex-1 min-w-[8rem]"
-        placeholder="type city / area" aria-label="City or area" maxLength={200}
-      />
-      <button onClick={() => value.trim() && save({ location: value.trim(), source: 'manual' })}
-        disabled={busy || !value.trim()} className="btn-primary text-xs shrink-0">Save</button>
+      {maps ? (
+        <div ref={hostRef} className="flex-1 min-w-[8rem] cc-place-autocomplete-host" aria-label="City or area" />
+      ) : (
+        <>
+          <input
+            value={value} onChange={e => setValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && value.trim()) save({ location: value.trim(), source: 'manual' }); }}
+            className="input-field text-sm flex-1 min-w-[8rem]"
+            placeholder="type city / area" aria-label="City or area" maxLength={200}
+          />
+          <button onClick={() => value.trim() && save({ location: value.trim(), source: 'manual' })}
+            disabled={busy || !value.trim()} className="btn-primary text-xs shrink-0">Save</button>
+        </>
+      )}
       <button onClick={() => setDismissed(true)} className="text-xs pt-muted shrink-0 hover:text-ink">Later</button>
+      <style>{`
+        .cc-place-autocomplete-host gmp-place-autocomplete {
+          width: 100%;
+          display: block;
+        }
+        .cc-place-autocomplete-host gmp-place-autocomplete,
+        .cc-place-autocomplete-host .cc-place-autocomplete {
+          --gmp-mat-color-surface: hsl(var(--pt-surface, 0 0% 100%));
+          color-scheme: inherit;
+        }
+      `}</style>
     </div>
   );
 }

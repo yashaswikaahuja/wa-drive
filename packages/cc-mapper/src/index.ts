@@ -5,7 +5,28 @@ export { resolveChoiceToOption, CcResolveChoice } from './resolve-choice.ts';
 export { decideConditionalChoice, CcDecideConditional } from './decide-conditional.ts';
 export { tryMatch as tryMatchSpecial, isTwinField, isEducationRow, CcMatchSpecialFields } from './match-special-fields.ts';
 export { tryMatch as tryMatchProfile, tryMatchNameParts, tryMatchDob, CcMatchProfileFields } from './match-profile-fields.ts';
-export { applyAll, applyConditionalPost, applyTwinMirror, applySplitDob, CcFuzzyPostPasses } from './fuzzy-post-passes.ts';
+export { applyAll, applyConditionalPost, applyTwinMirror, CcFuzzyPostPasses } from './fuzzy-post-passes.ts';
+export { applySplitDob, parseDobParts } from './split-dob.ts';
+export {
+  profileAtom,
+  isCompoundAtom,
+  looksLikePartField,
+  shapeCompatible,
+  normalizeRelation,
+  relationStrength,
+  applyRelation,
+  induceRelation,
+  materializeSavedRelations,
+} from './mapping-relation.ts';
+export type {
+  DobParts,
+} from './split-dob.ts';
+export type {
+  Relation,
+  RelationProfile,
+  SavedMappingEntry,
+  FilledBySource,
+} from './mapping-relation.ts';
 export { fuzzyMatch, CcFuzzyMatch } from './fuzzy-match.ts';
 export { aiMatch, CcAiMatch } from './ai-match.ts';
 export {

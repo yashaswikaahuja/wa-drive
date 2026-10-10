@@ -1,8 +1,9 @@
-// ── shared/label-utils.js ────────────────────────────────────────────────────
+// Generated from label-utils.ts � edit the .ts source, then re-copy/emit.
+// ── shared/label-utils.ts ────────────────────────────────────────────────────
 // Single source of truth for label normalization, semantic key mapping,
 // and confidence calculation.
 //
-// Used by: mapper.js, background.js, popup.js, rule-engine.js
+// Used by: mapper.ts, background.ts, popup.ts, rule-engine.ts
 //
 // NOTE: This file is loaded via <script> in popup.html AND injected into page
 // context. Keep it pure functions, no DOM, no async.

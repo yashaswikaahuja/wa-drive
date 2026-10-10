@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2018",
+    "module": "None",
+    "lib": ["ES2018", "DOM", "WebWorker"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": []
+  },
+  "include": [
+    "background.ts",
+    "content.ts",
+    "popup.ts",
+    "knowledge-sync.ts",
+    "sw/auth-refresh.ts",
+    "sw/wss-bridge.ts",
+    "application/fill-orchestrator.ts"
+  ]
+}

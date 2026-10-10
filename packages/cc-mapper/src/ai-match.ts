@@ -2,6 +2,7 @@
  * ai-match — LLM-based fallback field mapper
  */
 import type { FormField, Mapping, Profile } from './types.ts';
+import { IDENTITY_PROFILE_KEYS, isTravelJourneyField } from './field-ident.ts';
 
 export async function aiMatch(
   formFields: FormField[],
@@ -18,7 +19,7 @@ export async function aiMatch(
     .filter((kv) => kv[1] && kv[0] !== 'phone' && kv[0] !== 'updatedAt')
     .map((kv) => kv[0] + ': "' + kv[1] + '"').join('\n');
 
-  const prompt = 'You are a form field mapper. Given form fields and a student profile, return a JSON object mapping field index to profile key.\n\nRULES:\n- Return ONLY a valid JSON object, nothing else\n- Map each field to the profile key whose VALUE should fill that field\n- "first name" fields \u2192 use "first_name" profile key\n- "last name" / "surname" fields \u2192 use "last_name" profile key\n- "middle name" fields \u2192 use "middle_name" profile key\n- "full name" / "candidate name" fields \u2192 use "name" profile key\n- Separate day/month/year dropdowns \u2192 use "dob__day", "dob__month", "dob__year"\n- Single "date of birth" text field \u2192 use "dob"\n- For address parts: use "village", "post_office", "police_station", "block", "sub_division", "district", "state", "pincode" as available\n- Only use "address" for full address text fields\n- Confirm/retype fields \u2192 same key as primary field\n- Skip: captcha, OTP, verification code, password\n- Use EXACT profile key names from the list below\n\nForm fields:\n' + fieldDescriptions + '\n\nAvailable profile keys and values:\n' + profileKeys + '\n\nReturn JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}';
+  const prompt = 'You are a form field mapper. Given form fields and a student profile, return a JSON object mapping field index to profile key.\n\nRULES:\n- Return ONLY a valid JSON object, nothing else\n- Map each field to the profile key whose VALUE should fill that field\n- "first name" fields \u2192 use "first_name" profile key\n- "last name" / "surname" fields \u2192 use "last_name" profile key\n- "middle name" fields \u2192 use "middle_name" profile key\n- "full name" / "candidate name" fields \u2192 use "name" profile key\n- Separate day/month/year dropdowns \u2192 use "dob__day", "dob__month", "dob__year"\n- Single "date of birth" text field \u2192 use "dob"\n- For address parts: use "village", "post_office", "police_station", "block", "sub_division", "district", "state", "pincode" as available\n- Only use "address" for full address text fields\n- Confirm/retype fields \u2192 same key as primary field\n- Skip: captcha, OTP, verification code, password\n- NEVER map From/To/station/journey/train/flight/airport/PNR/boarding fields to dob, name, aadhaar, phone, or any identity key\n- For travel fields use: departure/from_station (From), arrival/to_station (To), journey_date (travel date), return_date, travel_class, quota\n- Use EXACT profile key names from the list below\n\nForm fields:\n' + fieldDescriptions + '\n\nAvailable profile keys and values:\n' + profileKeys + '\n\nReturn JSON only: {"0": "name", "2": "dob", "5": "departure", "7": "journey_date"}';
 
   try {
     const ccLLM = typeof window !== 'undefined' ? window.ccLLM : undefined;
@@ -68,6 +69,8 @@ export async function aiMatch(
       if ((profileKey === 'name' || profileKey === 'first_name' || profileKey === 'last_name' || profileKey === 'middle_name') && isRelativeField) continue;
       if (profileKey === 'father_name' && !isFatherField) continue;
       if (profileKey === 'mother_name' && !isMotherField) continue;
+      // Hard guard: never write identity atoms into travel/station fields (#308).
+      if (isTravelJourneyField(field) && IDENTITY_PROFILE_KEYS.has(String(profileKey))) continue;
 
       mapping[field.selector] = { value, type: field.type || '' };
     }
