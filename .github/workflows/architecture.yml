@@ -264,6 +264,13 @@ jobs:
         working-directory: extension-dev/tests/ratification
         run: npm ci
 
+      - name: Build extension-service emit for WSS unit suite
+        run: |
+          # @cc/mapper browser sources must not be pulled into NodeNext tsc;
+          # emit node dist for split-dob / mapping-relation first (paths remap).
+          pnpm --filter @cc/mapper run build:node
+          pnpm --filter cybercontrol-extension-service run build:tsc
+
       - name: "CHECK-005: Unit and knowledge tests"
         run: node --experimental-strip-types extension-dev/tests/ci-unit.ts
 
@@ -320,13 +327,10 @@ jobs:
         working-directory: extension-dev/tests/browser
         run: |
           npm ci
-          # Install chromium matching the exact playwright-core version in the lockfile.
-          # Using npx playwright@<ver> ensures the browser binary matches the library —
-          # avoids the "Executable doesn't exist" mismatch when the global playwright
-          # version on the runner differs from the project's playwright-core version.
-          PW_VERSION=$(node -e "const p=require('./package-lock.json');console.log(p.packages?.['node_modules/playwright-core']?.version||p.dependencies?.['playwright-core']?.version)")
-          echo "Installing Playwright Chromium for playwright-core@${PW_VERSION}"
-          npx "playwright@${PW_VERSION}" install chromium --with-deps
+          # Pin to the same major/minor as playwright-core in package.json so
+          # browser revision matches what tests launch (avoids missing
+          # chromium_headless_shell-* after Node bumps).
+          npx --yes playwright@1.62.1 install chromium --with-deps
 
       - name: "CHECK-005: Browser tests"
         run: node --experimental-strip-types extension-dev/tests/ci-browser.ts

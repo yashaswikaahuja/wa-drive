@@ -47,8 +47,10 @@ if (existsSync(fillOrch)) {
 }
 
 // Legacy gate lives in packages/cc-shared (turborepo), always closed
-const gatePath = resolve(ROOT, 'packages/cc-shared/src/legacy-fill-gate.js');
-ok(existsSync(gatePath), 'packages/cc-shared/src/legacy-fill-gate.js exists');
+const gatePathTs = resolve(ROOT, 'packages/cc-shared/src/legacy-fill-gate.ts');
+const gatePathJs = resolve(ROOT, 'packages/cc-shared/src/legacy-fill-gate.js');
+const gatePath = existsSync(gatePathTs) ? gatePathTs : gatePathJs;
+ok(existsSync(gatePath), 'packages/cc-shared/src/legacy-fill-gate.ts exists');
 if (existsSync(gatePath)) {
   const gate = readFileSync(gatePath, 'utf8');
   ok(gate.includes('return false'), 'legacy-fill-gate always returns false');
