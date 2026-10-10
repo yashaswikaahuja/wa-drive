@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── Rule engine (runs in page context) ─────────────────────────────────────
 // Pure evaluation of a saved field-mapping entry against a customer profile.
 // Produces a concrete fill ACTION the fill code applies. Shared shape with the
@@ -87,8 +86,8 @@ function ccEvaluateField(entry, field, profile, translations) {
     if (grp === 'checkbox') {
       const listv = entry.profileKey ? profile[entry.profileKey] : null;
       if (listv == null || listv === '') return { kind: 'skip' };
-      const parts = String(listv).split(/[,;/|]/).map(s => s.trim()).filter(Boolean);
-      const checks = options.filter(o => parts.some(p => ccNormVal(o).includes(ccNormVal(p)) || ccNormVal(p).includes(ccNormVal(o))));
+      const parts = String(listv).split(/[,;/|]/).map((s: any) => s.trim()).filter(Boolean);
+      const checks = options.filter((o: any) => parts.some(p => ccNormVal(o).includes(ccNormVal(p)) || ccNormVal(p).includes(ccNormVal(o))));
       return checks.length ? { kind: 'checkOptions', options: checks } : { kind: 'skip' };
     }
     if (grp === 'radio' || grp === 'dropdown') {

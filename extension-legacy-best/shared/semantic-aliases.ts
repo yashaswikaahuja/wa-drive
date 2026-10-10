@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Semantic Aliases (Service-Provided)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -80,7 +79,7 @@
         aliases[key] = newAliases[key];
       } else {
         var existing = aliases[key];
-        newAliases[key].forEach(function (a) {
+        newAliases[key].forEach(function (a: any) {
           if (existing.indexOf(a) === -1) existing.push(a);
         });
       }

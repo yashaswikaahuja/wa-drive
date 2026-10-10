@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Load knowledge sync client (must be first — other code references ccKnowledgeSync)
 try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.ts load failed:', e.message); }
 
@@ -28,8 +27,8 @@ async function getSemanticKeyResolved(label) {
   // Check cached server aliases (variant→canonical lookup)
   if (typeof ccKnowledgeSync !== 'undefined') {
     const aliases = await ccKnowledgeSync.getCachedAliases();
-    for (const [canonical, variants] of Object.entries(aliases)) {
-      if (variants.includes(n) || variants.includes(label)) return canonical;
+    for (const [canonical, variants] of Object.entries(aliases) as any) {
+      if ((variants as any).includes(n) || (variants as any).includes(label)) return canonical;
     }
   }
   return n;
@@ -217,10 +216,10 @@ async function runJobDispatch(envelope, tabId) {
           }
         }
         // Fuzzy fill remaining
-        const um = formFields.filter(f => !mapping[f.selector]);
+        const um = formFields.filter((f: any) => !mapping[f.selector]);
         if (um.length > 0) {
           const fz = fuzzyMatch(um, prof);
-          for (const [s, v] of Object.entries(fz)) { mapping[s] = v; const ff = formFields.find(x => x.selector === s); if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' }; }
+          for (const [s, v] of Object.entries(fz) as any) { mapping[s] = v; const ff = formFields.find((x: any) => x.selector === s); if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' }; }
         }
         // Adapters
         let adp = {};
@@ -228,7 +227,7 @@ async function runJobDispatch(envelope, tabId) {
         // Run executor (returns total filled)
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
         const records = JSON.parse(document.body.getAttribute('data-cc-records') || '[]');
-        const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
+        const failed = records.filter((r: any) => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
         // Sync mappings — labels, types, order, options (same as popup path)
         try {
           const updates = {};
@@ -420,7 +419,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
   if (!tabId) { console.error('[CC] no tabId, aborting teach'); _teachRunning = false; stopKeepalive(); return; }
   // Native <select> and radio are handled by executor directly — only teach custom dropdowns
   const TEACHABLE_TYPES = ['ng-dropdown', 'mat-select', 'mat-radio'];
-  const teachable = fields.filter(f => TEACHABLE_TYPES.includes(f.type));
+  const teachable = fields.filter((f: any) => TEACHABLE_TYPES.includes(f.type));
 
   if (teachable.length === 0) {
     notifyPopup({ type: 'TEACH_PROGRESS', status: 'No interactive fields need teaching.', done: true });
@@ -461,7 +460,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
           func: (lbl) => {
             // Collect outer HTML of elements that look like custom dropdowns near the label
             const snippets = [];
-            document.querySelectorAll('div,span,ul,ng-select,app-dropdown,[class*=select],[class*=dropdown],[class*=picker]').forEach(el => {
+            document.querySelectorAll('div,span,ul,ng-select,app-dropdown,[class*=select],[class*=dropdown],[class*=picker]').forEach((el: any) => {
               if (el.tagName === 'SELECT' || el.tagName === 'INPUT') return;
               const text = el.textContent.slice(0, 100);
               if (text.toLowerCase().includes(lbl.toLowerCase().slice(0, 10))) {
@@ -512,7 +511,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
     if (!injectResult) { _teachRunning = false; stopKeepalive(); return; }
 
     // Poll sessionStorage for result (up to 45s) — background stays alive
-    const adapter = await pollTeachResult(tabId, 45000);
+    const adapter: any = await pollTeachResult(tabId, 45000);
     console.log('[CC] pollTeachResult returned:', JSON.stringify(adapter));
     // Always clear page teach state after poll (timeout or success)
     await chrome.scripting.executeScript({
@@ -532,7 +531,7 @@ async function runTeachSession({ tabId, fields, backendUrl, hostname, groqKey, l
 
     const saveUrl = `${backendUrl}/adapters/${hostname}`;
     console.log('[CC] saving adapter to:', saveUrl, 'adapter:', JSON.stringify(adapter).slice(0,200));
-    const saveRes = await fetch(saveUrl, {
+    const saveRes: any = await fetch(saveUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(adapter),
@@ -615,7 +614,7 @@ Reply with ONLY valid JSON (no markdown):
         const root = document.querySelectorAll('div.' + compClass)[f.domIndex ?? 0];
         // Also capture any newly added overlay/dropdown list
         const overlay = Array.from(document.querySelectorAll('ul,div[class*="dropdown-list"],div[class*="options"],div[class*="menu"]'))
-          .find(el => el.offsetParent !== null && el.querySelectorAll('li,[class*="option"]').length > 0);
+          .find((el: any) => el.offsetParent !== null && el.querySelectorAll('li,[class*="option"]').length > 0);
         return {
           rootHtml: root?.outerHTML?.slice(0, 800) || '',
           overlayHtml: overlay?.outerHTML?.slice(0, 1200) || '',
@@ -652,7 +651,7 @@ Reply with ONLY valid JSON:
       target: { tabId }, world: 'MAIN',
       func: (optSel, optText) => {
         const opts = Array.from(document.querySelectorAll(optSel));
-        const opt = opts.find(o => o.textContent.trim() === optText) || opts.find(o => o.textContent.trim().includes(optText.slice(0, 10)));
+        const opt = opts.find((o: any) => o.textContent.trim() === optText) || opts.find((o: any) => o.textContent.trim().includes(optText.slice(0, 10)));
         if (opt) { opt.click(); return opt.textContent.trim(); }
         return null;
       },
@@ -712,7 +711,7 @@ function teachOneField(field) {
     if (!root) {
       const allDropdowns = Array.from(document.querySelectorAll(
         `div.${compClass},[class*=dropdown],[class*=select],[class*=picker]`
-      )).filter(el => el.tagName !== 'SELECT' && el.tagName !== 'INPUT');
+      )).filter((el: any) => el.tagName !== 'SELECT' && el.tagName !== 'INPUT');
       root = allDropdowns[field.domIndex] || null;
     }
   }
@@ -721,7 +720,7 @@ function teachOneField(field) {
   }
   if (!root) {
     const baseLabel = field.label.replace(/\s*\(\d+\)$/, '').replace(/[\n*]/g,'').trim().slice(0,15);
-    document.querySelectorAll(`div.${compClass}, mat-select, [role=combobox]`).forEach(el => {
+    document.querySelectorAll(`div.${compClass}, mat-select, [role=combobox]`).forEach((el: any) => {
       const lbl = el.querySelector('.label, mat-label, label')?.textContent?.trim() || el.getAttribute('aria-label') || '';
       if (lbl && baseLabel && lbl.includes(baseLabel)) root = el;
     });
@@ -784,9 +783,9 @@ function teachOneField(field) {
     const matVal = root.querySelector('.mat-select-value-text,.mat-mdc-select-value-text');
     if (matVal) return matVal.textContent.trim();
     const clone = root.cloneNode(true);
-    clone.querySelectorAll('ul,ol,[class*="options"],[class*="dropdown-list"],[class*="drop-list"],[class*="menu"],[class*="items"]').forEach(e => e.remove());
+    clone.querySelectorAll('ul,ol,[class*="options"],[class*="dropdown-list"],[class*="drop-list"],[class*="menu"],[class*="items"]').forEach((e: any) => e.remove());
     // Remove placeholder only if it has placeholder class (not value class)
-    clone.querySelectorAll('[class*="placeholder"]:not([class*="value"])').forEach(e => e.remove());
+    clone.querySelectorAll('[class*="placeholder"]:not([class*="value"])').forEach((e: any) => e.remove());
     return clone.textContent.replace(labelText, '').trim();
   };
   const initialValue = getDisplayText();
@@ -794,7 +793,7 @@ function teachOneField(field) {
   const verifySel = (() => {
     const el = root.querySelector('.select-type') || root.querySelector('.value-area');
     if (!el) return '';
-    const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
+    const cls = (el.className || '').trim().split(/\s+/).filter((c: any) => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
     return cls ? '.' + cls : '';
   })();
 
@@ -835,7 +834,7 @@ function teachOneField(field) {
                    e.clientY >= rr.top - 20 && e.clientY <= rr.bottom + 200;
     if (!inArea) return;
     const el = e.target;
-    const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
+    const cls = (el.className || '').trim().split(/\s+/).filter((c: any) => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
     if (cls) triggerSelector = '.' + cls;
     triggerCaptured = true;
     badge.textContent = '⚠ Select an option from the list';
@@ -848,7 +847,7 @@ function teachOneField(field) {
   const _teachAddedNodes = [];
   const _teachMo = new MutationObserver(mutations => {
     for (const m of mutations) {
-      m.addedNodes.forEach(n => { if (n.nodeType === 1) _teachAddedNodes.push(n); });
+      m.addedNodes.forEach((n: any) => { if (n.nodeType === 1) _teachAddedNodes.push(n); });
     }
   });
   function isVisibleTeach(node) {
@@ -868,7 +867,7 @@ function teachOneField(field) {
       _teachMo.disconnect();
       for (const node of _teachAddedNodes) {
         if (!isVisibleTeach(node)) continue;
-        const lis = Array.from(node.querySelectorAll('li')).filter(o => isVisibleTeach(o));
+        const lis = Array.from(node.querySelectorAll('li')).filter((o: any) => isVisibleTeach(o));
         if (lis.length > 0) { _teachOverlayRoot = node; break; }
       }
       console.log('[CC] teach overlay root:', _teachOverlayRoot ? _teachOverlayRoot.tagName + '.' + _teachOverlayRoot.className.slice(0,40) : 'none');
@@ -893,10 +892,10 @@ function teachOneField(field) {
       let optionSelector = 'li';
       let containerSel = '';
       const searchRoot = _teachOverlayRoot || document;
-      searchRoot.querySelectorAll('li, [class*="option"], [class*="item"]').forEach(el => {
+      searchRoot.querySelectorAll('li, [class*="option"], [class*="item"]').forEach((el: any) => {
         if (!isVisibleTeach(el) && el.offsetParent === null) return;
         if (el.textContent.trim() === currentValue) {
-          const cls = (el.className || '').trim().split(/\s+/).filter(c => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
+          const cls = (el.className || '').trim().split(/\s+/).filter((c: any) => c && !c.startsWith('ng-') && !c.startsWith('_ng'))[0];
           optionSelector = cls ? (el.tagName.toLowerCase() + '.' + cls) : el.tagName.toLowerCase();
           if (_teachOverlayRoot) {
             const tag = _teachOverlayRoot.tagName.toLowerCase();
@@ -963,4 +962,4 @@ function normalizeFieldLabel(label) {
   return (label || '').replace(/\n/g, ' ').replace(/^\d+\.\s*/, '').replace(/^[a-z]\.\s*/i, '').replace(/\*$/, '').trim();
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms) { return new Promise<void>(r => setTimeout(r, ms)); }

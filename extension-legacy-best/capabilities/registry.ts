@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Capability Registry
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -251,7 +250,7 @@
       // Poll for matching option (handles cascade selects where options load async)
       var opt = null;
       while (Date.now() < deadline) {
-        var options = Array.from(el.options);
+        var options = Array.from(el.options as any);
         opt = window.ccMatchOption ? window.ccMatchOption(value, options) : null;
         if (opt) break;
         // If select has only 1 option (placeholder), wait for more to load
@@ -262,7 +261,7 @@
         // Has multiple options but none match — wait a bit more (DWR can be slow)
         await new Promise(function (r) { setTimeout(r, 500); });
         // Re-check after wait
-        options = Array.from(el.options);
+        options = Array.from(el.options as any);
         opt = window.ccMatchOption ? window.ccMatchOption(value, options) : null;
         if (opt) break;
         // Still no match — keep polling if we have time

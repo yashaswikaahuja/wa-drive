@@ -1,4 +1,3 @@
-// @ts-nocheck
 async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters, allFields) {
   portalAdapters = portalAdapters || {};
   console.log('[CC] fillFormFieldsSequential started v' + ((typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) ? chrome.runtime.getManifest().version : 'inj') + ', fields:', Object.keys(mapping).length);
@@ -26,11 +25,11 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   }
   function _realOptions(el) {
     if (!el || !el.options) return [];
-    return Array.from(el.options).filter((o) => !_isPlaceholderOption(o));
+    return Array.from(el.options as any).filter((o: any) => !_isPlaceholderOption(o));
   }
-  function _sampleOptions(el, n) {
+  function _sampleOptions(el: any, n?: any) {
     n = n || 8;
-    return _realOptions(el).slice(0, n).map((o) => ({
+    return _realOptions(el).slice(0, n).map((o: any) => ({
       value: String(o.value || '').slice(0, 40),
       text: String(o.text || '').trim().slice(0, 60),
     }));
@@ -118,16 +117,16 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
    *   select — dropdown (may load options for later fields)
    *   button — navigation / section reveal
    */
-  async function settleAfterAct(kind, opts) {
+  async function settleAfterAct(kind: any, opts?: any) {
     opts = opts || {};
     const budget = typeof opts.budgetMs === 'number' ? opts.budgetMs : _ajaxWaitBudgetMs;
     if (kind === 'text') {
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise<void>((r) => setTimeout(r, 100));
       return { idle: true, waitedMs: 100, kind: 'text' };
     }
     // Let DWR/XHR kick off after change/click
     const kick = kind === 'button' ? 300 : 200;
-    await new Promise((r) => setTimeout(r, kick));
+    await new Promise<void>((r) => setTimeout(r, kick));
     let maxNet = kind === 'button' ? 5000 : kind === 'select' ? 4500 : 3500;
     maxNet = Math.min(maxNet, Math.max(300, budget > 0 ? budget : 400));
     const quiet = kind === 'select' ? 150 : 120;
@@ -222,7 +221,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
   // Detect which strategy applies to a field (for ReplayRecord tagging)
   function detectStrategy(el, type) {
-    for (const [key, s] of Object.entries(STRATEGY_REGISTRY)) {
+    for (const [key, s] of Object.entries(STRATEGY_REGISTRY) as any) {
       try { if (s.applies(el, type)) return key; } catch {}
     }
     return type || 'unknown';
@@ -235,7 +234,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   async function verifyValue(selector, expected, settleMs) {
     settleMs = (typeof settleMs === 'number') ? settleMs : 150;
     // Wait for framework to react (validators, formatters, ControlValueAccessor)
-    if (settleMs > 0) await new Promise(r => setTimeout(r, settleMs));
+    if (settleMs > 0) await new Promise<void>(r => setTimeout(r, settleMs));
     // Resolve element — index-based selectors use the same getEl() helper
     let liveEl;
     if (selector && selector.startsWith && selector.startsWith('form-field-')) {
@@ -281,9 +280,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   }
 
   // ── WaitEngine — state-based waits replacing fixed setTimeout delays ──────
-  function waitForOptions(selector, minCount, timeout) {
+  function waitForOptions(selector: any, minCount?: any, timeout?: any) {
     minCount = minCount || 1; timeout = timeout || 8000;
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve: (v?: any) => void) {
       var deadline = Date.now() + timeout;
       var resolved = false;
       var poll, mo;
@@ -297,7 +296,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       function check() {
         if (resolved) return;
         var el = document.querySelector(selector);
-        var real = Array.from(el ? el.options || [] : []).filter(function(o) {
+        var real = Array.from(el ? el.options || [] : []).filter(function (o: any) {
           return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
         });
         if (real.length >= minCount) { cleanup(el); return; }
@@ -315,7 +314,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
   function waitForDOMQuiet(ms) {
     ms = ms || 300;
-    return new Promise(function(resolve) {
+    return new Promise(function (resolve: (v?: any) => void) {
       var last = Date.now();
       var mo = new MutationObserver(function() { last = Date.now(); });
       mo.observe(document.body, { childList: true, subtree: true });
@@ -330,7 +329,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
    * Resolve when the page network has been idle for `quietMs` consecutive
    * milliseconds. Delegates to shared/network-idle.ts.
    */
-  function waitForNetworkIdle(quietMs, maxMs) {
+  function waitForNetworkIdle(quietMs: any, maxMs?: any) {
     return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
   }
 
@@ -348,7 +347,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     'pin_code', 'pincode', 'पिन',
     'municipal', 'नगर',
   ];
-  const entries = Object.entries(mapping);
+  const entries: any[] = Object.entries(mapping) as any;
   // Sort by actual DOM position (compareDocumentPosition)
   function getEl(sel) {
     if (sel.startsWith('form-field-')) {
@@ -396,7 +395,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         const rootClass = el.className ? el.className.trim().split(/\s+/)[0] : 'ng-dropdown';
         const adapter = portalAdapters[rootClass] || portalAdapters['ng-dropdown'];
         if (adapter) {
-          const _label = filledBySource[selector]?.label || selector;
+          const _label = (filledBySource as any)[selector]?.label || selector;
           const trigger = el.querySelector(adapter.triggerSelector) || el;
 
           // ── Session lifecycle ────────────────────────────────────────
@@ -406,7 +405,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             const old = window._ccReplaySessions.get(_label);
             old.cancelled = true;
             clearInterval(old.pollTimer);
-            old.timeoutIds.forEach(id => clearTimeout(id));
+            old.timeoutIds.forEach((id: any) => clearTimeout(id));
             if (old.observer) old.observer.disconnect();
             window._ccReplaySessions.delete(_label);
             console.log('[CC][session-cancel] id='+old.id+' label='+_label);
@@ -429,11 +428,11 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           }
 
           function cleanupSession(result) {
-            if (session.resolved && result !== session._result) return; // already resolved, don't overwrite
+            if (session.resolved && result !== (session as any)._result) return; // already resolved, don't overwrite
             session.resolved = true;
-            session._result = result;
+            (session as any)._result = result;
             clearInterval(session.pollTimer);
-            session.timeoutIds.forEach(id => clearTimeout(id));
+            session.timeoutIds.forEach((id: any) => clearTimeout(id));
             if (session.observer) { session.observer.disconnect(); session.observer = null; }
             window._ccReplaySessions.delete(_label);
             _replayResults[_label] = result;
@@ -456,7 +455,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           const mo = new MutationObserver(mutations => {
             if (session.cancelled || session.resolved) return;
             for (const m of mutations) {
-              m.addedNodes.forEach(n => { if (n.nodeType === 1) addedNodes.push(n); });
+              m.addedNodes.forEach((n: any) => { if (n.nodeType === 1) addedNodes.push(n); });
             }
           });
           session.observer = mo;
@@ -489,16 +488,16 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             for (const node of addedNodes) {
               if (!isVisible(node)) continue;
               const _optQ = adapter.optionSelector || 'li,.ng-option,mat-option,.dropdown-item';
-              const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
+              const lis = Array.from(node.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
               if (lis.length > 0) { activeOverlayRoot = node; break; }
             }
             // Priority 2: existing overlay nearest trigger with visible options
             if (!activeOverlayRoot) {
               let bestDist = Infinity;
-              OVERLAY_TAGS.forEach(sel => {
+              OVERLAY_TAGS.forEach((sel: any) => {
                 try {
-                  document.querySelectorAll(sel).forEach(node => {
-                    const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
+                  document.querySelectorAll(sel).forEach((node: any) => {
+                    const lis = Array.from(node.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
                     if (lis.length === 0) return;
                     const r = node.getBoundingClientRect();
                     const dist = Math.abs(r.left - trigRect.left) + Math.abs(r.top - trigRect.bottom);
@@ -513,7 +512,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             }
             // Priority 4: options already in DOM inside the root component
             if (!activeOverlayRoot) {
-              const rootLis = Array.from(root.querySelectorAll(_optQ)).filter(o => isVisible(o));
+              const rootLis = Array.from(root.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
               if (rootLis.length > 0) activeOverlayRoot = root;
             }
 
@@ -528,15 +527,15 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
               attempts++;
               // Search in overlay root, then root component, then document
               const searchRoot = activeOverlayRoot || root;
-              let opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter(o => isVisible(o));
+              let opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
               // Fallback: if root has no visible options, try document
               if (opts.length === 0 && searchRoot !== document) {
-                opts = Array.from(document.querySelectorAll(_optQ)).filter(o => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
+                opts = Array.from(document.querySelectorAll(_optQ)).filter((o: any) => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
               console.log('[CC][poll] id='+session.id+' attempt='+attempts+' opts='+opts.length+' v='+v);
-              if (opts.length > 0 && attempts === 1) console.log('[CC][poll] sample:', opts.slice(0,3).map(o=>o.textContent.trim()));
+              if (opts.length > 0 && attempts === 1) console.log('[CC][poll] sample:', opts.slice(0,3).map((o: any) =>o.textContent.trim()));
 
               // ── Matching cascade: exact → contains → reverse-contains → token overlap → synonym
               function _matchScore(optText) {
@@ -545,9 +544,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
                 if (ot.includes(v)) return 80;
                 if (v.includes(ot) && ot.length > 3) return 70;
                 // Token overlap: split both into words, count matching tokens
-                const vToks = v.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
-                const oToks = ot.split(/[\s()+,/\-]+/).filter(t=>t.length>2);
-                const overlap = vToks.filter(t => oToks.some(o => o.includes(t) || t.includes(o))).length;
+                const vToks = v.split(/[\s()+,/\-]+/).filter((t: any) =>t.length>2);
+                const oToks = ot.split(/[\s()+,/\-]+/).filter((t: any) =>t.length>2);
+                const overlap = vToks.filter((t: any) => oToks.some(o => o.includes(t) || t.includes(o))).length;
                 if (overlap >= 2) return 60;
                 if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
                 // Common education synonyms
@@ -565,7 +564,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
                 return 0;
               }
               let bestOpt = null, bestScore = 0;
-              for (const o of opts) {
+              for (const o of opts as any[]) {
                 const score = _matchScore(o.textContent.trim());
                 if (score > bestScore) { bestScore = score; bestOpt = o; }
               }
@@ -577,7 +576,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
                 _trace.matchedOption = opt.textContent.trim();
                 _trace.clicked = true;
                 console.log('[CC][poll] matched: '+_trace.matchedOption+' id='+session.id);
-                ['pointerdown','mousedown','mouseup','click'].forEach(ev =>
+                ['pointerdown','mousedown','mouseup','click'].forEach((ev: any) =>
                   opt.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }))
                 );
                 // Multi-stage verify
@@ -616,7 +615,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           return 1;
         }
         // No adapter yet
-        const _noAdapterLabel = filledBySource[selector]?.label || selector;
+        const _noAdapterLabel = (filledBySource as any)[selector]?.label || selector;
         _replayResults[_noAdapterLabel] = 'no-adapter';
         sessionStorage.setItem('_cc_replay_results', JSON.stringify(_replayResults));
         return 0;
@@ -629,10 +628,10 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         setTimeout(() => {
           const v = value.toLowerCase().trim();
           const opts = Array.from(document.querySelectorAll('mat-option,.mat-option,.mat-mdc-option'));
-          const opt = opts.find(o => o.textContent.trim().toLowerCase() === v) ||
-                      opts.find(o => o.textContent.trim().toLowerCase().startsWith(v)) ||
-                      opts.find(o => v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2) ||
-                      opts.find(o => o.textContent.trim().toLowerCase().includes(v));
+          const opt = opts.find((o: any) => o.textContent.trim().toLowerCase() === v) ||
+                      opts.find((o: any) => o.textContent.trim().toLowerCase().startsWith(v)) ||
+                      opts.find((o: any) => v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2) ||
+                      opts.find((o: any) => o.textContent.trim().toLowerCase().includes(v));
           if (opt) opt.click(); else document.body.click();
         }, 400);
         return 1; // fire-and-forget, count as filled
@@ -664,13 +663,13 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       if (type === 'radio-click') {
         el.focus();
         el.checked = true;
-        ['click','change'].forEach(ev => el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
+        ['click','change'].forEach((ev: any) => el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
         return 1;
       }
       if (elType === 'select') {
         const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
         const v = norm(value);
-        const vWords = v.split(' ').filter(w => w.length > 1);
+        const vWords = v.split(' ').filter((w: any) => w.length > 1);
         const extraValues = [];
         if (mapping[selector]?.monthNum) { extraValues.push(mapping[selector].monthNum.toString()); if (mapping[selector].monthShort) extraValues.push(mapping[selector].monthShort.toLowerCase()); }
 
@@ -684,7 +683,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           el.dispatchEvent(new Event('focus', { bubbles: true }));
 
           // Step 1: Mark the option directly (most reliable for ASP.NET/NIC)
-          Array.from(el.options).forEach(o => { o.selected = false; });
+          Array.from(el.options as any).forEach((o: any) => { o.selected = false; });
           opt.selected = true;
           el.selectedIndex = opt.index;
 
@@ -694,7 +693,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           else el.value = opt.value;
 
           // Step 3: Fire full event sequence
-          ['mousedown','mouseup','click','input','change'].forEach(ev =>
+          ['mousedown','mouseup','click','input','change'].forEach((ev: any) =>
             el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }))
           );
           // Trigger ASP.NET onchange handler directly if present
@@ -735,9 +734,9 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
           return 1;
         }
 
-        const allOptions = Array.from(el.options);
+        const allOptions: any[] = Array.from(el.options as any);
         const opt = findOpt(allOptions);
-        console.debug('[CC] select attempt:', selector, 'value:', value, 'total opts:', allOptions.length, 'matched:', opt ? opt.text.trim() : 'NONE', 'sample:', allOptions.slice(0,3).map(o=>o.value+'='+o.text.trim()));
+        console.debug('[CC] select attempt:', selector, 'value:', value, 'total opts:', allOptions.length, 'matched:', opt ? opt.text.trim() : 'NONE', 'sample:', allOptions.slice(0,3).map((o: any) =>o.value+'='+o.text.trim()));
         if (opt) return applySelect(el, opt);
 
         // Options not ready yet (dependent dropdown) — schedule retry
@@ -745,8 +744,8 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         // This retry is a fallback for when fillOne is called directly (not through the cascade path).
         let attempts = 0;
         const interval = setInterval(() => {
-          const allOpts = Array.from(el.options);
-          const realOpts = allOpts.filter(o => {
+          const allOpts: any[] = Array.from(el.options as any);
+          const realOpts = allOpts.filter((o: any) => {
             if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
             const txt = o.text.toLowerCase();
             return !txt.includes('select') && !txt.includes('choose') && !txt.includes('loading') && txt !== '--';
@@ -759,7 +758,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             // AI fallback — ask LLM to pick the best option
             const groqKey = window._cc_groq_key || (document.body.getAttribute('data-cc-llm-key') || '');
             if (groqKey && realOpts.length > 0) {
-              const optTexts = realOpts.map(o => o.text.trim()).join('\n');
+              const optTexts = realOpts.map((o: any) => o.text.trim()).join('\n');
               window.ccLLM.call({
                 apiKey: groqKey,
                 baseUrl: document.body.getAttribute('data-cc-llm-url') || undefined,
@@ -769,12 +768,12 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
               }).then(result => {
                 const aiText = (result.text || '').trim();
                 if (aiText) {
-                  const aiOpt = realOpts.find(o => o.text.trim() === aiText) || realOpts.find(o => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
+                  const aiOpt = realOpts.find((o: any) => o.text.trim() === aiText) || realOpts.find((o: any) => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
                   if (aiOpt) { console.debug('[CC] AI matched:', aiText, '->', aiOpt.text); applySelect(el, aiOpt); }
                 }
               }).catch(() => {});
             }
-            console.debug('[CC] select no match after wait:', selector, 'value:', value, 'opts:', realOpts.slice(0,5).map(o=>o.text.trim()));
+            console.debug('[CC] select no match after wait:', selector, 'value:', value, 'opts:', realOpts.slice(0,5).map((o: any) =>o.text.trim()));
           }
         }, 200);
         return 1; // counted as filled; actual value applied async
@@ -783,7 +782,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         const normR = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
         const vR = normR(value);
         const radios = document.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
-        const match = Array.from(radios).find(r => {
+        const match = Array.from(radios).find((r: any) => {
           if (normR(r.value) === vR) return true;
           const lbl = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
           const lblText = lbl ? normR(lbl.textContent) : '';
@@ -792,7 +791,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         if (match) {
           match.focus();
           match.checked = true;
-          ['click','change'].forEach(ev => match.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
+          ['click','change'].forEach((ev: any) => match.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
           match.dispatchEvent(new Event('blur', { bubbles: true }));
           return 1;
         }
@@ -817,7 +816,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
             const [meta, b64] = value.split(',');
             const mime = meta.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
             const ext = mime.split('/')[1] || 'bin';
-            const fileName = (filledBySource[selector]?.label || 'file').replace(/[^a-z0-9]/gi, '_') + '.' + ext;
+            const fileName = ((filledBySource as any)[selector]?.label || 'file').replace(/[^a-z0-9]/gi, '_') + '.' + ext;
             const binary = atob(b64);
             const bytes = new Uint8Array(binary.length);
             for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -1001,7 +1000,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
     for (const [selector, fieldData] of entries) {
       const { value, type } = fieldData;
       let isNgDropdown = type === 'ng-dropdown' || selector.startsWith('ng-dropdown-');
-      const fieldLabel = (filledBySource[selector]?.label || selector).toLowerCase();
+      const fieldLabel = ((filledBySource as any)[selector]?.label || selector).toLowerCase();
       // Cascade treatment only applies to actual dropdowns (state→district→block
       // selects that load options via AJAX). A TEXT field labeled "district"
       // must NOT wait for <option>s it will never have.
@@ -1035,17 +1034,17 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
       // Scroll into view
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise<void>(r => setTimeout(r, 300));
       }
 
       const _t0 = Date.now();
       // Label is semantic authority; selector is only the act target
       const _fieldCtx = {
         type,
-        label: fieldData.label || filledBySource[selector]?.label || selector,
-        profileKey: fieldData.profileKey || filledBySource[selector]?.profileKey || '',
+        label: fieldData.label || (filledBySource as any)[selector]?.label || selector,
+        profileKey: fieldData.profileKey || (filledBySource as any)[selector]?.profileKey || '',
         selector,
-        matchBy: fieldData.matchBy || filledBySource[selector]?.matchBy || 'label',
+        matchBy: fieldData.matchBy || (filledBySource as any)[selector]?.matchBy || 'label',
       };
       // Diagnostic: which path will this field take?
       const _selectLike2 = /^(select|dropdown|ng-dropdown|mat-select)$/.test(type || '');
@@ -1403,11 +1402,11 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
         : el.value || '';
       snapshot[selector] = val;
-      const rec = _ccRecords.find(r => r.selector === selector);
+      const rec = _ccRecords.find((r: any) => r.selector === selector);
       fieldMeta[selector] = {
-        label: filledBySource[selector]?.label || selector,
-        semanticKey: filledBySource[selector]?.semanticKey || '',
-        profileKey: filledBySource[selector]?.profileKey || '',
+        label: (filledBySource as any)[selector]?.label || selector,
+        semanticKey: (filledBySource as any)[selector]?.semanticKey || '',
+        profileKey: (filledBySource as any)[selector]?.profileKey || '',
         plugin: rec?.plugin || null,
         strategy: rec?.strategy || '',
         originalResult: rec?.result || 'unknown',
@@ -1441,7 +1440,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
 
     function captureCorrections(trigger) {
       const corrections = [];
-      for (const [selector, originalVal] of Object.entries(snapshot)) {
+      for (const [selector, originalVal] of Object.entries(snapshot) as any) {
         let el = getEl(selector);
         if (!el) continue;
         const currentVal = el.tagName === 'SELECT' ? (el.options[el.selectedIndex]?.text || el.value)
@@ -1497,7 +1496,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   setTimeout(function() {
     var confirmPatterns = /^c(?=[a-z])|^confirm|^retype|^re_?type|^re_?enter|^verify/i;
     var allInputs = Array.from(document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number]'));
-    allInputs.forEach(function(el) {
+    allInputs.forEach(function (el: any) {
       if (!el.id && !el.name) return;
       var id = (el.id || el.name || '').toLowerCase();
       var label = (function() { if(el.id){var l=document.querySelector('label[for="'+el.id+'"]');if(l)return l.textContent.toLowerCase();} return ''; })();
@@ -1512,17 +1511,17 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         var ph = (el.placeholder || '').toLowerCase();
         if (ph.includes('dd/mm') || ph.includes('dd-mm')) {
           // Find any filled input with same placeholder pattern
-          var allFilled = Array.from(document.querySelectorAll('input[type=text]')).filter(function(inp) {
+          var allFilled = Array.from(document.querySelectorAll('input[type=text]')).filter(function (inp: any) {
             return inp !== el && inp.value && (inp.placeholder || '').toLowerCase().match(/dd.mm/);
           });
-          if (allFilled.length > 0) primary = allFilled[0];
+          if (allFilled.length > 0) primary = allFilled[0] as any;
         }
       }
       if (!primary || !primary.value) return;
       // Propagate settled DOM value
       var niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
       if (niv) niv.set.call(el, primary.value); else el.value = primary.value;
-      ['input','change','blur'].forEach(function(ev) { el.dispatchEvent(new Event(ev, {bubbles:true})); });
+      ['input','change','blur'].forEach(function (ev: any) { el.dispatchEvent(new Event(ev, {bubbles:true})); });
       _ccRecords.push({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0, ts: Date.now(), rv: RUNTIME_VERSION });
       _flushRecords();
     });
@@ -1532,13 +1531,13 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
   setTimeout(function() {
     var confirmPatterns = /^c(?=[a-z])|^confirm|^retype|^re_?type|^re_?enter|^verify/i;
     var allInputs = Array.from(document.querySelectorAll('input[type=text],input[type=email],input[type=tel]'));
-    allInputs.forEach(function(el) {
+    allInputs.forEach(function (el: any) {
       if (!el.id) return;
       if (el.value) return; // already filled — no need to observe
       var id = el.id.toLowerCase();
       // Find if this is a primary field with a derived confirm field
       var confirmId = null;
-      allInputs.forEach(function(other) {
+      allInputs.forEach(function (other: any) {
         if (!other.id || other === el) return;
         var oid = other.id.toLowerCase();
         if (confirmPatterns.test(oid)) {
@@ -1555,7 +1554,7 @@ async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters,
         _mirroring = true;
         var niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
         if (niv) niv.set.call(_mirrorTarget, el.value); else _mirrorTarget.value = el.value;
-        ['input','change'].forEach(function(ev) { _mirrorTarget.dispatchEvent(new Event(ev, {bubbles:true})); });
+        ['input','change'].forEach(function (ev: any) { _mirrorTarget.dispatchEvent(new Event(ev, {bubbles:true})); });
         _mirroring = false;
       });
     });

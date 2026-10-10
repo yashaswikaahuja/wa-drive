@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl ActionPlan Runner
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -102,7 +101,7 @@
 
     // Build edge index: from → [{to, condition}]
     var edgeIndex = {};
-    (plan.edges || []).forEach(function (e) {
+    (plan.edges || []).forEach(function (e: any) {
       if (!edgeIndex[e.from]) edgeIndex[e.from] = [];
       edgeIndex[e.from].push(e);
     });
@@ -323,7 +322,7 @@
           url: window.location.href,
           navigated: false,
           form_submitted: false,
-          fields_snapshot: state.formFields.map(function (f) {
+          fields_snapshot: state.formFields.map(function (f: any) {
             return { label: f.label, value: f.value || '' };
           }),
         };

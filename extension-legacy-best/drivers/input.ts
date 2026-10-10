@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Input drivers — keystroke-style typing, clearing, focusing.
  * Wraps window.keystrokeFillSync from autofill/plugins/keystroke-input.ts.
@@ -55,7 +54,7 @@
       const before = readActual(el);
       window.keystrokeFillSync(el, String(args.value));
       // Settle for framework reaction
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise<void>(r => setTimeout(r, 120));
       const after = readActual(el);
       const expectedNorm = String(args.value).toLowerCase().replace(/[^a-z0-9]/g, '');
       const actualNorm = after.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -119,7 +118,7 @@
       if (!el) throw new Error('element-not-found: ' + args.target);
       if (args.scrollIntoView !== false) {
         try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise<void>(r => setTimeout(r, 100));
       }
       try { el.focus(); } catch (e) {}
       return { focused: document.activeElement === el };

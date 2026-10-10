@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * button-click plugin — workflow transition primitive.
  *

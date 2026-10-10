@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── Derivation layer (runs in page context, before fill) ────────────────────
 // Computes profile values that are NOT explicitly stored but are logically
 // implied by the data that IS stored. This is the "common sense" pass:

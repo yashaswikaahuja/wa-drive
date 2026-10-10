@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * PluginInterface — contract for interaction plugins.
  *

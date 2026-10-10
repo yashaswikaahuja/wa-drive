@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── Fuzzy matching ────────────────────────────────────────────────────────────
 // Server-resolved field mappings (injected by background.ts/popup.ts from cache)
 // take precedence over hardcoded FIELD_ALIASES. Merge server mappings on top.
@@ -145,7 +144,7 @@ function resolveChoiceToOption(field, plannedValue, profileKey) {
 
   // Reject free-text dumps on Yes/No style groups (address/aadhaar onto radio)
   var opts = field.options || [];
-  var looksYesNo = opts.length > 0 && opts.every(function (o) {
+  var looksYesNo = opts.length > 0 && opts.every(function (o: any) {
     var n = _normChoice(o);
     return !n || n === 'yes' || n === 'no' || n === 'y' || n === 'n' || n === 'haan' || n === 'nahi'
       || n === 'true' || n === 'false' || n === '1' || n === '0';
@@ -405,7 +404,7 @@ function fuzzyMatch(formFields, profile) {
       for (var [fileKey, fileLabels] of Object.entries(fileAliases)) {
         if (!profile[fileKey]) continue;
         // File match: label only when label is strong
-        var fileHit = fileLabels.some(function (a) {
+        var fileHit = fileLabels.some(function (a: any) {
           return fileLabelLower.includes(a) || (matchBy !== 'label' && fileIdentLower.includes(a.replace(/\s+/g, '_')));
         });
         if (fileHit) {
@@ -446,16 +445,15 @@ function fuzzyMatch(formFields, profile) {
         college_name:       ['college_name','college','institution_12','inter_college'],
         university_name:    ['university_name','university','institution_grad','college_grad','institution_name'],
         roll_no_graduation: ['roll_no_graduation','roll_grad','graduation_roll','degree_roll'],
-        passing_year_12th:  ['passing_year_12th','year_12th','year_inter','inter_year','12th_year'],
         year_of_passing:    ['year_of_passing','passing_year','year_pass','year_graduation','grad_year'],
         grade:              ['grade','grade_system','grading','cgpa','gpa','division','class_obtained'],
         degree_name:        ['degree_name','degree','qualification','course_name','programme'],
         marks_graduation:   ['marks_graduation','percentage_grad','grad_marks','grad_percentage'],
       };
       let eduMatched = false;
-      for (const [key, aliases] of Object.entries(eduAliases)) {
+      for (const [key, aliases] of Object.entries(eduAliases) as any) {
         if (!profile[key]) continue;
-        if (aliases.some(function (a) { return ident.includes(a); })) {
+        if (aliases.some(function (a: any) { return ident.includes(a); })) {
           mapping[field.selector] = { value: profile[key], type: field.type, matchBy: matchBy, profileKey: key };
           eduMatched = true; break;
         }
@@ -517,7 +515,7 @@ function fuzzyMatch(formFields, profile) {
     // Alias match: require hit on LABEL identity. Prefer longest alias (more specific).
     var bestKey = null;
     var bestAliasLen = -1;
-    for (const [profileKey, aliases] of Object.entries(fieldAliases)) {
+    for (const [profileKey, aliases] of Object.entries(fieldAliases) as any) {
       if (!profile[profileKey]) continue;
       // Strict separation: name must not match father/mother/state/district fields
       if (profileKey === 'name' && (isFatherMother || isStateDistrict)) continue;
@@ -537,7 +535,7 @@ function fuzzyMatch(formFields, profile) {
       if (field.type === 'radio' || field.type === 'radio-group') {
         // Include name/id so label-only "Yes" groups still match "changed"/"gender"
         var groupIdent = _normalizeIdent([field.label, field.name, field.id].filter(Boolean).join(' '));
-        var groupMatches = aliases.some(function (a) {
+        var groupMatches = aliases.some(function (a: any) {
           return groupIdent.includes(a.replace(/[^a-z0-9]/g, ''));
         });
         // Also match gender aliases against bilingual Male/Female option text
@@ -634,14 +632,14 @@ function fuzzyMatch(formFields, profile) {
     var primaryNorm = normLabel(primaryLabel);
     if (!primaryNorm) continue;
     // Find a mapped field whose normalised label matches
-    var primaryField = formFields.find(f =>
+    var primaryField = formFields.find((f: any) =>
       mapping[f.selector] &&
       f.selector !== field.selector &&
       normLabel(f.label || '') === primaryNorm
     );
     // Fuzzy fallback: contains relationship
     if (!primaryField) {
-      primaryField = formFields.find(f => {
+      primaryField = formFields.find((f: any) => {
         if (!mapping[f.selector] || f.selector === field.selector) return false;
         var fNorm = normLabel(f.label || '');
         return fNorm && primaryNorm && (fNorm.includes(primaryNorm) || primaryNorm.includes(fNorm));
@@ -737,7 +735,7 @@ Return JSON only: {"0": "name", "2": "dob", "5": "first_name", "7": "district"}`
     var mapping = {};
     var nameParts = (profile.name || '').trim().split(/\s+/);
     var dobParts = (profile.dob || '').split('/'); // DD/MM/YYYY
-    for (const [idx, profileKey] of Object.entries(indexMap)) {
+    for (const [idx, profileKey] of Object.entries(indexMap) as any) {
       var field = formFields[parseInt(idx)];
       if (!field) continue;
       let value = null;

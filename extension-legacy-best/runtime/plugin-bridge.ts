@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Plugin → Capability Bridge
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -94,10 +93,10 @@
       }
 
       if (!matched && window.ccMatchOption) {
-        var optTexts = opts.map(function (o) { return o.textContent.trim(); });
+        var optTexts = opts.map(function (o: any) { return o.textContent.trim(); });
         var matchedText = window.ccMatchOption(value, optTexts);
         if (matchedText) {
-          matched = opts.find(function (o) { return o.textContent.trim() === matchedText; });
+          matched = opts.find(function (o: any) { return o.textContent.trim() === matchedText; });
         }
       }
 
@@ -158,10 +157,10 @@
       }
 
       if (!matched && window.ccMatchOption) {
-        var optTexts = Array.from(opts).map(function (o) { return o.textContent.trim(); });
+        var optTexts = Array.from(opts).map(function (o: any) { return o.textContent.trim(); });
         var matchedText = window.ccMatchOption(value, optTexts);
         if (matchedText) {
-          matched = Array.from(opts).find(function (o) { return o.textContent.trim() === matchedText; });
+          matched = Array.from(opts).find(function (o: any) { return o.textContent.trim() === matchedText; });
         }
       }
 

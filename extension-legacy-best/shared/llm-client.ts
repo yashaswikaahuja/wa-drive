@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/llm-client.ts ───────────────────────────────────────────────────
 // Single LLM client for all AI calls across the extension.
 // Exposes: window.ccLLM = { call, parseJSON }
@@ -45,7 +44,7 @@
     }
     messages.push({ role: 'user', content: opts.userPrompt });
 
-    var body = {
+    var body: any = {
       model: model,
       messages: messages,
       max_tokens: maxTokens,

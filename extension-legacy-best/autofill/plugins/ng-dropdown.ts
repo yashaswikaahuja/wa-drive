@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ng-dropdown plugin — handles Angular custom dropdown widgets.
  *
@@ -68,7 +67,7 @@ var NgDropdownPlugin = {
     var startTime = Date.now();
     var optSel = adapter.optionSelector || null;
 
-    return new Promise((resolve) => {
+    return new Promise((resolve: (v?: any) => void) => {
       let attempts = 0;
       var poll = setInterval(() => {
         attempts++;
@@ -101,7 +100,7 @@ var NgDropdownPlugin = {
           }
           // Check inside parent (panel might be a sibling child)
           if (opts.length === 0 && el.parentElement) {
-            var siblings = Array.from(el.parentElement.children).filter(function(c) { return c !== el; });
+            var siblings = Array.from(el.parentElement.children).filter(function (c: any) { return c !== el; });
             for (var si = 0; si < siblings.length; si++) {
               opts = findOptionsInContainer(siblings[si], optSel, isVisible);
               if (opts.length > 0) break;
@@ -134,15 +133,15 @@ var NgDropdownPlugin = {
 
         // Match option using shared/option-match.ts (injected before plugins)
         var match = null;
-        var optTexts = opts.map(function(o) { return o.textContent.trim(); });
+        var optTexts = opts.map(function (o: any) { return o.textContent.trim(); });
         var matched = window.ccMatchOption(value, optTexts);
         if (matched) {
-          match = opts.find(function(o) { return o.textContent.trim() === matched; });
+          match = opts.find(function (o: any) { return o.textContent.trim() === matched; });
         }
 
         if (match) {
           clearInterval(poll);
-          ['pointerdown','mousedown','mouseup','click'].forEach(ev =>
+          ['pointerdown','mousedown','mouseup','click'].forEach((ev: any) =>
             match.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }))
           );
           // Verify after click

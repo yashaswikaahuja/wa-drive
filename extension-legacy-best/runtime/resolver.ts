@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Semantic Target Resolver
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -60,7 +59,7 @@
     if (!pageModel || !pageModel.forms) return;
 
     var allFields = [];
-    pageModel.forms.forEach(function (form) {
+    pageModel.forms.forEach(function (form: any) {
       allFields = allFields.concat(form.fields || []);
     });
 
@@ -208,7 +207,7 @@
       // Word overlap
       var needleWords = needle.split(/\s+/);
       var fieldWords = fieldLabel.split(/\s+/);
-      var overlap = needleWords.filter(function (w) { return fieldWords.indexOf(w) !== -1; }).length;
+      var overlap = needleWords.filter(function (w: any) { return fieldWords.indexOf(w) !== -1; }).length;
       if (overlap > 0) {
         var score2 = (overlap / Math.max(needleWords.length, fieldWords.length)) * 60;
         candidates.push({ score: score2, index: i });
