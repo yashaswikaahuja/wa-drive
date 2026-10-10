@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Knowledge Seed Migration (Phase 2.5, Issue #89)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 const records = [];
 const now = new Date().toISOString();
 
-function makeRecord(kind, scope, payload, opts = {}) {
+function makeRecord( kind: any, scope: any, payload: any, opts: any= {}) {
   return {
     id: randomUUID(),
     kind,
@@ -77,7 +76,7 @@ const FIELD_ALIASES = {
   registration_number: ['reg_number', 'reg_no', 'registration_no', 'enrollment_number'],
 };
 
-for (const [profileKey, aliases] of Object.entries(FIELD_ALIASES)) {
+for (const [profileKey, aliases] of Object.entries(FIELD_ALIASES) as any) {
   records.push(makeRecord('field_mapping', GLOBAL, {
     field_label: profileKey,
     semantic_key: profileKey,
@@ -111,7 +110,7 @@ const HINDI_SYNONYMS = {
   aadhaar_number: ['आधार संख्या', 'aadhar_sankhya', 'aadhaar_sankhya'],
 };
 
-for (const [canonical, variants] of Object.entries(HINDI_SYNONYMS)) {
+for (const [canonical, variants] of Object.entries(HINDI_SYNONYMS) as any) {
   records.push(makeRecord('synonym', INDIA, {
     canonical,
     variants,
@@ -135,7 +134,7 @@ const CASCADE_DEPENDENCIES = {
   post_office: ['block', 'village'],
 };
 
-for (const [child, parents] of Object.entries(CASCADE_DEPENDENCIES)) {
+for (const [child, parents] of Object.entries(CASCADE_DEPENDENCIES) as any) {
   for (const parent of parents) {
     records.push(makeRecord('fill_rule', INDIA, {
       target_semantic_key: child,
@@ -287,7 +286,7 @@ const BACKGROUND_SEMANTIC_ALIASES = {
   district: ['district name'],
 };
 
-for (const [canonical, variants] of Object.entries(BACKGROUND_SEMANTIC_ALIASES)) {
+for (const [canonical, variants] of Object.entries(BACKGROUND_SEMANTIC_ALIASES) as any) {
   records.push(makeRecord('synonym', GLOBAL, {
     canonical,
     variants,
@@ -313,7 +312,7 @@ const FILE_ALIASES = {
   utility_bill: ['utility bill', 'electricity bill', 'address proof'],
 };
 
-for (const [fileKey, labels] of Object.entries(FILE_ALIASES)) {
+for (const [fileKey, labels] of Object.entries(FILE_ALIASES) as any) {
   records.push(makeRecord('field_mapping', GLOBAL, {
     field_label: fileKey,
     semantic_key: fileKey,
@@ -347,7 +346,7 @@ const EDU_ALIASES = {
   marks_graduation: ['marks_graduation','percentage_grad','grad_marks','grad_percentage'],
 };
 
-for (const [eduKey, aliases] of Object.entries(EDU_ALIASES)) {
+for (const [eduKey, aliases] of Object.entries(EDU_ALIASES) as any) {
   records.push(makeRecord('field_mapping', GLOBAL, {
     field_label: eduKey,
     semantic_key: eduKey,

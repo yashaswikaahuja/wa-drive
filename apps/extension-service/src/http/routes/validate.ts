@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Validation Engine REST API (Phase 2.4, Issue #88)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -19,7 +18,7 @@ import { validate, detectConflicts, validateTransition } from '@cybercontrol/svc
 const router = Router();
 
 // ── Validate single record (dry-run) ────────────────────────────────
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, async ( req: any, res: any) => {
   try {
     const record = req.body;
     if (!record || typeof record !== 'object') {
@@ -38,7 +37,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // ── Validate batch ──────────────────────────────────────────────────
-router.post('/batch', authMiddleware, async (req, res) => {
+router.post('/batch', authMiddleware, async ( req: any, res: any) => {
   try {
     const records = req.body?.records;
     if (!Array.isArray(records)) {
@@ -66,7 +65,7 @@ router.post('/batch', authMiddleware, async (req, res) => {
 });
 
 // ── Validate status transition ──────────────────────────────────────
-router.post('/transition', authMiddleware, async (req, res) => {
+router.post('/transition', authMiddleware, async ( req: any, res: any) => {
   try {
     const { from, to } = req.body || {};
     if (!from || !to) {

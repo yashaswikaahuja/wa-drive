@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import { pool } from '../../db/db.js';
 import { authMiddleware } from '../auth.js';
@@ -7,7 +6,7 @@ import { deriveProfile } from '@cybercontrol/svc-fill-planner';
 const router = Router();
 
 // GET /api/profiles — list profiles for the authenticated workspace
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, async ( req: any, res: any) => {
   try {
     const { rows } = await pool.query(`
       SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",
@@ -24,7 +23,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // GET /api/profiles/:id — full profile (with data jsonb) for autofill
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const { rows } = await pool.query(`
       SELECT id, name, primary_contact_phone AS phone, display_label AS "displayLabel",

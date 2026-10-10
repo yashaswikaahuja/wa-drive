@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import { pool } from '../../db/db.js';
 import { authMiddleware } from '../auth.js';
@@ -6,7 +5,7 @@ import { authMiddleware } from '../auth.js';
 const router = Router();
 
 // POST /api/sessions — extension reports a completed fill session
-router.post('/', authMiddleware, async (req, res) => {
+router.post('/', authMiddleware, async ( req: any, res: any) => {
   try {
     const {
       hostname,
@@ -63,7 +62,7 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // GET /api/sessions/stats — per-hostname success rates (must be BEFORE /:id)
-router.get('/stats', authMiddleware, async (req, res) => {
+router.get('/stats', authMiddleware, async ( req: any, res: any) => {
   try {
     const { rows } = await pool.query(
       `SELECT hostname,
@@ -86,10 +85,10 @@ router.get('/stats', authMiddleware, async (req, res) => {
 });
 
 // GET /api/sessions — list summary, paginated, workspace-scoped
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, async ( req: any, res: any) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const offset = parseInt(req.query.offset) || 0;
+    const limit = Math.min(parseInt((req.query.limit as any)) || 50, 200);
+    const offset = parseInt((req.query.offset as any)) || 0;
     const { rows } = await pool.query(
       `SELECT id, hostname, semantic_form_key AS "semanticFormKey",
               runtime_version AS "runtimeVersion",
@@ -109,7 +108,7 @@ router.get('/', authMiddleware, async (req, res) => {
 });
 
 // GET /api/sessions/:id — full session with per-field records
-router.get('/:id', authMiddleware, async (req, res) => {
+router.get('/:id', authMiddleware, async ( req: any, res: any) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, hostname, semantic_form_key AS "semanticFormKey",

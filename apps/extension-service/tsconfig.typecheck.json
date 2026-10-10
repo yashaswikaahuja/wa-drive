@@ -1,0 +1,39 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
+    "paths": {
+      "@cc/mapper/mapping-relation": [
+        "./src/shims/cc__mapper__mapping_relation.ts"
+      ],
+      "@cc/mapper/split-dob": [
+        "./src/shims/cc__mapper__split_dob.ts"
+      ],
+      "@cybercontrol/svc-ai-mapper": [
+        "./src/shims/cybercontrol__svc_ai_mapper.ts"
+      ],
+      "@cybercontrol/svc-fill-planner": [
+        "./src/shims/cybercontrol__svc_fill_planner.ts"
+      ],
+      "@cybercontrol/svc-knowledge": [
+        "./src/shims/cybercontrol__svc_knowledge.ts"
+      ],
+      "@cybercontrol/svc-runtime": [
+        "./src/shims/cybercontrol__svc_runtime.ts"
+      ],
+      "@cybercontrol/svc-session": [
+        "./src/shims/cybercontrol__svc_session.ts"
+      ],
+      "@cybercontrol/svc-teach": [
+        "./src/shims/cybercontrol__svc_teach.ts"
+      ]
+    },
+    "baseUrl": ".",
+    "moduleResolution": "Bundler",
+    "module": "ESNext"
+  }
+}

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router } from 'express';
 import { loadDoc, mutateDoc, KEYS } from '../../db/store.js';
 
@@ -8,18 +7,18 @@ const load = () => loadDoc(KEYS.ADAPTERS);
 const mutate = (fn) => mutateDoc(KEYS.ADAPTERS, fn);
 
 // GET /api/adapters — get all adapters
-router.get('/', async (_req, res) => {
+router.get('/', async ( _req: any, res: any) => {
   res.json(await load());
 });
 
 // GET /api/adapters/:hostname
-router.get('/:hostname', async (req, res) => {
+router.get('/:hostname', async ( req: any, res: any) => {
   const store = await load();
   res.json(store[req.params.hostname] || {});
 });
 
 // POST /api/adapters/:hostname
-router.post('/:hostname', async (req, res) => {
+router.post('/:hostname', async ( req: any, res: any) => {
   const { componentClass, triggerSelector, optionsContainer, optionSelector, verifySelector } = req.body || {};
   if (!componentClass || !triggerSelector || !optionSelector) {
     return res.status(400).json({ error: 'componentClass, triggerSelector, optionSelector required' });
@@ -50,7 +49,7 @@ router.post('/:hostname', async (req, res) => {
 });
 
 // PATCH /api/adapters/:hostname/:componentClass
-router.patch('/:hostname/:componentClass', async (req, res) => {
+router.patch('/:hostname/:componentClass', async ( req: any, res: any) => {
   const { success, stale } = req.body || {};
   let notFound = false;
   await mutate((store) => {
@@ -67,7 +66,7 @@ router.patch('/:hostname/:componentClass', async (req, res) => {
 });
 
 // DELETE /api/adapters/:hostname/:componentClass
-router.delete('/:hostname/:componentClass', async (req, res) => {
+router.delete('/:hostname/:componentClass', async ( req: any, res: any) => {
   const { hostname, componentClass } = req.params;
   await mutate((data) => {
     if (data[hostname]) {

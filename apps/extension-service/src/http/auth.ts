@@ -1,4 +1,3 @@
-// @ts-nocheck
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -12,12 +11,12 @@ if (!JWT_SECRET) {
  * On success, sets req.user = { userId, workspaceId, role }
  * On failure, returns 401.
  */
-export function authMiddleware(req, res, next) {
+export function authMiddleware( req: any, res: any, next: any) {
   const auth = req.headers.authorization || '';
   const m = auth.match(/^Bearer\s+(.+)$/i);
   if (!m) return res.status(401).json({ error: 'missing bearer token' });
   try {
-    const decoded = jwt.verify(m[1], JWT_SECRET);
+    const decoded: any = jwt.verify(m[1], JWT_SECRET);
     if (!decoded.workspaceId) return res.status(401).json({ error: 'token missing workspaceId' });
     req.user = {
       userId: decoded.userId,

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import 'dotenv/config';
 import express from 'express';
 import http from 'http';
@@ -51,7 +50,7 @@ const PORT = Number(process.env.PORT) || 3300;
 const app = express();
 
 // CORS — same as hub (extension hits this via public API host → nginx → here)
-app.use((req, res, next) => {
+app.use((req: any, res: any, next: any) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -90,7 +89,7 @@ app.use('/api/sync', syncRouter);
 app.use('/api', fillRouter);
 
 // 404 fallthrough
-app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
+app.use((req: any, res: any) => res.status(404).json({ error: 'not found', path: req.path }));
 
 // Error handler (last)
 app.use((err, _req, res, _next) => {
@@ -100,7 +99,7 @@ app.use((err, _req, res, _next) => {
 
 // Crash safety
 process.on('uncaughtException', (err) => console.error('[FATAL] Uncaught:', err.message));
-process.on('unhandledRejection', (err) => console.error('[FATAL] Unhandled:', err?.message || err));
+process.on('unhandledRejection', (err: any) => console.error('[FATAL] Unhandled:', err?.message || err));
 
 // ── HTTP + WebSocket server ──────────────────────────────────────────────
 const server = http.createServer(app);

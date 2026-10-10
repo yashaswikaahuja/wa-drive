@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Scope Resolution API (Phase 2.3, Issue #87)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -18,7 +17,7 @@ import { resolveOne, resolveAll, resolveWithInheritance } from '@cybercontrol/sv
 const router = Router();
 
 // ── Resolve single best record ──────────────────────────────────────
-router.post('/one', authMiddleware, async (req, res) => {
+router.post('/one', authMiddleware, async ( req: any, res: any) => {
   try {
     const context = req.body;
     if (!context?.kind) {
@@ -32,7 +31,7 @@ router.post('/one', authMiddleware, async (req, res) => {
 });
 
 // ── Resolve all matching (de-duplicated by entity) ──────────────────
-router.post('/all', authMiddleware, async (req, res) => {
+router.post('/all', authMiddleware, async ( req: any, res: any) => {
   try {
     const context = req.body;
     if (!context?.kind) {
@@ -46,7 +45,7 @@ router.post('/all', authMiddleware, async (req, res) => {
 });
 
 // ── Resolve with inheritance chain ──────────────────────────────────
-router.post('/inherited', authMiddleware, async (req, res) => {
+router.post('/inherited', authMiddleware, async ( req: any, res: any) => {
   try {
     const context = req.body;
     if (!context?.kind) {
@@ -60,7 +59,7 @@ router.post('/inherited', authMiddleware, async (req, res) => {
 });
 
 // ── Explain resolution (dry-run, shows all candidates + ranking) ────
-router.post('/explain', authMiddleware, async (req, res) => {
+router.post('/explain', authMiddleware, async ( req: any, res: any) => {
   try {
     const context = req.body;
     if (!context?.kind) {

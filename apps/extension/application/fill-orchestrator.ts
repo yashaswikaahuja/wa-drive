@@ -1,4 +1,3 @@
-// @ts-nocheck
 /* Product-path fill orchestration (MIG-POPUP-01 / #166).
  * Loaded in extension popup context only — not injected into pages.
  * Parts under application/orchestrator/capabilities/ load before this facade.

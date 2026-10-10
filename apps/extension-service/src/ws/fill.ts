@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * WSS Stage C — fill plan + session over the live socket (not HTTPS).
  * Builds a sequential-kernel mapping from taught form maps + profile + conditionals.
@@ -12,7 +11,7 @@ import {
   materializeSavedRelations,
 } from '@cc/mapper/mapping-relation';
 
-function gsk(l) {
+function gsk( l: any) {
   return String(l || '')
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
@@ -21,7 +20,7 @@ function gsk(l) {
 }
 
 /** Dual normalization — agent/mappings used spaced punctuation; fill/corrections strip it. */
-function labelKeys(label) {
+function labelKeys( label: any) {
   const raw = String(label || '')
     .toLowerCase()
     .trim();
@@ -34,7 +33,7 @@ function labelKeys(label) {
   return out;
 }
 
-function lookupTaught(saved, field) {
+function lookupTaught( saved: any, field: any) {
   if (!saved || !field) return null;
   const keys = [...labelKeys(field.label), ...labelKeys(field.name)];
   for (const k of keys) {
@@ -46,10 +45,10 @@ function lookupTaught(saved, field) {
   return null;
 }
 
-function countMapped(saved) {
+function countMapped( saved: any) {
   if (!saved || typeof saved !== 'object') return 0;
   let n = 0;
-  for (const [k, v] of Object.entries(saved)) {
+  for (const [k, v] of Object.entries(saved) as any) {
     if (k.startsWith('_')) continue;
     if (v && typeof v === 'object' && v.profileKey) n++;
   }
@@ -61,7 +60,7 @@ function countMapped(saved) {
  * Prefer exact formKey; if empty (formKey drift), pick same-hostname map with
  * the most overlapping taught labels — restores GCP-style reuse of prior maps.
  */
-function resolveSavedMappings(allMappings, formKey, hostname, fields) {
+function resolveSavedMappings( allMappings: any, formKey: any, hostname: any, fields: any) {
   const exact = (formKey && allMappings[formKey]) || {};
   const exactTaught = countMapped(exact);
   if (exactTaught > 0) {
@@ -92,12 +91,12 @@ function resolveSavedMappings(allMappings, formKey, hostname, fields) {
 
   let best = null;
   let bestScore = 0;
-  for (const [fk, entry] of Object.entries(allMappings || {})) {
+  for (const [fk, entry] of Object.entries(allMappings || {}) as any) {
     if (!entry || typeof entry !== 'object') continue;
     const metaHost = entry._meta?.hostname || '';
     if (hostname && metaHost && metaHost !== hostname) continue;
     let score = 0;
-    for (const [lk, lv] of Object.entries(entry)) {
+    for (const [lk, lv] of Object.entries(entry) as any) {
       if (lk.startsWith('_') || !lv?.profileKey) continue;
       if (fieldKeySet.has(lk)) score++;
     }
@@ -142,7 +141,7 @@ const PROFILE_KEY_ALIASES = {
   aadhaar_number: ['aadhaar', 'aadhar'],
 };
 
-function profileVal(profile, key) {
+function profileVal( profile: any, key: any) {
   if (!profile || key == null) return null;
   const entry = profile[key];
   if (entry == null) return null;
@@ -152,7 +151,7 @@ function profileVal(profile, key) {
   return s === '' ? null : s;
 }
 
-function profileValWithAlias(profile, key) {
+function profileValWithAlias( profile: any, key: any) {
   const direct = profileVal(profile, key);
   if (direct != null) return { value: direct, key };
   const aliases = PROFILE_KEY_ALIASES[key] || [];
@@ -163,13 +162,13 @@ function profileValWithAlias(profile, key) {
   return null;
 }
 
-function normChoice(s) {
+function normChoice( s: any) {
   return String(s || '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 }
 
-function decideConditional(field, profile) {
+function decideConditional( field: any, profile: any) {
   const label = String(field.label || '').toLowerCase();
   const nameId = `${field.name || ''} ${field.id || ''}`.toLowerCase();
   const blob = `${gsk(field.label)} ${label} ${nameId}`;
@@ -204,7 +203,7 @@ function decideConditional(field, profile) {
   return null;
 }
 
-function resolveChoice(field, planned, profileKey) {
+function resolveChoice( field: any, planned: any, profileKey: any) {
   if (planned == null || String(planned).trim() === '') return null;
   const plannedStr = String(planned).trim();
   const plannedNorm = normChoice(plannedStr);
@@ -314,7 +313,7 @@ function resolveChoice(field, planned, profileKey) {
   return null;
 }
 
-function isChoiceType(t) {
+function isChoiceType( t: any) {
   return /radio|checkbox/i.test(String(t || ''));
 }
 
@@ -322,7 +321,7 @@ function isChoiceType(t) {
  * @param {object} msg — fill_request payload
  * @param {string} workspaceId
  */
-export async function buildFillMapping(msg, workspaceId) {
+export async function buildFillMapping( msg: any, workspaceId: any) {
   const formKey = msg.formKey || msg.semanticFormKey || null;
   const fields = Array.isArray(msg.fields) ? msg.fields : [];
   const profile = msg.profile && typeof msg.profile === 'object' ? msg.profile : {};
@@ -339,7 +338,7 @@ export async function buildFillMapping(msg, workspaceId) {
   /** @type {Record<string, object>} */
   const filledBySource = {};
 
-  function applyEntry(entry) {
+  function applyEntry( entry: any) {
     if (!entry || !entry.selector) return;
     mapping[entry.selector] = {
       value: entry.value,
@@ -357,7 +356,7 @@ export async function buildFillMapping(msg, workspaceId) {
 
   // Profile with aliases so taught mobile↔phone etc. still materialize.
   const profileForApply = { ...profile };
-  for (const [canonical, aliases] of Object.entries(PROFILE_KEY_ALIASES)) {
+  for (const [canonical, aliases] of Object.entries(PROFILE_KEY_ALIASES) as any) {
     if (profileVal(profileForApply, canonical) != null) continue;
     for (const alt of aliases) {
       const v = profileVal(profile, alt);
@@ -415,7 +414,7 @@ export async function buildFillMapping(msg, workspaceId) {
   // Was present in legacy mapper post-pass but skipped on the WSS path.
   const beforeSplit = Object.keys(mapping).length;
   applySplitDob(fields, profileForApply, mapping);
-  for (const [sel, entry] of Object.entries(mapping)) {
+  for (const [sel, entry] of Object.entries(mapping) as any) {
     if (entry && entry.matchBy === 'split-dob' && !filledBySource[sel]) {
       filledBySource[sel] = {
         label: entry.label || '',
@@ -494,7 +493,7 @@ export async function buildFillMapping(msg, workspaceId) {
 /**
  * Persist a fill session from WSS (same shape as POST /api/sessions).
  */
-export async function persistFillSession(msg, workspaceId, userId) {
+export async function persistFillSession( msg: any, workspaceId: any, userId: any) {
   const hostname = (msg.hostname && String(msg.hostname).trim()) || null;
   const records = Array.isArray(msg.records) ? msg.records : [];
   const filled = msg.totalFilled || 0;

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * esbuild report.test.ts → temp .mjs and run with node.
  */

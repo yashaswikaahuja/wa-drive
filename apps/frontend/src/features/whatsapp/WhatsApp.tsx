@@ -170,9 +170,10 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
 
 export default function WhatsApp() {
   const navigate = useNavigate();
+  // true = show inbox immediately when last session was linked; null = spinner until
+  // /whatsapp/status returns. Never start as false (that caused a 2s Connect flash).
   const [connected, setConnected] = useState<boolean | null>(() => {
-    const cached = localStorage.getItem('cc-wa-connected');
-    return cached !== null ? cached === 'true' : null;
+    return localStorage.getItem('cc-wa-connected') === 'true' ? true : null;
   });
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
@@ -203,19 +204,26 @@ export default function WhatsApp() {
   const msgContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
+  // Require consecutive misses before flipping linked→Connect UI (avoids 2s flash on open).
+  const statusMissesRef = useRef(0);
 
   useEffect(() => {
     api.get('/whatsapp/status').then(r => {
       if (r.data.connected) {
+        statusMissesRef.current = 0;
         setConnected(true);
+        setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
-      } else if (localStorage.getItem('cc-wa-connected') !== 'true') {
+      } else if (localStorage.getItem('cc-wa-connected') === 'true') {
+        // Already linked — keep inbox up while the socket finishes resuming.
+        setReconnecting(true);
+      } else {
         setConnected(false);
         localStorage.setItem('cc-wa-connected', 'false');
         localStorage.removeItem('cc-drive-files');
       }
-      // Auto-start session if none exists
-      if (r.data.status === 'none' || (!r.data.connected && !r.data.qr)) {
+      // Auto-start only when there is no session yet (not on every brief disconnect).
+      if (r.data.status === 'none') {
         api.post('/whatsapp/connect').catch(() => {});
       }
       if (r.data.qr) setQrCode(r.data.qr);
@@ -260,6 +268,7 @@ export default function WhatsApp() {
         const r = await api.get('/whatsapp/status');
         if (!mounted) return;
         if (r.data.connected) {
+          statusMissesRef.current = 0;
           setConnected(true); setQrCode(null); setReconnecting(false); setQrExpired(false);
           qrStartRef.current = null;
           localStorage.setItem('cc-wa-connected', 'true');
@@ -275,7 +284,18 @@ export default function WhatsApp() {
               setQrCode(r.data.qr);
             }
           }
-          setConnected(false);
+          statusMissesRef.current += 1;
+          const wasLinked = localStorage.getItem('cc-wa-connected') === 'true';
+          // One miss is normal while Baileys resumes — do not flash Connect WhatsApp.
+          if (!wasLinked || statusMissesRef.current >= 2) {
+            setConnected(false);
+            setReconnecting(false);
+            if (wasLinked && statusMissesRef.current >= 2) {
+              localStorage.setItem('cc-wa-connected', 'false');
+            }
+          } else {
+            setReconnecting(true);
+          }
         }
       } catch (e) {
         console.warn('[WhatsApp] status poll failed:', (e as any)?.message);
@@ -292,11 +312,15 @@ export default function WhatsApp() {
     socket.on('connection:status', (data: any) => {
       if (!mounted) return;
       if (data.connected) {
+        statusMissesRef.current = 0;
         setConnected(true); setQrCode(null); setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
         stopPolling();
       } else {
-        // Resumed disconnect → restart polling for fresh QR (only while mounted)
+        // Soft disconnect / resume — keep inbox if previously linked; poll to confirm.
+        if (localStorage.getItem('cc-wa-connected') === 'true') {
+          setReconnecting(true);
+        }
         startPolling();
       }
     });
@@ -778,8 +802,9 @@ export default function WhatsApp() {
     <div className="h-full flex w-full min-w-0 overflow-hidden">
       <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
         <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
-          <span className="w-2 h-2 rounded-full bg-emerald-400" />
+          <span className={`w-2 h-2 rounded-full ${reconnecting ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
           <span className="text-sm text-white font-medium">Inbox</span>
+          {reconnecting && <span className="text-[10px] text-amber-400/90">Reconnecting…</span>}
           <span className="text-xs text-gray-500 ml-auto">{sortedChats.length} customers</span>
         </div>
         <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>

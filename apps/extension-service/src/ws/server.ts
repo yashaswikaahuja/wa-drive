@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl WebSocket Server — extension-service/ws-server.js
  * Phase 3.4 — WSS Protocol (#128 / CYB-98)
@@ -63,7 +62,7 @@ let _heartbeatTimer = null;
  * @param {function} [options.onError] — (session, error) => void
  * @returns {{ wss: WebSocketServer, sessions: Map, getSession: function, broadcast: function, send: function, shutdown: function }}
  */
-export function attachWebSocket(httpServer, options = {}) {
+export function attachWebSocket( httpServer: any, options: any= {}) {
   if (_wss) throw new Error('WebSocket server already attached');
 
   _wss = new WebSocketServer({
@@ -184,7 +183,7 @@ export function attachWebSocket(httpServer, options = {}) {
  * Production requires secure WebSocket. Dev/test may use plain ws when allowed.
  * @param {import('http').IncomingMessage} req
  */
-function _isSecureUpgrade(req) {
+function _isSecureUpgrade( req: any) {
   const allowPlain =
     process.env.ALLOW_WS_PLAINTEXT === '1' ||
     process.env.NODE_ENV === 'test' ||
@@ -201,7 +200,7 @@ function _isSecureUpgrade(req) {
  * Validate application envelope: type, id, protocol version, dedupe, sequence.
  * @returns {{ code: string, message: string }|null}
  */
-function _validateEnvelope(session, msg) {
+function _validateEnvelope( session: any, msg: any) {
   if (!msg || typeof msg !== 'object') {
     return { code: 'invalid_json', message: 'Message must be a JSON object' };
   }
@@ -258,7 +257,7 @@ function _validateEnvelope(session, msg) {
  * Expects: wss://host/ws?token=<jwt> (or ws:// in non-production)
  * @returns {WsSession|null}
  */
-function _authenticate(ws, req) {
+function _authenticate( ws: any, req: any) {
   if (!JWT_SECRET) {
     ws.close(4001, 'Server misconfigured: no JWT_SECRET');
     return null;
@@ -308,7 +307,7 @@ function _authenticate(ws, req) {
 /**
  * Remove a session from all tracking maps.
  */
-function _removeSession(sessionId) {
+function _removeSession( sessionId: any) {
   const session = sessions.get(sessionId);
   if (!session) return;
   sessions.delete(sessionId);
@@ -322,14 +321,14 @@ function _removeSession(sessionId) {
 /**
  * Get a session by ID.
  */
-export function getSession(sessionId) {
+export function getSession( sessionId: any) {
   return sessions.get(sessionId) || null;
 }
 
 /**
  * Get all sessions for a workspace.
  */
-export function getWorkspaceSessions(workspaceId) {
+export function getWorkspaceSessions( workspaceId: any) {
   const ids = workspaceSessions.get(workspaceId);
   if (!ids) return [];
   return [...ids].map((id) => sessions.get(id)).filter(Boolean);
@@ -341,7 +340,7 @@ export function getWorkspaceSessions(workspaceId) {
  * @param {object} message
  * @returns {boolean} — true if sent
  */
-export function send(sessionId, message) {
+export function send( sessionId: any, message: any) {
   const session = sessions.get(sessionId);
   if (!session || session.ws.readyState !== 1) return false;
   _send(session.ws, message);
@@ -353,7 +352,7 @@ export function send(sessionId, message) {
  * @param {string} workspaceId
  * @param {object} message
  */
-export function broadcast(workspaceId, message) {
+export function broadcast( workspaceId: any, message: any) {
   const ids = workspaceSessions.get(workspaceId);
   if (!ids) return;
   const payload = JSON.stringify(message);
@@ -388,7 +387,7 @@ export function shutdown() {
 /**
  * Internal: send JSON message over a WebSocket (always stamps protocol version).
  */
-function _send(ws, obj) {
+function _send( ws: any, obj: any) {
   if (ws.readyState === 1) {
     const payload = { v: PROTOCOL_VERSION, ...obj };
     if (!payload.id) payload.id = `srv.${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 8)}`;

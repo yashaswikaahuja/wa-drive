@@ -1,4 +1,3 @@
-// @ts-nocheck
 // store.js — shared document store for the extension-service.
 //
 // WHY: form_mappings.json and adapters.json used to live on local disk (DATA_DIR). That made the
@@ -34,14 +33,14 @@ export function ensureSchema() {
 }
 
 // Load a whole document by key. Returns {} if absent (same as the old file load()).
-export async function loadDoc(key) {
+export async function loadDoc( key: any) {
   await ensureSchema();
   const { rows } = await pool.query('SELECT data FROM ext_kv_store WHERE key = $1', [key]);
   return rows[0]?.data ?? {};
 }
 
 // Save (replace) a whole document by key. Upsert — same contract as the old file save().
-export async function saveDoc(key, data) {
+export async function saveDoc( key: any, data: any) {
   await ensureSchema();
   await pool.query(
     `INSERT INTO ext_kv_store (key, data, updated_at) VALUES ($1, $2::jsonb, now())
@@ -61,7 +60,7 @@ export async function saveDoc(key, data) {
 // value, if an object, becomes the new document; otherwise the (mutated) input is written. Any second
 // value the caller needs can be smuggled out via a closure variable. mutateDoc resolves to the mutator's
 // return value so callers can also read a result back.
-export async function mutateDoc(key, mutator) {
+export async function mutateDoc( key: any, mutator: any) {
   await ensureSchema();
   const client = await pool.connect();
   try {

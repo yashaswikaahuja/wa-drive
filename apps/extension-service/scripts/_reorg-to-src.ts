@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * One-shot: move flat extension-service modules into src/{http,ws,db,engines}.
  * ALREADY APPLIED on this branch — kept for history / other clones only.
@@ -47,7 +46,7 @@ const ENGINES = [
 /** old relative from ROOT → new relative from ROOT */
 const MOVES = new Map();
 
-function addMove(fromRel, toRel) {
+function addMove( fromRel: any, toRel: any) {
   MOVES.set(fromRel.replace(/\\/g, '/'), toRel.replace(/\\/g, '/'));
 }
 
@@ -71,18 +70,18 @@ if (fs.existsSync(routesDir)) {
   }
 }
 
-function ensureDir(p) {
+function ensureDir( p: any) {
   fs.mkdirSync(p, { recursive: true });
 }
 
-function relImport(fromFile, toFile) {
+function relImport( fromFile: any, toFile: any) {
   let rel = path.relative(path.dirname(fromFile), toFile).replace(/\\/g, '/');
   if (!rel.startsWith('.')) rel = './' + rel;
   return rel;
 }
 
 /** Resolve an import specifier from a file to a ROOT-relative path (pre-move paths). */
-function resolveOldTarget(fromRel, spec) {
+function resolveOldTarget( fromRel: any, spec: any) {
   if (!spec.startsWith('.')) return null;
   const abs = path.normalize(path.join(ROOT, path.dirname(fromRel), spec));
   let rel = path.relative(ROOT, abs).replace(/\\/g, '/');
@@ -93,11 +92,11 @@ function resolveOldTarget(fromRel, spec) {
   return rel;
 }
 
-function newLocation(oldRel) {
+function newLocation( oldRel: any) {
   return MOVES.get(oldRel) || oldRel;
 }
 
-function rewriteFile(newRel) {
+function rewriteFile( newRel: any) {
   const abs = path.join(ROOT, newRel);
   let text = fs.readFileSync(abs, 'utf8');
   const re = /from\s+(['"])(\.\.?\/[^'"]+)\1/g;

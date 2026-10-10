@@ -1,4 +1,3 @@
-// @ts-nocheck
 // routes/agent.js — AI agent that plans driver actions for a given goal.
 //
 // POST /api/agent/plan
@@ -31,7 +30,7 @@ const DEFAULT_MODEL = process.env.LLM_AGENT_MODEL || process.env.GROQ_AGENT_MODE
 
 // Compute semanticFormKey identically to extension/autofill/extractor.js
 // so the agent and the autofill flow share the same cache key.
-function computeSemanticFormKey(snapshot) {
+function computeSemanticFormKey( snapshot: any) {
   const url = snapshot && snapshot.url || '';
   let hostname = '';
   try { hostname = new URL(url).hostname; } catch (e) {}
@@ -47,11 +46,11 @@ function computeSemanticFormKey(snapshot) {
 }
 
 // Match fill.js / corrections gsk — strip punctuation so cache keys stay stable.
-function normLabel(s) {
+function normLabel( s: any) {
   return (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function buildSystemPrompt(profile, hostname, formContext) {
+function buildSystemPrompt( profile: any, hostname: any, formContext: any) {
   // Strip metadata that aren't form values (id, timestamps, relationship, etc.)
   // These leaked into past plans as values being typed (e.g. Aadhaar got the
   // profile UUID instead of the aadhaar_number).
@@ -122,7 +121,7 @@ Hostname: ${hostname || 'unknown'}
 Form: ${formContext || 'unknown'}`;
 }
 
-function driverSchemasToTools(drivers) {
+function driverSchemasToTools( drivers: any) {
   const FILL_DRIVERS = new Set(['input.type', 'select.option', 'select.cascade']);
   return (drivers || [])
     .filter(d => d && d.name && d.input && FILL_DRIVERS.has(d.name))
@@ -136,8 +135,8 @@ function driverSchemasToTools(drivers) {
         required: d.input.required || [],
       };
       // Strip nested non-standard fields per property (only keep type, description, enum, items)
-      for (const [propKey, propVal] of Object.entries(cleanInput.properties)) {
-        const out = {};
+      for (const [propKey, propVal] of Object.entries(cleanInput.properties) as any) {
+        const out: any = {};
         if (propVal.type) out.type = propVal.type;
         if (propVal.description) out.description = String(propVal.description).slice(0, 200);
         if (propVal.enum) out.enum = propVal.enum;
@@ -156,11 +155,11 @@ function driverSchemasToTools(drivers) {
     });
 }
 
-function toolNameToDriverName(toolName) {
+function toolNameToDriverName( toolName: any) {
   return toolName.replace(/__/g, '.');
 }
 
-function buildUserPrompt(goal, snapshot) {
+function buildUserPrompt( goal: any, snapshot: any) {
   const elements = (snapshot && snapshot.elements) || [];
   // Filter out elements the agent shouldn't fill (saves prompt tokens)
   // Also limit to first 80 fillable elements.
@@ -202,7 +201,7 @@ ${fieldList}
 For each [TEXT] use input.type. For each [DROPDOWN] use select.option (value text matches profile, e.g. "Female"). SKIP [RADIO] / [CHECKBOX] unless explicitly told otherwise.`;
 }
 
-router.post('/plan', async (req, res) => {
+router.post('/plan', async ( req: any, res: any) => {
   const t0 = Date.now();
   const { goal, snapshot, drivers, profile, hostname, formContext, model: requestedModel } = req.body || {};
   if (!goal) return res.status(400).json({ error: 'goal is required' });
@@ -388,7 +387,7 @@ router.post('/plan', async (req, res) => {
         // Direct match
         if (profileValueSet.has(valNorm)) return true;
         // Substring match (e.g. profile.address contains the value, or value is prefix of address)
-        for (const pv of profileValueSet) {
+        for (const pv of (profileValueSet as any)) {
           if (pv.length >= 4 && (pv.includes(valNorm) || valNorm.includes(pv))) return true;
         }
         // Single-token / numeric check (DD/MM/YYYY parts of dob)
@@ -427,7 +426,7 @@ router.post('/plan', async (req, res) => {
           // Reverse-lookup profileKey from value
           let profileKey = null;
           if (profile && typeof profile === 'object') {
-            for (const [k, v] of Object.entries(profile)) {
+            for (const [k, v] of Object.entries(profile) as any) {
               if (v && String(v) === String(action.args.value)) { profileKey = k; break; }
             }
           }
@@ -483,7 +482,7 @@ router.post('/plan', async (req, res) => {
   }
 });
 
-router.post('/trace', async (req, res) => {
+router.post('/trace', async ( req: any, res: any) => {
   const { goal, plan, results, snapshotBefore, snapshotAfter, profileId, traceId, profile, formKey: bodyFormKey } = req.body || {};
   if (!plan || !results) return res.status(400).json({ error: 'plan and results required' });
 
@@ -514,7 +513,7 @@ router.post('/trace', async (req, res) => {
         // Reverse-lookup the profile key by value
         let profileKey = null;
         if (profile && typeof profile === 'object') {
-          for (const [k, v] of Object.entries(profile)) {
+          for (const [k, v] of Object.entries(profile) as any) {
             if (v && String(v) === String(action.args.value)) { profileKey = k; break; }
           }
         }
@@ -564,7 +563,7 @@ router.post('/trace', async (req, res) => {
   }
 });
 
-router.get('/traces', async (req, res) => {
+router.get('/traces', async ( req: any, res: any) => {
   try {
     const workspaceId = req.user?.workspaceId;
     const { rows } = await pool.query(
@@ -583,7 +582,7 @@ router.get('/traces', async (req, res) => {
   }
 });
 
-router.get('/traces/:id', async (req, res) => {
+router.get('/traces/:id', async ( req: any, res: any) => {
   try {
     const workspaceId = req.user?.workspaceId;
     const { rows } = await pool.query(
