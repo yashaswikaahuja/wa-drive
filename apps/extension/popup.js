@@ -705,23 +705,23 @@ async function injectDriversInto(tabId) {
     await chrome.scripting.executeScript({
       target: { tabId },
       world: "MAIN",
-      files: ["autofill/plugins/network-monitor.ts"]
+      files: ["autofill/plugins/network-monitor.js"]
     });
   } catch (e) {
   }
   await chrome.scripting.executeScript({
     target: { tabId },
     files: [
-      "autofill/plugins/interface.ts",
-      "autofill/plugins/cascade-select.ts",
-      "autofill/plugins/ng-dropdown.ts",
-      "autofill/plugins/button-click.ts",
-      "autofill/plugins/keystroke-input.ts",
-      "drivers/dispatch.ts",
-      "drivers/dom.ts",
-      "drivers/input.ts",
-      "drivers/select.ts",
-      "drivers/interaction.ts"
+      "autofill/plugins/interface.js",
+      "autofill/plugins/cascade-select.js",
+      "autofill/plugins/ng-dropdown.js",
+      "autofill/plugins/button-click.js",
+      "autofill/plugins/keystroke-input.js",
+      "drivers/dispatch.js",
+      "drivers/dom.js",
+      "drivers/input.js",
+      "drivers/select.js",
+      "drivers/interaction.js"
     ]
   });
 }

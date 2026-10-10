@@ -1,6 +1,6 @@
-// Generated from background.ts — edit the .ts source, then re-copy/emit.
+// Generated from background.ts — edit the .ts source.
 // Load knowledge sync client (must be first â€” other code references ccKnowledgeSync)
-try { importScripts('knowledge-sync.ts'); } catch (e) { console.warn('[CC] knowledge-sync.ts load failed:', e.message); }
+try { importScripts('knowledge-sync.js'); } catch (e) { console.warn('[CC] knowledge-sync.ts load failed:', e.message); }
 
 // Helper functions â€” use shared/label-utils.ts as canonical source.
 // These are thin wrappers because background.ts (service worker) cannot import
@@ -192,7 +192,7 @@ async function runJobDispatch(envelope, tabId) {
         });
       }
     }
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.ts', 'autofill/plugins/cascade-select.ts', 'autofill/plugins/ng-dropdown.ts', 'autofill/plugins/button-click.ts', 'autofill/plugins/keystroke-input.ts', 'drivers/dispatch.ts', 'drivers/dom.ts', 'drivers/input.ts', 'drivers/select.ts', 'drivers/interaction.ts', 'autofill/extractor.ts', 'autofill/mapper.ts', 'autofill/executor.ts'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['autofill/plugins/interface.js', 'autofill/plugins/cascade-select.js', 'autofill/plugins/ng-dropdown.js', 'autofill/plugins/button-click.js', 'autofill/plugins/keystroke-input.js', 'drivers/dispatch.js', 'drivers/dom.js', 'drivers/input.js', 'drivers/select.js', 'drivers/interaction.js', 'autofill/extractor.js', 'autofill/mapper.js', 'autofill/executor.js'] });
 
     const result = await chrome.scripting.executeScript({
       target: { tabId },

@@ -458,7 +458,7 @@ fillBtn.addEventListener('click', async () => {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         world: 'MAIN',
-        files: ['autofill/plugins/network-monitor.ts'],
+        files: ['autofill/plugins/network-monitor.js'],
       });
     } catch (e) {
       console.warn('[CC] network monitor injection failed (will use fallback delays):', e.message);
@@ -485,33 +485,33 @@ fillBtn.addEventListener('click', async () => {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: [
-          'shared/option-match.ts',
-          'shared/dom-utils.ts',
-          'shared/network-idle.ts',
-          'shared/llm-client.ts',
-          'shared/select-apply.ts',
-          'shared/semantic-aliases.ts',
-          'models/ir.ts',
-          'capabilities/registry.ts',
-          'runtime/resolver.ts',
-          'runtime/runner.ts',
-          'autofill/plugins/interface.ts',
-          'autofill/plugins/cascade-select.ts',
-          'autofill/plugins/ng-dropdown.ts',
-          'autofill/plugins/button-click.ts',
-          'autofill/plugins/keystroke-input.ts',
-          'runtime/plugin-bridge.ts',
-          'drivers/dispatch.ts',
-          'drivers/dom.ts',
-          'drivers/input.ts',
-          'drivers/select.ts',
-          'drivers/interaction.ts',
-          'autofill/extractor.ts',
-          'autofill/rule-engine.ts',
-          'autofill/derive.ts',
-          'autofill/ai-resolve.ts',
-          'autofill/mapper.ts',
-          'autofill/executor.ts'
+          'shared/option-match.js',
+          'shared/dom-utils.js',
+          'shared/network-idle.js',
+          'shared/llm-client.js',
+          'shared/select-apply.js',
+          'shared/semantic-aliases.js',
+          'models/ir.js',
+          'capabilities/registry.js',
+          'runtime/resolver.js',
+          'runtime/runner.js',
+          'autofill/plugins/interface.js',
+          'autofill/plugins/cascade-select.js',
+          'autofill/plugins/ng-dropdown.js',
+          'autofill/plugins/button-click.js',
+          'autofill/plugins/keystroke-input.js',
+          'runtime/plugin-bridge.js',
+          'drivers/dispatch.js',
+          'drivers/dom.js',
+          'drivers/input.js',
+          'drivers/select.js',
+          'drivers/interaction.js',
+          'autofill/extractor.js',
+          'autofill/rule-engine.js',
+          'autofill/derive.js',
+          'autofill/ai-resolve.js',
+          'autofill/mapper.js',
+          'autofill/executor.js'
         ]
       });
     } catch (e) {
@@ -1093,23 +1093,23 @@ async function injectDriversInto(tabId) {
     await chrome.scripting.executeScript({
       target: { tabId },
       world: 'MAIN',
-      files: ['autofill/plugins/network-monitor.ts'],
+      files: ['autofill/plugins/network-monitor.js'],
     });
   } catch (e) {}
   // Inject plugins + drivers in ISOLATED world
   await chrome.scripting.executeScript({
     target: { tabId },
     files: [
-      'autofill/plugins/interface.ts',
-      'autofill/plugins/cascade-select.ts',
-      'autofill/plugins/ng-dropdown.ts',
-      'autofill/plugins/button-click.ts',
-      'autofill/plugins/keystroke-input.ts',
-      'drivers/dispatch.ts',
-      'drivers/dom.ts',
-      'drivers/input.ts',
-      'drivers/select.ts',
-      'drivers/interaction.ts',
+      'autofill/plugins/interface.js',
+      'autofill/plugins/cascade-select.js',
+      'autofill/plugins/ng-dropdown.js',
+      'autofill/plugins/button-click.js',
+      'autofill/plugins/keystroke-input.js',
+      'drivers/dispatch.js',
+      'drivers/dom.js',
+      'drivers/input.js',
+      'drivers/select.js',
+      'drivers/interaction.js',
     ],
   });
 }
