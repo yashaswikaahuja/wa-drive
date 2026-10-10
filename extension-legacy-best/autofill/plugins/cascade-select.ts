@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cascade-select plugin — handles dependent <select> chains (state→district→block→village).
  * 
@@ -58,16 +57,16 @@ var CascadeSelectPlugin = {
       return window.ccApplySelect(el, opt);
     }
 
-    function realOptsOf(list) {
-      return list.filter(function (o) {
+    function realOptsOf(list: any) {
+      return list.filter(function (o: any) {
         if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
         var t = (o.text || '').toLowerCase();
         return !t.includes('select') && !t.includes('choose') && !t.includes('loading') && t !== '--';
       });
     }
 
-    function sample(list, n) {
-      return realOptsOf(list).slice(0, n || 8).map(function (o) {
+    function sample(list: any, n?: any) {
+      return realOptsOf(list).slice(0, n || 8).map(function (o: any) {
         return { value: String(o.value || '').slice(0, 40), text: String(o.text || '').trim().slice(0, 60) };
       });
     }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Select drivers — pick options from native <select>, ng-select, mat-select,
  * and custom JS-driven dropdowns.
@@ -22,7 +21,7 @@
 
   function fillNativeSelect(sel, value) {
     const opt = pickNativeOption(sel, value);
-    if (!opt) return { ok: false, reason: 'no-matching-option', options: Array.from(sel.options).slice(0, 20).map(o => o.text) };
+    if (!opt) return { ok: false, reason: 'no-matching-option', options: Array.from(sel.options).slice(0, 20).map((o: any) => o.text) };
     sel.value = opt.value;
     sel.selectedIndex = opt.index;
     sel.dispatchEvent(new Event('input', { bubbles: true }));
@@ -66,17 +65,17 @@
         const plugin = window.findPlugin(el, { profileKey: '', label: '' });
         if (plugin) {
           const result = plugin.fill(el, args.value, { profileKey: '', parentValues: {}, attempt: 1 });
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise<void>(r => setTimeout(r, 200));
           return { strategy: 'plugin:' + plugin.id, ...result };
         }
       }
 
       // Last-ditch: try opening + clicking option
       try { el.click(); } catch (e) {}
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise<void>(r => setTimeout(r, 300));
       const v = String(args.value).toLowerCase();
       const opts = Array.from(document.querySelectorAll('.ng-option, .mat-option, [role="option"]'))
-        .filter(o => (o.textContent || '').trim().toLowerCase().includes(v));
+        .filter((o: any) => (o.textContent || '').trim().toLowerCase().includes(v));
       if (opts[0]) {
         opts[0].click();
         return { strategy: 'click-option', selectedText: opts[0].textContent.trim() };
@@ -118,7 +117,7 @@
           const lastActivity = parseInt(document.body.dataset.ccAjaxLastActivity || '0', 10);
           if (Date.now() - lastActivity > 200) break;
         }
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise<void>(r => setTimeout(r, 100));
       }
 
       const el = findEl(args.target);

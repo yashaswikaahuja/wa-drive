@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Click + wait drivers — interaction primitives.
  *
@@ -35,18 +34,18 @@
       if (!el) throw new Error('element-not-found: ' + args.target);
       if (args.scrollIntoView !== false) {
         try { el.scrollIntoView({ block: 'center' }); } catch (e) {}
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise<void>(r => setTimeout(r, 100));
       }
       const urlBefore = location.href;
       try { el.click(); } catch (e) { throw new Error('click-failed: ' + e.message); }
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise<void>(r => setTimeout(r, 200));
       const urlAfter = location.href;
       // Brief poll for navigation
       let navigated = urlAfter !== urlBefore;
       if (!navigated) {
         const settle = Date.now() + 2000;
         while (Date.now() < settle && location.href === urlBefore) {
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise<void>(r => setTimeout(r, 100));
         }
         navigated = location.href !== urlBefore;
       }
@@ -79,7 +78,7 @@
           const r = el.getBoundingClientRect();
           return { found: true, waitedMs: Date.now() - (deadline - timeout), bounds: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) } };
         }
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise<void>(r => setTimeout(r, 100));
       }
       return { found: false, waitedMs: timeout };
     },
@@ -118,7 +117,7 @@
     output: { type: 'object' },
     handler: async function (args) {
       const ms = Math.min(Math.max(0, args.ms || 0), 30000);
-      await new Promise(r => setTimeout(r, ms));
+      await new Promise<void>(r => setTimeout(r, ms));
       return { waitedMs: ms };
     },
   });

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * keystroke-input plugin — types values char-by-char with full key+input event sequence.
  *

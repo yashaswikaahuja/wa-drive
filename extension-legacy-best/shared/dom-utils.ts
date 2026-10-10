@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/dom-utils.ts ────────────────────────────────────────────────────
 // Single source of truth for DOM utility functions used across the extension.
 // Exposes: window.ccDomUtils = { getLabel, isVisible, isGoodLabel }
@@ -87,7 +86,7 @@
     var wrappingLabel = el.closest('label');
     if (wrappingLabel) {
       var clone = wrappingLabel.cloneNode(true);
-      clone.querySelectorAll('input,select,textarea,button').forEach(function (e) { e.remove(); });
+      clone.querySelectorAll('input,select,textarea,button').forEach(function (e: any) { e.remove(); });
       var t = clone.textContent.trim();
       if (isGoodLabel(t)) return t;
     }

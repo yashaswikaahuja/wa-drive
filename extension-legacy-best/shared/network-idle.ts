@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/network-idle.ts ─────────────────────────────────────────────────
 // Single source of truth for waiting on network idle state.
 // Reads counters published by network-monitor.ts (which runs in MAIN world).
@@ -23,7 +22,7 @@
     quietMs = (typeof quietMs === 'number' && quietMs > 0) ? quietMs : 200;
     maxMs = (typeof maxMs === 'number' && maxMs > 0) ? maxMs : 8000;
 
-    return new Promise(function (resolve) {
+    return new Promise(function (resolve: (v?: any) => void) {
       var start = Date.now();
       var deadline = start + maxMs;
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 const VERSION = chrome.runtime.getManifest().version;
 let allProfiles = [];
 let selectedProfile = null;
@@ -29,7 +28,7 @@ async function getActivePageTab() {
   let tab = tabs[0];
   if (!tab?.url || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('chrome://') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
     const allTabs = await chrome.tabs.query({ currentWindow: true });
-    tab = allTabs.find(t =>
+    tab = allTabs.find((t: any) =>
       t.url &&
       !t.url.startsWith('chrome') &&
       !t.url.startsWith('edge://') &&
@@ -147,9 +146,9 @@ function showResults(filled, skipped, failed, records) {
   bar.innerHTML = `<div class="filled" style="width:${filled/total*100}%"></div><div class="skipped" style="width:${skipped/total*100}%"></div><div class="failed" style="width:${failed/total*100}%"></div>`;
   // Show field names for skipped/failed
   const detailEl = document.getElementById('results-detail');
-  const issues = (records || []).filter(r => r.result && r.result !== 'filled');
+  const issues = (records || []).filter((r: any) => r.result && r.result !== 'filled');
   if (issues.length) {
-    detailEl.innerHTML = issues.slice(0, 8).map(r => {
+    detailEl.innerHTML = issues.slice(0, 8).map((r: any) => {
       const color = r.result === 'unmapped' ? 'hsl(35 92% 38%)' : 'hsl(0 65% 45%)';
       const label = r.label || r.selector?.replace(/[#.\[\]]/g, '').slice(0, 20) || '?';
       return `<span class="field-tag" style="border-color:${color};color:${color}">${label}</span>`;
@@ -167,7 +166,7 @@ function showResults(filled, skipped, failed, records) {
       filledEl.innerHTML = `<div class="filled-toggle" id="filled-toggle">▸ See what was filled (${fr.length})</div>
         <div id="filled-list" style="display:none"></div>`;
       const listEl = filledEl.querySelector('#filled-list');
-      listEl.innerHTML = fr.map(r => {
+      listEl.innerHTML = fr.map((r: any) => {
         const label = (r.label || r.selector || '').toString().replace(/[#.\[\]]/g, '').slice(0, 28);
         const val = (r.value != null ? String(r.value) : '').slice(0, 30);
         return `<div class="filled-row"><span class="fl-label">${label}</span><span class="fl-val">${val}</span><span class="fl-check">✓</span></div>`;
@@ -212,20 +211,20 @@ async function loadRecents() {
   recentIds = data._cc_recents || [];
 }
 async function saveRecent(profileId) {
-  recentIds = [profileId, ...recentIds.filter(id => id !== profileId)].slice(0, 5);
+  recentIds = [profileId, ...recentIds.filter((id: any) => id !== profileId)].slice(0, 5);
   await chrome.storage.local.set({ _cc_recents: recentIds });
 }
 
 function renderProfiles(query) {
   const q = (query || '').toLowerCase().trim();
   let list = q
-    ? allProfiles.filter(p => (p.name||'').toLowerCase().includes(q) || getPhone(p).includes(q))
+    ? allProfiles.filter((p: any) => (p.name||'').toLowerCase().includes(q) || getPhone(p).includes(q))
     : allProfiles;
 
   // Sort recents to top when no search query
   if (!q && recentIds.length) {
-    const recents = recentIds.map(id => list.find(p => p.id === id)).filter(Boolean);
-    const rest = list.filter(p => !recentIds.includes(p.id));
+    const recents = recentIds.map((id: any) => list.find((p: any) => p.id === id)).filter(Boolean);
+    const rest = list.filter((p: any) => !recentIds.includes(p.id));
     list = [...recents, ...rest];
   }
   filteredProfiles = list;
@@ -245,9 +244,9 @@ function renderProfiles(query) {
   }
 
   const visibleList = filteredProfiles.slice(0, 20);
-  const recentCount = !q ? recentIds.filter(id => allProfiles.some(x => x.id === id)).length : 0;
+  const recentCount = !q ? recentIds.filter((id: any) => allProfiles.some(x => x.id === id)).length : 0;
   profilesEl.innerHTML = visibleList.map((p, i) => {
-    const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const initials = (p.name||'?').split(' ').map((w: any) =>w[0]).join('').slice(0,2).toUpperCase();
     const isSelected = selectedProfile?.id === p.id;
     const isFocused = i === focusIdx;
     const phone = getPhone(p);
@@ -263,7 +262,7 @@ function renderProfiles(query) {
     </div>`;
   }).join('');
 
-  profilesEl.querySelectorAll('.profile-item').forEach(el => {
+  profilesEl.querySelectorAll('.profile-item').forEach((el: any) => {
     el.addEventListener('click', () => {
       selectProfile(el.dataset.id);
     });
@@ -271,7 +270,7 @@ function renderProfiles(query) {
 }
 
 function selectProfile(id) {
-  selectedProfile = allProfiles.find(p => p.id === id) || null;
+  selectedProfile = allProfiles.find((p: any) => p.id === id) || null;
   fillBtn.disabled = !selectedProfile;
   agentBtn.disabled = !selectedProfile;
   chrome.storage.session.set({ _cc_selected: id });
@@ -359,7 +358,7 @@ async function init() {
     // Restore last selected profile
     const sess = await chrome.storage.session.get('_cc_selected');
     if (sess._cc_selected) {
-      selectedProfile = allProfiles.find(p => p.id === sess._cc_selected) || null;
+      selectedProfile = allProfiles.find((p: any) => p.id === sess._cc_selected) || null;
       fillBtn.disabled = !selectedProfile;
       agentBtn.disabled = !selectedProfile;
     }
@@ -403,7 +402,7 @@ fillBtn.addEventListener('click', async () => {
     const warn = document.getElementById('completeness-warn');
     warn.innerHTML = `<span>⚠️ ${percent}% complete — will skip: ${missing.slice(0,3).join(', ')}${missing.length > 3 ? '...' : ''}</span><button id="fill-anyway">Fill anyway</button>`;
     warn.style.display = 'flex';
-    await new Promise(resolve => {
+    await new Promise<void>((resolve) => {
       document.getElementById('fill-anyway').onclick = () => { warn.style.display = 'none'; resolve(); };
     });
   }
@@ -428,7 +427,7 @@ fillBtn.addEventListener('click', async () => {
       target: { tabId: tab.id },
       func: () => {
         const snapshot = {};
-        document.querySelectorAll('input, select, textarea').forEach(el => {
+        document.querySelectorAll('input, select, textarea').forEach((el: any) => {
           const key = el.id || el.name || el.getAttribute('formcontrolname');
           if (key) snapshot[key] = { selector: el.id ? '#'+el.id : `[name="${el.name}"]`, value: el.value, type: el.type };
         });
@@ -532,9 +531,9 @@ fillBtn.addEventListener('click', async () => {
       target: { tabId: tab.id },
       args: [(() => {
           // Flatten provenance structure: {field: {value, source, ...}} → {field: value}
-          const flat = {};
+          const flat: any = {};
           const raw = selectedProfile.data || selectedProfile;
-          for (const [k, v] of Object.entries(raw)) {
+          for (const [k, v] of Object.entries(raw) as any) {
             flat[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
           }
           // Also include top-level fields
@@ -665,10 +664,10 @@ fillBtn.addEventListener('click', async () => {
 
         // Fuzzy fill remaining — LABEL-PRIMARY (mapper matches label → profile key;
         // selector is only the fill target, never the semantic authority).
-        const unmapped = formFields.filter(f => !mapping[f.selector] && !handled.has(f.selector));
+        const unmapped = formFields.filter((f: any) => !mapping[f.selector] && !handled.has(f.selector));
         if (unmapped.length) {
           const fz = fuzzyMatch(unmapped, profile);
-          for (const [s, v] of Object.entries(fz)) {
+          for (const [s, v] of Object.entries(fz) as any) {
             mapping[s] = v;
             const ff = formFields.find((x) => x.selector === s);
             fbs[s] = {
@@ -682,7 +681,7 @@ fillBtn.addEventListener('click', async () => {
             '[CC] label-primary fuzzy mapped',
             Object.keys(fz).length,
             'fields; matchBy=label count=',
-            Object.values(fz).filter((x) => x && x.matchBy === 'label').length
+            Object.values(fz).filter((x: any) => x && x.matchBy === 'label').length
           );
         }
 
@@ -691,7 +690,7 @@ fillBtn.addEventListener('click', async () => {
 
         // Optional AI mapping — soft timeout (never reject / never console.warn → Chrome Errors)
         // Exclude radio/checkbox — handled by rule engine / sequential fill.
-        const unmappedAI = formFields.filter(f => {
+        const unmappedAI = formFields.filter((f: any) => {
           if (mapping[f.selector] || handled.has(f.selector)) return false;
           const g = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
           return g !== 'radio' && g !== 'checkbox';
@@ -699,10 +698,10 @@ fillBtn.addEventListener('click', async () => {
         if (unmappedAI.length > 0 && groqKey) {
           try {
             const aiPromise = aiMatch(unmappedAI, profile, groqKey, llmBaseUrl, llmModel).catch(() => ({}));
-            const softTimeout = new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), 8000));
+            const softTimeout = new Promise((resolve: (v?: any) => void) => setTimeout(() => resolve({ __timeout: true }), 8000));
             const aiMapping = await Promise.race([aiPromise, softTimeout]);
             if (aiMapping && !aiMapping.__timeout) {
-              for (const [sel, val] of Object.entries(aiMapping)) {
+              for (const [sel, val] of Object.entries(aiMapping) as any) {
                 if (!mapping[sel]) {
                   mapping[sel] = val;
                   fbs[sel] = { label: (val && val.label) || 'ai', source: 'ai', matchBy: 'ai' };
@@ -754,26 +753,26 @@ fillBtn.addEventListener('click', async () => {
         // form-specific question or needs reasoning over the profile (e.g. which
         // dropdown option fits). One batched call; option values are validated
         // against the field's real options so nothing unusable gets filled.
-        const stillBlank = formFields.filter(f =>
+        const stillBlank = formFields.filter((f: any) =>
           !mapping[f.selector] && !handled.has(f.selector) &&
           f.type !== 'checkbox-agreement' &&
           !/captcha|otp|password|verification code/i.test(f.label || '')
         );
         if (stillBlank.length > 0 && groqKey && typeof ccAiResolveValues === 'function') {
           try {
-            const pending = stillBlank.map(f => ({
+            const pending = stillBlank.map((f: any) => ({
               selector: f.selector, label: f.label, type: f.type,
               options: f.options || null, placeholder: f.placeholder || '',
             }));
             // Soft timeout: resolve {} so fill continues — never reject (no Chrome Errors spam)
             const rPromise = ccAiResolveValues(pending, profile, groqKey, llmBaseUrl, llmModel).catch(() => ({}));
-            const rTimeout = new Promise((resolve) => setTimeout(() => resolve({ __timeout: true }), 8000));
+            const rTimeout = new Promise((resolve: (v?: any) => void) => setTimeout(() => resolve({ __timeout: true }), 8000));
             const resolved = await Promise.race([rPromise, rTimeout]);
             if (resolved && !resolved.__timeout) {
               let n = 0;
-              for (const [sel, info] of Object.entries(resolved)) {
+              for (const [sel, info] of Object.entries(resolved) as any) {
                 if (mapping[sel] || !info || info.value == null) continue;
-                const f = formFields.find(x => x.selector === sel);
+                const f = formFields.find((x: any) => x.selector === sel);
                 if (!f) continue;
                 const grp = (typeof ccTypeGroup === 'function') ? ccTypeGroup(f.type) : 'text';
                 if (grp === 'radio' && Array.isArray(f.optionSelectors)) {
@@ -823,7 +822,7 @@ fillBtn.addEventListener('click', async () => {
         try {
           if (window.ccRunner && window.ccResolver) {
             const extractResult = extractFormFieldsWithFingerprint();
-            const elements = formFields.map(f => document.querySelector(f.selector));
+            const elements = formFields.map((f: any) => document.querySelector(f.selector));
             window.ccResolver.setPageContext(extractResult.pageModel, elements);
 
             // Build Observation from executor's _ccRecords
@@ -851,7 +850,7 @@ fillBtn.addEventListener('click', async () => {
                 fields_snapshot: null,
               },
             };
-            const succeeded = runnerObservation.execution_path.filter(e => e.status === 'success').length;
+            const succeeded = runnerObservation.execution_path.filter((e: any) => e.status === 'success').length;
             console.log('[CC] Observation:', succeeded, '/', runnerObservation.execution_path.length, 'fields filled');
           }
         } catch (e) { console.warn('[CC] Observation build error:', e.message); }
@@ -865,7 +864,7 @@ fillBtn.addEventListener('click', async () => {
         const fieldBySelector = {};
         for (const f of formFields) fieldBySelector[f.selector] = f;
         // Tag every record with its source (mapping / fuzzy / ai) AND the field's label
-        records = records.map(r => ({
+        records = records.map((r: any) => ({
           ...r,
           source: r.source || (fbs[r.selector] && fbs[r.selector].source) || 'unknown',
           label: r.label || (fieldBySelector[r.selector] && fieldBySelector[r.selector].label) || (fbs[r.selector] && fbs[r.selector].label) || '',
@@ -873,7 +872,7 @@ fillBtn.addEventListener('click', async () => {
 
         // Append honest "unmapped" diagnostics — NOT always "no-mapping".
         // Profile may have district; another selector may already own that cascade key.
-        const filledSelectors = new Set(records.map(r => r.selector));
+        const filledSelectors = new Set(records.map((r: any) => r.selector));
         const semKeyOf = (label, pk) => {
           const s = ((pk || '') + ' ' + (label || '')).toLowerCase();
           if (/state|राज्/.test(s) && !/sub/.test(s)) return 'state';
@@ -963,11 +962,11 @@ fillBtn.addEventListener('click', async () => {
 
         const totalDetected = formFields.length;
         const totalMapped = Object.keys(mapping).length;
-        const totalFilled = records.filter(r => r.result === 'filled').length;
-        const totalSkipped = records.filter(r => r.result === 'skipped').length;
-        const totalUnmapped = records.filter(r => r.result === 'unmapped').length;
+        const totalFilled = records.filter((r: any) => r.result === 'filled').length;
+        const totalSkipped = records.filter((r: any) => r.result === 'skipped').length;
+        const totalUnmapped = records.filter((r: any) => r.result === 'unmapped').length;
         // Honest fail count: skips + unmapped that were not pure duplicates
-        const totalFailed = records.filter(r =>
+        const totalFailed = records.filter((r: any) =>
           r.result === 'skipped' ||
           r.result === 'error' ||
           r.result === 'failed' ||
@@ -1014,7 +1013,7 @@ fillBtn.addEventListener('click', async () => {
           }
         } catch (e) { console.warn('[CC] mapping sync build failed:', e.message); }
 
-        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length, records: records.filter(r => r.result !== 'filled').slice(0, 10), filledRecords: records.filter(r => r.result === 'filled').slice(0, 25), syncUpdates, syncFormKey: semanticFormKey, syncTitle: document.title.slice(0, 80), syncHost: location.hostname };
+        return { ok: true, filled, totalDetected, totalMapped, totalFilled, totalFailed, totalUnmapped, recordCount: records.length, records: records.filter((r: any) => r.result !== 'filled').slice(0, 10), filledRecords: records.filter((r: any) => r.result === 'filled').slice(0, 25), syncUpdates, syncFormKey: semanticFormKey, syncTitle: document.title.slice(0, 80), syncHost: location.hostname };
       }
     });
 
@@ -1056,7 +1055,7 @@ undoBtn.addEventListener('click', async () => {
       target: { tabId: _lastFillTabId },
       func: () => {
         const snapshot = JSON.parse(document.body.getAttribute('data-cc-undo') || '{}');
-        for (const [key, info] of Object.entries(snapshot)) {
+        for (const [key, info] of Object.entries(snapshot) as any) {
           const el = document.querySelector(info.selector);
           if (el) { el.value = info.value; el.dispatchEvent(new Event('input', {bubbles:true})); el.dispatchEvent(new Event('change', {bubbles:true})); }
         }
@@ -1075,7 +1074,7 @@ document.getElementById('open-btn').addEventListener('click', async () => {
     ? 'http://localhost:5173'
     : (data.backendUrl || '').replace('/api','');
   const tabs = await chrome.tabs.query({});
-  const existing = tabs.find(t => t.url?.startsWith(frontendUrl));
+  const existing = tabs.find((t: any) => t.url?.startsWith(frontendUrl));
   if (existing) { chrome.tabs.update(existing.id, {active:true}); chrome.windows.update(existing.windowId,{focused:true}); }
   else chrome.tabs.create({ url: frontendUrl || 'http://localhost:5173' });
   // Side panel stays open (ChatGPT-style) — do not window.close()
@@ -1152,9 +1151,9 @@ agentBtn.addEventListener('click', async () => {
 
     // Flatten data — strip metadata keys
     const META_KEYS = new Set(['id', 'displayLabel', 'displayName', 'relationship', 'createdAt', 'updatedAt', 'workspaceId', 'createdBy', 'updatedBy', 'documentId', 'confirmedAt', 'confirmedBy', 'source', 'confidence']);
-    const flatProfile = {};
+    const flatProfile: any = {};
     const raw = fullProfile.data || fullProfile;
-    for (const [k, v] of Object.entries(raw)) {
+    for (const [k, v] of Object.entries(raw) as any) {
       if (META_KEYS.has(k)) continue;
       flatProfile[k] = (v && typeof v === 'object' && 'value' in v) ? v.value : v;
     }
@@ -1247,7 +1246,7 @@ agentExecuteBtn.addEventListener('click', async () => {
 
     if (execResult.error) throw new Error(execResult.error);
 
-    const okCount = execResult.steps.filter(s => s.ok).length;
+    const okCount = execResult.steps.filter((s: any) => s.ok).length;
     showStatus(`Done: ${okCount}/${execResult.steps.length} actions succeeded`, execResult.ok ? CC.success : CC.warning);
 
     // Render per-step results inline so operator sees what happened
