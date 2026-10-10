@@ -11,7 +11,7 @@
     "start": "node --experimental-strip-types scripts/build-entry.ts && node index.js",
     "start:dist": "node dist/index.js",
     "dev": "node --experimental-strip-types scripts/build-entry.ts && node --watch index.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit",
     "test": "node -e \"console.log('[whatsapp-service] no package tests yet')\""
   },
   "dependencies": {

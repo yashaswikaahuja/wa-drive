@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Emit runnable index.js from index.ts (Node 20-safe).
  */
