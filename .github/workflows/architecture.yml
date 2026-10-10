@@ -265,7 +265,11 @@ jobs:
         run: npm ci
 
       - name: Build extension-service emit for WSS unit suite
-        run: pnpm --filter cybercontrol-extension-service run build:tsc
+        run: |
+          # @cc/mapper browser sources must not be pulled into NodeNext tsc;
+          # emit node dist for split-dob / mapping-relation first (paths remap).
+          pnpm --filter @cc/mapper run build:node
+          pnpm --filter cybercontrol-extension-service run build:tsc
 
       - name: "CHECK-005: Unit and knowledge tests"
         run: node --experimental-strip-types extension-dev/tests/ci-unit.ts
