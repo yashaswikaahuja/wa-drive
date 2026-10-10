@@ -22,9 +22,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Run architecture doctrine check (warn-only)
         # Reports forbidden deps but does NOT fail the build for now.
         # `sharp` is currently used by the backend photo-sheet feature (face crop / passport sheets)
         # and is a known, accepted exception to be cleaned up later. Re-add `--strict` to enforce.
-        run: node tools/forbidden-deps-check.ts || true
+        run: node --experimental-strip-types tools/forbidden-deps-check.ts || true

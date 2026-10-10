@@ -32,7 +32,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 22+: architecture checks run .ts via --experimental-strip-types
+          node-version: '22'
 
       # ── Forbidden patterns in new code ─────────────────────────────
       - name: "CHECK-001: Forbidden patterns"
@@ -193,24 +194,24 @@ jobs:
       # ── Phase 3.0 architecture contracts ──────────────────────────
       - name: "CHECK-008: Phase 3 architecture contracts"
         if: always()
-        run: node extension-dev/tests/unit/test-phase3-governance.ts
+        run: node --experimental-strip-types extension-dev/tests/unit/test-phase3-governance.ts
 
       # ── New structural DOM access boundary ────────────────────────
       - name: "CHECK-009: DOM access boundary"
         if: always()
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            node tools/dom-boundary-check.ts --base "origin/${{ github.base_ref }}"
+            node --experimental-strip-types tools/dom-boundary-check.ts --base "origin/${{ github.base_ref }}"
           else
             BASE="${{ github.event.before }}"
             if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
-            node tools/dom-boundary-check.ts --base "$BASE"
+            node --experimental-strip-types tools/dom-boundary-check.ts --base "$BASE"
           fi
 
       # ── Discussion 11 architecture invariants ─────────────────────
       - name: "CHECK-012: D11 architecture invariants"
         if: always()
-        run: node extension-dev/tests/unit/test-d11-invariants.ts
+        run: node --experimental-strip-types extension-dev/tests/unit/test-d11-invariants.ts
 
       # ── Architecture health report ─────────────────────────────────
       - name: "CHECK-004: Architecture report"
@@ -252,7 +253,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 22+: unit runners are TypeScript (--experimental-strip-types)
+          node-version: '22'
           cache: pnpm
 
       - name: Install workspace deps
@@ -263,7 +265,7 @@ jobs:
         run: npm ci
 
       - name: "CHECK-005: Unit and knowledge tests"
-        run: node extension-dev/tests/ci-unit.ts
+        run: node --experimental-strip-types extension-dev/tests/ci-unit.ts
 
   # ════════════════════════════════════════════════════════════════════
   # JOB 3: Extension & Browser Boundary Security (permanent pillar)
@@ -276,10 +278,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: "CHECK-011: Extension & browser boundary security"
-        run: node extension-dev/tests/security/run.ts
+        run: node --experimental-strip-types extension-dev/tests/security/run.ts
 
   # ════════════════════════════════════════════════════════════════════
   # JOB: Phase 3 Schema Conformance (adversarial ratification)
@@ -292,14 +294,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install conformance dependencies
         working-directory: extension-dev/tests/ratification
         run: npm ci
 
       - name: "CHECK-010: Adversarial schema conformance"
-        run: node extension-dev/tests/ratification/run-conformance.ts
+        run: node --experimental-strip-types extension-dev/tests/ratification/run-conformance.ts
 
   # ════════════════════════════════════════════════════════════════════
   # JOB 3: Browser Capability Tests
@@ -312,7 +314,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Playwright dependencies
         working-directory: extension-dev/tests/browser
@@ -321,7 +323,7 @@ jobs:
           npx playwright install chromium --with-deps
 
       - name: "CHECK-005: Browser tests"
-        run: node extension-dev/tests/ci-browser.ts
+        run: node --experimental-strip-types extension-dev/tests/ci-browser.ts
         env:
           # Use Playwright's bundled Chromium (no system Chrome needed)
           PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: ""

@@ -34,7 +34,7 @@ jobs:
           node-version: 22
 
       - name: Run turborepo safety check
-        run: node tooling/turborepo-safety-check.ts
+        run: node --experimental-strip-types tooling/turborepo-safety-check.ts
 
   # ── Turbo build smoke (filtered, after guards) ───────────────────────────
   turbo-build:
