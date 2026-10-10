@@ -18,10 +18,11 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../..');
 
 // Suites that do not require deleted apps/extension/perception|runtime trees.
+const NODE_TS = 'node --experimental-strip-types';
 const candidates = [
-  { name: 'Browser Tests', cmd: 'node extension-dev/tests/browser/run.ts' },
-  { name: 'Real Widget Tests', cmd: 'node extension-dev/tests/browser/run-real-widgets.ts' },
-  { name: 'Comprehensive Portal Tests', cmd: 'node extension-dev/tests/browser/run-comprehensive.ts' },
+  { name: 'Browser Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run.ts` },
+  { name: 'Real Widget Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-real-widgets.ts` },
+  { name: 'Comprehensive Portal Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-comprehensive.ts` },
 ];
 
 // Skip suites that still hard-require deleted discrete trees.

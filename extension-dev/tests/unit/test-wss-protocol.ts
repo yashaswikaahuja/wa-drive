@@ -27,21 +27,34 @@ import { existsSync, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import vm from 'node:vm';
 
-function ensureExtensionServiceDist() {
-  const serverJs = resolve(ROOT, 'apps/extension-service/dist/src/ws/server.js');
-  if (existsSync(serverJs)) return;
+function resolveExtensionServiceWs(name) {
+  const candidates = [
+    resolve(ROOT, `apps/extension-service/.tsbuild/src/ws/${name}.js`),
+    resolve(ROOT, `apps/extension-service/dist/src/ws/${name}.js`),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+function ensureExtensionServiceEmit() {
+  if (resolveExtensionServiceWs('server')) return;
   execSync('pnpm --filter cybercontrol-extension-service run build:tsc', {
     cwd: ROOT,
     stdio: 'inherit',
   });
+  if (!resolveExtensionServiceWs('server')) {
+    throw new Error('extension-service build:tsc did not emit .tsbuild/src/ws/server.js');
+  }
 }
-ensureExtensionServiceDist();
+ensureExtensionServiceEmit();
 
 const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(
-  pathToFileURL(resolve(ROOT, 'apps/extension-service/dist/src/ws/server.js')).href
+  pathToFileURL(resolveExtensionServiceWs('server')).href
 );
 const { createHandlers } = await import(
-  pathToFileURL(resolve(ROOT, 'apps/extension-service/dist/src/ws/handlers.js')).href
+  pathToFileURL(resolveExtensionServiceWs('handlers')).href
 );
 
 async function loadIifeCjs(relTs) {

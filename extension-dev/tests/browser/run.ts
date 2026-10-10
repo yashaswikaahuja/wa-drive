@@ -36,27 +36,14 @@ const CHROME_PATHS = [
 let executablePath = CHROME_PATHS.find(p => existsSync(p)) || undefined;
 
 // ── Build script injection list (mirrors popup.ts order) ────────────
+// Turborepo: discrete shared/autofill trees live in packages/@cc/* and are
+// emitted as concat bundles. Inject those .js bundles (Chrome cannot run .ts).
 const SHARED_SCRIPTS = [
-  'shared/option-match.ts',
-  'shared/dom-utils.ts',
-  'shared/network-idle.ts',
-  'shared/llm-client.ts',
-  'shared/select-apply.ts',
-  'shared/semantic-aliases.ts',
-  'models/ir.ts',
-  'capabilities/registry.ts',
-  'runtime/resolver.ts',
-  'runtime/runner.ts',
-  'autofill/plugins/interface.ts',
-  'autofill/plugins/cascade-select.ts',
-  'autofill/plugins/ng-dropdown.ts',
-  'autofill/plugins/keystroke-input.ts',
-  'runtime/plugin-bridge.ts',
-  'autofill/rule-engine.ts',
-  'autofill/extractor.ts',
-  'autofill/mapper.ts',
-      'autofill/executor-bundle.js',
-
+  'shared-bundle.js',
+  'autofill/plugins-bundle.js',
+  'autofill/extractor-bundle.js',
+  'autofill/mapper-bundle.js',
+  'autofill/executor-bundle.js',
 ];
 
 async function injectExtension(page) {
