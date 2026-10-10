@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Build a runnable dist/ for whatsapp-resolver.
  * Vendors @cybercontrol/wa-resolver under dist/vendor/ for Docker.
@@ -22,7 +21,7 @@ const packageNames = ['wa-resolver'];
 execSync('node scripts/build-entry.ts', { cwd: serviceRoot, stdio: 'inherit' });
 
 // Include package dist/ (compiled TS). Only skip nested node_modules.
-const copyFilter = (source) => path.basename(source) !== 'node_modules';
+const copyFilter = (source: any) => path.basename(source) !== 'node_modules';
 
 fs.rmSync(distRoot, { recursive: true, force: true });
 fs.mkdirSync(vendorRoot, { recursive: true });

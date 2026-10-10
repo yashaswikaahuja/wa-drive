@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Real-browser test of the extension fill engine (extractor + rule-engine).
 // Run from the frontend dir: node e2e/_fill-harness.ts
 import { chromium } from '@playwright/test';
@@ -10,8 +9,8 @@ const ruleSrc = readFileSync(`${EXT}/autofill/rule-engine.ts`, 'utf8');
 const fixture = `file://${EXT}/test/fixtures/govt-form.html`;
 
 let pass = 0, fail = 0;
-const ok = (name, cond, extra = '') => { if (cond) { pass++; console.log('  ✓', name); } else { fail++; console.log('  ✗', name, extra); } };
-const eqJSON = (name, got, want) => ok(name, JSON.stringify(got) === JSON.stringify(want), `\n     got  ${JSON.stringify(got)}\n     want ${JSON.stringify(want)}`);
+const ok = (name: any, cond: any, extra: any = '') => { if (cond) { pass++; console.log('  ✓', name); } else { fail++; console.log('  ✗', name, extra); } };
+const eqJSON = (name: any, got: any, want: any) => ok(name, JSON.stringify(got) === JSON.stringify(want), `\n     got  ${JSON.stringify(got)}\n     want ${JSON.stringify(want)}`);
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 1400 } });
@@ -22,21 +21,21 @@ await page.addScriptTag({ content: ruleSrc });
 // ── 1. Extraction: order + types + options ──────────────────────────────────
 const fields = await page.evaluate(() => {
   const r = extractFormFieldsWithFingerprint();
-  return r.formFields.map(f => ({ label: f.label, type: f.type, options: f.options || null, selector: f.selector, optionSelectors: f.optionSelectors || null }));
+  return r.formFields.map((f: any) => ({ label: f.label, type: f.type, options: f.options || null, selector: f.selector, optionSelectors: f.optionSelectors || null }));
 });
 
 console.log('\n── Extracted fields (in order) ──');
-fields.forEach((f, i) => console.log(`  ${i}. [${f.type}] ${f.label}${f.options ? '  {' + f.options.join(', ') + '}' : ''}`));
+fields.forEach((f: any, i: any) => console.log(`  ${i}. [${f.type}] ${f.label}${f.options ? '  {' + f.options.join(', ') + '}' : ''}`));
 
 console.log('\n── Ordering ──');
-const labels = fields.map(f => f.label);
-const idx = l => labels.findIndex(x => x === l);
+const labels = fields.map((f: any) => f.label);
+const idx = (l: any) => labels.findIndex((x: any) => x === l);
 ok('Full Name before Date of Birth', idx('Full Name (as per certificate)') < idx('Date of Birth'));
 ok('District before Pincode (same row L→R)', idx('District') >= 0 && idx('District') < idx('Pincode'));
 ok('House No before City (CSS order:-1 beats DOM order)', idx('House No (visually first)') >= 0 && idx('House No (visually first)') < idx('City (visually second)'), `house=${idx('House No (visually first)')} city=${idx('City (visually second)')}`);
 
 console.log('\n── Types & options ──');
-const byLabel = l => fields.find(f => f.label === l) || {};
+const byLabel = (l: any) => fields.find((f: any) => f.label === l) || {};
 ok('Gender is radio-group', byLabel('Gender').type === 'radio-group', byLabel('Gender').type);
 eqJSON('Gender options', byLabel('Gender').options, ['Male', 'Female', 'Transgender']);
 ok('Category is dropdown', byLabel('Category').type === 'dropdown', byLabel('Category').type);

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Build a runnable dist/ for whatsapp-service.
  * Vendors @cybercontrol/wa-* under dist/vendor/ (not node_modules) for Docker.
@@ -22,7 +21,7 @@ const packageNames = ['wa-auth', 'wa-service'];
 execSync('node scripts/build-entry.ts', { cwd: serviceRoot, stdio: 'inherit' });
 
 // Include package dist/ (compiled TS). Only skip nested node_modules.
-const copyFilter = (source) => path.basename(source) !== 'node_modules';
+const copyFilter = (source: any) => path.basename(source) !== 'node_modules';
 
 fs.rmSync(distRoot, { recursive: true, force: true });
 fs.mkdirSync(vendorRoot, { recursive: true });

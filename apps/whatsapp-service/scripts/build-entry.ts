@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Emit runnable .js entry shells from .ts sources (Node 20-safe).
  * Writes index.js + migrate-sessions-to-db.js next to the .ts sources.

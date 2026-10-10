@@ -1,4 +1,3 @@
-// @ts-nocheck
 module.exports = {
   apps: [{
     name: 'whatsapp-service',
