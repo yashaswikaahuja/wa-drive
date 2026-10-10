@@ -1,5 +1,4 @@
-// @ts-nocheck
-/** @type {import('tailwindcss').Config} */
+﻿/** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
@@ -50,3 +49,4 @@ export default {
   },
   plugins: [],
 };
+

@@ -67,8 +67,9 @@ function loadIifeCjsSource(relPath) {
   const requireFromRoot = createRequire(resolve(ROOT, 'package.json'));
   const esbuild = requireFromRoot('esbuild');
   const raw = readFileSync(resolve(ROOT, relPath), 'utf8');
+  // Emit CJS so vm.runInNewContext can evaluate ESM `export` sources as module.exports.
   const code = relPath.endsWith('.ts')
-    ? esbuild.transformSync(raw, { loader: 'ts', target: 'es2018' }).code
+    ? esbuild.transformSync(raw, { loader: 'ts', target: 'es2018', format: 'cjs' }).code
     : raw;
   const module = { exports: {} };
   const sandbox = {
