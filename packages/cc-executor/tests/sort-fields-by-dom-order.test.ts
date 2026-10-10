@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for sort-fields-by-dom-order.js
  *

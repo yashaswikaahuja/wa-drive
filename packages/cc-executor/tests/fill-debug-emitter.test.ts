@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for fill-debug-emitter.js
  *

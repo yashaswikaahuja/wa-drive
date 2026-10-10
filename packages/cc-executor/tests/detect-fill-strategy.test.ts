@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for detect-fill-strategy.js
  *

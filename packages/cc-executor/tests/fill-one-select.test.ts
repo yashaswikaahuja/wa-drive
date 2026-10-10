@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for fill-one-select.ts
  * Run: node extension/autofill/executor/capabilities/fill-one-select.test.ts

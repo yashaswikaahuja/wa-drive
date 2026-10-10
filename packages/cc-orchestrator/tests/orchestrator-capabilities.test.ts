@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * orchestrator-capabilities.test.ts
  * Tests for script-manifests and flatten-profile (pure, no browser).

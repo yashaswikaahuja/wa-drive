@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for fill-one-radio.js
  * Run: node extension/autofill/executor/capabilities/fill-one-radio.test.ts

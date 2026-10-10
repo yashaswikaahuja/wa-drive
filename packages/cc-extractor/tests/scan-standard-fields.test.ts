@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * scan-standard-fields.test.ts — plain Node tests, no framework, no jsdom
  */

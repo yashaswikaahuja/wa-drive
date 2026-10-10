@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for fill-one-mat.js
  * Run: node extension/autofill/executor/capabilities/fill-one-mat.test.ts

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fingerprint-form.test.ts — plain Node tests, no framework, no jsdom
  */

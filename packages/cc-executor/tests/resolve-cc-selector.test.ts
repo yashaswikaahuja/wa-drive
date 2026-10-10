@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for resolve-cc-selector.js
  *

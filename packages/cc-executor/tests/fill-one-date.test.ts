@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for fill-one-date.js
  * Run: node extension/autofill/executor/capabilities/fill-one-date.test.ts

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * scan-mat-widgets.test.ts — plain Node tests, no framework, no jsdom
  */

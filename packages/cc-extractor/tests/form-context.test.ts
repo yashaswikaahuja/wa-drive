@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * form-context.test.ts — plain Node tests, no framework, no jsdom
  *

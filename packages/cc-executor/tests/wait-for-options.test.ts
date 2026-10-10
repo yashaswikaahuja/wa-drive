@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for wait-for-options.js
  *

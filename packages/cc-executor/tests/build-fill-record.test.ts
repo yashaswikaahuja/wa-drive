@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for build-fill-record.js
  *

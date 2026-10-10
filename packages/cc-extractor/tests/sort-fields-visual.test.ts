@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * sort-fields-visual.test.ts — plain Node tests, no framework, no jsdom
  */
