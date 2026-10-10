@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 // corpus/snapshot.ts — Capture a live form page into the corpus
 //
 // Usage:

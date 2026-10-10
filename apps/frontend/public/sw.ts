@@ -1,12 +1,22 @@
-// @ts-nocheck
+/// <reference lib="webworker" />
 // Self-destructing service worker — clears all caches and unregisters itself
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => {
+declare const self: ServiceWorkerGlobalScope;
+
+self.addEventListener('install', () => {
+  void self.skipWaiting();
+});
+self.addEventListener('activate', (event: ExtendableEvent) => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
       .then(() => self.registration.unregister())
       .then(() => self.clients.matchAll())
-      .then(clients => clients.forEach(c => c.navigate(c.url)))
+      .then((clients) => {
+        for (const c of clients) {
+          if ('navigate' in c && typeof (c as WindowClient).navigate === 'function') {
+            void (c as WindowClient).navigate(c.url);
+          }
+        }
+      }),
   );
 });
 

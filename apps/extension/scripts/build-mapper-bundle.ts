@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Build mapper IIFE from @cc/mapper TypeScript via esbuild.
  * Resolves the package by name — no ../../packages/cc-mapper path.

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Resolve @cc/* package roots via Node package names (not ../../packages/…).
  * Same location-independence idea as extension-service → @cybercontrol/svc-*.

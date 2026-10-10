@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Backward-compatible alias — emits all extension entry .ts → .js
  * (including background.ts). Prefer build-extension-entries.ts.

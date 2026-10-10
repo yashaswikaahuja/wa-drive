@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Rebuild all extension inject/SW bundles from @cc/* workspace packages,
  * then emit entry .js files from .ts (background, content, popup, SW helpers, …).

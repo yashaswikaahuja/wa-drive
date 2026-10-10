@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Walk upward from startDir until a directory containing packages/ is found.
  * Used by app build-dist scripts after the Turborepo apps/ layout move.
@@ -6,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export function findRepoRoot(startDir) {
+export function findRepoRoot(startDir: string): string {
   let dir = path.resolve(startDir);
   for (;;) {
     if (fs.existsSync(path.join(dir, 'packages')) && fs.existsSync(path.join(dir, 'pnpm-workspace.yaml'))) {

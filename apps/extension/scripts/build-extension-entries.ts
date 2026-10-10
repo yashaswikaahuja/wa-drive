@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Emit Chrome-loadable .js siblings from extension entry .ts sources.
  * Manifest / HTML / importScripts keep pointing at the .js paths.

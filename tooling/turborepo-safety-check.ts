@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Turborepo safety guards — fail CI (and local preflight) when the monorepo
  * drifts back toward the pre-apps/ layout or CI-only discrete file restores.

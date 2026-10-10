@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * build-all.ts — rebuild all extension bundles from @cc/* packages.
  * Prefer: pnpm --filter cybercontrol-extension build
