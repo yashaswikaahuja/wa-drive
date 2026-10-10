@@ -320,7 +320,10 @@ jobs:
         working-directory: extension-dev/tests/browser
         run: |
           npm ci
-          npx playwright install chromium --with-deps
+          # Pin to the same major/minor as playwright-core in package.json so
+          # browser revision matches what tests launch (avoids missing
+          # chromium_headless_shell-* after Node bumps).
+          npx --yes playwright@1.62.1 install chromium --with-deps
 
       - name: "CHECK-005: Browser tests"
         run: node --experimental-strip-types extension-dev/tests/ci-browser.ts

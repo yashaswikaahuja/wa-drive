@@ -168,11 +168,17 @@ const PRIVATE_BINDING_PATTERNS = /\b(querySelector|querySelectorAll|css_selector
 
 // These server modules must be browser-free
 const SERVER_PLANNER_FILES = [
+  'packages/svc-fill-planner/src/fill-planner.ts',
+  'packages/svc-fill-planner/src/mapping-engine.ts',
+  'packages/svc-fill-planner/src/plan-builder.ts',
+  'packages/svc-fill-planner/src/dependency-resolver.ts',
+  'packages/svc-ai-mapper/src/semantic-mapper.ts',
+  'packages/svc-fill-planner/src/derivation-engine.ts',
+  'packages/svc-ai-mapper/src/confidence-evaluator.ts',
+  // Legacy .js paths kept as fallbacks if emit siblings exist without .ts
   'packages/svc-fill-planner/src/fill-planner.js',
   'packages/svc-fill-planner/src/mapping-engine.js',
   'packages/svc-fill-planner/src/plan-builder.js',
-  'packages/svc-fill-planner/src/dependency-resolver.ts',
-  'packages/svc-ai-mapper/src/semantic-mapper.ts',
   'packages/svc-fill-planner/src/derivation-engine.js',
   'packages/svc-ai-mapper/src/confidence-evaluator.js',
 ];
@@ -249,8 +255,10 @@ if (ownership) {
 
 console.log('\n  Invariant 6: Knowledge store alignment');
 
-const knowledgeStore = readFile('packages/svc-knowledge/src/knowledge-store.js');
-assert(knowledgeStore !== null, 'knowledge-store.js exists');
+const knowledgeStore =
+  readFile('packages/svc-knowledge/src/knowledge-store.ts')
+  ?? readFile('packages/svc-knowledge/src/knowledge-store.js');
+assert(knowledgeStore !== null, 'knowledge-store.ts exists');
 if (knowledgeStore) {
   // Must have field_mapping kind (D11 Cold-Start produces these)
   assert(knowledgeStore.includes("'field_mapping'"), 'Knowledge store supports field_mapping kind');

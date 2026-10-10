@@ -315,7 +315,13 @@ console.log('\n=== SEC-002: page-readable exfiltration sinks remain absent ===')
   const background = read('apps/extension/sw/bg-bundle.js');
   const fillOrchestrator = existsSync(resolve(ROOT, 'apps/extension/application/fill-orchestrator.js'))
     ? read('apps/extension/application/fill-orchestrator.js') : '';
-  const productFillCode = popup + '\n' + fillOrchestrator;
+  const orchestratorBundle = existsSync(resolve(ROOT, 'apps/extension/application/orchestrator-bundle.js'))
+    ? read('apps/extension/application/orchestrator-bundle.js') : '';
+  const actionPlanFill = existsSync(resolve(ROOT, 'packages/cc-orchestrator/src/action-plan-fill.ts'))
+    ? read('packages/cc-orchestrator/src/action-plan-fill.ts')
+    : (existsSync(resolve(ROOT, 'packages/cc-orchestrator/src/action-plan-fill.js'))
+      ? read('packages/cc-orchestrator/src/action-plan-fill.js') : '');
+  const productFillCode = [popup, fillOrchestrator, orchestratorBundle, actionPlanFill].join('\n');
 
   // APE-IMPL-P1-04: product Fill credentials stay in extension storage / Bearer headers.
   // Do NOT require window.__ccFillCtx — product path intentionally never injects
@@ -460,7 +466,10 @@ console.log('\n=== Permanent CI pillar and issue-closure policy ===');
   const verification = read('architecture/verification.yml');
   const securityPolicy = read('architecture/gateway-security.yml');
   ok(/extension-security:\s*[\s\S]*?CHECK-011: Extension & browser boundary security/.test(workflow), 'GitHub Actions has a dedicated extension-security job');
-  ok(workflow.includes('node extension-dev/tests/security/run.ts'), 'dedicated CI job executes this permanent suite');
+  ok(
+    /node(?:\s+--experimental-strip-types)?\s+extension-dev\/tests\/security\/run\.ts/.test(workflow),
+    'dedicated CI job executes this permanent suite',
+  );
   ok(verification.includes('CHECK-011') && verification.includes('severity: fail'), 'verification registry defines CHECK-011 as a hard failure');
   ok(securityPolicy.includes('security_regression_policy:'), 'gateway policy defines a permanent security regression policy');
   ok(securityPolicy.includes('before the fix issue is closed'), 'security issue closure requires regression coverage');
