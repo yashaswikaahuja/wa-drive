@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 // tools/forbidden-deps-check.ts
 //
 // Architecture doctrine (see /ARCHITECTURE.md §5 and the runtime guards in

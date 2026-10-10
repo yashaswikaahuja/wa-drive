@@ -1,4 +1,3 @@
-// @ts-nocheck
 import path from 'node:path';
 import { extensionRoot, packageSrc } from './lib/resolve.ts';
 import { writeConcatBundle } from './lib/concat-bundle.ts';

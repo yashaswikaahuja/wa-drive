@@ -1,13 +1,15 @@
-// Generated from sw.ts � edit sw.ts, then re-copy/emit.
-// Self-destructing service worker — clears all caches and unregisters itself
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => {
+// Generated from sw.ts — edit sw.ts, then re-emit.
+self.addEventListener("install", () => {
+  void self.skipWaiting();
+});
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
-      .then(() => self.registration.unregister())
-      .then(() => self.clients.matchAll())
-      .then(clients => clients.forEach(c => c.navigate(c.url)))
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k)))).then(() => self.registration.unregister()).then(() => self.clients.matchAll()).then((clients) => {
+      for (const c of clients) {
+        if ("navigate" in c && typeof c.navigate === "function") {
+          void c.navigate(c.url);
+        }
+      }
+    })
   );
 });
-
-// cache-bust file-manager-provenance 2026-09-20

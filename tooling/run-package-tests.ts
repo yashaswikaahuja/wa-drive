@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Cross-platform runner for package unit tests.
  * Prefers packages/<name>/tests/*.test.ts (colocated layout).
@@ -17,7 +16,7 @@ import { join } from 'node:path';
 const cwd = process.cwd();
 const PER_FILE_MS = Number(process.env.CC_TEST_TIMEOUT_MS || 60_000);
 
-function listTestFiles(dir) {
+function listTestFiles(dir: string): string[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => f.endsWith('.test.ts') || f.endsWith('.t6.test.ts') || /\.t\d+\.test\.ts$/.test(f))

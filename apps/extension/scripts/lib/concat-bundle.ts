@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Concatenate ordered source files into one Chrome inject / SW bundle.
  * `.ts` files are type-stripped via esbuild.transform; `.js` stays raw text.

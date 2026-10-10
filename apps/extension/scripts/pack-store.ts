@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Pack CyberControl extension for Chrome Web Store + local CRX.
  *

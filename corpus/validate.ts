@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 // corpus/validate.ts — Runs the current extractor against every saved snapshot
 // and diffs against the expected.json ground truth.
 //

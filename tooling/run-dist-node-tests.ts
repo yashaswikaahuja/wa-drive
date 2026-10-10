@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Run node:test on compiled *.test.js under dist/ if any exist.
  * Avoids `node --test` with zero files, which waits on stdin forever (CI hang).
@@ -10,7 +9,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-function walk(dir, acc = []) {
+function walk(dir: string, acc: string[] = []): string[] {
   if (!existsSync(dir)) return acc;
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);

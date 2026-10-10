@@ -1,4 +1,3 @@
-// @ts-nocheck
 const { Pool } = require('pg');
 const p = new Pool({ connectionString: process.env.DATABASE_URL });
 (async () => {

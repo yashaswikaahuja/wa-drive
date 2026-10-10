@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * CHECK-009: reject structural DOM APIs added outside the Phase 3 gateway.
  * Existing code is intentionally grandfathered; this examines added lines only.
@@ -27,7 +26,8 @@ let diff = '';
 try {
   diff = execFileSync('git', gitArgs, { cwd: ROOT, encoding: 'utf8' });
 } catch (error) {
-  console.error(`[dom-boundary] unable to read git diff: ${error.message}`);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[dom-boundary] unable to read git diff: ${message}`);
   process.exit(1);
 }
 

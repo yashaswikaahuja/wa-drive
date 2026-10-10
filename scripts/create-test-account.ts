@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Create a local test café admin for frontend login.
  * Usage (from repo root):

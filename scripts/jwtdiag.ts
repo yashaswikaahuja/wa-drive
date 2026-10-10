@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Compares which secret actually verifies the issued JWT.
 // Run on GCP#1: node /tmp/jwtdiag.ts <token>
 const jwt = require('/opt/extension-service/node_modules/jsonwebtoken');
