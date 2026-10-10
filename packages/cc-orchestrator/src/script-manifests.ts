@@ -1,13 +1,12 @@
-// @ts-nocheck
 /**
  * script-manifests — Injection script lists for the sequential fill path
  *
  * SEQUENTIAL_KERNEL_SCRIPTS — scripts injected into the page for autofill
  *
- * Public API (on globalThis.CcScriptManifests):
+ * Public API (on (globalThis as any).CcScriptManifests):
  *   SEQUENTIAL_KERNEL_SCRIPTS
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var SEQUENTIAL_KERNEL_SCRIPTS = Object.freeze([

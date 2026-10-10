@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * settleAfterAct + WaitEngine
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installSettle = function (k) {
@@ -13,7 +12,7 @@
     var _saa = root.CcSettleAfterAct;
     var _wfo = root.CcWaitForOptions;
 
-    function waitForNetworkIdle(quietMs, maxMs) {
+    function waitForNetworkIdle(quietMs: any, maxMs: any) {
       if (typeof window !== 'undefined' && typeof window.ccWaitForNetworkIdle === 'function') {
         return window.ccWaitForNetworkIdle(quietMs || 200, maxMs || 8000);
       }
@@ -22,7 +21,7 @@
       });
     }
 
-    function waitForOptions(selector, minCount, timeout) {
+    function waitForOptions(selector: any, minCount: any, timeout: any) {
       return _wfo.waitForOptions(selector, minCount, timeout,
         document.querySelector.bind(document), document.body);
     }
@@ -34,9 +33,9 @@
       setBudget: function (n) { k.ajaxWaitBudgetMs = n; },
     });
 
-    function waitForDOMQuiet(ms) {
+    function waitForDOMQuiet(ms: any) {
       ms = ms || 300;
-      return new Promise(function (resolve) {
+      return new Promise(function (resolve: (v?: any) => void) {
         var last = Date.now();
         var mo = new MutationObserver(function () { last = Date.now(); });
         mo.observe(document.body, { childList: true, subtree: true });

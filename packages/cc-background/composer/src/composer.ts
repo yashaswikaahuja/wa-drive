@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cc-background/composer — Service worker entry point wiring.
  * Event listeners and bootstrap. Must be LAST in bg-bundle.js.

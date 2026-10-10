@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * form-context — Form guard + element skip + label helpers
  *
@@ -12,7 +11,7 @@
  *
  * ccDomUtils is injected (not read from window) so the functions are testable in Node.
  *
- * Public API (on globalThis.CcFormContext):
+ * Public API (on (globalThis as any).CcFormContext):
  *   isInSkipContext(el)
  *   isGoodLabel(s, ccDomUtils)
  *   hasFormContext(doc, ccDomUtils)
@@ -20,7 +19,7 @@
  *
  * See docs/form-context.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|onward|return|leaving|going|city|date)\b/i;
@@ -28,7 +27,7 @@
   /**
    * True if element looks like a travel From/To/date widget (OTA search strips).
    */
-  function isJourneyLike(el, labelHint) {
+  function isJourneyLike(el: any, labelHint?: any) {
     if (!el) return false;
     var blob = [
       labelHint || '',
@@ -52,7 +51,7 @@
    * @param {Element} el
    * @returns {boolean}
    */
-  function isInSkipContext(el) {
+  function isInSkipContext(el: any) {
     if (!el || !el.closest) return false;
     if (el.closest('nav,header,footer,[role="navigation"],[role="banner"]')) return true;
     var searchHost = el.closest('[role="search"]');
@@ -70,7 +69,7 @@
    * @param {object} [ccDomUtils]
    * @returns {boolean}
    */
-  function isGoodLabel(s, ccDomUtils) {
+  function isGoodLabel(s: any, ccDomUtils: any) {
     if (ccDomUtils && typeof ccDomUtils.isGoodLabel === 'function') {
       return ccDomUtils.isGoodLabel(s);
     }
@@ -89,7 +88,7 @@
    * @param {object} [ccDomUtils]
    * @returns {boolean}
    */
-  function hasFormContext(doc, ccDomUtils) {
+  function hasFormContext(doc: any, ccDomUtils: any) {
     const forms = doc.querySelectorAll('form');
     if (forms.length > 0) return true;
     // No <form> tag — check for 2+ labeled inputs (some govt sites don't use <form>)
@@ -98,7 +97,7 @@
       'input[type="text"],input[type="email"],input[type="tel"],input[type="search"],input[type="date"],input:not([type]),textarea,[role="combobox"]'
     );
     let labeled = 0;
-    inputs.forEach(function (el) {
+    inputs.forEach(function (el: any) {
       if (isInSkipContext(el)) return;
       const lbl = ccDomUtils && typeof ccDomUtils.getLabel === 'function'
         ? ccDomUtils.getLabel(el)

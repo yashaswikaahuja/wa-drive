@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * DOM radio / checkbox / file
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneChoiceDom = function (k) {
@@ -28,7 +27,7 @@
                 const normR = s => s.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
                 const vR = normR(value);
                 const radios = document.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
-                const match = Array.from(radios).find(r => {
+                const match = Array.from(radios).find((r: any) => {
                   if (normR(r.value) === vR) return true;
                   const lbl = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
                   const lblText = lbl ? normR(lbl.textContent) : '';
@@ -37,7 +36,7 @@
                 if (match) {
                   match.focus();
                   match.checked = true;
-                  ['click','change'].forEach(ev => match.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
+                  ['click','change'].forEach((ev: any) => match.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true })));
                   match.dispatchEvent(new Event('blur', { bubbles: true }));
                   return 1;
                 }

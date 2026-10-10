@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fill-one-select — Native Select Fill Handler
  *
@@ -6,17 +5,17 @@
  * Applies selection via native setter + full event sequence (ASP.NET/NIC compat).
  * Includes DWR cascade re-apply (ServicePlus), AI LLM fallback.
  *
- * Public API (on globalThis.CcFillOneSelect):
+ * Public API (on (globalThis as any).CcFillOneSelect):
  *   fillSelect(el, selector, value, mapping) => 1 | 0 | null
  *
  * Returns null if not a select element.
  *
  * See fill-one-select.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  function fillSelect(el, selector, value, mapping) {
+  function fillSelect(el: any, selector: any, value: any, mapping: any) {
     if ((el.tagName || '').toLowerCase() !== 'select') return null;
 
     var norm = function (s) {
@@ -30,22 +29,22 @@
       if (mapEntry.monthShort) extraValues.push(mapEntry.monthShort.toLowerCase());
     }
 
-    function findOpt(options) {
+    function findOpt(options: any) {
       return window.ccMatchOption
         ? window.ccMatchOption(value, options, { extraValues: extraValues })
         : null;
     }
 
-    function applySelect(el, opt) {
+    function applySelect(el: any, opt: any) {
       el.focus();
       el.dispatchEvent(new Event('focus', { bubbles: true }));
-      Array.from(el.options).forEach(function (o) { o.selected = false; });
+      Array.from(el.options as any).forEach(function (o: any) { o.selected = false; });
       opt.selected = true;
       el.selectedIndex = opt.index;
       var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value');
       if (nativeSetter) nativeSetter.set.call(el, opt.value);
       else el.value = opt.value;
-      ['mousedown','mouseup','click','input','change'].forEach(function (ev) {
+      ['mousedown','mouseup','click','input','change'].forEach(function (ev: any) {
         el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }));
       });
       if (typeof el.onchange === 'function') { try { el.onchange.call(el, new Event('change')); } catch (e) {} }
@@ -73,15 +72,15 @@
       return 1;
     }
 
-    var allOptions = Array.from(el.options);
+    var allOptions = Array.from(el.options as any);
     var opt = findOpt(allOptions);
     if (opt) return applySelect(el, opt);
 
     // Retry interval + AI fallback
     var attempts = 0;
     var interval = setInterval(function () {
-      var allOpts = Array.from(el.options);
-      var realOpts = allOpts.filter(function (o) {
+      var allOpts = Array.from(el.options as any);
+      var realOpts = allOpts.filter(function (o: any) {
         if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
         var txt = o.text.toLowerCase();
         return !txt.includes('select') && !txt.includes('choose') &&
@@ -94,7 +93,7 @@
         clearInterval(interval);
         var llmKey = window._cc_llm_key || (document.body.getAttribute('data-cc-llm-key') || '');
         if (llmKey && realOpts.length > 0) {
-          var optTexts = realOpts.map(function (o) { return o.text.trim(); }).join('\n');
+          var optTexts = realOpts.map(function (o: any) { return o.text.trim(); }).join('\n');
           window.ccLLM && window.ccLLM.call({
             apiKey: llmKey,
             baseUrl: document.body.getAttribute('data-cc-llm-url') || undefined,
@@ -105,8 +104,8 @@
           }).then(function (result) {
             var aiText = (result.text || '').trim();
             if (aiText) {
-              var aiOpt = realOpts.find(function (o) { return o.text.trim() === aiText; }) ||
-                          realOpts.find(function (o) { return o.text.trim().toLowerCase().includes(aiText.toLowerCase()); });
+              var aiOpt = realOpts.find(function (o: any) { return o.text.trim() === aiText; }) ||
+                          realOpts.find(function (o: any) { return o.text.trim().toLowerCase().includes(aiText.toLowerCase()); });
               if (aiOpt) applySelect(el, aiOpt);
             }
           }).catch(function () {});

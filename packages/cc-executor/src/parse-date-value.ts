@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * parse-date-value — Profile Date String Parser
  *
@@ -12,12 +11,12 @@
  *
  * No DOM, no kernel, no Chrome APIs. Pure JS date parsing.
  *
- * Public API (on globalThis.CcParseDateValue):
+ * Public API (on (globalThis as any).CcParseDateValue):
  *   parseDateValue(value) => { dateObj, isoDate, isoMonth, isoDatetime }
  *
  * See parse-date-value.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -39,7 +38,7 @@
    * @param {string|null|undefined} value
    * @returns {{ dateObj: Date|null, isoDate: string, isoMonth: string, isoDatetime: string }}
    */
-  function parseDateValue(value) {
+  function parseDateValue(value: any) {
     var empty = { dateObj: null, isoDate: '', isoMonth: '', isoDatetime: '' };
     if (value == null || value === '') return empty;
 

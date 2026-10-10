@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/label-utils.ts ────────────────────────────────────────────────────
 // Single source of truth for label normalization, semantic key mapping,
 // and confidence calculation.
@@ -25,11 +24,11 @@ const SEMANTIC_ALIASES = {
   'state name': 'state', 'district name': 'district',
 };
 
-function normalizeLabel(label) {
+function normalizeLabel(label: any) {
   return (label || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-function getSemanticKey(label) {
+function getSemanticKey(label: any) {
   const n = normalizeLabel(label);
   return SEMANTIC_ALIASES[n] || n;
 }
@@ -46,7 +45,7 @@ function getSemanticKey(label) {
  * @param {number} corrections - Number of operator corrections
  * @returns {number} Confidence between 0 and 1
  */
-function calcConfidence(fills, corrections) {
+function calcConfidence(fills: any, corrections: any) {
   if (fills + corrections === 0) return 0.5;
   return fills / (fills + corrections * 3);
 }
@@ -55,6 +54,6 @@ function calcConfidence(fills, corrections) {
  * Strip leading numbering ("4. ", "a. ") and trailing asterisks from form labels.
  * Also collapses newlines to spaces.
  */
-function normalizeFieldLabel(label) {
+function normalizeFieldLabel(label: any) {
   return (label || '').replace(/\n/g, ' ').replace(/^\d+\.\s*/, '').replace(/^[a-z]\.\s*/i, '').replace(/\*$/, '').trim();
 }

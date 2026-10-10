@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * ng-dropdown shared helpers (score/pick/visible)
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneNgHelpers = function (k) {
@@ -38,7 +37,7 @@
     };
 
     k._ngPickOption = function (opts, planned) {
-      var wrapped = Array.from(opts).map(function (n) {
+      var wrapped = Array.from(opts).map(function (n: any) {
         return { text: (n.textContent || n.innerText || '').trim(), node: n };
       });
       var result = _nos.scoreAndPick(wrapped, planned, 30);

@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * confirm/retype pass
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installPostFillConfirm = function (k) {
@@ -26,7 +25,7 @@
     var _isConfirmField = _cfp.isConfirmField || function() { return false; };
     var _getBaseId      = _cfp.getBaseId     || function(id) { return id; };
     var allInputs = Array.from(document.querySelectorAll('input[type=text],input[type=email],input[type=tel],input[type=number]'));
-    allInputs.forEach(function(el) {
+    allInputs.forEach(function (el: any) {
       if (!el.id && !el.name) return;
       var id = (el.id || el.name || '').toLowerCase();
       var label = (function() { if(el.id){var l=document.querySelector('label[for="'+el.id+'"]');if(l)return l.textContent.toLowerCase();} return ''; })();
@@ -41,17 +40,17 @@
         var ph = (el.placeholder || '').toLowerCase();
         if (ph.includes('dd/mm') || ph.includes('dd-mm')) {
           // Find any filled input with same placeholder pattern
-          var allFilled = Array.from(document.querySelectorAll('input[type=text]')).filter(function(inp) {
+          var allFilled = Array.from(document.querySelectorAll('input[type=text]') as any).filter(function (inp: any) {
             return inp !== el && inp.value && (inp.placeholder || '').toLowerCase().match(/dd.mm/);
           });
-          if (allFilled.length > 0) primary = allFilled[0];
+          if (allFilled.length > 0) primary = allFilled[0] as any;
         }
       }
       if (!primary || !primary.value) return;
       // Propagate settled DOM value
       var niv = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
       if (niv) niv.set.call(el, primary.value); else el.value = primary.value;
-      ['input','change','blur'].forEach(function(ev) { el.dispatchEvent(new Event(ev, {bubbles:true})); });
+      ['input','change','blur'].forEach(function (ev: any) { el.dispatchEvent(new Event(ev, {bubbles:true})); });
       _ccRecords.push((root.CcBuildFillRecord ? root.CcBuildFillRecord.buildFillRecord : function(b){return Object.assign({ts:Date.now(),rv:RUNTIME_VERSION,fillMode:'sequential'},b);})({ selector: '#'+(el.id||el.name), value: primary.value, type: 'text', result: 'filled', strategy: 'confirm-mirror', durationMs: 0 }, { rv: RUNTIME_VERSION }));
       _flushRecords();
     });

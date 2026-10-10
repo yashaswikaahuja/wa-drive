@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/dom-utils.ts ────────────────────────────────────────────────────
 // Single source of truth for DOM utility functions used across the extension.
 // Exposes: window.ccDomUtils = { getLabel, isVisible, isGoodLabel, humanizeAttr }
@@ -14,7 +13,7 @@
    * - getComputedStyle display/visibility/opacity
    * - offsetParent (detects display:none ancestors)
    */
-  function isVisible(el) {
+  function isVisible(el: any) {
     if (!el) return false;
     // offsetParent is null for hidden elements (display:none, or <html>/<body>)
     // but also for position:fixed — so we can't rely on it alone
@@ -30,7 +29,7 @@
   /**
    * Determine if a label text is "good" (meaningful, not just whitespace or generic).
    */
-  function isGoodLabel(text) {
+  function isGoodLabel(text: any) {
     if (!text) return false;
     var t = text.replace(/[*:\s]/g, '');
     if (t.length < 2) return false;
@@ -48,7 +47,7 @@
     return true;
   }
 
-  function cleanLabelText(text) {
+  function cleanLabelText(text: any) {
     return String(text || '')
       .replace(/\u00a0/g, ' ')
       .replace(/\s+/g, ' ')
@@ -61,7 +60,7 @@
    * Examples: fatherName → Father Name, father_name → Father Name, txtDOB → DOB
    * Returns '' for opaque framework ids (mat-input-3, uuids, etc.).
    */
-  function humanizeAttr(raw) {
+  function humanizeAttr(raw: any) {
     if (!raw || typeof raw !== 'string') return '';
     var s = raw.trim();
     if (!s) return '';
@@ -85,13 +84,13 @@
     return s.replace(/\b([a-z])/g, function (m) { return m.toUpperCase(); });
   }
 
-  function textFromLabelEl(lbl) {
+  function textFromLabelEl(lbl: any) {
     if (!lbl) return '';
     // Prefer clone-without-controls so checkbox/radio wrapper labels work
     try {
       if (lbl.querySelector && lbl.querySelector('input,select,textarea,button')) {
         var clone = lbl.cloneNode(true);
-        clone.querySelectorAll('input,select,textarea,button').forEach(function (e) { e.remove(); });
+        clone.querySelectorAll('input,select,textarea,button').forEach(function (e: any) { e.remove(); });
         return cleanLabelText(clone.textContent);
       }
     } catch (e) {}
@@ -114,7 +113,7 @@
    *  10. Placeholder
    *  11. Humanized name / id (last resort — never leave blank when possible)
    */
-  function getLabel(el) {
+  function getLabel(el: any) {
     if (!el) return '';
 
     // 1. Explicit <label for="id">
@@ -132,7 +131,7 @@
     var labelledBy = el.getAttribute('aria-labelledby');
     if (labelledBy) {
       var parts = String(labelledBy).trim().split(/\s+/).filter(Boolean);
-      var joined = parts.map(function (id) {
+      var joined = parts.map(function (id: any) {
         var lEl = document.getElementById(id);
         return lEl ? cleanLabelText(lEl.textContent) : '';
       }).filter(Boolean).join(' ');

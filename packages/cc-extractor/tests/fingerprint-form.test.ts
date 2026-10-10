@@ -107,7 +107,7 @@ console.log('\npageModel');
 console.log('\nLabel truncation');
 {
   const manyLabels = Array.from({ length: 15 }, (_, i) => 'label' + i);
-  const fields = manyLabels.map(l => ({ label: l, _el: {} }));
+  const fields = manyLabels.map((l: any) => ({ label: l, _el: {} }));
   // formKey should use top-10 sorted labels
   const { formKey: k1 } = fingerprint(fields.slice(), manyLabels.slice(0, 10).sort(), opts);
   const { formKey: k2 } = fingerprint(fields.slice(), manyLabels.slice(0, 10).sort(), opts);

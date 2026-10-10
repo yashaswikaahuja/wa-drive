@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * post-fill-corrections — Operator Correction Observer
  *
@@ -7,16 +6,16 @@
  * correction signals to the backend (data-cc-backend attribute).
  * Also captures unmapped fields as 'completion' corrections.
  *
- * Public API (on globalThis.CcPostFillCorrections):
+ * Public API (on (globalThis as any).CcPostFillCorrections):
  *   installCorrectionsObserver(opts)
  *
  * opts: { entries, filledBySource, allFields, getEl, records,
  *         RUNTIME_VERSION, settleDelayMs? }
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  function readFieldValue(el) {
+  function readFieldValue(el: any) {
     if (!el) return '';
     if (el.tagName === 'SELECT') {
       var opt = el.options && el.options[el.selectedIndex];
@@ -29,7 +28,7 @@
     return el.value || '';
   }
 
-  function installCorrectionsObserver(opts) {
+  function installCorrectionsObserver(opts: any) {
     opts = opts || {};
     var entries         = opts.entries         || [];
     var filledBySource  = opts.filledBySource  || {};
@@ -48,7 +47,7 @@
         var el = getEl(sel);
         if (!el) continue;
         snapshot[sel] = readFieldValue(el);
-        var rec = records.find(function (r) { return r.selector === sel; });
+        var rec = records.find(function (r: any) { return r.selector === sel; });
         fieldMeta[sel] = {
           label: (filledBySource[sel] && filledBySource[sel].label) || sel,
           semanticKey: (filledBySource[sel] && filledBySource[sel].semanticKey) || '',
@@ -72,9 +71,9 @@
         }
       }
 
-      function captureCorrections(trigger) {
+      function captureCorrections(trigger: any) {
         var out = [];
-        Object.keys(snapshot).forEach(function (s) {
+        Object.keys(snapshot).forEach(function (s: any) {
           var el = getEl(s);
           if (!el) return;
           var cur = readFieldValue(el);
@@ -91,7 +90,7 @@
         return out;
       }
 
-      function postCorrections(trigger) {
+      function postCorrections(trigger: any) {
         var corrections = captureCorrections(trigger);
         if (!corrections.length) return;
         try { document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections)); } catch (e) {}

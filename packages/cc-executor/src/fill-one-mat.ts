@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fill-one-mat — Angular Material Fill Handler
  *
@@ -12,14 +11,14 @@
  *
  * mat-radio: clicks if label text matches value.
  *
- * Public API (on globalThis.CcFillOneMat):
+ * Public API (on (globalThis as any).CcFillOneMat):
  *   fillMat(el, value, elType) => 1 | 0 | null
  *
  * Returns null if elType is not a mat type (pass-through for handler chain).
  *
  * See fill-one-mat.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -28,7 +27,7 @@
    * @param {string}  elType  — 'mat-select' | 'mat-checkbox' | 'mat-radio'
    * @returns {1|0|null}
    */
-  function fillMat(el, value, elType) {
+  function fillMat(el: any, value: any, elType: any) {
     if (elType !== 'mat-select' && elType !== 'mat-checkbox' && elType !== 'mat-radio') {
       return null;
     }
@@ -39,10 +38,10 @@
       setTimeout(function () {
         var v = value.toLowerCase().trim();
         var opts = Array.from(document.querySelectorAll('mat-option,.mat-option,.mat-mdc-option'));
-        var opt = opts.find(function (o) { return o.textContent.trim().toLowerCase() === v; }) ||
-                  opts.find(function (o) { return o.textContent.trim().toLowerCase().startsWith(v); }) ||
-                  opts.find(function (o) { return v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2; }) ||
-                  opts.find(function (o) { return o.textContent.trim().toLowerCase().includes(v); });
+        var opt = opts.find(function (o: any) { return o.textContent.trim().toLowerCase() === v; }) ||
+                  opts.find(function (o: any) { return o.textContent.trim().toLowerCase().startsWith(v); }) ||
+                  opts.find(function (o: any) { return v.startsWith(o.textContent.trim().toLowerCase()) && o.textContent.trim().length > 2; }) ||
+                  opts.find(function (o: any) { return o.textContent.trim().toLowerCase().includes(v); });
         if (opt) opt.click(); else document.body.click();
       }, 400);
       return 1; // fire-and-forget

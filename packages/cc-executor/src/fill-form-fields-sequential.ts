@@ -1,4 +1,3 @@
-// @ts-nocheck
 /* ==== executor.ts (facade) ==== */
 /**
  * Sequential fill kernel — thin facade.
@@ -6,9 +5,9 @@
  * Parts under autofill/executor/ (injected before this file). Public API unchanged:
  *   fillFormFieldsSequential(mapping, filledBySource, portalAdapters, allFields)
  */
-globalThis.fillFormFieldsSequential = async function fillFormFieldsSequential(mapping, filledBySource, portalAdapters, allFields) {
+(globalThis as any).fillFormFieldsSequential = async function fillFormFieldsSequential(mapping: any, filledBySource: any, portalAdapters: any, allFields: any) {
   portalAdapters = portalAdapters || {};
-  const parts = (typeof globalThis !== 'undefined' && globalThis.CcExecParts) || {};
+  const parts = (typeof globalThis !== 'undefined' && (globalThis as any).CcExecParts) || {};
 
   // Hard requirements — without these fill cannot run
   const need = [
@@ -61,7 +60,7 @@ globalThis.fillFormFieldsSequential = async function fillFormFieldsSequential(ma
     Object.keys(mapping || {}).length
   );
 
-  const k = {
+  const k: any = {
     mapping: mapping || {},
     filledBySource: filledBySource || {},
     portalAdapters: portalAdapters,
@@ -93,7 +92,7 @@ globalThis.fillFormFieldsSequential = async function fillFormFieldsSequential(ma
     }
   };
 
-  function install(name) {
+  function install(name: any) {
     if (typeof parts[name] === 'function') parts[name](k);
   }
 

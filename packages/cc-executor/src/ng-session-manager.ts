@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ng-session-manager — ng-dropdown Replay Session Manager
  *
@@ -9,7 +8,7 @@
  * The session store is injected so this capability is testable without
  * a real browser window.
  *
- * Public API (on globalThis.CcNgSessionManager):
+ * Public API (on (globalThis as any).CcNgSessionManager):
  *   cancelSession(label, sessions)  — cancel + cleanup a named session
  *   createSession(label, sessions)  — register a new blank session
  *   cleanupSession(session, sessions, label)  — cleanup without deleting from store
@@ -21,7 +20,7 @@
  *
  * See ng-session-manager.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -34,12 +33,12 @@
    * @param {string} label       — field key / session label
    * @param {Map}    sessions    — session store (window._ccReplaySessions)
    */
-  function cancelSession(label, sessions) {
+  function cancelSession(label: any, sessions: any) {
     if (!sessions || !sessions.has(label)) return;
     var old = sessions.get(label);
     old.cancelled = true;
     try { clearInterval(old.pollTimer); } catch (e) {}
-    (old.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch (e) {} });
+    (old.timeoutIds || []).forEach(function (id: any) { try { clearTimeout(id); } catch (e) {} });
     if (old.observer) { try { old.observer.disconnect(); } catch (e) {} old.observer = null; }
     sessions.delete(label);
   }
@@ -51,7 +50,7 @@
    * @param {Map}    sessions — session store
    * @returns {NgSession}
    */
-  function createSession(label, sessions) {
+  function createSession(label: any, sessions: any) {
     var session = {
       id: Math.random().toString(36).slice(2, 8),
       fieldKey: label,
@@ -74,9 +73,9 @@
    * @param {Map}       sessions
    * @param {string}    label
    */
-  function cleanupSession(session, sessions, label) {
+  function cleanupSession(session: any, sessions: any, label: any) {
     try { clearInterval(session.pollTimer); } catch (e) {}
-    (session.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch (e) {} });
+    (session.timeoutIds || []).forEach(function (id: any) { try { clearTimeout(id); } catch (e) {} });
     if (session.observer) { try { session.observer.disconnect(); } catch (e) {} session.observer = null; }
     if (sessions && label !== undefined) sessions.delete(label);
   }

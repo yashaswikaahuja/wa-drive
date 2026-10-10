@@ -1,14 +1,13 @@
-// @ts-nocheck
 /**
  * mapping-relation — browser/SW copy of @cc/mapper/mapping-relation (#302).
  * Keep behavior aligned with packages/cc-mapper/src/mapping-relation.js
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var MONTH_NAMES = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-  function parseDobParts(dob) {
+  function parseDobParts(dob: any) {
     if (dob == null) return null;
     var dobStr = String(dob).trim();
     if (!dobStr) return null;
@@ -19,7 +18,7 @@
     return null;
   }
 
-  function profileAtom(profile, key) {
+  function profileAtom(profile: any, key: any) {
     if (!profile || key == null) return null;
     var entry = profile[key];
     if (entry == null) return null;
@@ -29,20 +28,20 @@
     return s === '' ? null : s;
   }
 
-  function normLoose(s) {
+  function normLoose(s: any) {
     return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   }
 
-  function fieldBlob(field) {
+  function fieldBlob(field: any) {
     if (!field || typeof field !== 'object') return '';
     return (field.label || '') + ' ' + (field.name || '') + ' ' + (field.id || '') + ' ' + (field.placeholder || '');
   }
 
-  function isCompoundAtom(profileKey) {
+  function isCompoundAtom(profileKey: any) {
     return /^(dob|date_of_birth|phone|mobile|email|email_id|name|full_name|aadhaar_number|aadhaar|pan_number)$/i.test(String(profileKey || ''));
   }
 
-  function looksLikePartField(field) {
+  function looksLikePartField(field: any) {
     var blob = fieldBlob(field).toLowerCase();
     var label = String(field && field.label || '').trim();
     if (/^dd$|^day$|^mm$|^month$|^yyyy$|^yyy$|^year$/i.test(label)) return true;
@@ -54,7 +53,7 @@
     return false;
   }
 
-  function shapeCompatible(field, value) {
+  function shapeCompatible(field: any, value: any) {
     if (value == null) return false;
     var s = String(value);
     var maxLen = Number(field && (field.maxLength || field.maxlength) || 0);
@@ -62,7 +61,7 @@
     return true;
   }
 
-  function normalizeRelation(entry, field) {
+  function normalizeRelation(entry: any, field: any) {
     if (entry && entry.relation && entry.relation.kind) return Object.assign({}, entry.relation);
     var pk = entry && entry.profileKey;
     if (!pk) return { kind: 'unknown' };
@@ -70,7 +69,7 @@
     return { kind: 'identity' };
   }
 
-  function applyDatePart(atom, part, field) {
+  function applyDatePart(atom: any, part: any, field: any) {
     var dp = parseDobParts(atom);
     if (!dp) return null;
     var monthNum = parseInt(dp.month, 10) || 0;
@@ -87,7 +86,7 @@
     return null;
   }
 
-  function applyRelation(relation, profile, profileKey, field) {
+  function applyRelation(relation: any, profile: any, profileKey: any, field: any) {
     var kind = (relation && relation.kind) || 'unknown';
     if (kind === 'unknown') return null;
     var atom = profileAtom(profile, profileKey);
@@ -120,7 +119,7 @@
     return String(value);
   }
 
-  function induceRelation(profile, profileKey, actualOrPlanned, field) {
+  function induceRelation(profile: any, profileKey: any, actualOrPlanned: any, field: any) {
     if (!profileKey) return { kind: 'unknown' };
     var atom = profileAtom(profile, profileKey);
     var sample = actualOrPlanned == null ? '' : String(actualOrPlanned).trim();
@@ -161,11 +160,11 @@
     return { kind: 'unknown' };
   }
 
-  function gsk(l) {
+  function gsk(l: any) {
     return String(l || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   }
 
-  function labelKeys(label) {
+  function labelKeys(label: any) {
     var raw = String(label || '').toLowerCase().trim();
     if (!raw) return [];
     var stripped = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -176,7 +175,7 @@
     return out;
   }
 
-  function lookupSavedEntry(savedMap, field) {
+  function lookupSavedEntry(savedMap: any, field: any) {
     if (!savedMap || !field) return null;
     var keys = labelKeys(field.label).concat(labelKeys(field.name));
     var i;
@@ -189,7 +188,7 @@
     return null;
   }
 
-  function isTravelJourneyField(field) {
+  function isTravelJourneyField(field: any) {
     var raw = [field && field.label, field && field.name, field && field.id, field && field.placeholder, field && field.selector]
       .filter(Boolean).join(' ').toLowerCase();
     if (!raw.trim()) return false;
@@ -205,7 +204,7 @@
     pan: 1, pan_number: 1, gender: 1, sex: 1, email: 1, phone: 1, mobile: 1, mobile_number: 1,
   };
 
-  function materializeSavedRelations(fields, profile, savedMap, mapping, filledBySource, sourceTag) {
+  function materializeSavedRelations(fields: any, profile: any, savedMap: any, mapping: any, filledBySource: any, sourceTag: any) {
     if (!savedMap || typeof savedMap !== 'object') return 0;
     var added = 0;
     var map = mapping || {};

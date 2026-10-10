@@ -205,7 +205,7 @@ class WsClient {
     const timeout = timeoutMs || this._requestTimeout;
     const id = this.send(type, payload);
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve: (v?: any) => void, reject: (e?: any) => void) => {
       const timer = setTimeout(() => {
         this._pending.delete(id);
         reject(new Error(`Request timeout (${type}, ${id})`));
@@ -400,8 +400,8 @@ class WsClient {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { WsClient, STATE };
 } else if (typeof globalThis !== 'undefined') {
-  globalThis.CcWsClient = WsClient;
-  globalThis.CcWsClientSTATE = STATE;
+  (globalThis as any).CcWsClient = WsClient;
+  (globalThis as any).CcWsClientSTATE = STATE;
 }
 
 export { WsClient, STATE };

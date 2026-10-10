@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * native select
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneSelect = function (k) {
@@ -28,21 +27,21 @@
         if (elType === 'select') {
                 const norm = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
                 const v = norm(value);
-                const vWords = v.split(' ').filter(w => w.length > 1);
+                const vWords = v.split(' ').filter((w: any) => w.length > 1);
                 const extraValues = [];
                 if (mapping[selector]?.monthNum) { extraValues.push(mapping[selector].monthNum.toString()); if (mapping[selector].monthShort) extraValues.push(mapping[selector].monthShort.toLowerCase()); }
 
-                function findOpt(options) {
+                function findOpt(options: any) {
                   // shared/option-match.ts is injected before executor.ts runs
                   return window.ccMatchOption(value, options, { extraValues: extraValues });
                 }
 
-                function applySelect(el, opt) {
+                function applySelect(el: any, opt: any) {
                   el.focus();
                   el.dispatchEvent(new Event('focus', { bubbles: true }));
 
                   // Step 1: Mark the option directly (most reliable for ASP.NET/NIC)
-                  Array.from(el.options).forEach(o => { o.selected = false; });
+                  Array.from(el.options as any).forEach((o: any) => { o.selected = false; });
                   opt.selected = true;
                   el.selectedIndex = opt.index;
 
@@ -52,7 +51,7 @@
                   else el.value = opt.value;
 
                   // Step 3: Fire full event sequence
-                  ['mousedown','mouseup','click','input','change'].forEach(ev =>
+                  ['mousedown','mouseup','click','input','change'].forEach((ev: any) =>
                     el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }))
                   );
                   // Trigger ASP.NET onchange handler directly if present
@@ -93,9 +92,9 @@
                   return 1;
                 }
 
-                const allOptions = Array.from(el.options);
+                const allOptions: any[] = Array.from(el.options as any);
                 const opt = findOpt(allOptions);
-                console.debug('[CC] select attempt:', selector, 'value:', value, 'total opts:', allOptions.length, 'matched:', opt ? opt.text.trim() : 'NONE', 'sample:', allOptions.slice(0,3).map(o=>o.value+'='+o.text.trim()));
+                console.debug('[CC] select attempt:', selector, 'value:', value, 'total opts:', allOptions.length, 'matched:', opt ? opt.text.trim() : 'NONE', 'sample:', allOptions.slice(0,3).map((o: any) =>o.value+'='+o.text.trim()));
                 if (opt) return applySelect(el, opt);
 
                 // Options not ready yet (dependent dropdown) — schedule retry
@@ -103,8 +102,8 @@
                 // This retry is a fallback for when fillOne is called directly (not through the cascade path).
                 let attempts = 0;
                 const interval = setInterval(() => {
-                  const allOpts = Array.from(el.options);
-                  const realOpts = allOpts.filter(o => {
+                  const allOpts: any[] = Array.from(el.options as any);
+                  const realOpts: any[] = allOpts.filter((o: any) => {
                     if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
                     const txt = o.text.toLowerCase();
                     return !txt.includes('select') && !txt.includes('choose') && !txt.includes('loading') && txt !== '--';
@@ -117,7 +116,7 @@
                     // AI fallback — ask LLM to pick the best option
                     const llmKey = window._cc_llm_key || (document.body.getAttribute('data-cc-llm-key') || '');
                     if (llmKey && realOpts.length > 0) {
-                      const optTexts = realOpts.map(o => o.text.trim()).join('\n');
+                      const optTexts = realOpts.map((o: any) => o.text.trim()).join('\n');
                       window.ccLLM.call({
                         apiKey: llmKey,
                         baseUrl: document.body.getAttribute('data-cc-llm-url') || undefined,
@@ -127,12 +126,12 @@
                       }).then(result => {
                         const aiText = (result.text || '').trim();
                         if (aiText) {
-                          const aiOpt = realOpts.find(o => o.text.trim() === aiText) || realOpts.find(o => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
+                          const aiOpt = realOpts.find((o: any) => o.text.trim() === aiText) || realOpts.find((o: any) => o.text.trim().toLowerCase().includes(aiText.toLowerCase()));
                           if (aiOpt) { console.debug('[CC] AI matched:', aiText, '->', aiOpt.text); applySelect(el, aiOpt); }
                         }
                       }).catch(() => {});
                     }
-                    console.debug('[CC] select no match after wait:', selector, 'value:', value, 'opts:', realOpts.slice(0,5).map(o=>o.text.trim()));
+                    console.debug('[CC] select no match after wait:', selector, 'value:', value, 'opts:', realOpts.slice(0,5).map((o: any) =>o.text.trim()));
                   }
                 }, 200);
                 return 1; // counted as filled; actual value applied async

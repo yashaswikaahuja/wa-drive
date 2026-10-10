@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Semantic Aliases (Service-Provided)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -38,7 +37,7 @@
    * @param {string} token — Bearer token
    * @returns {Promise<boolean>} true if loaded successfully
    */
-  async function load(backendUrl, token) {
+  async function load(backendUrl: any, token: any) {
     if (!backendUrl) return false;
     try {
       var headers = { 'Authorization': 'Bearer ' + token };
@@ -73,14 +72,14 @@
    * Merge additional aliases (additive).
    * @param {object} newAliases — { semantic_key: [label_patterns...] }
    */
-  function merge(newAliases) {
+  function merge(newAliases: any) {
     if (!newAliases || typeof newAliases !== 'object') return;
     for (var key in newAliases) {
       if (!aliases[key]) {
         aliases[key] = newAliases[key];
       } else {
         var existing = aliases[key];
-        newAliases[key].forEach(function (a) {
+        newAliases[key].forEach(function (a: any) {
           if (existing.indexOf(a) === -1) existing.push(a);
         });
       }
@@ -92,7 +91,7 @@
    * Replace all aliases (full override from service).
    * @param {object} newAliases
    */
-  function replace(newAliases) {
+  function replace(newAliases: any) {
     if (!newAliases || typeof newAliases !== 'object') return;
     for (var k in aliases) delete aliases[k];
     for (var key in newAliases) aliases[key] = newAliases[key];

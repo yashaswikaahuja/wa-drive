@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/select-apply.ts ─────────────────────────────────────────────────
 // Single source of truth for applying a native <select> option with full event
 // dispatch compatibility (ASP.NET, DWR/ServicePlus, jQuery, Angular).
@@ -25,12 +24,12 @@
    * @param {HTMLOptionElement} opt - The option to select
    * @returns {boolean} true
    */
-  function ccApplySelect(el, opt) {
+  function ccApplySelect(el: any, opt: any) {
     el.focus();
     el.dispatchEvent(new Event('focus', { bubbles: true }));
 
     // Step 1: Mark the option directly
-    Array.from(el.options).forEach(function (o) { o.selected = false; });
+    Array.from(el.options).forEach(function (o: any) { o.selected = false; });
     opt.selected = true;
     el.selectedIndex = opt.index;
 
@@ -40,7 +39,7 @@
     else el.value = opt.value;
 
     // Step 3: Full event sequence
-    ['mousedown', 'mouseup', 'click', 'input', 'change'].forEach(function (ev) {
+    ['mousedown', 'mouseup', 'click', 'input', 'change'].forEach(function (ev: any) {
       el.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }));
     });
 

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fingerprint-form — Form fingerprinting + pageModel assembly
  *
@@ -14,7 +13,7 @@
  * Strips _el DOM references from all fields (not serialisable across
  * chrome.scripting.executeScript boundary).
  *
- * Public API (on globalThis.CcFingerprintForm):
+ * Public API (on (globalThis as any).CcFingerprintForm):
  *   fingerprint(formFields, labelList, opts) => { formKey, semanticFormKey, pageModel }
  *
  * opts: { hostname, title, ccModels? }
@@ -22,10 +21,10 @@
  *
  * See docs/fingerprint-form.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  function djb2(str) {
+  function djb2(str: any) {
     var hash = 0;
     for (var i = 0; i < str.length; i++) {
       hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -40,7 +39,7 @@
    * @param {{ hostname: string, title: string, ccModels?: object }} opts
    * @returns {{ formKey: string, semanticFormKey: string, pageModel: object|null }}
    */
-  function fingerprint(formFields, labelList, opts) {
+  function fingerprint(formFields: any, labelList: any, opts: any) {
     opts = opts || {};
     var hostname = opts.hostname || '';
     var title = opts.title || '';
@@ -52,10 +51,10 @@
 
     // ── semanticFormKey: top-15 normalized labels sorted ──
     var semanticLabels = formFields
-      .map(function (f) {
+      .map(function (f: any) {
         return (f.label || '').toLowerCase().replace(/[^a-z\s]/g, '').trim();
       })
-      .filter(function (l) { return l.length > 2; })
+      .filter(function (l: any) { return l.length > 2; })
       .sort()
       .slice(0, 15);
     var semRaw = hostname + '|' + semanticLabels.join('|');
@@ -71,7 +70,7 @@
     }
 
     // ── Strip DOM references (not serialisable) ──
-    formFields.forEach(function (f) { delete f._el; });
+    formFields.forEach(function (f: any) { delete f._el; });
 
     return { formKey: formKey, semanticFormKey: semanticFormKey, pageModel: pageModel };
   }

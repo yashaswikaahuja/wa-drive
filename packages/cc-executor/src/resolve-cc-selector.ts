@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * resolve-cc-selector — CC-Style Selector Resolver
  *
@@ -11,12 +10,12 @@
  * The document is injectable for testing (jsdom) and cross-frame use.
  * No Chrome API, no CcExecParts, no kernel, no fill state.
  *
- * Public API (on globalThis.CcResolveCcSelector):
+ * Public API (on (globalThis as any).CcResolveCcSelector):
  *   resolveCcSelector(selector, doc?) => Element | null
  *
  * See resolve-cc-selector.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -44,7 +43,7 @@
    * @param {Document} [doc] - document to query against (defaults to global document)
    * @returns {Element|null}
    */
-  function resolveCcSelector(selector, doc) {
+  function resolveCcSelector(selector: any, doc: any) {
     var d = doc || (typeof document !== 'undefined' ? document : null);
     if (!d) return null;
 

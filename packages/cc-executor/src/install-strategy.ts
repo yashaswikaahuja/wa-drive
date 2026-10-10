@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * STRATEGY_REGISTRY + detectStrategy + verifyValue
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installStrategy = function (k) {
@@ -14,7 +13,7 @@
   var STRATEGY_REGISTRY = _dfs.STRATEGY_REGISTRY || {};
 
   // Detect which strategy applies to a field (for ReplayRecord tagging)
-  function detectStrategy(el, type) {
+  function detectStrategy(el: any, type: any) {
     if (_dfs.detectFillStrategy) return _dfs.detectFillStrategy(el, type);
     return type || 'unknown'; // safe fallback
   }
@@ -23,7 +22,7 @@
   // Must be loaded before strategy.js (see build-executor-bundle.ts ORDER).
   var _vfv = root.CcVerifyFillValue || {};
   var _resolveEl = root.CcResolveCcSelector ? root.CcResolveCcSelector.resolveCcSelector : function(sel) { return document.querySelector(sel); };
-  async function verifyValue(selector, expected, settleMs) {
+  async function verifyValue(selector: any, expected: any, settleMs: any) {
     if (_vfv.verifyFillValue) return _vfv.verifyFillValue(selector, expected, _resolveEl, settleMs);
     // Safe fallback: unknown result
     return { ok: false, actualValue: '', normExpected: '', normActual: '', reason: 'verifier-not-loaded' };
