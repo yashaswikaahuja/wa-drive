@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * flatten-profile — Profile data flattener
  *
@@ -6,20 +5,20 @@
  * { value: ... } objects into a flat { key: value } map for use by the
  * sequential fill kernel.
  *
- * Public API (on globalThis.CcFlattenProfile):
+ * Public API (on (globalThis as any).CcFlattenProfile):
  *   flattenProfile(profile) => flat object
  *
  * See docs/flatten-profile.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
    * @param {object} profile — raw profile, may have .data or { value } wrappers
    * @returns {object} flat key→value map
    */
-  function flattenProfile(profile) {
-    var flat = {};
+  function flattenProfile(profile: any) {
+    var flat: any = {};
     var raw = (profile && (profile.data || profile)) || {};
     for (var k in raw) {
       var v = raw[k];

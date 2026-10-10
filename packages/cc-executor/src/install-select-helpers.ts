@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Select/cascade helpers + pushSelectRecord
  * Part of sequential kernel — load before autofill/executor.ts
@@ -7,7 +6,7 @@
  * state functions. This file re-exposes them on the kernel (k) for existing
  * consumers that access them via bindKernelLocals(k).
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installSelectHelpers = function (k) {
@@ -29,7 +28,7 @@
   // cascade-field-level.js is the single source of truth for cascade geography.
   // It must be loaded before select-helpers.js (see build-executor-bundle.ts ORDER).
   var _cascadeGeo = root.CcCascadeFieldLevel;
-  function cascadeSemanticKey(label, profileKey, selector) {
+  function cascadeSemanticKey(label: any, profileKey: any, selector: any) {
     return _cascadeGeo
       ? _cascadeGeo.cascadeFieldLevel(label, profileKey, selector)
       : ''; // safe fallback if loaded out of order
@@ -38,7 +37,7 @@
   k.CASCADE_PARENTS = _cascadeGeo ? _cascadeGeo.CASCADE_PARENTS : {};
   // ── Cascade geography (delegated to capabilities/cascade-field-level.js) ─
 
-  function pushSelectRecord(base) {
+  function pushSelectRecord(base: any) {
     const rec = _buildFillRecord(base, { rv: k.RUNTIME_VERSION });
     k.records.push(rec);
     k.flushRecords();

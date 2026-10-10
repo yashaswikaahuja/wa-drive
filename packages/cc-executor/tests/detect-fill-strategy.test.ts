@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for detect-fill-strategy.js
  *
@@ -122,7 +121,7 @@ assert('has text-input',        keys.includes('text-input'), true);
 assert('has radio-click',       keys.includes('radio-click'), true);
 
 // Each strategy has required fields
-keys.forEach(key => {
+keys.forEach((key: any) => {
   const s = STRATEGY_REGISTRY[key];
   assert(key + ' has name', typeof s.name, 'string');
   assert(key + ' has applies fn', typeof s.applies, 'function');

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * settle-after-act — Post-Action Settle Engine
  *
@@ -11,7 +10,7 @@
  *
  * Both network-idle and option-polling are injected for testability.
  *
- * Public API (on globalThis.CcSettleAfterAct):
+ * Public API (on (globalThis as any).CcSettleAfterAct):
  *   createSettleEngine(opts) => { settleAfterAct, waitForSelectOptionsSequential }
  *
  * opts:
@@ -22,7 +21,7 @@
  *
  * See settle-after-act.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -32,7 +31,7 @@
    * @param {function} opts.getBudget
    * @param {function} opts.setBudget
    */
-  function createSettleEngine(opts) {
+  function createSettleEngine(opts: any) {
     opts = opts || {};
     var waitForNetworkIdle = opts.waitForNetworkIdle || function (q, m) {
       return Promise.resolve({ idle: true, waitedMs: 0 });
@@ -43,7 +42,7 @@
     var getBudget = opts.getBudget || function () { return 0; };
     var setBudget = opts.setBudget || function () {};
 
-    async function settleAfterAct(kind, actOpts) {
+    async function settleAfterAct(kind: any, actOpts: any) {
       actOpts = actOpts || {};
       var budget = typeof actOpts.budgetMs === 'number' ? actOpts.budgetMs : getBudget();
 
@@ -69,7 +68,7 @@
       return Object.assign({ kind: kind }, net);
     }
 
-    async function waitForSelectOptionsSequential(selector, maxMs) {
+    async function waitForSelectOptionsSequential(selector: any, maxMs: any) {
       maxMs = Math.min(maxMs || 6000, Math.max(400, getBudget() || 400));
       var t0 = Date.now();
       // First a general settle (covers radio→ajax-select pattern)

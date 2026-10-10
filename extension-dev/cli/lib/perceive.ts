@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { injectProductPath } from './product-inject.ts';
 
 export async function perceivePage(page, { includeGeometry = true } = {}) {

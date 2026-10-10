@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * W-P1-04 — Classifier ↔ adapter registry CI matrix (#136)
  *

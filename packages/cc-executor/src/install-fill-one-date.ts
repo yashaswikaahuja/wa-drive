@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * date pickers
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneDate = function (k) {

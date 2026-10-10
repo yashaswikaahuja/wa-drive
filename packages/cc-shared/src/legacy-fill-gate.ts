@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Phase 4.1 — legacy client-fill gate (permanently closed).
  *
@@ -8,7 +7,7 @@
  *
  * This module is pure (no chrome.*). Unit tests import these helpers.
  */
-(function (root, factory) {
+(function (root: any, factory: any) {
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = factory();
   } else {
@@ -28,7 +27,7 @@
    * @param {object|null|undefined} _storageSlice - ignored (kept for API compat)
    * @returns {boolean} always false
    */
-  function isLegacyClientFillAllowed(_storageSlice) {
+  function isLegacyClientFillAllowed(_storageSlice: any) {
     return false;
   }
 
@@ -36,7 +35,7 @@
    * @param {string} pathName - e.g. DISPATCH_JOB, agent, OPEN_AND_DISPATCH
    * @returns {{ ok: false, error: string, code: string }}
    */
-  function legacyClientFillDenied(pathName) {
+  function legacyClientFillDenied(pathName: any) {
     const name = pathName || 'legacy client fill';
     return {
       ok: false,

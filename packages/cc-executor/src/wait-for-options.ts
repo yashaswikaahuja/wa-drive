@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * wait-for-options — Select Options DOM Poller
  *
@@ -11,7 +10,7 @@
  * The querySelector function is injected so this capability is testable
  * without a real browser document.
  *
- * Public API (on globalThis.CcWaitForOptions):
+ * Public API (on (globalThis as any).CcWaitForOptions):
  *   waitForOptions(selector, minCount, timeout, querySelector?, observeTarget?) => Promise<Element|null>
  *
  * querySelector  — defaults to document.querySelector
@@ -19,7 +18,7 @@
  *
  * See wait-for-options.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -32,18 +31,18 @@
    * @param {Element}  [observeTarget] — MutationObserver target (injected for tests)
    * @returns {Promise<Element|null>}
    */
-  function waitForOptions(selector, minCount, timeout, qs, observeTarget) {
+  function waitForOptions(selector: any, minCount: any, timeout: any, qs: any, observeTarget: any) {
     minCount = minCount || 1;
     timeout  = timeout  || 8000;
     qs = qs || (typeof document !== 'undefined' ? document.querySelector.bind(document) : function () { return null; });
     observeTarget = observeTarget || (typeof document !== 'undefined' ? document.body : null);
 
-    return new Promise(function (resolve) {
+    return new Promise(function (resolve: (v?: any) => void) {
       var deadline = Date.now() + timeout;
       var resolved = false;
       var poll, mo;
 
-      function cleanup(val) {
+      function cleanup(val: any) {
         if (resolved) return;
         resolved = true;
         if (poll) clearInterval(poll);
@@ -51,7 +50,7 @@
         resolve(val);
       }
 
-      function isRealOption(o) {
+      function isRealOption(o: any) {
         return o.value && o.value !== '0' && o.value !== '' && o.value !== '-1';
       }
 

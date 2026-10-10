@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * One-shot: does CDP isolated-world value set show up in page main world?
  */

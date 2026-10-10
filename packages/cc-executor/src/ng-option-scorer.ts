@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * ng-option-scorer — Angular Dropdown Option Scorer
  *
@@ -11,13 +10,13 @@
  *
  * Pure JS — no DOM, no Chrome, no kernel. Deterministic.
  *
- * Public API (on globalThis.CcNgOptionScorer):
+ * Public API (on (globalThis as any).CcNgOptionScorer):
  *   scoreOption(optText, planned) => number    (0–100)
  *   scoreAndPick(opts, planned, minScore?) => opt | null
  *
  * See ng-option-scorer.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -36,7 +35,7 @@
    * @param {string} planned  — planned fill value
    * @returns {number} 0–100
    */
-  function scoreOption(optText, planned) {
+  function scoreOption(optText: any, planned: any) {
     var ot = String(optText || '').toLowerCase().trim();
     var v  = String(planned  || '').toLowerCase().trim();
     if (!ot || !v) return 0;
@@ -44,10 +43,10 @@
     if (ot.includes(v)) return 80;
     if (v.includes(ot) && ot.length > 3) return 70;
     // Token overlap: split on common separators, require tokens > 2 chars
-    var vToks = v.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
-    var oToks = ot.split(/[\s()+,/\-]+/).filter(function (t) { return t.length > 2; });
-    var overlap = vToks.filter(function (t) {
-      return oToks.some(function (o) { return o.includes(t) || t.includes(o); });
+    var vToks = v.split(/[\s()+,/\-]+/).filter(function (t: any) { return t.length > 2; });
+    var oToks = ot.split(/[\s()+,/\-]+/).filter(function (t: any) { return t.length > 2; });
+    var overlap = vToks.filter(function (t: any) {
+      return oToks.some(function (o: any) { return o.includes(t) || t.includes(o); });
     }).length;
     if (overlap >= 2) return 60;
     if (overlap === 1 && (vToks.length <= 2 || oToks.length <= 2)) return 50;
@@ -60,8 +59,8 @@
     ];
     for (var i = 0; i < EDU_SYNONYMS.length; i++) {
       var group = EDU_SYNONYMS[i];
-      var vIn = group.some(function (s) { return v.includes(s); });
-      var oIn = group.some(function (s) { return ot.includes(s); });
+      var vIn = group.some(function (s: any) { return v.includes(s); });
+      var oIn = group.some(function (s: any) { return ot.includes(s); });
       if (vIn && oIn) return 55;
     }
     return 0;
@@ -75,7 +74,7 @@
    * @param {number} [minScore=50]                  — minimum score to accept
    * @returns {{text, node, score} | null}
    */
-  function scoreAndPick(opts, planned, minScore) {
+  function scoreAndPick(opts: any, planned: any, minScore: any) {
     minScore = (typeof minScore === 'number') ? minScore : 50;
     var best = null;
     var bestScore = 0;

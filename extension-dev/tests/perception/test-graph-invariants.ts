@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Graph invariant tests — Phase 3.3 / issue #131 / #130 P1
  */

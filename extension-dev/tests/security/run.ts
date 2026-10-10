@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * CHECK-011: Permanent Extension & Browser Boundary Security Regression Suite.
  *

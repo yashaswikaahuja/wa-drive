@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * T2/T6/T9 mapping-engine classification tests
  * Run: node packages/svc-fill-planner/tests/mapping-engine.t6.test.ts

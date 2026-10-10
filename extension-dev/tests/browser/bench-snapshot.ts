@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * CyberControl Phase 3.3 — Snapshot Performance Benchmark
  *

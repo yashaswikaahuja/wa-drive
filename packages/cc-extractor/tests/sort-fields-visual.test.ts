@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * sort-fields-visual.test.ts — plain Node tests, no framework, no jsdom
  */
@@ -52,7 +51,7 @@ console.log('\nTop-to-bottom sort');
 {
   const fields = [makeField('B', 200, 0), makeField('A', 100, 0)];
   sort(fields);
-  assert('A before B', fields.map(f => f.label).join(','), 'A,B');
+  assert('A before B', fields.map((f: any) => f.label).join(','), 'A,B');
   assert('index reassigned', fields[0].index, 0);
   assert('_pos cleaned up', fields[0]._pos, undefined);
 }
@@ -63,7 +62,7 @@ console.log('\nSame-row left-to-right');
   // Within ROW_BAND (8px), treated as same row
   const fields = [makeField('Right', 100, 400), makeField('Left', 100, 50)];
   sort(fields);
-  assert('Left before Right in same row', fields.map(f => f.label).join(','), 'Left,Right');
+  assert('Left before Right in same row', fields.map((f: any) => f.label).join(','), 'Left,Right');
 }
 
 // ── Within ROW_BAND treated as same row ──────────────────────────────────────
@@ -72,7 +71,7 @@ console.log('\nSame-row left-to-right');
   const f1 = makeField('F1', 100, 400);
   const f2 = makeField('F2', 104, 50); // within 8px → same row
   sort([f1, f2]);
-  assert('fields within ROW_BAND treated as same row (F2 left → first)', [f1,f2].find(f=>f.label==='F2').index < [f1,f2].find(f=>f.label==='F1').index, true);
+  assert('fields within ROW_BAND treated as same row (F2 left → first)', [f1,f2].find((f: any) =>f.label==='F2').index < [f1,f2].find((f: any) =>f.label==='F1').index, true);
 }
 
 // ── Unrendered fields go to end ───────────────────────────────────────────────
@@ -111,7 +110,7 @@ console.log('\nMulti-column layout');
     makeField('Name',  100, 0),
   ];
   sort(fields);
-  const labels = fields.map(f => f.label).join(',');
+  const labels = fields.map((f: any) => f.label).join(',');
   assert('Name,Email,Phone,City order', labels, 'Name,Email,Phone,City');
 }
 

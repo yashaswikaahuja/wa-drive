@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl driver dispatcher — window.cc.do(action) → result
  *
@@ -48,7 +47,7 @@
   // Each entry: { name, description, sideEffect, input, output, handler }
   const _registry = {};
 
-  window.cc.registerDriver = function registerDriver(driver) {
+  window.cc.registerDriver = function registerDriver(driver: any) {
     if (!driver || !driver.name || typeof driver.handler !== 'function') {
       console.warn('[cc] invalid driver:', driver);
       return;
@@ -61,7 +60,7 @@
   };
 
   window.cc.listDrivers = function listDrivers() {
-    return Object.values(_registry).map(d => ({
+    return Object.values(_registry).map((d: any) => ({
       name: d.name,
       description: d.description,
       sideEffect: d.sideEffect,
@@ -71,7 +70,7 @@
   };
 
   // ── Tiny JSON-schema-ish validator (just type + required) ───────────────
-  function validateAgainstSchema(value, schema, path) {
+  function validateAgainstSchema(value: any, schema: any, path: any) {
     path = path || '$';
     if (!schema) return { ok: true };
     if (schema.type === 'object') {
@@ -125,7 +124,7 @@
   // Traces may contain action selectors and values, so they must never be
   // serialized into page-readable DOM attributes or storage.
   if (!window._ccTraces) window._ccTraces = [];
-  function recordTrace(entry) {
+  function recordTrace(entry: any) {
     window._ccTraces.push(entry);
     if (window._ccTraces.length > 100) window._ccTraces.shift();
   }
@@ -135,7 +134,7 @@
   }
 
   // ── Main dispatcher ──────────────────────────────────────────────────────
-  window.cc.do = async function ccDo(action) {
+  window.cc.do = async function ccDo(action: any) {
     const t0 = Date.now();
     const traceId = (action && action.options && action.options.traceId) || makeTraceId();
     if (!action || typeof action !== 'object') {
@@ -152,7 +151,7 @@
     // Validate input
     const args = action.args || {};
     if (driver.input) {
-      const v = validateAgainstSchema(args, driver.input);
+      const v = validateAgainstSchema(args, driver.input, undefined);
       if (!v.ok) {
         const out = { ok: false, error: 'invalid-args: ' + v.error, traceId, durationMs: 0, driver: driver.name };
         recordTrace({ traceId, action, result: out, ts: t0 });
@@ -191,7 +190,7 @@
   };
 
   // Convenience: cc.run([action, action, ...]) — sequential composition
-  window.cc.run = async function ccRun(actions) {
+  window.cc.run = async function ccRun(actions: any) {
     const results = [];
     for (const action of actions) {
       const r = await window.cc.do(action);

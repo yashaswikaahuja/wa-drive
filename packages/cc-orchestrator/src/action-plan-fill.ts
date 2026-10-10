@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * action-plan-fill — ActionPlan (APE) fill path
  *
@@ -13,15 +12,15 @@
  *
  * Depends on: CcScriptManifests, CcFlattenProfile
  *
- * Public API (on globalThis.CcActionPlanFill):
+ * Public API (on (globalThis as any).CcActionPlanFill):
  *   run(ctx) => Promise<result>
  *
  * See docs/action-plan-fill.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  async function run(ctx) {
+  async function run(ctx: any) {
     var tabId              = ctx.tabId;
     var profile            = ctx.profile;
     var backendUrl         = ctx.backendUrl;
@@ -31,7 +30,7 @@
     var onProgress         = ctx.onProgress;
 
     var progress = function (t, p) { if (typeof onProgress === 'function') onProgress(t, p); };
-    var errors = (typeof globalThis !== 'undefined' && globalThis.CcRuntimeErrors) || null;
+    var errors = (typeof globalThis !== 'undefined' && (globalThis as any).CcRuntimeErrors) || null;
     var opMsg = function (code, detail) {
       return errors && errors.operatorMessageFor
         ? errors.operatorMessageFor(code, detail)
@@ -54,7 +53,7 @@
     var loadedCheck = await chrome.scripting.executeScript({
       target: { tabId },
       func: function () {
-        return !!(globalThis.CcDomGateway && globalThis.CcBindingRegistry && globalThis.CcPerception && globalThis.CcActionPlanExecutor);
+        return !!((globalThis as any).CcDomGateway && (globalThis as any).CcBindingRegistry && (globalThis as any).CcPerception && (globalThis as any).CcActionPlanExecutor);
       },
     });
     if (!loadedCheck[0].result) {
@@ -65,15 +64,15 @@
     try {
       var allowStore = await chrome.storage.local.get('navigationOriginAllowlist');
       var originAllowlist = Array.isArray(allowStore.navigationOriginAllowlist)
-        ? allowStore.navigationOriginAllowlist.filter(function (x) { return typeof x === 'string' && x.length > 0; })
+        ? allowStore.navigationOriginAllowlist.filter(function (x: any) { return typeof x === 'string' && x.length > 0; })
         : [];
       await chrome.scripting.executeScript({
         target: { tabId },
         func: function (list) {
-          if (globalThis.CcNavigationContract && globalThis.CcNavigationContract.setOriginAllowlist) {
-            globalThis.CcNavigationContract.setOriginAllowlist(list);
+          if ((globalThis as any).CcNavigationContract && (globalThis as any).CcNavigationContract.setOriginAllowlist) {
+            (globalThis as any).CcNavigationContract.setOriginAllowlist(list);
           } else {
-            globalThis.__ccNavigationOriginAllowlist = Array.isArray(list) ? list : [];
+            (globalThis as any).__ccNavigationOriginAllowlist = Array.isArray(list) ? list : [];
           }
         },
         args: [originAllowlist],
@@ -139,19 +138,19 @@
     var execResults = await chrome.scripting.executeScript({
       target: { tabId },
       func: async function (actionPlan) {
-        if (!globalThis.CcActionPlanExecutor || !globalThis.CcActionPlanExecutor.execute) throw new Error('ActionPlan executor not loaded');
-        if (typeof globalThis.ccExecutor === 'function' || globalThis.__ccLegacyFillActive) throw new Error('Legacy fill path must not run with ActionPlan v3');
-        if (globalThis.CcDomEvidence && globalThis.CcDomEvidence.startObserving) {
-          var registry = globalThis.CcPerception && globalThis.CcPerception.getBindingRegistry && globalThis.CcPerception.getBindingRegistry();
-          globalThis.CcDomEvidence.startObserving(actionPlan, registry);
+        if (!(globalThis as any).CcActionPlanExecutor || !(globalThis as any).CcActionPlanExecutor.execute) throw new Error('ActionPlan executor not loaded');
+        if (typeof (globalThis as any).ccExecutor === 'function' || (globalThis as any).__ccLegacyFillActive) throw new Error('Legacy fill path must not run with ActionPlan v3');
+        if ((globalThis as any).CcDomEvidence && (globalThis as any).CcDomEvidence.startObserving) {
+          var registry = (globalThis as any).CcPerception && (globalThis as any).CcPerception.getBindingRegistry && (globalThis as any).CcPerception.getBindingRegistry();
+          (globalThis as any).CcDomEvidence.startObserving(actionPlan, registry);
         }
         var observation;
         try {
-          observation = await globalThis.CcActionPlanExecutor.execute(actionPlan);
+          observation = await (globalThis as any).CcActionPlanExecutor.execute(actionPlan);
         } finally {
-          if (globalThis.CcDomEvidence && globalThis.CcDomEvidence.stopObserving) {
-            globalThis.CcDomEvidence.stopObserving();
-            var evidence = (globalThis.CcDomEvidence.getEvidence && globalThis.CcDomEvidence.getEvidence()) || [];
+          if ((globalThis as any).CcDomEvidence && (globalThis as any).CcDomEvidence.stopObserving) {
+            (globalThis as any).CcDomEvidence.stopObserving();
+            var evidence = ((globalThis as any).CcDomEvidence.getEvidence && (globalThis as any).CcDomEvidence.getEvidence()) || [];
             if (evidence.length > 0 && observation) observation.dom_evidence = evidence;
           }
         }
@@ -178,11 +177,11 @@
     } catch (e) { observationError = e.message; }
 
     var stepResults = executionObservation.steps || [];
-    var filled  = stepResults.filter(function (r) { return r.status === 'succeeded'; }).length;
-    var failed  = stepResults.filter(function (r) { return r.status === 'failed'; }).length;
-    var skipped = stepResults.filter(function (r) { return r.status === 'skipped'; }).length;
+    var filled  = stepResults.filter(function (r: any) { return r.status === 'succeeded'; }).length;
+    var failed  = stepResults.filter(function (r: any) { return r.status === 'failed'; }).length;
+    var skipped = stepResults.filter(function (r: any) { return r.status === 'skipped'; }).length;
 
-    var resultByStep = new Map(stepResults.map(function (r) { return [r.step_id, r]; }));
+    var resultByStep = new Map(stepResults.map(function (r: any) { return [r.step_id, r]; }));
     var hostFromSnap = (function () {
       try { var origin = (pageSnapshot.page && pageSnapshot.page.origin) || (pageSnapshot.page && pageSnapshot.page.url) || ''; return origin ? new URL(origin).hostname : ''; } catch (e) { return ''; }
     }());
@@ -204,8 +203,8 @@
       if (target.semantic_key) return target.semantic_key;
       return label || 'Field';
     };
-    var records = (plan.steps || []).map(function (step) {
-      var result = resultByStep.get(step.step_id);
+    var records = (plan.steps || []).map(function (step: any) {
+      var result: any = resultByStep.get(step.step_id);
       var planned = (step.action && step.action.value != null) ? step.action.value : ((step.action && step.action.text != null) ? step.action.text : '');
       var actual = (result && result.observed_value_state) || (result && result.actual_value) || (result && result.actualValue) || null;
       var target = (step && step.target) || {};

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CHECK-012: Discussion 11 Architecture Invariants
  *

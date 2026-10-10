@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * split-dob.test.ts — date splitter (TypeScript via strip-types)
  */

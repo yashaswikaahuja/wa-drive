@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for post-fill-corrections.js
  * Run: node extension/autofill/executor/capabilities/post-fill-corrections.test.ts

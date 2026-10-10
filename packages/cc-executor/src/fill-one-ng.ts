@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fill-one-ng — ng-dropdown Fill Handler
  *
@@ -11,7 +10,7 @@
  *   CcNgSessionManager — session lifecycle (CAP-12)
  *   CcBuildFillRecord  — record stamping (CAP-10)
  *
- * Public API (on globalThis.CcFillOneNg):
+ * Public API (on (globalThis as any).CcFillOneNg):
  *   fillNg(el, selector, value, type, elType, ctx) => 1 | 0 | null
  *
  * ctx: { portalAdapters, filledBySource, _replayResults, _ccRecords,
@@ -21,10 +20,10 @@
  *
  * See fill-one-ng.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  function fillNg(el, selector, value, type, elType, ctx) {
+  function fillNg(el: any, selector: any, value: any, type: any, elType: any, ctx: any) {
     if (!(elType === 'ng-dropdown' || type === 'ng-dropdown')) return null;
 
     var portalAdapters   = ctx.portalAdapters   || {};
@@ -60,13 +59,13 @@
           pollTimer: null, timeoutIds: [], observer: null, startedAt: Date.now() };
     if (!_nsm.createSession) window._ccReplaySessions.set(_label, session);
 
-    function isVisible(node) {
+    function isVisible(node: any) {
       return window.ccDomUtils && window.ccDomUtils.isVisible
         ? window.ccDomUtils.isVisible(node)
         : !!(node && node.offsetParent !== null);
     }
 
-    function cleanupAndRecord(result) {
+    function cleanupAndRecord(result: any) {
       if (session.resolved && result !== session._result) return;
       session.resolved = true;
       session._result = result;
@@ -74,7 +73,7 @@
         _nsm.cleanupSession(session, window._ccReplaySessions, _label);
       } else {
         try { clearInterval(session.pollTimer); } catch (e) {}
-        (session.timeoutIds || []).forEach(function (id) { try { clearTimeout(id); } catch (e) {} });
+        (session.timeoutIds || []).forEach(function (id: any) { try { clearTimeout(id); } catch (e) {} });
         if (session.observer) { session.observer.disconnect(); session.observer = null; }
         window._ccReplaySessions.delete(_label);
       }
@@ -104,8 +103,8 @@
 
     var mo = new MutationObserver(function (mutations) {
       if (session.cancelled || session.resolved) return;
-      mutations.forEach(function (m) {
-        m.addedNodes.forEach(function (n) { if (n.nodeType === 1) addedNodes.push(n); });
+      mutations.forEach(function (m: any) {
+        m.addedNodes.forEach(function (n: any) { if (n.nodeType === 1) addedNodes.push(n); });
       });
     });
     session.observer = mo;
@@ -115,7 +114,7 @@
     var _stabilizeMo = new MutationObserver(function () { _lastMutation = Date.now(); });
     _stabilizeMo.observe(document.body, { childList: true, subtree: true, attributes: true });
 
-    function waitStable(cb) {
+    function waitStable(cb: any) {
       var check = setInterval(function () {
         if (session.cancelled) { clearInterval(check); _stabilizeMo.disconnect(); return; }
         if (Date.now() - _lastMutation >= 150) { clearInterval(check); _stabilizeMo.disconnect(); cb(); }
@@ -139,16 +138,16 @@
       for (var i = 0; i < addedNodes.length; i++) {
         var node = addedNodes[i];
         if (!isVisible(node)) continue;
-        var lis = Array.from(node.querySelectorAll(_optQ)).filter(function (o) { return isVisible(o); });
+        var lis = Array.from(node.querySelectorAll(_optQ)).filter(function (o: any) { return isVisible(o); });
         if (lis.length > 0) { activeOverlayRoot = node; break; }
       }
 
       if (!activeOverlayRoot) {
         var bestDist = Infinity;
-        OVERLAY_TAGS.forEach(function (sel) {
+        OVERLAY_TAGS.forEach(function (sel: any) {
           try {
-            document.querySelectorAll(sel).forEach(function (node) {
-              var lis2 = Array.from(node.querySelectorAll(_optQ)).filter(function (o) { return isVisible(o); });
+            document.querySelectorAll(sel).forEach(function (node: any) {
+              var lis2 = Array.from(node.querySelectorAll(_optQ)).filter(function (o: any) { return isVisible(o); });
               if (lis2.length === 0) return;
               var r = node.getBoundingClientRect();
               var dist = Math.abs(r.left - trigRect.left) + Math.abs(r.top - trigRect.bottom);
@@ -171,9 +170,9 @@
         if (session.cancelled || session.resolved) { clearInterval(session.pollTimer); return; }
         attempts++;
         var searchRoot = activeOverlayRoot || document.body;
-        var opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter(function (o) { return isVisible(o); });
+        var opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter(function (o: any) { return isVisible(o); });
         if (opts.length === 0 && searchRoot !== document) {
-          opts = Array.from(document.querySelectorAll(_optQ)).filter(function (o) {
+          opts = Array.from(document.querySelectorAll(_optQ)).filter(function (o: any) {
             return isVisible(o) && !el.contains(o) && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]');
           });
         }
@@ -190,7 +189,7 @@
         };
 
         var bestOpt = null, bestScore = 0;
-        opts.forEach(function (o) {
+        opts.forEach(function (o: any) {
           var score = scoreOption(o.textContent.trim(), v);
           if (score > bestScore) { bestScore = score; bestOpt = o; }
         });
@@ -201,7 +200,7 @@
           if (session.cancelled || session.resolved) return;
           _trace.matchedOption = opt.textContent.trim();
           _trace.clicked = true;
-          ['pointerdown','mousedown','mouseup','click'].forEach(function (ev) {
+          ['pointerdown','mousedown','mouseup','click'].forEach(function (ev: any) {
             opt.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }));
           });
 

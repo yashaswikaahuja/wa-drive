@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fuzzy-match.test.ts — TypeScript ESM fuzzyMatch pipeline.
  */

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * DOM observation drivers — read-only primitives.
  *
@@ -14,15 +13,15 @@
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   // Delegate to shared/dom-utils.ts (injected before drivers run)
-  function isVisible(el) {
+  function isVisible(el: any) {
     return window.ccDomUtils.isVisible(el);
   }
 
-  function getLabelFor(el) {
+  function getLabelFor(el: any) {
     return window.ccDomUtils.getLabel(el);
   }
 
-  function selectorFor(el) {
+  function selectorFor(el: any) {
     if (!el) return '';
     if (el.id) return '#' + CSS.escape(el.id);
     if (el.name) return el.tagName.toLowerCase() + '[name="' + CSS.escape(el.name) + '"]';
@@ -32,12 +31,12 @@
     while (cur && cur.tagName && path.length < 5) {
       let part = cur.tagName.toLowerCase();
       if (cur.className && typeof cur.className === 'string') {
-        const cls = cur.className.trim().split(/\s+/).filter(c => /^[a-z][\w-]*$/i.test(c)).slice(0, 2);
+        const cls = cur.className.trim().split(/\s+/).filter((c: any) => /^[a-z][\w-]*$/i.test(c)).slice(0, 2);
         if (cls.length) part += '.' + cls.join('.');
       }
       const parent = cur.parentElement;
       if (parent) {
-        const same = Array.from(parent.children).filter(c => c.tagName === cur.tagName);
+        const same = Array.from(parent.children).filter((c: any) => c.tagName === cur.tagName);
         if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(cur) + 1) + ')';
       }
       path.unshift(part);
@@ -46,7 +45,7 @@
     return path.join(' > ');
   }
 
-  function summarizeEl(el, opts) {
+  function summarizeEl(el: any, opts?: any): any {
     if (!el) return null;
     const r = el.getBoundingClientRect();
     const tag = el.tagName.toLowerCase();
@@ -69,7 +68,7 @@
     } else if (tag === 'a') {
       kind = 'link';
     }
-    const sum = {
+    const sum: any = {
       tag,
       kind,
       type: el.type || null,
@@ -133,13 +132,13 @@
         candidates = Array.from(document.querySelectorAll(sel));
         if (args.text) {
           const re = new RegExp(args.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-          candidates = candidates.filter(el => re.test((el.textContent || el.value || el.placeholder || '').trim()));
+          candidates = candidates.filter((el: any) => re.test((el.textContent || el.value || el.placeholder || '').trim()));
         }
       } else {
         return { count: 0, elements: [], error: 'must provide selector OR kind+text' };
       }
       if (!args.includeHidden) candidates = candidates.filter(isVisible);
-      const elements = candidates.slice(0, limit).map(el => summarizeEl(el));
+      const elements = candidates.slice(0, limit).map((el: any) => summarizeEl(el));
       return { count: candidates.length, elements };
     },
   });
@@ -202,7 +201,7 @@
         url: location.href,
         title: document.title,
         elementCount: els.length,
-        elements: els.map(el => summarizeEl(el)),
+        elements: els.map((el: any) => summarizeEl(el)),
       };
     },
   });

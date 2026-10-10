@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Live fill recording WITHOUT modifying the product extension.
  * Uses what the real extension already posts to the live server:

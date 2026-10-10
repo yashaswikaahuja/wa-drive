@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Pure-unit tests for humanizeAttr / isGoodLabel logic (no jsdom).
  * Re-implements the pure helpers by evaluating the IIFE with a stub window.

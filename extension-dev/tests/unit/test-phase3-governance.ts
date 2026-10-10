@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 3.0 architecture contract tests (issue #96).
  * Architecture-only: validates governance and schema shape, not perception runtime behavior.

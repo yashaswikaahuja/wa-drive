@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 3.7 runtime errors catalog unit tests (MIG-ERR-01 / #166)
  */

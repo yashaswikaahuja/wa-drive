@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Select drivers — pick options from native <select>, ng-select, mat-select,
  * and custom JS-driven dropdowns.
@@ -10,19 +9,19 @@
 ;(function () {
   if (!window.cc || !window.cc.registerDriver) return;
 
-  function findEl(target) {
+  function findEl(target: any) {
     if (!target) return null;
     return document.querySelector(target);
   }
 
   // Native <select>: find option using shared/option-match.ts
-  function pickNativeOption(sel, value) {
+  function pickNativeOption(sel: any, value: any) {
     return window.ccMatchOption(value, Array.from(sel.options), { excludePlaceholders: false });
   }
 
-  function fillNativeSelect(sel, value) {
+  function fillNativeSelect(sel: any, value: any) {
     const opt = pickNativeOption(sel, value);
-    if (!opt) return { ok: false, reason: 'no-matching-option', options: Array.from(sel.options).slice(0, 20).map(o => o.text) };
+    if (!opt) return { ok: false, reason: 'no-matching-option', options: Array.from(sel.options).slice(0, 20).map((o: any) => o.text) };
     sel.value = opt.value;
     sel.selectedIndex = opt.index;
     sel.dispatchEvent(new Event('input', { bubbles: true }));
@@ -76,7 +75,7 @@
       await new Promise(r => setTimeout(r, 300));
       const v = String(args.value).toLowerCase();
       const opts = Array.from(document.querySelectorAll('.ng-option, .mat-option, [role="option"]'))
-        .filter(o => (o.textContent || '').trim().toLowerCase().includes(v));
+        .filter((o: any) => (o.textContent || '').trim().toLowerCase().includes(v));
       if (opts[0]) {
         opts[0].click();
         return { strategy: 'click-option', selectedText: opts[0].textContent.trim() };

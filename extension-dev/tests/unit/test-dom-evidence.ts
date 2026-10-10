@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * DOM Evidence Emitter — Phase 4.2 unit + adversarial tests
  * Issue #196: Dynamic DOM behavior evidence

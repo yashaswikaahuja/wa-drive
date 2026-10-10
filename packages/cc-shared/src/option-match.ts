@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/option-match.ts ─────────────────────────────────────────────────
 // Single source of truth for matching a desired value against a list of options.
 // Used by: executor.ts, cascade-select.ts, ng-dropdown.ts, drivers/select.ts,
@@ -24,7 +23,7 @@
 ;(function () {
   'use strict';
 
-  function norm(s) {
+  function norm(s: any) {
     return (s == null ? '' : String(s)).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
@@ -55,7 +54,7 @@
    * @param {boolean}[config.excludePlaceholders] - Filter out Select/Choose/Loading (default true)
    * @returns {Object|string|null} The matched option or null
    */
-  function ccMatchOption(value, options, config) {
+  function ccMatchOption(value: any, options: any, config: any) {
     if (value == null || !options || !options.length) return null;
     config = config || {};
 
@@ -65,13 +64,13 @@
 
     // Normalize options to {text, value, _original} shape
     var excludePlaceholders = config.excludePlaceholders !== false;
-    var opts = options.map(function (o) {
+    var opts = options.map(function (o: any) {
       if (typeof o === 'string') return { text: o, value: o, _original: o };
       return { text: o.text || o.label || '', value: o.value || '', _original: o };
     });
 
     if (excludePlaceholders) {
-      opts = opts.filter(function (o) {
+      opts = opts.filter(function (o: any) {
         if (!o.value || o.value === '0' || o.value === '-1' || o.value === '') return false;
         var t = (o.text || '').toLowerCase();
         if (t.includes('select') || t.includes('choose') || t.includes('loading') || t === '--') return false;
@@ -87,28 +86,28 @@
       var tr = translations[v] || translations[vn] || translations[value];
       if (tr) {
         var trn = norm(tr);
-        var hit = opts.find(function (o) { return norm(o.text) === trn || norm(o.value) === trn; });
+        var hit = opts.find(function (o: any) { return norm(o.text) === trn || norm(o.value) === trn; });
         if (hit) return hit._original;
       }
     }
 
     // 2. Exact match by value property (case-insensitive)
-    var hit = opts.find(function (o) { return o.value.toLowerCase().trim() === v.toLowerCase().trim(); });
+    var hit = opts.find(function (o: any) { return o.value.toLowerCase().trim() === v.toLowerCase().trim(); });
     if (hit) return hit._original;
 
     // 3. Exact match by normalized text
-    hit = opts.find(function (o) { return norm(o.text) === vn; });
+    hit = opts.find(function (o: any) { return norm(o.text) === vn; });
     if (hit) return hit._original;
 
     // Also try normalized value
-    hit = opts.find(function (o) { return norm(o.value) === vn; });
+    hit = opts.find(function (o: any) { return norm(o.value) === vn; });
     if (hit) return hit._original;
 
     // 4. Extra values (from corrections/alternatives)
     var extraValues = config.extraValues;
     if (extraValues && extraValues.length) {
-      var extras = extraValues.map(function (e) { return norm(e); });
-      hit = opts.find(function (o) {
+      var extras = extraValues.map(function (e: any) { return norm(e); });
+      hit = opts.find(function (o: any) {
         return extras.includes(o.value.toLowerCase()) || extras.includes(norm(o.text));
       });
       if (hit) return hit._original;
@@ -116,26 +115,26 @@
 
     // 5. Starts-with (either direction, min 3 chars)
     if (vn.length > 2) {
-      hit = opts.find(function (o) { return norm(o.text).startsWith(vn); });
+      hit = opts.find(function (o: any) { return norm(o.text).startsWith(vn); });
       if (hit) return hit._original;
-      hit = opts.find(function (o) { var on = norm(o.text); return on.length > 2 && vn.startsWith(on); });
+      hit = opts.find(function (o: any) { var on = norm(o.text); return on.length > 2 && vn.startsWith(on); });
       if (hit) return hit._original;
     }
 
     // 6. Contains (either direction, min 4 chars)
     if (vn.length > 3) {
-      hit = opts.find(function (o) { return norm(o.text).includes(vn); });
+      hit = opts.find(function (o: any) { return norm(o.text).includes(vn); });
       if (hit) return hit._original;
-      hit = opts.find(function (o) { var on = norm(o.text); return on.length > 3 && vn.includes(on); });
+      hit = opts.find(function (o: any) { var on = norm(o.text); return on.length > 3 && vn.includes(on); });
       if (hit) return hit._original;
     }
 
     // 7. Token overlap (all value tokens found in option)
-    var vWords = vn.split(' ').filter(function (w) { return w.length > 1; });
+    var vWords = vn.split(' ').filter(function (w: any) { return w.length > 1; });
     if (vWords.length > 0) {
-      var scored = opts.filter(function (o) {
+      var scored = opts.filter(function (o: any) {
         var on = norm(o.text);
-        return vWords.every(function (w) { return on.includes(w); });
+        return vWords.every(function (w: any) { return on.includes(w); });
       });
       if (scored.length === 1) return scored[0]._original;
       // If multiple all-token matches, prefer shortest (most specific)
@@ -149,11 +148,11 @@
     var synonymGroups = (config.synonymGroups || []).concat(DEFAULT_SYNONYMS);
     for (var gi = 0; gi < synonymGroups.length; gi++) {
       var group = synonymGroups[gi];
-      var vInGroup = group.some(function (s) { return vn.includes(s) || s.includes(vn); });
+      var vInGroup = group.some(function (s: any) { return vn.includes(s) || s.includes(vn); });
       if (!vInGroup) continue;
-      hit = opts.find(function (o) {
+      hit = opts.find(function (o: any) {
         var on = norm(o.text);
-        return group.some(function (s) { return on.includes(s) || s.includes(on); });
+        return group.some(function (s: any) { return on.includes(s) || s.includes(on); });
       });
       if (hit) return hit._original;
     }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Regression test for issue-54: field mapping guards.
  * Verifies that profile.name does NOT get mapped to relative/spouse fields.

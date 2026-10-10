@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 3.0 ratification: adversarial schema conformance.
  *

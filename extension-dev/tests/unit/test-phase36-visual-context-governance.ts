@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 3.6 Visual Context — CHECK-014 semantic governance (#158).
  * Architecture-only: no runtime Visual Context behavior.

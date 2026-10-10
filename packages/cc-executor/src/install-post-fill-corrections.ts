@@ -1,9 +1,8 @@
-// @ts-nocheck
 /**
  * correction observer
  * Part of sequential kernel — load before autofill/executor.ts
  */
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installPostFillCorrections = function (k) {
@@ -46,7 +45,7 @@
         : el.classList?.contains('ng-dropdown') ? (el.querySelector('.value-area .value,.select-type,.ng-value-label')?.textContent?.trim() || '')
         : el.value || '';
       snapshot[selector] = val;
-      const rec = _ccRecords.find(r => r.selector === selector);
+      const rec = _ccRecords.find((r: any) => r.selector === selector);
       fieldMeta[selector] = {
         label: filledBySource[selector]?.label || selector,
         semanticKey: filledBySource[selector]?.semanticKey || '',
@@ -82,7 +81,7 @@
       }
     }
 
-    function captureCorrections(trigger) {
+    function captureCorrections(trigger: any) {
       const corrections = [];
       for (const [selector, originalVal] of Object.entries(snapshot)) {
         let el = getEl(selector);
@@ -104,7 +103,7 @@
       return corrections;
     }
 
-    function postCorrections(trigger) {
+    function postCorrections(trigger: any) {
       const corrections = captureCorrections(trigger);
       if (corrections.length === 0) return;
       document.body.setAttribute('data-cc-corrections', JSON.stringify(corrections));

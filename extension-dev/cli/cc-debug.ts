@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * CyberControl debug CLI — LIVE operator fill reports (no extension patches)
  *

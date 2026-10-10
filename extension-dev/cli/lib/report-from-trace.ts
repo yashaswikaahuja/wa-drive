@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Build human gap report from a real operator fill trace (cc-fill-trace/v1).
  */

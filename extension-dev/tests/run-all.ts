@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl Test Runner — runs all test suites.
  * Usage: node extension-dev/tests/run-all.ts

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Unit tests for apps/extension/perception/widget-classifier.js
  * Includes W-P1-01..05 remediations (#136)

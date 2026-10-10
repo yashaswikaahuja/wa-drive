@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 3.5 Navigation Understanding — CHECK-013 semantic governance (#145/#147).
  * Architecture-only: no runtime navigation behavior.

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Timing helpers for live session reports and lab fill clocks.
  * Product path fills ALL steps, then POSTs /fill-observation once at the end.

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * correction-observer.test.ts — plain Node tests, no framework, no jsdom
  */

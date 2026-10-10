@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Phase 4.1 CI guard — forbidden legacy brain modules must not exist as
  * discrete files under the turborepo apps/extension product surface.

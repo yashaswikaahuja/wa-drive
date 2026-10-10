@@ -1,4 +1,3 @@
-// @ts-nocheck
 const SENSITIVE_KEY = /token|password|authorization|secret|credential|accessToken|refreshToken/i;
 
 export function redactDeep(value, depth = 0) {

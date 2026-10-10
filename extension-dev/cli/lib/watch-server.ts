@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Optional local sink — NOT used for product extension hooks.
  * Reserved for future external tools. Prefer: cc-debug live (API poll).

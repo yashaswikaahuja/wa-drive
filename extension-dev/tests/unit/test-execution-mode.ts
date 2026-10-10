@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Unit tests for Phase 4.4 — mergeExecutionMode decision table.
  */

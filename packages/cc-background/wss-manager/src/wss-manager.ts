@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cc-background/wss-manager — WSS message handler dispatcher for the service worker.
  *
@@ -115,4 +114,4 @@ function handleWssMessage(msg, sendResponse) {
   return false; // not a WSS message
 }
 
-globalThis.handleWssMessage = handleWssMessage;
+(globalThis as any).handleWssMessage = handleWssMessage;

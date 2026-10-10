@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Phase 0 (CYB-85) — legacy client-fill gate unit tests.
  */

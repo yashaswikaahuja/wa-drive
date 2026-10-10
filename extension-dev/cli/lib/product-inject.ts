@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Product-path inject: scripts from fill-orchestrator PRODUCT_PATH_SCRIPTS.
  * Never invent a second list — parse the orchestrator source.

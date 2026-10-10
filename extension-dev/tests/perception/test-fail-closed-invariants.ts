@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * IMP-P1-01 — fail closed when graph invariants unavailable (#133)
  */

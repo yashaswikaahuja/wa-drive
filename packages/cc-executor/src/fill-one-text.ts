@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fill-one-text — Text / Keystroke Fill Handler
  *
@@ -12,12 +11,12 @@
  * All browser globals are read at call time (not injected) since this
  * capability runs exclusively in the browser extension context.
  *
- * Public API (on globalThis.CcFillOneText):
+ * Public API (on (globalThis as any).CcFillOneText):
  *   fillText(el, value) => 1 | 0
  *
  * See fill-one-text.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -27,7 +26,7 @@
    * @param {string}  value  — value to fill
    * @returns {1|0}  1 = filled, 0 = failed
    */
-  function fillText(el, value) {
+  function fillText(el: any, value: any) {
     var isTextarea = el.tagName === 'TEXTAREA';
     var niv = isTextarea
       ? Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')

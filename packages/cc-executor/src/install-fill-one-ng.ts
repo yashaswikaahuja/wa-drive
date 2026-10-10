@@ -1,5 +1,4 @@
-// @ts-nocheck
-(function (root) {
+(function (root: any) {
   'use strict';
   root.CcExecParts = root.CcExecParts || {};
   root.CcExecParts.installFillOneNg = function (k) {
@@ -27,15 +26,15 @@
           k._ngCancelSession && k._ngCancelSession(_label);
           const session = { id: Math.random().toString(36).slice(2,8), fieldKey: _label, resolved: false, cancelled: false, pollTimer: null, timeoutIds: [], observer: null, startedAt: Date.now() };
           window._ccReplaySessions.set(_label, session);
-          function isVisible(node) {
+          function isVisible(node: any) {
             return window.ccDomUtils.isVisible(node);
           }
-          function cleanupSession(result) {
-            if (session.resolved && result !== session._result) return;
+          function cleanupSession(result: any) {
+            if (session.resolved && result !== (session as any)._result) return;
             session.resolved = true;
-            session._result = result;
+            (session as any)._result = result;
             clearInterval(session.pollTimer);
-            session.timeoutIds.forEach(id => clearTimeout(id));
+            session.timeoutIds.forEach((id: any) => clearTimeout(id));
             if (session.observer) { session.observer.disconnect(); session.observer = null; }
             window._ccReplaySessions.delete(_label);
             _replayResults[_label] = result;
@@ -52,7 +51,7 @@
           const mo = new MutationObserver(mutations => {
             if (session.cancelled || session.resolved) return;
             for (const m of mutations) {
-              m.addedNodes.forEach(n => { if (n.nodeType === 1) addedNodes.push(n); });
+              m.addedNodes.forEach((n: any) => { if (n.nodeType === 1) addedNodes.push(n); });
             }
           });
           session.observer = mo;
@@ -60,7 +59,7 @@
           let _lastMutation = Date.now();
           const _stabilizeMo = new MutationObserver(() => { _lastMutation = Date.now(); });
           _stabilizeMo.observe(document.body, { childList: true, subtree: true, attributes: true });
-          function waitStable(cb) {
+          function waitStable(cb: any) {
             const check = setInterval(() => {
               if (session.cancelled) { clearInterval(check); _stabilizeMo.disconnect(); return; }
               if (Date.now() - _lastMutation >= 150) { clearInterval(check); _stabilizeMo.disconnect(); cb(); }
@@ -78,15 +77,15 @@
             for (const node of addedNodes) {
               if (!isVisible(node)) continue;
               const _optQ = adapter.optionSelector || 'li,.ng-option,mat-option,.dropdown-item';
-              const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
+              const lis = Array.from(node.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
               if (lis.length > 0) { activeOverlayRoot = node; break; }
             }
             if (!activeOverlayRoot) {
               let bestDist = Infinity;
-              OVERLAY_TAGS.forEach(sel => {
+              OVERLAY_TAGS.forEach((sel: any) => {
                 try {
-          document.querySelectorAll(sel).forEach(node => {
-            const lis = Array.from(node.querySelectorAll(_optQ)).filter(o => isVisible(o));
+          document.querySelectorAll(sel).forEach((node: any) => {
+            const lis = Array.from(node.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
             if (lis.length === 0) return;
             const r = node.getBoundingClientRect();
             const dist = Math.abs(r.left - trigRect.left) + Math.abs(r.top - trigRect.bottom);
@@ -99,7 +98,7 @@
               activeOverlayRoot = document.querySelector(adapter.optionsContainer) || null;
             }
             if (!activeOverlayRoot) {
-              const rootLis = Array.from(root.querySelectorAll(_optQ)).filter(o => isVisible(o));
+              const rootLis = Array.from(root.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
               if (rootLis.length > 0) activeOverlayRoot = root;
             }
             _trace.overlayFound = !!activeOverlayRoot;
@@ -109,15 +108,15 @@
               if (session.cancelled || session.resolved) { clearInterval(session.pollTimer); return; }
               attempts++;
               const searchRoot = activeOverlayRoot || root;
-              let opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter(o => isVisible(o));
+              let opts = Array.from(searchRoot.querySelectorAll(_optQ)).filter((o: any) => isVisible(o));
               if (opts.length === 0 && searchRoot !== document) {
-                opts = Array.from(document.querySelectorAll(_optQ)).filter(o => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
+                opts = Array.from(document.querySelectorAll(_optQ)).filter((o: any) => isVisible(o) && root.contains(o) === false && o.closest('[class*="dropdown"],[class*="options"],[class*="list"]'));
               }
               const v = value.toLowerCase().trim();
               _trace.optionCount = opts.length;
               var _nos = root.CcNgOptionScorer;
               let bestOpt = null, bestScore = 0;
-              for (const o of opts) {
+              for (const o of opts as any[]) {
                 const score = _nos.scoreOption(o.textContent.trim(), v);
                 if (score > bestScore) { bestScore = score; bestOpt = o; }
               }
@@ -127,7 +126,7 @@
                 if (session.cancelled || session.resolved) return;
                 _trace.matchedOption = opt.textContent.trim();
                 _trace.clicked = true;
-                ['pointerdown','mousedown','mouseup','click'].forEach(ev =>
+                ['pointerdown','mousedown','mouseup','click'].forEach((ev: any) =>
           opt.dispatchEvent(new MouseEvent(ev, { bubbles: true, cancelable: true }))
                 );
                 const verifyStart = Date.now();

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Phase 1.4 — Real Framework Browser Tests
  *

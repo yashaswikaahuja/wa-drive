@@ -5,7 +5,7 @@
  * HTTPS remains for token mint / profile CRUD.
  * This module opens authenticated WSS after credentials land in storage.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   const STORAGE_KEY = 'ccWssState';

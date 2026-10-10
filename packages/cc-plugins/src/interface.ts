@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * PluginInterface — contract for interaction plugins.
  *
@@ -31,12 +30,12 @@ var PluginInterface = {
 // Plugin registry — ordered by specificity (most specific first)
 var PLUGIN_REGISTRY = [];
 
-function registerPlugin(plugin) {
+function registerPlugin(plugin: any) {
   if (!plugin.id || !plugin.supports || !plugin.fill) throw new Error('Invalid plugin: missing id/supports/fill');
   PLUGIN_REGISTRY.push(plugin);
 }
 
-function findPlugin(el, fieldContext) {
+function findPlugin(el: any, fieldContext: any) {
   for (const plugin of PLUGIN_REGISTRY) {
     try { if (plugin.supports(el, fieldContext)) return plugin; } catch {}
   }

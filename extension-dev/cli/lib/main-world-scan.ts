@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Read form controls from the page main world (querySelectorAll),
  * independent of BindingRegistry — catches "executor claimed filled but page empty".

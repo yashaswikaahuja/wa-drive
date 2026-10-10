@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Edge factory + relationship tests — Phase 3.3 / issue #131
  */

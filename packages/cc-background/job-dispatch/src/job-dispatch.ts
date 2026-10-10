@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cc-background/job-dispatch — Job dispatch runner for the service worker.
  *
@@ -113,10 +112,10 @@ async function runJobDispatch(envelope, tabId) {
           }
         }
         // Fuzzy fill remaining
-        const um = formFields.filter(f => !mapping[f.selector]);
+        const um = formFields.filter((f: any) => !mapping[f.selector]);
         if (um.length > 0) {
           const fz = fuzzyMatch(um, prof);
-          for (const [s, v] of Object.entries(fz)) { mapping[s] = v; const ff = formFields.find(x => x.selector === s); if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' }; }
+          for (const [s, v] of Object.entries(fz)) { mapping[s] = v; const ff = formFields.find((x: any) => x.selector === s); if (ff) fbs[s] = { label: ff.label, source: 'fuzzy' }; }
         }
         // Adapters
         let adp = {};
@@ -124,7 +123,7 @@ async function runJobDispatch(envelope, tabId) {
         // Run executor (returns total filled)
         const filled = await fillFormFieldsSequential(mapping, fbs, adp);
         const records = Array.isArray(window.__ccFillRecords) ? window.__ccFillRecords : [];
-        const failed = records.filter(r => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
+        const failed = records.filter((r: any) => r.result === 'skipped' || r.result === 'failed' || r.result === 'reset').length;
         // Sync mappings â€” labels, types, order, options (same as popup path)
         try {
           const updates = {};

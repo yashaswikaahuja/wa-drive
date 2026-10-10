@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * APE-P1-09 — ActionPlan product path must not depend on legacy fill modules.
  */

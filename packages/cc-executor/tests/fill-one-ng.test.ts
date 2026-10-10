@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for fill-one-ng.js
  * Run: node extension/autofill/executor/capabilities/fill-one-ng.test.ts

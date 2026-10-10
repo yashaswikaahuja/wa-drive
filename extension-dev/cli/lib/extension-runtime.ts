@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Launch Chromium with unpacked extension and run __ccDebugRun in the SW.
  * DEBUG BRANCH ONLY — never merge to master.

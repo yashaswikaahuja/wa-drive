@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cascade-field-level — Cascade Geography Level Identifier
  *
@@ -9,13 +8,13 @@
  * Pure JavaScript — no DOM, no Chrome, no imports.
  * Safe to use in browser (executor) and Node.js (extension-service fill planner).
  *
- * Public API (on globalThis.CcCascadeFieldLevel):
+ * Public API (on (globalThis as any).CcCascadeFieldLevel):
  *   cascadeFieldLevel(label, profileKey, selector) => string
  *   CASCADE_PARENTS: Record<string, string[]>
  *
  * See cascade-field-level.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -52,7 +51,7 @@
    * @param {string|null|undefined} selector   CSS selector or form-field-N string
    * @returns {string}
    */
-  function cascadeFieldLevel(label, profileKey, selector) {
+  function cascadeFieldLevel(label: any, profileKey: any, selector: any) {
     var s = ((profileKey || '') + ' ' + (label || '') + ' ' + (selector || '')).toLowerCase();
 
     // sub_division must be tested before state to avoid 'sub division' matching 'state'

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Build Chrome inject IIFE from TypeScript sources via esbuild.
  * Prefer: pnpm --filter cybercontrol-extension build

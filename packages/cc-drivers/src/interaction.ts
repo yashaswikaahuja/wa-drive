@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Click + wait drivers — interaction primitives.
  *
@@ -11,7 +10,7 @@
 ;(function () {
   if (!window.cc || !window.cc.registerDriver) return;
 
-  function isVisible(el) {
+  function isVisible(el: any) {
     return window.ccDomUtils.isVisible(el);
   }
 

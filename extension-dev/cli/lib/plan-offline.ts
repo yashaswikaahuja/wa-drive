@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Build a minimal offline ActionPlan from a snapshot for debug fill.
  * Uses known DEBUG_VALUE_* strings so truth gate can assert stickiness.

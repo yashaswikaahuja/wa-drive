@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fill-one-radio — Radio, Checkbox, and File Fill Handlers
  *
@@ -6,25 +5,25 @@
  * (normalised match with gender synonyms), checkbox (boolean-like values),
  * file input (base64 path only; URL fetch handled in sequential loop).
  *
- * Public API (on globalThis.CcFillOneRadio):
+ * Public API (on (globalThis as any).CcFillOneRadio):
  *   fillRadio(el, selector, value, type, elType, filledBySource) => 1 | 0 | null
  *
  * Returns null for unrecognised types (pass-through for handler chain).
  *
  * See fill-one-radio.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var NORM = function (s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim(); };
 
-  function fillRadio(el, selector, value, type, elType, filledBySource) {
+  function fillRadio(el: any, selector: any, value: any, type: any, elType: any, filledBySource: any) {
     // ── radio-click: direct click on a radio input ────────────────────────────
     if (type === 'radio-click') {
       var target = (el.type === 'radio') ? el : (el.querySelector && el.querySelector('input[type="radio"]')) || el;
       target.focus();
       target.checked = true;
-      ['click', 'change'].forEach(function (ev) {
+      ['click', 'change'].forEach(function (ev: any) {
         target.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }));
       });
       return 1;
@@ -34,7 +33,7 @@
     if (type === 'radio-group' && elType === 'radio' && el.name) {
       var vR0 = NORM(value);
       var radios = document.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
-      var match = Array.from(radios).find(function (r) {
+      var match = Array.from(radios).find(function (r: any) {
         if (NORM(r.value) === vR0) return true;
         var lbl = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
         var lblText = lbl ? NORM(lbl.textContent) : '';
@@ -50,7 +49,7 @@
       if (match) {
         match.focus();
         match.checked = true;
-        ['click', 'change'].forEach(function (ev) {
+        ['click', 'change'].forEach(function (ev: any) {
           match.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }));
         });
         return 1;
@@ -62,7 +61,7 @@
     if (elType === 'radio') {
       var vR = NORM(value);
       var radiosDOM = document.querySelectorAll('input[type="radio"][name="' + el.name + '"]');
-      var matchDOM = Array.from(radiosDOM).find(function (r) {
+      var matchDOM = Array.from(radiosDOM).find(function (r: any) {
         if (NORM(r.value) === vR) return true;
         var lbl = r.id ? document.querySelector('label[for="' + r.id + '"]') : null;
         var lblText = lbl ? NORM(lbl.textContent) : '';
@@ -71,7 +70,7 @@
       if (matchDOM) {
         matchDOM.focus();
         matchDOM.checked = true;
-        ['click', 'change'].forEach(function (ev) {
+        ['click', 'change'].forEach(function (ev: any) {
           matchDOM.dispatchEvent(new Event(ev, { bubbles: true, cancelable: true }));
         });
         matchDOM.dispatchEvent(new Event('blur', { bubbles: true }));

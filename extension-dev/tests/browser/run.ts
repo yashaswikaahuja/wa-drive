@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Phase 1.3 — Browser Test Harness
  *

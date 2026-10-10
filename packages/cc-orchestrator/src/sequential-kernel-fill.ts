@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * sequential-kernel-fill — Sequential kernel fill path
  *
@@ -11,17 +10,17 @@
  *
  * Depends on: CcScriptManifests, CcFlattenProfile
  *
- * Public API (on globalThis.CcSequentialKernelFill):
+ * Public API (on (globalThis as any).CcSequentialKernelFill):
  *   run(ctx) => Promise<result>
  *
  * ctx: { tabId, profile, backendUrl, accessToken, runtimeVersion, onProgress }
  *
  * See docs/sequential-kernel-fill.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
-  async function run(ctx) {
+  async function run(ctx: any) {
     var tabId          = ctx.tabId;
     var profile        = ctx.profile;
     var backendUrl     = ctx.backendUrl;
@@ -30,7 +29,7 @@
     var onProgress     = ctx.onProgress;
 
     var progress = function (t, p) { if (typeof onProgress === 'function') onProgress(t, p); };
-    var errors = (typeof globalThis !== 'undefined' && globalThis.CcRuntimeErrors) || null;
+    var errors = (typeof globalThis !== 'undefined' && (globalThis as any).CcRuntimeErrors) || null;
     var opMsg = function (code, detail) {
       return errors && errors.operatorMessageFor
         ? errors.operatorMessageFor(code, detail)
@@ -63,8 +62,8 @@
         var extracted = extractFormFieldsWithFingerprint();
         var formFields = extracted.formFields, formKey = extracted.formKey, semanticFormKey = extracted.semanticFormKey;
         if (!formFields.length) return { ok: false, error: 'no fields detected' };
-        var visible = formFields.filter(function (f) { return f.visible !== false && f.hidden !== true; });
-        var fields = (visible.length ? visible : formFields).map(function (f) {
+        var visible = formFields.filter(function (f: any) { return f.visible !== false && f.hidden !== true; });
+        var fields = (visible.length ? visible : formFields).map(function (f: any) {
           return { selector: f.selector, id: f.id || '', name: f.name || '', label: f.label || '', type: f.type || 'text', options: f.options || null, optionSelectors: f.optionSelectors || null, placeholder: f.placeholder || '' };
         });
         return { ok: true, fields: fields, profile: prof, formKey: formKey, semanticFormKey: semanticFormKey || formKey, hostname: location.hostname, url: location.href };
@@ -81,7 +80,7 @@
     var transport = 'wss';
     var wssPlan = null;
     try {
-      var planResp = await new Promise(function (resolve) {
+      var planResp = await new Promise(function (resolve: (v?: any) => void) {
         var timer = setTimeout(function () { resolve({ ok: false, error: 'wss_plan_timeout' }); }, 30000);
         chrome.runtime.sendMessage(
           { type: 'WSS_FILL_REQUEST', formKey: extracted.semanticFormKey || extracted.formKey, semanticFormKey: extracted.semanticFormKey || extracted.formKey, hostname: extracted.hostname, fields: extracted.fields, profile: extracted.profile, profileId: (profile && profile.id) || null },
@@ -120,7 +119,7 @@
 
     // Keep WSS hot for fill debug events
     try {
-      await new Promise(function (resolve) {
+      await new Promise(function (resolve: (v?: any) => void) {
         chrome.runtime.sendMessage({ type: 'ENSURE_WSS' }, function () { resolve(); });
         setTimeout(resolve, 1500);
       });
@@ -153,12 +152,12 @@
     try {
       var planned = wssPlan.mapping || {};
       var covered = {};
-      Object.keys(planned).forEach(function (sel) { covered[sel] = true; });
+      Object.keys(planned).forEach(function (sel: any) { covered[sel] = true; });
       var savedMaps = wssPlan.savedMappings || {};
       var exactTaughtCount = typeof wssPlan.exactTaughtCount === 'number' ? wssPlan.exactTaughtCount : 0;
       var preferMapsOnly = wssPlan.preferMapsOnly === true
         || (wssPlan.mappingSource === 'exact' && exactTaughtCount > 0);
-      function labelKeys(label) {
+      function labelKeys(label: any) {
         var raw = String(label || '').toLowerCase().trim();
         if (!raw) return [];
         var gsk = raw.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
@@ -168,7 +167,7 @@
         if (spaced && spaced !== gsk) out.push(spaced);
         return out;
       }
-      function hasTaughtMapping(f) {
+      function hasTaughtMapping(f: any) {
         var keys = labelKeys(f && f.label).concat(labelKeys(f && f.name));
         for (var i = 0; i < keys.length; i++) {
           var entry = savedMaps[keys[i]];
@@ -179,17 +178,17 @@
 
       // Exact formKey already trained → never call AI. Residuals → fuzzy/skip.
       if (preferMapsOnly) {
-        var residual = extracted.fields.filter(function (f) { return !covered[f.selector]; }).length;
+        var residual = extracted.fields.filter(function (f: any) { return !covered[f.selector]; }).length;
         console.log('[CC] prefer taught mappings: exact form trained (', exactTaughtCount || 'n', 'keys); skipping AI (', residual, 'residual → fuzzy/skip)');
         progress('Using taught mappings…', 58);
       } else {
       // New website / new form (or only soft label-overlap) → AI for unknowns.
-      var aiCandidates = extracted.fields.filter(function (f) {
+      var aiCandidates = extracted.fields.filter(function (f: any) {
         if (covered[f.selector]) return false;
         if (hasTaughtMapping(f)) return false; // reused taught label still wins
         return true;
       });
-      var taughtSkipped = extracted.fields.filter(function (f) {
+      var taughtSkipped = extracted.fields.filter(function (f: any) {
         return !covered[f.selector] && hasTaughtMapping(f);
       }).length;
       if (taughtSkipped > 0) {
@@ -234,14 +233,14 @@
             if (!am || !am.selector || !am.profile_key) continue;
             if (am.disposition === 'reject') continue;
             if (wssPlan.mapping[am.selector]) continue;
-            var fieldMeta = aiCandidates.find(function (f) { return f.selector === am.selector; }) || {};
+            var fieldMeta = aiCandidates.find(function (f: any) { return f.selector === am.selector; }) || {};
             // #308: never write identity atoms into From/To/station/journey fields.
             var travelBlob = [fieldMeta.label, fieldMeta.name, fieldMeta.id, fieldMeta.placeholder].filter(Boolean).join(' ');
             if (travelRe.test(travelBlob) && !policeRe.test(travelBlob) && identityKeys[String(am.profile_key)]) continue;
             // #302: never raw-dump a compound atom onto a part-looking field.
             // Prefer explicit AI projection keys (dob__day) or induce identity only when safe.
             var aiKey = am.profile_key;
-            var aiRelation = { kind: 'identity' };
+            var aiRelation: any = { kind: 'identity' };
             var pval = null;
             if (aiKey === 'dob__day' || aiKey === 'dob__month' || aiKey === 'dob__year') {
               aiRelation = { kind: 'date_part', part: aiKey.split('__')[1] };
@@ -292,7 +291,7 @@
               source: 'server-ai',
             };
           }
-          console.log('[CC] semantic-map strategy=', aiData.strategy, 'applied=', Object.keys(wssPlan.filledBySource).filter(function (k) { return wssPlan.filledBySource[k].source === 'server-ai'; }).length);
+          console.log('[CC] semantic-map strategy=', aiData.strategy, 'applied=', Object.keys(wssPlan.filledBySource).filter(function (k: any) { return wssPlan.filledBySource[k].source === 'server-ai'; }).length);
         } else {
           console.warn('[CC] semantic-map HTTP', aiRes.status);
         }
@@ -312,14 +311,14 @@
         try { window._ccProfileId = profileId; } catch (e) {}
         var mapping = Object.assign({}, wssMapping || {});
         var fbs = Object.assign({}, wssFbs || {});
-        function choiceCovered(f) {
+        function choiceCovered(f: any) {
           if (mapping[f.selector]) return true;
           if (f.optionSelectors) { for (var i = 0; i < f.optionSelectors.length; i++) { if (mapping[f.optionSelectors[i]]) return true; } }
           return false;
         }
         // #302: taught relations are materialized on the SW before executeScript.
         // Residual unmapped fields fall through to fuzzyMatch / skip — never raw-dump saved keys here.
-        var unmapped = fields.filter(function (f) { return !choiceCovered(f); });
+        var unmapped = fields.filter(function (f: any) { return !choiceCovered(f); });
         if (unmapped.length > 0 && typeof fuzzyMatch === 'function') {
           var fz = fuzzyMatch(unmapped, prof);
           for (var sel in (fz || {})) {
@@ -332,10 +331,10 @@
         var records = [];
         try { var raw = document.body.getAttribute('data-cc-records'); if (raw) records = JSON.parse(raw); } catch (e) {}
         if (!records.length && Array.isArray(window.__ccFillRecords)) records = window.__ccFillRecords;
-        var failed  = records.filter(function (r) { return (r.result === 'failed' || r.result === 'error') || (r.failReason && r.result !== 'skipped' && r.result !== 'waiting_human' && r.result !== 'filled'); }).length;
-        var skipped = records.filter(function (r) { return r.result === 'skipped' || r.result === 'waiting_human'; }).length;
-        var filled  = records.filter(function (r) { return r.result === 'filled'; }).length || filledCount || 0;
-        records = records.map(function (r) { return Object.assign({}, r, { hostname: r.hostname || location.hostname, plannedValue: r.plannedValue != null ? r.plannedValue : r.value, actualValue: r.actualValue != null ? r.actualValue : r.actual, transport: fillTransport }); });
+        var failed  = records.filter(function (r: any) { return (r.result === 'failed' || r.result === 'error') || (r.failReason && r.result !== 'skipped' && r.result !== 'waiting_human' && r.result !== 'filled'); }).length;
+        var skipped = records.filter(function (r: any) { return r.result === 'skipped' || r.result === 'waiting_human'; }).length;
+        var filled  = records.filter(function (r: any) { return r.result === 'filled'; }).length || filledCount || 0;
+        records = records.map(function (r: any) { return Object.assign({}, r, { hostname: r.hostname || location.hostname, plannedValue: r.plannedValue != null ? r.plannedValue : r.value, actualValue: r.actualValue != null ? r.actualValue : r.actual, transport: fillTransport }); });
         return { ok: true, filled: filled, failed: failed, skipped: skipped, fields: Object.keys(mapping).length, records: records, hostname: location.hostname, url: location.href, _mapping: mapping, _fbs: fbs, _fields: fields };
       },
     });
@@ -367,7 +366,7 @@
         var info = syncFbs[f.selector];
         var mapEntry = syncMapping[f.selector];
         var profileKey = (info && info.profileKey) || (mapEntry && mapEntry.profileKey) || null;
-        var filledRec = syncRecords.find(function (rec) { return rec.selector === f.selector && rec.result === 'filled'; });
+        var filledRec = syncRecords.find(function (rec: any) { return rec.selector === f.selector && rec.result === 'filled'; });
         var wasFilled = !!filledRec;
         var evidence = null;
         if (filledRec) {
@@ -419,7 +418,7 @@
       records: r.records || [],
     };
     try {
-      var sessResp = await new Promise(function (resolve) {
+      var sessResp = await new Promise(function (resolve: (v?: any) => void) {
         chrome.runtime.sendMessage(Object.assign({ type: 'WSS_FILL_SESSION' }, sessionPayload), function (resp) {
           if (chrome.runtime.lastError) resolve({ ok: false, error: chrome.runtime.lastError.message });
           else resolve(resp || { ok: false });

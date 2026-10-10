@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Emit Node-runnable ESM for WSS consumers (extension-service on Node 20).
  * Browser mapper continues to consume TypeScript via esbuild IIFE.

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl CI Runner — Unit & Knowledge Tests (turborepo-aware)
  *

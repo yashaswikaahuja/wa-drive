@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * fill-debug-emitter — Debug Event Queue + Emitter
  *
@@ -9,7 +8,7 @@
  * Events are coalesced with a 40ms timer. High-priority events
  * (fill.start, fill.end, queue >= 6) flush immediately.
  *
- * Public API (on globalThis.CcFillDebugEmitter):
+ * Public API (on (globalThis as any).CcFillDebugEmitter):
  *   createEmitter(opts) => emitter
  *
  * emitter:
@@ -19,7 +18,7 @@
  *
  * See fill-debug-emitter.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   /**
@@ -32,7 +31,7 @@
    * @param {function(Array): void} opts.send         — batch sender (receives array of event objects)
    * @returns {{ emit, flush, queue }}
    */
-  function createEmitter(opts) {
+  function createEmitter(opts: any) {
     opts = opts || {};
     var getRunId   = opts.getRunId   || function () { return ''; };
     var getRv      = opts.getRv      || function () { return ''; };
@@ -59,7 +58,7 @@
       }, 40);
     }
 
-    function emit(event, payload) {
+    function emit(event: any, payload: any) {
       var evt = Object.assign(
         {
           event: event,

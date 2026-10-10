@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Read live DOM for plan targets via binding registry; compare to claimed results.
  */

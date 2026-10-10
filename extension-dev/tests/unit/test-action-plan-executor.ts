@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * ActionPlanExecutor v3 unit tests — #139 APE-P1
  * Does not require DB or browser.

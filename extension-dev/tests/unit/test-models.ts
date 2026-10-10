@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for Phase 1.1: FormModel / FieldModel / PageModel IR layer.
  * Run: node extension-dev/tests/test-models.ts

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for resolve-cc-selector.js
  *
@@ -36,7 +35,7 @@ function makeEl(attrs) {
 function makeDoc(elements) {
   // querySelectorAll — simplified: match by type attribute or tag or class
   const byId = {};
-  elements.forEach(el => { if (el.id) byId[el.id] = el; });
+  elements.forEach((el: any) => { if (el.id) byId[el.id] = el; });
 
   function matches(el, sel) {
     sel = sel.trim();
@@ -66,7 +65,7 @@ function makeDoc(elements) {
 
   function querySelectorAll(selector) {
     // Split compound selector by comma
-    const parts = selector.split(',').map(s => s.trim());
+    const parts = selector.split(',').map((s: any) => s.trim());
     const seen = new Set();
     const result = [];
     for (const el of elements) {

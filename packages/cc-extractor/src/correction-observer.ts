@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * correction-observer — Post-fill correction + enrichment listeners
  *
@@ -15,12 +14,12 @@
  *    the extension missed, validates it (dob/pincode/mobile/aadhaar/name)
  *    and saves to sessionStorage._cc_enrichments.
  *
- * Public API (on globalThis.CcCorrectionObserver):
+ * Public API (on (globalThis as any).CcCorrectionObserver):
  *   inject(mapping, filledBySource, profile, backendUrl, formKey, doc?)
  *
  * See docs/correction-observer.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var SKIP_LABELS_RE = /captcha|otp|token|verification|code|password|confirm|repeat|retype/i;
@@ -33,7 +32,7 @@
     'pin code': 'pincode', 'permanent address': 'address',
   };
 
-  function resolveEl(selector, doc) {
+  function resolveEl(selector: any, doc: any) {
     if (selector.startsWith('form-field-')) {
       var i = parseInt(selector.split('-')[2]);
       var all = doc.querySelectorAll('input,select,textarea');
@@ -42,12 +41,12 @@
     return doc.querySelector(selector);
   }
 
-  function makeSelectorFromEl(el) {
+  function makeSelectorFromEl(el: any) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
     return '[name="' + el.name + '"]';
   }
 
-  function getLabelForEl(el, doc) {
+  function getLabelForEl(el: any, doc: any) {
     if (el.id) {
       var l = doc.querySelector('label[for="' + el.id + '"]');
       if (l) return l.textContent.trim();
@@ -57,7 +56,7 @@
     return el.placeholder || '';
   }
 
-  function isValidValue(semanticKey, val) {
+  function isValidValue(semanticKey: any, val: any) {
     if (semanticKey === 'dob') return /^\d{2}\/\d{2}\/\d{4}$/.test(val);
     if (semanticKey === 'pincode') return /^\d{6}$/.test(val);
     if (semanticKey === 'mobile') return /^\d{10}$/.test(val);
@@ -74,9 +73,9 @@
    * @param {object} profile        — { profileKey: value }
    * @param {string} backendUrl     — backend base URL (may be null/empty)
    * @param {string} formKey        — form identifier
-   * @param {Document} [doc]        — defaults to globalThis.document
+   * @param {Document} [doc]        — defaults to (globalThis as any).document
    */
-  function inject(mapping, filledBySource, profile, backendUrl, formKey, doc) {
+  function inject(mapping: any, filledBySource: any, profile: any, backendUrl: any, formKey: any, doc: any) {
     doc = doc || (typeof document !== 'undefined' ? document : null);
     if (!doc) return;
 
@@ -105,7 +104,7 @@
               if (typeof console !== 'undefined') console.debug('[CC] correction: no profileKey for value', newVal);
               return;
             }
-            var already = corrections.some(function (c) {
+            var already = corrections.some(function (c: any) {
               return c.semanticKey === info.semanticKey && c.newKey === correctedKey;
             });
             if (already) return;
@@ -117,7 +116,7 @@
               var pending = [];
               try { pending = JSON.parse(sessionStorage.getItem('_cc_corrections') || '[]'); } catch (e) {}
               var updates = {};
-              pending.forEach(function (c) {
+              pending.forEach(function (c: any) {
                 if (c.newKey) updates[c.semanticKey] = { profileKey: c.newKey, delta: { fills: 0, corrections: 1 } };
               });
               if (!Object.keys(updates).length) return;
@@ -137,7 +136,7 @@
     }
 
     // ── Enrichment listener (unfilled fields) ──
-    doc.querySelectorAll('input,textarea').forEach(function (el) {
+    doc.querySelectorAll('input,textarea').forEach(function (el: any) {
       if (SKIP_TYPES.indexOf(el.type) !== -1) return;
       var sel = makeSelectorFromEl(el);
       if (mapping[sel]) return;

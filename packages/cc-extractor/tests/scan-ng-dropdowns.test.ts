@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * scan-ng-dropdowns.test.ts — plain Node tests, no framework, no jsdom
  */

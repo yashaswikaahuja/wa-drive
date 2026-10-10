@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * cc-background/auth — Authentication and trust guards for the service worker.
  *
@@ -18,8 +17,8 @@
 // Chrome may re-evaluate bundles; const redeclaration → status code 15.
 var DEFAULT_PUBLIC_DOMAIN = 'cybercontrol.fun';
 function resolveTrustedFrontendOrigins() {
-  if (Array.isArray(globalThis.__CC_TRUSTED_FRONTEND_ORIGINS) && globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.length) {
-    return globalThis.__CC_TRUSTED_FRONTEND_ORIGINS.slice();
+  if (Array.isArray((globalThis as any).__CC_TRUSTED_FRONTEND_ORIGINS) && (globalThis as any).__CC_TRUSTED_FRONTEND_ORIGINS.length) {
+    return (globalThis as any).__CC_TRUSTED_FRONTEND_ORIGINS.slice();
   }
   var origins = [
     'http://localhost:5173',
@@ -28,11 +27,11 @@ function resolveTrustedFrontendOrigins() {
     'http://127.0.0.1:3000',
   ];
   try {
-    if (typeof globalThis.__CC_APP_ORIGIN === 'string' && globalThis.__CC_APP_ORIGIN) {
-      origins.unshift(String(globalThis.__CC_APP_ORIGIN).replace(/\/$/, ''));
+    if (typeof (globalThis as any).__CC_APP_ORIGIN === 'string' && (globalThis as any).__CC_APP_ORIGIN) {
+      origins.unshift(String((globalThis as any).__CC_APP_ORIGIN).replace(/\/$/, ''));
     } else {
-      var pubDomain = (typeof globalThis.__CC_PUBLIC_DOMAIN === 'string' && globalThis.__CC_PUBLIC_DOMAIN)
-        ? String(globalThis.__CC_PUBLIC_DOMAIN).replace(/^\./, '')
+      var pubDomain = (typeof (globalThis as any).__CC_PUBLIC_DOMAIN === 'string' && (globalThis as any).__CC_PUBLIC_DOMAIN)
+        ? String((globalThis as any).__CC_PUBLIC_DOMAIN).replace(/^\./, '')
         : DEFAULT_PUBLIC_DOMAIN;
       origins.unshift('https://app.' + pubDomain);
     }
@@ -70,9 +69,9 @@ function ccIsTrustedFrontend(sender) {
 }
 
 // Expose as globals for service worker scope
-globalThis.CC_TRUSTED_FRONTEND_ORIGINS = CC_TRUSTED_FRONTEND_ORIGINS;
-globalThis.CC_TRUSTED_ONLY_TYPES       = CC_TRUSTED_ONLY_TYPES;
-globalThis.isLegacyClientFillAllowed   = isLegacyClientFillAllowed;
-globalThis.legacyClientFillDenied      = legacyClientFillDenied;
-globalThis.ccSenderOrigin              = ccSenderOrigin;
-globalThis.ccIsTrustedFrontend         = ccIsTrustedFrontend;
+(globalThis as any).CC_TRUSTED_FRONTEND_ORIGINS = CC_TRUSTED_FRONTEND_ORIGINS;
+(globalThis as any).CC_TRUSTED_ONLY_TYPES       = CC_TRUSTED_ONLY_TYPES;
+(globalThis as any).isLegacyClientFillAllowed   = isLegacyClientFillAllowed;
+(globalThis as any).legacyClientFillDenied      = legacyClientFillDenied;
+(globalThis as any).ccSenderOrigin              = ccSenderOrigin;
+(globalThis as any).ccIsTrustedFrontend         = ccIsTrustedFrontend;

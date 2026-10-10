@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// @ts-nocheck
 /**
  * Phase 4.0 HIM Runtime — Adversarial Trust Boundary Tests
  * Covers: Server HIM Engine, Extension State Machine, Bridge Security,

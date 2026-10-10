@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * scan-standard-fields — Standard input/select/radio/checkbox scanner
  *
@@ -11,14 +10,14 @@
  *   - <select>: options captured, type = 'dropdown'
  *   - Everything else: text/email/tel/number/date/file inputs
  *
- * Public API (on globalThis.CcScanStandardFields):
+ * Public API (on (globalThis as any).CcScanStandardFields):
  *   scan(doc, helpers) => { formFields, labelList }
  *
  * helpers: { isInSkipContext, getLabel, isGoodLabel }
  *
  * See docs/scan-standard-fields.md for full documentation.
  */
-(function (root) {
+(function (root: any) {
   'use strict';
 
   var INPUT_SELECTOR = (
@@ -33,22 +32,22 @@
   var JOURNEY_RE = /\b(from|to|source|destination|origin|depart|arriv|journey|travel|station|boarding|onward|return|leaving|going|city|date)\b/i;
   var AGREEMENT_RE = /\b(i\s+)?(agree|accept|confirm|declare|certify|consent|terms|self.declaration)\b/i;
 
-  function isJourneyMeta(meta, label) {
+  function isJourneyMeta(meta: any, label: any) {
     return JOURNEY_RE.test(String(meta || '') + ' ' + String(label || ''));
   }
 
-  function makeSelector(el) {
+  function makeSelector(el: any) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
     if (el.name) return '[name="' + el.name + '"]';
     return null;
   }
 
-  function makeRadioSelector(el) {
+  function makeRadioSelector(el: any) {
     if (el.id) return el.id.match(/^\d/) ? '[id="' + el.id + '"]' : '#' + el.id;
     return '[name="' + el.name + '"][value="' + el.value + '"]';
   }
 
-  function resolveRadioGroupLabel(el, isGoodLabel) {
+  function resolveRadioGroupLabel(el: any, isGoodLabel: any) {
     const fieldset = el.closest('fieldset');
     const legend = fieldset && fieldset.querySelector('legend');
     if (legend && isGoodLabel(legend.textContent.trim())) {
@@ -64,7 +63,7 @@
     return '';
   }
 
-  function resolveCheckboxGroupLabel(el, isGoodLabel) {
+  function resolveCheckboxGroupLabel(el: any, isGoodLabel: any) {
     const container = el.closest('.form-group,.form-field,[class*="form-row"],tr,div,fieldset');
     if (container) {
       const legend = container.querySelector('legend');
@@ -81,7 +80,7 @@
    * @param {{ isInSkipContext, getLabel, isGoodLabel }} helpers
    * @returns {{ formFields: Array, labelList: Array }}
    */
-  function scan(doc, helpers) {
+  function scan(doc: any, helpers: any) {
     var isInSkipContext = helpers.isInSkipContext;
     var getLabel = helpers.getLabel;
     var isGoodLabel = helpers.isGoodLabel;
@@ -94,7 +93,7 @@
 
     var inputs = doc.querySelectorAll(INPUT_SELECTOR);
 
-    inputs.forEach(function (el) {
+    inputs.forEach(function (el: any) {
       var t = el.type;
       // Allow type=search when journey-like (redBus/Cleartrip From/To) — #311
       if (t === 'hidden' || t === 'submit' || t === 'button' ||
@@ -161,8 +160,8 @@
       // ── Select ──
       if (el.tagName === 'SELECT') {
         var options = Array.from(el.querySelectorAll('option'))
-          .map(function (o) { return o.textContent.trim(); })
-          .filter(function (t) { return t && !/^(select|choose|--)/i.test(t); });
+          .map(function (o: any) { return o.textContent.trim(); })
+          .filter(function (t: any) { return t && !/^(select|choose|--)/i.test(t); });
         if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
         formFields.push({ selector: selector, id: el.id, name: el.name, value: el.value,
           placeholder: el.placeholder || '', label: label, type: 'dropdown', index: idx,

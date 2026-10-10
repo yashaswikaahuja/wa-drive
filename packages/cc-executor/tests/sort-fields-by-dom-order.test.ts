@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Tests for sort-fields-by-dom-order.js
  *
@@ -59,17 +58,17 @@ const resolverABC = makeResolver({ '#a': elA, '#b': elB, '#c': elC });
 // Already in order — should stay same
 const entries1 = [['#a', {}], ['#b', {}], ['#c', {}]];
 sortFieldsByDomOrder(entries1, resolverABC);
-assert('already in order stays same', entries1.map(e => e[0]), ['#a', '#b', '#c']);
+assert('already in order stays same', entries1.map((e: any) => e[0]), ['#a', '#b', '#c']);
 
 // Reverse order — should be sorted
 const entries2 = [['#c', {}], ['#b', {}], ['#a', {}]];
 sortFieldsByDomOrder(entries2, resolverABC);
-assert('reverse order gets sorted', entries2.map(e => e[0]), ['#a', '#b', '#c']);
+assert('reverse order gets sorted', entries2.map((e: any) => e[0]), ['#a', '#b', '#c']);
 
 // Mixed order
 const entries3 = [['#b', {}], ['#a', {}], ['#c', {}]];
 sortFieldsByDomOrder(entries3, resolverABC);
-assert('mixed order sorted correctly', entries3.map(e => e[0]), ['#a', '#b', '#c']);
+assert('mixed order sorted correctly', entries3.map((e: any) => e[0]), ['#a', '#b', '#c']);
 
 console.log('\nNull elements:');
 
@@ -80,19 +79,19 @@ sortFieldsByDomOrder(entries4, resolverWithNull);
 // #missing resolves to null, preserved with stable sort behavior
 // #a and #c should be sorted, #missing position is stable
 assert('present elements sorted, missing preserved',
-  entries4.filter(e => e[0] !== '#missing').map(e => e[0]), ['#a', '#c']);
+  entries4.filter((e: any) => e[0] !== '#missing').map((e: any) => e[0]), ['#a', '#c']);
 
 // Both missing — preserved order
 const resolverNone = makeResolver({});
 const entries5 = [['#x', {}], ['#y', {}]];
 sortFieldsByDomOrder(entries5, resolverNone);
-assert('both null — order preserved', entries5.map(e => e[0]), ['#x', '#y']);
+assert('both null — order preserved', entries5.map((e: any) => e[0]), ['#x', '#y']);
 
 // Same element for both selectors
 const resolverSame = makeResolver({ '#a': elA, '#alias': elA });
 const entries6 = [['#a', {}], ['#alias', {}]];
 sortFieldsByDomOrder(entries6, resolverSame);
-assert('same element — order preserved', entries6.map(e => e[0]), ['#a', '#alias']);
+assert('same element — order preserved', entries6.map((e: any) => e[0]), ['#a', '#alias']);
 
 console.log('\nEdge cases:');
 
@@ -104,7 +103,7 @@ assert('empty array → []', entries7, []);
 // Single entry
 const entries8 = [['#a', {}]];
 sortFieldsByDomOrder(entries8, resolverABC);
-assert('single entry unchanged', entries8.map(e => e[0]), ['#a']);
+assert('single entry unchanged', entries8.map((e: any) => e[0]), ['#a']);
 
 // compareDocumentPosition not available on first element of a pair:
 // The guard `typeof a.compareDocumentPosition !== 'function'` returns 0,
@@ -116,13 +115,13 @@ assert('single entry unchanged', entries8.map(e => e[0]), ['#a']);
 const resolverNoCompare2 = makeResolver({ '#x': { _index: 1 }, '#y': { _index: 0 } });
 const entries9 = [['#x', {}], ['#y', {}]];
 sortFieldsByDomOrder(entries9, resolverNoCompare2);
-assert('both elements lack compareDocumentPosition → order preserved', entries9.map(e => e[0]), ['#x', '#y']);
+assert('both elements lack compareDocumentPosition → order preserved', entries9.map((e: any) => e[0]), ['#x', '#y']);
 
 console.log('\nReturn value:');
 const entries10 = [['#b', {}], ['#a', {}]];
 const returned = sortFieldsByDomOrder(entries10, resolverABC);
 assert('returns same array reference', returned === entries10, true);
-assert('returned array is sorted', returned.map(e => e[0]), ['#a', '#b']);
+assert('returned array is sorted', returned.map((e: any) => e[0]), ['#a', '#b']);
 
 // ── Summary ───────────────────────────────────────────────────────────────────
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * keystroke-input plugin — types values char-by-char with full key+input event sequence.
  *
@@ -26,13 +25,13 @@
   if (window._ccKeystrokeFillLoaded) return;
   window._ccKeystrokeFillLoaded = true;
 
-  function keyCodeFor(ch) {
+  function keyCodeFor(ch: any) {
     if (/\d/.test(ch)) return ch.charCodeAt(0);
     if (/[a-z]/i.test(ch)) return ch.toUpperCase().charCodeAt(0);
     return ch.charCodeAt(0);
   }
 
-  function codeFor(ch) {
+  function codeFor(ch: any) {
     if (/\d/.test(ch)) return 'Digit' + ch;
     if (/[a-z]/i.test(ch)) return 'Key' + ch.toUpperCase();
     return '';
@@ -51,7 +50,7 @@
    * jQuery focusout-bound formatters) run as if the user actually
    * pressed Tab to leave the field.
    */
-  window.keystrokeFillSync = function keystrokeFillSync(el, value) {
+  window.keystrokeFillSync = function keystrokeFillSync(el: any, value: any) {
     if (!el) return false;
     const str = String(value);
     const isTextarea = el.tagName === 'TEXTAREA';
