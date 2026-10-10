@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── AI residual resolver (runs in page context, LAST pass) ──────────────────
 // Direct key matching and the derivation layer handle most fields. Whatever is
 // STILL blank goes here: one batched LLM call that sees the whole profile plus
@@ -30,7 +29,7 @@ async function ccAiResolveValues(pendingFields, profile, apiKey, baseUrl, model)
     let line = `${i}. label="${f.label || ''}" type=${f.type || 'text'}`;
     if (f.placeholder) line += ` placeholder="${f.placeholder}"`;
     if (f.options && f.options.length) {
-      line += `\n   OPTIONS (must pick EXACTLY one of these): ${f.options.map(o => `"${o}"`).join(' | ')}`;
+      line += `\n   OPTIONS (must pick EXACTLY one of these): ${f.options.map((o: any) => `"${o}"`).join(' | ')}`;
     } else if (f.type === 'ng-dropdown' || f.type === 'mat-select' || f.type === 'dropdown') {
       line += `\n   (DROPDOWN — options not pre-loaded, but the system will fuzzy-match your answer against the real options. Give the most standard/common phrasing.)`;
     }
@@ -75,8 +74,8 @@ Example: {"0": "Intermediate", "2": "1234567", "3": "No"}`;
     const idxMap = window.ccLLM.parseJSON(result.text);
     if (!idxMap) return {};
 
-    const out = {};
-    for (const [idx, rawVal] of Object.entries(idxMap)) {
+    const out: any = {};
+    for (const [idx, rawVal] of Object.entries(idxMap) as any) {
       const f = pendingFields[parseInt(idx, 10)];
       if (!f || rawVal == null || String(rawVal).trim() === '') continue;
       let value = String(rawVal).trim();
@@ -84,10 +83,10 @@ Example: {"0": "Intermediate", "2": "1234567", "3": "No"}`;
       // If the field has options, the value MUST be one of them — validate and
       // snap to the closest match, else drop (prevents unusable values).
       if (f.options && f.options.length) {
-        const exact = f.options.find(o => o === value);
+        const exact = f.options.find((o: any) => o === value);
         if (!exact) {
-          const ci = f.options.find(o => o.toLowerCase() === value.toLowerCase());
-          const partial = ci || f.options.find(o =>
+          const ci = f.options.find((o: any) => o.toLowerCase() === value.toLowerCase());
+          const partial = ci || f.options.find((o: any) =>
             o.toLowerCase().includes(value.toLowerCase()) || value.toLowerCase().includes(o.toLowerCase()));
           if (!partial) continue;   // AI returned something not on the list → skip
           value = partial;

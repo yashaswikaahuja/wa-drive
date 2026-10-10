@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── shared/label-utils.ts ────────────────────────────────────────────────────
 // Single source of truth for label normalization, semantic key mapping,
 // and confidence calculation.

@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Knowledge Sync Client (Phase 2.8, Issue #92)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -250,9 +249,9 @@ const ccKnowledgeSync = {
         if (item.kind === 'synonym' && arts.semantic_aliases) {
           delete arts.semantic_aliases[item.key];
         } else if (item.kind === 'field_mapping' && arts.field_mappings) {
-          arts.field_mappings = arts.field_mappings.filter(m => m.semantic_key !== item.key);
+          arts.field_mappings = arts.field_mappings.filter((m: any) => m.semantic_key !== item.key);
         } else if (item.kind === 'option_translation' && arts.option_translations) {
-          arts.option_translations = arts.option_translations.filter(t =>
+          arts.option_translations = arts.option_translations.filter((t: any) =>
             t.field_semantic_key !== item.key
           );
         }

@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * CyberControl driver dispatcher — window.cc.do(action) → result
  *
@@ -61,7 +60,7 @@
   };
 
   window.cc.listDrivers = function listDrivers() {
-    return Object.values(_registry).map(d => ({
+    return Object.values(_registry).map((d: any) => ({
       name: d.name,
       description: d.description,
       sideEffect: d.sideEffect,
@@ -82,7 +81,7 @@
         if (!(key in value)) return { ok: false, error: path + '.' + key + ': required' };
       }
       const props = schema.properties || {};
-      for (const [key, sub] of Object.entries(props)) {
+      for (const [key, sub] of Object.entries(props) as any) {
         if (key in value) {
           const r = validateAgainstSchema(value[key], sub, path + '.' + key);
           if (!r.ok) return r;
@@ -154,7 +153,7 @@
     // Validate input
     const args = action.args || {};
     if (driver.input) {
-      const v = validateAgainstSchema(args, driver.input);
+      const v = validateAgainstSchema(args, driver.input, undefined);
       if (!v.ok) {
         const out = { ok: false, error: 'invalid-args: ' + v.error, traceId, durationMs: 0, driver: driver.name };
         recordTrace({ traceId, action, result: out, ts: t0 });

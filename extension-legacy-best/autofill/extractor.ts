@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ── Content script functions (run in page context) ────────────────────────────
 function extractFormFieldsWithFingerprint() {
   const hostname = location.hostname;
@@ -30,7 +29,7 @@ function extractFormFieldsWithFingerprint() {
     // No <form> tag but has multiple labeled inputs (some govt sites don't use <form>)
     const inputs = document.querySelectorAll('input[type="text"],input[type="email"],input[type="tel"],textarea');
     let labeled = 0;
-    inputs.forEach(el => { if (!isInSkipContext(el) && getLabel(el)) labeled++; });
+    inputs.forEach((el: any) => { if (!isInSkipContext(el) && getLabel(el)) labeled++; });
     return labeled >= 2;
   }
 
@@ -114,7 +113,7 @@ function extractFormFieldsWithFingerprint() {
 
     // For <select>, capture options
     if (el.tagName === 'SELECT') {
-      const options = Array.from(el.querySelectorAll('option')).map(o => o.textContent.trim()).filter(t => t && !/^(select|choose|--)/i.test(t));
+      const options = Array.from(el.querySelectorAll('option')).map((o: any) => o.textContent.trim()).filter((t: any) => t && !/^(select|choose|--)/i.test(t));
       if (label) labelList.push(label.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
       formFields.push({ selector, id: el.id, name: el.name, value: el.value, placeholder: el.placeholder || '', label, type: 'dropdown', index: idx, options: options.length > 0 ? options : null, _el: el });
       idx++;
@@ -128,7 +127,7 @@ function extractFormFieldsWithFingerprint() {
   });
 
   // ── Emit grouped radio fields ──
-  for (const [name, group] of Object.entries(radioGroups)) {
+  for (const [name, group] of Object.entries(radioGroups) as any) {
     const groupLabel = group.groupLabel || group.options.join(' / ');
     if (groupLabel) labelList.push(groupLabel.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({
@@ -146,7 +145,7 @@ function extractFormFieldsWithFingerprint() {
   }
 
   // ── Emit grouped checkbox fields ──
-  for (const [name, group] of Object.entries(checkboxGroups)) {
+  for (const [name, group] of Object.entries(checkboxGroups) as any) {
     const groupLabel = group.groupLabel || group.options.join(' / ');
     if (groupLabel) labelList.push(groupLabel.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15));
     formFields.push({
@@ -167,7 +166,7 @@ function extractFormFieldsWithFingerprint() {
 
   // ── Angular Material: mat-select ──
   let matIdx = 10000;
-  document.querySelectorAll('mat-select,mat-form-field select').forEach(el => {
+  document.querySelectorAll('mat-select,mat-form-field select').forEach((el: any) => {
     if (isInSkipContext(el)) return;
     if (el.tagName === 'SELECT' && formFields.some(f => f.selector === (el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : '#'+el.id) : `[name="${el.name}"]`))) return;
     const label = getLabel(el) || el.getAttribute('aria-label') || '';
@@ -180,7 +179,7 @@ function extractFormFieldsWithFingerprint() {
   });
 
   // ── mat-checkbox / mat-radio ──
-  document.querySelectorAll('mat-checkbox').forEach(el => {
+  document.querySelectorAll('mat-checkbox').forEach((el: any) => {
     if (isInSkipContext(el)) return;
     const label = getLabel(el) || el.textContent.trim().slice(0, 40);
     if (!isGoodLabel(label)) return;
@@ -188,7 +187,7 @@ function extractFormFieldsWithFingerprint() {
     if (!el.id) el.setAttribute('data-cc-id', id);
     formFields.push({ selector: el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[data-cc-id="${id}"]`, id, name: '', value: '', placeholder: '', label, type: 'mat-checkbox', index: matIdx++, _el: el });
   });
-  document.querySelectorAll('mat-radio-button').forEach(el => {
+  document.querySelectorAll('mat-radio-button').forEach((el: any) => {
     if (isInSkipContext(el)) return;
     const label = el.textContent.trim().slice(0, 40);
     if (!isGoodLabel(label)) return;
@@ -199,7 +198,7 @@ function extractFormFieldsWithFingerprint() {
   });
 
   // ── role=combobox (non-input, non-search) ──
-  document.querySelectorAll('[role="combobox"],[role="listbox"]').forEach(el => {
+  document.querySelectorAll('[role="combobox"],[role="listbox"]').forEach((el: any) => {
     if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
     if (isInSkipContext(el)) return;
     const meta = ((el.id || '') + ' ' + (el.className || '')).toLowerCase();
@@ -223,16 +222,16 @@ function extractFormFieldsWithFingerprint() {
   const ngContainerSelectors = 'ng-select, ng-dropdown, .ng-select, .ng-dropdown, [class*="custom-dropdown"], [class*="select-control"]';
   const ngCandidates = new Set();
   // Direct: explicit container classes
-  document.querySelectorAll(ngContainerSelectors).forEach(el => ngCandidates.add(el));
+  document.querySelectorAll(ngContainerSelectors).forEach((el: any) => ngCandidates.add(el));
   // Indirect: any element with a trigger child becomes a candidate (use closest meaningful wrapper)
-  document.querySelectorAll(ngTriggerSelectors).forEach(trigger => {
+  document.querySelectorAll(ngTriggerSelectors).forEach((trigger: any) => {
     // Walk up to find the field-level container (form-field, .form-group, or parent div)
     let container = trigger.closest('mat-form-field, .form-field, .form-group, [class*="dropdown"], [class*="select"]');
     if (!container) container = trigger.parentElement;
     if (container && container !== document.body) ngCandidates.add(container);
   });
 
-  ngCandidates.forEach(el => {
+  ngCandidates.forEach((el: any) => {
     if (isInSkipContext(el)) return;
     // Skip if already captured (mat-select / select / ng-select case)
     // Check: is this element itself already captured, OR is it inside an already-captured element?
@@ -251,13 +250,13 @@ function extractFormFieldsWithFingerprint() {
     if (!label) {
       // Direct child label/.label/.field-label (NOT inside .value-area which holds the trigger)
       const childLabel = el.querySelector(':scope > .label, :scope > label, :scope > .field-label, :scope > [class*="label"]');
-      if (childLabel) label = childLabel.textContent.trim();
+      if (childLabel) label = (childLabel as any).textContent.trim();
     }
     if (!label) {
       // Any descendant .label that isn't inside a value-area / option-list
       const dl = Array.from(el.querySelectorAll('.label, .field-label, [class*="label"]'))
-        .find(n => !n.closest('.value-area, .options-list, .ng-dropdown-panel, .dropdown-options'));
-      if (dl) label = dl.textContent.trim();
+        .find((n: any) => !n.closest('.value-area, .options-list, .ng-dropdown-panel, .dropdown-options'));
+      if (dl) label = (dl as any).textContent.trim();
     }
     label = (label || '').replace(/\s+/g, ' ').trim();
     if (!isGoodLabel(label)) return;
@@ -294,7 +293,7 @@ function extractFormFieldsWithFingerprint() {
     if (r.width === 0 && r.height === 0 && top === 0 && left === 0) return { row: 1e9, left: 1e9 };
     return { row: Math.round(top / ROW_BAND), left: Math.round(left) };
   }
-  formFields.forEach(f => { f._pos = _visualPos(f._el); });
+  formFields.forEach((f: any) => { f._pos = _visualPos(f._el); });
   formFields.sort((a, b) => (a._pos.row - b._pos.row) || (a._pos.left - b._pos.left));
   formFields.forEach((f, i) => { f.index = i; delete f._pos; });
 
@@ -307,8 +306,8 @@ function extractFormFieldsWithFingerprint() {
 
   // ── Semantic formKey — stable across DOM changes, based on normalized labels ──
   const semanticLabels = formFields
-    .map(f => (f.label || '').toLowerCase().replace(/[^a-z\s]/g, '').trim())
-    .filter(l => l.length > 2)
+    .map((f: any) => (f.label || '').toLowerCase().replace(/[^a-z\s]/g, '').trim())
+    .filter((l: any) => l.length > 2)
     .sort()
     .slice(0, 15);
   const semRaw = `${hostname}|${semanticLabels.join('|')}`;
@@ -327,7 +326,7 @@ function extractFormFieldsWithFingerprint() {
   }
 
   // ── Strip DOM references (not serializable) ──
-  formFields.forEach(f => { delete f._el; });
+  formFields.forEach((f: any) => { delete f._el; });
 
   return { formFields, formKey, semanticFormKey, pageModel };
 }
@@ -338,7 +337,7 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
   const enrichments = [];
 
   // Watch autofilled fields for corrections
-  for (const [selector, { value }] of Object.entries(mapping)) {
+  for (const [selector, { value }] of Object.entries(mapping) as any) {
     try {
       const el = selector.startsWith('form-field-')
         ? document.querySelectorAll('input,select,textarea')[parseInt(selector.split('-')[2])]
@@ -379,7 +378,7 @@ function injectCorrectionObserver(mapping, filledBySource, profile, backendUrl, 
   // Watch UNFILLED fields for profile enrichment
   const skipLabels = /captcha|otp|token|verification|code|password|confirm|repeat|retype/i;
   const skipTypes = ['select', 'checkbox', 'radio', 'hidden', 'submit', 'button'];
-  document.querySelectorAll('input,textarea').forEach(el => {
+  document.querySelectorAll('input,textarea').forEach((el: any) => {
     if (skipTypes.includes(el.type)) return;
     const selector = el.id ? (el.id.match(/^\d/) ? `[id="${el.id}"]` : `#${el.id}`) : `[name="${el.name}"]`;
     if (mapping[selector]) return;

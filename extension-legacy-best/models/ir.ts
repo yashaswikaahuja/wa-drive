@@ -1,4 +1,3 @@
-// @ts-nocheck
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // CyberControl Intermediate Representation (IR)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -85,7 +84,7 @@
       formMethod: raw.formMethod || null,
 
       // ── Fields ──────────────────────────────────────────────────────
-      fields: (raw.fields || []).map(function (f) { return FieldModel(f); }),
+      fields: (raw.fields || []).map(function (f: any) { return FieldModel(f); }),
       fieldCount: (raw.fields || []).length,
 
       // ── Structure ───────────────────────────────────────────────────
@@ -120,7 +119,7 @@
       pageFingerprint: raw.pageFingerprint || '',
 
       // ── Forms ───────────────────────────────────────────────────────
-      forms: (raw.forms || []).map(function (f) { return FormModel(f); }),
+      forms: (raw.forms || []).map(function (f: any) { return FormModel(f); }),
       primaryForm: raw.primaryForm != null ? raw.primaryForm : null,  // index of the main form
 
       // ── Page context ────────────────────────────────────────────────
@@ -164,7 +163,7 @@
    * @returns {object} PageModel
    */
   function createPageModel(extractorOutput, pageContext) {
-    var fields = (extractorOutput.formFields || []).map(function (f, i) {
+    var fields = (extractorOutput.formFields || []).map(function (f: any, i: any) {
       // Generate stable field ID from label + name + type + index
       // More stable than CSS selector across page reloads
       var stableId = generateStableId(f, i);
@@ -197,9 +196,9 @@
 
     // Detect cascade dependencies (state → district → block pattern)
     var cascadeChains = detectCascadeChains(fields);
-    cascadeChains.forEach(function (chain) {
+    cascadeChains.forEach(function (chain: any) {
       for (var i = 1; i < chain.length; i++) {
-        var child = fields.find(function (f) { return f.fieldId === chain[i]; });
+        var child = fields.find(function (f: any) { return f.fieldId === chain[i]; });
         if (child) child.dependsOn = chain[i - 1];
       }
     });
@@ -210,7 +209,7 @@
       formAction: null,
       formMethod: null,
       fields: fields,
-      hasFileUpload: fields.some(function (f) { return f.type === 'file'; }),
+      hasFileUpload: fields.some(function (f: any) { return f.type === 'file'; }),
       hasCaptcha: detectCaptcha(),
       hasSubmitButton: !!document.querySelector('button[type="submit"],input[type="submit"]'),
       submitSelector: getSubmitSelector(),
@@ -271,10 +270,10 @@
       ['state', 'district', 'sub_division'],
       ['country', 'state', 'city'],
     ];
-    cascadeKeywords.forEach(function (pattern) {
+    cascadeKeywords.forEach(function (pattern: any) {
       var chain = [];
-      pattern.forEach(function (keyword) {
-        var match = fields.find(function (f) {
+      pattern.forEach(function (keyword: any) {
+        var match = fields.find(function (f: any) {
           var ident = (f.label + ' ' + f.name + ' ' + f.id).toLowerCase();
           return ident.includes(keyword) && f.type === 'dropdown';
         });
