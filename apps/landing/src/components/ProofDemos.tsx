@@ -1,8 +1,9 @@
 /**
- * NPCI-style product proof: silent WebM clips from pixel-exact product UI
- * (real Hub + unpacked extension) with fictional demo fixtures via local stub APIs.
- * See issue #331. Re-record with: pnpm record:pixel
- * Fixture fallback: pnpm record:proof
+ * NPCI-style product proof: silent WebM clips of real product UI.
+ * Form band: real unpacked Chrome extension AutoFill on a ServicePlus-style
+ * demo portal (scripts/record-extension-autofill.mjs). Other bands: Hub
+ * recordings (pixel fixtures via local stub APIs — pnpm record:pixel).
+ * See issue #331.
  */
 import { ArrowRight, Check } from "lucide-react";
 
@@ -79,15 +80,15 @@ const BANDS: ProofBand[] = [
     id: "proof-forms",
     eyebrow: "Form AutoFill",
     title: "Extension Fill on a portal form — from a saved profile",
-    body: "Pixel-exact recording of the real CyberControl Chrome extension on a demo portal form: popup loads the fictional Ananya Demo profile, Fill Form runs, fields populate. Review stays with the café before submit.",
+    body: "Silent recording of the real CyberControl Chrome extension on a Bihar ServicePlus-style demo portal: the side panel loads a saved customer profile, Fill Form runs, and fields populate. Review stays with the café before submit.",
     bullets: [
-      "Real unpacked extension UI (not a stylized mock)",
-      "Fictional Ananya Demo profile — no live café data",
+      "Real unpacked Chrome extension UI (popup + Fill Form)",
+      "Saved CyberControl profile filling a gov-style application form",
       "You review before submit — control stays with the café",
     ],
     cta: { href: "#extension", label: "Get the AutoFill extension" },
     clip: "form",
-    clipLabel: "Extension · Fill Form on demo portal",
+    clipLabel: "Extension AutoFill · real UI · demo portal",
   },
   {
     id: "proof-wa",
@@ -156,7 +157,7 @@ export function ProofBands() {
             Proof for every part of CyberControl
           </h2>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
-            Silent product recordings of the real Hub + extension UI with fictional demo data — muted, looping, no soundtrack.
+            Silent product recordings of the real Hub and Chrome extension — muted, looping, no soundtrack.
           </p>
         </div>
 
