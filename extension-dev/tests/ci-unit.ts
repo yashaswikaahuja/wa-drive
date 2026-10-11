@@ -59,6 +59,11 @@ const suites = [
 
   // extension-legacy-best/perception archives
   { name: 'Perception Unit Tests', cmd: `${NODE_TS} extension-dev/tests/perception/run-perception-unit.ts` },
+
+  // ActionPlan product-path wiring (manifests + legacy-best runtime)
+  { name: 'ActionPlan Legacy Guard', cmd: `${NODE_TS} extension-dev/tests/unit/test-action-plan-legacy-guard.ts` },
+  { name: 'ActionPlan Executor Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-action-plan-executor.ts` },
+  { name: 'DOM Evidence Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-dom-evidence.ts` },
 ];
 
 let allPass = true;

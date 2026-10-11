@@ -10,17 +10,19 @@ import { readFileSync } from 'node:fs';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const nav = require(resolve(ROOT, 'apps/extension/runtime/navigation-contract.js'));
+const nav = require(resolve(ROOT, 'extension-legacy-best/runtime/navigation-contract.js'));
 globalThis.CcNavigationContract = nav;
-const executor = require(resolve(ROOT, 'apps/extension/runtime/action-plan-executor.js'));
+const executor = require(resolve(ROOT, 'extension-legacy-best/runtime/action-plan-executor.js'));
 const popup = readFileSync(resolve(ROOT, 'apps/extension/popup.js'), 'utf8');
-const gateway = readFileSync(resolve(ROOT, 'apps/extension/runtime/dom-gateway.js'), 'utf8');
-const perception = readFileSync(resolve(ROOT, 'apps/extension/perception/index.js'), 'utf8');
-const orchestratorPath = resolve(ROOT, 'apps/extension/application/fill-orchestrator.js');
+const gateway = readFileSync(resolve(ROOT, 'extension-legacy-best/runtime/dom-gateway.js'), 'utf8');
+const perception = readFileSync(resolve(ROOT, 'extension-legacy-best/perception/index.js'), 'utf8');
+const orchestratorPath = resolve(ROOT, 'apps/extension/application/orchestrator-bundle.js');
 const orchestrator = require('fs').existsSync(orchestratorPath) ? readFileSync(orchestratorPath, 'utf8') : '';
-const interactionPath = resolve(ROOT, 'apps/extension/runtime/gateway/interaction.js');
+const apeFillPath = resolve(ROOT, 'packages/cc-orchestrator/src/action-plan-fill.ts');
+const apeFill = require('fs').existsSync(apeFillPath) ? readFileSync(apeFillPath, 'utf8') : '';
+const interactionPath = resolve(ROOT, 'extension-legacy-best/runtime/gateway/interaction.js');
 const interaction = require('fs').existsSync(interactionPath) ? readFileSync(interactionPath, 'utf8') : '';
-const productFillCode = popup + '\n' + orchestrator;
+const productFillCode = popup + '\n' + orchestrator + '\n' + apeFill;
 
 let passed = 0;
 let failed = 0;
@@ -145,7 +147,7 @@ ok(
 ok(perception.includes('_captureAuthorshipGenerations') || perception.includes('authorshipGeneration'), 'perception captures authorship generations');
 ok(perception.includes('expectedGeneration') || perception.includes('resolveBinding'), 'perception compares generation via resolveBinding');
 ok(gatewayCode.includes('expectedGeneration'), 'gateway resolveBinding takes expectedGeneration');
-const execSrc = readFileSync(resolve(ROOT, 'apps/extension/runtime/action-plan-executor.js'), 'utf8');
+const execSrc = readFileSync(resolve(ROOT, 'extension-legacy-best/runtime/action-plan-executor.js'), 'utf8');
 ok(execSrc.includes('resolveBinding'), 'executor calls generation-aware resolveBinding before mutation');
 ok(execSrc.includes('allow_submit'), 'executor references allow_submit');
 ok(execSrc.includes('checkStepAuthorization'), 'executor hard-enforces step authorization');

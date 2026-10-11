@@ -1,7 +1,7 @@
 node_modules/
 dist/
 build/
-# Keep Mozilla PDF.js engine (public/pdfjs/build) â€” required for in-app viewer
+# Keep Mozilla PDF.js engine (public/pdfjs/build) Ã¢â‚¬â€ required for in-app viewer
 !apps/frontend/public/pdfjs/build/
 !apps/frontend/public/pdfjs/build/**
 .env
@@ -23,7 +23,7 @@ auth_info/
 sessions/
 upload_queue/
 
-# Chromium / wwebjs browser session data (never commit â€” contains cookies, login data)
+# Chromium / wwebjs browser session data (never commit Ã¢â‚¬â€ contains cookies, login data)
 apps/whatsapp-resolver/session/
 apps/whatsapp-service/session/
 
@@ -103,7 +103,7 @@ extension-dev/cli/out/
 # Turborepo
 .turbo/
 
-# Stale pre-monorepo root dirs (source now lives under apps/ â€” these are local artifacts only)
+# Stale pre-monorepo root dirs (source now lives under apps/ Ã¢â‚¬â€ these are local artifacts only)
 /backend/
 /extension-service/
 /frontend/
@@ -120,3 +120,6 @@ extension-dev/cli/out/
 # Local WA resolver browser session (never commit)
 apps/whatsapp-resolver/session/
 
+# Synced from extension-legacy-best by extension build (PRODUCT_PATH_SCRIPTS)
+apps/extension/perception/
+apps/extension/runtime/
