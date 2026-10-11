@@ -1,9 +1,8 @@
 /**
  * CyberControl CI Runner — Browser Tests (turborepo-aware)
  *
- * Bundle-based harnesses (autofill + capabilities) are active again via
- * inject-extension-host.ts. Perception / ActionPlan suites still need a
- * packages remap of the deleted apps/extension/perception|runtime trees.
+ * Bundle harnesses use inject-extension-host.ts (@cc bundles + legacy IR/runner).
+ * Perception / APE harnesses use extension-legacy-best perception+runtime archives.
  *
  * Usage: node extension-dev/tests/ci-browser.ts
  */
@@ -20,29 +19,19 @@ const candidates = [
   { name: 'Comprehensive Portal Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-comprehensive.ts` },
   { name: 'Browser Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run.ts` },
   { name: 'Real Widget Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-real-widgets.ts` },
-];
-
-// Still deferred until perception/runtime land as @cc packages (or harnesses
-// remap onto a new host). extension-legacy-best has capabilities/models but
-// not the perception graph tree these suites inject.
-const deferred = [
-  'Perception Browser Tests (needs packages remap of perception/*)',
-  'Widget Classification Tests (needs packages remap of perception/*)',
-  'Relationship Lifecycle Tests (needs packages remap of perception/*)',
-  'ActionPlanExecutor v3 Product E2E (needs packages remap of runtime/*)',
+  { name: 'Perception Browser Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-perception-browser.ts` },
+  { name: 'Widget Classification Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-widget-classification.ts` },
+  { name: 'Relationship Lifecycle Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-relationship-lifecycle.ts` },
+  { name: 'ActionPlanExecutor v3 Product E2E', cmd: `${NODE_TS} extension-dev/tests/browser/run-action-plan-executor.ts` },
 ];
 
 let allPass = true;
 let totalPassed = 0;
 console.log('CyberControl CI — Browser Tests (turborepo)\n');
 
-for (const note of deferred) {
-  console.log(`  ⊘ deferred: ${note}`);
-}
-
 for (const suite of candidates) {
   try {
-    const output = execSync(suite.cmd, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe', timeout: 180000 });
+    const output = execSync(suite.cmd, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe', timeout: 240000 });
     const lastLine = output.trim().split('\n').pop();
     const match = lastLine.match(/(\d+) passed/);
     const count = match ? parseInt(match[1], 10) : 0;
@@ -51,16 +40,16 @@ for (const suite of candidates) {
   } catch (e) {
     allPass = false;
     const output = (e.stdout || '') + (e.stderr || '');
-    const failLine = output.split('\n').find((l) => l.includes('failed') || l.includes('Error')) || 'unknown failure';
+    const failLine = output.split('\n').find((l) => l.includes('failed') || l.includes('Error') || l.includes('✗')) || 'unknown failure';
     console.error(`  ✗ ${suite.name}: ${failLine.trim()}`);
     if (output.trim()) {
       console.error('    --- output ---');
-      output.trim().split('\n').slice(-20).forEach((l) => console.error('    ' + l));
+      output.trim().split('\n').slice(-25).forEach((l) => console.error('    ' + l));
       console.error('    --- end ---');
     }
   }
 }
 
-console.log(`\n${totalPassed} tests passed across ${candidates.length} active suites (${deferred.length} deferred)`);
+console.log(`\n${totalPassed} tests passed across ${candidates.length} active suites`);
 console.log(allPass ? '\n✅ All active suites passed' : '\n❌ Some suites failed');
 process.exit(allPass ? 0 : 1);

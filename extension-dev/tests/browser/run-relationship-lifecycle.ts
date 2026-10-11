@@ -16,10 +16,10 @@ import { createRequire } from 'node:module';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
-const EXT_DIR = resolve(ROOT, 'apps/extension');
+const EXT_DIR = resolve(ROOT, 'extension-legacy-best');
 const require = createRequire(import.meta.url);
-const { applyPageDelta, validateComposedGraph } = require(resolve(ROOT, 'apps/extension/perception/delta-apply.js'));
-const { validateGraphInvariants } = require(resolve(ROOT, 'apps/extension/perception/graph-invariants.js'));
+const { applyPageDelta, validateComposedGraph } = require(resolve(ROOT, 'extension-legacy-best/perception/delta-apply.js'));
+const { validateGraphInvariants } = require(resolve(ROOT, 'extension-legacy-best/perception/graph-invariants.js'));
 
 let pass = 0;
 let fail = 0;
@@ -36,7 +36,7 @@ const CHROME_PATHS = [
 const executablePath = CHROME_PATHS.find((p) => existsSync(p)) || undefined;
 
 const PERCEPTION_SCRIPTS = [
-  'perception/binding-registry.ts',
+  'perception/binding-registry.js',
   'perception/revision-manager.js',
   'perception/canonical-hash.js',
   'perception/privacy-filter.js',
@@ -48,9 +48,9 @@ const PERCEPTION_SCRIPTS = [
   'perception/context-discovery.js',
   'perception/snapshot-builder.js',
   'perception/validator.js',
-  'perception/index.js',
-  'runtime/gateway/interaction.ts',
+  'runtime/gateway/interaction.js',
   'runtime/dom-gateway.js',
+  'perception/index.js',
 ];
 
 const FIXTURE_HTML = `<!DOCTYPE html>

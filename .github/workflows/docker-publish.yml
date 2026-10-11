@@ -40,7 +40,7 @@ jobs:
       # can bake + serve it from the tailnet-only owner listener.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Build owner panel into backend context
         run: |
           (cd apps/owner-panel && npm install --no-audit --no-fund && npm run build)

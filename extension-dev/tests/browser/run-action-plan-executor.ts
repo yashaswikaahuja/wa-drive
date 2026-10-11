@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
-const EXT_DIR = resolve(ROOT, 'apps/extension');
+const EXT_DIR = resolve(ROOT, 'extension-legacy-best');
 const FIXTURES = resolve(ROOT, 'extension-dev/tests/fixtures');
 
 let pass = 0;
@@ -35,10 +35,10 @@ const executablePath = CHROME_PATHS.find((p) => existsSync(p)) || undefined;
 
 /** Product path scripts only — no autofill/mapper/resolver/runner. */
 const PRODUCT_SCRIPTS = [
-  'runtime/gateway/interaction.ts',
+  'runtime/gateway/interaction.js',
   'runtime/dom-gateway.js',
   'runtime/navigation-contract.js',
-  'perception/binding-registry.ts',
+  'perception/binding-registry.js',
   'perception/revision-manager.js',
   'perception/canonical-hash.js',
   'perception/privacy-filter.js',
@@ -51,7 +51,7 @@ const PRODUCT_SCRIPTS = [
   'perception/snapshot-builder.js',
   'perception/validator.js',
   'perception/index.js',
-  'runtime/action-plan-executor.ts',
+  'runtime/action-plan-executor.js',
 ];
 
 async function injectProductPath(page) {
