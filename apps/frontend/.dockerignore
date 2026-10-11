@@ -1,4 +1,13 @@
 node_modules
-dist
 .env
 .env.local
+.vercel
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+.last-run.json
+
+# Note: dist/ is intentionally NOT ignored — CI prebuilds Vite output for the nginx image.
