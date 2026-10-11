@@ -1,10 +1,8 @@
 /**
  * CyberControl CI Runner — Unit & Knowledge Tests (turborepo-aware)
  *
- * Only suites that target packages/* or architecture docs, or thin apps/
- * entrypoints. Suites that still require deleted discrete trees
- * (apps/extension/perception|runtime|…) are NOT run here — remapped later
- * against packages/cc-* when those modules are extracted as packages.
+ * Suites target packages/*, architecture docs, thin apps/ entrypoints, and
+ * extension-legacy-best/perception archives (restored for CI after turborepo cut).
  *
  * Usage: node extension-dev/tests/ci-unit.ts
  */
@@ -58,6 +56,9 @@ const suites = [
   { name: 'WSS Protocol Tests', cmd: `${NODE_TS} extension-dev/tests/unit/test-wss-protocol.ts` },
   { name: 'Behavior Classifier Tests', cmd: `${NODE_TS} extension-dev/tests/unit/test-behavior-classifier.ts` },
   { name: 'Execution Mode Tests', cmd: `${NODE_TS} extension-dev/tests/unit/test-execution-mode.ts` },
+
+  // extension-legacy-best/perception archives
+  { name: 'Perception Unit Tests', cmd: `${NODE_TS} extension-dev/tests/perception/run-perception-unit.ts` },
 ];
 
 let allPass = true;
