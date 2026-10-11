@@ -18,8 +18,19 @@ import { useAuthStore } from '../auth/store';
 import {
   Printer, Camera, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle,
   PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise, FilePdf, Image as ImageIcon,
-  FileVideo, FileAudio, File as FileIcon, Play, DotsThree,
+  FileVideo, FileAudio, File as FileIcon, Play, DotsThree, Check,
 } from '@phosphor-icons/react';
+
+const DOCS_RETURN = '/app/whatsapp';
+
+function photoEditorPath(driveId: string, msg?: { phone?: string; name?: string }) {
+  const q = new URLSearchParams();
+  q.set('fileId', driveId);
+  if (msg?.phone) q.set('phone', msg.phone);
+  if (msg?.name) q.set('name', msg.name);
+  q.set('from', DOCS_RETURN);
+  return `/app/photos/portal?${q}`;
+}
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -161,9 +172,13 @@ const ActionBtn = ({ title, onClick, danger, accent, children }: any) => (
   </button>
 );
 
-const MessageCard = memo(({ msg, onClick, selected, onToggleSelect, onDelete, onSetType }: any) => {
+const MessageCard = memo(({ msg, onClick, selected, selectUiActive, onToggleSelect, onDelete, onSetType }: any) => {
+  const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
+  const longPressRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+  const openClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const { title, kind } = docTitle(msg.fileName || '');
   const cleanName = displayName(msg.fileName || '');
@@ -171,6 +186,7 @@ const MessageCard = memo(({ msg, onClick, selected, onToggleSelect, onDelete, on
   const thumbUrl = kind === 'image' || kind === 'video'
     ? (authThumbUrl(msg.fileUrl, msg.id) || msg.fileUrl)
     : undefined;
+  const showCheck = selectUiActive || selected;
   const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
   const needsType = msg.tag === 'Needs type' || msg.needsType;
   const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag) && !needsType;
@@ -218,11 +234,52 @@ const MessageCard = memo(({ msg, onClick, selected, onToggleSelect, onDelete, on
 
   const doPhotoEditor = () => {
     if (!driveId) return;
-    const q = new URLSearchParams();
-    q.set('fileId', driveId);
-    if (msg.phone) q.set('phone', msg.phone);
-    if (msg.name) q.set('name', msg.name);
-    window.location.href = `/app/photos/portal?${q}`;
+    navigate(photoEditorPath(driveId, msg));
+  };
+
+  const clearLongPress = () => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  };
+
+  const onThumbOpen = () => {
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    // Delay single-click open so double-click can steal it for select (desktop).
+    if (openClickTimer.current) clearTimeout(openClickTimer.current);
+    openClickTimer.current = setTimeout(() => {
+      openClickTimer.current = null;
+      onClick(msg);
+    }, 260);
+  };
+
+  const onThumbDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (openClickTimer.current) {
+      clearTimeout(openClickTimer.current);
+      openClickTimer.current = null;
+    }
+    onToggleSelect(msg);
+  };
+
+  const onThumbTouchStart = () => {
+    longPressFired.current = false;
+    clearLongPress();
+    longPressRef.current = setTimeout(() => {
+      longPressFired.current = true;
+      onToggleSelect(msg);
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { (navigator as any).vibrate?.(12); } catch { /* ignore */ }
+      }
+    }, 450);
+  };
+
+  const onThumbTouchEnd = () => {
+    clearLongPress();
   };
 
   const doDownload = () => {
@@ -260,22 +317,38 @@ const MessageCard = memo(({ msg, onClick, selected, onToggleSelect, onDelete, on
       }}
     >
       <div className="flex gap-3 p-3">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggleSelect(msg)}
-          className="w-5 h-5 mt-1 cursor-pointer accent-[hsl(var(--marigold))] shrink-0"
-          title={selected ? 'Deselect for Build Profile' : 'Select for Build Profile'}
-          aria-label={selected ? 'Deselect document' : 'Select document for Build Profile'}
-        />
-        <button
-          type="button"
-          onClick={() => onClick(msg)}
-          className="shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--marigold))]"
-          title="Open"
-        >
-          <LazyThumbnail src={thumbUrl} ext={ext} kind={kind} label={primaryTitle} />
-        </button>
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={onThumbOpen}
+            onDoubleClick={onThumbDoubleClick}
+            onTouchStart={onThumbTouchStart}
+            onTouchEnd={onThumbTouchEnd}
+            onTouchCancel={onThumbTouchEnd}
+            onContextMenu={(e) => e.preventDefault()}
+            className="rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--marigold))] select-none"
+            title="Open · double-click or long-press to select"
+          >
+            <LazyThumbnail src={thumbUrl} ext={ext} kind={kind} label={primaryTitle} />
+          </button>
+          {showCheck && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleSelect(msg); }}
+              className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center shadow-md"
+              style={{
+                background: selected ? 'hsl(var(--marigold))' : 'hsl(var(--pt-card) / 0.92)',
+                border: selected ? '1.5px solid hsl(var(--marigold-deep))' : '1.5px solid hsl(var(--ink) / 0.35)',
+                color: selected ? 'white' : 'transparent',
+              }}
+              title={selected ? 'Deselect' : 'Select'}
+              aria-label={selected ? 'Deselect document' : 'Select document'}
+              aria-pressed={selected}
+            >
+              {selected ? <Check size={14} weight="bold" /> : null}
+            </button>
+          )}
+        </div>
 
         <div className="flex-1 min-w-0 flex flex-col gap-1.5">
           <div className="flex items-start justify-between gap-2">
@@ -1342,6 +1415,7 @@ export default function WhatsApp() {
                     <MessageCard
                       msg={msg} onClick={handleOpenFile}
                       selected={selectedDocs.has(msg.id)}
+                      selectUiActive={selectedDocs.size > 0}
                       onToggleSelect={toggleDocSelection}
                       onDelete={handleDeleteDoc}
                       onSetType={(m: Message) => setTypePickerFile(m)}
@@ -1490,12 +1564,8 @@ export default function WhatsApp() {
         }}
         onOpenInPhotoEditor={() => {
           const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
-          if (!driveId) return;
-          const q = new URLSearchParams();
-          q.set('fileId', driveId);
-          if (viewerFile?.phone) q.set('phone', viewerFile.phone);
-          if (viewerFile?.name) q.set('name', viewerFile.name);
-          window.location.href = `/app/photos/portal?${q}`;
+          if (!driveId || !viewerFile) return;
+          navigate(photoEditorPath(driveId, viewerFile));
         }}
         onDownload={() => {
           const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
