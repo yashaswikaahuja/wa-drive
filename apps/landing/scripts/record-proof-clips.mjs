@@ -1,6 +1,7 @@
 /**
- * Record silent product proof clips (WebM) with Playwright.
- * Output: apps/landing/public/proof/*.webm
+ * Record silent product proof clips (WebM) from fictional HTML fixtures.
+ * Output: apps/landing/public/proof/clip-*.webm
+ * Uses DemoFx choreography (__ready / __done). No live app / no real PII (#331).
  */
 import { chromium } from "@playwright/test";
 import fs from "fs";
@@ -13,20 +14,39 @@ const root = path.resolve(__dirname, "..");
 const proofDir = path.join(root, "public", "proof");
 fs.mkdirSync(proofDir, { recursive: true });
 
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".webm": "video/webm",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".ico": "image/x-icon",
+};
+
 function startStaticServer() {
+  const publicRoot = path.join(root, "public");
   const server = createServer((req, res) => {
     const urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
-    let file = path.join(root, "public", urlPath === "/" ? "proof/record-form-fill.html" : urlPath);
-    if (!file.startsWith(path.join(root, "public"))) {
-      res.writeHead(403); res.end(); return;
+    let file = path.join(
+      publicRoot,
+      urlPath === "/" ? "proof/record-form-fill.html" : urlPath.replace(/^\//, ""),
+    );
+    const resolved = path.resolve(file);
+    if (!resolved.startsWith(path.resolve(publicRoot))) {
+      res.writeHead(403);
+      res.end();
+      return;
     }
-    if (!fs.existsSync(file)) {
-      res.writeHead(404); res.end("missing"); return;
+    if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) {
+      res.writeHead(404);
+      res.end("missing");
+      return;
     }
-    const ext = path.extname(file);
-    const type = ext === ".html" ? "text/html" : ext === ".js" ? "text/javascript" : "application/octet-stream";
-    res.writeHead(200, { "Content-Type": type });
-    fs.createReadStream(file).pipe(res);
+    const ext = path.extname(resolved);
+    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+    fs.createReadStream(resolved).pipe(res);
   });
   return new Promise((resolve) => {
     server.listen(0, "127.0.0.1", () => {
@@ -36,7 +56,7 @@ function startStaticServer() {
   });
 }
 
-async function recordPage({ name, url, width = 1280, height = 720, seconds = 8, afterOpen }) {
+async function recordPage({ name, url, width = 1280, height = 720, fallbackSeconds = 12 }) {
   const tmpDir = path.join(proofDir, `_rec_${name}`);
   fs.rmSync(tmpDir, { recursive: true, force: true });
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -45,11 +65,30 @@ async function recordPage({ name, url, width = 1280, height = 720, seconds = 8, 
   const context = await browser.newContext({
     viewport: { width, height },
     recordVideo: { dir: tmpDir, size: { width, height } },
+    deviceScaleFactor: 1,
   });
   const page = await context.newPage();
+  page.setDefaultTimeout(25000);
+
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
-  if (afterOpen) await afterOpen(page);
-  await page.waitForTimeout(seconds * 1000);
+
+  try {
+    await page.waitForFunction(() => window.__ready === true, { timeout: 10000 });
+  } catch {
+    console.warn(`${name}: __ready timeout — continuing`);
+  }
+
+  try {
+    await page.waitForFunction(() => window.__done === true, {
+      timeout: Math.max(8000, fallbackSeconds * 1000),
+    });
+    // Brief hold so the last frame / success state is visible in the WebM
+    await page.waitForTimeout(400);
+  } catch {
+    console.warn(`${name}: __done timeout — using fallback ${fallbackSeconds}s`);
+    await page.waitForTimeout(fallbackSeconds * 1000);
+  }
+
   await context.close();
   await browser.close();
 
@@ -63,36 +102,34 @@ async function recordPage({ name, url, width = 1280, height = 720, seconds = 8, 
   return dest;
 }
 
+const CLIPS = [
+  ["clip-form-fill", "record-form-fill.html", 14],
+  ["clip-whatsapp", "record-whatsapp.html", 12],
+  ["clip-customers", "record-customers.html", 12],
+  ["clip-files", "record-files.html", 12],
+  ["clip-photos", "record-photos.html", 12],
+  ["clip-workspace", "record-workspace.html", 12],
+];
+
 const { server, port } = await startStaticServer();
 const base = `http://127.0.0.1:${port}`;
+console.log(`Serving fixtures at ${base}/proof/`);
 
 try {
-  await recordPage({
-    name: "clip-form-fill",
-    url: `${base}/proof/record-form-fill.html`,
-    seconds: 11,
-    afterOpen: async (page) => {
-      await page.waitForFunction(() => window.__ready === true);
-    },
-  });
-
-  const featurePages = [
-    ["clip-whatsapp", "record-whatsapp.html", 5],
-    ["clip-customers", "record-customers.html", 4],
-    ["clip-files", "record-files.html", 4],
-    ["clip-photos", "record-photos.html", 5],
-    ["clip-workspace", "record-workspace.html", 4],
-  ];
-  for (const [name, file, seconds] of featurePages) {
+  for (const [name, file, fallbackSeconds] of CLIPS) {
     const full = path.join(proofDir, file);
     if (!fs.existsSync(full)) {
       console.warn(`SKIP missing ${file}`);
       continue;
     }
-    await recordPage({ name, url: `${base}/proof/${file}`, seconds });
+    await recordPage({
+      name,
+      url: `${base}/proof/${file}`,
+      fallbackSeconds,
+    });
   }
 } finally {
   server.close();
 }
 
-console.log("Clips ready in", proofDir);
+console.log("Fictional proof clips ready in", proofDir);

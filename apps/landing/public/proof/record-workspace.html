@@ -1,23 +1,135 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"/><title>Workspace proof</title>
-<style>
-body{margin:0;background:#0f1218;font-family:Inter,system-ui,sans-serif}
-.stage{width:1280px;height:720px;margin:0 auto;padding:28px;box-sizing:border-box}
-.chrome{background:#111;color:#fff;border-radius:16px 16px 0 0;padding:12px 16px;font:600 13px Inter}
-.board{background:#f3efe7;padding:24px;height:640px;border-radius:0 0 16px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.tile{background:#fff;border:1px solid #e7e5e4;border-radius:14px;padding:18px;display:flex;gap:12px;align-items:center;opacity:0;animation:in .4s forwards}
-.tile:nth-child(1){animation-delay:.1s}.tile:nth-child(2){animation-delay:.25s}.tile:nth-child(3){animation-delay:.4s}
-.tile:nth-child(4){animation-delay:.55s}.tile:nth-child(5){animation-delay:.7s}.tile:nth-child(6){animation-delay:.85s}
-.ic{width:40px;height:40px;border-radius:10px;background:#111;color:#fff;display:grid;place-items:center;font-size:18px}
-@keyframes in{to{opacity:1}}
-</style></head>
-<body><div class="stage">
-<div class="chrome">CyberControl · Operator Workspace · silent clip</div>
-<div class="board">
-  <div class="tile"><div class="ic">👤</div><div style="font:700 15px Inter">Customers</div></div>
-  <div class="tile"><div class="ic">💬</div><div style="font:700 15px Inter">WhatsApp</div></div>
-  <div class="tile"><div class="ic">📁</div><div style="font:700 15px Inter">Files</div></div>
-  <div class="tile"><div class="ic">📷</div><div style="font:700 15px Inter">Photos</div></div>
-  <div class="tile"><div class="ic">📝</div><div style="font:700 15px Inter">Forms</div></div>
-  <div class="tile"><div class="ic">🏪</div><div style="font:700 15px Inter">Desk</div></div>
-</div></div></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workspace proof · fictional demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0f1218; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+    .stage { width: 1280px; height: 720px; margin: 0 auto; padding: 24px; }
+    .chrome {
+      background: #111; color: #fff; border-radius: 16px 16px 0 0; padding: 12px 16px;
+      display: flex; align-items: center; gap: 10px; font: 600 13px Inter, sans-serif;
+    }
+    .badge {
+      margin-left: auto; padding: 4px 10px; border-radius: 999px;
+      background: rgba(249,115,22,.2); color: #fb923c; font: 600 11px Inter, sans-serif;
+    }
+    .board {
+      background: #f3efe7; padding: 24px; height: 632px; border-radius: 0 0 16px 16px;
+      display: grid; grid-template-columns: 200px 1fr; gap: 18px;
+    }
+    .side {
+      background: #111; color: #fff; border-radius: 14px; padding: 16px 12px;
+    }
+    .side h4 {
+      margin: 0 0 12px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase;
+      color: rgba(255,255,255,.45);
+    }
+    .nav {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+      font: 600 13px Inter, sans-serif; color: rgba(255,255,255,.7); margin-bottom: 4px;
+      transition: background .2s, color .2s;
+    }
+    .nav.on { background: rgba(249,115,22,.2); color: #fb923c; }
+    .main h2 { margin: 0 0 6px; font: 700 20px Inter, sans-serif; color: #111; }
+    .main .sub { color: #78716c; font-size: 13px; margin-bottom: 18px; }
+    .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .tile {
+      background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; padding: 18px;
+      display: flex; gap: 12px; align-items: center;
+      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s, border-color .2s, box-shadow .2s;
+    }
+    .tile.show { opacity: 1; transform: none; }
+    .tile.hover {
+      border-color: rgba(249,115,22,.55); box-shadow: 0 8px 20px rgba(0,0,0,.06);
+      transform: translateY(-2px);
+    }
+    .ic {
+      width: 40px; height: 40px; border-radius: 10px; background: #111; color: #fff;
+      display: grid; place-items: center; font-size: 18px; flex-shrink: 0;
+    }
+    .strip {
+      margin-top: 18px; background: #fff; border: 1px solid #e7e5e4; border-radius: 12px;
+      padding: 12px 14px; display: none; align-items: center; gap: 10px;
+    }
+    .strip.show { display: flex; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="chrome">
+      CyberControl · Operator Workspace
+      <span class="badge">Demo · fictional data</span>
+    </div>
+    <div class="board">
+      <aside class="side">
+        <h4>CyberControl</h4>
+        <div class="nav on" id="navHome">🏠 Today</div>
+        <div class="nav" id="navCust">👤 Customers</div>
+        <div class="nav" id="navWa">💬 WhatsApp</div>
+        <div class="nav" id="navFiles">📁 Files</div>
+      </aside>
+      <main class="main">
+        <h2>Today · Demo Desk</h2>
+        <div class="sub">Fictional café workspace — no live accounts</div>
+        <div class="tiles">
+          <div class="tile" id="m1"><div class="ic">👤</div><div><div style="font:700 15px Inter">Customers</div><div style="color:#666;font-size:12px">4 demo profiles</div></div></div>
+          <div class="tile" id="m2"><div class="ic">💬</div><div><div style="font:700 15px Inter">WhatsApp</div><div style="color:#666;font-size:12px">2 demo chats</div></div></div>
+          <div class="tile" id="m3"><div class="ic">📁</div><div><div style="font:700 15px Inter">Files</div><div style="color:#666;font-size:12px">Demo folders</div></div></div>
+          <div class="tile" id="m4"><div class="ic">📷</div><div><div style="font:700 15px Inter">Photos</div><div style="color:#666;font-size:12px">Print tools</div></div></div>
+          <div class="tile" id="m5"><div class="ic">📝</div><div><div style="font:700 15px Inter">Forms</div><div style="color:#666;font-size:12px">AutoFill ready</div></div></div>
+          <div class="tile" id="m6"><div class="ic">🏪</div><div><div style="font:700 15px Inter">Desk</div><div style="color:#666;font-size:12px">Operator home</div></div></div>
+        </div>
+        <div class="strip" id="strip">
+          <span style="font:700 13px Inter">Working on</span>
+          <span style="color:#c2410c;font:600 13px Inter">Ananya Demo · 90000 00001</span>
+          <span style="margin-left:auto;color:#0f766e;font:600 12px Inter">Opened Customers</span>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="./demo-fx.js"></script>
+  <script>
+    async function runOnce() {
+      const fx = window.DemoFx;
+      const tiles = ['m1','m2','m3','m4','m5','m6'].map((id) => document.getElementById(id));
+      const navCust = document.getElementById('navCust');
+      const navHome = document.getElementById('navHome');
+      const strip = document.getElementById('strip');
+      tiles.forEach((t) => t.classList.remove('show','hover'));
+      navCust.classList.remove('on');
+      navHome.classList.add('on');
+      strip.classList.remove('show');
+
+      await fx.sleep(400);
+      for (const t of tiles) {
+        t.classList.add('show');
+        await fx.sleep(120);
+      }
+      await fx.sleep(250);
+      await fx.moveTo(tiles[1], 550);
+      tiles[1].classList.add('hover');
+      await fx.sleep(350);
+      tiles[1].classList.remove('hover');
+      await fx.moveTo(tiles[0], 450);
+      tiles[0].classList.add('hover');
+      await fx.highlight(tiles[0], 250);
+      await fx.click(tiles[0]);
+      navHome.classList.remove('on');
+      navCust.classList.add('on');
+      strip.classList.add('show');
+      await fx.sleep(400);
+      await fx.moveTo(navCust, 450);
+      await fx.sleep(1100);
+      window.__done = true;
+    }
+    window.__runClip = runOnce;
+    if (window.DemoFx) {
+      window.__ready = true;
+      runOnce().catch((e) => { console.error(e); window.__done = true; });
+    }
+  </script>
+</body>
+</html>

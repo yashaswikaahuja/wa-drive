@@ -1,24 +1,125 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"/><title>Photos proof</title>
-<style>
-body{margin:0;background:#0f1218;font-family:Inter,system-ui,sans-serif}
-.stage{width:1280px;height:720px;margin:0 auto;padding:28px;box-sizing:border-box}
-.chrome{background:#111;color:#fff;border-radius:16px 16px 0 0;padding:12px 16px;font:600 13px Inter}
-.board{background:#f3efe7;padding:28px;height:640px;border-radius:0 0 16px 16px;display:flex;align-items:center;justify-content:center;gap:40px}
-.box{background:#fff;border:1px dashed #d6d3d1;border-radius:16px;padding:16px;text-align:center}
-.box.ready{border:2px solid #14b8a6;box-shadow:0 10px 30px rgba(0,0,0,.08)}
-.ph{width:110px;height:140px;margin:8px auto;border-radius:6px;background:linear-gradient(135deg,#a8a29e,#78716c)}
-.ready .ph{width:92px;height:118px;background:linear-gradient(135deg,#e7e5e4,#a8a29e);position:relative}
-.ready .ph:after{content:'4.5 × 3.5 cm';position:absolute;left:0;right:0;bottom:0;background:#f5f5f4;font:10px ui-monospace;padding:4px}
-.arrow{font-size:28px;color:#ea580c;animation:pulse 1.2s infinite}
-@keyframes pulse{50%{transform:translateX(6px)}}
-.list{font-size:14px;color:#444;line-height:1.8}
-</style></head>
-<body><div class="stage">
-<div class="chrome">CyberControl · Photo & PDF Tools · silent clip</div>
-<div class="board">
-  <div class="box"><div style="font:600 11px Inter;color:#777;text-transform:uppercase">Before</div><div class="ph"></div></div>
-  <div class="arrow">→</div>
-  <div class="box ready"><div style="font:600 11px Inter;color:#0f766e;text-transform:uppercase">Print ready</div><div class="ph"></div></div>
-  <div class="list"><b style="color:#111">Passport size</b><br>✓ White background<br>✓ Exact dimensions<br>✓ PDF / print export</div>
-</div></div></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Photos proof · fictional demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0f1218; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+    .stage { width: 1280px; height: 720px; margin: 0 auto; padding: 24px; }
+    .chrome {
+      background: #111; color: #fff; border-radius: 16px 16px 0 0; padding: 12px 16px;
+      display: flex; align-items: center; gap: 10px; font: 600 13px Inter, sans-serif;
+    }
+    .badge {
+      margin-left: auto; padding: 4px 10px; border-radius: 999px;
+      background: rgba(249,115,22,.2); color: #fb923c; font: 600 11px Inter, sans-serif;
+    }
+    .board {
+      background: #f3efe7; padding: 28px; height: 632px; border-radius: 0 0 16px 16px;
+      display: flex; align-items: center; justify-content: center; gap: 36px;
+    }
+    .box {
+      background: #fff; border: 1px dashed #d6d3d1; border-radius: 16px; padding: 16px 20px;
+      text-align: center; transition: border-color .3s, box-shadow .3s;
+    }
+    .box.ready { border: 2px solid #14b8a6; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+    .ph {
+      width: 120px; height: 150px; margin: 10px auto; border-radius: 6px;
+      background: linear-gradient(135deg,#a8a29e,#78716c); position: relative;
+      transition: width .4s, height .4s, background .4s;
+    }
+    .ready .ph {
+      width: 96px; height: 122px;
+      background: linear-gradient(180deg,#f5f5f4 0 18%, #d6d3d1 18% 82%, #f5f5f4 82%);
+    }
+    .ready .ph:after {
+      content: '4.5 × 3.5 cm'; position: absolute; left: 0; right: 0; bottom: 0;
+      background: #f5f5f4; font: 10px ui-monospace, monospace; padding: 4px;
+    }
+    .arrow { font-size: 28px; color: #ea580c; opacity: .5; transition: opacity .3s, transform .3s; }
+    .arrow.on { opacity: 1; transform: translateX(6px); }
+    .side { font-size: 14px; color: #444; line-height: 1.8; min-width: 180px; }
+    .export-btn {
+      margin-top: 14px; border: 0; border-radius: 10px; padding: 10px 16px;
+      background: #f97316; color: #111; font: 700 13px Inter, sans-serif; cursor: pointer;
+    }
+    .toast {
+      display: none; margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+      background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3);
+      color: #047857; font: 600 12px Inter, sans-serif;
+    }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="chrome">
+      CyberControl · Photo &amp; PDF Tools
+      <span class="badge">Demo · fictional data</span>
+    </div>
+    <div class="board">
+      <div class="box" id="before">
+        <div style="font:600 11px Inter;color:#777;text-transform:uppercase">Before</div>
+        <div class="ph" id="phBefore"></div>
+        <div style="font:12px Inter;color:#78716c">demo_selfie.jpg</div>
+      </div>
+      <div class="arrow" id="arrow">→</div>
+      <div class="box" id="after">
+        <div style="font:600 11px Inter;color:#777;text-transform:uppercase" id="afterLabel">Processing…</div>
+        <div class="ph" id="phAfter"></div>
+        <div style="font:12px Inter;color:#78716c">passport crop</div>
+      </div>
+      <div class="side">
+        <b style="color:#111">Passport size</b><br>
+        ✓ White background<br>
+        ✓ Exact dimensions<br>
+        ✓ PDF / print export
+        <div>
+          <button class="export-btn" id="exportBtn" type="button">Export print-ready</button>
+          <div class="toast" id="toast">✓ Ready · demo_passport.pdf</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="./demo-fx.js"></script>
+  <script>
+    async function runOnce() {
+      const fx = window.DemoFx;
+      const after = document.getElementById('after');
+      const afterLabel = document.getElementById('afterLabel');
+      const arrow = document.getElementById('arrow');
+      const exportBtn = document.getElementById('exportBtn');
+      const toast = document.getElementById('toast');
+      after.classList.remove('ready');
+      afterLabel.textContent = 'Processing…';
+      afterLabel.style.color = '#777';
+      arrow.classList.remove('on');
+      toast.classList.remove('show');
+
+      await fx.sleep(600);
+      await fx.moveTo(document.getElementById('before'), 500);
+      await fx.sleep(350);
+      arrow.classList.add('on');
+      await fx.moveTo(after, 550);
+      await fx.sleep(400);
+      after.classList.add('ready');
+      afterLabel.textContent = 'Print ready';
+      afterLabel.style.color = '#0f766e';
+      await fx.sleep(400);
+      await fx.moveTo(exportBtn, 550);
+      await fx.highlight(exportBtn, 280);
+      await fx.click(exportBtn);
+      toast.classList.add('show');
+      await fx.sleep(1200);
+      window.__done = true;
+    }
+    window.__runClip = runOnce;
+    if (window.DemoFx) {
+      window.__ready = true;
+      runOnce().catch((e) => { console.error(e); window.__done = true; });
+    }
+  </script>
+</body>
+</html>

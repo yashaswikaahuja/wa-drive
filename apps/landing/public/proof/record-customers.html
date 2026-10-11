@@ -1,20 +1,137 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"/><title>Customers proof</title>
-<style>
-body{margin:0;background:#0f1218;font-family:Inter,system-ui,sans-serif}
-.stage{width:1280px;height:720px;margin:0 auto;padding:28px;box-sizing:border-box}
-.chrome{background:#111;color:#fff;border-radius:16px 16px 0 0;padding:12px 16px;font:600 13px Inter}
-.board{background:#f3efe7;padding:20px;height:640px;border-radius:0 0 16px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.card{background:#fff;border:1px solid #e7e5e4;border-radius:14px;padding:16px;display:flex;gap:12px;align-items:center;opacity:0;animation:in .45s forwards}
-.card:nth-child(1){animation-delay:.2s}.card:nth-child(2){animation-delay:.5s}.card:nth-child(3){animation-delay:.8s}.card:nth-child(4){animation-delay:1.1s}
-.av{width:44px;height:44px;border-radius:999px;background:#ffedd5;color:#c2410c;display:grid;place-items:center;font:700 13px Inter}
-@keyframes in{to{opacity:1}}
-</style></head>
-<body><div class="stage">
-<div class="chrome">CyberControl · Customer Profiles · silent clip</div>
-<div class="board">
-  <div class="card"><div class="av">RK</div><div><div style="font:700 15px Inter">Ramesh Kumar</div><div style="color:#666;font-size:13px">98765 44120</div><div style="color:#0f766e;font-size:12px">6 docs · last: Aadhaar</div></div></div>
-  <div class="card"><div class="av">PD</div><div><div style="font:700 15px Inter">Priya Devi</div><div style="color:#666;font-size:13px">98001 22314</div><div style="color:#0f766e;font-size:12px">4 docs · last: Photo</div></div></div>
-  <div class="card"><div class="av">AS</div><div><div style="font:700 15px Inter">Amit Singh</div><div style="color:#666;font-size:13px">99314 77820</div><div style="color:#0f766e;font-size:12px">9 docs · last: Form</div></div></div>
-  <div class="card"><div class="av">SJ</div><div><div style="font:700 15px Inter">Suman Ji</div><div style="color:#666;font-size:13px">91234 55667</div><div style="color:#0f766e;font-size:12px">3 docs · last: PDF</div></div></div>
-</div></div></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Customers proof · fictional demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0f1218; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+    .stage { width: 1280px; height: 720px; margin: 0 auto; padding: 24px; }
+    .chrome {
+      background: #111; color: #fff; border-radius: 16px 16px 0 0; padding: 12px 16px;
+      display: flex; align-items: center; gap: 10px; font: 600 13px Inter, sans-serif;
+    }
+    .badge {
+      margin-left: auto; padding: 4px 10px; border-radius: 999px;
+      background: rgba(249,115,22,.2); color: #fb923c; font: 600 11px Inter, sans-serif;
+    }
+    .board {
+      background: #f3efe7; padding: 18px; height: 632px; border-radius: 0 0 16px 16px;
+      display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px;
+    }
+    .list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start; }
+    .card {
+      background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; padding: 14px;
+      display: flex; gap: 12px; align-items: center; cursor: pointer;
+      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s, border-color .2s, box-shadow .2s;
+    }
+    .card.show { opacity: 1; transform: none; }
+    .card.selected { border-color: rgba(249,115,22,.55); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
+    .av {
+      width: 44px; height: 44px; border-radius: 999px; background: #ffedd5; color: #c2410c;
+      display: grid; place-items: center; font: 700 13px Inter, sans-serif; flex-shrink: 0;
+    }
+    .panel {
+      background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; padding: 18px;
+      opacity: 0; transform: translateX(12px); transition: opacity .4s, transform .4s;
+    }
+    .panel.open { opacity: 1; transform: none; }
+    .panel h2 { margin: 0 0 4px; font: 700 18px Inter, sans-serif; }
+    .panel .phone { color: #666; font-size: 13px; margin-bottom: 14px; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f5f5f4; font-size: 13px; }
+    .row span:first-child { color: #78716c; }
+    .tag {
+      display: inline-block; margin-top: 14px; padding: 4px 10px; border-radius: 999px;
+      background: #d1fae5; color: #047857; font: 600 11px Inter, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="chrome">
+      CyberControl · Customer Profiles
+      <span class="badge">Demo · fictional data</span>
+    </div>
+    <div class="board">
+      <div class="list">
+        <div class="card" id="c1" data-name="Ananya Demo">
+          <div class="av">AD</div>
+          <div>
+            <div style="font:700 15px Inter">Ananya Demo</div>
+            <div style="color:#666;font-size:13px">90000 00001</div>
+            <div style="color:#0f766e;font-size:12px">6 docs · last: Aadhaar</div>
+          </div>
+        </div>
+        <div class="card" id="c2">
+          <div class="av">VD</div>
+          <div>
+            <div style="font:700 15px Inter">Vikram Demo</div>
+            <div style="color:#666;font-size:13px">90000 00002</div>
+            <div style="color:#0f766e;font-size:12px">4 docs · last: Photo</div>
+          </div>
+        </div>
+        <div class="card" id="c3">
+          <div class="av">PD</div>
+          <div>
+            <div style="font:700 15px Inter">Priya Demo</div>
+            <div style="color:#666;font-size:13px">90000 00003</div>
+            <div style="color:#0f766e;font-size:12px">9 docs · last: Form</div>
+          </div>
+        </div>
+        <div class="card" id="c4">
+          <div class="av">KD</div>
+          <div>
+            <div style="font:700 15px Inter">Kabir Demo</div>
+            <div style="color:#666;font-size:13px">90000 00004</div>
+            <div style="color:#0f766e;font-size:12px">3 docs · last: PDF</div>
+          </div>
+        </div>
+      </div>
+      <aside class="panel" id="detail">
+        <h2 id="dName">—</h2>
+        <div class="phone" id="dPhone">—</div>
+        <div class="row"><span>Aadhaar</span><span>0000 1111 2222</span></div>
+        <div class="row"><span>DOB</span><span>12/03/1995</span></div>
+        <div class="row"><span>Documents</span><span>6 ready</span></div>
+        <div class="row"><span>Folder</span><span>Customers / Ananya Demo</span></div>
+        <div class="tag">Demo profile · fictional</div>
+      </aside>
+    </div>
+  </div>
+  <script src="./demo-fx.js"></script>
+  <script>
+    async function runOnce() {
+      const fx = window.DemoFx;
+      const cards = ['c1','c2','c3','c4'].map((id) => document.getElementById(id));
+      const detail = document.getElementById('detail');
+      cards.forEach((c) => c.classList.remove('show','selected'));
+      detail.classList.remove('open');
+
+      await fx.sleep(400);
+      for (const c of cards) {
+        c.classList.add('show');
+        await fx.sleep(180);
+      }
+      await fx.sleep(300);
+      const target = cards[0];
+      await fx.moveTo(target, 650);
+      await fx.highlight(target, 280);
+      await fx.click(target);
+      target.classList.add('selected');
+      document.getElementById('dName').textContent = 'Ananya Demo';
+      document.getElementById('dPhone').textContent = '90000 00001';
+      detail.classList.add('open');
+      await fx.sleep(500);
+      await fx.moveTo(detail, 450);
+      await fx.sleep(1200);
+      window.__done = true;
+    }
+    window.__runClip = runOnce;
+    if (window.DemoFx) {
+      window.__ready = true;
+      runOnce().catch((e) => { console.error(e); window.__done = true; });
+    }
+  </script>
+</body>
+</html>

@@ -1,19 +1,43 @@
 /**
- * Record silent WebM proof clips from the REAL CyberControl app
- * (https://app.cybercontrol.fun), not HTML stage mocks.
+ * PRIVATE debug recorder against the REAL CyberControl app.
+ * Public marketing clips MUST use record-proof-clips.mjs (fictional fixtures) per #331.
+ *
+ * Gate: set ALLOW_REAL_DATA=1 to run. Outputs go to public/proof/_private-rec/
+ * (never overwrite public clip-*.webm). Do NOT commit those WebMs.
  *
  * Requires apps/frontend/.tmp-cc-auth.json (zustand persist shape for key cc-auth).
- * Output: apps/landing/public/proof/clip-*.webm
  */
 import { chromium } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
+if (process.env.ALLOW_REAL_DATA !== "1") {
+  console.error(`
+REFUSED (#331): record-real-app-clips.mjs must not write public proof clips.
+
+Public WebMs use fictional fixtures only:
+  pnpm record:proof
+  (or: node scripts/record-proof-clips.mjs)
+
+For private debugging against live data, set ALLOW_REAL_DATA=1.
+Outputs then go to public/proof/_private-rec/ — NEVER commit those files.
+`);
+  process.exit(1);
+}
+
+console.warn(`
+╔══════════════════════════════════════════════════════════════════╗
+║  WARNING: REAL-DATA recording enabled (ALLOW_REAL_DATA=1)        ║
+║  Writing to public/proof/_private-rec/ ONLY                      ║
+║  NEVER commit those WebMs — they may contain café PII (#331)     ║
+╚══════════════════════════════════════════════════════════════════╝
+`);
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const landingRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(landingRoot, "../..");
-const proofDir = path.join(landingRoot, "public", "proof");
+const proofDir = path.join(landingRoot, "public", "proof", "_private-rec");
 fs.mkdirSync(proofDir, { recursive: true });
 
 const APP = "https://app.cybercontrol.fun";
@@ -203,4 +227,5 @@ await withRecording("clip-form-fill", W, H, async (page) => {
   await page.waitForTimeout(1800);
 });
 
-console.log("Real-app clips ready in", proofDir);
+console.log("Private real-app clips ready in", proofDir);
+console.warn("Do NOT commit files under public/proof/_private-rec/ (#331)");

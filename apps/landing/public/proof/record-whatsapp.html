@@ -1,38 +1,158 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"/><title>WhatsApp proof</title>
-<style>
-body{margin:0;background:#0f1218;font-family:Inter,system-ui,sans-serif}
-.stage{width:1280px;height:720px;margin:0 auto;padding:28px;box-sizing:border-box}
-.chrome{background:#111;color:#fff;border-radius:16px 16px 0 0;padding:12px 16px;font:600 13px Inter}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;background:#1a2030;padding:16px;height:640px;border-radius:0 0 16px 16px}
-.panel{border-radius:14px;overflow:hidden}
-.wa{background:#0b141a;color:#fff;padding:12px;height:100%;box-sizing:border-box}
-.bubble{max-width:85%;margin:8px 0;padding:8px 10px;border-radius:10px;font-size:13px}
-.me{margin-left:auto;background:#005c4b}
-.them{background:#1f2c34}
-.file{height:56px;display:grid;place-items:center;background:rgba(255,255,255,.08);border-radius:8px;margin-bottom:4px;font-size:12px}
-.desk{background:#fff;padding:14px;height:100%;box-sizing:border-box}
-.item{display:flex;gap:10px;align-items:center;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0;opacity:0;transform:translateY(8px);animation:in .5s forwards}
-.item:nth-child(2){animation-delay:.6s}
-.item:nth-child(3){animation-delay:1.2s}
-.item:nth-child(4){animation-delay:1.8s}
-@keyframes in{to{opacity:1;transform:none}}
-.badge{display:inline-block;margin-left:auto;background:#d1fae5;color:#047857;font:600 11px Inter;padding:3px 8px;border-radius:999px}
-</style></head>
-<body><div class="stage">
-  <div class="chrome">CyberControl · WhatsApp Documents · silent clip</div>
-  <div class="grid">
-    <div class="panel wa">
-      <div style="font:600 13px Inter;margin-bottom:10px">Suresh Bhai</div>
-      <div class="bubble me">bhaiya aadhaar bhej raha hu</div>
-      <div class="bubble them"><div class="file">📄 aadhaar_front.jpg</div><div style="opacity:.5;font-size:11px">today 10:42</div></div>
-      <div class="bubble them"><div class="file">📄 marksheet_10th.pdf</div></div>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WhatsApp proof · fictional demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #0f1218; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+    .stage { width: 1280px; height: 720px; margin: 0 auto; padding: 24px; }
+    .chrome {
+      background: #111; color: #fff; border-radius: 16px 16px 0 0; padding: 12px 16px;
+      display: flex; align-items: center; gap: 10px; font: 600 13px Inter, sans-serif;
+    }
+    .badge {
+      margin-left: auto; padding: 4px 10px; border-radius: 999px;
+      background: rgba(249,115,22,.2); color: #fb923c; font: 600 11px Inter, sans-serif;
+    }
+    .grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #1a2030;
+      padding: 16px; height: 632px; border-radius: 0 0 16px 16px;
+    }
+    .panel { border-radius: 14px; overflow: hidden; height: 100%; }
+    .wa { background: #0b141a; color: #fff; padding: 14px; display: flex; flex-direction: column; }
+    .wa-head { font: 600 14px Inter, sans-serif; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .wa-head .av {
+      width: 32px; height: 32px; border-radius: 999px; background: #334155;
+      display: grid; place-items: center; font: 700 11px Inter, sans-serif;
+    }
+    .chat { flex: 1; overflow: hidden; }
+    .bubble {
+      max-width: 88%; margin: 8px 0; padding: 8px 10px; border-radius: 10px; font-size: 13px;
+      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s;
+    }
+    .bubble.show { opacity: 1; transform: none; }
+    .me { margin-left: auto; background: #005c4b; }
+    .them { background: #1f2c34; }
+    .file {
+      height: 52px; display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,.08); border-radius: 8px; margin-bottom: 4px;
+      padding: 0 10px; font-size: 12px;
+    }
+    .desk { background: #f7f4ee; padding: 16px; height: 100%; }
+    .desk h3 { margin: 0 0 4px; font: 700 15px Inter, sans-serif; color: #111; }
+    .desk .sub { color: #78716c; font-size: 12px; margin-bottom: 12px; }
+    .item {
+      display: flex; gap: 10px; align-items: center; border: 1px solid #e7e5e4; background: #fff;
+      border-radius: 10px; padding: 10px 12px; margin: 8px 0;
+      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s, border-color .2s, box-shadow .2s;
+    }
+    .item.show { opacity: 1; transform: none; }
+    .item.selected { border-color: rgba(249,115,22,.55); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
+    .badge-ok {
+      margin-left: auto; background: #d1fae5; color: #047857; font: 600 11px Inter, sans-serif;
+      padding: 3px 8px; border-radius: 999px;
+    }
+    .save-btn {
+      margin-top: 12px; border: 0; border-radius: 10px; padding: 10px 14px;
+      background: #f97316; color: #111; font: 700 13px Inter, sans-serif; cursor: pointer;
+      opacity: 0; transition: opacity .3s;
+    }
+    .save-btn.show { opacity: 1; }
+    .toast {
+      display: none; margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+      background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3);
+      color: #047857; font: 600 12px Inter, sans-serif;
+    }
+    .toast.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="chrome">
+      CyberControl · WhatsApp Documents
+      <span class="badge">Demo · fictional data</span>
     </div>
-    <div class="panel desk">
-      <div style="font:700 14px Inter;margin-bottom:8px">Saved to customer folder</div>
-      <div class="item"><span>📄</span><span style="flex:1;font:600 13px Inter">aadhaar_front.jpg</span><span class="badge">saved</span></div>
-      <div class="item"><span>📄</span><span style="flex:1;font:600 13px Inter">marksheet_10th.pdf</span><span class="badge">saved</span></div>
-      <div class="item"><span>📄</span><span style="flex:1;font:600 13px Inter">IMG_signature.jpg</span><span class="badge">saved</span></div>
+    <div class="grid">
+      <div class="panel wa">
+        <div class="wa-head"><div class="av">VD</div>Vikram Demo · 90000 00002</div>
+        <div class="chat">
+          <div class="bubble me" id="b1">bhaiya demo docs bhej raha hu</div>
+          <div class="bubble them" id="b2">
+            <div class="file">📄 demo_aadhaar_front.jpg</div>
+            <div style="opacity:.5;font-size:11px">today 10:42</div>
+          </div>
+          <div class="bubble them" id="b3">
+            <div class="file">📄 demo_marksheet.pdf</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel desk">
+        <h3>Save to customer folder</h3>
+        <div class="sub">Ananya Demo · 90000 00001</div>
+        <div class="item" id="d1"><span>📄</span><span style="flex:1;font:600 13px Inter">demo_aadhaar_front.jpg</span><span class="badge-ok" id="s1" style="visibility:hidden">saved</span></div>
+        <div class="item" id="d2"><span>📄</span><span style="flex:1;font:600 13px Inter">demo_marksheet.pdf</span><span class="badge-ok" id="s2" style="visibility:hidden">saved</span></div>
+        <button class="save-btn" id="saveBtn" type="button">Save selected → folder</button>
+        <div class="toast" id="toast">✓ Saved to Ananya Demo / Documents</div>
+      </div>
     </div>
   </div>
-</div></body></html>
+  <script src="./demo-fx.js"></script>
+  <script>
+    async function runOnce() {
+      const fx = window.DemoFx;
+      const b1 = document.getElementById('b1');
+      const b2 = document.getElementById('b2');
+      const b3 = document.getElementById('b3');
+      const d1 = document.getElementById('d1');
+      const d2 = document.getElementById('d2');
+      const s1 = document.getElementById('s1');
+      const s2 = document.getElementById('s2');
+      const saveBtn = document.getElementById('saveBtn');
+      const toast = document.getElementById('toast');
+
+      [b1,b2,b3,d1,d2].forEach((el) => el.classList.remove('show','selected'));
+      s1.style.visibility = 'hidden';
+      s2.style.visibility = 'hidden';
+      saveBtn.classList.remove('show');
+      toast.classList.remove('show');
+
+      await fx.sleep(500);
+      b1.classList.add('show');
+      await fx.sleep(500);
+      b2.classList.add('show');
+      await fx.sleep(450);
+      b3.classList.add('show');
+      await fx.sleep(400);
+
+      d1.classList.add('show');
+      d2.classList.add('show');
+      saveBtn.classList.add('show');
+      await fx.sleep(300);
+
+      await fx.moveTo(d1, 550);
+      await fx.click(d1);
+      d1.classList.add('selected');
+      await fx.sleep(200);
+      await fx.moveTo(d2, 400);
+      await fx.click(d2);
+      d2.classList.add('selected');
+      await fx.sleep(250);
+      await fx.moveTo(saveBtn, 500);
+      await fx.highlight(saveBtn, 250);
+      await fx.click(saveBtn);
+      s1.style.visibility = 'visible';
+      s2.style.visibility = 'visible';
+      toast.classList.add('show');
+      await fx.sleep(1100);
+      window.__done = true;
+    }
+    window.__runClip = runOnce;
+    if (window.DemoFx) {
+      window.__ready = true;
+      runOnce().catch((e) => { console.error(e); window.__done = true; });
+    }
+  </script>
+</body>
+</html>

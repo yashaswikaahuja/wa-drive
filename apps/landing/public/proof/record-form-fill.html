@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Form AutoFill proof clip</title>
+  <title>Form AutoFill proof · fictional demo</title>
   <style>
     * { box-sizing: border-box; }
     body {
       margin: 0; font-family: Inter, system-ui, sans-serif;
       background: #0f1218; color: #111; overflow: hidden;
     }
-    .stage { width: 1280px; height: 720px; margin: 0 auto; background: #1a1f2e; }
+    .stage { width: 1280px; height: 720px; margin: 0 auto; background: #1a1f2e; position: relative; }
     .chrome {
       display: flex; align-items: center; gap: 8px;
       padding: 10px 14px; background: #0b0e14; border-bottom: 1px solid rgba(255,255,255,.1);
@@ -24,43 +24,107 @@
       padding: 4px 10px; border-radius: 999px; background: rgba(249,115,22,.2);
       color: #fb923c; font: 600 11px/1 Inter, sans-serif;
     }
-    .grid { display: grid; grid-template-columns: 240px 1fr; height: calc(720px - 45px); }
-    .side { padding: 16px; background: rgba(0,0,0,.28); border-right: 1px solid rgba(255,255,255,.1); color: #fff; }
-    .side h4 { margin: 0 0 12px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.45); }
-    .card {
-      border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.05); transition: .25s;
+    .form-wrap {
+      height: calc(720px - 45px); padding: 22px 28px; background: #f7f4ee;
+      position: relative;
     }
-    .card.on { border-color: rgba(249,115,22,.55); background: rgba(249,115,22,.16); }
-    .avatar {
-      width: 36px; height: 36px; border-radius: 999px; background: #f97316; color: #111;
-      display: grid; place-items: center; font: 700 12px Inter, sans-serif;
+    .form-card {
+      max-width: 720px; background: #fff; border: 1px solid #e7e5e4; border-radius: 14px;
+      padding: 20px 24px; box-shadow: 0 8px 24px rgba(0,0,0,.06);
     }
-    .row { display: flex; gap: 10px; align-items: center; }
-    .btn {
-      margin-top: 14px; width: 100%; border: 0; border-radius: 8px; padding: 10px;
-      font: 600 12px Inter, sans-serif; background: rgba(255,255,255,.12); color: rgba(255,255,255,.7);
+    .form-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+    .form-head h1 { margin: 0; font: 700 18px/1.2 Inter, sans-serif; color: #111; }
+    .form-head .meta { font: 500 11px Inter, sans-serif; color: #78716c; }
+    .gov-bar {
+      display: flex; gap: 10px; align-items: center; margin-bottom: 16px; padding-bottom: 12px;
+      border-bottom: 1px solid #e7e5e4;
     }
-    .btn.on { background: #f97316; color: #111; }
-    .form { padding: 20px 22px; background: #f7f4ee; }
-    .form-head { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 13px; font-weight: 600; }
-    label { display: block; margin-bottom: 10px; }
-    label span { display: block; margin-bottom: 4px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: rgba(17,17,17,.45); font-weight: 600; }
+    .gov-seal {
+      width: 36px; height: 36px; border-radius: 8px; background: #1e3a5f; color: #fff;
+      display: grid; place-items: center; font: 700 11px Inter, sans-serif;
+    }
+    .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+    label { display: block; }
+    label.full { grid-column: 1 / -1; }
+    label span {
+      display: block; margin-bottom: 4px; font-size: 10px; letter-spacing: .08em;
+      text-transform: uppercase; color: rgba(17,17,17,.45); font-weight: 600;
+    }
     .field {
-      height: 38px; border-radius: 8px; border: 1px solid rgba(17,17,17,.1);
-      background: rgba(255,255,255,.75); padding: 0 12px; display: flex; align-items: center;
-      font-size: 14px; color: rgba(17,17,17,.25); transition: .2s;
+      height: 38px; border-radius: 8px; border: 1px solid rgba(17,17,17,.12);
+      background: rgba(255,255,255,.95); padding: 0 12px; display: flex; align-items: center;
+      font-size: 14px; color: rgba(17,17,17,.28); transition: border-color .2s, background .2s, color .2s, box-shadow .2s;
     }
-    .field.filling { border-color: #f97316; background: rgba(249,115,22,.12); color: #c2410c; }
-    .field.filled { border-color: rgba(16,185,129,.4); background: #fff; color: #111; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .field.filling { border-color: #f97316; background: rgba(249,115,22,.1); color: #c2410c; }
+    .field.filled {
+      border-color: rgba(16,185,129,.45); background: #fff; color: #111;
+      box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
     .done {
-      display: none; margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+      display: none; margin-top: 14px; padding: 10px 12px; border-radius: 8px;
       border: 1px solid rgba(16,185,129,.3); background: rgba(16,185,129,.12);
       color: #047857; font: 600 12px Inter, sans-serif;
     }
     .done.show { display: block; }
-    .ok { margin-top: 8px; font-size: 11px; color: #fb923c; font-weight: 600; opacity: 0; }
-    .ok.show { opacity: 1; }
+
+    /* Extension popup — dark/orange AutoFill vibe */
+    .ext {
+      position: absolute; top: 28px; right: 36px; width: 300px;
+      background: #141820; color: #f5f5f4; border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.1);
+      box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(249,115,22,.15);
+      opacity: 0; transform: translateY(10px) scale(.96);
+      transition: opacity .35s ease, transform .35s ease;
+      z-index: 40; overflow: hidden; pointer-events: none;
+    }
+    .ext.show { opacity: 1; transform: none; pointer-events: auto; }
+    .ext-head {
+      display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.08); background: #1a2030;
+    }
+    .ext-mark {
+      width: 28px; height: 28px; border-radius: 8px; background: #111;
+      display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(249,115,22,.4);
+    }
+    .ext-mark span { color: #f97316; font-size: 14px; }
+    .ext-title { font: 700 13px Inter, sans-serif; }
+    .ext-title em { font-style: normal; color: #fb923c; }
+    .ext-conn {
+      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      font: 600 10px Inter, sans-serif; color: #86efac;
+      padding: 3px 8px; border-radius: 999px; background: rgba(16,185,129,.12);
+    }
+    .ext-conn i { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; display: block; }
+    .ext-site {
+      padding: 10px 14px; font: 12px Inter, sans-serif; color: rgba(255,255,255,.55);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .ext-site strong { color: rgba(255,255,255,.85); font-weight: 600; }
+    .profile-chip {
+      margin: 12px 14px; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid rgba(249,115,22,.35); background: rgba(249,115,22,.1);
+      display: flex; gap: 10px; align-items: center;
+    }
+    .profile-chip .av {
+      width: 36px; height: 36px; border-radius: 999px; background: #f97316; color: #111;
+      display: grid; place-items: center; font: 700 12px Inter, sans-serif; flex-shrink: 0;
+    }
+    .profile-chip .name { font: 600 13px Inter, sans-serif; }
+    .profile-chip .sub { font: 11px Inter, sans-serif; color: rgba(255,255,255,.5); margin-top: 2px; }
+    .fill-btn {
+      display: block; width: calc(100% - 28px); margin: 0 14px 14px; border: 0; border-radius: 10px;
+      padding: 12px 14px; font: 700 14px Inter, sans-serif; cursor: pointer;
+      background: linear-gradient(180deg, #fb923c, #f97316); color: #111;
+      box-shadow: 0 6px 16px -6px rgba(249,115,22,.55);
+      transition: filter .15s, transform .1s;
+    }
+    .fill-btn:active { transform: scale(.98); }
+    .fill-btn.running { background: #334155; color: #e2e8f0; box-shadow: none; }
+    .fill-btn.done-btn { background: #059669; color: #fff; }
+    .ext-foot {
+      padding: 0 14px 12px; font: 10px ui-monospace, monospace; color: rgba(255,255,255,.35);
+      letter-spacing: .04em;
+    }
   </style>
 </head>
 <body>
@@ -69,96 +133,113 @@
       <span class="dot" style="background:#f87171"></span>
       <span class="dot" style="background:#fbbf24"></span>
       <span class="dot" style="background:#34d399"></span>
-      <div class="url">https://serviceonline.bihar.gov.in/…/application</div>
-      <div class="badge">Live fill · silent clip</div>
+      <div class="url">https://demo-portal.example.gov.in/…/application</div>
+      <div class="badge">Demo · fictional data</div>
     </div>
-    <div class="grid">
-      <aside class="side">
-        <h4>CyberControl</h4>
-        <div class="card" id="profile">
-          <div class="row">
-            <div class="avatar">RK</div>
-            <div>
-              <div style="font:600 13px Inter">Ramesh Kumar</div>
-              <div style="font:11px Inter;color:rgba(255,255,255,.55)">6 documents · ready</div>
-            </div>
+    <div class="form-wrap">
+      <div class="form-card">
+        <div class="gov-bar">
+          <div class="gov-seal">GOV</div>
+          <div>
+            <div style="font:700 13px Inter">Demo State Service Portal</div>
+            <div style="font:11px Inter;color:#78716c">Sample application — not a real government site</div>
           </div>
-          <div class="ok" id="selected">✓ Profile selected</div>
         </div>
-        <button class="btn" id="runBtn">Select & AutoFill</button>
-      </aside>
-      <main class="form">
         <div class="form-head">
-          <div>Application form</div>
-          <div id="count" style="font-weight:500;color:#666;font-size:11px">Empty</div>
+          <h1>Application form</h1>
+          <div class="meta" id="count">Empty</div>
         </div>
-        <div id="fields"></div>
-        <div class="done" id="done">✓ Form filled from customer profile — review & submit</div>
-      </main>
+        <div class="fields" id="fields"></div>
+        <div class="done" id="done">✓ Form filled from demo profile — review &amp; submit</div>
+      </div>
+
+      <aside class="ext" id="ext" aria-label="CyberControl AutoFill demo popup">
+        <div class="ext-head">
+          <div class="ext-mark"><span>⚡</span></div>
+          <div class="ext-title">Cyber<em>Control</em></div>
+          <div class="ext-conn"><i></i> online</div>
+        </div>
+        <div class="ext-site">Site · <strong>demo-portal.example.gov.in</strong></div>
+        <div class="profile-chip" id="profileChip">
+          <div class="av">AD</div>
+          <div>
+            <div class="name">Ananya Demo</div>
+            <div class="sub">90000 00001 · 6 docs ready</div>
+          </div>
+        </div>
+        <button class="fill-btn" id="fillBtn" type="button">⚡ Fill Form</button>
+        <div class="ext-foot">DEMO FIXTURE · NO REAL PII</div>
+      </aside>
     </div>
   </div>
+  <script src="./demo-fx.js"></script>
   <script>
     const FIELDS = [
-      ['Full name', 'Ramesh Kumar'],
-      ['Date of birth', '14/08/1992'],
-      ['Aadhaar / ID', '2847 9201 5536'],
-      ['Mobile', '98765 44120'],
-      ["Father's name", 'Suresh Kumar'],
-      ['Address', 'Ward 4, Near Bus Stand, Patna'],
+      ['Full name', 'Ananya Demo', false],
+      ['Date of birth', '12/03/1995', false],
+      ['Aadhaar / ID', '0000 1111 2222', false],
+      ['Mobile', '90000 00001', false],
+      ["Father's name", 'Vikram Demo', false],
+      ['Address', 'Demo Ward 1, Sample Nagar, Demo City', true],
     ];
     const fieldsEl = document.getElementById('fields');
-    FIELDS.forEach(([label], i) => {
+    FIELDS.forEach(([label, , full], i) => {
       const lab = document.createElement('label');
+      if (full) lab.className = 'full';
       lab.innerHTML = '<span>' + label + '</span><div class="field" id="f' + i + '">—</div>';
       fieldsEl.appendChild(lab);
     });
 
-    async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
     async function runOnce() {
-      const profile = document.getElementById('profile');
-      const selected = document.getElementById('selected');
-      const runBtn = document.getElementById('runBtn');
+      const fx = window.DemoFx;
+      const ext = document.getElementById('ext');
+      const fillBtn = document.getElementById('fillBtn');
       const done = document.getElementById('done');
       const count = document.getElementById('count');
-      profile.classList.remove('on');
-      selected.classList.remove('show');
-      runBtn.classList.remove('on');
-      runBtn.textContent = 'Select & AutoFill';
+
       done.classList.remove('show');
+      fillBtn.className = 'fill-btn';
+      fillBtn.textContent = '⚡ Fill Form';
       count.textContent = 'Empty';
       FIELDS.forEach((_, i) => {
         const el = document.getElementById('f' + i);
         el.className = 'field';
         el.textContent = '—';
       });
+      ext.classList.remove('show');
 
-      await sleep(700);
-      profile.classList.add('on');
-      selected.classList.add('show');
-      runBtn.classList.add('on');
-      runBtn.textContent = 'AutoFill running…';
-      await sleep(800);
+      await fx.sleep(700);
+      ext.classList.add('show');
+      await fx.sleep(600);
+
+      await fx.moveTo(fillBtn, 700);
+      await fx.highlight(fillBtn, 280);
+      await fx.click(fillBtn);
+      fillBtn.classList.add('running');
+      fillBtn.textContent = 'Filling…';
+      await fx.sleep(350);
 
       for (let i = 0; i < FIELDS.length; i++) {
         const el = document.getElementById('f' + i);
-        el.className = 'field filling';
-        el.textContent = 'filling…';
-        await sleep(450);
-        el.className = 'field filled';
-        el.textContent = FIELDS[i][1];
+        await fx.moveTo(el, 320);
+        await fx.typeInto(el, FIELDS[i][1], 32);
         count.textContent = (i + 1) + '/' + FIELDS.length + ' fields';
-        await sleep(350);
+        await fx.sleep(120);
       }
-      runBtn.textContent = 'Filled ✓';
+
+      fillBtn.className = 'fill-btn done-btn';
+      fillBtn.textContent = 'Filled ✓';
       done.classList.add('show');
       count.textContent = 'Complete';
-      await sleep(1800);
+      await fx.sleep(900);
+      window.__done = true;
     }
 
     window.__runClip = runOnce;
-    window.__ready = true;
-    runOnce();
+    if (window.DemoFx) {
+      window.__ready = true;
+      runOnce().catch((e) => { console.error(e); window.__done = true; });
+    }
   </script>
 </body>
 </html>

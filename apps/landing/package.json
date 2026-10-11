@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "record:proof": "node scripts/record-proof-clips.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

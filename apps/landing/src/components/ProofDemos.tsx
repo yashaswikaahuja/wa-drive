@@ -1,7 +1,7 @@
 /**
- * NPCI-style product proof: silent WebM clips recorded from the LIVE app
- * (https://app.cybercontrol.fun), muted / autoplay / loop.
- * Re-record with scripts/record-real-app-clips.mjs
+ * NPCI-style product proof: silent WebM clips from fictional HTML fixtures
+ * (scripts/record-proof-clips.mjs + public/proof/record-*.html), muted / autoplay / loop.
+ * No live café data — see issue #331. Re-record with: pnpm record:proof
  */
 import { ArrowRight, Check } from "lucide-react";
 
@@ -35,7 +35,7 @@ function SilentProofVideo({
         </div>
         <div className="truncate text-[11px] font-medium text-paper/80">{label}</div>
         <span className="ml-auto rounded-full bg-marigold/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-marigold">
-          Live product
+          Demo
         </span>
       </div>
       <video

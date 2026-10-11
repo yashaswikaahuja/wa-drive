@@ -30,3 +30,7 @@ dist-ssr
 /blob-report/
 /playwright/.cache/
 .last-run.json
+
+# Private real-data recordings — never commit (#331)
+/public/proof/_private-rec/
+/public/proof/_rec_*/
