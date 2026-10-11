@@ -64,6 +64,10 @@ const suites = [
   { name: 'ActionPlan Legacy Guard', cmd: `${NODE_TS} extension-dev/tests/unit/test-action-plan-legacy-guard.ts` },
   { name: 'ActionPlan Executor Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-action-plan-executor.ts` },
   { name: 'DOM Evidence Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-dom-evidence.ts` },
+  { name: 'Navigation Contract Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-navigation-contract.ts` },
+  { name: 'Runtime Errors Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-runtime-errors.ts` },
+  { name: 'Visual Context Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-visual-context.ts` },
+  { name: 'Phase 3.7 Hardening Governance', cmd: `${NODE_TS} extension-dev/tests/unit/test-phase37-hardening-governance.ts` },
 ];
 
 let allPass = true;

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const vc = require(resolve(ROOT, 'apps/extension/perception/visual-context.js'));
+const vc = require(resolve(ROOT, 'extension-legacy-best/perception/visual-context.js'));
 
 let passed = 0;
 let failed = 0;
