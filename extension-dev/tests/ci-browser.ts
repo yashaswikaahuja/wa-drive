@@ -1,10 +1,9 @@
 /**
  * CyberControl CI Runner — Browser Tests (turborepo-aware)
  *
- * Perception / ActionPlan discrete sources live under packages (or are bundled).
- * Until those browser harnesses are remapped off the deleted apps/extension/perception
- * and apps/extension/runtime trees, this runner only executes suites that do not
- * require those paths. Full browser coverage returns when harnesses import @cc/*.
+ * Bundle-based harnesses (autofill + capabilities) are active again via
+ * inject-extension-host.ts. Perception / ActionPlan suites still need a
+ * packages remap of the deleted apps/extension/perception|runtime trees.
  *
  * Usage: node extension-dev/tests/ci-browser.ts
  */
@@ -16,18 +15,17 @@ import { fileURLToPath } from 'node:url';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../..');
 
-// Suites that do not require deleted apps/extension/perception|runtime trees.
 const NODE_TS = 'node --experimental-strip-types';
 const candidates = [
-  // Comprehensive portal suite is remapped to fixtures and stays green.
   { name: 'Comprehensive Portal Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-comprehensive.ts` },
+  { name: 'Browser Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run.ts` },
+  { name: 'Real Widget Tests', cmd: `${NODE_TS} extension-dev/tests/browser/run-real-widgets.ts` },
 ];
 
-// Skip suites that still hard-require deleted discrete trees or need a fuller
-// @cc bundle host stub (chrome.runtime.dispatch etc.) after the JS→TS migrate.
+// Still deferred until perception/runtime land as @cc packages (or harnesses
+// remap onto a new host). extension-legacy-best has capabilities/models but
+// not the perception graph tree these suites inject.
 const deferred = [
-  'Browser Tests (needs @cc bundle host stubs after discrete-tree removal)',
-  'Real Widget Tests (needs @cc bundle host stubs after discrete-tree removal)',
   'Perception Browser Tests (needs packages remap of perception/*)',
   'Widget Classification Tests (needs packages remap of perception/*)',
   'Relationship Lifecycle Tests (needs packages remap of perception/*)',
@@ -44,7 +42,7 @@ for (const note of deferred) {
 
 for (const suite of candidates) {
   try {
-    const output = execSync(suite.cmd, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe', timeout: 120000 });
+    const output = execSync(suite.cmd, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe', timeout: 180000 });
     const lastLine = output.trim().split('\n').pop();
     const match = lastLine.match(/(\d+) passed/);
     const count = match ? parseInt(match[1], 10) : 0;
@@ -57,7 +55,7 @@ for (const suite of candidates) {
     console.error(`  ✗ ${suite.name}: ${failLine.trim()}`);
     if (output.trim()) {
       console.error('    --- output ---');
-      output.trim().split('\n').slice(-15).forEach((l) => console.error('    ' + l));
+      output.trim().split('\n').slice(-20).forEach((l) => console.error('    ' + l));
       console.error('    --- end ---');
     }
   }
