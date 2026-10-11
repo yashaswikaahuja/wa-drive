@@ -1,17 +1,17 @@
 /**
- * Pixel-exact AutoFill proof: REAL unpacked apps/extension + local stub API.
- * Fictional Ananya Demo only — refuses production hosts (#331).
- *
- * Output: apps/landing/public/proof/clip-form-fill.webm
- * Re-record: node scripts/record-extension-autofill.mjs
+ * Pixel-exact AutoFill proof with visible cursor animation (#331).
+ * Real unpacked extension + stub API + DemoFx cursor/ripples.
+ * Records form + popup, hstacks when ffmpeg-static is available.
  */
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
-import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { spawn, spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { startDemoApiServer, DEMO_PROFILE, DEMO_OPERATOR } from "./demo-api-server.mjs";
+import { injectDemoFx, fxClick, fxMove, animateFieldsFilling } from "./lib/inject-demo-fx.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const landingRoot = path.resolve(__dirname, "..");
@@ -19,30 +19,71 @@ const repoRoot = path.resolve(landingRoot, "../..");
 const proofDir = path.join(landingRoot, "public", "proof");
 const extPath = path.resolve(repoRoot, "apps/extension");
 const formFile = path.join(proofDir, "gov-bihar-application.html");
-const userDataDir = path.join(proofDir, "_private-rec", "_ext_userdata");
-const tmpVideoDir = path.join(proofDir, "_private-rec", "_rec_ext_fill");
+// Keep Chromium profile + raw WebMs outside public/ so Vite does not watch Cookies/etc.
+const recRoot = path.join(landingRoot, ".tmp-rec");
+const userDataDir = path.join(recRoot, "_ext_userdata");
+const tmpVideoDir = path.join(recRoot, "_rec_ext_fill");
+
+const FIELD_IDS = [
+  "full_name", "father_name", "dob", "gender", "aadhaar_number",
+  "phone", "address", "village", "district", "state", "pincode", "post_office",
+];
 
 function assertLocalOnly(url) {
   const u = String(url);
   if (/cybercontrol\.fun|amazonaws|\.prod\./i.test(u)) {
-    throw new Error(`REFUSED (#331): production URL not allowed in pixel recorder: ${u}`);
+    throw new Error(`REFUSED (#331): production URL not allowed: ${u}`);
   }
   if (!/127\.0\.0\.1|localhost/i.test(u)) {
     throw new Error(`REFUSED (#331): stub must be local: ${u}`);
   }
 }
 
-fs.mkdirSync(path.join(proofDir, "_private-rec"), { recursive: true });
+function resolveFfmpeg() {
+  const candidates = [];
+  try {
+    const require = createRequire(path.join(landingRoot, "package.json"));
+    candidates.push(require("ffmpeg-static"));
+  } catch { /* optional */ }
+  const which = spawnSync(process.platform === "win32" ? "where.exe" : "which", ["ffmpeg"], {
+    encoding: "utf8",
+  });
+  if (which.status === 0) {
+    const line = String(which.stdout || "").split(/\r?\n/).map((s) => s.trim()).find(Boolean);
+    if (line) candidates.push(line);
+  }
+  return candidates.find((p) => p && fs.existsSync(p)) || null;
+}
+
+async function hstack(formWebm, popupWebm, dest) {
+  const ffmpeg = resolveFfmpeg();
+  if (!ffmpeg) {
+    fs.copyFileSync(formWebm, dest);
+    return "form-only";
+  }
+  await new Promise((resolve, reject) => {
+    const args = [
+      "-y", "-i", formWebm, "-i", popupWebm,
+      "-filter_complex",
+      "[0:v]scale=900:720:force_original_aspect_ratio=decrease,pad=900:720:(ow-iw)/2:(oh-ih)/2:color=0xe8eef5,setsar=1[left];" +
+        "[1:v]scale=380:720:force_original_aspect_ratio=decrease,pad=380:720:(ow-iw)/2:(oh-ih)/2:color=0xf7f3eb,setsar=1[right];" +
+        "[left][right]hstack=inputs=2[v]",
+      "-map", "[v]", "-an", "-c:v", "libvpx-vp9", "-b:v", "1.4M", "-row-mt", "1", dest,
+    ];
+    const p = spawn(ffmpeg, args, { stdio: "inherit" });
+    p.on("error", reject);
+    p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))));
+  });
+  return "hstack";
+}
+
+fs.mkdirSync(recRoot, { recursive: true });
 fs.rmSync(userDataDir, { recursive: true, force: true });
 fs.rmSync(tmpVideoDir, { recursive: true, force: true });
 fs.mkdirSync(tmpVideoDir, { recursive: true });
 
-if (!fs.existsSync(path.join(extPath, "manifest.json"))) {
-  throw new Error(`Extension missing at ${extPath}`);
-}
-if (!fs.existsSync(formFile)) {
-  throw new Error(`Demo form missing: ${formFile}`);
-}
+if (!fs.existsSync(path.join(extPath, "manifest.json"))) throw new Error(`Extension missing at ${extPath}`);
+if (!fs.existsSync(formFile)) throw new Error(`Demo form missing: ${formFile}`);
 
 const { server: apiServer, apiBase, port: apiPort } = await startDemoApiServer(0);
 assertLocalOnly(apiBase);
@@ -70,9 +111,7 @@ function startFormServer() {
     fs.createReadStream(file).pipe(res);
   });
   return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      resolve({ server, port: server.address().port });
-    });
+    server.listen(0, "127.0.0.1", () => resolve({ server, port: server.address().port }));
   });
 }
 
@@ -80,10 +119,15 @@ const { server: formServer, port: formPort } = await startFormServer();
 const formUrl = `http://127.0.0.1:${formPort}/gov-bihar-application.html`;
 assertLocalOnly(formUrl);
 
+const formVidDir = path.join(tmpVideoDir, "form");
+const popupVidDir = path.join(tmpVideoDir, "popup");
+fs.mkdirSync(formVidDir, { recursive: true });
+fs.mkdirSync(popupVidDir, { recursive: true });
+
 const context = await chromium.launchPersistentContext(userDataDir, {
   channel: "chromium",
   headless: true,
-  viewport: { width: 1280, height: 720 },
+  viewport: { width: 900, height: 720 },
   args: [
     `--disable-extensions-except=${extPath}`,
     `--load-extension=${extPath}`,
@@ -91,7 +135,8 @@ const context = await chromium.launchPersistentContext(userDataDir, {
     "--no-default-browser-check",
   ],
   ignoreDefaultArgs: ["--disable-extensions"],
-  recordVideo: { dir: tmpVideoDir, size: { width: 1280, height: 720 } },
+  // record per-page via newContext-like: persistent records all pages into one dir
+  recordVideo: { dir: tmpVideoDir, size: { width: 900, height: 720 } },
 });
 
 let ok = false;
@@ -101,11 +146,9 @@ try {
   const extensionId = sw.url().split("/")[2];
   console.log("extensionId", extensionId);
 
-  // Seed auth on the real popup page (more reliable than SW evaluate after blank-tab churn)
   const popup = await context.newPage();
-  await popup.goto(`chrome-extension://${extensionId}/popup.html`, {
-    waitUntil: "domcontentloaded",
-  });
+  await popup.setViewportSize({ width: 380, height: 720 });
+  await popup.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
   await popup.evaluate(async ({ accessToken, backendUrl, user }) => {
     await chrome.storage.local.set({ accessToken, backendUrl, user });
   }, {
@@ -114,8 +157,10 @@ try {
     user: DEMO_OPERATOR,
   });
   await popup.reload({ waitUntil: "domcontentloaded" });
+  await injectDemoFx(popup);
 
   const formPage = await context.newPage();
+  await formPage.setViewportSize({ width: 900, height: 720 });
   await formPage.goto(formUrl, { waitUntil: "domcontentloaded" });
   await formPage.waitForSelector("#full_name");
   await formPage.evaluate(() => {
@@ -124,62 +169,68 @@ try {
     b.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:9999;background:#f98a1e;color:#111;font:700 11px Inter,sans-serif;text-align:center;padding:6px;";
     document.body.prepend(b);
   });
+  await injectDemoFx(formPage);
+  await formPage.waitForTimeout(500);
+
+  // Show empty form briefly with cursor idle
+  await formPage.bringToFront();
+  await fxMove(formPage, "#full_name", 700);
   await formPage.waitForTimeout(400);
 
-  // WSS will fail → HTTPS fallback to stub /profiles
+  // Popup choreography with visible cursor
+  await popup.bringToFront();
   await popup.waitForSelector(".profile-item", { timeout: 60000 });
   console.log("profiles_visible", await popup.locator(".profile-item").count());
 
-  const item = popup.locator(`.profile-item[data-id="${DEMO_PROFILE.id}"]`).first();
-  if (await item.count()) {
-    await item.click();
-  } else {
-    await popup.getByText("Ananya Demo").first().click();
-  }
-  await popup.waitForTimeout(400);
+  const profileItem = popup.locator(`.profile-item[data-id="${DEMO_PROFILE.id}"]`).first();
+  const profileTarget = (await profileItem.count())
+    ? profileItem
+    : popup.getByText("Ananya Demo").first();
+  await fxClick(popup, profileTarget, 700);
+  await popup.waitForTimeout(350);
 
   await popup.waitForFunction(() => {
     const b = document.getElementById("fill-btn");
     return b && !b.disabled;
   }, null, { timeout: 15000 });
 
-  await formPage.bringToFront();
-  await formPage.waitForTimeout(250);
-  await popup.bringToFront();
-  await popup.locator("#fill-btn").click();
+  await fxMove(popup, "#fill-btn", 600);
+  await popup.waitForTimeout(200);
+  await fxClick(popup, "#fill-btn", 500);
   const anyway = popup.locator("#fill-anyway");
-  if (await anyway.isVisible({ timeout: 2500 }).catch(() => false)) await anyway.click();
+  if (await anyway.isVisible({ timeout: 2500 }).catch(() => false)) {
+    await fxClick(popup, anyway, 400);
+  }
   console.log("fill_clicked");
 
+  // Form: animate cursor across fields as they populate
   await formPage.bringToFront();
-  await formPage.waitForFunction(() => {
-    const ids = ["full_name", "father_name", "dob", "aadhaar_number", "phone", "address", "state", "pincode"];
-    let n = 0;
-    for (const id of ids) {
-      const v = document.getElementById(id)?.value || "";
-      if (String(v).trim()) n++;
-    }
-    return n >= 5;
-  }, null, { timeout: 120000 });
+  const filledIds = await animateFieldsFilling(formPage, FIELD_IDS, {
+    minFilled: 5,
+    timeoutMs: 120000,
+  });
+  console.log("animated_fields", filledIds.join(","));
 
-  const values = await formPage.evaluate(() => {
-    const ids = ["full_name", "father_name", "dob", "gender", "aadhaar_number", "phone", "address", "state", "pincode"];
+  const values = await formPage.evaluate((ids) => {
     const out = {};
     for (const id of ids) out[id] = document.getElementById(id)?.value || "";
     return out;
-  });
+  }, FIELD_IDS);
   console.log("filled_values", JSON.stringify(values));
 
   const blob = JSON.stringify(values);
-  if (/Lalita|kishynay|@[a-z0-9.-]+\.(com|in)/i.test(blob) && !/demo@cybercontrol\.local/i.test(blob)) {
-    throw new Error("PII guard: unexpected non-demo values in filled form");
-  }
+  if (/Lalita|kishynay/i.test(blob)) throw new Error("PII guard: live name leaked");
   if (!/Ananya Demo|000011112222|9000000001/i.test(blob)) {
-    throw new Error("PII guard: expected Ananya Demo fixture values missing");
+    throw new Error("PII guard: expected Ananya Demo values missing");
   }
 
-  await formPage.waitForTimeout(2800);
-  await popup.waitForTimeout(800);
+  // Hold on completed form + success moment
+  await fxMove(formPage, "#full_name", 400);
+  await formPage.waitForTimeout(1800);
+  await popup.bringToFront();
+  await popup.waitForTimeout(900);
+  await formPage.bringToFront();
+  await formPage.waitForTimeout(700);
   ok = true;
 
   await popup.close().catch(() => {});
@@ -188,7 +239,7 @@ try {
   console.error("FAIL", e.message);
   try {
     for (const p of context.pages()) {
-      console.log("page", p.url(), (await p.locator("body").innerText().catch(() => "")).slice(0, 500));
+      console.log("page", p.url(), (await p.locator("body").innerText().catch(() => "")).slice(0, 400));
     }
   } catch { /* ignore */ }
   throw e;
@@ -198,46 +249,32 @@ try {
   apiServer.close();
 }
 
-const videos = fs.readdirSync(tmpVideoDir).filter((f) => f.endsWith(".webm"));
+const videos = fs.readdirSync(tmpVideoDir)
+  .filter((f) => f.endsWith(".webm"))
+  .map((f) => ({ f, size: fs.statSync(path.join(tmpVideoDir, f)).size }))
+  .sort((a, b) => b.size - a.size);
+
 if (!videos.length) throw new Error("No webm recorded");
 
-// Prefer the largest (form page with fill motion); optionally hstack with popup if ffmpeg exists
-videos.sort((a, b) => fs.statSync(path.join(tmpVideoDir, b)).size - fs.statSync(path.join(tmpVideoDir, a)).size);
 const dest = path.join(proofDir, "clip-form-fill.webm");
-const primary = path.join(tmpVideoDir, videos[0]);
+const primary = path.join(tmpVideoDir, videos[0].f);
+const secondary = videos[1] ? path.join(tmpVideoDir, videos[1].f) : null;
 
-let ffmpeg = "ffmpeg";
-const which = spawnSync(process.platform === "win32" ? "where" : "which", [ffmpeg], { encoding: "utf8" });
-const hasFfmpeg = which.status === 0;
-if (hasFfmpeg && videos.length >= 2) {
-  const formVid = primary;
-  const popupVid = path.join(tmpVideoDir, videos[1]);
-  const stacked = path.join(tmpVideoDir, "stacked.webm");
-  const ff = spawnSync(ffmpeg, [
-    "-y",
-    "-i", formVid,
-    "-i", popupVid,
-    "-filter_complex",
-    "[0:v]scale=900:720:force_original_aspect_ratio=decrease,pad=900:720:(ow-iw)/2:(oh-ih)/2[left];[1:v]scale=380:720:force_original_aspect_ratio=decrease,pad=380:720:(ow-iw)/2:(oh-ih)/2[right];[left][right]hstack=inputs=2[v]",
-    "-map", "[v]",
-    "-an",
-    "-c:v", "libvpx-vp9",
-    "-b:v", "1M",
-    stacked,
-  ], { encoding: "utf8" });
-  if (ff.status === 0 && fs.existsSync(stacked)) {
-    fs.copyFileSync(stacked, dest);
-    console.log("OK stacked form|popup", dest, Math.round(fs.statSync(dest).size / 1024) + "KB");
-  } else {
-    console.warn("ffmpeg hstack failed, using primary form video", ff.stderr?.slice(-400));
+let mode = "form-only";
+if (secondary) {
+  try {
+    mode = await hstack(primary, secondary, dest);
+  } catch (e) {
+    console.warn("hstack failed:", e.message);
     fs.copyFileSync(primary, dest);
+    mode = "form-only-fallback";
   }
 } else {
   fs.copyFileSync(primary, dest);
-  console.log("OK", dest, Math.round(fs.statSync(dest).size / 1024) + "KB", "from", videos.join(","));
 }
 
+console.log("OK", dest, Math.round(fs.statSync(dest).size / 1024) + "KB", mode);
 fs.rmSync(tmpVideoDir, { recursive: true, force: true });
 fs.rmSync(userDataDir, { recursive: true, force: true });
 if (!ok) process.exit(1);
-console.log("done — fictional Ananya Demo only, stub API port", apiPort);
+console.log("done — animated AutoFill, stub port", apiPort);

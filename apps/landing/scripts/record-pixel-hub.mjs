@@ -1,6 +1,6 @@
 /**
- * Pixel-exact Hub proof clips: real apps/frontend + local stub API (#331).
- * Fictional demo data only.
+ * Pixel-exact Hub proof clips with DemoFx cursor animation (#331).
+ * Real apps/frontend + local stub API + visible mouse/click polish.
  */
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";
@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startDemoApiServer, DEMO_OPERATOR } from "./demo-api-server.mjs";
+import { injectDemoFx, fxClick, fxMove } from "./lib/inject-demo-fx.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const landingRoot = path.resolve(__dirname, "..");
@@ -56,7 +57,8 @@ const vite = spawn(
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   },
-);vite.stdout.on("data", (d) => process.stdout.write(`[vite] ${d}`));
+);
+vite.stdout.on("data", (d) => process.stdout.write(`[vite] ${d}`));
 vite.stderr.on("data", (d) => process.stderr.write(`[vite] ${d}`));
 
 const authFixture = {
@@ -73,68 +75,108 @@ const clips = [
   {
     name: "clip-workspace",
     path: "/app",
-    seconds: 9,
     act: async (page) => {
-      await page.waitForTimeout(2000);
-      await page.mouse.wheel(0, 200);
-      await page.waitForTimeout(800);
-      const link = page.getByRole("link", { name: "Customers" }).first();
-      if (await link.isVisible().catch(() => false)) {
-        await link.hover();
-        await page.waitForTimeout(600);
+      await page.waitForTimeout(900);
+      const customers = page.getByRole("link", { name: "Customers" }).first();
+      if (await customers.isVisible().catch(() => false)) {
+        await fxMove(page, customers, 700);
+        await page.waitForTimeout(300);
+        await fxClick(page, customers, 550);
+        await page.waitForTimeout(1200);
+        // back to Today
+        const today = page.getByRole("link", { name: "Today" }).first();
+        if (await today.isVisible().catch(() => false)) {
+          await fxClick(page, today, 600);
+          await page.waitForTimeout(900);
+        }
       }
-      await page.waitForTimeout(2000);
+      const files = page.getByRole("link", { name: "File Manager" }).first();
+      if (await files.isVisible().catch(() => false)) {
+        await fxMove(page, files, 550);
+        await page.waitForTimeout(500);
+      }
+      await page.waitForTimeout(800);
     },
   },
   {
     name: "clip-customers",
     path: "/app/customers",
-    seconds: 10,
     act: async (page) => {
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(1000);
+      const search = page.getByPlaceholder(/Search by name or phone/i).first();
+      if (await search.isVisible().catch(() => false)) {
+        await fxClick(page, search, 600);
+        await search.fill("Ananya");
+        await page.waitForTimeout(500);
+      }
       const row = page.getByText("Ananya Demo").first();
       if (await row.isVisible({ timeout: 8000 }).catch(() => false)) {
-        await row.click();
-        await page.waitForTimeout(2500);
+        await fxClick(page, row, 700);
+        await page.waitForTimeout(2200);
       } else {
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(2500);
       }
     },
   },
   {
     name: "clip-files",
     path: "/app/files",
-    seconds: 9,
     act: async (page) => {
-      await page.waitForTimeout(2000);
-      await page.mouse.wheel(0, 180);
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(1200);
+      // hover/click first clickable tile or folder-ish control
+      const candidates = [
+        page.getByText(/Ananya Demo/i).first(),
+        page.locator("button, a, [role='button']").filter({ hasText: /Demo|Aadhaar|folder|Folder/i }).first(),
+        page.locator("main button, main a").first(),
+      ];
+      for (const c of candidates) {
+        if (await c.isVisible({ timeout: 1500 }).catch(() => false)) {
+          await fxMove(page, c, 650);
+          await page.waitForTimeout(250);
+          await fxClick(page, c, 500);
+          await page.waitForTimeout(1400);
+          break;
+        }
+      }
+      await page.mouse.wheel(0, 160);
+      await page.waitForTimeout(900);
       await page.mouse.wheel(0, -80);
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(700);
     },
   },
   {
     name: "clip-whatsapp",
     path: "/app/whatsapp",
-    seconds: 9,
     act: async (page) => {
-      await page.waitForTimeout(2500);
-      await page.mouse.wheel(0, 120);
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(1400);
+      const item = page.getByText(/Ananya|Demo|aadhaar|document/i).first();
+      if (await item.isVisible({ timeout: 4000 }).catch(() => false)) {
+        await fxMove(page, item, 650);
+        await page.waitForTimeout(300);
+        await fxClick(page, item, 500);
+        await page.waitForTimeout(1600);
+      } else {
+        await page.mouse.wheel(0, 140);
+        await page.waitForTimeout(1200);
+      }
+      await page.waitForTimeout(800);
     },
   },
   {
     name: "clip-photos",
     path: "/app/photos",
-    seconds: 9,
     act: async (page) => {
-      await page.waitForTimeout(2500);
-      const tile = page.getByText(/Photo Editor|Passport|PDF/i).first();
-      if (await tile.isVisible({ timeout: 4000 }).catch(() => false)) {
-        await tile.hover();
-        await page.waitForTimeout(1200);
+      await page.waitForTimeout(1200);
+      const tile = page.getByText(/Photo Editor|Passport|PDF Tool|Photos/i).first();
+      if (await tile.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await fxMove(page, tile, 700);
+        await page.waitForTimeout(280);
+        await fxClick(page, tile, 550);
+        await page.waitForTimeout(1800);
+      } else {
+        await page.waitForTimeout(2000);
       }
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(700);
     },
   },
 ];
@@ -159,12 +201,12 @@ try {
     }, authFixture);
 
     await page.goto(`${hubOrigin}${clip.path}`, { waitUntil: "networkidle", timeout: 60000 });
-    // Skip login if auth inject worked
     if (page.url().includes("/login")) {
-      throw new Error(`Auth inject failed for ${clip.name} — landed on login`);
+      throw new Error(`Auth inject failed for ${clip.name}`);
     }
+    await injectDemoFx(page);
     await clip.act(page);
-    await page.waitForTimeout(Math.max(500, clip.seconds * 200));
+    await page.waitForTimeout(600);
     await context.close();
     await browser.close();
 
@@ -176,8 +218,8 @@ try {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 } finally {
-  vite.kill("SIGTERM");
+  try { vite.kill("SIGTERM"); } catch { /* ignore */ }
   apiServer.close();
 }
 
-console.log("Hub pixel clips done (stub API only)");
+console.log("Hub animated pixel clips done");
