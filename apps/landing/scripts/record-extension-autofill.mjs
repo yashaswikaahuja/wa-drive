@@ -55,26 +55,41 @@ function resolveFfmpeg() {
   return candidates.find((p) => p && fs.existsSync(p)) || null;
 }
 
+// Final canvas: form (left) + extension panel (right) filling the height — no postage-stamp popup.
+const FORM_W = 860;
+const POPUP_W = 420;
+const CLIP_H = 720;
+const POPUP_VP_W = 400; // viewport width used while recording the extension page
+
+/**
+ * Playwright records every page at context recordVideo size (FORM_W×CLIP_H).
+ * The popup page only paints POPUP_VP_W×CLIP_H in the center → letterbox.
+ * Crop that content, then scale it up to fill the right panel.
+ */
 async function hstack(formWebm, popupWebm, dest) {
   const ffmpeg = resolveFfmpeg();
   if (!ffmpeg) {
     fs.copyFileSync(formWebm, dest);
     return "form-only";
   }
+  const filter =
+    `[0:v]scale=${FORM_W}:${CLIP_H}:force_original_aspect_ratio=decrease,` +
+    `pad=${FORM_W}:${CLIP_H}:(ow-iw)/2:(oh-ih)/2:color=0xe8eef5,setsar=1[left];` +
+    // Crop letterboxed popup content, scale to full panel height, pad width so Fill button stays visible.
+    `[1:v]crop=${POPUP_VP_W}:${CLIP_H}:(iw-${POPUP_VP_W})/2:0,` +
+    `scale=-1:${CLIP_H},pad=${POPUP_W}:${CLIP_H}:(ow-iw)/2:0:color=0xf7f3eb,setsar=1[right];` +
+    `[left][right]hstack=inputs=2[v]`;
   await new Promise((resolve, reject) => {
     const args = [
       "-y", "-i", formWebm, "-i", popupWebm,
-      "-filter_complex",
-      "[0:v]scale=900:720:force_original_aspect_ratio=decrease,pad=900:720:(ow-iw)/2:(oh-ih)/2:color=0xe8eef5,setsar=1[left];" +
-        "[1:v]scale=380:720:force_original_aspect_ratio=decrease,pad=380:720:(ow-iw)/2:(oh-ih)/2:color=0xf7f3eb,setsar=1[right];" +
-        "[left][right]hstack=inputs=2[v]",
-      "-map", "[v]", "-an", "-c:v", "libvpx-vp9", "-b:v", "1.4M", "-row-mt", "1", dest,
+      "-filter_complex", filter,
+      "-map", "[v]", "-an", "-c:v", "libvpx-vp9", "-b:v", "1.6M", "-row-mt", "1", dest,
     ];
     const p = spawn(ffmpeg, args, { stdio: "inherit" });
     p.on("error", reject);
     p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))));
   });
-  return "hstack";
+  return "hstack-fitted";
 }
 
 fs.mkdirSync(recRoot, { recursive: true });
@@ -127,7 +142,7 @@ fs.mkdirSync(popupVidDir, { recursive: true });
 const context = await chromium.launchPersistentContext(userDataDir, {
   channel: "chromium",
   headless: true,
-  viewport: { width: 900, height: 720 },
+  viewport: { width: FORM_W, height: CLIP_H },
   args: [
     `--disable-extensions-except=${extPath}`,
     `--load-extension=${extPath}`,
@@ -135,8 +150,8 @@ const context = await chromium.launchPersistentContext(userDataDir, {
     "--no-default-browser-check",
   ],
   ignoreDefaultArgs: ["--disable-extensions"],
-  // record per-page via newContext-like: persistent records all pages into one dir
-  recordVideo: { dir: tmpVideoDir, size: { width: 900, height: 720 } },
+  // All pages share this video size; popup viewport is narrower → letterboxed (cropped in hstack).
+  recordVideo: { dir: tmpVideoDir, size: { width: FORM_W, height: CLIP_H } },
 });
 
 let ok = false;
@@ -147,7 +162,7 @@ try {
   console.log("extensionId", extensionId);
 
   const popup = await context.newPage();
-  await popup.setViewportSize({ width: 380, height: 720 });
+  await popup.setViewportSize({ width: POPUP_VP_W, height: CLIP_H });
   await popup.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
   await popup.evaluate(async ({ accessToken, backendUrl, user }) => {
     await chrome.storage.local.set({ accessToken, backendUrl, user });
@@ -160,7 +175,7 @@ try {
   await injectDemoFx(popup);
 
   const formPage = await context.newPage();
-  await formPage.setViewportSize({ width: 900, height: 720 });
+  await formPage.setViewportSize({ width: FORM_W, height: CLIP_H });
   await formPage.goto(formUrl, { waitUntil: "domcontentloaded" });
   await formPage.waitForSelector("#full_name");
   await formPage.evaluate(() => {
@@ -233,8 +248,31 @@ try {
   await formPage.waitForTimeout(700);
   ok = true;
 
+  // Capture video paths before close (Playwright finalizes on page close).
+  const formVideo = formPage.video();
+  const popupVideo = popup.video();
   await popup.close().catch(() => {});
   await formPage.close();
+  const formWebm = formVideo ? await formVideo.path() : null;
+  const popupWebm = popupVideo ? await popupVideo.path() : null;
+  console.log("videos", { formWebm, popupWebm });
+
+  const dest = path.join(proofDir, "clip-form-fill.webm");
+  let mode = "form-only";
+  if (formWebm && popupWebm && fs.existsSync(formWebm) && fs.existsSync(popupWebm)) {
+    try {
+      mode = await hstack(formWebm, popupWebm, dest);
+    } catch (e) {
+      console.warn("hstack failed:", e.message);
+      fs.copyFileSync(formWebm, dest);
+      mode = "form-only-fallback";
+    }
+  } else if (formWebm && fs.existsSync(formWebm)) {
+    fs.copyFileSync(formWebm, dest);
+  } else {
+    throw new Error("No form webm recorded");
+  }
+  console.log("OK", dest, Math.round(fs.statSync(dest).size / 1024) + "KB", mode);
 } catch (e) {
   console.error("FAIL", e.message);
   try {
@@ -249,32 +287,7 @@ try {
   apiServer.close();
 }
 
-const videos = fs.readdirSync(tmpVideoDir)
-  .filter((f) => f.endsWith(".webm"))
-  .map((f) => ({ f, size: fs.statSync(path.join(tmpVideoDir, f)).size }))
-  .sort((a, b) => b.size - a.size);
-
-if (!videos.length) throw new Error("No webm recorded");
-
-const dest = path.join(proofDir, "clip-form-fill.webm");
-const primary = path.join(tmpVideoDir, videos[0].f);
-const secondary = videos[1] ? path.join(tmpVideoDir, videos[1].f) : null;
-
-let mode = "form-only";
-if (secondary) {
-  try {
-    mode = await hstack(primary, secondary, dest);
-  } catch (e) {
-    console.warn("hstack failed:", e.message);
-    fs.copyFileSync(primary, dest);
-    mode = "form-only-fallback";
-  }
-} else {
-  fs.copyFileSync(primary, dest);
-}
-
-console.log("OK", dest, Math.round(fs.statSync(dest).size / 1024) + "KB", mode);
 fs.rmSync(tmpVideoDir, { recursive: true, force: true });
 fs.rmSync(userDataDir, { recursive: true, force: true });
 if (!ok) process.exit(1);
-console.log("done — animated AutoFill, stub port", apiPort);
+console.log("done — fitted popup panel, stub port", apiPort);
