@@ -16,16 +16,16 @@ const require = createRequire(import.meta.url);
 
 // ─── Load modules ────────────────────────────────────────────────────────────
 // Server engine (ESM) — use file:// URL for Windows compatibility
-const himEngine = await import(pathToFileURL(resolve(ROOT, 'packages/svc-runtime/src/him-engine.js')).href);
+const himEngine = await import(pathToFileURL(resolve(ROOT, 'packages/svc-runtime/src/him-engine.ts')).href);
 
 // Extension state machine (IIFE/CJS wrapper)
-const stateMachine = require(resolve(ROOT, 'apps/extension/runtime/him-state-machine.js'));
+const stateMachine = require(resolve(ROOT, 'extension-legacy-best/runtime/him-state-machine.js'));
 
 // Extension sensitive field (IIFE/CJS wrapper)
-const sensitive = require(resolve(ROOT, 'apps/extension/runtime/him-sensitive.js'));
+const sensitive = require(resolve(ROOT, 'extension-legacy-best/runtime/him-sensitive.js'));
 
 // Extension bridge (CJS)
-const bridgeMod = require(resolve(ROOT, 'apps/extension/runtime/him-bridge.js'));
+const bridgeMod = require(resolve(ROOT, 'extension-legacy-best/runtime/him-bridge.js'));
 
 // ─── Test harness ────────────────────────────────────────────────────────────
 let passed = 0;
