@@ -26,7 +26,70 @@ const progressText = document.getElementById("progress-text");
 const progressInner = document.getElementById("progress-inner");
 const resultsEl = document.getElementById("results");
 const versionEl = document.getElementById("ver");
+const selectedDock = document.getElementById("selected-dock");
+const dockAvatar = document.getElementById("dock-avatar");
+const dockName = document.getElementById("dock-name");
+const dockPhone = document.getElementById("dock-phone");
+const dockClear = document.getElementById("dock-clear");
+const FILL_BTN_LABEL = "Fill this form";
 versionEl.textContent = "v" + VERSION;
+const HUB_FALLBACK = "https://app.cybercontrol.fun";
+function initialsFor(name) {
+  return String(name || "?").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+}
+function updateSelectedDock() {
+  if (!selectedDock) return;
+  if (!selectedProfile) {
+    selectedDock.classList.remove("open");
+    if (dockName) dockName.textContent = "\u2014";
+    if (dockPhone) dockPhone.textContent = "";
+    if (dockAvatar) dockAvatar.textContent = "?";
+    return;
+  }
+  const name = selectedProfile.name || "Unknown";
+  const phone = getPhone(selectedProfile);
+  if (dockAvatar) dockAvatar.textContent = initialsFor(name);
+  if (dockName) dockName.textContent = name;
+  if (dockPhone) dockPhone.textContent = phone ? `\u{1F4F1} ${phone}` : "";
+  selectedDock.classList.add("open");
+}
+function clearSelection() {
+  selectedProfile = null;
+  fillBtn.disabled = true;
+  applyAgentVisibility();
+  chrome.storage.session.remove("_cc_selected").catch(() => {
+  });
+  updateSelectedDock();
+  renderProfiles((searchEl == null ? void 0 : searchEl.value) || "");
+}
+async function openHub(path) {
+  var _a2;
+  const data = await chrome.storage.local.get("backendUrl");
+  let frontendUrl = HUB_FALLBACK;
+  if ((_a2 = data.backendUrl) == null ? void 0 : _a2.includes("localhost:3000")) frontendUrl = "http://localhost:5173";
+  else if (data.backendUrl) frontendUrl = String(data.backendUrl).replace(/\/api\/?$/, "") || HUB_FALLBACK;
+  const url = path ? frontendUrl.replace(/\/$/, "") + path : frontendUrl;
+  const tabs = await chrome.tabs.query({});
+  const existing = tabs.find((t) => {
+    var _a3;
+    return (_a3 = t.url) == null ? void 0 : _a3.startsWith(frontendUrl);
+  });
+  if (existing) {
+    chrome.tabs.update(existing.id, { active: true, url: path ? url : void 0 });
+    chrome.windows.update(existing.windowId, { focused: true });
+  } else {
+    chrome.tabs.create({ url });
+  }
+}
+function setLocked(locked) {
+  document.body.classList.toggle("is-locked", !!locked);
+}
+function showLoginEmpty(title, detail) {
+  setLocked(true);
+  profilesEl.innerHTML = `<div class="empty"><div class="empty-title">${title}</div><div>${detail}</div><button type="button" class="primary" id="open-login-btn">Open CyberControl Hub</button></div>`;
+  const btn = document.getElementById("open-login-btn");
+  if (btn) btn.onclick = () => openHub("/login");
+}
 function shortSha(s) {
   if (!s || s === "development") return s || "dev";
   return String(s).slice(0, 7);
@@ -40,7 +103,7 @@ function applyAgentVisibility() {
   } else {
     agentBtn.style.display = "none";
     agentBtn.disabled = true;
-    agentBtn.title = "Legacy Agent disabled (Phase 0). Use Fill Form.";
+    agentBtn.title = "Legacy Agent disabled (Phase 0). Use Fill this form.";
     if (agentPanel) agentPanel.style.display = "none";
   }
 }
@@ -173,7 +236,7 @@ async function detectSite() {
     clearStaleFillSummary((tab == null ? void 0 : tab.id) || null, host);
     if (!(tab == null ? void 0 : tab.url) || tab.url.startsWith("chrome") || tab.url.startsWith("edge://") || tab.url.startsWith("about:")) {
       siteIcon.textContent = "\u{1F310}";
-      siteName.textContent = "No page detected";
+      siteName.textContent = "Open a form page in this window";
       const conf = document.getElementById("site-confidence");
       if (conf) conf.style.display = "none";
       return;
@@ -330,7 +393,7 @@ function renderProfiles(query) {
   }
   filteredProfiles = list;
   if (!filteredProfiles.length) {
-    profilesEl.innerHTML = `<div class="empty">${q ? 'No match for "' + q + '"' : "No profiles found"}</div>`;
+    profilesEl.innerHTML = q ? `<div class="empty"><div class="empty-title">No match</div>No customer matches \u201C${q}\u201D.</div>` : `<div class="empty"><div class="empty-title">No customers</div>Add customers in CyberControl Hub, then come back here.</div>`;
     focusIdx = -1;
     return;
   }
@@ -339,23 +402,25 @@ function renderProfiles(query) {
     focusIdx = 0;
     fillBtn.disabled = false;
     applyAgentVisibility();
+    updateSelectedDock();
   }
   const visibleList = filteredProfiles.slice(0, 20);
   const recentCount = !q ? recentIds.filter((id) => allProfiles.some((x) => x.id === id)).length : 0;
   profilesEl.innerHTML = visibleList.map((p, i) => {
-    const initials = (p.name || "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+    const initials = initialsFor(p.name);
     const isSelected = (selectedProfile == null ? void 0 : selectedProfile.id) === p.id;
     const isFocused = i === focusIdx;
     const phone = getPhone(p);
     let label = "";
     if (!q && i === 0 && recentCount > 0) label = '<div class="section-label">Recent</div>';
-    if (!q && i === recentCount && recentCount > 0) label = '<div class="section-label">All</div>';
-    return `${label}<div class="profile-item${isSelected ? " selected" : ""}${isFocused ? " focused" : ""}" data-id="${p.id}" data-idx="${i}">
+    if (!q && i === recentCount && recentCount > 0) label = '<div class="section-label">All customers</div>';
+    return `${label}<div class="profile-item${isSelected ? " selected" : ""}${isFocused ? " focused" : ""}" data-id="${p.id}" data-idx="${i}" role="option" aria-selected="${isSelected}">
       <div class="avatar">${initials}</div>
-      <div>
+      <div class="profile-body">
         <div class="profile-name">${p.name || "Unknown"}</div>
-        <div class="profile-phone">\u{1F4F1} ${phone}</div>
+        <div class="profile-phone">${phone ? "\u{1F4F1} " + phone : "No phone on file"}</div>
       </div>
+      <div class="profile-check" aria-hidden="true">\u2713</div>
     </div>`;
   }).join("");
   profilesEl.querySelectorAll(".profile-item").forEach((el) => {
@@ -368,8 +433,14 @@ function selectProfile(id) {
   selectedProfile = allProfiles.find((p) => p.id === id) || null;
   fillBtn.disabled = !selectedProfile;
   applyAgentVisibility();
-  chrome.storage.session.set({ _cc_selected: id });
-  if (selectedProfile) prefetchProfile(id);
+  if (selectedProfile) {
+    chrome.storage.session.set({ _cc_selected: id });
+    prefetchProfile(id);
+  } else {
+    chrome.storage.session.remove("_cc_selected").catch(() => {
+    });
+  }
+  updateSelectedDock();
   renderProfiles(searchEl.value);
 }
 let _prefetchedProfile = null;
@@ -412,20 +483,22 @@ function applyWssPresence(wss, fallbackName) {
   connDot.classList.remove("green", "amber");
   if (state === "connected") {
     connDot.classList.add("green");
-    connText.textContent = "WSS \xB7 " + (fallbackName || "live");
-    connText.title = wss.sessionId ? "session " + wss.sessionId : "WebSocket connected";
+    connText.textContent = fallbackName || "Connected";
+    connText.title = wss.sessionId ? "Live \xB7 session " + wss.sessionId : "Live connection";
   } else if (state === "connecting" || state === "reconnecting") {
     connDot.classList.add("amber");
-    connText.textContent = state === "connecting" ? "WSS connecting\u2026" : "WSS reconnecting\u2026";
+    connText.textContent = state === "connecting" ? "Connecting\u2026" : "Reconnecting\u2026";
     connText.title = wss && wss.lastError || state;
   } else if (state === "suspended") {
-    connText.textContent = "WSS suspended";
+    connText.textContent = "Server busy";
     connText.title = wss && wss.lastError || "server unavailable";
   } else if (fallbackName) {
-    connText.textContent = fallbackName + " \xB7 no WSS";
-    connText.title = wss && wss.lastError || "WebSocket not connected";
+    connDot.classList.add("amber");
+    connText.textContent = fallbackName;
+    connText.title = wss && wss.lastError || "Signed in \u2014 live link reconnecting";
   } else {
-    connText.textContent = "WSS off";
+    connText.textContent = "Offline";
+    connText.title = "Not connected to CyberControl";
   }
 }
 async function refreshWssPresence(fallbackName) {
@@ -440,17 +513,21 @@ async function refreshWssPresence(fallbackName) {
 }
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || !changes.ccWssState) return;
-  const name = (connText.textContent || "").split("\xB7")[0].trim();
-  applyWssPresence(changes.ccWssState.newValue, name && !/^WSS|Not |Token|Offline/i.test(name) ? name : null);
+  const name = (connText.textContent || "").trim();
+  const keepName = name && !/^(Checking|Connecting|Reconnecting|Connected|Offline|Server busy|Signed out|Session expired|Not connected)/i.test(
+    name
+  );
+  applyWssPresence(changes.ccWssState.newValue, keepName ? name : null);
 });
 async function init() {
   document.getElementById("ver").textContent = "v" + VERSION;
+  updateSelectedDock();
   detectSite();
   await loadRecents();
   const data = await chrome.storage.local.get(["accessToken", "backendUrl", "user"]);
   if (!data.accessToken || !data.backendUrl) {
-    connText.textContent = "Not connected";
-    profilesEl.innerHTML = '<div class="empty">Login to CyberControl first</div>';
+    connText.textContent = "Signed out";
+    showLoginEmpty("Sign in required", "Open CyberControl Hub and sign in as the caf\xE9 account, then reopen this panel.");
     return;
   }
   let operatorName = null;
@@ -463,13 +540,15 @@ async function init() {
       operatorName = (user.name || user.email || "Operator").split(" ")[0];
       connDot.classList.add("green");
       connText.textContent = operatorName;
+      setLocked(false);
     } else {
-      connText.textContent = "Token expired";
-      profilesEl.innerHTML = '<div class="empty">Please login again</div>';
+      connText.textContent = "Session expired";
+      showLoginEmpty("Session expired", "Sign in again in CyberControl Hub, then reopen this panel.");
       return;
     }
   } catch (e) {
-    connText.textContent = "Offline?";
+    connText.textContent = "Offline";
+    setLocked(false);
   }
   await refreshWssPresence(operatorName);
   await loadProfilesHttps(data);
@@ -477,10 +556,10 @@ async function init() {
 async function loadProfilesHttps(data) {
   const creds = data || await chrome.storage.local.get(["accessToken", "backendUrl"]);
   if (!creds.accessToken || !creds.backendUrl) {
-    profilesEl.innerHTML = '<div class="empty">Login to CyberControl first</div>';
+    showLoginEmpty("Sign in required", "Open CyberControl Hub and sign in as the caf\xE9 account, then reopen this panel.");
     return;
   }
-  profilesEl.innerHTML = '<div class="empty">Loading profiles (WSS)\u2026</div>';
+  profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Loading customers\u2026</div>Fetching your caf\xE9 list.</div>';
   let profiles = null;
   let transport = "wss";
   try {
@@ -501,7 +580,7 @@ async function loadProfilesHttps(data) {
   } catch (e) {
     console.warn("[CC] WSS profiles failed, HTTPS fallback:", e.message);
     transport = "https-fallback";
-    profilesEl.innerHTML = '<div class="empty">WSS busy \u2014 loading profiles (HTTPS)\u2026</div>';
+    profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Still loading\u2026</div>Live link busy \u2014 trying backup path.</div>';
     try {
       const r = await fetch(String(creds.backendUrl).replace(/\/$/, "") + "/profiles", {
         headers: { Authorization: "Bearer " + creds.accessToken }
@@ -517,7 +596,7 @@ async function loadProfilesHttps(data) {
       profiles = Array.isArray(body) ? body : body && body.profiles || [];
     } catch (e2) {
       console.error("[CC] loadProfiles", e2);
-      profilesEl.innerHTML = `<div class="empty">Failed to load profiles: ${e2.message}<br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
+      profilesEl.innerHTML = `<div class="empty"><div class="empty-title">Couldn\u2019t load customers</div>${e2.message}<br><button type="button" id="retry-profiles">Retry</button></div>`;
       const btn = document.getElementById("retry-profiles");
       if (btn) btn.onclick = () => loadProfilesHttps();
       return;
@@ -530,10 +609,13 @@ async function loadProfilesHttps(data) {
     fillBtn.disabled = !selectedProfile;
     applyAgentVisibility();
   }
+  updateSelectedDock();
   if (!allProfiles.length) {
-    profilesEl.innerHTML = `<div class="empty">No profiles in this workspace (${transport}).<br><span class="pt-muted" style="font-size:11px">Re-login as the caf\xE9 account that owns customers, or add profiles in the app.</span><br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
+    profilesEl.innerHTML = `<div class="empty"><div class="empty-title">No customers yet</div>Add customers in CyberControl Hub for this caf\xE9 account, then tap Retry.<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" id="retry-profiles">Retry</button><button type="button" class="primary" id="open-hub-customers">Open Hub</button></div></div>`;
     const btn = document.getElementById("retry-profiles");
     if (btn) btn.onclick = () => loadProfilesHttps();
+    const hubBtn = document.getElementById("open-hub-customers");
+    if (hubBtn) hubBtn.onclick = () => openHub("/");
     return;
   }
   renderProfiles("");
@@ -575,10 +657,10 @@ fillBtn.addEventListener("click", async () => {
     });
   }
   fillBtn.disabled = true;
-  fillBtn.innerHTML = "<span>Filling...</span>";
+  fillBtn.innerHTML = "<span>Filling\u2026</span>";
   resultsEl.style.display = "none";
   undoBtn.style.display = "none";
-  showProgress("Preparing...");
+  showProgress("Preparing\u2026");
   saveRecent(selectedProfile.id);
   try {
     const tab = await getActivePageTab();
@@ -656,8 +738,8 @@ fillBtn.addEventListener("click", async () => {
     const msg = (errApi == null ? void 0 : errApi.operatorMessageFor) ? errApi.operatorMessageFor("gateway_error", null) : "Something went wrong while filling.";
     showStatus(msg, CC.danger);
   } finally {
-    fillBtn.disabled = false;
-    fillBtn.innerHTML = "Fill Form";
+    fillBtn.disabled = !selectedProfile;
+    fillBtn.innerHTML = FILL_BTN_LABEL;
     hideProgress();
   }
 });
@@ -685,19 +767,13 @@ undoBtn.addEventListener("click", async () => {
     showStatus("Undo failed: " + e.message, CC.danger);
   }
 });
-document.getElementById("open-btn").addEventListener("click", async () => {
-  var _a2;
-  const data = await chrome.storage.local.get("backendUrl");
-  const frontendUrl = ((_a2 = data.backendUrl) == null ? void 0 : _a2.includes("localhost:3000")) ? "http://localhost:5173" : (data.backendUrl || "").replace("/api", "");
-  const tabs = await chrome.tabs.query({});
-  const existing = tabs.find((t) => {
-    var _a3;
-    return (_a3 = t.url) == null ? void 0 : _a3.startsWith(frontendUrl);
-  });
-  if (existing) {
-    chrome.tabs.update(existing.id, { active: true });
-    chrome.windows.update(existing.windowId, { focused: true });
-  } else chrome.tabs.create({ url: frontendUrl || "http://localhost:5173" });
+dockClear == null ? void 0 : dockClear.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  clearSelection();
+});
+document.getElementById("open-btn").addEventListener("click", () => {
+  openHub("/");
 });
 let _pendingPlan = null;
 async function injectDriversInto(tabId) {
