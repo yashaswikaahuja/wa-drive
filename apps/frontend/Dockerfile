@@ -1,19 +1,6 @@
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-# Monorepo uses root pnpm-lock; app context may not have package-lock.json.
-RUN npm install --no-audit --no-fund
-COPY . .
-ARG VITE_API_URL=https://api.cybercontrol.fun/api
-ARG VITE_SOCKET_URL=https://api.cybercontrol.fun
-ARG VITE_GOOGLE_CLIENT_ID=62092486976-jhsn62q3ufj4dvr42c1hpubnujasaqok.apps.googleusercontent.com
-ENV VITE_API_URL=$VITE_API_URL \
-    VITE_SOCKET_URL=$VITE_SOCKET_URL \
-    VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
-RUN npm run build
-
+# Pre-built by CI: pnpm --filter cybercontrol-frontend build (workspace deps need monorepo pnpm).
 FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
