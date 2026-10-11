@@ -1354,7 +1354,7 @@ export default function WhatsApp() {
 
             {selectedDocs.size > 0 && (
               <div
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full flex items-center gap-2.5 z-10 flex-wrap justify-center max-w-[95%]"
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full flex items-center gap-2 z-10 max-w-[95%]"
                 style={{
                   background: untaggedSelected.length > 0
                     ? 'linear-gradient(180deg, hsl(28 90% 42%) 0%, hsl(22 85% 34%) 100%)'
@@ -1380,39 +1380,27 @@ export default function WhatsApp() {
                           : `Tag ${untaggedSelected.length} docs, then Build Profile`,
                       );
                     }}
-                    className="px-3 py-1 bg-white rounded-full text-xs font-bold hover:bg-white/95 inline-flex items-center gap-1"
+                    className="px-3 py-1.5 bg-white rounded-full text-xs font-bold hover:bg-white/95 inline-flex items-center gap-1"
                     style={{ color: 'hsl(22 85% 32%)' }}
                   >
                     <Tag size={13} weight="bold" /> Tag first
                   </button>
                 ) : (
-                  <button onClick={startBuildProfile} className="px-3 py-1 bg-white rounded-full text-xs font-bold hover:bg-white/95" style={{ color: 'hsl(var(--ink))' }}>
+                  <button
+                    type="button"
+                    onClick={startBuildProfile}
+                    className="px-3 py-1.5 bg-white rounded-full text-xs font-bold hover:bg-white/95"
+                    style={{ color: 'hsl(var(--ink))' }}
+                  >
                     Build Profile
                   </button>
                 )}
                 <button
-                  onClick={() => {
-                    const first = Array.from(selectedDocs.values())[0];
-                    const driveId = first?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || first?.id;
-                    const phone = first?.phone || '';
-                    const name = first?.name || '';
-                    const q = new URLSearchParams();
-                    if (driveId) q.set('fileId', String(driveId));
-                    if (phone) q.set('phone', String(phone));
-                    if (name) q.set('name', String(name));
-                    window.location.href = '/app/photos/portal?' + q.toString();
-                  }}
-                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30"
+                  type="button"
+                  onClick={clearSelection}
+                  className="px-2.5 py-1.5 text-white/90 rounded-full text-xs font-semibold hover:bg-white/15"
+                  title="Clear selection"
                 >
-                  Portal photo
-                </button>
-                <button onClick={() => { window.location.href = '/app/photos/scan'; }} className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  Scan PDF
-                </button>
-                <button onClick={() => { window.location.href = '/app/photos/aadhaar'; }} className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
-                  Aadhaar
-                </button>
-                <button onClick={clearSelection} className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
                   Clear
                 </button>
               </div>
