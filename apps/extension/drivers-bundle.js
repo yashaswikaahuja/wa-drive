@@ -101,7 +101,7 @@
     }
     const args = action.args || {};
     if (driver.input) {
-      const v = validateAgainstSchema(args, driver.input);
+      const v = validateAgainstSchema(args, driver.input, void 0);
       if (!v.ok) {
         const out2 = { ok: false, error: "invalid-args: " + v.error, traceId, durationMs: 0, driver: driver.name };
         recordTrace({ traceId, action, result: out2, ts: t0 });
@@ -634,7 +634,7 @@
   });
   window.cc.registerDriver({
     name: "wait.networkIdle",
-    description: "Wait until in-flight fetch + XHR count reaches 0 and stays quiet for `quietMs`. Delegates to shared/network-idle.js.",
+    description: "Wait until in-flight fetch + XHR count reaches 0 and stays quiet for `quietMs`. Delegates to shared/network-idle.ts.",
     sideEffect: "observe",
     input: {
       type: "object",

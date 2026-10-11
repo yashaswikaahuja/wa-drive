@@ -9,17 +9,32 @@ import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
+const nodeTs = 'node --experimental-strip-types';
 
+// Bundle builders were renamed .mjs → .ts in the JS→TS migration; discover both.
 const scripts = fs
   .readdirSync(scriptsDir)
-  .filter((name) => name.startsWith('build-') && name.endsWith('-bundle.mjs'))
+  .filter(
+    (name) =>
+      name.startsWith('build-') &&
+      (name.endsWith('-bundle.ts') || name.endsWith('-bundle.mjs')),
+  )
   .sort()
   .map((name) => path.join(scriptsDir, name));
 
-console.log(`Building ${scripts.length} extension bundles from @cc/* packages...\n`);
-for (const s of scripts) {
-  execSync(`node "${s}"`, { stdio: 'inherit' });
+if (scripts.length === 0) {
+  throw new Error(
+    `No build-*-bundle.{ts,mjs} scripts found in ${scriptsDir} — extension fill/SW bundles would be stale.`,
+  );
 }
 
-execSync(`node "${path.join(scriptsDir, 'build-extension-entries.ts')}"`, { stdio: 'inherit' });
+console.log(`Building ${scripts.length} extension bundles from @cc/* packages...\n`);
+for (const s of scripts) {
+  const cmd = s.endsWith('.ts') ? `${nodeTs} "${s}"` : `node "${s}"`;
+  execSync(cmd, { stdio: 'inherit' });
+}
+
+execSync(`${nodeTs} "${path.join(scriptsDir, 'build-extension-entries.ts')}"`, {
+  stdio: 'inherit',
+});
 console.log('\nAll extension bundles + entry .js files rebuilt.');

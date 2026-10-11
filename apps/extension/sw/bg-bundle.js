@@ -117,7 +117,8 @@ async function getSemanticKeyResolved(label) {
   if (typeof ccKnowledgeSync !== "undefined") {
     const aliases = await ccKnowledgeSync.getCachedAliases();
     for (const [canonical, variants] of Object.entries(aliases)) {
-      if (variants.includes(n) || variants.includes(label)) return canonical;
+      const vs = variants;
+      if (vs.includes(n) || vs.includes(label)) return canonical;
     }
   }
   return n;
