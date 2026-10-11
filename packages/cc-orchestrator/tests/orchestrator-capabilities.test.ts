@@ -13,7 +13,7 @@ async function load(name) {
 }
 
 const { CcScriptManifests } = await load('../src/script-manifests.ts');
-const { SEQUENTIAL_KERNEL_SCRIPTS } = CcScriptManifests;
+const { SEQUENTIAL_KERNEL_SCRIPTS, PRODUCT_PATH_SCRIPTS } = CcScriptManifests;
 const { CcFlattenProfile } = await load('../src/flatten-profile.ts');
 
 let passed = 0, failed = 0;
@@ -30,6 +30,13 @@ assert('SEQUENTIAL_KERNEL_SCRIPTS is array', Array.isArray(SEQUENTIAL_KERNEL_SCR
 assert('SEQUENTIAL_KERNEL_SCRIPTS has extractor-bundle', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/extractor-bundle.js'), true);
 assert('SEQUENTIAL_KERNEL_SCRIPTS has mapper-bundle', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/mapper-bundle.js'), true);
 assert('SEQUENTIAL_KERNEL_SCRIPTS has executor-bundle', SEQUENTIAL_KERNEL_SCRIPTS.includes('autofill/executor-bundle.js'), true);
+
+assert('PRODUCT_PATH_SCRIPTS is array', Array.isArray(PRODUCT_PATH_SCRIPTS), true);
+assert('PRODUCT_PATH_SCRIPTS has action-plan-executor', PRODUCT_PATH_SCRIPTS.some((p) => p.includes('action-plan-executor')), true);
+assert('PRODUCT_PATH_SCRIPTS has perception index', PRODUCT_PATH_SCRIPTS.includes('perception/index.js'), true);
+assert('PRODUCT_PATH_SCRIPTS has gateway interaction', PRODUCT_PATH_SCRIPTS.some((p) => p.includes('gateway/interaction')), true);
+try { PRODUCT_PATH_SCRIPTS.push('test'); assert('PRODUCT_PATH_SCRIPTS is frozen', false, true); }
+catch (e) { assert('PRODUCT_PATH_SCRIPTS is frozen', true, true); }
 
 // Frozen arrays
 try { SEQUENTIAL_KERNEL_SCRIPTS.push('test'); assert('SEQUENTIAL_KERNEL_SCRIPTS is frozen', false, true); }

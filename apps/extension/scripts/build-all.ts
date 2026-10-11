@@ -34,6 +34,10 @@ for (const s of scripts) {
   execSync(cmd, { stdio: 'inherit' });
 }
 
+execSync(`${nodeTs} "${path.join(scriptsDir, 'sync-product-path-runtime.ts')}"`, {
+  stdio: 'inherit',
+});
+
 execSync(`${nodeTs} "${path.join(scriptsDir, 'build-extension-entries.ts')}"`, {
   stdio: 'inherit',
 });

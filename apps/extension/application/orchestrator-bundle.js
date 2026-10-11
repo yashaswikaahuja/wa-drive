@@ -5,7 +5,7 @@
  */
 
 /* ==== script-manifests.ts ==== */
-(function(root2) {
+(function(root) {
   "use strict";
   var SEQUENTIAL_KERNEL_SCRIPTS = Object.freeze([
     "shared-bundle.js",
@@ -21,11 +21,38 @@
     "autofill/executor-bundle.js"
     // @cc/executor
   ]);
-  root2.CcScriptManifests = {
-    SEQUENTIAL_KERNEL_SCRIPTS
+  var PRODUCT_PATH_SCRIPTS = Object.freeze([
+    "runtime/gateway/interaction.js",
+    "runtime/dom-gateway.js",
+    "runtime/dom-settle.js",
+    "runtime/dom-evidence.js",
+    "runtime/errors.js",
+    "runtime/navigation-contract.js",
+    "perception/binding-registry.js",
+    "perception/revision-manager.js",
+    "perception/canonical-hash.js",
+    "perception/privacy-filter.js",
+    "perception/widget-classifier.js",
+    "perception/adapters/index.js",
+    "perception/node-factory.js",
+    "perception/edge-factory.js",
+    "perception/graph-invariants.js",
+    "perception/delta-apply.js",
+    "perception/context-discovery.js",
+    "perception/snapshot-builder.js",
+    "perception/validator.js",
+    "perception/visual-context.js",
+    "perception/index.js",
+    "runtime/action-plan-executor.js"
+  ]);
+  root.CcScriptManifests = {
+    SEQUENTIAL_KERNEL_SCRIPTS,
+    PRODUCT_PATH_SCRIPTS
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
-if (typeof module !== "undefined") module.exports = root.CcScriptManifests;
+if (typeof module !== "undefined" && typeof globalThis !== "undefined") {
+  module.exports = globalThis.CcScriptManifests;
+}
 
 /* ==== flatten-profile.ts ==== */
 (function(root2) {

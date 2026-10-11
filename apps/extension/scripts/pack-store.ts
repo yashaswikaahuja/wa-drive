@@ -27,18 +27,21 @@ const crxName = `cybercontrol-extension-${version}.crx`;
 /** Runtime files/dirs only — never ship node_modules, scripts, PEM, README. */
 const INCLUDE = [
   'manifest.json',
-  'background.ts',
-  'content.ts',
+  'background.js',
+  'content.js',
   'popup.html',
-  'popup.ts',
+  'popup.js',
   'icon.png',
   'icons',
-  'knowledge-sync.ts',
+  'knowledge-sync.js',
   'drivers-bundle.js',
   'shared-bundle.js',
   'application',
   'autofill',
   'sw',
+  // Synced from extension-legacy-best on build (PRODUCT_PATH_SCRIPTS)
+  'perception',
+  'runtime',
 ];
 
 function findChrome() {
