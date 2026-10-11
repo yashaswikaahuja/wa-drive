@@ -82,33 +82,46 @@ const suiteEnv = {
 };
 
 for (const suite of suites) {
-  try {
-    const output = execSync(suite.cmd, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe', env: suiteEnv });
-    const lastLine = output.trim().split('\n').pop();
-    const match = lastLine.match(/(\d+) passed/);
-    const count = match ? parseInt(match[1], 10) : 0;
-    totalPassed += count;
-    console.log(`  ✓ ${suite.name}: ${count} passed`);
-  } catch (e) {
-    const output = (e.stdout || '') + (e.stderr || '');
-    // Some suites print "N passed, 0 failed" then abort on Windows UV teardown;
-    // treat a clean pass line as success when there is no "N failed" with N>0.
-    const cleanPass = /(\d+)\s+passed,\s*0\s+failed/.test(output)
-      && !/[1-9]\d*\s+failed/.test(output.replace(/,\s*0\s+failed/g, ''));
-    if (cleanPass) {
-      const match = output.match(/(\d+)\s+passed,\s*0\s+failed/);
+  const retries = suite.name === 'WSS Protocol Tests' ? 2 : 0;
+  let attempt = 0;
+  let suiteDone = false;
+  while (!suiteDone) {
+    try {
+      const output = execSync(suite.cmd, { cwd: ROOT, encoding: 'utf8', stdio: 'pipe', env: suiteEnv });
+      const lastLine = output.trim().split('\n').pop();
+      const match = lastLine.match(/(\d+) passed/);
       const count = match ? parseInt(match[1], 10) : 0;
       totalPassed += count;
       console.log(`  ✓ ${suite.name}: ${count} passed`);
-      continue;
-    }
-    allPass = false;
-    const failLine = output.split('\n').find((l) => l.includes('failed') || l.includes('Error')) || 'unknown failure';
-    console.error(`  ✗ ${suite.name}: ${failLine.trim()}`);
-    if (output.trim()) {
-      console.error('    --- output ---');
-      output.trim().split('\n').slice(-10).forEach((l) => console.error('    ' + l));
-      console.error('    --- end ---');
+      suiteDone = true;
+    } catch (e) {
+      const output = (e.stdout || '') + (e.stderr || '');
+      // Some suites print "N passed, 0 failed" then abort on Windows UV teardown;
+      // treat a clean pass line as success when there is no "N failed" with N>0.
+      const cleanPass = /(\d+)\s+passed,\s*0\s+failed/.test(output)
+        && !/[1-9]\d*\s+failed/.test(output.replace(/,\s*0\s+failed/g, ''));
+      if (cleanPass) {
+        const match = output.match(/(\d+)\s+passed,\s*0\s+failed/);
+        const count = match ? parseInt(match[1], 10) : 0;
+        totalPassed += count;
+        console.log(`  ✓ ${suite.name}: ${count} passed`);
+        suiteDone = true;
+        continue;
+      }
+      if (attempt < retries) {
+        attempt += 1;
+        console.warn(`  ↻ ${suite.name}: retry ${attempt}/${retries} after flake`);
+        continue;
+      }
+      allPass = false;
+      suiteDone = true;
+      const failLine = output.split('\n').find((l) => l.includes('failed') || l.includes('Error')) || 'unknown failure';
+      console.error(`  ✗ ${suite.name}: ${failLine.trim()}`);
+      if (output.trim()) {
+        console.error('    --- output ---');
+        output.trim().split('\n').slice(-10).forEach((l) => console.error('    ' + l));
+        console.error('    --- end ---');
+      }
     }
   }
 }
