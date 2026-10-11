@@ -1,6 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  content: [
+    './index.html',
+    './src/**/*.{ts,tsx}',
+    // Photos-style MediaViewer lives in the shared package
+    '../../packages/media-viewer/src/**/*.{ts,tsx}',
+  ],
   theme: {
     extend: {
       colors: {

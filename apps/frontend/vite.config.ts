@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  // Workspace package ships TSX source — transpile it, do not prebundle as opaque CJS.
+  optimizeDeps: {
+    exclude: ['@cybercontrol/media-viewer'],
+  },
   build: {
     rollupOptions: {
       output: {

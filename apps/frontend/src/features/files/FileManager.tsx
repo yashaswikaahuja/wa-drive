@@ -6,15 +6,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FolderOpen, Folder, MagnifyingGlass, UploadSimple, ArrowsClockwise,
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, SquaresFour,
-  ListBullets, DownloadSimple, Trash, Camera, SpinnerGap, ArrowBendUpLeft,
-  MagnifyingGlassPlus, DotsThree, PencilSimple, CheckSquare,
+  ListBullets, DownloadSimple, Trash, Camera, SpinnerGap, CheckSquare,
+  House,
 } from '@phosphor-icons/react';
+import {
+  MediaViewer,
+  displayName as mediaDisplayName,
+  type MediaViewerStripItem,
+} from '@cybercontrol/media-viewer';
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
 import { useAuthStore } from '../auth/store';
 import PdfThumb from './PdfThumb';
-import MozillaPdfEmbed from './MozillaPdfEmbed';
 
 type DriveFile = {
   id: string;
@@ -47,11 +51,7 @@ function isPdf(f: DriveFile) {
 
 /** Strip noisy WA prefixes like 9198…_1699…_ for display */
 function displayName(fileName: string) {
-  if (!fileName) return 'Untitled';
-  let n = fileName;
-  n = n.replace(/^\d{10,15}_\d{10,13}_/, '');
-  n = n.replace(/^[0-9a-f]{8}-[0-9a-f-]{27}_/i, '');
-  return n || fileName;
+  return mediaDisplayName(fileName);
 }
 
 function folderLabel(phone: string, name: string) {
@@ -114,12 +114,9 @@ export default function FileManager() {
   const [preview, setPreview] = useState<{ file: DriveFile; url: string; kind: 'image' | 'pdf' } | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; file: DriveFile } | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [viewerMore, setViewerMore] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false); // phone / small tablet portrait
   const fileRef = useRef<HTMLInputElement>(null);
   const blobUrlCache = useRef<Map<string, string>>(new Map());
-  const filmstripRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -354,11 +351,6 @@ export default function FileManager() {
       }
       const url = await ensureBlobUrl(f);
       setPreview({ file: f, url, kind: isImage(f) ? 'image' : 'pdf' });
-      // Keep filmstrip thumb in view
-      requestAnimationFrame(() => {
-        const el = filmstripRef.current?.querySelector(`[data-file-id="${f.id}"]`);
-        el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      });
     } catch (e: any) {
       toast.error(e.message || 'Could not open file');
     } finally {
@@ -369,8 +361,6 @@ export default function FileManager() {
   const closePreview = () => {
     setPreview(null);
     setOpeningId(null);
-    setZoom(1);
-    setViewerMore(false);
   };
 
   const openInPhotoEditor = (f: DriveFile) => {
@@ -388,49 +378,21 @@ export default function FileManager() {
   const goPreviewDelta = async (delta: number) => {
     if (previewIndex < 0 || !visibleFiles.length) return;
     const next = visibleFiles[(previewIndex + delta + visibleFiles.length) % visibleFiles.length];
-    if (next) {
-      setZoom(1);
-      setViewerMore(false);
-      await openFile(next);
-    }
+    if (next) await openFile(next);
   };
 
-  // Desktop: ← → switch files (PDF.js handles pages itself). Esc = back.
-  // Phone: swipe left/right switches files. Don't steal keys when typing in PDF.js find box.
-  useEffect(() => {
-    if (!preview) return;
-    const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closePreview();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        void goPreviewDelta(-1);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        void goPreviewDelta(1);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+  const stripItems: MediaViewerStripItem[] = useMemo(
+    () =>
+      visibleFiles.map((f) => ({
+        id: f.id,
+        fileName: f.fileName,
+        thumbUrl: isImage(f) ? authFileUrl(driveIdOf(f)) : undefined,
+        kind: isPdf(f) ? 'pdf' : isImage(f) ? 'image' : 'other',
+      })),
+    // authFileUrl reads token from store; files identity is enough for strip
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preview?.file.id, previewIndex, visibleFiles.length]);
-
-  // Phone swipe between files (PDF or photo)
-  const swipeStartX = useRef<number | null>(null);
-  const onViewerTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length === 1) swipeStartX.current = e.touches[0].clientX;
-  };
-  const onViewerTouchEnd = (e: React.TouchEvent) => {
-    if (swipeStartX.current == null || e.changedTouches.length === 0) return;
-    const dx = e.changedTouches[0].clientX - swipeStartX.current;
-    swipeStartX.current = null;
-    if (Math.abs(dx) < 60) return; // ignore taps
-    if (dx < 0) void goPreviewDelta(1);  // swipe left → next
-    else void goPreviewDelta(-1);         // swipe right → prev
-  };
+    [visibleFiles],
+  );
 
   const downloadFile = async (f: DriveFile) => {
     setCtx(null);
@@ -596,40 +558,72 @@ export default function FileManager() {
       "
       style={{ background: 'hsl(var(--paper))' }}
     >
-      {/* Toolbar — paper header */}
+      {/* Explorer-style toolbar: Back/Up · address bar · search · view */}
       <div
         className="shrink-0 border-b px-2 sm:px-3 py-2 flex flex-col gap-2"
         style={{
           borderColor: 'hsl(var(--pt-border))',
-          background: 'hsl(var(--pt-card))',
-          boxShadow: '0 1px 0 hsl(var(--pt-border) / 0.8)',
+          background: 'linear-gradient(180deg, hsl(var(--pt-card)) 0%, hsl(var(--paper)) 100%)',
         }}
       >
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-          {!atRoot && (
-            <button type="button" className="btn-secondary text-xs py-1.5 px-2 flex items-center gap-1 shrink-0" onClick={goRoot} title="Back to customers">
-              <CaretLeft size={14} /> <span className="hidden xs:inline sm:inline">Back</span>
-            </button>
-          )}
-          <FolderOpen size={18} weight="fill" className="shrink-0" style={{ color: 'hsl(var(--marigold))' }} />
-          <nav className="flex items-center gap-1 text-xs min-w-0 flex-1" style={{ color: 'hsl(var(--pt-muted))' }}>
+          <div
+            className="flex items-center rounded-lg overflow-hidden shrink-0"
+            style={{ border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}
+          >
             <button
               type="button"
-              className="truncate transition-colors"
-              style={{ color: 'hsl(var(--pt-muted))' }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--marigold-deep))'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = 'hsl(var(--pt-muted))'; }}
+              className="pt-toolbtn !rounded-none !h-9 !w-9 !p-0 disabled:opacity-35"
+              disabled={atRoot}
               onClick={goRoot}
+              title="Up to customers"
+              aria-label="Up"
             >
-              Customers
+              <CaretLeft size={16} weight="bold" />
             </button>
-            {activeFolder && (
-              <>
-                <CaretRight size={12} className="shrink-0" style={{ color: 'hsl(var(--pt-muted))' }} />
-                <span className="truncate font-medium" style={{ color: 'hsl(var(--ink))' }}>{activeFolder.name}</span>
-              </>
-            )}
-          </nav>
+            <button
+              type="button"
+              className="pt-toolbtn !rounded-none !h-9 !w-9 !p-0 border-l disabled:opacity-35"
+              style={{ borderColor: 'hsl(var(--pt-border))' }}
+              disabled={atRoot}
+              onClick={goRoot}
+              title="Customers home"
+              aria-label="Home"
+            >
+              <House size={15} weight="fill" />
+            </button>
+          </div>
+
+          {/* Address bar */}
+          <div
+            className="flex items-center gap-1.5 min-w-0 flex-1 h-9 px-2.5 rounded-lg text-xs"
+            style={{
+              border: '1px solid hsl(var(--pt-border))',
+              background: 'hsl(var(--pt-card))',
+              boxShadow: 'inset 0 1px 0 hsl(var(--ink) / 0.03)',
+            }}
+          >
+            <FolderOpen size={15} weight="fill" className="shrink-0" style={{ color: 'hsl(var(--marigold))' }} />
+            <nav className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden" style={{ color: 'hsl(var(--pt-muted))' }}>
+              <button
+                type="button"
+                className="truncate font-medium transition-colors shrink-0"
+                style={{ color: atRoot ? 'hsl(var(--ink))' : 'hsl(var(--pt-muted))' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--marigold-deep))'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = atRoot ? 'hsl(var(--ink))' : 'hsl(var(--pt-muted))'; }}
+                onClick={goRoot}
+              >
+                Customers
+              </button>
+              {activeFolder && (
+                <>
+                  <CaretRight size={11} className="shrink-0 opacity-60" />
+                  <span className="truncate font-semibold" style={{ color: 'hsl(var(--ink))' }}>{activeFolder.name}</span>
+                </>
+              )}
+            </nav>
+          </div>
+
           <button
             type="button"
             className="pt-toolbtn w-10 h-10 sm:w-9 sm:h-9 !p-0 shrink-0"
@@ -638,7 +632,7 @@ export default function FileManager() {
             title="Refresh"
             aria-label="Refresh"
           >
-            <ArrowsClockwise size={20} className={loading ? 'animate-spin' : ''} />
+            <ArrowsClockwise size={18} className={loading ? 'animate-spin' : ''} />
           </button>
           <button
             type="button"
@@ -648,10 +642,11 @@ export default function FileManager() {
             aria-label="Upload"
             onClick={() => fileRef.current?.click()}
           >
-            <UploadSimple size={20} />
+            <UploadSimple size={18} />
           </button>
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => uploadLocal(e.target.files)} />
         </div>
+
         <div className="flex items-center gap-2 relative">
           <div className="relative flex-1 min-w-0">
             <MagnifyingGlass size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
@@ -662,7 +657,6 @@ export default function FileManager() {
               onChange={(e) => setSearch(e.target.value)}
               autoComplete="off"
             />
-            {/* Autocomplete for customer folders */}
             {atRoot && autocompleteFolders.length > 0 && search.trim().length > 0 && (
               <ul
                 className="absolute left-0 right-0 top-full mt-1 z-40 max-h-64 overflow-y-auto rounded-xl py-1"
@@ -710,7 +704,7 @@ export default function FileManager() {
                 type="button"
                 className="pt-toolbtn !rounded-none !h-8 !px-2"
                 data-active={view === 'grid' ? 'true' : undefined}
-                title="Icons"
+                title="Large icons"
                 onClick={() => setView('grid')}
               >
                 <SquaresFour size={15} />
@@ -719,7 +713,7 @@ export default function FileManager() {
                 type="button"
                 className="pt-toolbtn !rounded-none !h-8 !px-2"
                 data-active={view === 'list' ? 'true' : undefined}
-                title="List"
+                title="Details"
                 onClick={() => setView('list')}
               >
                 <ListBullets size={15} />
@@ -730,17 +724,19 @@ export default function FileManager() {
       </div>
 
       <div className="flex-1 min-h-0 flex">
-        {/* Sidebar folders */}
+        {/* Navigation pane — Explorer-style */}
         <aside
-          className={`w-52 lg:w-56 shrink-0 border-r overflow-y-auto ${isNarrow ? 'hidden' : 'block'}`}
+          className={`w-56 lg:w-60 shrink-0 border-r overflow-y-auto ${isNarrow ? 'hidden' : 'block'}`}
           style={{
             borderColor: 'hsl(var(--pt-border))',
-            background: 'hsl(var(--pt-card) / 0.55)',
+            background: 'hsl(var(--pt-secondary) / 0.35)',
           }}
         >
-          <p className="pt-label text-[10px] px-3 pt-3 pb-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
-            Customers{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
-          </p>
+          <div className="px-3 pt-3 pb-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: 'hsl(var(--pt-muted))' }}>
+              Navigation
+            </p>
+          </div>
           <button
             type="button"
             onClick={goRoot}
@@ -750,9 +746,12 @@ export default function FileManager() {
             style={{ width: 'calc(100% - 0.5rem)', marginLeft: '0.25rem', marginRight: '0.25rem' }}
           >
             <FolderOpen size={16} weight={atRoot ? 'fill' : 'regular'} style={atRoot ? { color: 'hsl(var(--marigold-deep))' } : undefined} />
-            <span className="truncate flex-1">All customers</span>
-            <span className="text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>{totalFolders}</span>
+            <span className="truncate flex-1 font-medium">All customers</span>
+            <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>{totalFolders}</span>
           </button>
+          <p className="pt-label text-[10px] px-3 pt-3 pb-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+            Folders{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
+          </p>
           {filteredFolders.map((fol) => {
             const active = folderPhone === fol.phone;
             const unassigned = fol.phone === '__unassigned__';
@@ -850,7 +849,7 @@ export default function FileManager() {
                   Showing {FOLDER_CAP} of {totalFolders} customers — type a name or phone to find others.
                 </p>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
                 {filteredFolders.map((fol) => {
                   const unassigned = fol.phone === '__unassigned__';
                   return (
@@ -858,33 +857,35 @@ export default function FileManager() {
                       key={fol.phone}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); openFolder(fol.phone); setSearch(''); }}
-                      className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-2xl text-center transition-all"
+                      className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl text-center transition-all min-h-[132px]"
                       style={{
                         background: 'hsl(var(--pt-card))',
                         border: '1px solid hsl(var(--pt-border))',
                         boxShadow: 'var(--shadow-paper)',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'hsl(var(--pt-secondary))';
-                        e.currentTarget.style.borderColor = 'hsl(var(--ink) / 0.18)';
+                        e.currentTarget.style.background = 'hsl(var(--marigold) / 0.1)';
+                        e.currentTarget.style.borderColor = 'hsl(var(--marigold) / 0.45)';
+                        e.currentTarget.style.boxShadow = '0 0 0 1px hsl(var(--marigold) / 0.2), var(--shadow-paper)';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.background = 'hsl(var(--pt-card))';
                         e.currentTarget.style.borderColor = 'hsl(var(--pt-border))';
+                        e.currentTarget.style.boxShadow = 'var(--shadow-paper)';
                       }}
                     >
                       <Folder
-                        size={44}
+                        size={56}
                         weight="fill"
-                        style={{ color: unassigned ? 'hsl(var(--pt-muted))' : 'hsl(var(--marigold))' }}
+                        style={{
+                          color: unassigned ? 'hsl(var(--pt-muted))' : 'hsl(var(--marigold))',
+                          filter: unassigned ? undefined : 'drop-shadow(0 3px 6px hsl(var(--marigold) / 0.28))',
+                        }}
                       />
-                      <span className="text-xs font-semibold truncate w-full" style={{ color: 'hsl(var(--ink))' }}>{fol.name}</span>
-                      <span className="text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>
+                      <span className="text-xs sm:text-[13px] font-semibold truncate w-full leading-tight" style={{ color: 'hsl(var(--ink))' }}>{fol.name}</span>
+                      <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>
                         {fol.count} item{fol.count === 1 ? '' : 's'}
                       </span>
-                      {!unassigned && fol.name !== fol.phone && (
-                        <span className="text-[10px] truncate w-full" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.phone}</span>
-                      )}
                     </button>
                   );
                 })}
@@ -918,23 +919,25 @@ export default function FileManager() {
                     className="relative flex flex-col items-stretch rounded-xl p-2 text-left transition-all select-none"
                     style={{
                       background: isSel || openingId === f.id
-                        ? 'hsl(var(--marigold) / 0.12)'
+                        ? 'hsl(var(--marigold) / 0.14)'
                         : 'hsl(var(--pt-card))',
                       border: isSel || openingId === f.id
                         ? '1px solid hsl(var(--marigold) / 0.55)'
                         : '1px solid hsl(var(--pt-border))',
                       boxShadow: isSel
-                        ? '0 0 0 2px hsl(var(--marigold) / 0.22), var(--shadow-paper)'
+                        ? '0 0 0 1px hsl(var(--marigold) / 0.22), var(--shadow-paper)'
                         : 'var(--shadow-paper)',
                     }}
                     onMouseEnter={(e) => {
                       if (!isSel && openingId !== f.id) {
-                        e.currentTarget.style.background = 'hsl(var(--pt-secondary))';
+                        e.currentTarget.style.background = 'hsl(var(--marigold) / 0.08)';
+                        e.currentTarget.style.borderColor = 'hsl(var(--marigold) / 0.35)';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isSel && openingId !== f.id) {
                         e.currentTarget.style.background = 'hsl(var(--pt-card))';
+                        e.currentTarget.style.borderColor = 'hsl(var(--pt-border))';
                       }
                     }}
                     title={isNarrow ? 'Tap to open · Long-press to select' : 'Click open · Ctrl+click select'}
@@ -949,7 +952,7 @@ export default function FileManager() {
                     )}
                     <div
                       className="aspect-square rounded-lg flex items-center justify-center overflow-hidden mb-2 relative"
-                      style={{ background: 'hsl(var(--pt-secondary))' }}
+                      style={{ background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
                     >
                       <Thumb f={f} />
                       {openingId === f.id && (
@@ -1042,6 +1045,27 @@ export default function FileManager() {
           )}
         </main>
       </div>
+
+      {/* Explorer status bar */}
+      {!preview && (
+        <div
+          className="shrink-0 border-t px-3 py-1.5 flex items-center justify-between gap-3 text-[11px]"
+          style={{
+            borderColor: 'hsl(var(--pt-border))',
+            background: 'hsl(var(--pt-card))',
+            color: 'hsl(var(--pt-muted))',
+          }}
+        >
+          <span className="truncate">
+            {atRoot
+              ? `${filteredFolders.length} folder${filteredFolders.length === 1 ? '' : 's'}${totalFolders > FOLDER_CAP ? ` (of ${totalFolders})` : ''}`
+              : `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'}${selectedIds.size > 0 ? ` · ${selectedIds.size} selected` : ''}`}
+          </span>
+          <span className="shrink-0 tabular-nums hidden sm:inline">
+            {atRoot ? 'Large icons' : view === 'grid' ? 'Large icons' : 'Details'}
+          </span>
+        </div>
+      )}
 
       {/* Multi-select action bar */}
       {!preview && selectedIds.size > 0 && (
@@ -1186,233 +1210,37 @@ export default function FileManager() {
         </div>
       )}
 
-      {preview && (
-        <div
-          className="fixed inset-0 z-[100] bg-[#0a0a0a] flex flex-col overscroll-none"
-          style={{ touchAction: preview.kind === 'pdf' ? 'auto' : 'none' }}
-          onClick={closePreview}
-          onWheel={(e) => {
-            // Images only: Ctrl+wheel zooms our stage. PDF.js owns its own zoom.
-            if (preview.kind !== 'image') return;
-            if (e.ctrlKey || e.metaKey) {
-              e.preventDefault();
-              setZoom((z) => Math.min(3, Math.max(0.5, Number((z - e.deltaY * 0.002).toFixed(2)))));
-            }
-          }}
-        >
-          {/* Stage — full-bleed (PDF gets max space: no filmstrip) */}
-          <div
-            className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={onViewerTouchStart}
-            onTouchEnd={onViewerTouchEnd}
-            style={{ touchAction: preview.kind === 'pdf' ? 'auto' : 'none' }}
-          >
-            {/* Soft vignette behind image */}
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  'radial-gradient(ellipse at center, rgba(40,40,45,0.9) 0%, rgba(10,10,10,1) 70%)',
-              }}
-            />
-
-            {/* Floating controls — photos only. PDF uses buttons inside Mozilla toolbar. */}
-            {preview.kind === 'image' && (
-              <>
-                <button
-                  type="button"
-                  onClick={closePreview}
-                  className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 h-9 sm:h-11 px-2.5 sm:px-3.5 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center gap-1 shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                  title="Back (Esc)"
-                >
-                  <ArrowBendUpLeft size={16} weight="bold" />
-                  <span className="text-[11px] sm:text-xs font-semibold">Back</span>
-                </button>
-
-                <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2.5">
-                  <button
-                    type="button"
-                    className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                    title="Zoom"
-                    onClick={() => setZoom((z) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
-                  >
-                    <MagnifyingGlassPlus size={18} weight="bold" />
-                  </button>
-                  <button
-                    type="button"
-                    className="hidden sm:flex w-11 h-11 rounded-full bg-white/95 hover:bg-white text-black items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                    title="Edit in Photo Editor"
-                    onClick={() => openInPhotoEditor(preview.file)}
-                  >
-                    <PencilSimple size={20} weight="bold" />
-                  </button>
-                  <button
-                    type="button"
-                    className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                    title="Delete"
-                    onClick={() => void deleteFile(preview.file)}
-                  >
-                    <Trash size={18} weight="bold" />
-                  </button>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                      title="More"
-                      onClick={() => setViewerMore((v) => !v)}
-                    >
-                      <DotsThree size={22} weight="bold" />
-                    </button>
-                    {viewerMore && (
-                      <div
-                        className="absolute right-0 min-w-[170px] rounded-xl border border-white/20 bg-[#2c2c2e] shadow-2xl py-1.5 text-sm text-white z-30"
-                        style={{ top: '3.25rem' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); void downloadFile(preview.file); }}>
-                          <DownloadSimple size={16} /> Download
-                        </button>
-                        <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5" onClick={() => { setViewerMore(false); openInPhotoEditor(preview.file); }}>
-                          <Camera size={16} /> Photo Editor
-                        </button>
-                        <button type="button" className="w-full px-3.5 py-2.5 text-left hover:bg-white/10" onClick={() => { setZoom(1); setViewerMore(false); }}>
-                          Reset zoom
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Side chevrons for photos only — PDF uses keys (desktop) / swipe (phone) for file switch */}
-            {preview.kind === 'image' && visibleFiles.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
-                  onClick={() => void goPreviewDelta(-1)}
-                  title="Previous file"
-                >
-                  <CaretLeft size={22} weight="bold" className="sm:hidden" />
-                  <CaretLeft size={28} weight="bold" className="hidden sm:block" />
-                </button>
-                <button
-                  type="button"
-                  className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
-                  onClick={() => void goPreviewDelta(1)}
-                  title="Next file"
-                >
-                  <CaretRight size={22} weight="bold" className="sm:hidden" />
-                  <CaretRight size={28} weight="bold" className="hidden sm:block" />
-                </button>
-              </>
-            )}
-            {/* Wide edge hit-zones over the iframe (phone) — center stays for PDF pan/scroll */}
-            {preview.kind === 'pdf' && visibleFiles.length > 1 && (
-              <>
-                <div
-                  className="absolute left-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
-                  style={{ touchAction: 'pan-y' }}
-                  onTouchStart={onViewerTouchStart}
-                  onTouchEnd={onViewerTouchEnd}
-                  title="Swipe for previous file"
-                />
-                <div
-                  className="absolute right-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
-                  style={{ touchAction: 'pan-y' }}
-                  onTouchStart={onViewerTouchStart}
-                  onTouchEnd={onViewerTouchEnd}
-                  title="Swipe for next file"
-                />
-              </>
-            )}
-
-            {openingId && openingId !== preview.file.id && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10">
-                <SpinnerGap size={32} className="animate-spin text-white" />
-              </div>
-            )}
-
-            {/* Photo: bias image upward; leave only filmstrip clearance at bottom. PDF: edge-to-edge. */}
-            <div
-              className={`absolute inset-0 z-[5] overflow-hidden ${
-                preview.kind === 'pdf' ? 'pt-0 pb-0' : 'pt-12 pb-0'
-              }`}
-            >
-              {preview.kind === 'image' ? (
-                <div className="w-full h-full flex items-start justify-center overflow-hidden px-10 sm:px-14 pt-1 pb-[3.75rem] sm:pb-[4.5rem]">
-                  <img
-                    src={preview.url}
-                    alt={preview.file.fileName}
-                    className="max-w-full max-h-full object-contain object-top shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
-                    style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
-                    draggable={false}
-                  />
-                </div>
-              ) : (
-                <div className="w-full h-full min-h-0 bg-[#525659]">
-                  <MozillaPdfEmbed
-                    fileUrl={preview.url}
-                    onBack={closePreview}
-                    onDelete={() => void deleteFile(preview.file)}
-                    onPrevFile={() => void goPreviewDelta(-1)}
-                    onNextFile={() => void goPreviewDelta(1)}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Filename chip — above the overlapping filmstrip */}
-            {preview.kind === 'image' && (
-              <div className="absolute bottom-[3.25rem] sm:bottom-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="px-3 py-1 rounded-full bg-white/95 text-[11px] sm:text-[12px] font-medium text-black shadow-lg max-w-[80vw] truncate">
-                  {displayName(preview.file.fileName)}
-                  {previewIndex >= 0 ? ` · ${previewIndex + 1} of ${visibleFiles.length}` : ''}
-                  {zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : ''}
-                </div>
-              </div>
-            )}
-
-            {/* Small transparent filmstrip overlaid on the preview (photos only) */}
-            {preview.kind === 'image' && visibleFiles.length > 0 && (
-              <div
-                className="absolute inset-x-0 bottom-0 z-20 pointer-events-none safe-pb"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div
-                  ref={filmstripRef}
-                  className="pointer-events-auto flex gap-1.5 sm:gap-2 overflow-x-auto justify-start sm:justify-center scroll-smooth px-2 sm:px-4 py-2 bg-transparent"
-                  style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as any}
-                >
-                  {visibleFiles.map((f) => {
-                    const active = f.id === preview.file.id;
-                    return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        data-file-id={f.id}
-                        onClick={() => { setZoom(1); void openFile(f); }}
-                        className={`shrink-0 w-9 h-9 sm:w-12 sm:h-12 rounded-md overflow-hidden transition-all shadow-md ${
-                          active
-                            ? 'ring-2 ring-[#4da3ff] ring-offset-1 ring-offset-transparent scale-105'
-                            : 'opacity-75 hover:opacity-100 ring-1 ring-white/40'
-                        }`}
-                        title={displayName(f.fileName)}
-                      >
-                        <div className="w-full h-full bg-black/40 flex items-center justify-center">
-                          <Thumb f={f} />
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <MediaViewer
+        file={
+          preview
+            ? {
+                id: preview.file.id,
+                fileName: preview.file.fileName,
+                url: preview.url,
+                kind: preview.kind,
+              }
+            : null
+        }
+        items={stripItems}
+        index={previewIndex}
+        opening={!!openingId && !!preview && openingId !== preview.file.id}
+        onClose={closePreview}
+        onPrev={() => void goPreviewDelta(-1)}
+        onNext={() => void goPreviewDelta(1)}
+        onSelectItem={(id) => {
+          const f = visibleFiles.find((x) => x.id === id);
+          if (f) void openFile(f);
+        }}
+        onDelete={preview ? () => void deleteFile(preview.file) : undefined}
+        onDownload={preview ? () => void downloadFile(preview.file) : undefined}
+        onOpenInPhotoEditor={preview ? () => openInPhotoEditor(preview.file) : undefined}
+        showDelete
+        showPhotoEditor
+        renderStripThumb={(item) => {
+          const f = visibleFiles.find((x) => x.id === item.id);
+          return f ? <Thumb f={f} /> : null;
+        }}
+      />
     </div>
   );
 }

@@ -1,12 +1,18 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
-import api, { SOCKET_URL } from '../../shared/api';
+import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { DocTypePickerModal } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
-import MediaViewer from '../../shared/MediaViewer';
+import {
+  MediaViewer,
+  driveIdFromUrl,
+  mediaKindOf,
+  type MediaViewerFile,
+  type MediaViewerStripItem,
+} from '@cybercontrol/media-viewer';
 import { useAuthStore } from '../auth/store';
 import { Printer, Camera, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle, PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise } from '@phosphor-icons/react';
 
@@ -271,6 +277,9 @@ export default function WhatsApp() {
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [viewerFile, setViewerFile] = useState<Message | null>(null);
+  const [viewerResolved, setViewerResolved] = useState<MediaViewerFile | null>(null);
+  const [viewerOpening, setViewerOpening] = useState(false);
+  const viewerBlobUrlRef = useRef<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedDocs, setSelectedDocs] = useState<Map<string, Message>>(new Map());
   const [showPicker, setShowPicker] = useState(false);
@@ -566,27 +575,78 @@ export default function WhatsApp() {
     } catch { toast.error('Failed to send request'); }
   }, []);
 
-  const handleOpenFile = useCallback((msg: Message) => setViewerFile(msg), []);
-  const viewerRef = useRef<HTMLDivElement>(null);
-  const handleCloseViewer = useCallback(() => setViewerFile(null), []);
+  const handleOpenFile = useCallback(async (msg: Message) => {
+    const kind = mediaKindOf(msg.fileName);
+    if (!kind) {
+      const driveId = driveIdFromUrl(msg.fileUrl) || msg.id;
+      try {
+        const blob = await getCachedBlob(driveId, async () => {
+          const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+          return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/octet-stream') });
+        });
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } catch (err: any) {
+        toast.error('Failed to open: ' + (err?.message || 'unknown'));
+      }
+      return;
+    }
+    setViewerFile(msg);
+  }, []);
+  const handleCloseViewer = useCallback(() => {
+    setViewerFile(null);
+    setViewerResolved(null);
+    setViewerOpening(false);
+    if (viewerBlobUrlRef.current) {
+      URL.revokeObjectURL(viewerBlobUrlRef.current);
+      viewerBlobUrlRef.current = null;
+    }
+  }, []);
+
+  // Resolve authenticated blob URL for the Photos-style viewer
   useEffect(() => {
-    if (!viewerFile) return;
-    const el = viewerRef.current;
-    const prev = document.activeElement as HTMLElement | null;
-    const sel = 'a[href],button:not([disabled]),input:not([disabled]),[tabindex]:not([tabindex="-1"])';
-    const focusables = () => el ? Array.from(el.querySelectorAll<HTMLElement>(sel)).filter(n => n.offsetParent !== null) : [];
-    focusables()[0]?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setViewerFile(null); return; }
-      if (e.key !== 'Tab') return;
-      const items = focusables();
-      if (!items.length) return;
-      const first = items[0], last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    if (!viewerFile) {
+      setViewerResolved(null);
+      setViewerOpening(false);
+      return;
+    }
+    const kind = mediaKindOf(viewerFile.fileName);
+    if (!kind) {
+      setViewerFile(null);
+      return;
+    }
+    let cancelled = false;
+    const driveId = driveIdFromUrl(viewerFile.fileUrl) || viewerFile.id;
+    setViewerOpening(true);
+    getCachedBlob(driveId, async () => {
+      const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+      return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/octet-stream') });
+    })
+      .then((blob) => {
+        if (cancelled) return;
+        if (viewerBlobUrlRef.current) URL.revokeObjectURL(viewerBlobUrlRef.current);
+        const url = URL.createObjectURL(blob);
+        viewerBlobUrlRef.current = url;
+        setViewerResolved({
+          id: viewerFile.id,
+          fileName: viewerFile.fileName || 'file',
+          url,
+          kind,
+        });
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        toast.error('Failed to load: ' + (err?.message || 'unknown'));
+        setViewerFile(null);
+        setViewerResolved(null);
+      })
+      .finally(() => {
+        if (!cancelled) setViewerOpening(false);
+      });
+    return () => {
+      cancelled = true;
     };
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('keydown', onKey); prev?.focus?.(); };
   }, [viewerFile]);
   const handleDeleteDoc = useCallback((id: string) => {
     setChats(prev => {
@@ -808,7 +868,27 @@ export default function WhatsApp() {
     });
   }, [sortedChats, chatSearch, pinnedChats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
-  const viewerMessages = useMemo(() => activeChat ? activeChat.messages.filter((m) => !!m.fileName) : [], [activeChat]);
+  const viewerMessages = useMemo(
+    () => (activeChat ? activeChat.messages.filter((m) => !!m.fileName && mediaKindOf(m.fileName)) : []),
+    [activeChat],
+  );
+  const viewerIndex = viewerFile ? viewerMessages.findIndex((m) => m.id === viewerFile.id) : -1;
+  const viewerStripItems: MediaViewerStripItem[] = useMemo(() => {
+    const token = useAuthStore.getState().accessToken || '';
+    return viewerMessages.map((m) => {
+      const kind = mediaKindOf(m.fileName) || 'other';
+      const driveId = driveIdFromUrl(m.fileUrl) || m.id;
+      return {
+        id: m.id,
+        fileName: m.fileName || 'file',
+        kind,
+        thumbUrl:
+          kind === 'image'
+            ? `${API_URL}/drive/download/${driveId}?token=${encodeURIComponent(token)}`
+            : undefined,
+      };
+    });
+  }, [viewerMessages]);
   const handlePrevViewer = useCallback(() => {
     if (!viewerFile || !viewerMessages.length) return;
     const idx = viewerMessages.findIndex((msg) => msg.id === viewerFile.id);
@@ -1180,34 +1260,61 @@ export default function WhatsApp() {
       )}
 
       <MediaViewer
-        item={viewerFile}
+        file={viewerResolved}
+        items={viewerStripItems}
+        index={viewerIndex}
+        opening={!!viewerFile && (!viewerResolved || viewerOpening)}
         onClose={handleCloseViewer}
+        onPrev={handlePrevViewer}
+        onNext={handleNextViewer}
+        onSelectItem={(id) => {
+          const msg = viewerMessages.find((m) => m.id === id);
+          if (msg) setViewerFile(msg);
+        }}
         onPrint={() => {
-          const driveId = viewerFile?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+          const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
           if (!driveId) return;
           void getCachedBlob(driveId, async () => {
             const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
             return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });
-          }).then(blob => {
+          }).then((blob) => {
             printBlob(blob);
           }).catch((err) => {
             toast.error('Failed to load: ' + (err.message || 'unknown'));
           });
         }}
-        onOpenInPhotoTool={() => {
-          const driveId = viewerFile?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+        onOpenInPhotoEditor={() => {
+          const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
           if (!driveId) return;
-          window.open('/app/photo?fileId=' + driveId, '_blank');
+          const q = new URLSearchParams();
+          q.set('fileId', driveId);
+          if (viewerFile?.phone) q.set('phone', viewerFile.phone);
+          if (viewerFile?.name) q.set('name', viewerFile.name);
+          window.location.href = `/app/photos/portal?${q}`;
+        }}
+        onDownload={() => {
+          const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
+          if (!driveId || !viewerFile) return;
+          void getCachedBlob(driveId, async () => {
+            const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+            return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/octet-stream') });
+          }).then((blob) => {
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = viewerFile.fileName || 'file';
+            a.click();
+          }).catch((err) => {
+            toast.error('Download failed: ' + (err.message || 'unknown'));
+          });
         }}
         onDelete={() => {
           if (!viewerFile) return;
           handleDeleteDoc(viewerFile.id);
-          setViewerFile(null);
+          handleCloseViewer();
         }}
-        onPrev={handlePrevViewer}
-        onNext={handleNextViewer}
         showDelete={!!viewerFile}
-        showNavigator={viewerMessages.length > 1}
+        showPrint
+        showPhotoEditor
       />
       {typePickerFile && (
         <DocTypePickerModal
