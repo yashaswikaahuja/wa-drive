@@ -21,20 +21,21 @@ interface Household { phone: string; persons: Person[]; person_count: string; }
 
 function docCategory(fileName: string): { category: string; color: string } | null {
   const name = fileName.toLowerCase();
-  if (/aadh|aadhaar|adhar|uid/i.test(name)) return { category: 'Aadhaar', color: 'bg-orange-500/20 text-orange-400' };
-  if (/pan[\s_-]?card|pan[\s_.]|pancard/i.test(name)) return { category: 'PAN', color: 'bg-blue-500/20 text-blue-400' };
-  if (/passport|pport/i.test(name)) return { category: 'Passport', color: 'bg-purple-500/20 text-purple-400' };
-  if (/mark\s?sheet|result|10th|12th|matric|inter|hsc|ssc/i.test(name)) return { category: 'Marksheet', color: 'bg-green-500/20 text-green-400' };
-  if (/degree|graduat|diploma|certif/i.test(name)) return { category: 'Certificate', color: 'bg-blue-500/20 text-blue-400' };
-  if (/photo|passport.?size|selfie|dp|pic/i.test(name)) return { category: 'Photo', color: 'bg-pink-500/20 text-pink-400' };
-  if (/voter|epic|election/i.test(name)) return { category: 'Voter ID', color: 'bg-yellow-500/20 text-yellow-400' };
-  if (/driv.*lic|dl[\s_.-]/i.test(name)) return { category: 'Driving License', color: 'bg-red-500/20 text-red-400' };
-  if (/ration|bpl|apl/i.test(name)) return { category: 'Ration Card', color: 'bg-amber-500/20 text-amber-400' };
-  if (/caste|obc|sc[\s_]|st[\s_]|category/i.test(name)) return { category: 'Caste Cert', color: 'bg-indigo-500/20 text-indigo-400' };
-  if (/income|salary|itr/i.test(name)) return { category: 'Income', color: 'bg-emerald-500/20 text-green-400' };
-  if (/domicile|residen/i.test(name)) return { category: 'Domicile', color: 'bg-cyan-500/20 text-cyan-400' };
-  if (/bank|passbook|cheque|ifsc/i.test(name)) return { category: 'Bank', color: 'bg-sky-500/20 text-sky-400' };
-  if (/sign|signature/i.test(name)) return { category: 'Signature', color: 'bg-violet-500/20 text-violet-400' };
+  // Paper-theme chips (readable on cream cards)
+  if (/aadh|aadhaar|adhar|uid/i.test(name)) return { category: 'Aadhaar', color: 'bg-[hsl(28_95%_55%/0.14)] text-[hsl(18_90%_40%)]' };
+  if (/pan[\s_-]?card|pan[\s_.]|pancard/i.test(name)) return { category: 'PAN', color: 'bg-[hsl(215_70%_42%/0.12)] text-[hsl(215_70%_34%)]' };
+  if (/passport|pport/i.test(name)) return { category: 'Passport', color: 'bg-[hsl(280_45%_42%/0.12)] text-[hsl(280_45%_36%)]' };
+  if (/mark\s?sheet|result|10th|12th|matric|inter|hsc|ssc/i.test(name)) return { category: 'Marksheet', color: 'bg-[hsl(158_55%_36%/0.12)] text-[hsl(158_55%_28%)]' };
+  if (/degree|graduat|diploma|certif/i.test(name)) return { category: 'Certificate', color: 'bg-[hsl(215_70%_42%/0.12)] text-[hsl(215_70%_34%)]' };
+  if (/photo|passport.?size|selfie|dp|pic/i.test(name)) return { category: 'Photo', color: 'bg-[hsl(330_55%_45%/0.12)] text-[hsl(330_55%_38%)]' };
+  if (/voter|epic|election/i.test(name)) return { category: 'Voter ID', color: 'bg-[hsl(40_90%_42%/0.14)] text-[hsl(35_90%_34%)]' };
+  if (/driv.*lic|dl[\s_.-]/i.test(name)) return { category: 'Driving License', color: 'bg-[hsl(0_65%_48%/0.12)] text-[hsl(0_65%_42%)]' };
+  if (/ration|bpl|apl/i.test(name)) return { category: 'Ration Card', color: 'bg-[hsl(28_80%_45%/0.14)] text-[hsl(22_80%_38%)]' };
+  if (/caste|obc|sc[\s_]|st[\s_]|category/i.test(name)) return { category: 'Caste Cert', color: 'bg-[hsl(250_40%_45%/0.12)] text-[hsl(250_40%_38%)]' };
+  if (/income|salary|itr/i.test(name)) return { category: 'Income', color: 'bg-[hsl(158_55%_36%/0.12)] text-[hsl(158_55%_28%)]' };
+  if (/domicile|residen/i.test(name)) return { category: 'Domicile', color: 'bg-[hsl(190_60%_35%/0.12)] text-[hsl(190_60%_30%)]' };
+  if (/bank|passbook|cheque|ifsc/i.test(name)) return { category: 'Bank', color: 'bg-[hsl(200_65%_40%/0.12)] text-[hsl(200_65%_34%)]' };
+  if (/sign|signature/i.test(name)) return { category: 'Signature', color: 'bg-[hsl(270_40%_45%/0.12)] text-[hsl(270_40%_38%)]' };
   return null;
 }
 
@@ -73,26 +74,49 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
   const hasThumbnail = isImage || isVideo || isPdf;
   const { icon, badge } = docTitle(alt || ('file.' + ext));
   return (
-    <div ref={ref} className="w-[120px] h-[120px] rounded-xl bg-white/5 relative overflow-hidden flex items-center justify-center">
+    <div
+      ref={ref}
+      className="w-[112px] h-[112px] rounded-xl relative overflow-hidden flex items-center justify-center shrink-0"
+      style={{ background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
+    >
       {visible && src && hasThumbnail && !imgError ? (
-        <>
-          <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt}
-            onError={() => setImgError(true)} />
-        </>
+        <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt}
+          onError={() => setImgError(true)} />
       ) : (
-        <div className="flex flex-col items-center justify-center gap-1">
+        <div className="flex flex-col items-center justify-center gap-1.5">
           <span className="text-2xl">{isVideo ? '🎬' : icon}</span>
-          <span className="text-[8px] px-1 py-0.5 rounded bg-white/10 text-gray-400 font-bold">{badge}</span>
+          <span
+            className="text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wide"
+            style={{ background: 'hsl(var(--ink) / 0.08)', color: 'hsl(var(--ink-soft))' }}
+          >
+            {badge}
+          </span>
         </div>
       )}
       {isVideo && visible && src && !imgError && (
         <span className="absolute inset-0 flex items-center justify-center">
-          <span className="w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white text-[10px]">▶</span>
+          <span className="w-7 h-7 rounded-full bg-black/55 flex items-center justify-center text-white text-[11px] shadow-md">▶</span>
         </span>
       )}
     </div>
   );
 });
+
+const ActionBtn = ({ title, onClick, danger, accent, children }: any) => (
+  <button
+    type="button"
+    title={title}
+    onClick={onClick}
+    className="inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors"
+    style={{
+      border: '1px solid hsl(var(--pt-border))',
+      background: danger ? 'hsl(0 70% 50% / 0.08)' : accent ? 'hsl(var(--marigold) / 0.1)' : 'hsl(var(--pt-card))',
+      color: danger ? 'hsl(0 65% 42%)' : accent ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
+    }}
+  >
+    {children}
+  </button>
+);
 
 const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete, onSetType }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
@@ -102,44 +126,72 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
   const needsType = msg.tag === 'Needs type' || msg.needsType;
   const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag) && !needsType;
   const category = needsType
-    ? { category: 'Needs type', color: 'bg-amber-500/20 text-amber-400' }
+    ? { category: 'Needs type', color: 'bg-[hsl(35_92%_48%/0.16)] text-[hsl(28_90%_38%)]' }
     : msg.tag
-    ? { category: msg.tag, color: isJunkTag ? 'bg-white/10 text-gray-500' : 'bg-green-500/15 text-green-400' }
+    ? { category: msg.tag, color: isJunkTag ? 'bg-[hsl(var(--pt-secondary))] text-[hsl(var(--pt-muted))]' : 'bg-[hsl(158_55%_36%/0.12)] text-[hsl(158_55%_28%)]' }
     : docCategory(msg.fileName || '');
 
   if (msg.text && !msg.fileName) return (
-    <div className="bg-[var(--secondary)] rounded-lg px-3 py-2 max-w-[80%]">
-      <p className="text-sm text-gray-300">{msg.text}</p>
-      <p className="text-[10px] text-gray-600 mt-1">{timeAgo(msg.timestamp)}</p>
+    <div
+      className="rounded-2xl rounded-tl-md px-3.5 py-2.5 max-w-[85%] sm:max-w-[70%]"
+      style={{
+        background: 'hsl(142 45% 92%)',
+        border: '1px solid hsl(142 35% 82%)',
+        boxShadow: 'var(--shadow-paper)',
+      }}
+    >
+      <p className="text-sm leading-relaxed" style={{ color: 'hsl(var(--ink))' }}>{msg.text}</p>
+      <p className="text-[10px] mt-1.5 text-right" style={{ color: 'hsl(var(--pt-muted))' }}>{timeAgo(msg.timestamp)}</p>
     </div>
   );
 
   return (
-    <div className={`rounded-lg p-3 flex gap-3 max-w-[480px] transition group ${selected ? 'border border-blue-500/40 bg-blue-500/5' : 'border border-transparent hover:bg-white/[0.02]'}`} style={{ background: selected ? undefined : 'var(--card)' }}>
+    <div
+      className="rounded-2xl p-3 flex gap-3 max-w-[520px] transition group"
+      style={{
+        background: selected ? 'hsl(var(--marigold) / 0.08)' : 'hsl(var(--pt-card))',
+        border: selected ? '1px solid hsl(var(--marigold) / 0.45)' : '1px solid hsl(var(--pt-border))',
+        boxShadow: 'var(--shadow-paper)',
+      }}
+    >
       {selectionMode && (
         <input
           type="checkbox"
           checked={selected}
           onChange={() => onToggleSelect(msg)}
-          className="w-4 h-4 self-center accent-blue-500 cursor-pointer"
+          className="w-4 h-4 self-center cursor-pointer accent-[hsl(var(--marigold))]"
         />
       )}
       <div onClick={() => selectionMode ? onToggleSelect(msg) : onClick(msg)} className="shrink-0 cursor-pointer">
         <LazyThumbnail src={thumbUrl} ext={ext} alt={title} />
       </div>
-      <div className="flex-1 min-w-0 flex flex-col justify-between">
+      <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
         <div>
-          <p className="text-sm font-medium">{title}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}{category && <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-medium ${category.color}`}>{category.category}</span>}</p>
+          <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>{title}</p>
+          <p className="text-[11px] mt-1 flex flex-wrap items-center gap-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+            <span className="font-mono text-[10px] uppercase tracking-wide">{badge}</span>
+            <span>·</span>
+            <span>{timeAgo(msg.timestamp)}</span>
+            {category && (
+              <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${category.color}`}>
+                {category.category}
+              </span>
+            )}
+          </p>
+          {msg.fileName && (
+            <p className="text-[11px] mt-1 truncate" style={{ color: 'hsl(var(--pt-muted))' }} title={msg.fileName}>
+              {msg.fileName}
+            </p>
+          )}
         </div>
         {!selectionMode && (
-          <div className="flex flex-wrap gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition">
-            <button onClick={() => onClick(msg)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Open"><Eye size={14} /></button>
-            <button onClick={(e) => { e.stopPropagation(); onSetType?.(msg); }} className={`p-1.5 rounded-md border ${needsType ? 'border-amber-500/50 bg-amber-500/20 text-amber-300' : 'border-amber-500/30 bg-amber-500/10 text-amber-400'} hover:bg-amber-500/20`} title={needsType ? 'Set document type' : 'Tag / set type'}><Tag size={14} /></button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }} className="p-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20" title="Print"><Printer size={14} /></button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Photo Tool"><Camera size={14} /></button>
-            <button onClick={(e) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--border-strong)] hover:bg-[var(--card-hover)]" title="Download"><DownloadSimple size={14} /></button>
-            <button onClick={(e) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }} className="p-1.5 rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20" title="Delete"><Trash size={14} /></button>
+          <div className="flex flex-wrap gap-1.5 mt-2.5">
+            <ActionBtn title="Open" onClick={() => onClick(msg)}><Eye size={14} /></ActionBtn>
+            <ActionBtn title={needsType ? 'Set document type' : 'Tag / set type'} accent={needsType} onClick={(e: any) => { e.stopPropagation(); onSetType?.(msg); }}><Tag size={14} /></ActionBtn>
+            <ActionBtn title="Print" onClick={(e: any) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }}><Printer size={14} /></ActionBtn>
+            <ActionBtn title="Photo Tool" onClick={(e: any) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }}><Camera size={14} /></ActionBtn>
+            <ActionBtn title="Download" onClick={(e: any) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }}><DownloadSimple size={14} /></ActionBtn>
+            <ActionBtn title="Delete" danger onClick={(e: any) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }}><Trash size={14} /></ActionBtn>
           </div>
         )}
       </div>
@@ -148,22 +200,57 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
 });
 
 const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: any) => (
-  <div onClick={() => onClick(chat.phone)}
-    className={`px-3 py-3 border-b cursor-pointer transition-colors hover:bg-white/[0.03] ${selected ? 'bg-blue-500/5' : ''}`} style={{ borderColor: 'var(--border)' }}>
-    <div className="flex items-center gap-2.5">
-      <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 text-xs font-semibold shrink-0 overflow-hidden">
-        {chat.dpUrl ? <img src={chat.dpUrl} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display='none')} /> : null}
+  <div
+    onClick={() => onClick(chat.phone)}
+    className="group px-3 py-2.5 cursor-pointer transition-colors"
+    style={{
+      background: selected ? 'hsl(var(--whatsapp) / 0.1)' : 'transparent',
+      boxShadow: selected ? 'inset 3px 0 0 hsl(var(--whatsapp))' : undefined,
+      borderBottom: '1px solid hsl(var(--pt-border-soft))',
+    }}
+    onMouseEnter={(e) => { if (!selected) e.currentTarget.style.background = 'hsl(var(--pt-secondary) / 0.7)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = selected ? 'hsl(var(--whatsapp) / 0.1)' : 'transparent'; }}
+  >
+    <div className="flex items-center gap-3">
+      <div
+        className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 overflow-hidden"
+        style={{ background: 'hsl(var(--whatsapp) / 0.14)', color: 'hsl(142 64% 28%)' }}
+      >
+        {chat.dpUrl ? <img src={chat.dpUrl} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display='none')} alt="" /> : null}
         {!chat.dpUrl && (chat.name[0]?.toUpperCase() || '?')}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate" style={{ color: 'hsl(var(--ink))' }}>{chat.name} {pinned && <span className="text-[9px] text-gray-500">📌</span>}</p>
-        <p className="text-[11px] text-gray-500">{/^\d{10,13}$/.test(chat.phone) ? `+${chat.phone.slice(0,2)} ${chat.phone.slice(2,7)} ${chat.phone.slice(7)}` : ''} · {chat.newCount} doc{chat.newCount !== 1 ? 's' : ''}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>{chat.name}</p>
+          {pinned && <span className="text-[10px]" title="Pinned">📌</span>}
+        </div>
+        <p className="text-[11px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+          {/^\d{10,13}$/.test(chat.phone) ? `+${chat.phone.slice(0,2)} ${chat.phone.slice(2,7)} ${chat.phone.slice(7)}` : chat.phone}
+          {' · '}{chat.newCount} doc{chat.newCount !== 1 ? 's' : ''}
+        </p>
       </div>
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <span className="text-[10px] text-gray-600">{timeAgo(chat.lastTime)}</span>
-        {unreadCount > 0 && <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold">{unreadCount}</span>}
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <span className="text-[10px] font-medium" style={{ color: unreadCount > 0 ? 'hsl(var(--whatsapp))' : 'hsl(var(--pt-muted))' }}>
+          {timeAgo(chat.lastTime)}
+        </span>
+        {unreadCount > 0 && (
+          <span
+            className="min-w-[1.25rem] h-5 px-1.5 rounded-full text-white text-[10px] flex items-center justify-center font-bold"
+            style={{ background: 'hsl(var(--whatsapp))' }}
+          >
+            {unreadCount}
+          </span>
+        )}
       </div>
-      <button onClick={(e) => { e.stopPropagation(); onPin(chat.phone); }} className="text-gray-600 hover:text-white text-xs opacity-0 group-hover:opacity-100" title={pinned ? 'Unpin' : 'Pin'}>📌</button>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onPin(chat.phone); }}
+        className="text-xs opacity-0 group-hover:opacity-100 transition-opacity p-1"
+        style={{ color: 'hsl(var(--pt-muted))' }}
+        title={pinned ? 'Unpin' : 'Pin'}
+      >
+        📌
+      </button>
     </div>
   </div>
 ));
@@ -750,42 +837,67 @@ export default function WhatsApp() {
   }, [reversedMessages.length]);
 
   if (connected === null) {
-    return <div className="h-full flex items-center justify-center"><div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /></div>;
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div
+          className="w-8 h-8 rounded-full border-2 animate-spin"
+          style={{ borderColor: 'hsl(var(--whatsapp) / 0.25)', borderTopColor: 'hsl(var(--whatsapp))' }}
+        />
+      </div>
+    );
   }
 
   if (!connected) {
     return (
-      <div className="h-full flex flex-col items-center justify-center max-w-md mx-auto text-center">
-        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'hsl(142 60% 40% / 0.12)' }}>
-          <WhatsappLogo size={32} weight="fill" style={{ color: 'hsl(142 64% 34%)' }} />
+      <div className="h-full flex flex-col items-center justify-center max-w-md mx-auto text-center px-6">
+        <div
+          className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
+          style={{ background: 'hsl(var(--whatsapp) / 0.12)', boxShadow: 'var(--shadow-paper)' }}
+        >
+          <WhatsappLogo size={32} weight="fill" style={{ color: 'hsl(var(--whatsapp))' }} />
         </div>
-        <h2 className="pt-display text-lg font-bold mb-2" style={{ color: 'hsl(var(--ink))' }}>Connect WhatsApp</h2>
+        <h2 className="pt-display text-xl font-bold mb-2" style={{ color: 'hsl(var(--ink))' }}>Connect WhatsApp</h2>
         {useAuthStore.getState().user?.role === 'admin' ? (
           <>
-            <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
+            <p className="text-sm mb-6 leading-relaxed" style={{ color: 'hsl(var(--pt-muted))' }}>
+              Link your café WhatsApp to receive customer documents. Files sent to this number appear here automatically.
+            </p>
             {qrCode && !qrExpired ? (
-              <div className="bg-white p-4 rounded-xl mb-4 shadow-lg">
+              <div className="bg-white p-4 rounded-2xl mb-4" style={{ boxShadow: 'var(--shadow-lift)', border: '1px solid hsl(var(--pt-border))' }}>
                 <img src={qrCode.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode)}`} alt="QR" className="w-48 h-48" />
               </div>
             ) : qrExpired ? (
-              <div className="relative bg-white p-4 rounded-xl mb-4 shadow-lg">
+              <div className="relative bg-white p-4 rounded-2xl mb-4" style={{ boxShadow: 'var(--shadow-lift)', border: '1px solid hsl(var(--pt-border))' }}>
                 <img src={qrCode?.startsWith('data:') ? qrCode : `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrCode || '')}`} alt="QR expired" className="w-48 h-48 blur-sm" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <p className="text-gray-800 text-xs font-medium mb-2">QR code expired</p>
-                  <button onClick={handleShowQR} className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 shadow-md">
+                  <p className="text-xs font-medium mb-2" style={{ color: 'hsl(var(--ink))' }}>QR code expired</p>
+                  <button
+                    onClick={handleShowQR}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-full"
+                    style={{ background: 'hsl(var(--whatsapp))' }}
+                  >
                     <ArrowClockwise size={16} weight="bold" /> Refresh
                   </button>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3 mb-4">
-                {reconnecting && <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin" />}
-                <button onClick={handleShowQR} className="px-5 py-2.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
-                  {reconnecting ? 'Connecting...' : 'Connect WhatsApp'}
+                {reconnecting && (
+                  <div
+                    className="w-8 h-8 rounded-full border-2 animate-spin"
+                    style={{ borderColor: 'hsl(var(--whatsapp) / 0.25)', borderTopColor: 'hsl(var(--whatsapp))' }}
+                  />
+                )}
+                <button
+                  onClick={handleShowQR}
+                  className="px-6 py-2.5 text-sm font-semibold text-white rounded-full"
+                  style={{ background: 'hsl(var(--whatsapp))', boxShadow: '0 8px 20px -8px hsl(var(--whatsapp) / 0.55)' }}
+                >
+                  {reconnecting ? 'Connecting…' : 'Connect WhatsApp'}
                 </button>
               </div>
             )}
-            <div className="text-xs text-gray-600 mt-4 space-y-1">
+            <div className="text-xs mt-4 space-y-1.5 text-left rounded-xl px-4 py-3" style={{ color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-secondary) / 0.7)', border: '1px solid hsl(var(--pt-border))' }}>
               <p>1. Open WhatsApp on your phone</p>
               <p>2. Go to Settings → Linked Devices</p>
               <p>3. Scan the QR code above</p>
@@ -799,70 +911,149 @@ export default function WhatsApp() {
   }
 
   return (
-    <div className="h-full flex w-full min-w-0 overflow-hidden">
-      <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
-        <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
-          <span className={`w-2 h-2 rounded-full ${reconnecting ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
-          <span className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Inbox</span>
-          {reconnecting && <span className="text-[10px] text-amber-400/90">Reconnecting…</span>}
-          <span className="text-xs text-gray-500 ml-auto">{sortedChats.length} customers</span>
+    <div className="h-full flex w-full min-w-0 overflow-hidden relative" style={{ background: 'hsl(var(--paper))' }}>
+      {/* Inbox */}
+      <div
+        className={`w-full md:w-80 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`}
+        style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}
+      >
+        <div
+          className="px-4 py-3 border-b flex items-center gap-2.5 shrink-0"
+          style={{ borderColor: 'hsl(var(--pt-border))', background: 'linear-gradient(180deg, hsl(142 40% 22%) 0%, hsl(142 45% 16%) 100%)' }}
+        >
+          <WhatsappLogo size={18} weight="fill" className="text-white/90 shrink-0" />
+          <span className="text-sm font-semibold text-white tracking-tight">Documents</span>
+          {reconnecting && <span className="text-[10px] text-amber-200/90">Reconnecting…</span>}
+          <span className="text-[11px] text-white/55 ml-auto tabular-nums">{sortedChats.length}</span>
         </div>
-        <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border)' }}>
-          <input value={chatSearch} onChange={e => setChatSearch(e.target.value)} placeholder="Search customers..." className="input-field text-xs" />
+        <div className="px-3 py-2.5 border-b" style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--paper) / 0.65)' }}>
+          <input
+            value={chatSearch}
+            onChange={e => setChatSearch(e.target.value)}
+            placeholder="Search customers…"
+            className="input-field text-xs"
+          />
         </div>
         <div className="flex-1 overflow-y-auto">
           {filteredChats.length === 0 ? (
-            <p className="text-center text-gray-600 text-xs py-8">{chatSearch ? 'No match' : 'No documents received'}</p>
+            <div className="text-center py-12 px-4">
+              <WhatsappLogo size={28} className="mx-auto mb-2" style={{ color: 'hsl(var(--pt-muted))' }} />
+              <p className="text-xs" style={{ color: 'hsl(var(--pt-muted))' }}>
+                {chatSearch ? 'No match' : 'No documents received yet'}
+              </p>
+            </div>
           ) : filteredChats.map(chat => (
             <ChatItem key={chat.phone} chat={chat} selected={selectedChat === chat.phone} onClick={handleSelectChat} unreadCount={unread.get(chat.phone) || 0} pinned={pinnedChats.has(chat.phone)} onPin={togglePin} />
           ))}
         </div>
       </div>
 
-      <div className={`flex-1 min-w-0 flex-col ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
+      {/* Conversation */}
+      <div className={`flex-1 min-w-0 flex-col relative ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
         {!activeChat ? (
-          <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">Select a customer to view documents</div>
+          <div
+            className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center"
+            style={{
+              backgroundImage: 'radial-gradient(hsl(142 30% 40% / 0.06) 1px, transparent 1px)',
+              backgroundSize: '18px 18px',
+            }}
+          >
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center"
+              style={{ background: 'hsl(var(--whatsapp) / 0.12)' }}
+            >
+              <WhatsappLogo size={28} weight="fill" style={{ color: 'hsl(var(--whatsapp))' }} />
+            </div>
+            <p className="pt-display text-base font-semibold" style={{ color: 'hsl(var(--ink))' }}>Select a customer</p>
+            <p className="text-sm max-w-xs" style={{ color: 'hsl(var(--pt-muted))' }}>
+              Open a chat to review documents, tag IDs, and build profiles.
+            </p>
+          </div>
         ) : (
           <>
-            <div className="min-h-[3.5rem] px-3 sm:px-4 py-2 flex flex-wrap items-center gap-2 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
-              <button onClick={() => setSelectedChat(null)} className="md:hidden -ml-1 text-2xl leading-none pt-muted hover:text-[hsl(var(--pt-ink))]" aria-label="Back to inbox">‹</button>
-              <div className="w-9 h-9 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-400 font-semibold text-sm overflow-hidden cursor-pointer shrink-0"
-                onClick={() => activeChat.dpUrl && setDpPreview(activeChat.dpUrl)}>
-                {activeChat.dpUrl ? <img src={activeChat.dpUrl} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none'; }} /> : null}
+            <div
+              className="min-h-[3.75rem] px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-2.5 border-b shrink-0"
+              style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-card))', boxShadow: '0 1px 0 hsl(var(--pt-border) / 0.8)' }}
+            >
+              <button
+                onClick={() => setSelectedChat(null)}
+                className="md:hidden -ml-1 text-2xl leading-none px-1"
+                style={{ color: 'hsl(var(--pt-muted))' }}
+                aria-label="Back to inbox"
+              >
+                ‹
+              </button>
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden cursor-pointer shrink-0"
+                style={{ background: 'hsl(var(--whatsapp) / 0.14)', color: 'hsl(142 64% 28%)' }}
+                onClick={() => activeChat.dpUrl && setDpPreview(activeChat.dpUrl)}
+              >
+                {activeChat.dpUrl ? <img src={activeChat.dpUrl} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display='none'; }} alt="" /> : null}
                 {!activeChat.dpUrl && (activeChat.name[0]?.toUpperCase() || '?')}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>{activeChat.name}</p>
-                <p className="text-xs text-gray-500">{activeChat.messages.length} documents</p>
+                <p className="text-xs" style={{ color: 'hsl(var(--pt-muted))' }}>
+                  {activeChat.messages.length} document{activeChat.messages.length !== 1 ? 's' : ''}
+                </p>
               </div>
               {!selectionMode ? (
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <input value={msgSearch} onChange={e => setMsgSearch(e.target.value)} placeholder="Search..." className="input-field w-28 text-xs py-1" />
-                  <button onClick={() => { if (activeChat) requestDocs(activeChat.phone); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-orange-400 hover:bg-[var(--card-hover)]" title="Request documents"><PaperPlaneTilt size={16} /></button>
-                  <button onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-blue-400 hover:bg-[var(--card-hover)]" title="Profile"><UserCircle size={16} /></button>
-                  <button onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:bg-[var(--card-hover)]" title="Assign"><AddressBook size={16} /></button>
-                  <button onClick={() => setSelectionMode(true)} className="p-1.5 rounded-md border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:bg-[var(--card-hover)]" title="Select"><CheckSquare size={16} /></button>
+                  <input
+                    value={msgSearch}
+                    onChange={e => setMsgSearch(e.target.value)}
+                    placeholder="Search…"
+                    className="input-field w-28 text-xs py-1.5"
+                  />
+                  <ActionBtn title="Request documents" accent onClick={() => { if (activeChat) requestDocs(activeChat.phone); }}>
+                    <PaperPlaneTilt size={15} />
+                  </ActionBtn>
+                  <ActionBtn title="Profile" onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)}>
+                    <UserCircle size={15} />
+                  </ActionBtn>
+                  <ActionBtn title="Assign" onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }}>
+                    <AddressBook size={15} />
+                  </ActionBtn>
+                  <ActionBtn title="Select" onClick={() => setSelectionMode(true)}>
+                    <CheckSquare size={15} />
+                  </ActionBtn>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <button onClick={() => {
-                    // Smart-select only document-type files (skip greetings/photos/junk)
-                    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
-                    const msgs = activeChat?.messages || [];
-                    const next = new Map(selectedDocs);
-                    let n = 0;
-                    for (const m of msgs) {
-                      const tag = m.tag || (m.fileName ? docCategory(m.fileName)?.category : null);
-                      if (tag && ID_TAGS.includes(tag)) { next.set(m.id, m); n++; }
-                    }
-                    setSelectedDocs(next);
-                    if (n === 0) toast.info('No ID documents detected yet — select manually');
-                  }} className="btn-ghost text-xs text-teal-400 hover:text-teal-300">Select IDs</button>
-                  <button onClick={exitSelectionMode} className="text-xs text-gray-400 hover:text-white">Cancel</button>
+                  <button
+                    onClick={() => {
+                      const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+                      const msgs = activeChat?.messages || [];
+                      const next = new Map(selectedDocs);
+                      let n = 0;
+                      for (const m of msgs) {
+                        const tag = m.tag || (m.fileName ? docCategory(m.fileName)?.category : null);
+                        if (tag && ID_TAGS.includes(tag)) { next.set(m.id, m); n++; }
+                      }
+                      setSelectedDocs(next);
+                      if (n === 0) toast.info('No ID documents detected yet — select manually');
+                    }}
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-full"
+                    style={{ color: 'hsl(var(--teal-deep))', background: 'hsl(var(--teal) / 0.12)' }}
+                  >
+                    Select IDs
+                  </button>
+                  <button onClick={exitSelectionMode} className="text-xs font-medium" style={{ color: 'hsl(var(--pt-muted))' }}>
+                    Cancel
+                  </button>
                 </div>
               )}
             </div>
-            <div ref={msgContainerRef} onScroll={() => { const el = msgContainerRef.current; if (el) userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 100; }} className="flex-1 overflow-y-auto p-4 space-y-2 pb-20">
+            <div
+              ref={msgContainerRef}
+              onScroll={() => { const el = msgContainerRef.current; if (el) userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 100; }}
+              className="flex-1 overflow-y-auto p-4 space-y-3 pb-24"
+              style={{
+                backgroundColor: 'hsl(38 28% 93%)',
+                backgroundImage: 'radial-gradient(hsl(142 25% 35% / 0.07) 1px, transparent 1px)',
+                backgroundSize: '16px 16px',
+              }}
+            >
               {reversedMessages.map((msg, i) => {
                 const msgDate = new Date(msg.timestamp).toLocaleDateString();
                 const prevDate = i > 0 ? new Date(reversedMessages[i-1].timestamp).toLocaleDateString() : null;
@@ -870,49 +1061,61 @@ export default function WhatsApp() {
                 const today = new Date().toLocaleDateString();
                 const yesterday = new Date(Date.now()-86400000).toLocaleDateString();
                 const label = msgDate === today ? 'Today' : msgDate === yesterday ? 'Yesterday' : msgDate;
-                return (<>
-                  {showDate && <div key={'d-'+i} className="text-center py-2"><span className="text-[10px] bg-white/[0.03] text-gray-500 px-3 py-1 rounded-full">{label}</span></div>}
-                  <MessageCard
-                    key={msg.id} msg={msg} onClick={handleOpenFile}
-                    selectionMode={selectionMode}
-                    selected={selectedDocs.has(msg.id)}
-                    onToggleSelect={toggleDocSelection}
-                    onDelete={handleDeleteDoc}
-                    onSetType={(m: Message) => setTypePickerFile(m)}
-                  />
-                </>);
+                return (
+                  <div key={msg.id}>
+                    {showDate && (
+                      <div className="text-center py-2">
+                        <span
+                          className="text-[10px] font-semibold px-3 py-1 rounded-full"
+                          style={{ background: 'hsl(var(--pt-card) / 0.92)', color: 'hsl(var(--pt-muted))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
+                        >
+                          {label}
+                        </span>
+                      </div>
+                    )}
+                    <MessageCard
+                      msg={msg} onClick={handleOpenFile}
+                      selectionMode={selectionMode}
+                      selected={selectedDocs.has(msg.id)}
+                      onToggleSelect={toggleDocSelection}
+                      onDelete={handleDeleteDoc}
+                      onSetType={(m: Message) => setTypePickerFile(m)}
+                    />
+                  </div>
+                );
               })}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Floating action bar when items selected */}
             {selectionMode && selectedDocs.size > 0 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full shadow-xl flex items-center gap-3 z-10" style={{ background: 'var(--primary)' }}>
-                <span className="text-sm font-medium">{selectedDocs.size} selected</span>
-                <button onClick={startBuildProfile}
-                  className="px-3 py-1 bg-white text-gray-900 rounded-full text-xs font-bold hover:bg-gray-100">
+              <div
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full flex items-center gap-2.5 z-10 flex-wrap justify-center max-w-[95%]"
+                style={{ background: 'var(--gradient-marigold)', boxShadow: '0 12px 32px -10px hsl(var(--marigold) / 0.55)' }}
+              >
+                <span className="text-sm font-semibold text-white whitespace-nowrap">{selectedDocs.size} selected</span>
+                <button onClick={startBuildProfile} className="px-3 py-1 bg-white rounded-full text-xs font-bold hover:bg-white/95" style={{ color: 'hsl(var(--ink))' }}>
                   Build Profile
                 </button>
-                <button onClick={() => {
-                  const first = Array.from(selectedDocs.values())[0];
-                  const driveId = first?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || first?.id;
-                  const phone = first?.phone || '';
-                  const name = first?.name || '';
-                  const q = new URLSearchParams();
-                  if (driveId) q.set('fileId', String(driveId));
-                  if (phone) q.set('phone', String(phone));
-                  if (name) q.set('name', String(name));
-                  window.location.href = '/app/photos/portal?' + q.toString();
-                }}
-                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                <button
+                  onClick={() => {
+                    const first = Array.from(selectedDocs.values())[0];
+                    const driveId = first?.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1] || first?.id;
+                    const phone = first?.phone || '';
+                    const name = first?.name || '';
+                    const q = new URLSearchParams();
+                    if (driveId) q.set('fileId', String(driveId));
+                    if (phone) q.set('phone', String(phone));
+                    if (name) q.set('name', String(name));
+                    window.location.href = '/app/photos/portal?' + q.toString();
+                  }}
+                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30"
+                >
                   Portal photo
                 </button>
-                <button onClick={() => { window.location.href = '/app/photos/scan'; }}
-                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                <button onClick={() => { window.location.href = '/app/photos/scan'; }} className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
                   Scan PDF
                 </button>
-                <button onClick={() => { window.location.href = '/app/photos/aadhaar'; }}
-                  className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                <button onClick={() => { window.location.href = '/app/photos/aadhaar'; }} className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
                   Aadhaar
                 </button>
               </div>
@@ -932,20 +1135,25 @@ export default function WhatsApp() {
 
       {/* Extracting overlay */}
       {extracting && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
-          <div className="bg-[var(--card)] rounded-xl p-6 text-center">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-white text-sm">Extracting from {selectedDocs.size} document{selectedDocs.size !== 1 ? 's' : ''}...</p>
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="rounded-2xl p-6 text-center" style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-lift)' }}>
+            <div
+              className="w-8 h-8 rounded-full border-2 animate-spin mx-auto mb-3"
+              style={{ borderColor: 'hsl(var(--marigold) / 0.25)', borderTopColor: 'hsl(var(--marigold))' }}
+            />
+            <p className="text-sm font-medium" style={{ color: 'hsl(var(--ink))' }}>
+              Extracting from {selectedDocs.size} document{selectedDocs.size !== 1 ? 's' : ''}…
+            </p>
           </div>
         </div>
       )}
 
       {/* Extraction error */}
       {extractError && !extracting && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setExtractError('')}>
-          <div className="bg-[var(--card)] border border-red-500/30 rounded-xl p-6 max-w-sm">
-            <p className="text-red-400 text-sm mb-3">Extraction failed</p>
-            <p className="text-gray-400 text-xs">{extractError}</p>
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] flex items-center justify-center" onClick={() => setExtractError('')}>
+          <div className="rounded-2xl p-6 max-w-sm" style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(0 70% 50% / 0.25)', boxShadow: 'var(--shadow-lift)' }}>
+            <p className="text-sm font-semibold mb-2" style={{ color: 'hsl(0 65% 42%)' }}>Extraction failed</p>
+            <p className="text-xs" style={{ color: 'hsl(var(--pt-muted))' }}>{extractError}</p>
           </div>
         </div>
       )}
@@ -1042,25 +1250,40 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto">
-        <h3 className="text-base font-bold mb-1">Build profile from {docCount} document{docCount !== 1 ? 's' : ''}</h3>
-        <p className="text-xs text-gray-500 mb-4">Select an existing person, or create a new one</p>
+    <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] flex items-center justify-center p-4" onClick={onCancel}>
+      <div
+        onClick={e => e.stopPropagation()}
+        className="rounded-2xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto"
+        style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-lift)' }}
+      >
+        <h3 className="pt-display text-base font-bold mb-1" style={{ color: 'hsl(var(--ink))' }}>
+          Build profile from {docCount} document{docCount !== 1 ? 's' : ''}
+        </h3>
+        <p className="text-xs mb-4" style={{ color: 'hsl(var(--pt-muted))' }}>Select an existing person, or create a new one</p>
 
         {!showCreate ? (
           <>
             <div className="space-y-3 mb-4">
               {households.map(h => (
                 <div key={h.phone}>
-                  <p className="text-[10px] text-gray-500 uppercase mb-1 px-1">{h.phone}</p>
+                  <p className="pt-label text-[10px] mb-1.5 px-1" style={{ color: 'hsl(var(--pt-muted))' }}>{h.phone}</p>
                   <div className="space-y-1">
                     {h.persons.map(p => (
-                      <button key={p.id} onClick={() => onConfirm(p.id)}
-                        className="w-full text-left px-3 py-2 rounded-lg bg-white/5 hover:bg-white/[0.04] text-sm text-white flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-600/30 flex items-center justify-center text-xs font-bold">{p.name?.[0]}</div>
-                        <div className="flex-1">
-                          <div className="text-sm">{p.displayLabel || p.name}</div>
-                          <div className="text-[10px] text-gray-500 capitalize">{p.relationship}</div>
+                      <button
+                        key={p.id}
+                        onClick={() => onConfirm(p.id)}
+                        className="w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center gap-2.5 transition-colors"
+                        style={{ background: 'hsl(var(--pt-secondary) / 0.65)', border: '1px solid hsl(var(--pt-border))' }}
+                      >
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                          style={{ background: 'hsl(var(--marigold) / 0.16)', color: 'hsl(var(--marigold-deep))' }}
+                        >
+                          {p.name?.[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>{p.displayLabel || p.name}</div>
+                          <div className="text-[10px] capitalize" style={{ color: 'hsl(var(--pt-muted))' }}>{p.relationship}</div>
                         </div>
                       </button>
                     ))}
@@ -1068,25 +1291,26 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
                 </div>
               ))}
             </div>
-            <button onClick={() => setShowCreate(true)} className="w-full px-3 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">+ Create New Person</button>
+            <button type="button" onClick={() => setShowCreate(true)} className="w-full btn-primary text-sm">+ Create New Person</button>
           </>
         ) : (
           <div className="space-y-3">
             <div>
-              <label className="text-[11px] text-gray-500 uppercase">Phone</label>
-              <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
+              <label className="text-[11px] uppercase tracking-wide" style={{ color: 'hsl(var(--pt-muted))' }}>Phone</label>
+              <input
+                value={form.phone}
+                onChange={e => setForm({ ...form, phone: e.target.value })}
                 placeholder="9823745234"
-                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none" />
+                className="input-field mt-1"
+              />
             </div>
             <div>
-              <label className="text-[11px] text-gray-500 uppercase">Name</label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none" />
+              <label className="text-[11px] uppercase tracking-wide" style={{ color: 'hsl(var(--pt-muted))' }}>Name</label>
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="input-field mt-1" />
             </div>
             <div>
-              <label className="text-[11px] text-gray-500 uppercase">Relationship</label>
-              <select value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })}
-                className="w-full mt-1 px-3 py-2 bg-[var(--secondary)] border border-[var(--border)] rounded-lg text-sm text-white outline-none">
+              <label className="text-[11px] uppercase tracking-wide" style={{ color: 'hsl(var(--pt-muted))' }}>Relationship</label>
+              <select value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })} className="input-field mt-1">
                 <option value="self">Self</option>
                 <option value="spouse">Spouse</option>
                 <option value="parent">Parent</option>
@@ -1096,14 +1320,19 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
               </select>
             </div>
             <div className="flex gap-2 pt-2">
-              <button onClick={handleQuickCreate} disabled={!form.phone || !form.name}
-                className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm disabled:opacity-50">Create & Use</button>
-              <button onClick={() => setShowCreate(false)} className="px-3 py-2 bg-white/5 text-gray-400 rounded-lg text-sm">Back</button>
+              <button
+                onClick={handleQuickCreate}
+                disabled={!form.phone || !form.name}
+                className="flex-1 btn-primary text-sm disabled:opacity-50"
+              >
+                Create & Use
+              </button>
+              <button onClick={() => setShowCreate(false)} className="btn-secondary text-sm">Back</button>
             </div>
           </div>
         )}
 
-        <button onClick={onCancel} className="w-full mt-3 text-xs text-gray-500 hover:text-white">Cancel</button>
+        <button onClick={onCancel} className="w-full mt-3 text-xs font-medium" style={{ color: 'hsl(var(--pt-muted))' }}>Cancel</button>
       </div>
     </div>
   );
