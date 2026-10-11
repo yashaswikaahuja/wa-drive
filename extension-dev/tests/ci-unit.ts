@@ -68,6 +68,7 @@ const suites = [
   { name: 'Runtime Errors Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-runtime-errors.ts` },
   { name: 'Visual Context Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-visual-context.ts` },
   { name: 'Phase 3.7 Hardening Governance', cmd: `${NODE_TS} extension-dev/tests/unit/test-phase37-hardening-governance.ts` },
+  { name: 'HIM Runtime Unit', cmd: `${NODE_TS} extension-dev/tests/unit/test-him-runtime.ts` },
 ];
 
 let allPass = true;
