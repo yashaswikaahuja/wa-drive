@@ -118,6 +118,7 @@ if (typeof module !== "undefined" && module.exports) {
 } else if (typeof globalThis !== "undefined") {
   globalThis.CcReconnectManager = ReconnectManager;
 }
+export { ReconnectManager, DEFAULTS };
 
 /* ==== ws-client.ts ==== */
 const STATE = {
@@ -433,6 +434,7 @@ if (typeof module !== "undefined" && module.exports) {
   globalThis.CcWsClient = WsClient;
   globalThis.CcWsClientSTATE = STATE;
 }
+export { WsClient, STATE };
 
 /* ==== wss-session.ts ==== */
 (function(root) {
