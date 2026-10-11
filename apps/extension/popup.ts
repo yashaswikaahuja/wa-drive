@@ -27,7 +27,83 @@ const progressText = document.getElementById('progress-text');
 const progressInner = document.getElementById('progress-inner');
 const resultsEl = document.getElementById('results');
 const versionEl = document.getElementById('ver');
+const selectedDock = document.getElementById('selected-dock');
+const dockAvatar = document.getElementById('dock-avatar');
+const dockName = document.getElementById('dock-name');
+const dockPhone = document.getElementById('dock-phone');
+const dockClear = document.getElementById('dock-clear');
+const FILL_BTN_LABEL = 'Fill this form';
 versionEl.textContent = 'v' + VERSION;
+
+const HUB_FALLBACK = 'https://app.cybercontrol.fun';
+
+function initialsFor(name) {
+  return String(name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || '?';
+}
+
+function updateSelectedDock() {
+  if (!selectedDock) return;
+  if (!selectedProfile) {
+    selectedDock.classList.remove('open');
+    if (dockName) dockName.textContent = '—';
+    if (dockPhone) dockPhone.textContent = '';
+    if (dockAvatar) dockAvatar.textContent = '?';
+    return;
+  }
+  const name = selectedProfile.name || 'Unknown';
+  const phone = getPhone(selectedProfile);
+  if (dockAvatar) dockAvatar.textContent = initialsFor(name);
+  if (dockName) dockName.textContent = name;
+  if (dockPhone) dockPhone.textContent = phone ? `📱 ${phone}` : '';
+  selectedDock.classList.add('open');
+}
+
+function clearSelection() {
+  selectedProfile = null;
+  fillBtn.disabled = true;
+  applyAgentVisibility();
+  chrome.storage.session.remove('_cc_selected').catch(() => {});
+  updateSelectedDock();
+  renderProfiles(searchEl?.value || '');
+}
+
+async function openHub(path) {
+  const data = await chrome.storage.local.get('backendUrl');
+  let frontendUrl = HUB_FALLBACK;
+  if (data.backendUrl?.includes('localhost:3000')) frontendUrl = 'http://localhost:5173';
+  else if (data.backendUrl) frontendUrl = String(data.backendUrl).replace(/\/api\/?$/, '') || HUB_FALLBACK;
+  const url = path ? frontendUrl.replace(/\/$/, '') + path : frontendUrl;
+  const tabs = await chrome.tabs.query({});
+  const existing = tabs.find((t) => t.url?.startsWith(frontendUrl));
+  if (existing) {
+    chrome.tabs.update(existing.id, { active: true, url: path ? url : undefined });
+    chrome.windows.update(existing.windowId, { focused: true });
+  } else {
+    chrome.tabs.create({ url });
+  }
+}
+
+function setLocked(locked) {
+  document.body.classList.toggle('is-locked', !!locked);
+}
+
+function showLoginEmpty(title, detail) {
+  setLocked(true);
+  profilesEl.innerHTML =
+    `<div class="empty">` +
+    `<div class="empty-title">${title}</div>` +
+    `<div>${detail}</div>` +
+    `<button type="button" class="primary" id="open-login-btn">Open CyberControl Hub</button>` +
+    `</div>`;
+  const btn = document.getElementById('open-login-btn');
+  if (btn) btn.onclick = () => openHub('/login');
+}
 
 function shortSha(s) {
   if (!s || s === 'development') return s || 'dev';
@@ -43,7 +119,7 @@ function applyAgentVisibility() {
   } else {
     agentBtn.style.display = 'none';
     agentBtn.disabled = true;
-    agentBtn.title = 'Legacy Agent disabled (Phase 0). Use Fill Form.';
+    agentBtn.title = 'Legacy Agent disabled (Phase 0). Use Fill this form.';
     if (agentPanel) agentPanel.style.display = 'none';
   }
 }
@@ -198,7 +274,7 @@ async function detectSite() {
     clearStaleFillSummary(tab?.id || null, host);
     if (!tab?.url || tab.url.startsWith('chrome') || tab.url.startsWith('edge://') || tab.url.startsWith('about:')) {
       siteIcon.textContent = '🌐';
-      siteName.textContent = 'No page detected';
+      siteName.textContent = 'Open a form page in this window';
       const conf = document.getElementById('site-confidence');
       if (conf) conf.style.display = 'none';
       return;
@@ -356,7 +432,9 @@ function renderProfiles(query) {
   filteredProfiles = list;
 
   if (!filteredProfiles.length) {
-    profilesEl.innerHTML = `<div class="empty">${q ? 'No match for "'+q+'"' : 'No profiles found'}</div>`;
+    profilesEl.innerHTML = q
+      ? `<div class="empty"><div class="empty-title">No match</div>No customer matches “${q}”.</div>`
+      : `<div class="empty"><div class="empty-title">No customers</div>Add customers in CyberControl Hub, then come back here.</div>`;
     focusIdx = -1;
     return;
   }
@@ -367,24 +445,26 @@ function renderProfiles(query) {
     focusIdx = 0;
     fillBtn.disabled = false;
     applyAgentVisibility();
+    updateSelectedDock();
   }
 
   const visibleList = filteredProfiles.slice(0, 20);
   const recentCount = !q ? recentIds.filter(id => allProfiles.some(x => x.id === id)).length : 0;
   profilesEl.innerHTML = visibleList.map((p, i) => {
-    const initials = (p.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const initials = initialsFor(p.name);
     const isSelected = selectedProfile?.id === p.id;
     const isFocused = i === focusIdx;
     const phone = getPhone(p);
     let label = '';
     if (!q && i === 0 && recentCount > 0) label = '<div class="section-label">Recent</div>';
-    if (!q && i === recentCount && recentCount > 0) label = '<div class="section-label">All</div>';
-    return `${label}<div class="profile-item${isSelected?' selected':''}${isFocused?' focused':''}" data-id="${p.id}" data-idx="${i}">
+    if (!q && i === recentCount && recentCount > 0) label = '<div class="section-label">All customers</div>';
+    return `${label}<div class="profile-item${isSelected?' selected':''}${isFocused?' focused':''}" data-id="${p.id}" data-idx="${i}" role="option" aria-selected="${isSelected}">
       <div class="avatar">${initials}</div>
-      <div>
+      <div class="profile-body">
         <div class="profile-name">${p.name || 'Unknown'}</div>
-        <div class="profile-phone">📱 ${phone}</div>
+        <div class="profile-phone">${phone ? '📱 ' + phone : 'No phone on file'}</div>
       </div>
+      <div class="profile-check" aria-hidden="true">✓</div>
     </div>`;
   }).join('');
 
@@ -399,9 +479,13 @@ function selectProfile(id) {
   selectedProfile = allProfiles.find(p => p.id === id) || null;
   fillBtn.disabled = !selectedProfile;
   applyAgentVisibility();
-  chrome.storage.session.set({ _cc_selected: id });
-  // Pre-fetch full profile data
-  if (selectedProfile) prefetchProfile(id);
+  if (selectedProfile) {
+    chrome.storage.session.set({ _cc_selected: id });
+    prefetchProfile(id);
+  } else {
+    chrome.storage.session.remove('_cc_selected').catch(() => {});
+  }
+  updateSelectedDock();
   renderProfiles(searchEl.value);
 }
 
@@ -448,21 +532,23 @@ function applyWssPresence(wss, fallbackName) {
   connDot.classList.remove('green', 'amber');
   if (state === 'connected') {
     connDot.classList.add('green');
-    connText.textContent = 'WSS · ' + (fallbackName || 'live');
-    connText.title = wss.sessionId ? ('session ' + wss.sessionId) : 'WebSocket connected';
+    connText.textContent = fallbackName || 'Connected';
+    connText.title = wss.sessionId ? ('Live · session ' + wss.sessionId) : 'Live connection';
   } else if (state === 'connecting' || state === 'reconnecting') {
     connDot.classList.add('amber');
-    connText.textContent = state === 'connecting' ? 'WSS connecting…' : 'WSS reconnecting…';
+    connText.textContent = state === 'connecting' ? 'Connecting…' : 'Reconnecting…';
     connText.title = (wss && wss.lastError) || state;
   } else if (state === 'suspended') {
-    connText.textContent = 'WSS suspended';
+    connText.textContent = 'Server busy';
     connText.title = (wss && wss.lastError) || 'server unavailable';
   } else if (fallbackName) {
-    // HTTPS auth ok but WSS not up yet
-    connText.textContent = fallbackName + ' · no WSS';
-    connText.title = (wss && wss.lastError) || 'WebSocket not connected';
+    // HTTPS auth ok but live socket not up yet
+    connDot.classList.add('amber');
+    connText.textContent = fallbackName;
+    connText.title = (wss && wss.lastError) || 'Signed in — live link reconnecting';
   } else {
-    connText.textContent = 'WSS off';
+    connText.textContent = 'Offline';
+    connText.title = 'Not connected to CyberControl';
   }
 }
 
@@ -479,20 +565,26 @@ async function refreshWssPresence(fallbackName) {
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local' || !changes.ccWssState) return;
-  const name = (connText.textContent || '').split('·')[0].trim();
-  applyWssPresence(changes.ccWssState.newValue, name && !/^WSS|Not |Token|Offline/i.test(name) ? name : null);
+  const name = (connText.textContent || '').trim();
+  const keepName =
+    name &&
+    !/^(Checking|Connecting|Reconnecting|Connected|Offline|Server busy|Signed out|Session expired|Not connected)/i.test(
+      name,
+    );
+  applyWssPresence(changes.ccWssState.newValue, keepName ? name : null);
 });
 
 async function init() {
   document.getElementById('ver').textContent = 'v' + VERSION;
+  updateSelectedDock();
   detectSite();
   await loadRecents();
 
   const data = await chrome.storage.local.get(['accessToken', 'backendUrl', 'user']);
 
   if (!data.accessToken || !data.backendUrl) {
-    connText.textContent = 'Not connected';
-    profilesEl.innerHTML = '<div class="empty">Login to CyberControl first</div>';
+    connText.textContent = 'Signed out';
+    showLoginEmpty('Sign in required', 'Open CyberControl Hub and sign in as the café account, then reopen this panel.');
     return;
   }
 
@@ -507,35 +599,37 @@ async function init() {
       operatorName = (user.name || user.email || 'Operator').split(' ')[0];
       connDot.classList.add('green');
       connText.textContent = operatorName;
+      setLocked(false);
     } else {
-      connText.textContent = 'Token expired';
-      profilesEl.innerHTML = '<div class="empty">Please login again</div>';
+      connText.textContent = 'Session expired';
+      showLoginEmpty('Session expired', 'Sign in again in CyberControl Hub, then reopen this panel.');
       return;
     }
   } catch {
-    connText.textContent = 'Offline?';
+    connText.textContent = 'Offline';
+    setLocked(false);
   }
 
-  // T4: show real WSS presence (not HTTPS-only)
+  // T4: show real live-socket presence (not HTTPS-only)
   await refreshWssPresence(operatorName);
 
-  // Profiles stay on HTTPS (Stage A/B WSS = presence + fill_debug only — not CRUD)
+  // Profiles stay on HTTPS (Stage A/B live socket = presence + fill_debug only — not CRUD)
   await loadProfilesHttps(data);
 }
 
-/** Prefer WSS profiles_list; HTTPS /profiles only as fallback. */
+/** Prefer live profiles_list; HTTPS /profiles only as fallback. */
 async function loadProfilesHttps(data?: any) {
   const creds = data || (await chrome.storage.local.get(['accessToken', 'backendUrl']));
   if (!creds.accessToken || !creds.backendUrl) {
-    profilesEl.innerHTML = '<div class="empty">Login to CyberControl first</div>';
+    showLoginEmpty('Sign in required', 'Open CyberControl Hub and sign in as the café account, then reopen this panel.');
     return;
   }
-  profilesEl.innerHTML = '<div class="empty">Loading profiles (WSS)…</div>';
+  profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Loading customers…</div>Fetching your café list.</div>';
 
   let profiles = null;
   let transport = 'wss';
 
-  // 1) WSS first
+  // 1) Live socket first
   try {
     const wssResp: any = await new Promise((resolve: (v?: any) => void) => {
       const timer = setTimeout(() => resolve({ ok: false, error: 'wss_profiles_timeout' }), 12000);
@@ -554,7 +648,7 @@ async function loadProfilesHttps(data?: any) {
   } catch (e) {
     console.warn('[CC] WSS profiles failed, HTTPS fallback:', e.message);
     transport = 'https-fallback';
-    profilesEl.innerHTML = '<div class="empty">WSS busy — loading profiles (HTTPS)…</div>';
+    profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Still loading…</div>Live link busy — trying backup path.</div>';
     try {
       const r = await fetch(String(creds.backendUrl).replace(/\/$/, '') + '/profiles', {
         headers: { Authorization: 'Bearer ' + creds.accessToken },
@@ -571,7 +665,7 @@ async function loadProfilesHttps(data?: any) {
     } catch (e2) {
       console.error('[CC] loadProfiles', e2);
       profilesEl.innerHTML =
-        `<div class="empty">Failed to load profiles: ${e2.message}<br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
+        `<div class="empty"><div class="empty-title">Couldn’t load customers</div>${e2.message}<br><button type="button" id="retry-profiles">Retry</button></div>`;
       const btn = document.getElementById('retry-profiles');
       if (btn) btn.onclick = () => loadProfilesHttps();
       return;
@@ -585,11 +679,20 @@ async function loadProfilesHttps(data?: any) {
     fillBtn.disabled = !selectedProfile;
     applyAgentVisibility();
   }
+  updateSelectedDock();
   if (!allProfiles.length) {
     profilesEl.innerHTML =
-      `<div class="empty">No profiles in this workspace (${transport}).<br><span class="pt-muted" style="font-size:11px">Re-login as the café account that owns customers, or add profiles in the app.</span><br><button id="retry-profiles" style="margin-top:8px">Retry</button></div>`;
+      `<div class="empty">` +
+      `<div class="empty-title">No customers yet</div>` +
+      `Add customers in CyberControl Hub for this café account, then tap Retry.` +
+      `<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">` +
+      `<button type="button" id="retry-profiles">Retry</button>` +
+      `<button type="button" class="primary" id="open-hub-customers">Open Hub</button>` +
+      `</div></div>`;
     const btn = document.getElementById('retry-profiles');
     if (btn) btn.onclick = () => loadProfilesHttps();
+    const hubBtn = document.getElementById('open-hub-customers');
+    if (hubBtn) hubBtn.onclick = () => openHub('/');
     return;
   }
   renderProfiles('');
@@ -634,10 +737,10 @@ fillBtn.addEventListener('click', async () => {
   }
 
   fillBtn.disabled = true;
-  fillBtn.innerHTML = '<span>Filling...</span>';
+  fillBtn.innerHTML = '<span>Filling…</span>';
   resultsEl.style.display = 'none';
   undoBtn.style.display = 'none';
-  showProgress('Preparing...');
+  showProgress('Preparing…');
   saveRecent(selectedProfile.id);
 
   try {
@@ -718,8 +821,8 @@ fillBtn.addEventListener('click', async () => {
       : 'Something went wrong while filling.';
     showStatus(msg, CC.danger);
   } finally {
-    fillBtn.disabled = false;
-    fillBtn.innerHTML = 'Fill Form';
+    fillBtn.disabled = !selectedProfile;
+    fillBtn.innerHTML = FILL_BTN_LABEL;
     hideProgress();
   }
 });
@@ -744,17 +847,15 @@ undoBtn.addEventListener('click', async () => {
   } catch (e) { showStatus('Undo failed: ' + e.message, CC.danger); }
 });
 
-// Open CyberControl
-document.getElementById('open-btn').addEventListener('click', async () => {
-  const data = await chrome.storage.local.get('backendUrl');
-  const frontendUrl = data.backendUrl?.includes('localhost:3000')
-    ? 'http://localhost:5173'
-    : (data.backendUrl || '').replace('/api','');
-  const tabs = await chrome.tabs.query({});
-  const existing = tabs.find(t => t.url?.startsWith(frontendUrl));
-  if (existing) { chrome.tabs.update(existing.id, {active:true}); chrome.windows.update(existing.windowId,{focused:true}); }
-  else chrome.tabs.create({ url: frontendUrl || 'http://localhost:5173' });
-  // Side panel stays open (ChatGPT-style) — do not window.close()
+dockClear?.addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  clearSelection();
+});
+
+// Open CyberControl Hub
+document.getElementById('open-btn').addEventListener('click', () => {
+  openHub('/');
 });
 
 // ── AI Agent flow ─────────────────────────────────────────────────────────
