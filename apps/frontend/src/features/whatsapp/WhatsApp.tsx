@@ -8,13 +8,18 @@ import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import {
   MediaViewer,
+  displayName,
   driveIdFromUrl,
   mediaKindOf,
   type MediaViewerFile,
   type MediaViewerStripItem,
 } from '@cybercontrol/media-viewer';
 import { useAuthStore } from '../auth/store';
-import { Printer, Camera, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle, PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise } from '@phosphor-icons/react';
+import {
+  Printer, Camera, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle,
+  PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise, FilePdf, Image as ImageIcon,
+  FileVideo, FileAudio, File as FileIcon, Play,
+} from '@phosphor-icons/react';
 
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
@@ -45,13 +50,13 @@ function docCategory(fileName: string): { category: string; color: string } | nu
   return null;
 }
 
-function docTitle(fileName: string): { title: string; badge: string; icon: string } {
+function docTitle(fileName: string): { title: string; badge: string; kind: 'image' | 'video' | 'pdf' | 'audio' | 'file' } {
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return { title: 'Photo', badge: 'IMG', icon: '🖼️' };
-  if (['mp4','3gp','mov','avi','webm'].includes(ext)) return { title: 'Video', badge: 'VID', icon: '🎬' };
-  if (ext === 'pdf') return { title: 'PDF Document', badge: 'PDF', icon: '📕' };
-  if (['mp3','ogg','wav','aac','opus'].includes(ext)) return { title: 'Audio', badge: 'AUD', icon: '🎵' };
-  return { title: 'Document', badge: ext.toUpperCase() || 'FILE', icon: '📄' };
+  if (['jpg','jpeg','png','gif','webp','bmp'].includes(ext)) return { title: 'Photo', badge: 'IMG', kind: 'image' };
+  if (['mp4','3gp','mov','avi','webm'].includes(ext)) return { title: 'Video', badge: 'VID', kind: 'video' };
+  if (ext === 'pdf') return { title: 'PDF', badge: 'PDF', kind: 'pdf' };
+  if (['mp3','ogg','wav','aac','opus'].includes(ext)) return { title: 'Audio', badge: 'AUD', kind: 'audio' };
+  return { title: 'Document', badge: ext.toUpperCase() || 'FILE', kind: 'file' };
 }
 
 function timeAgo(ts: string): string {
@@ -62,7 +67,22 @@ function timeAgo(ts: string): string {
   return new Date(ts).toLocaleDateString();
 }
 
-const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?: string }) => {
+function authThumbUrl(fileUrl?: string, fileId?: string) {
+  const driveId = driveIdFromUrl(fileUrl) || fileId || '';
+  if (!driveId) return undefined;
+  const token = useAuthStore.getState().accessToken || '';
+  return `${API_URL}/drive/download/${driveId}?token=${encodeURIComponent(token)}`;
+}
+
+const KindGlyph = ({ kind, size = 28 }: { kind: string; size?: number }) => {
+  if (kind === 'pdf') return <FilePdf size={size} weight="fill" style={{ color: 'hsl(0 65% 48%)' }} />;
+  if (kind === 'image') return <ImageIcon size={size} weight="fill" style={{ color: 'hsl(200 65% 40%)' }} />;
+  if (kind === 'video') return <FileVideo size={size} weight="fill" style={{ color: 'hsl(280 45% 42%)' }} />;
+  if (kind === 'audio') return <FileAudio size={size} weight="fill" style={{ color: 'hsl(158 55% 36%)' }} />;
+  return <FileIcon size={size} weight="fill" style={{ color: 'hsl(var(--pt-muted))' }} />;
+};
+
+const LazyThumbnail = memo(({ src, ext, kind, label }: { src?: string; ext: string; kind: string; label?: string }) => {
   const [visible, setVisible] = useState(false);
   const [imgError, setImgError] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -74,36 +94,45 @@ const LazyThumbnail = memo(({ src, ext, alt }: { src?: string; ext: string; alt?
     obs.observe(ref.current);
     return () => obs.disconnect();
   }, [visible]);
-  const isImage = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
-  const isVideo = ['mp4','3gp','mov','avi','webm'].includes(ext);
-  const isPdf = ext === 'pdf';
-  const hasThumbnail = isImage || isVideo || isPdf;
-  const { icon, badge } = docTitle(alt || ('file.' + ext));
+  const isImage = kind === 'image';
+  const isVideo = kind === 'video';
+  const showImg = visible && src && (isImage || isVideo) && !imgError;
   return (
     <div
       ref={ref}
-      className="w-[112px] h-[112px] rounded-xl relative overflow-hidden flex items-center justify-center shrink-0"
-      style={{ background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
+      className="w-[96px] h-[96px] sm:w-[108px] sm:h-[108px] rounded-xl relative overflow-hidden flex items-center justify-center shrink-0"
+      style={{
+        background: 'hsl(var(--pt-secondary))',
+        border: '1px solid hsl(var(--pt-border))',
+        boxShadow: 'inset 0 1px 0 hsl(var(--ink) / 0.03)',
+      }}
     >
-      {visible && src && hasThumbnail && !imgError ? (
-        <img src={src} className="w-full h-full object-cover" loading="lazy" alt={alt}
-          onError={() => setImgError(true)} />
+      {showImg ? (
+        <img src={src} className="w-full h-full object-cover" loading="lazy" alt={label || ''} onError={() => setImgError(true)} />
       ) : (
-        <div className="flex flex-col items-center justify-center gap-1.5">
-          <span className="text-2xl">{isVideo ? '🎬' : icon}</span>
+        <div className="flex flex-col items-center justify-center gap-1.5 px-2">
+          <KindGlyph kind={kind} size={30} />
           <span
-            className="text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wide"
-            style={{ background: 'hsl(var(--ink) / 0.08)', color: 'hsl(var(--ink-soft))' }}
+            className="text-[9px] px-1.5 py-0.5 rounded-md font-bold tracking-wide uppercase"
+            style={{ background: 'hsl(var(--ink) / 0.07)', color: 'hsl(var(--ink-soft))' }}
           >
-            {badge}
+            {ext || kind}
           </span>
         </div>
       )}
-      {isVideo && visible && src && !imgError && (
-        <span className="absolute inset-0 flex items-center justify-center">
-          <span className="w-7 h-7 rounded-full bg-black/55 flex items-center justify-center text-white text-[11px] shadow-md">▶</span>
+      {isVideo && showImg && (
+        <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="w-8 h-8 rounded-full bg-black/55 flex items-center justify-center text-white shadow-md">
+            <Play size={14} weight="fill" />
+          </span>
         </span>
       )}
+      <span
+        className="absolute bottom-1.5 left-1.5 text-[9px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-md"
+        style={{ background: 'hsl(var(--ink) / 0.72)', color: 'white' }}
+      >
+        {kind === 'image' ? 'IMG' : kind === 'pdf' ? 'PDF' : kind === 'video' ? 'VID' : ext || 'FILE'}
+      </span>
     </div>
   );
 });
@@ -113,10 +142,10 @@ const ActionBtn = ({ title, onClick, danger, accent, children }: any) => (
     type="button"
     title={title}
     onClick={onClick}
-    className="inline-flex items-center justify-center h-8 w-8 rounded-lg transition-colors"
+    className="inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-[11px] font-medium gap-1 transition-colors"
     style={{
       border: '1px solid hsl(var(--pt-border))',
-      background: danger ? 'hsl(0 70% 50% / 0.08)' : accent ? 'hsl(var(--marigold) / 0.1)' : 'hsl(var(--pt-card))',
+      background: danger ? 'hsl(0 70% 50% / 0.08)' : accent ? 'hsl(var(--marigold) / 0.12)' : 'hsl(var(--paper))',
       color: danger ? 'hsl(0 65% 42%)' : accent ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
     }}
   >
@@ -126,8 +155,12 @@ const ActionBtn = ({ title, onClick, danger, accent, children }: any) => (
 
 const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete, onSetType }: any) => {
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
-  const thumbUrl = msg.fileUrl?.includes('uc?export=view') ? msg.fileUrl.replace('uc?export=view&id=','thumbnail?id=')+'&sz=w600' : (msg.fileUrl?.replace('sz=w200','sz=w600') || msg.fileUrl);
-  const { title, badge } = docTitle(msg.fileName || '');
+  const { title, kind } = docTitle(msg.fileName || '');
+  const cleanName = displayName(msg.fileName || '');
+  const driveId = driveIdFromUrl(msg.fileUrl) || msg.id;
+  const thumbUrl = kind === 'image' || kind === 'video'
+    ? (authThumbUrl(msg.fileUrl, msg.id) || msg.fileUrl)
+    : undefined;
   const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
   const needsType = msg.tag === 'Needs type' || msg.needsType;
   const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag) && !needsType;
@@ -136,6 +169,9 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
     : msg.tag
     ? { category: msg.tag, color: isJunkTag ? 'bg-[hsl(var(--pt-secondary))] text-[hsl(var(--pt-muted))]' : 'bg-[hsl(158_55%_36%/0.12)] text-[hsl(158_55%_28%)]' }
     : docCategory(msg.fileName || '');
+  const primaryTitle = category?.category && category.category !== 'Needs type'
+    ? category.category
+    : title;
 
   if (msg.text && !msg.fileName) return (
     <div
@@ -153,54 +189,149 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
 
   return (
     <div
-      className="rounded-2xl p-3 flex gap-3 max-w-[520px] transition group"
+      className="rounded-2xl max-w-[min(100%,540px)] overflow-hidden transition group"
       style={{
         background: selected ? 'hsl(var(--marigold) / 0.08)' : 'hsl(var(--pt-card))',
-        border: selected ? '1px solid hsl(var(--marigold) / 0.45)' : '1px solid hsl(var(--pt-border))',
-        boxShadow: 'var(--shadow-paper)',
+        border: selected
+          ? '1px solid hsl(var(--marigold) / 0.5)'
+          : '1px solid hsl(var(--pt-border))',
+        boxShadow: selected
+          ? '0 0 0 1px hsl(var(--marigold) / 0.18), var(--shadow-paper)'
+          : 'var(--shadow-paper)',
       }}
     >
-      {selectionMode && (
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggleSelect(msg)}
-          className="w-4 h-4 self-center cursor-pointer accent-[hsl(var(--marigold))]"
-        />
-      )}
-      <div onClick={() => selectionMode ? onToggleSelect(msg) : onClick(msg)} className="shrink-0 cursor-pointer">
-        <LazyThumbnail src={thumbUrl} ext={ext} alt={title} />
-      </div>
-      <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-        <div>
-          <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>{title}</p>
-          <p className="text-[11px] mt-1 flex flex-wrap items-center gap-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
-            <span className="font-mono text-[10px] uppercase tracking-wide">{badge}</span>
-            <span>·</span>
-            <span>{timeAgo(msg.timestamp)}</span>
-            {category && (
-              <span className={`px-1.5 py-0.5 rounded-md text-[9px] font-semibold ${category.color}`}>
+      <div className="flex gap-3 p-3">
+        {selectionMode && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(msg)}
+            className="w-4 h-4 mt-1 cursor-pointer accent-[hsl(var(--marigold))] shrink-0"
+          />
+        )}
+        <button
+          type="button"
+          onClick={() => (selectionMode ? onToggleSelect(msg) : onClick(msg))}
+          className="shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--marigold))]"
+          title="Open"
+        >
+          <LazyThumbnail src={thumbUrl} ext={ext} kind={kind} label={primaryTitle} />
+        </button>
+
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold leading-snug truncate" style={{ color: 'hsl(var(--ink))' }}>
+                {primaryTitle}
+              </p>
+              <p className="text-[12px] mt-0.5 truncate" style={{ color: 'hsl(var(--ink-soft))' }} title={msg.fileName}>
+                {cleanName}
+              </p>
+            </div>
+            <span className="text-[10px] font-medium shrink-0 pt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+              {timeAgo(msg.timestamp)}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-md"
+              style={{ background: 'hsl(var(--pt-secondary))', color: 'hsl(var(--ink-soft))' }}
+            >
+              <KindGlyph kind={kind} size={12} />
+              {title}
+            </span>
+            {category && category.category !== primaryTitle && (
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${category.color}`}>
                 {category.category}
               </span>
             )}
-          </p>
-          {msg.fileName && (
-            <p className="text-[11px] mt-1 truncate" style={{ color: 'hsl(var(--pt-muted))' }} title={msg.fileName}>
-              {msg.fileName}
-            </p>
-          )}
-        </div>
-        {!selectionMode && (
-          <div className="flex flex-wrap gap-1.5 mt-2.5">
-            <ActionBtn title="Open" onClick={() => onClick(msg)}><Eye size={14} /></ActionBtn>
-            <ActionBtn title={needsType ? 'Set document type' : 'Tag / set type'} accent={needsType} onClick={(e: any) => { e.stopPropagation(); onSetType?.(msg); }}><Tag size={14} /></ActionBtn>
-            <ActionBtn title="Print" onClick={(e: any) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/pdf')}); }).then(blob => { printBlob(blob); }).catch((err) => { toast.error('Failed to load file: ' + (err.message || 'unknown')); }); }}><Printer size={14} /></ActionBtn>
-            <ActionBtn title="Photo Tool" onClick={(e: any) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; window.open('/app/photo?fileId=' + driveId, '_blank'); }}><Camera size={14} /></ActionBtn>
-            <ActionBtn title="Download" onClick={(e: any) => { e.stopPropagation(); const driveId = msg.fileUrl?.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1]; if (!driveId) return; getCachedBlob(driveId, async () => { const res = await api.get(`/drive/download/${driveId}`, {responseType:'blob'}); return new Blob([res.data], {type: String(res.headers['content-type'] ?? 'application/octet-stream')}); }).then(blob => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = msg.fileName || 'file'; a.click(); }); }}><DownloadSimple size={14} /></ActionBtn>
-            <ActionBtn title="Delete" danger onClick={(e: any) => { e.stopPropagation(); if (!confirm('Delete this document? This cannot be undone.')) return; api.delete('/drive/files/' + msg.id).then(() => { onDelete(msg.id); toast.success('Document deleted'); }).catch(() => toast.error('Failed to delete')); }}><Trash size={14} /></ActionBtn>
           </div>
-        )}
+        </div>
       </div>
+
+      {!selectionMode && (
+        <div
+          className="flex flex-wrap items-center gap-1.5 px-3 py-2"
+          style={{
+            borderTop: '1px solid hsl(var(--pt-border))',
+            background: 'hsl(var(--pt-secondary) / 0.45)',
+          }}
+        >
+          <ActionBtn title="Open" onClick={() => onClick(msg)}>
+            <Eye size={14} /> <span className="hidden sm:inline">Open</span>
+          </ActionBtn>
+          <ActionBtn
+            title={needsType ? 'Set document type' : 'Tag / set type'}
+            accent={needsType}
+            onClick={(e: any) => { e.stopPropagation(); onSetType?.(msg); }}
+          >
+            <Tag size={14} /> <span className="hidden sm:inline">{needsType ? 'Tag' : 'Tag'}</span>
+          </ActionBtn>
+          <ActionBtn
+            title="Print"
+            onClick={(e: any) => {
+              e.stopPropagation();
+              if (!driveId) return;
+              getCachedBlob(driveId, async () => {
+                const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+                return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });
+              }).then((blob) => { printBlob(blob); }).catch((err) => {
+                toast.error('Failed to load file: ' + (err.message || 'unknown'));
+              });
+            }}
+          >
+            <Printer size={14} />
+          </ActionBtn>
+          <ActionBtn
+            title="Photo Tool"
+            onClick={(e: any) => {
+              e.stopPropagation();
+              if (!driveId) return;
+              const q = new URLSearchParams();
+              q.set('fileId', driveId);
+              if (msg.phone) q.set('phone', msg.phone);
+              if (msg.name) q.set('name', msg.name);
+              window.location.href = `/app/photos/portal?${q}`;
+            }}
+          >
+            <Camera size={14} />
+          </ActionBtn>
+          <ActionBtn
+            title="Download"
+            onClick={(e: any) => {
+              e.stopPropagation();
+              if (!driveId) return;
+              getCachedBlob(driveId, async () => {
+                const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+                return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/octet-stream') });
+              }).then((blob) => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = msg.fileName || 'file';
+                a.click();
+              });
+            }}
+          >
+            <DownloadSimple size={14} />
+          </ActionBtn>
+          <div className="flex-1 min-w-[0.5rem]" />
+          <ActionBtn
+            title="Delete"
+            danger
+            onClick={(e: any) => {
+              e.stopPropagation();
+              if (!confirm('Delete this document? This cannot be undone.')) return;
+              api.delete('/drive/files/' + msg.id).then(() => {
+                onDelete(msg.id);
+                toast.success('Document deleted');
+              }).catch(() => toast.error('Failed to delete'));
+            }}
+          >
+            <Trash size={14} />
+          </ActionBtn>
+        </div>
+      )}
     </div>
   );
 });
