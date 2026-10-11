@@ -2,136 +2,142 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Customers proof · fictional demo</title>
+  <title>Customers proof · product demo</title>
+  <link rel="stylesheet" href="./demo-tokens.css" />
   <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #0f1218; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
-    .stage { width: 1280px; height: 720px; margin: 0 auto; padding: 24px; }
-    .chrome {
-      background: #111; color: #fff; border-radius: 16px 16px 0 0; padding: 12px 16px;
-      display: flex; align-items: center; gap: 10px; font: 600 13px Inter, sans-serif;
+    .toolbar { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .search-wrap { position: relative; margin-bottom: 14px; max-width: 420px; }
+    .search-wrap .ic { position: absolute; left: 12px; top: 12px; color: hsl(var(--pt-muted)); font-size: 14px; }
+    .hh {
+      border-radius: 16px; overflow: hidden; margin-bottom: 10px;
+      background: hsl(var(--pt-card)); border: 1px solid hsl(var(--pt-border));
+      box-shadow: var(--shadow-paper); opacity: 0; transform: translateY(8px);
+      transition: opacity .35s, transform .35s, box-shadow .2s;
     }
-    .badge {
-      margin-left: auto; padding: 4px 10px; border-radius: 999px;
-      background: rgba(249,115,22,.2); color: #fb923c; font: 600 11px Inter, sans-serif;
+    .hh.show { opacity: 1; transform: none; }
+    .hh.selected { box-shadow: 0 0 0 3px hsl(var(--marigold) / 0.22), var(--shadow-paper); }
+    .hh-head {
+      padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;
+      background: hsl(var(--pt-secondary) / 0.45); font-size: 11px; color: hsl(var(--pt-muted)); font-weight: 500;
     }
-    .board {
-      background: #f3efe7; padding: 18px; height: 632px; border-radius: 0 0 16px 16px;
-      display: grid; grid-template-columns: 1.1fr .9fr; gap: 16px;
+    .person {
+      width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      border-top: 1px solid hsl(var(--pt-border-soft)); background: transparent; border-left: 0; border-right: 0; border-bottom: 0;
+      text-align: left; cursor: pointer; font: inherit;
     }
-    .list { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-content: start; }
-    .card {
-      background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; padding: 14px;
-      display: flex; gap: 12px; align-items: center; cursor: pointer;
-      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s, border-color .2s, box-shadow .2s;
-    }
-    .card.show { opacity: 1; transform: none; }
-    .card.selected { border-color: rgba(249,115,22,.55); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
+    .person:hover { background: hsl(var(--pt-secondary) / 0.55); }
     .av {
-      width: 44px; height: 44px; border-radius: 999px; background: #ffedd5; color: #c2410c;
-      display: grid; place-items: center; font: 700 13px Inter, sans-serif; flex-shrink: 0;
+      width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center;
+      background: hsl(var(--pt-marigold) / 0.14); color: hsl(var(--pt-marigold-deep)); font: 600 13px Inter, sans-serif;
     }
-    .panel {
-      background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; padding: 18px;
-      opacity: 0; transform: translateX(12px); transition: opacity .4s, transform .4s;
+    .open { margin-left: auto; font-size: 11px; font-weight: 600; color: hsl(var(--marigold-deep)); }
+    .detail {
+      margin-top: 16px; padding: 18px; max-width: 480px; opacity: 0; transform: translateY(10px);
+      transition: opacity .4s, transform .4s;
     }
-    .panel.open { opacity: 1; transform: none; }
-    .panel h2 { margin: 0 0 4px; font: 700 18px Inter, sans-serif; }
-    .panel .phone { color: #666; font-size: 13px; margin-bottom: 14px; }
-    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f5f5f4; font-size: 13px; }
-    .row span:first-child { color: #78716c; }
-    .tag {
-      display: inline-block; margin-top: 14px; padding: 4px 10px; border-radius: 999px;
-      background: #d1fae5; color: #047857; font: 600 11px Inter, sans-serif;
-    }
+    .detail.open { opacity: 1; transform: none; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid hsl(var(--pt-border-soft)); font-size: 13px; }
+    .row span:first-child { color: hsl(var(--pt-muted)); }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div class="chrome">
-      CyberControl · Customer Profiles
-      <span class="badge">Demo · fictional data</span>
-    </div>
-    <div class="board">
-      <div class="list">
-        <div class="card" id="c1" data-name="Ananya Demo">
-          <div class="av">AD</div>
-          <div>
-            <div style="font:700 15px Inter">Ananya Demo</div>
-            <div style="color:#666;font-size:13px">90000 00001</div>
-            <div style="color:#0f766e;font-size:12px">6 docs · last: Aadhaar</div>
-          </div>
+    <div class="hub">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <div class="mark">⚡</div>
+          <div class="name pt-display">Cyber<em>Control</em></div>
         </div>
-        <div class="card" id="c2">
-          <div class="av">VD</div>
-          <div>
-            <div style="font:700 15px Inter">Vikram Demo</div>
-            <div style="color:#666;font-size:13px">90000 00002</div>
-            <div style="color:#0f766e;font-size:12px">4 docs · last: Photo</div>
-          </div>
-        </div>
-        <div class="card" id="c3">
-          <div class="av">PD</div>
-          <div>
-            <div style="font:700 15px Inter">Priya Demo</div>
-            <div style="color:#666;font-size:13px">90000 00003</div>
-            <div style="color:#0f766e;font-size:12px">9 docs · last: Form</div>
-          </div>
-        </div>
-        <div class="card" id="c4">
-          <div class="av">KD</div>
-          <div>
-            <div style="font:700 15px Inter">Kabir Demo</div>
-            <div style="color:#666;font-size:13px">90000 00004</div>
-            <div style="color:#0f766e;font-size:12px">3 docs · last: PDF</div>
-          </div>
-        </div>
-      </div>
-      <aside class="panel" id="detail">
-        <h2 id="dName">—</h2>
-        <div class="phone" id="dPhone">—</div>
-        <div class="row"><span>Aadhaar</span><span>0000 1111 2222</span></div>
-        <div class="row"><span>DOB</span><span>12/03/1995</span></div>
-        <div class="row"><span>Documents</span><span>6 ready</span></div>
-        <div class="row"><span>Folder</span><span>Customers / Ananya Demo</span></div>
-        <div class="tag">Demo profile · fictional</div>
+        <nav>
+          <div class="nav-item"><span class="ic">⚡</span> Today</div>
+          <div class="nav-item active" id="navCustomers"><span class="ic">👤</span> Customers</div>
+          <div class="nav-item"><span class="ic">🔎</span> Find Form</div>
+          <div class="nav-item"><span class="ic">📁</span> File Manager</div>
+          <div class="nav-item"><span class="ic">💬</span> Documents</div>
+          <div class="nav-item"><span class="ic">📷</span> Photos</div>
+          <div class="nav-item"><span class="ic">⚙</span> Settings</div>
+        </nav>
+        <div class="sidebar-foot">Demo café · fictional data</div>
       </aside>
+      <main class="main">
+        <div class="toolbar">
+          <div>
+            <h1 class="page-title pt-display">Customers</h1>
+            <p class="page-sub">3 households in this workspace</p>
+          </div>
+          <span class="badge-demo">Demo · fictional data</span>
+          <button class="btn-primary" type="button" id="newBtn">+ New Customer</button>
+        </div>
+        <div class="search-wrap">
+          <span class="ic">🔍</span>
+          <input class="input-field" id="search" placeholder="Search by name or phone..." readonly />
+        </div>
+        <div class="hh" id="h1">
+          <div class="hh-head"><span>+9000000001 · 2 people</span></div>
+          <button class="person" type="button" id="p1">
+            <div class="av">AD</div>
+            <div>
+              <div style="font:600 14px Inter">Ananya Demo</div>
+              <div style="font-size:12px;color:hsl(var(--pt-muted))">self</div>
+            </div>
+            <span class="open">Open →</span>
+          </button>
+          <button class="person" type="button">
+            <div class="av">VD</div>
+            <div>
+              <div style="font:600 14px Inter">Vikram Demo</div>
+              <div style="font-size:12px;color:hsl(var(--pt-muted))">father</div>
+            </div>
+            <span class="open">Open →</span>
+          </button>
+        </div>
+        <div class="hh" id="h2">
+          <div class="hh-head"><span>+9000000003 · 1 person</span></div>
+          <button class="person" type="button">
+            <div class="av">PD</div>
+            <div>
+              <div style="font:600 14px Inter">Priya Demo</div>
+              <div style="font-size:12px;color:hsl(var(--pt-muted))">self</div>
+            </div>
+            <span class="open">Open →</span>
+          </button>
+        </div>
+        <div class="card detail" id="detail">
+          <h2 class="pt-display" style="margin:0 0 4px;font-size:18px">Ananya Demo</h2>
+          <div style="color:hsl(var(--pt-muted));font-size:13px;margin-bottom:12px">+9000000001</div>
+          <div class="row"><span>Aadhaar</span><span>0000 1111 2222</span></div>
+          <div class="row"><span>DOB</span><span>12/03/1995</span></div>
+          <div class="row"><span>Documents</span><span>6 ready</span></div>
+          <div style="margin-top:12px;font:600 11px Inter;color:hsl(var(--pt-success))">✓ Ready for AutoFill</div>
+        </div>
+      </main>
     </div>
   </div>
   <script src="./demo-fx.js"></script>
   <script>
     async function runOnce() {
       const fx = window.DemoFx;
-      const cards = ['c1','c2','c3','c4'].map((id) => document.getElementById(id));
+      const h1 = document.getElementById('h1');
+      const h2 = document.getElementById('h2');
+      const p1 = document.getElementById('p1');
       const detail = document.getElementById('detail');
-      cards.forEach((c) => c.classList.remove('show','selected'));
       detail.classList.remove('open');
-
+      h1.classList.remove('show', 'selected');
+      h2.classList.remove('show');
       await fx.sleep(400);
-      for (const c of cards) {
-        c.classList.add('show');
-        await fx.sleep(180);
-      }
-      await fx.sleep(300);
-      const target = cards[0];
-      await fx.moveTo(target, 650);
-      await fx.highlight(target, 280);
-      await fx.click(target);
-      target.classList.add('selected');
-      document.getElementById('dName').textContent = 'Ananya Demo';
-      document.getElementById('dPhone').textContent = '90000 00001';
+      h1.classList.add('show');
+      await fx.sleep(280);
+      h2.classList.add('show');
+      await fx.sleep(400);
+      await fx.moveTo(p1, 700);
+      await fx.highlight(p1, 250);
+      await fx.click(p1);
+      h1.classList.add('selected');
       detail.classList.add('open');
-      await fx.sleep(500);
-      await fx.moveTo(detail, 450);
-      await fx.sleep(1200);
+      await fx.sleep(1400);
       window.__done = true;
     }
-    window.__runClip = runOnce;
-    if (window.DemoFx) {
-      window.__ready = true;
-      runOnce().catch((e) => { console.error(e); window.__done = true; });
-    }
+    if (window.DemoFx) { window.__ready = true; runOnce().catch(() => { window.__done = true; }); }
   </script>
 </body>
 </html>

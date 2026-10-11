@@ -56,7 +56,7 @@ export function FormFillClip() {
   return (
     <SilentProofVideo
       src={CLIP_SRC.form}
-      label="app.cybercontrol.fun · customer profile for AutoFill"
+      label="Extension AutoFill · Fill Form on a demo portal"
     />
   );
 }
@@ -77,68 +77,68 @@ const BANDS: ProofBand[] = [
   {
     id: "proof-forms",
     eyebrow: "Form AutoFill",
-    title: "Saved customer profiles feed AutoFill on government sites",
-    body: "This clip is the real CyberControl app: open a customer, see the identity and documents the Chrome extension uses to fill forms — so the desk stops retyping Aadhaar details.",
+    title: "Extension Fill on a portal form — from a saved profile",
+    body: "Product demo of the CyberControl Chrome extension: portal form open, popup visible, Fill Form clicked, fields populate from a fictional customer profile. Review stays with the café before submit.",
     bullets: [
-      "Works with the CyberControl Chrome extension",
-      "Uses the customer profile already in your workspace",
+      "Matches the real extension paper UI (Fill Form)",
+      "Uses a demo profile — no live café data",
       "You review before submit — control stays with the café",
     ],
     cta: { href: "#extension", label: "Get the AutoFill extension" },
     clip: "form",
-    clipLabel: "app.cybercontrol.fun · customer profile",
+    clipLabel: "Extension · Fill Form on demo portal",
   },
   {
     id: "proof-wa",
     eyebrow: "WhatsApp Documents",
     title: "From WhatsApp chat → customer folder, not phone chaos",
-    body: "Customers send Aadhaar and marksheets on WhatsApp. CyberControl captures them into the right profile so the desk is not hunting through chats.",
+    body: "Product demo of Documents intake: a fictional chat sends files, then they land in the customer folder — the desk stops hunting through phones.",
     bullets: ["Chat + files in one place", "Linked to the customer", "Ready for forms and printing"],
     cta: { href: `${APP_URL}/app/whatsapp`, label: "Open WhatsApp desk" },
     clip: "wa",
-    clipLabel: "app.cybercontrol.fun · WhatsApp Documents",
+    clipLabel: "Hub · Documents (WhatsApp)",
     flip: true,
   },
   {
     id: "proof-customers",
     eyebrow: "Customer Profiles",
     title: "Every return visit starts with memory, not a blank form",
-    body: "Profiles hold identity, phone, and documents. The café stops asking for the same papers every time someone walks in.",
+    body: "Product demo of the Hub Customers list: household rows, open a person, see identity ready for AutoFill — all fictional demo data.",
     bullets: ["Search by name or phone", "Documents attached", "History across visits"],
     cta: { href: `${APP_URL}/app/customers`, label: "See customer list" },
     clip: "customers",
-    clipLabel: "app.cybercontrol.fun · Customers",
+    clipLabel: "Hub · Customers",
   },
   {
     id: "proof-files",
     eyebrow: "File Manager",
     title: "Browse documents like a real drive — per customer",
-    body: "Preview images and PDFs, open what you need, keep folders tidy. Built for the café desk, not a generic cloud dump.",
+    body: "Product demo of File Manager chrome: per-customer crumbs and document tiles, with the same Hub sidebar operators use.",
     bullets: ["Per-customer folders", "Preview before print", "Fast find at the counter"],
     cta: { href: `${APP_URL}/app/files`, label: "Open File Manager" },
     clip: "files",
-    clipLabel: "app.cybercontrol.fun · File Manager",
+    clipLabel: "Hub · File Manager",
     flip: true,
   },
   {
     id: "proof-photo",
     eyebrow: "Photo & PDF Tools",
     title: "Passport photos and scans that match counter rules",
-    body: "Size, crop, background, export — the boring rules that reject applications if you get them wrong.",
+    body: "Product demo of Photos: before → print-ready sizing and export — the rules that reject applications when wrong.",
     bullets: ["Exact sizes (e.g. 4.5×3.5)", "Print-ready export", "PDF tools for scans"],
     cta: { href: `${APP_URL}/app/photos`, label: "Open photo tools" },
     clip: "photo",
-    clipLabel: "app.cybercontrol.fun · Photos",
+    clipLabel: "Hub · Photos",
   },
   {
     id: "proof-workspace",
     eyebrow: "Operator Workspace",
     title: "One signed-in desk for the whole café day",
-    body: "Customers, WhatsApp, files, photos, forms — one operating system your staff can run without juggling five apps.",
+    body: "Product demo of the Hub shell: Today workspace tiles and the real sidebar (Customers, Documents, Files, Photos).",
     bullets: ["Single login", "Tools in one sidebar", "Built for Hindi + English desks"],
     cta: { href: APP_URL, label: "Sign in to workspace" },
     clip: "workspace",
-    clipLabel: "app.cybercontrol.fun · Today",
+    clipLabel: "Hub · Today",
     flip: true,
   },
 ];
@@ -155,7 +155,7 @@ export function ProofBands() {
             Proof for every part of CyberControl
           </h2>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
-            Silent clips recorded from the live CyberControl app — muted, looping, no soundtrack.
+            Silent product demos of Hub + extension UI (fictional data) — muted, looping, no soundtrack.
           </p>
         </div>
 

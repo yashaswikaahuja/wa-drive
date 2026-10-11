@@ -2,157 +2,86 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>WhatsApp proof · fictional demo</title>
+  <title>WhatsApp proof · product demo</title>
+  <link rel="stylesheet" href="./demo-tokens.css" />
   <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #0f1218; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
-    .stage { width: 1280px; height: 720px; margin: 0 auto; padding: 24px; }
-    .chrome {
-      background: #111; color: #fff; border-radius: 16px 16px 0 0; padding: 12px 16px;
-      display: flex; align-items: center; gap: 10px; font: 600 13px Inter, sans-serif;
+    .main { padding: 0; display: grid; grid-template-columns: 1.05fr .95fr; height: 720px; }
+    .pane { border-right: 1px solid hsl(var(--pt-border)); display: flex; flex-direction: column; min-width: 0; }
+    .pane:last-child { border-right: 0; }
+    .pane-head {
+      height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 16px;
+      border-bottom: 1px solid hsl(var(--pt-border)); background: hsl(var(--pt-card));
+      font: 600 13px Inter, sans-serif;
     }
-    .badge {
-      margin-left: auto; padding: 4px 10px; border-radius: 999px;
-      background: rgba(249,115,22,.2); color: #fb923c; font: 600 11px Inter, sans-serif;
-    }
-    .grid {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #1a2030;
-      padding: 16px; height: 632px; border-radius: 0 0 16px 16px;
-    }
-    .panel { border-radius: 14px; overflow: hidden; height: 100%; }
-    .wa { background: #0b141a; color: #fff; padding: 14px; display: flex; flex-direction: column; }
-    .wa-head { font: 600 14px Inter, sans-serif; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
-    .wa-head .av {
-      width: 32px; height: 32px; border-radius: 999px; background: #334155;
-      display: grid; place-items: center; font: 700 11px Inter, sans-serif;
-    }
-    .chat { flex: 1; overflow: hidden; }
-    .bubble {
-      max-width: 88%; margin: 8px 0; padding: 8px 10px; border-radius: 10px; font-size: 13px;
-      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s;
-    }
+    .wa-body { flex: 1; padding: 14px; background: #0b141a; color: #fff; overflow: hidden; }
+    .bubble { max-width: 88%; margin: 8px 0; padding: 8px 10px; border-radius: 10px; font-size: 13px; opacity: 0; transform: translateY(6px); transition: .35s; }
     .bubble.show { opacity: 1; transform: none; }
     .me { margin-left: auto; background: #005c4b; }
     .them { background: #1f2c34; }
-    .file {
-      height: 52px; display: flex; align-items: center; gap: 8px;
-      background: rgba(255,255,255,.08); border-radius: 8px; margin-bottom: 4px;
-      padding: 0 10px; font-size: 12px;
-    }
-    .desk { background: #f7f4ee; padding: 16px; height: 100%; }
-    .desk h3 { margin: 0 0 4px; font: 700 15px Inter, sans-serif; color: #111; }
-    .desk .sub { color: #78716c; font-size: 12px; margin-bottom: 12px; }
+    .file { height: 48px; display: grid; place-items: center; background: rgba(255,255,255,.08); border-radius: 8px; margin-bottom: 4px; font-size: 12px; }
+    .desk { flex: 1; padding: 14px; background: hsl(var(--paper)); }
     .item {
-      display: flex; gap: 10px; align-items: center; border: 1px solid #e7e5e4; background: #fff;
-      border-radius: 10px; padding: 10px 12px; margin: 8px 0;
-      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s, border-color .2s, box-shadow .2s;
+      display: flex; gap: 10px; align-items: center; border: 1px solid hsl(var(--pt-border));
+      border-radius: 12px; padding: 10px 12px; margin: 8px 0; background: hsl(var(--pt-card));
+      box-shadow: var(--shadow-paper); opacity: 0; transform: translateY(8px); transition: .4s;
     }
     .item.show { opacity: 1; transform: none; }
-    .item.selected { border-color: rgba(249,115,22,.55); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
-    .badge-ok {
-      margin-left: auto; background: #d1fae5; color: #047857; font: 600 11px Inter, sans-serif;
-      padding: 3px 8px; border-radius: 999px;
-    }
-    .save-btn {
-      margin-top: 12px; border: 0; border-radius: 10px; padding: 10px 14px;
-      background: #f97316; color: #111; font: 700 13px Inter, sans-serif; cursor: pointer;
-      opacity: 0; transition: opacity .3s;
-    }
-    .save-btn.show { opacity: 1; }
-    .toast {
-      display: none; margin-top: 10px; padding: 10px 12px; border-radius: 8px;
-      background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3);
-      color: #047857; font: 600 12px Inter, sans-serif;
-    }
-    .toast.show { display: block; }
+    .badge { margin-left: auto; background: #d1fae5; color: #047857; font: 600 11px Inter; padding: 3px 8px; border-radius: 999px; }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div class="chrome">
-      CyberControl · WhatsApp Documents
-      <span class="badge">Demo · fictional data</span>
-    </div>
-    <div class="grid">
-      <div class="panel wa">
-        <div class="wa-head"><div class="av">VD</div>Vikram Demo · 90000 00002</div>
-        <div class="chat">
-          <div class="bubble me" id="b1">bhaiya demo docs bhej raha hu</div>
-          <div class="bubble them" id="b2">
-            <div class="file">📄 demo_aadhaar_front.jpg</div>
-            <div style="opacity:.5;font-size:11px">today 10:42</div>
+    <div class="hub">
+      <aside class="sidebar">
+        <div class="sidebar-brand"><div class="mark">⚡</div><div class="name pt-display">Cyber<em>Control</em></div></div>
+        <nav>
+          <div class="nav-item"><span class="ic">⚡</span> Today</div>
+          <div class="nav-item"><span class="ic">👤</span> Customers</div>
+          <div class="nav-item"><span class="ic">🔎</span> Find Form</div>
+          <div class="nav-item"><span class="ic">📁</span> File Manager</div>
+          <div class="nav-item active"><span class="ic">💬</span> Documents</div>
+          <div class="nav-item"><span class="ic">📷</span> Photos</div>
+          <div class="nav-item"><span class="ic">⚙</span> Settings</div>
+        </nav>
+        <div class="sidebar-foot">Demo café · fictional data</div>
+      </aside>
+      <main class="main">
+        <section class="pane">
+          <div class="pane-head">WhatsApp · Demo Customer <span class="badge-demo">Demo · fictional data</span></div>
+          <div class="wa-body">
+            <div class="bubble me" id="b1">bhaiya aadhaar bhej raha hu (demo)</div>
+            <div class="bubble them" id="b2"><div class="file">📄 aadhaar_demo_front.jpg</div><div style="opacity:.5;font-size:11px">today 10:42</div></div>
+            <div class="bubble them" id="b3"><div class="file">📄 marksheet_demo.pdf</div></div>
           </div>
-          <div class="bubble them" id="b3">
-            <div class="file">📄 demo_marksheet.pdf</div>
+        </section>
+        <section class="pane">
+          <div class="pane-head">Saved to Ananya Demo</div>
+          <div class="desk">
+            <div class="item" id="i1"><span>📄</span><span style="flex:1;font:600 13px Inter">aadhaar_demo_front.jpg</span><span class="badge">saved</span></div>
+            <div class="item" id="i2"><span>📄</span><span style="flex:1;font:600 13px Inter">marksheet_demo.pdf</span><span class="badge">saved</span></div>
+            <div class="item" id="i3"><span>📄</span><span style="flex:1;font:600 13px Inter">signature_demo.png</span><span class="badge">saved</span></div>
           </div>
-        </div>
-      </div>
-      <div class="panel desk">
-        <h3>Save to customer folder</h3>
-        <div class="sub">Ananya Demo · 90000 00001</div>
-        <div class="item" id="d1"><span>📄</span><span style="flex:1;font:600 13px Inter">demo_aadhaar_front.jpg</span><span class="badge-ok" id="s1" style="visibility:hidden">saved</span></div>
-        <div class="item" id="d2"><span>📄</span><span style="flex:1;font:600 13px Inter">demo_marksheet.pdf</span><span class="badge-ok" id="s2" style="visibility:hidden">saved</span></div>
-        <button class="save-btn" id="saveBtn" type="button">Save selected → folder</button>
-        <div class="toast" id="toast">✓ Saved to Ananya Demo / Documents</div>
-      </div>
+        </section>
+      </main>
     </div>
   </div>
   <script src="./demo-fx.js"></script>
   <script>
     async function runOnce() {
       const fx = window.DemoFx;
-      const b1 = document.getElementById('b1');
-      const b2 = document.getElementById('b2');
-      const b3 = document.getElementById('b3');
-      const d1 = document.getElementById('d1');
-      const d2 = document.getElementById('d2');
-      const s1 = document.getElementById('s1');
-      const s2 = document.getElementById('s2');
-      const saveBtn = document.getElementById('saveBtn');
-      const toast = document.getElementById('toast');
-
-      [b1,b2,b3,d1,d2].forEach((el) => el.classList.remove('show','selected'));
-      s1.style.visibility = 'hidden';
-      s2.style.visibility = 'hidden';
-      saveBtn.classList.remove('show');
-      toast.classList.remove('show');
-
-      await fx.sleep(500);
-      b1.classList.add('show');
-      await fx.sleep(500);
-      b2.classList.add('show');
-      await fx.sleep(450);
-      b3.classList.add('show');
+      for (const id of ['b1','b2','b3','i1','i2','i3']) document.getElementById(id).classList.remove('show');
       await fx.sleep(400);
-
-      d1.classList.add('show');
-      d2.classList.add('show');
-      saveBtn.classList.add('show');
+      for (const id of ['b1','b2','b3']) { document.getElementById(id).classList.add('show'); await fx.sleep(450); }
+      await fx.moveTo(document.getElementById('b2'), 600);
+      await fx.click(document.getElementById('b2'));
       await fx.sleep(300);
-
-      await fx.moveTo(d1, 550);
-      await fx.click(d1);
-      d1.classList.add('selected');
-      await fx.sleep(200);
-      await fx.moveTo(d2, 400);
-      await fx.click(d2);
-      d2.classList.add('selected');
-      await fx.sleep(250);
-      await fx.moveTo(saveBtn, 500);
-      await fx.highlight(saveBtn, 250);
-      await fx.click(saveBtn);
-      s1.style.visibility = 'visible';
-      s2.style.visibility = 'visible';
-      toast.classList.add('show');
-      await fx.sleep(1100);
+      for (const id of ['i1','i2','i3']) { document.getElementById(id).classList.add('show'); await fx.sleep(320); }
+      await fx.moveTo(document.getElementById('i1'), 500);
+      await fx.highlight(document.getElementById('i1'), 280);
+      await fx.sleep(900);
       window.__done = true;
     }
-    window.__runClip = runOnce;
-    if (window.DemoFx) {
-      window.__ready = true;
-      runOnce().catch((e) => { console.error(e); window.__done = true; });
-    }
+    if (window.DemoFx) { window.__ready = true; runOnce().catch(() => { window.__done = true; }); }
   </script>
 </body>
 </html>

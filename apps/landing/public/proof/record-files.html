@@ -2,118 +2,87 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Files proof · fictional demo</title>
+  <title>Files proof · product demo</title>
+  <link rel="stylesheet" href="./demo-tokens.css" />
   <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #0f1218; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
-    .stage { width: 1280px; height: 720px; margin: 0 auto; padding: 24px; }
-    .chrome {
-      background: #111; color: #fff; border-radius: 16px 16px 0 0; padding: 12px 16px;
-      display: flex; align-items: center; gap: 10px; font: 600 13px Inter, sans-serif;
+    .hub { grid-template-columns: 224px 1fr; }
+    .main { padding: 0; display: flex; flex-direction: column; height: 720px; }
+    .fm-bar {
+      height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 18px;
+      border-bottom: 1px solid hsl(var(--pt-border)); background: hsl(var(--pt-card));
     }
-    .badge {
-      margin-left: auto; padding: 4px 10px; border-radius: 999px;
-      background: rgba(249,115,22,.2); color: #fb923c; font: 600 11px Inter, sans-serif;
+    .crumb { font-size: 13px; color: hsl(var(--pt-muted)); }
+    .crumb b { color: hsl(var(--ink)); font-weight: 600; }
+    .grid {
+      flex: 1; padding: 18px; display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 14px; align-content: start; background: hsl(var(--paper));
     }
-    .board { background: #f3efe7; padding: 20px; height: 632px; border-radius: 0 0 16px 16px; }
-    .crumb { color: #666; font-size: 13px; margin-bottom: 14px; }
-    .crumb strong { color: #111; }
-    .folders { display: flex; gap: 12px; margin-bottom: 18px; }
-    .folder {
-      background: #fff; border: 1px solid #e7e5e4; border-radius: 12px; padding: 12px 16px;
-      display: flex; gap: 10px; align-items: center; min-width: 160px;
-      opacity: 0; transform: translateY(6px); transition: opacity .3s, transform .3s, border-color .2s, box-shadow .2s;
-    }
-    .folder.show { opacity: 1; transform: none; }
-    .folder.open { border-color: rgba(249,115,22,.55); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
-    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
     .tile {
-      background: #fff; border: 1px solid #e7e5e4; border-radius: 14px; padding: 12px;
-      opacity: 0; transform: translateY(8px); transition: opacity .35s, transform .35s, border-color .2s, box-shadow .2s;
+      background: hsl(var(--pt-card)); border: 1px solid hsl(var(--pt-border));
+      border-radius: 14px; padding: 12px; box-shadow: var(--shadow-paper);
+      opacity: 0; transform: translateY(8px); transition: .35s; cursor: pointer;
     }
     .tile.show { opacity: 1; transform: none; }
-    .tile.active { border-color: rgba(249,115,22,.55); box-shadow: 0 0 0 3px rgba(249,115,22,.15); }
+    .tile.selected { border-color: hsl(var(--marigold)); box-shadow: 0 0 0 3px hsl(var(--marigold) / 0.2); }
     .preview {
-      height: 120px; border-radius: 10px; background: linear-gradient(135deg,#e7e5e4,#d6d3d1);
-      display: grid; place-items: center; font-size: 28px; margin-bottom: 10px;
+      height: 110px; border-radius: 10px; margin-bottom: 10px;
+      background: linear-gradient(135deg, #e7e5e4, #d6d3d1);
+      display: grid; place-items: center; font-size: 28px;
     }
-    .previewer {
-      margin-top: 16px; background: #fff; border: 1px solid #e7e5e4; border-radius: 12px;
-      padding: 14px 16px; display: none; align-items: center; gap: 14px;
-    }
-    .previewer.show { display: flex; }
-    .previewer .thumb {
-      width: 64px; height: 80px; border-radius: 6px; background: linear-gradient(135deg,#fb923c,#f97316);
-      display: grid; place-items: center; color: #111; font-weight: 700; font-size: 11px;
-    }
+    .name { font: 700 13px Inter, sans-serif; }
+    .meta { color: hsl(var(--pt-muted)); font-size: 12px; margin-top: 2px; }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div class="chrome">
-      CyberControl · File Manager
-      <span class="badge">Demo · fictional data</span>
-    </div>
-    <div class="board">
-      <div class="crumb">Customers / <strong id="crumb">Ananya Demo</strong></div>
-      <div class="folders">
-        <div class="folder" id="folderDocs"><span>📁</span><div><div style="font:700 13px Inter">Documents</div><div style="color:#666;font-size:11px">4 files</div></div></div>
-        <div class="folder" id="folderPhotos"><span>📁</span><div><div style="font:700 13px Inter">Photos</div><div style="color:#666;font-size:11px">2 files</div></div></div>
-      </div>
-      <div class="grid">
-        <div class="tile" id="t1"><div class="preview">🪪</div><div style="font:700 13px Inter">demo_aadhaar.jpg</div><div style="color:#666;font-size:12px">JPG · demo</div></div>
-        <div class="tile" id="t2"><div class="preview">📄</div><div style="font:700 13px Inter">demo_marksheet.pdf</div><div style="color:#666;font-size:12px">PDF · demo</div></div>
-        <div class="tile" id="t3"><div class="preview">🖼️</div><div style="font:700 13px Inter">demo_photo.jpg</div><div style="color:#666;font-size:12px">JPG · 4.5×3.5</div></div>
-        <div class="tile" id="t4"><div class="preview">✍️</div><div style="font:700 13px Inter">demo_signature.png</div><div style="color:#666;font-size:12px">PNG · demo</div></div>
-      </div>
-      <div class="previewer" id="previewer">
-        <div class="thumb">ID</div>
-        <div>
-          <div style="font:700 14px Inter">demo_aadhaar.jpg</div>
-          <div style="color:#666;font-size:12px;margin-top:4px">Opened from Ananya Demo / Documents · fictional fixture</div>
+    <div class="hub">
+      <aside class="sidebar">
+        <div class="sidebar-brand"><div class="mark">⚡</div><div class="name pt-display">Cyber<em>Control</em></div></div>
+        <nav>
+          <div class="nav-item"><span class="ic">⚡</span> Today</div>
+          <div class="nav-item"><span class="ic">👤</span> Customers</div>
+          <div class="nav-item"><span class="ic">🔎</span> Find Form</div>
+          <div class="nav-item active"><span class="ic">📁</span> File Manager</div>
+          <div class="nav-item"><span class="ic">💬</span> Documents</div>
+          <div class="nav-item"><span class="ic">📷</span> Photos</div>
+          <div class="nav-item"><span class="ic">⚙</span> Settings</div>
+        </nav>
+        <div class="sidebar-foot">Demo café · fictional data</div>
+      </aside>
+      <main class="main">
+        <div class="fm-bar">
+          <div class="crumb">Customers / <b>Ananya Demo</b></div>
+          <span class="badge-demo">Demo · fictional data</span>
         </div>
-      </div>
+        <div class="grid">
+          <div class="tile" id="t1"><div class="preview">🪪</div><div class="name">Aadhaar</div><div class="meta">JPG · demo</div></div>
+          <div class="tile" id="t2"><div class="preview">📄</div><div class="name">Marksheet</div><div class="meta">PDF · demo</div></div>
+          <div class="tile" id="t3"><div class="preview">🖼️</div><div class="name">Photo 4.5×3.5</div><div class="meta">JPG · demo</div></div>
+          <div class="tile" id="t4"><div class="preview">✍️</div><div class="name">Signature</div><div class="meta">PNG · demo</div></div>
+        </div>
+      </main>
     </div>
   </div>
   <script src="./demo-fx.js"></script>
   <script>
     async function runOnce() {
       const fx = window.DemoFx;
-      const folder = document.getElementById('folderDocs');
       const tiles = ['t1','t2','t3','t4'].map((id) => document.getElementById(id));
-      const previewer = document.getElementById('previewer');
-      folder.classList.remove('show','open');
-      document.getElementById('folderPhotos').classList.remove('show','open');
-      tiles.forEach((t) => t.classList.remove('show','active'));
-      previewer.classList.remove('show');
-
-      await fx.sleep(400);
-      folder.classList.add('show');
-      document.getElementById('folderPhotos').classList.add('show');
-      await fx.sleep(300);
-      await fx.moveTo(folder, 550);
-      await fx.click(folder);
-      folder.classList.add('open');
-      await fx.sleep(250);
-      for (const t of tiles) {
-        t.classList.add('show');
-        await fx.sleep(140);
-      }
-      await fx.sleep(200);
-      await fx.moveTo(tiles[0], 550);
-      await fx.highlight(tiles[0], 250);
+      tiles.forEach((t) => t.classList.remove('show','selected'));
+      await fx.sleep(350);
+      for (const t of tiles) { t.classList.add('show'); await fx.sleep(180); }
+      await fx.moveTo(tiles[0], 650);
       await fx.click(tiles[0]);
-      tiles[0].classList.add('active');
-      previewer.classList.add('show');
-      await fx.sleep(1200);
+      tiles[0].classList.add('selected');
+      await fx.sleep(500);
+      await fx.moveTo(tiles[2], 550);
+      await fx.click(tiles[2]);
+      tiles[0].classList.remove('selected');
+      tiles[2].classList.add('selected');
+      await fx.sleep(1100);
       window.__done = true;
     }
-    window.__runClip = runOnce;
-    if (window.DemoFx) {
-      window.__ready = true;
-      runOnce().catch((e) => { console.error(e); window.__done = true; });
-    }
+    if (window.DemoFx) { window.__ready = true; runOnce().catch(() => { window.__done = true; }); }
   </script>
 </body>
 </html>
