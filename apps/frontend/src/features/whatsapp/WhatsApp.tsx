@@ -24,6 +24,14 @@ import {
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
   fileUrl?: string; timestamp: string; type?: string; dpUrl?: string; tag?: string;
+  needsType?: boolean;
+}
+
+/** True when Build Profile would fail / skip this doc for missing document type. */
+function docNeedsTypeTag(msg: Message): boolean {
+  if (msg.tag === 'Needs type' || msg.needsType) return true;
+  if (msg.tag) return false;
+  return !docCategory(msg.fileName || '');
 }
 interface Chat { phone: string; name: string; lastTime: string; messages: Message[]; newCount: number; dpUrl?: string; }
 
@@ -859,6 +867,22 @@ export default function WhatsApp() {
   };
 
   const startBuildProfile = async () => {
+    const blocked = Array.from(selectedDocs.values()).filter(docNeedsTypeTag);
+    if (blocked.length > 0) {
+      const names = blocked
+        .slice(0, 3)
+        .map((d) => displayName(d.fileName || 'file'))
+        .join(', ');
+      const more = blocked.length > 3 ? ` +${blocked.length - 3} more` : '';
+      toast.error(
+        blocked.length === 1
+          ? `Tag “${names}” first, then Build Profile`
+          : `Tag ${blocked.length} docs first (${names}${more})`,
+      );
+      const first = blocked[0];
+      if (first) setTypePickerFile(first);
+      return;
+    }
     setShowPicker(true);
   };
 
@@ -1052,6 +1076,10 @@ export default function WhatsApp() {
     });
   }, [sortedChats, chatSearch, pinnedChats]);
   const activeChat = selectedChat ? chats.get(selectedChat) : null;
+  const untaggedSelected = useMemo(
+    () => Array.from(selectedDocs.values()).filter(docNeedsTypeTag),
+    [selectedDocs],
+  );
   const viewerMessages = useMemo(
     () => (activeChat ? activeChat.messages.filter((m) => !!m.fileName && mediaKindOf(m.fileName)) : []),
     [activeChat],
@@ -1327,12 +1355,41 @@ export default function WhatsApp() {
             {selectedDocs.size > 0 && (
               <div
                 className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full flex items-center gap-2.5 z-10 flex-wrap justify-center max-w-[95%]"
-                style={{ background: 'var(--gradient-marigold)', boxShadow: '0 12px 32px -10px hsl(var(--marigold) / 0.55)' }}
+                style={{
+                  background: untaggedSelected.length > 0
+                    ? 'linear-gradient(180deg, hsl(28 90% 42%) 0%, hsl(22 85% 34%) 100%)'
+                    : 'var(--gradient-marigold)',
+                  boxShadow: untaggedSelected.length > 0
+                    ? '0 12px 32px -10px hsl(28 90% 40% / 0.55)'
+                    : '0 12px 32px -10px hsl(var(--marigold) / 0.55)',
+                }}
               >
-                <span className="text-sm font-semibold text-white whitespace-nowrap">{selectedDocs.size} selected</span>
-                <button onClick={startBuildProfile} className="px-3 py-1 bg-white rounded-full text-xs font-bold hover:bg-white/95" style={{ color: 'hsl(var(--ink))' }}>
-                  Build Profile
-                </button>
+                <span className="text-sm font-semibold text-white whitespace-nowrap">
+                  {selectedDocs.size} selected
+                  {untaggedSelected.length > 0 ? ` · ${untaggedSelected.length} need tag` : ''}
+                </span>
+                {untaggedSelected.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const first = untaggedSelected[0];
+                      if (first) setTypePickerFile(first);
+                      toast.info(
+                        untaggedSelected.length === 1
+                          ? 'Set the document type, then Build Profile'
+                          : `Tag ${untaggedSelected.length} docs, then Build Profile`,
+                      );
+                    }}
+                    className="px-3 py-1 bg-white rounded-full text-xs font-bold hover:bg-white/95 inline-flex items-center gap-1"
+                    style={{ color: 'hsl(22 85% 32%)' }}
+                  >
+                    <Tag size={13} weight="bold" /> Tag first
+                  </button>
+                ) : (
+                  <button onClick={startBuildProfile} className="px-3 py-1 bg-white rounded-full text-xs font-bold hover:bg-white/95" style={{ color: 'hsl(var(--ink))' }}>
+                    Build Profile
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     const first = Array.from(selectedDocs.values())[0];
