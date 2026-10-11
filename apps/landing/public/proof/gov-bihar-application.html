@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ServicePlus Bihar · Online Application</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Inter, system-ui, sans-serif;
+      background: #e8eef5;
+      color: #1a2332;
+    }
+    .top {
+      background: linear-gradient(90deg, #0b3d91, #1256c4);
+      color: #fff;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 3px solid #f4c430;
+    }
+    .top .emblem {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: #fff; color: #0b3d91; display: grid; place-items: center;
+      font-weight: 800; font-size: 12px;
+    }
+    .top h1 { margin: 0; font-size: 16px; font-weight: 700; }
+    .top p { margin: 2px 0 0; font-size: 11px; opacity: .9; }
+    .wrap { max-width: 920px; margin: 18px auto; padding: 0 16px 40px; }
+    .card {
+      background: #fff;
+      border: 1px solid #c5d0e0;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(11,61,145,.08);
+      overflow: hidden;
+    }
+    .card-h {
+      background: #f3f6fb;
+      border-bottom: 1px solid #c5d0e0;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-h strong { font-size: 14px; color: #0b3d91; }
+    .badge {
+      font-size: 10px; font-weight: 700; letter-spacing: .04em;
+      background: #fff3cd; color: #856404; border: 1px solid #ffe08a;
+      padding: 3px 8px; border-radius: 999px;
+    }
+    .body { padding: 16px 18px 22px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+    label { display: block; font-size: 11px; font-weight: 600; color: #445; margin-bottom: 4px; }
+    label .req { color: #c0392b; }
+    input, select, textarea {
+      width: 100%; height: 36px; border: 1px solid #b8c4d6; border-radius: 4px;
+      padding: 0 10px; font-size: 13px; background: #fbfcfe;
+    }
+    textarea { height: 64px; padding: 8px 10px; resize: vertical; }
+    input:focus, select:focus, textarea:focus {
+      outline: 2px solid #1256c4; outline-offset: 0; border-color: #1256c4; background: #fff;
+    }
+    .full { grid-column: 1 / -1; }
+    .actions {
+      margin-top: 16px; padding-top: 14px; border-top: 1px dashed #c5d0e0;
+      display: flex; gap: 10px; justify-content: flex-end;
+    }
+    .btn {
+      border: 0; border-radius: 4px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: default;
+    }
+    .btn.ghost { background: #eef2f8; color: #334; }
+    .btn.primary { background: #0b3d91; color: #fff; }
+    .note { margin-top: 10px; font-size: 11px; color: #667; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <div class="emblem">BR</div>
+    <div>
+      <h1>Government of Bihar · ServicePlus / RTPS</h1>
+      <p>Online Application · Permanent Residence Certificate (demo form for CyberControl AutoFill)</p>
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="card">
+      <div class="card-h">
+        <strong>Applicant Details</strong>
+        <span class="badge">STEP 2 OF 4 · PERSONAL INFORMATION</span>
+      </div>
+      <div class="body">
+        <form id="application" autocomplete="off" onsubmit="return false">
+          <div class="grid">
+            <div>
+              <label for="full_name">Full Name <span class="req">*</span></label>
+              <input id="full_name" name="name" type="text" placeholder="As per Aadhaar" />
+            </div>
+            <div>
+              <label for="father_name">Father's / Husband's Name <span class="req">*</span></label>
+              <input id="father_name" name="father_name" type="text" />
+            </div>
+            <div>
+              <label for="dob">Date of Birth <span class="req">*</span></label>
+              <input id="dob" name="dob" type="text" placeholder="DD/MM/YYYY" />
+            </div>
+            <div>
+              <label for="gender">Gender <span class="req">*</span></label>
+              <select id="gender" name="gender">
+                <option value="">-- Select --</option>
+                <option value="MALE">Male</option>
+                <option value="FEMALE">Female</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div>
+              <label for="aadhaar_number">Aadhaar Number <span class="req">*</span></label>
+              <input id="aadhaar_number" name="aadhaar_number" type="text" inputmode="numeric" maxlength="12" />
+            </div>
+            <div>
+              <label for="phone">Mobile Number <span class="req">*</span></label>
+              <input id="phone" name="phone" type="tel" />
+            </div>
+            <div class="full">
+              <label for="address">Address <span class="req">*</span></label>
+              <textarea id="address" name="address" placeholder="House / Mohalla / Village"></textarea>
+            </div>
+            <div>
+              <label for="village">Village / Ward</label>
+              <input id="village" name="village" type="text" />
+            </div>
+            <div>
+              <label for="district">District <span class="req">*</span></label>
+              <input id="district" name="district" type="text" />
+            </div>
+            <div>
+              <label for="state">State <span class="req">*</span></label>
+              <input id="state" name="state" type="text" />
+            </div>
+            <div>
+              <label for="pincode">PIN Code <span class="req">*</span></label>
+              <input id="pincode" name="pincode" type="text" maxlength="6" />
+            </div>
+            <div>
+              <label for="post_office">Post Office</label>
+              <input id="post_office" name="post_office" type="text" />
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn ghost" type="button">Save Draft</button>
+            <button class="btn primary" type="button">Continue</button>
+          </div>
+          <p class="note">Fields empty until CyberControl AutoFill runs from a saved customer profile.</p>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

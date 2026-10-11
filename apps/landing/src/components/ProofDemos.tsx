@@ -1,7 +1,8 @@
 /**
- * NPCI-style product proof: silent WebM clips from fictional HTML fixtures
- * (scripts/record-proof-clips.mjs + public/proof/record-*.html), muted / autoplay / loop.
- * No live café data — see issue #331. Re-record with: pnpm record:proof
+ * NPCI-style product proof: silent WebM clips from pixel-exact product UI
+ * (real Hub + unpacked extension) with fictional demo fixtures via local stub APIs.
+ * See issue #331. Re-record with: pnpm record:pixel
+ * Fixture fallback: pnpm record:proof
  */
 import { ArrowRight, Check } from "lucide-react";
 
@@ -35,7 +36,7 @@ function SilentProofVideo({
         </div>
         <div className="truncate text-[11px] font-medium text-paper/80">{label}</div>
         <span className="ml-auto rounded-full bg-marigold/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-marigold">
-          Demo
+          Product recording · real UI · demo data
         </span>
       </div>
       <video
@@ -56,7 +57,7 @@ export function FormFillClip() {
   return (
     <SilentProofVideo
       src={CLIP_SRC.form}
-      label="Extension AutoFill · Fill Form on a demo portal"
+      label="Extension AutoFill · real UI · demo portal"
     />
   );
 }
@@ -78,10 +79,10 @@ const BANDS: ProofBand[] = [
     id: "proof-forms",
     eyebrow: "Form AutoFill",
     title: "Extension Fill on a portal form — from a saved profile",
-    body: "Product demo of the CyberControl Chrome extension: portal form open, popup visible, Fill Form clicked, fields populate from a fictional customer profile. Review stays with the café before submit.",
+    body: "Pixel-exact recording of the real CyberControl Chrome extension on a demo portal form: popup loads the fictional Ananya Demo profile, Fill Form runs, fields populate. Review stays with the café before submit.",
     bullets: [
-      "Matches the real extension paper UI (Fill Form)",
-      "Uses a demo profile — no live café data",
+      "Real unpacked extension UI (not a stylized mock)",
+      "Fictional Ananya Demo profile — no live café data",
       "You review before submit — control stays with the café",
     ],
     cta: { href: "#extension", label: "Get the AutoFill extension" },
@@ -92,7 +93,7 @@ const BANDS: ProofBand[] = [
     id: "proof-wa",
     eyebrow: "WhatsApp Documents",
     title: "From WhatsApp chat → customer folder, not phone chaos",
-    body: "Product demo of Documents intake: a fictional chat sends files, then they land in the customer folder — the desk stops hunting through phones.",
+    body: "Pixel-exact Hub Documents desk with fictional demo chats and files — the same UI operators use, mocked locally so no live café data appears.",
     bullets: ["Chat + files in one place", "Linked to the customer", "Ready for forms and printing"],
     cta: { href: `${APP_URL}/app/whatsapp`, label: "Open WhatsApp desk" },
     clip: "wa",
@@ -103,7 +104,7 @@ const BANDS: ProofBand[] = [
     id: "proof-customers",
     eyebrow: "Customer Profiles",
     title: "Every return visit starts with memory, not a blank form",
-    body: "Product demo of the Hub Customers list: household rows, open a person, see identity ready for AutoFill — all fictional demo data.",
+    body: "Pixel-exact Hub Customers list recorded from the real frontend: household rows and person profiles filled with fictional demo fixtures.",
     bullets: ["Search by name or phone", "Documents attached", "History across visits"],
     cta: { href: `${APP_URL}/app/customers`, label: "See customer list" },
     clip: "customers",
@@ -113,7 +114,7 @@ const BANDS: ProofBand[] = [
     id: "proof-files",
     eyebrow: "File Manager",
     title: "Browse documents like a real drive — per customer",
-    body: "Product demo of File Manager chrome: per-customer crumbs and document tiles, with the same Hub sidebar operators use.",
+    body: "Pixel-exact File Manager from the real Hub chrome: per-customer folders and document tiles, driven by mocked demo drive fixtures.",
     bullets: ["Per-customer folders", "Preview before print", "Fast find at the counter"],
     cta: { href: `${APP_URL}/app/files`, label: "Open File Manager" },
     clip: "files",
@@ -124,7 +125,7 @@ const BANDS: ProofBand[] = [
     id: "proof-photo",
     eyebrow: "Photo & PDF Tools",
     title: "Passport photos and scans that match counter rules",
-    body: "Product demo of Photos: before → print-ready sizing and export — the rules that reject applications when wrong.",
+    body: "Pixel-exact Photos / Media Desk from the real Hub: Photo Editor and PDF Tool tiles operators open at the counter.",
     bullets: ["Exact sizes (e.g. 4.5×3.5)", "Print-ready export", "PDF tools for scans"],
     cta: { href: `${APP_URL}/app/photos`, label: "Open photo tools" },
     clip: "photo",
@@ -134,7 +135,7 @@ const BANDS: ProofBand[] = [
     id: "proof-workspace",
     eyebrow: "Operator Workspace",
     title: "One signed-in desk for the whole café day",
-    body: "Product demo of the Hub shell: Today workspace tiles and the real sidebar (Customers, Documents, Files, Photos).",
+    body: "Pixel-exact Hub Today workspace from the real app shell: queue tiles and the live sidebar (Customers, Documents, Files, Photos).",
     bullets: ["Single login", "Tools in one sidebar", "Built for Hindi + English desks"],
     cta: { href: APP_URL, label: "Sign in to workspace" },
     clip: "workspace",
@@ -155,7 +156,7 @@ export function ProofBands() {
             Proof for every part of CyberControl
           </h2>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
-            Silent product demos of Hub + extension UI (fictional data) — muted, looping, no soundtrack.
+            Silent product recordings of the real Hub + extension UI with fictional demo data — muted, looping, no soundtrack.
           </p>
         </div>
 
