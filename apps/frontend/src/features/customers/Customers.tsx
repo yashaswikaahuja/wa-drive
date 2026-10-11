@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Trash, MagnifyingGlass, Users } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import PageHeader from '../../shared/PageHeader';
 
 const INK = 'hsl(var(--pt-ink))';
 
@@ -68,15 +69,15 @@ export default function Customers() {
 
   return (
     <div className="max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="pt-display text-lg font-bold" style={{ color: INK }}>Customers</h1>
-          <p className="text-sm pt-muted">{households.length} households</p>
-        </div>
-        <button onClick={() => setShowCreate(!showCreate)} className="btn-primary flex items-center gap-2">
-          <Plus size={16} /> New Customer
-        </button>
-      </div>
+      <PageHeader
+        title="Customers"
+        subtitle={`${households.length} household${households.length === 1 ? '' : 's'} in this workspace`}
+        actions={
+          <button onClick={() => setShowCreate(!showCreate)} className="btn-primary flex items-center gap-2">
+            <Plus size={16} /> New Customer
+          </button>
+        }
+      />
 
       {showCreate && (
         <form onSubmit={handleCreate} className="card mb-4 flex gap-3 items-end">
@@ -120,15 +121,20 @@ export default function Customers() {
             const rows = qMatch.length > 0 ? qMatch : h.persons;
 
             return (
-              <div key={h.phone} className="rounded-lg overflow-hidden" style={{ background: 'hsl(var(--pt-secondary) / 0.35)' }}>
-                <div className="px-4 pt-2 pb-1 flex items-center justify-between">
-                  <p className="text-[11px] pt-muted">
+              <div
+                key={h.phone}
+                className="rounded-2xl overflow-hidden"
+                style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
+              >
+                <div className="px-4 pt-2.5 pb-1.5 flex items-center justify-between" style={{ background: 'hsl(var(--pt-secondary) / 0.45)' }}>
+                  <p className="text-[11px] pt-muted font-medium">
                     {h.phone.match(/^\d{10,13}$/) ? `+${h.phone}` : h.phone}
                     {' · '}{h.persons.length} {h.persons.length === 1 ? 'person' : 'people'}
                   </p>
                   <button
                     onClick={(e) => deleteHousehold(h.phone, e)}
-                    className="p-1 pt-muted hover:text-red-500 rounded"
+                    className="p-1.5 rounded-lg transition-colors"
+                    style={{ color: 'hsl(var(--pt-muted))' }}
                     title="Delete household"
                   >
                     <Trash size={13} />
@@ -139,21 +145,22 @@ export default function Customers() {
                     key={p.id}
                     type="button"
                     onClick={() => openPerson(h.phone, p.id)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all hover:bg-[hsl(var(--pt-secondary))] border-t border-white/5"
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all hover:bg-[hsl(var(--pt-secondary)/0.55)] border-t"
+                    style={{ borderColor: 'hsl(var(--pt-border-soft))' }}
                   >
                     <div
-                      className="w-9 h-9 rounded-md flex items-center justify-center font-semibold text-sm shrink-0"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center font-semibold text-sm shrink-0"
                       style={{ background: 'hsl(var(--pt-marigold) / 0.14)', color: 'hsl(var(--pt-marigold-deep))' }}
                     >
                       {(p.displayLabel || p.name || '?')[0]?.toUpperCase() || '?'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate" style={{ color: INK }}>
+                      <p className="text-sm font-semibold truncate" style={{ color: INK }}>
                         {p.displayLabel || p.name || 'Unnamed'}
                       </p>
                       <p className="text-xs pt-muted capitalize">{p.relationship || 'self'}</p>
                     </div>
-                    <span className="text-[11px] text-[#0a84ff]">Open →</span>
+                    <span className="text-[11px] font-semibold" style={{ color: 'hsl(var(--marigold-deep))' }}>Open →</span>
                   </button>
                 ))}
               </div>

@@ -80,13 +80,22 @@ export default function Settings() {
 
       <section className="card mb-4">
         <div className="flex items-center gap-2 mb-4">
-          <User size={16} className="text-gray-400" />
-          <h3 className="text-sm font-medium text-gray-300">Account</h3>
+          <User size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Account</h3>
         </div>
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between"><span className="text-gray-500">Name</span><span className="text-gray-200">{user?.name}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Email</span><span className="text-gray-200">{user?.email}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Role</span><span className="badge badge-info">{user?.role}</span></div>
+          <div className="flex justify-between gap-3">
+            <span style={{ color: 'hsl(var(--pt-muted))' }}>Name</span>
+            <span className="font-medium text-right" style={{ color: 'hsl(var(--ink))' }}>{user?.name}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span style={{ color: 'hsl(var(--pt-muted))' }}>Email</span>
+            <span className="font-medium text-right truncate" style={{ color: 'hsl(var(--ink))' }}>{user?.email}</span>
+          </div>
+          <div className="flex justify-between gap-3 items-center">
+            <span style={{ color: 'hsl(var(--pt-muted))' }}>Role</span>
+            <span className="badge badge-info capitalize">{user?.role}</span>
+          </div>
         </div>
 
         <PasswordPanel
@@ -98,15 +107,19 @@ export default function Settings() {
           }}
         />
 
-        <button onClick={logout} className="mt-4 btn-ghost text-red-400 hover:text-red-300 flex items-center gap-2 px-0">
+        <button
+          onClick={logout}
+          className="mt-4 btn-ghost flex items-center gap-2 px-0"
+          style={{ color: 'hsl(var(--chaos))' }}
+        >
           <SignOut size={14} /> Sign out
         </button>
       </section>
 
       <section className="card mb-4">
         <div className="flex items-center gap-2 mb-4">
-          <SealCheck size={16} className="text-gray-400" />
-          <h3 className="text-sm font-medium text-gray-300">Contact verification</h3>
+          <SealCheck size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Contact verification</h3>
         </div>
         <div className="space-y-4">
           <ContactRow channel="email" Icon={EnvelopeSimple} label="Email"
@@ -124,13 +137,13 @@ export default function Settings() {
 
       <section className="card mb-4">
         <div className="flex items-center gap-2 mb-4">
-          <GoogleDriveLogo size={16} className="text-gray-400" />
-          <h3 className="text-sm font-medium text-gray-300">Google Drive</h3>
+          <GoogleDriveLogo size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Google Drive</h3>
         </div>
-        <p className="text-xs text-gray-500 mb-4">Connect Google Drive to receive WhatsApp files</p>
+        <p className="text-xs mb-4" style={{ color: 'hsl(var(--pt-muted))' }}>Connect Google Drive to receive WhatsApp files</p>
         <div className="flex items-center gap-3">
           {driveStatus === 'connected' ? <CloudCheck size={20} className="text-emerald-400" /> : driveStatus === 'loading' ? <Spinner size={20} className="text-amber-400 animate-spin" /> : <CloudSlash size={20} className="text-red-400" />}
-          <span className="text-sm text-gray-200">{driveStatus === 'connected' ? 'Connected' : driveStatus === 'loading' ? 'Checking...' : 'Disconnected'}</span>
+          <span className="text-sm font-medium" style={{ color: 'hsl(var(--ink))' }}>{driveStatus === 'connected' ? 'Connected' : driveStatus === 'loading' ? 'Checking...' : 'Disconnected'}</span>
           {useAuthStore.getState().user?.role === 'admin' ? (
             <button onClick={connectDrive} disabled={driveStatus === 'loading'} className="ml-auto btn-primary text-xs">
               {driveStatus === 'connected' ? 'Reconnect' : 'Connect Drive'}
@@ -143,10 +156,16 @@ export default function Settings() {
 
 
       <section className="card">
-        <h3 className="text-sm font-medium text-gray-300 mb-3">Platform</h3>
+        <h3 className="text-sm font-semibold mb-3" style={{ color: 'hsl(var(--ink))' }}>Platform</h3>
         <div className="space-y-2 text-xs">
-          <div className="flex justify-between"><span className="text-gray-500">Backend</span><span className="text-gray-400 font-mono truncate ml-4">{API_URL}</span></div>
-          <div className="flex justify-between"><span className="text-gray-500">Workspace</span><span className="text-gray-400 font-mono">{user?.workspaceId?.slice(0, 8)}</span></div>
+          <div className="flex justify-between gap-3">
+            <span style={{ color: 'hsl(var(--pt-muted))' }}>Backend</span>
+            <span className="font-mono truncate ml-4" style={{ color: 'hsl(var(--ink-soft))' }}>{API_URL}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span style={{ color: 'hsl(var(--pt-muted))' }}>Workspace</span>
+            <span className="font-mono" style={{ color: 'hsl(var(--ink-soft))' }}>{user?.workspaceId?.slice(0, 8)}</span>
+          </div>
         </div>
       </section>
 

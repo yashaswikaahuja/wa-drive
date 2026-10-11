@@ -129,7 +129,7 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
       </div>
       <div className="flex-1 min-w-0 flex flex-col justify-between">
         <div>
-          <p className="text-sm font-medium text-white">{title}</p>
+          <p className="text-sm font-medium">{title}</p>
           <p className="text-[11px] text-gray-500 mt-0.5">{badge} · {timeAgo(msg.timestamp)}{category && <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-medium ${category.color}`}>{category.category}</span>}</p>
         </div>
         {!selectionMode && (
@@ -156,7 +156,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
         {!chat.dpUrl && (chat.name[0]?.toUpperCase() || '?')}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-white font-medium truncate">{chat.name} {pinned && <span className="text-[9px] text-gray-500">📌</span>}</p>
+        <p className="text-sm font-medium truncate" style={{ color: 'hsl(var(--ink))' }}>{chat.name} {pinned && <span className="text-[9px] text-gray-500">📌</span>}</p>
         <p className="text-[11px] text-gray-500">{/^\d{10,13}$/.test(chat.phone) ? `+${chat.phone.slice(0,2)} ${chat.phone.slice(2,7)} ${chat.phone.slice(7)}` : ''} · {chat.newCount} doc{chat.newCount !== 1 ? 's' : ''}</p>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
@@ -759,7 +759,7 @@ export default function WhatsApp() {
         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style={{ background: 'hsl(142 60% 40% / 0.12)' }}>
           <WhatsappLogo size={32} weight="fill" style={{ color: 'hsl(142 64% 34%)' }} />
         </div>
-        <h2 className="text-lg font-bold text-white mb-2">Connect WhatsApp</h2>
+        <h2 className="pt-display text-lg font-bold mb-2" style={{ color: 'hsl(var(--ink))' }}>Connect WhatsApp</h2>
         {useAuthStore.getState().user?.role === 'admin' ? (
           <>
             <p className="text-sm text-gray-500 mb-6">Link your WhatsApp to receive customer documents. Files sent to this number will appear here automatically.</p>
@@ -803,7 +803,7 @@ export default function WhatsApp() {
       <div className={`w-full md:w-72 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`} style={{ borderColor: 'var(--border)', background: 'var(--card)' }}>
         <div className="p-3 border-b flex items-center gap-2" style={{ borderColor: 'var(--border)' }}>
           <span className={`w-2 h-2 rounded-full ${reconnecting ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
-          <span className="text-sm text-white font-medium">Inbox</span>
+          <span className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Inbox</span>
           {reconnecting && <span className="text-[10px] text-amber-400/90">Reconnecting…</span>}
           <span className="text-xs text-gray-500 ml-auto">{sortedChats.length} customers</span>
         </div>
@@ -832,7 +832,7 @@ export default function WhatsApp() {
                 {!activeChat.dpUrl && (activeChat.name[0]?.toUpperCase() || '?')}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{activeChat.name}</p>
+                <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>{activeChat.name}</p>
                 <p className="text-xs text-gray-500">{activeChat.messages.length} documents</p>
               </div>
               {!selectionMode ? (
@@ -888,7 +888,7 @@ export default function WhatsApp() {
             {/* Floating action bar when items selected */}
             {selectionMode && selectedDocs.size > 0 && (
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-5 py-3 rounded-full shadow-xl flex items-center gap-3 z-10" style={{ background: 'var(--primary)' }}>
-                <span className="text-sm font-medium text-white">{selectedDocs.size} selected</span>
+                <span className="text-sm font-medium">{selectedDocs.size} selected</span>
                 <button onClick={startBuildProfile}
                   className="px-3 py-1 bg-white text-gray-900 rounded-full text-xs font-bold hover:bg-gray-100">
                   Build Profile
@@ -1044,7 +1044,7 @@ function CustomerPicker({ onCancel, onConfirm, docCount }: { onCancel: () => voi
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={onCancel}>
       <div onClick={e => e.stopPropagation()} className="bg-[var(--card)] border border-[var(--border)] rounded-xl p-5 max-w-md w-full max-h-[80vh] overflow-y-auto">
-        <h3 className="text-base font-bold text-white mb-1">Build profile from {docCount} document{docCount !== 1 ? 's' : ''}</h3>
+        <h3 className="text-base font-bold mb-1">Build profile from {docCount} document{docCount !== 1 ? 's' : ''}</h3>
         <p className="text-xs text-gray-500 mb-4">Select an existing person, or create a new one</p>
 
         {!showCreate ? (

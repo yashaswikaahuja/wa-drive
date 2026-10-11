@@ -25,7 +25,7 @@ const RELATIONSHIPS = [
 
 function DocThumb({ src, isPdf }: { src: string; isPdf: boolean }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return isPdf ? <FilePdf size={32} className="text-gray-600" /> : <FileText size={32} className="text-gray-600" />;
+  if (failed) return isPdf ? <FilePdf size={32} className="pt-muted" /> : <FileText size={32} className="pt-muted" />;
   return <img src={src} className="w-full h-full object-cover" onError={() => setFailed(true)} />;
 }
 
@@ -273,25 +273,25 @@ export default function CustomerDetail() {
   }
 
   if (loading && !household) return (
-    <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse">
-      <div className="h-6 w-24 rounded bg-white/[0.03]" />
-      <div className="h-16 rounded-2xl bg-white/[0.03]" />
-      <div className="h-40 rounded-2xl bg-white/[0.03]" />
+    <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse" aria-busy="true">
+      <div className="h-6 w-24 rounded" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
+      <div className="h-16 rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
+      <div className="h-40 rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
     </div>
   );
 
   if (notFound || !household) return (
     <div className="max-w-4xl mx-auto pt-4">
-      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0 text-gray-400">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0">
         <ArrowLeft size={15} /> Customers
       </button>
-      <div className="rounded-2xl border border-[hsl(var(--pt-border))] p-6 text-center">
-        <p className="text-sm text-gray-200 mb-1">Customer not found</p>
-        <p className="text-xs text-gray-500 mb-4">
-          No household matches <span className="font-mono text-gray-400">{phone}</span>.
+      <div className="rounded-2xl p-6 text-center" style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))' }}>
+        <p className="text-sm mb-1" style={{ color: 'hsl(var(--pt-ink))' }}>Customer not found</p>
+        <p className="text-xs pt-muted mb-4">
+          No household matches <span className="font-mono">{phone}</span>.
           It may use a different phone format, or the profile was never created.
         </p>
-        {error && <p className="text-xs text-red-400 mb-3">{error}</p>}
+        {error && <p className="text-xs mb-3" style={{ color: 'hsl(var(--chaos))' }}>{error}</p>}
         <button onClick={() => navigate('/app/customers')} className="btn-primary text-xs">Back to Customers</button>
       </div>
     </div>
@@ -303,27 +303,41 @@ export default function CustomerDetail() {
 
   return (
     <div className="max-w-4xl mx-auto pt-4">
-      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0 text-gray-400">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0">
         <ArrowLeft size={15} /> Customers
       </button>
 
       {/* Header — name first, phone secondary */}
       <div className="flex items-center gap-4 mb-8">
-        <div className="w-14 h-14 rounded-2xl bg-[#0a84ff]/10 flex items-center justify-center text-[#0a84ff] text-xl font-semibold shrink-0">
+        <div
+          className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-semibold shrink-0"
+          style={{ background: 'hsl(var(--pt-marigold) / 0.12)', color: 'hsl(var(--pt-marigold-deep))' }}
+        >
           {primaryName[0]?.toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-semibold text-white tracking-tight truncate">{primaryName}</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="pt-display text-2xl font-bold tracking-tight truncate" style={{ color: 'hsl(var(--pt-ink))' }}>{primaryName}</h1>
+          <p className="text-sm pt-muted">
             {phone.match(/^\d{10,13}$/) ? `+${phone}` : phone}
             {household.persons.length > 1 && ` · ${household.persons.length} people`}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => setShowShareModal(true)} disabled={!selectedPerson} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#0a84ff] transition-colors disabled:opacity-40" title="Share profile">
+          <button
+            onClick={() => setShowShareModal(true)}
+            disabled={!selectedPerson}
+            className="flex items-center gap-1.5 text-xs transition-opacity disabled:opacity-40 hover:opacity-80"
+            style={{ color: 'hsl(var(--pt-marigold-deep))' }}
+            title="Share profile"
+          >
             <ShareNetwork size={15} /> Share
           </button>
-          <button onClick={() => setShowImport(true)} className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-[#30d158] transition-colors" title="Import shared profile">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
+            style={{ color: 'hsl(var(--confidence))' }}
+            title="Import shared profile"
+          >
             <Export size={15} /> Import
           </button>
         </div>
@@ -356,14 +370,22 @@ export default function CustomerDetail() {
               </span>
             </button>
           ))}
-          <button onClick={() => setShowAddPerson(true)} className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm text-gray-500 bg-white/[0.03] hover:text-white transition-colors">
+          <button
+            onClick={() => setShowAddPerson(true)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm transition-colors"
+            style={{ color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-secondary))' }}
+          >
             <UserPlus size={14} /> Add
           </button>
         </div>
       )}
       {household.persons.length <= 1 && (
         <div className="mb-6">
-          <button onClick={() => setShowAddPerson(true)} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-white transition-colors">
+          <button
+            onClick={() => setShowAddPerson(true)}
+            className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-80"
+            style={{ color: 'hsl(var(--pt-muted))' }}
+          >
             <UserPlus size={15} /> Add family member
           </button>
         </div>
@@ -375,30 +397,34 @@ export default function CustomerDetail() {
           {/* Readiness — per form (architecture: "SSC 85%, missing 10th marksheet") */}
           <section className="card mb-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Form readiness</h2>
-              <span className="text-xs text-gray-500 tabular-nums">{completeness.filled}/{completeness.total} core fields</span>
+              <h2 className="text-xs uppercase tracking-[0.15em] pt-muted">Form readiness</h2>
+              <span className="text-xs pt-muted tabular-nums">{completeness.filled}/{completeness.total} core fields</span>
             </div>
             {readiness.length === 0 ? (
-              <p className="text-xs text-gray-600">No form data. Visit Find Form to see requirements.</p>
+              <p className="text-xs pt-muted">No form data. Visit Find Form to see requirements.</p>
             ) : (
               <div className="space-y-3">
                 {readiness.slice(0, 5).map((f: any) => {
-                  const color = f.percent >= 80 ? '#30d158' : f.percent >= 50 ? '#ffd60a' : '#ff453a';
+                  const color = f.percent >= 80
+                    ? 'hsl(var(--confidence))'
+                    : f.percent >= 50
+                      ? 'hsl(var(--saffron))'
+                      : 'hsl(var(--chaos))';
                   return (
                     <div key={f.id} className="flex items-center gap-3">
                       <div className="w-28 shrink-0">
-                        <p className="text-sm text-gray-200 truncate">{f.short_name}</p>
+                        <p className="text-sm truncate" style={{ color: 'hsl(var(--pt-ink))' }}>{f.short_name}</p>
                         {f.missing.length > 0 && f.percent < 100 && (
-                          <p className="text-[10px] text-gray-600 truncate">need {f.missing[0].replace(/_/g, ' ')}{f.missing.length > 1 ? ` +${f.missing.length - 1}` : ''}</p>
+                          <p className="text-[10px] pt-muted truncate">need {f.missing[0].replace(/_/g, ' ')}{f.missing.length > 1 ? ` +${f.missing.length - 1}` : ''}</p>
                         )}
                       </div>
-                      <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--pt-secondary))' }}>
                         <div className="h-full rounded-full transition-all"
                           style={{ width: `${f.percent}%`, background: color, transitionTimingFunction: EASE, transitionDuration: '600ms' }} />
                       </div>
                       <span className="text-sm font-semibold tabular-nums w-10 text-right" style={{ color }}>{f.percent}%</span>
                       {f.percent === 100
-                        ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-medium text-[#30d158] shrink-0 w-12 text-right hover:underline">Fill →</a>
+                        ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-medium shrink-0 w-12 text-right hover:underline" style={{ color: 'hsl(var(--confidence))' }}>Fill →</a>
                         : <span className="w-12 shrink-0" />}
                     </div>
                   );
@@ -409,7 +435,7 @@ export default function CustomerDetail() {
 
           {/* Classic sections: Personal / Identity / Contact / Education / Bank / Travel */}
           <section className="mb-6">
-            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500 mb-3 px-1">Profile data</h2>
+            <h2 className="text-xs uppercase tracking-[0.15em] pt-muted mb-3 px-1">Profile data</h2>
             <div className="space-y-3">
               {visibleSections.map((section) => {
                 const raw = personDetail.data || {};
@@ -428,7 +454,7 @@ export default function CustomerDetail() {
                 if (!rows.length) return null;
                 return (
                   <div key={section.id} className="card">
-                    <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wider mb-3 pt-muted">
                       {section.icon ? `${section.icon} ` : ''}{section.title}
                     </p>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -439,21 +465,34 @@ export default function CustomerDetail() {
                         const isEditing = editingField === f.key;
                         return (
                           <div key={f.key} className="flex flex-col gap-0.5">
-                            <span className={`text-[10px] uppercase tracking-wide ${val ? 'text-gray-500' : 'text-[#ff453a]/60'}`}>
+                            <span
+                              className="text-[10px] uppercase tracking-wide"
+                              style={{ color: val ? 'hsl(var(--pt-muted))' : 'hsl(var(--chaos) / 0.7)' }}
+                            >
                               {f.label}{f.required && !val ? ' *' : ''}
                             </span>
                             {isEditing ? (
                               <input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)}
                                 onBlur={() => { if (editValue !== (val || '')) saveField(f.key, editValue); else setEditingField(null); }}
                                 onKeyDown={(e) => { if (e.key === 'Enter') saveField(f.key, editValue); if (e.key === 'Escape') setEditingField(null); }}
-                                className="text-sm bg-[#0a84ff]/10 border border-[#0a84ff]/30 rounded-md px-2 py-1 text-white outline-none w-full" />
+                                className="text-sm rounded-md px-2 py-1 outline-none w-full"
+                                style={{
+                                  background: 'hsl(var(--pt-marigold) / 0.1)',
+                                  border: '1px solid hsl(var(--pt-marigold) / 0.35)',
+                                  color: 'hsl(var(--pt-ink))',
+                                }}
+                              />
                             ) : (
                               <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
                                 className="flex items-center gap-1.5 group text-left">
-                                <span className={`text-sm truncate ${val ? 'text-gray-100' : 'text-gray-600'}`} title={val || ''}>
+                                <span
+                                  className="text-sm truncate"
+                                  style={{ color: val ? 'hsl(var(--pt-ink))' : 'hsl(var(--pt-muted))' }}
+                                  title={val || ''}
+                                >
                                   {val ? (typeof val === 'string' ? val : String(val)) : '—'}
                                 </span>
-                                {docId && <Sparkle size={10} weight="fill" className="text-[#0a84ff]/60 shrink-0" />}
+                                {docId && <Sparkle size={10} weight="fill" className="shrink-0" style={{ color: 'hsl(var(--pt-marigold) / 0.7)' }} />}
                                 {rawVal && typeof rawVal === 'object' && (
                                   <ProvenanceChip
                                     source={rawVal.source}
@@ -462,7 +501,7 @@ export default function CustomerDetail() {
                                     needsReview={rawVal.needsReview}
                                   />
                                 )}
-                                <PencilSimple size={11} className="text-gray-400 opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
+                                <PencilSimple size={11} className="pt-muted opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
                               </button>
                             )}
                           </div>
@@ -473,11 +512,15 @@ export default function CustomerDetail() {
                       <div className="flex gap-2 mt-3">
                         <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
                         <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
-                        <button onClick={handleAddField} className="text-xs text-[#30d158] px-2">Save</button>
-                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs text-gray-500 px-1">✕</button>
+                        <button onClick={handleAddField} className="text-xs px-2" style={{ color: 'hsl(var(--confidence))' }}>Save</button>
+                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs pt-muted px-1">✕</button>
                       </div>
                     ) : (
-                      <button onClick={() => setAddingInSection(section.id)} className="text-xs text-[#0a84ff] hover:text-[#409cff] mt-3 flex items-center gap-1 transition-colors">
+                      <button
+                        onClick={() => setAddingInSection(section.id)}
+                        className="text-xs mt-3 flex items-center gap-1 transition-opacity hover:opacity-80"
+                        style={{ color: 'hsl(var(--pt-marigold-deep))' }}
+                      >
                         <Plus size={12} /> Add field
                       </button>
                     )}
@@ -485,7 +528,7 @@ export default function CustomerDetail() {
                 );
               })}
               {visibleSections.length === 0 && (
-                <p className="text-xs text-gray-600 px-1">No profile details yet — extract from Documents.</p>
+                <p className="text-xs pt-muted px-1">No profile details yet — extract from Documents.</p>
               )}
             </div>
           </section>
@@ -496,8 +539,11 @@ export default function CustomerDetail() {
       {documents.length > 0 && (
         <section className="mb-6">
           <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Documents · {documents.length}</h2>
-            <label className={`flex items-center gap-1.5 text-[11px] text-[#0a84ff] hover:text-[#409cff] cursor-pointer transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <h2 className="text-xs uppercase tracking-[0.15em] pt-muted">Documents · {documents.length}</h2>
+            <label
+              className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-opacity hover:opacity-80 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+              style={{ color: 'hsl(var(--pt-marigold-deep))' }}
+            >
               <UploadSimple size={13} weight="bold" /> {uploading ? 'Uploading…' : 'Upload'}
               <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
@@ -514,17 +560,25 @@ export default function CustomerDetail() {
                   ? `https://drive.google.com/thumbnail?id=${driveId}&sz=w400`
                   : null;
               return (
-                <div key={d.id} className="rounded-xl p-1.5 bg-white/[0.02] border border-white/[0.05]">
-                  <div className="rounded-lg bg-[#1c1c1e] overflow-hidden">
-                    <div className="aspect-[4/3] bg-black/40 flex items-center justify-center overflow-hidden relative">
+                <div
+                  key={d.id}
+                  className="rounded-xl p-1.5"
+                  style={{ background: 'hsl(var(--pt-secondary) / 0.45)', border: '1px solid hsl(var(--pt-border))' }}
+                >
+                  <div className="rounded-lg overflow-hidden" style={{ background: 'hsl(var(--pt-card))' }}>
+                    <div className="aspect-[4/3] flex items-center justify-center overflow-hidden relative" style={{ background: 'hsl(var(--pt-secondary))' }}>
                       {thumb
                         ? <DocThumb src={thumb} isPdf={isPdf} />
-                        : <FileText size={32} className="text-gray-600" />}
+                        : <FileText size={32} className="pt-muted" />}
                     </div>
                     <div className="p-2.5">
-                      <p className="text-[11px] text-gray-400 truncate mb-1.5">{ext.toUpperCase()} · {new Date(d.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                      <button onClick={() => handleExtract(d)} disabled={extracting === d.id || !selectedPerson}
-                        className="flex items-center gap-1 text-[11px] text-[#0a84ff] hover:text-[#409cff] disabled:text-gray-600 transition-colors">
+                      <p className="text-[11px] pt-muted truncate mb-1.5">{ext.toUpperCase()} · {new Date(d.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
+                      <button
+                        onClick={() => handleExtract(d)}
+                        disabled={extracting === d.id || !selectedPerson}
+                        className="flex items-center gap-1 text-[11px] transition-opacity hover:opacity-80 disabled:opacity-40"
+                        style={{ color: 'hsl(var(--pt-marigold-deep))' }}
+                      >
                         <Sparkle size={11} weight="fill" /> {extracting === d.id ? 'Extracting…' : 'Extract data'}
                       </button>
                     </div>
@@ -540,14 +594,20 @@ export default function CustomerDetail() {
       {documents.length === 0 && (
         <section className="mb-6">
           <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-xs uppercase tracking-[0.15em] text-gray-500">Documents</h2>
-            <label className={`flex items-center gap-1.5 text-[11px] text-[#0a84ff] hover:text-[#409cff] cursor-pointer transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <h2 className="text-xs uppercase tracking-[0.15em] pt-muted">Documents</h2>
+            <label
+              className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-opacity hover:opacity-80 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+              style={{ color: 'hsl(var(--pt-marigold-deep))' }}
+            >
               <UploadSimple size={13} weight="bold" /> {uploading ? 'Uploading…' : 'Upload'}
               <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
             </label>
           </div>
-          <div className="rounded-xl border border-dashed border-white/10 p-6 flex flex-col items-center gap-2 text-gray-500 text-xs">
-            <UploadSimple size={24} className="text-gray-600" />
+          <div
+            className="rounded-xl border border-dashed p-6 flex flex-col items-center gap-2 text-xs pt-muted"
+            style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-secondary) / 0.35)' }}
+          >
+            <UploadSimple size={24} className="pt-muted" />
             <p>No documents yet. Upload a hardcopy scan to get started.</p>
           </div>
         </section>
@@ -568,22 +628,26 @@ export default function CustomerDetail() {
       {/* Share modal */}
       {showShareModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); setCopiedCode(false); setCopiedLink(false); }}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#1c1c1e] border border-white/10 p-5">
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl p-5"
+            style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-lift)' }}
+          >
             <div className="flex items-center gap-2 mb-3">
-              <ShareNetwork size={16} className="text-[#0a84ff]" />
-              <h3 className="text-sm font-semibold text-white">Share Profile</h3>
+              <ShareNetwork size={16} style={{ color: 'hsl(var(--pt-marigold-deep))' }} />
+              <h3 className="pt-display text-sm font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>Share Profile</h3>
             </div>
 
             {!shareToken ? (
               <>
-                <p className="text-xs text-gray-400 mb-4">Share this profile with another cybercafe. Optionally restrict to a specific recipient.</p>
+                <p className="text-xs pt-muted mb-4">Share this profile with another cybercafe. Optionally restrict to a specific recipient.</p>
                 <div className="space-y-3 mb-4">
                   <div>
-                    <label className="text-[11px] text-gray-500 block mb-1">Recipient email (optional)</label>
+                    <label className="text-[11px] pt-muted block mb-1">Recipient email (optional)</label>
                     <input value={shareEmail} onChange={e => setShareEmail(e.target.value)} placeholder="cafe@example.com" className="input-field text-xs w-full" />
                   </div>
                   <div>
-                    <label className="text-[11px] text-gray-500 block mb-1">Recipient phone (optional)</label>
+                    <label className="text-[11px] pt-muted block mb-1">Recipient phone (optional)</label>
                     <input value={sharePhone} onChange={e => setSharePhone(e.target.value)} placeholder="9876543210" className="input-field text-xs w-full" />
                   </div>
                 </div>
@@ -591,24 +655,36 @@ export default function CustomerDetail() {
               </>
             ) : (
               <>
-                <p className="text-xs text-gray-400 mb-3">Share this code or link with the recipient. Valid for 7 days.</p>
+                <p className="text-xs pt-muted mb-3">Share this code or link with the recipient. Valid for 7 days.</p>
                 <div className="space-y-3">
                   <div>
-                    <label className="text-[11px] text-gray-500 block mb-1">Share Code</label>
+                    <label className="text-[11px] pt-muted block mb-1">Share Code</label>
                     <div className="flex items-center gap-2">
                       <input readOnly value={shareToken} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
-                      <button onClick={() => { navigator.clipboard.writeText(shareToken); setCopiedCode(true); }} disabled={copiedCode}
-                        className={`p-2 rounded-lg transition-all ${copiedCode ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(shareToken); setCopiedCode(true); }}
+                        disabled={copiedCode}
+                        className="p-2 rounded-lg transition-all"
+                        style={copiedCode
+                          ? { background: 'hsl(var(--confidence) / 0.1)', color: 'hsl(var(--confidence))' }
+                          : { background: 'hsl(var(--pt-secondary))', color: 'hsl(var(--pt-muted))' }}
+                      >
                         {copiedCode ? <Check size={15} weight="bold" /> : <CopySimple size={15} />}
                       </button>
                     </div>
                   </div>
                   <div>
-                    <label className="text-[11px] text-gray-500 block mb-1">Public Link</label>
+                    <label className="text-[11px] pt-muted block mb-1">Public Link</label>
                     <div className="flex items-center gap-2">
                       <input readOnly value={`${window.location.origin}/shared/${shareToken}`} className="input-field text-xs font-mono flex-1" onClick={e => (e.target as HTMLInputElement).select()} />
-                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`); setCopiedLink(true); }} disabled={copiedLink}
-                        className={`p-2 rounded-lg transition-all ${copiedLink ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'}`}>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`); setCopiedLink(true); }}
+                        disabled={copiedLink}
+                        className="p-2 rounded-lg transition-all"
+                        style={copiedLink
+                          ? { background: 'hsl(var(--confidence) / 0.1)', color: 'hsl(var(--confidence))' }
+                          : { background: 'hsl(var(--pt-secondary))', color: 'hsl(var(--pt-muted))' }}
+                      >
                         {copiedLink ? <Check size={15} weight="bold" /> : <CopySimple size={15} />}
                       </button>
                     </div>
@@ -616,7 +692,7 @@ export default function CustomerDetail() {
                 </div>
               </>
             )}
-            <button onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); setCopiedCode(false); setCopiedLink(false); }} className="mt-4 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
+            <button onClick={() => { setShowShareModal(false); setShareToken(null); setShareEmail(''); setSharePhone(''); setCopiedCode(false); setCopiedLink(false); }} className="mt-4 text-xs pt-muted transition-opacity hover:opacity-80">Close</button>
           </div>
         </div>
       )}
@@ -624,23 +700,38 @@ export default function CustomerDetail() {
       {/* Import modal */}
       {showImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => { setShowImport(false); setImportMsg(''); }}>
-          <div onClick={e => e.stopPropagation()} className="w-full max-w-sm rounded-2xl bg-[#1c1c1e] border border-white/10 p-5">
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-sm rounded-2xl p-5"
+            style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-lift)' }}
+          >
             <div className="flex items-center gap-2 mb-3">
-              <Export size={16} className="text-[#30d158]" />
-              <h3 className="text-sm font-semibold text-white">Import Shared Profile</h3>
+              <Export size={16} style={{ color: 'hsl(var(--confidence))' }} />
+              <h3 className="pt-display text-sm font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>Import Shared Profile</h3>
             </div>
-            <p className="text-xs text-gray-400 mb-3">Paste the share code from another cybercafe.</p>
+            <p className="text-xs pt-muted mb-3">Paste the share code from another cybercafe.</p>
             <div className="flex items-center gap-2">
               <input value={importToken} onChange={e => setImportToken(e.target.value)} placeholder="Paste share code" className="input-field text-xs font-mono flex-1" />
               <button onClick={handleImport} disabled={!importToken.trim()} className="btn-primary text-xs shrink-0 disabled:opacity-50">Import</button>
             </div>
-            {importMsg && <p className={`text-xs mt-3 ${importMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'}`}>{importMsg}</p>}
-            <button onClick={() => { setShowImport(false); setImportMsg(''); }} className="mt-3 text-xs text-gray-500 hover:text-white transition-colors">Close</button>
+            {importMsg && (
+              <p className="text-xs mt-3" style={{ color: importMsg.startsWith('✓') ? 'hsl(var(--confidence))' : 'hsl(var(--chaos))' }}>
+                {importMsg}
+              </p>
+            )}
+            <button onClick={() => { setShowImport(false); setImportMsg(''); }} className="mt-3 text-xs pt-muted transition-opacity hover:opacity-80">Close</button>
           </div>
         </div>
       )}
 
-      {error && <div className="rounded-xl bg-[#ff453a]/10 border border-[#ff453a]/20 p-3 mt-4 text-sm text-[#ff453a]">{error}</div>}
+      {error && (
+        <div
+          className="rounded-xl p-3 mt-4 text-sm"
+          style={{ background: 'hsl(var(--chaos) / 0.1)', border: '1px solid hsl(var(--chaos) / 0.25)', color: 'hsl(var(--chaos))' }}
+        >
+          {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -651,11 +742,11 @@ function AddPersonForm({ onSubmit, onCancel }: { onSubmit: (f: any) => void; onC
   return (
     <div className="card flex gap-3 items-end">
       <div className="flex-1">
-        <label className="text-xs text-gray-400 mb-1 block">Name</label>
+        <label className="text-xs pt-muted mb-1 block">Name</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Family member name" className="input-field" />
       </div>
       <div className="w-36">
-        <label className="text-xs text-gray-400 mb-1 block">Relationship</label>
+        <label className="text-xs pt-muted mb-1 block">Relationship</label>
         <select value={relationship} onChange={e => setRelationship(e.target.value)} className="input-field">
           {RELATIONSHIPS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
@@ -696,13 +787,17 @@ function ExtractionConfirm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onCancel}>
-      <div onClick={e => e.stopPropagation()} className="w-full max-w-lg rounded-[1.5rem] p-1.5 bg-white/[0.03] border border-white/[0.08] max-h-[85vh] flex flex-col">
-        <div className="rounded-[1.1rem] bg-[#1c1c1e] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)] p-5 flex flex-col min-h-0">
+      <div
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-lg rounded-2xl max-h-[85vh] flex flex-col overflow-hidden"
+        style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-lift)' }}
+      >
+        <div className="p-5 flex flex-col min-h-0">
           <div className="flex items-center gap-2 mb-1">
-            <Sparkle size={18} weight="fill" className="text-[#0a84ff]" />
-            <p className="text-base font-semibold text-white">Review extracted data</p>
+            <Sparkle size={18} weight="fill" style={{ color: 'hsl(var(--pt-marigold))' }} />
+            <p className="pt-display text-base font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>Review extracted data</p>
           </div>
-          <p className="text-xs text-gray-500 mb-3">Uncheck to skip. Edit values inline. Confirm to save.</p>
+          <p className="text-xs pt-muted mb-3">Uncheck to skip. Edit values inline. Confirm to save.</p>
           <ExtractProfileTarget
             value={target}
             onChange={setTarget}
@@ -713,8 +808,8 @@ function ExtractionConfirm({
             {Object.entries(suggestions).map(([k, v]: [string, any]) => (
               <label key={k} className="flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" checked={!!accepted[k]} onChange={() => toggle(k)}
-                  className="w-4 h-4 rounded accent-[#0a84ff]" />
-                <span className="text-xs text-gray-400 w-28 capitalize shrink-0">{k.replace(/_/g, ' ')}</span>
+                  className="w-4 h-4 rounded accent-[hsl(var(--pt-marigold))]" />
+                <span className="text-xs pt-muted w-28 capitalize shrink-0">{k.replace(/_/g, ' ')}</span>
                 <input value={accepted[k]?.value || v.value || ''} onChange={e => updateValue(k, e.target.value)} disabled={!accepted[k]}
                   className="input-field text-xs py-1.5 flex-1 disabled:opacity-40" />
               </label>
@@ -730,7 +825,7 @@ function ExtractionConfirm({
             </button>
             <button onClick={onCancel} disabled={saving} className="btn-secondary disabled:opacity-50">Cancel</button>
           </div>
-          {error && <p className="text-xs text-[#ff453a] mt-3">{error}</p>}
+          {error && <p className="text-xs mt-3" style={{ color: 'hsl(var(--chaos))' }}>{error}</p>}
         </div>
       </div>
     </div>
