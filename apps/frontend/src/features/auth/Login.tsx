@@ -141,17 +141,22 @@ export default function Login() {
   };
 
   return (
-    <div className="pt-paper min-h-[100dvh] flex items-center justify-center px-4">
-      <div className="w-full max-w-sm p-8 card">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ background: 'hsl(var(--pt-marigold) / 0.15)' }}>
-            <Lightning size={20} weight="fill" style={{ color: 'hsl(var(--pt-marigold-deep))' }} />
-          </div>
-          <div>
-            <h1 className="pt-display text-lg font-bold tracking-tight" style={{ color: 'hsl(var(--pt-ink))' }}>CyberControl</h1>
-            <p className="text-xs pt-muted">Operator Platform</p>
+    <div className="pt-paper min-h-[100dvh] flex items-center justify-center px-4 py-10">
+      <div className="w-full max-w-sm overflow-hidden rounded-2xl" style={{ boxShadow: 'var(--shadow-lift)', border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}>
+        <div className="px-8 pt-7 pb-5" style={{ background: 'linear-gradient(180deg, hsl(var(--ink)) 0%, hsl(220 40% 14%) 100%)' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--marigold) / 0.2)' }}>
+              <Lightning size={22} weight="fill" style={{ color: 'hsl(var(--marigold))' }} />
+            </div>
+            <div>
+              <h1 className="pt-display text-lg font-bold tracking-tight text-white">
+                Cyber<span style={{ color: 'hsl(var(--marigold))' }}>Control</span>
+              </h1>
+              <p className="text-[11px] text-white/55">Operator workspace for Indian cybercafés</p>
+            </div>
           </div>
         </div>
+        <div className="p-8 pt-6">
 
         {mode === 'verify' ? (
           <form onSubmit={handleVerify} className="space-y-4">
@@ -266,6 +271,7 @@ export default function Login() {
         </p>
         </>
         )}
+        </div>
       </div>
     </div>
   );

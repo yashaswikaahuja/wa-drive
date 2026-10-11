@@ -3,6 +3,7 @@
  */
 import { Link, useSearchParams } from 'react-router-dom';
 import { Images, FilePdf } from '@phosphor-icons/react';
+import PageHeader from '../../shared/PageHeader';
 
 const JOBS = [
   {
@@ -11,7 +12,7 @@ const JOBS = [
     hindi: 'फोटो',
     desc: 'Background, frame, portal JPG, free print sheet, signature — Save to Drive',
     icon: Images,
-    accent: 'hsl(27 95% 55%)',
+    accent: 'hsl(var(--marigold))',
   },
   {
     to: 'scan',
@@ -19,7 +20,7 @@ const JOBS = [
     hindi: 'PDF',
     desc: 'Scan pages, enhance, Aadhaar layout, multi-page PDF — Save to Drive',
     icon: FilePdf,
-    accent: 'hsl(145 50% 40%)',
+    accent: 'hsl(var(--confidence))',
   },
 ] as const;
 
@@ -30,12 +31,10 @@ export default function MediaDeskHome() {
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
-      <div className="mb-5">
-        <h1 className="text-xl font-semibold tracking-tight">Photos</h1>
-        <p className="text-sm text-[var(--muted-foreground)] mt-1">
-          Two tools only — Photo Editor and PDF Tool. Files live in File Manager / Drive.
-        </p>
-      </div>
+      <PageHeader
+        title="Photos"
+        subtitle="Photo Editor and PDF Tool — files stay in File Manager / Drive."
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {JOBS.map((job) => {
@@ -44,7 +43,10 @@ export default function MediaDeskHome() {
             <Link
               key={job.to}
               to={`${job.to}${suffix}`}
-              className="card group flex gap-4 p-4 md:p-5 hover:border-[hsl(27_95%_55%)] transition-colors items-start"
+              className="card group flex gap-4 p-4 md:p-5 items-start transition-colors"
+              style={{ borderColor: 'hsl(var(--pt-border))' }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--marigold) / 0.55)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--pt-border))'; }}
             >
               <span
                 className="grid place-items-center w-12 h-12 rounded-xl shrink-0 text-white"
@@ -54,12 +56,12 @@ export default function MediaDeskHome() {
               </span>
               <span className="min-w-0">
                 <span className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-base font-semibold group-hover:text-[hsl(27_95%_55%)]">
+                  <span className="text-base font-semibold" style={{ color: 'hsl(var(--ink))' }}>
                     {job.title}
                   </span>
-                  <span className="text-xs text-[var(--muted-foreground)]">{job.hindi}</span>
+                  <span className="text-xs" style={{ color: 'hsl(var(--pt-muted))' }}>{job.hindi}</span>
                 </span>
-                <span className="block text-xs text-[var(--muted-foreground)] mt-1 leading-relaxed">
+                <span className="block text-xs mt-1 leading-relaxed" style={{ color: 'hsl(var(--pt-muted))' }}>
                   {job.desc}
                 </span>
               </span>

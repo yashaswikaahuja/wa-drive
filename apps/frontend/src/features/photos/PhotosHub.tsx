@@ -9,10 +9,16 @@ export default function PhotosHub() {
   const atHome = /\/app\/photos\/?$/.test(loc.pathname);
 
   return (
-    <div className="pt-paper flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
+    <div className="flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
       {!atHome && (
-        <div className="px-3 py-2 border-b shrink-0" style={{ borderColor: 'hsl(var(--pt-border, var(--border)))' }}>
-          <Link to="/app/photos" className="inline-flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] hover:text-[hsl(27_95%_55%)]">
+        <div className="px-3 py-2.5 border-b shrink-0" style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-card) / 0.7)' }}>
+          <Link
+            to="/app/photos"
+            className="inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+            style={{ color: 'hsl(var(--pt-muted))' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--marigold-deep))'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'hsl(var(--pt-muted))'; }}
+          >
             <ArrowLeft size={14} /> Media Desk
           </Link>
         </div>
