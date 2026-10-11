@@ -18,7 +18,7 @@ import { useAuthStore } from '../auth/store';
 import {
   Printer, Camera, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle,
   PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise, FilePdf, Image as ImageIcon,
-  FileVideo, FileAudio, File as FileIcon, Play,
+  FileVideo, FileAudio, File as FileIcon, Play, DotsThree,
 } from '@phosphor-icons/react';
 
 interface Message {
@@ -154,6 +154,8 @@ const ActionBtn = ({ title, onClick, danger, accent, children }: any) => (
 );
 
 const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete, onSetType }: any) => {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
   const { title, kind } = docTitle(msg.fileName || '');
   const cleanName = displayName(msg.fileName || '');
@@ -173,6 +175,15 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
     ? category.category
     : title;
 
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [moreOpen]);
+
   if (msg.text && !msg.fileName) return (
     <div
       className="rounded-2xl rounded-tl-md px-3.5 py-2.5 max-w-[85%] sm:max-w-[70%]"
@@ -186,6 +197,46 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
       <p className="text-[10px] mt-1.5 text-right" style={{ color: 'hsl(var(--pt-muted))' }}>{timeAgo(msg.timestamp)}</p>
     </div>
   );
+
+  const doPrint = () => {
+    if (!driveId) return;
+    getCachedBlob(driveId, async () => {
+      const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+      return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });
+    }).then((blob) => { printBlob(blob); }).catch((err) => {
+      toast.error('Failed to load file: ' + (err.message || 'unknown'));
+    });
+  };
+
+  const doPhotoEditor = () => {
+    if (!driveId) return;
+    const q = new URLSearchParams();
+    q.set('fileId', driveId);
+    if (msg.phone) q.set('phone', msg.phone);
+    if (msg.name) q.set('name', msg.name);
+    window.location.href = `/app/photos/portal?${q}`;
+  };
+
+  const doDownload = () => {
+    if (!driveId) return;
+    getCachedBlob(driveId, async () => {
+      const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
+      return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/octet-stream') });
+    }).then((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = msg.fileName || 'file';
+      a.click();
+    });
+  };
+
+  const doDelete = () => {
+    if (!confirm('Delete this document? This cannot be undone.')) return;
+    api.delete('/drive/files/' + msg.id).then(() => {
+      onDelete(msg.id);
+      toast.success('Document deleted');
+    }).catch(() => toast.error('Failed to delete'));
+  };
 
   return (
     <div
@@ -252,84 +303,76 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
 
       {!selectionMode && (
         <div
-          className="flex flex-wrap items-center gap-1.5 px-3 py-2"
+          className="flex items-center gap-1.5 px-3 py-2"
           style={{
             borderTop: '1px solid hsl(var(--pt-border))',
             background: 'hsl(var(--pt-secondary) / 0.45)',
           }}
         >
           <ActionBtn title="Open" onClick={() => onClick(msg)}>
-            <Eye size={14} /> <span className="hidden sm:inline">Open</span>
+            <Eye size={14} /> <span>Open</span>
           </ActionBtn>
           <ActionBtn
             title={needsType ? 'Set document type' : 'Tag / set type'}
             accent={needsType}
             onClick={(e: any) => { e.stopPropagation(); onSetType?.(msg); }}
           >
-            <Tag size={14} /> <span className="hidden sm:inline">{needsType ? 'Tag' : 'Tag'}</span>
-          </ActionBtn>
-          <ActionBtn
-            title="Print"
-            onClick={(e: any) => {
-              e.stopPropagation();
-              if (!driveId) return;
-              getCachedBlob(driveId, async () => {
-                const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
-                return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });
-              }).then((blob) => { printBlob(blob); }).catch((err) => {
-                toast.error('Failed to load file: ' + (err.message || 'unknown'));
-              });
-            }}
-          >
-            <Printer size={14} />
-          </ActionBtn>
-          <ActionBtn
-            title="Photo Tool"
-            onClick={(e: any) => {
-              e.stopPropagation();
-              if (!driveId) return;
-              const q = new URLSearchParams();
-              q.set('fileId', driveId);
-              if (msg.phone) q.set('phone', msg.phone);
-              if (msg.name) q.set('name', msg.name);
-              window.location.href = `/app/photos/portal?${q}`;
-            }}
-          >
-            <Camera size={14} />
-          </ActionBtn>
-          <ActionBtn
-            title="Download"
-            onClick={(e: any) => {
-              e.stopPropagation();
-              if (!driveId) return;
-              getCachedBlob(driveId, async () => {
-                const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
-                return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/octet-stream') });
-              }).then((blob) => {
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = msg.fileName || 'file';
-                a.click();
-              });
-            }}
-          >
-            <DownloadSimple size={14} />
+            <Tag size={14} /> <span>Tag</span>
           </ActionBtn>
           <div className="flex-1 min-w-[0.5rem]" />
-          <ActionBtn
-            title="Delete"
-            danger
-            onClick={(e: any) => {
-              e.stopPropagation();
-              if (!confirm('Delete this document? This cannot be undone.')) return;
-              api.delete('/drive/files/' + msg.id).then(() => {
-                onDelete(msg.id);
-                toast.success('Document deleted');
-              }).catch(() => toast.error('Failed to delete'));
-            }}
-          >
-            <Trash size={14} />
-          </ActionBtn>
+          <div className="relative" ref={moreRef}>
+            <ActionBtn
+              title="More actions"
+              onClick={(e: any) => { e.stopPropagation(); setMoreOpen((v: boolean) => !v); }}
+            >
+              <DotsThree size={16} weight="bold" />
+            </ActionBtn>
+            {moreOpen && (
+              <div
+                className="absolute right-0 bottom-full mb-1 z-30 min-w-[160px] rounded-xl py-1 overflow-hidden"
+                style={{
+                  background: 'hsl(var(--pt-card))',
+                  border: '1px solid hsl(var(--pt-border))',
+                  boxShadow: 'var(--shadow-lift)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
+                  style={{ color: 'hsl(var(--ink))' }}
+                  onClick={() => { setMoreOpen(false); doPrint(); }}
+                >
+                  <Printer size={14} /> Print
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
+                  style={{ color: 'hsl(var(--ink))' }}
+                  onClick={() => { setMoreOpen(false); doPhotoEditor(); }}
+                >
+                  <Camera size={14} /> Photo Editor
+                </button>
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
+                  style={{ color: 'hsl(var(--ink))' }}
+                  onClick={() => { setMoreOpen(false); doDownload(); }}
+                >
+                  <DownloadSimple size={14} /> Download
+                </button>
+                <div style={{ borderTop: '1px solid hsl(var(--pt-border))', margin: '0.25rem 0' }} />
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(0_70%_50%/0.08)]"
+                  style={{ color: 'hsl(0 65% 42%)' }}
+                  onClick={() => { setMoreOpen(false); doDelete(); }}
+                >
+                  <Trash size={14} /> Delete
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
