@@ -12,18 +12,18 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
 
 const suites = [
-  { name: 'Binding Registry', cmd: 'node extension-dev/tests/perception/test-binding-registry.ts' },
-  { name: 'Revision Manager', cmd: 'node extension-dev/tests/perception/test-revision-manager.ts' },
-  { name: 'Canonical Hash', cmd: 'node extension-dev/tests/perception/test-canonical-hash.ts' },
-  { name: 'Privacy Filter', cmd: 'node extension-dev/tests/perception/test-privacy-filter.ts' },
-  { name: 'Widget Classifier', cmd: 'node extension-dev/tests/perception/test-widget-classifier.ts' },
-  { name: 'Adapter Registry Matrix', cmd: 'node extension-dev/tests/perception/test-adapter-registry-matrix.ts' },
-  { name: 'Page IR Validator', cmd: 'node extension-dev/tests/perception/test-validator.ts' },
-  { name: 'Delta Emitter', cmd: 'node extension-dev/tests/perception/test-delta-emitter.ts' },
-  { name: 'Graph Invariants', cmd: 'node extension-dev/tests/perception/test-graph-invariants.ts' },
-  { name: 'Edge Factory Relationships', cmd: 'node extension-dev/tests/perception/test-edge-factory.ts' },
-  { name: 'Delta Apply Composed Graph', cmd: 'node extension-dev/tests/perception/test-delta-apply.ts' },
-  { name: 'Fail-Closed Graph Invariants', cmd: 'node extension-dev/tests/perception/test-fail-closed-invariants.ts' },
+  { name: 'Binding Registry', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-binding-registry.ts' },
+  { name: 'Revision Manager', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-revision-manager.ts' },
+  { name: 'Canonical Hash', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-canonical-hash.ts' },
+  { name: 'Privacy Filter', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-privacy-filter.ts' },
+  { name: 'Widget Classifier', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-widget-classifier.ts' },
+  { name: 'Adapter Registry Matrix', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-adapter-registry-matrix.ts' },
+  { name: 'Page IR Validator', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-validator.ts' },
+  { name: 'Delta Emitter', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-delta-emitter.ts' },
+  { name: 'Graph Invariants', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-graph-invariants.ts' },
+  { name: 'Edge Factory Relationships', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-edge-factory.ts' },
+  { name: 'Delta Apply Composed Graph', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-delta-apply.ts' },
+  { name: 'Fail-Closed Graph Invariants', cmd: 'node --experimental-strip-types extension-dev/tests/perception/test-fail-closed-invariants.ts' },
 ];
 
 let allPass = true;
