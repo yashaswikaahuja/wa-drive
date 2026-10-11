@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
 const require = createRequire(import.meta.url);
-const nav = require(resolve(ROOT, 'apps/extension/runtime/navigation-contract.js'));
+const nav = require(resolve(ROOT, 'extension-legacy-best/runtime/navigation-contract.js'));
 
 let passed = 0;
 let failed = 0;

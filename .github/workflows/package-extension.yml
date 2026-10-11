@@ -1,9 +1,9 @@
 name: Package extension
 
-# Whenever anything under apps/extension/ changes on master, repackage it into the
-# landing site's public/ folder and commit it back. The landing Vercel project
-# is git-connected, so it redeploys automatically and the "Download extension"
-# button on cybercontrol.fun always serves the latest build.
+# Whenever anything under apps/extension/ (or product-path archives / @cc packages)
+# changes on master, rebuild + pack a clean zip into the landing site's public/
+# folder and commit it back. The landing Vercel project is git-connected, so it
+# redeploys and the "Download extension" button always serves the latest build.
 #
 # The commit is made with GITHUB_TOKEN, which does NOT re-trigger workflows
 # (so no loop); Vercel's GitHub app still receives the push and redeploys.
@@ -14,6 +14,8 @@ on:
     paths:
       - 'apps/extension/**'
       - 'packages/cc-*/**'
+      - 'extension-legacy-best/**'
+      - '.github/workflows/package-extension.yml'
   workflow_dispatch: {}
 
 permissions:
@@ -38,20 +40,23 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install + rebuild extension bundles
+      - name: Install + rebuild + pack extension
         run: |
           pnpm install --frozen-lockfile
-          pnpm --filter cybercontrol-extension build
+          pnpm --filter cybercontrol-extension run pack
 
-      - name: Package extension → apps/landing/public/cybercontrol-extension.zip
+      - name: Copy zip to landing public/
         run: |
           mkdir -p apps/landing/public
-          rm -f apps/landing/public/cybercontrol-extension.zip
-          cd apps/extension
-          # -r recurse, -X drop extra OS attributes; exclude the internal design doc
-          zip -r -X ../landing/public/cybercontrol-extension.zip . -x 'EXTENSION_DESIGN.md'
+          VERSION=$(node -p "require('./apps/extension/manifest.json').version")
+          SRC="release/cybercontrol-extension-${VERSION}.zip"
+          test -f "$SRC"
+          cp -f "$SRC" apps/landing/public/cybercontrol-extension.zip
+          ls -la apps/landing/public/cybercontrol-extension.zip
 
       - name: Commit the repackaged zip (if it changed)
+        # Only push from master — branch/workflow_dispatch runs still verify pack+copy.
+        if: github.ref == 'refs/heads/master'
         run: |
           git config user.name "cybercontrol-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -60,5 +65,7 @@ jobs:
             echo "Extension package unchanged — nothing to commit."
           else
             git commit -m "chore(extension): repackage download zip [skip ci]"
-            git push
+            # Master may move while we pack (other CI bots). Rebase then push.
+            git pull --rebase origin master
+            git push origin HEAD:master
           fi
