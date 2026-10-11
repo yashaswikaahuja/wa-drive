@@ -41,7 +41,7 @@ const PUBLIC_DOMAIN = String(import.meta.env.VITE_PUBLIC_DOMAIN ?? "cybercontrol
 const APP_URL = String(import.meta.env.VITE_APP_URL ?? `https://app.${PUBLIC_DOMAIN}`);
 const SITE_URL = String(import.meta.env.VITE_SITE_URL ?? `https://${PUBLIC_DOMAIN}`);
 const EXTENSION_URL = "/cybercontrol-extension.zip";
-const EXTENSION_VERSION = "5.79";
+const EXTENSION_VERSION = "5.92.29";
 const waEnabled = WHATSAPP_NUMBER.length >= 10;
 
 const waLink = (message: string) =>
@@ -516,85 +516,68 @@ const PillarsStrip = () => (
 const Nav = () => {
   const [open, setOpen] = useState(false);
   const links = [
-    { href: "#story", label: "How it works" },
-    { href: "#humse", label: "For operators" },
-    { href: "#used-for", label: "Used for" },
-    { href: "#memory", label: "Memory" },
+    { href: "#products", label: "Products" },
+    { href: "#humse", label: "Why cafés" },
+    { href: "#memory", label: "How it works" },
+    { href: "#extension", label: "Extension" },
   ];
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-paper/85 backdrop-blur">
-      <div className="container flex h-14 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="grid h-7 w-7 place-items-center rounded-md bg-ink">
+    <header className="sticky top-0 z-50 border-b border-ink/10 bg-ink text-paper">
+      <div className="container flex h-14 items-center justify-between sm:h-16">
+        <a href="/" className="flex items-center gap-2">
+          <div className="grid h-7 w-7 place-items-center rounded-md bg-paper/10 ring-1 ring-paper/15">
             <span className="h-2.5 w-2.5 rounded-sm bg-marigold" />
           </div>
-          <span className="font-display text-lg font-bold tracking-tight text-ink">
-            Cyber<span className="text-marigold-deep">Control</span>
+          <span className="font-display text-lg font-bold tracking-tight">
+            Cyber<span className="text-marigold">Control</span>
           </span>
-        </div>
-        <nav className="hidden items-center gap-7 text-[13px] font-medium text-ink-soft md:flex">
+        </a>
+        <nav className="hidden items-center gap-7 text-[13px] font-medium text-paper/75 md:flex">
           {links.map((l) => (
-            <a key={l.href} href={l.href} className="hover:text-ink">{l.label}</a>
+            <a key={l.href} href={l.href} className="hover:text-paper">{l.label}</a>
           ))}
         </nav>
         <div className="flex items-center gap-2">
           <a
-            href="#extension"
-            title="Get the Chrome extension"
-            className="hidden items-center gap-1.5 rounded-md border border-border px-3 py-2 text-[12.5px] font-medium text-ink-soft transition hover:border-ink/30 hover:text-ink md:inline-flex"
-          >
-            <Download className="h-3.5 w-3.5" aria-hidden="true" /> Extension
-          </a>
-          <a
             href={APP_URL}
-            className="hidden text-[13px] font-medium text-ink-soft hover:text-ink sm:block"
+            className="hidden text-[13px] font-medium text-paper/75 hover:text-paper sm:block"
           >
             Sign in
           </a>
           <a
-            {...demoLinkProps}
-            aria-label="Book a Hindi demo"
-            className="inline-flex items-center gap-1.5 rounded-md bg-whatsapp px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-paper transition hover:brightness-95"
+            href={APP_URL}
+            className="inline-flex items-center gap-1.5 rounded-full bg-marigold px-3.5 py-2 text-[12.5px] font-semibold text-ink shadow-paper transition hover:brightness-105"
           >
-            <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
-            <span className="hidden sm:inline">Book a Hindi Demo</span>
-            <span className="sm:hidden">Demo</span>
+            Get Started
           </a>
           <button
             type="button"
             onClick={() => setOpen((o) => !o)}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
-            className="grid h-9 w-9 place-items-center rounded-md text-ink-soft transition hover:bg-ink/5 md:hidden"
+            className="grid h-9 w-9 place-items-center rounded-md text-paper/80 transition hover:bg-paper/10 md:hidden"
           >
             {open ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
           </button>
         </div>
       </div>
       {open && (
-        <nav data-testid="mobile-menu" className="border-t border-border bg-paper md:hidden">
+        <nav data-testid="mobile-menu" className="border-t border-paper/10 bg-ink md:hidden">
           <div className="container flex flex-col py-2">
             {links.map((l) => (
               <a
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="py-2.5 text-sm font-medium text-ink-soft hover:text-ink"
+                className="py-2.5 text-sm font-medium text-paper/80 hover:text-paper"
               >
                 {l.label}
               </a>
             ))}
             <a
-              href="#extension"
-              onClick={() => setOpen(false)}
-              className="inline-flex items-center gap-2 py-2.5 text-sm font-medium text-ink-soft hover:text-ink"
-            >
-              <Download className="h-4 w-4" aria-hidden="true" /> Get the extension
-            </a>
-            <a
               href={APP_URL}
               onClick={() => setOpen(false)}
-              className="border-t border-border py-2.5 text-sm font-medium text-ink-soft hover:text-ink"
+              className="border-t border-paper/10 py-2.5 text-sm font-medium text-paper/80 hover:text-paper"
             >
               Sign in
             </a>
@@ -606,76 +589,268 @@ const Nav = () => {
 };
 
 /* ------------------------------------------------------------------ */
-/* Hero — the giant explainer                                           */
+/* Hero — explain what CyberControl is (NPCI-style clarity, our brand)  */
 /* ------------------------------------------------------------------ */
 
 const Hero = () => (
-  <section className="relative">
-    <div className="container pt-8 pb-6">
-      {/* eyebrow row */}
+  <section className="relative overflow-hidden border-b border-border bg-paper">
+    <div className="pointer-events-none absolute -right-24 top-10 h-72 w-72 rounded-full bg-marigold/15 blur-3xl" />
+    <div className="pointer-events-none absolute -left-16 bottom-0 h-56 w-56 rounded-full bg-teal/10 blur-3xl" />
+    <div className="container relative py-12 sm:py-16 lg:py-20">
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Tag tone="marigold">
           <span className="h-1.5 w-1.5 rounded-full bg-marigold-deep" />
-          Built for India's 3 lakh cybercafes
+          Operating system for India's cybercafes
         </Tag>
         <Tag tone="ink">Hindi · हिंदी · English</Tag>
-        <Tag tone="teal">800+ government forms mapped</Tag>
+        <Tag tone="teal">Documents · Photos · Forms</Tag>
       </div>
 
-      {/* headline */}
-      <div className="grid items-end gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <h1 className="font-display text-[clamp(2.4rem,5.6vw,4.6rem)] font-bold leading-[0.95] tracking-tight text-ink">
-          Never Start From <span className="scribble-underline">Scratch</span> Again
-          <span className="ml-2 inline-block font-hindi text-marigold-deep">।</span>
+      <div className="max-w-3xl">
+        <h1 className="font-display text-[clamp(2.35rem,5.2vw,4.25rem)] font-bold leading-[0.98] tracking-tight text-ink">
+          Enabling India&apos;s{" "}
+          <span className="scribble-underline">Cybercafes</span>
+          <span className="ml-1 inline-block font-hindi text-marigold-deep">।</span>
         </h1>
-        <p className="text-[15.5px] leading-relaxed text-ink-soft lg:text-right">
-          Remember every customer, organize every document, prepare every photo, and confidently complete any government service —
-          all from one operating system built for the way <em>cybercafes actually work</em>.
+        <p className="mt-5 max-w-2xl text-[16px] leading-relaxed text-ink-soft sm:text-[17px]">
+          CyberControl is the workspace that remembers every customer, organizes every WhatsApp document,
+          prepares photos and PDFs, and fills government portals — so your café never starts from scratch.
         </p>
       </div>
 
-      {/* THE GIANT INFOGRAPHIC */}
-      <div className="relative mt-8 rounded-3xl border border-ink/10 bg-paper-deep/50 p-3 shadow-paper sm:p-5">
-        {/* zones row */}
-        <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-[1fr_auto_1.05fr_auto_1fr]">
-          <ZoneChaos />
-          <ZoneArrow label="ingest" />
-          <ZoneControl />
-          <ZoneArrow label="deliver" />
-          <ZoneConfidence />
-        </div>
-
-        {/* workflow */}
-        <div className="mt-4">
-          <WorkflowStrip />
-        </div>
-
-        {/* pillars */}
-        <div className="mt-4">
-          <PillarsStrip />
-        </div>
-      </div>
-
-      {/* CTA row */}
-      <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <a
+          href="#products"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-marigold px-6 py-3.5 text-[14px] font-semibold text-ink shadow-paper transition hover:brightness-105 sm:w-auto"
+        >
+          Explore Our Products
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </a>
         <a
           {...demoLinkProps}
           aria-label="Book a Hindi demo"
-          className="inline-flex items-center gap-2 rounded-md bg-whatsapp px-5 py-3 text-[14px] font-semibold text-white shadow-paper transition hover:brightness-95"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:bg-paper-deep sm:w-auto"
         >
-          <MessageCircle className="h-4 w-4" aria-hidden="true" />
+          <MessageCircle className="h-4 w-4 text-whatsapp" aria-hidden="true" />
           Book a Hindi Demo
         </a>
         <a
-          href="#demo"
-          className="inline-flex items-center gap-2 rounded-md border border-ink/20 bg-paper px-5 py-3 text-[14px] font-semibold text-ink hover:bg-paper-deep"
+          href={APP_URL}
+          className="text-center text-[13px] font-medium text-ink-soft underline-offset-4 hover:text-ink hover:underline sm:text-left"
         >
-          <Play className="h-4 w-4" aria-hidden="true" />
-          Watch the 90-second story
+          Sign in to workspace
         </a>
-        <span className="text-[12px] text-muted-foreground">
-          Free demo on WhatsApp · works on your existing PC · setup in 7 minutes.
-        </span>
+      </div>
+
+      <p className="mt-5 text-[12.5px] text-muted-foreground">
+        Free Hindi demo on WhatsApp · works on your existing PC · setup in minutes.
+      </p>
+    </div>
+  </section>
+);
+
+/* ------------------------------------------------------------------ */
+/* Products — visual explanation of what the application is             */
+/* ------------------------------------------------------------------ */
+
+type Product = {
+  id: string;
+  title: string;
+  blurb: string;
+  detail: string;
+  icon: LucideIcon;
+  href: string;
+  tone: "whatsapp" | "marigold" | "teal" | "ink" | "confidence" | "gov";
+  visual: "wa" | "profile" | "files" | "photo" | "forms" | "desk";
+};
+
+const PRODUCTS: Product[] = [
+  {
+    id: "whatsapp",
+    title: "WhatsApp Documents",
+    blurb: "Customer chats and files land in one place.",
+    detail: "Aadhaar, marksheets, photos — pulled from WhatsApp into the café workspace instead of phone galleries and random folders.",
+    icon: MessageCircle,
+    href: `${APP_URL}/app/whatsapp`,
+    tone: "whatsapp",
+    visual: "wa",
+  },
+  {
+    id: "customers",
+    title: "Customer Profiles",
+    blurb: "Remember every customer. Stop retyping.",
+    detail: "Name, phone, documents, and history stay linked — so the next visit starts where the last one ended.",
+    icon: User,
+    href: `${APP_URL}/app/customers`,
+    tone: "marigold",
+    visual: "profile",
+  },
+  {
+    id: "files",
+    title: "File Manager",
+    blurb: "Documents organized per customer.",
+    detail: "Browse, preview, and open files like a real drive — built for café desks, not cloud clutter.",
+    icon: FileText,
+    href: `${APP_URL}/app/files`,
+    tone: "ink",
+    visual: "files",
+  },
+  {
+    id: "media",
+    title: "Photo & PDF Tools",
+    blurb: "Passport photos, scans, print-ready files.",
+    detail: "Crop, size, and prepare images and PDFs the way government counters actually ask for them.",
+    icon: Camera,
+    href: `${APP_URL}/app/photos`,
+    tone: "teal",
+    visual: "photo",
+  },
+  {
+    id: "forms",
+    title: "Form AutoFill",
+    blurb: "Fill portals from saved profiles.",
+    detail: "Chrome extension + mapped government forms — operator picks the customer, CyberControl fills the page.",
+    icon: PenLine,
+    href: "#extension",
+    tone: "gov",
+    visual: "forms",
+  },
+  {
+    id: "workspace",
+    title: "Operator Workspace",
+    blurb: "One OS for the whole café day.",
+    detail: "Customers, WhatsApp, files, photos, and forms in a single signed-in workspace your staff can run.",
+    icon: Store,
+    href: APP_URL,
+    tone: "confidence",
+    visual: "desk",
+  },
+];
+
+const toneIcon: Record<Product["tone"], string> = {
+  whatsapp: "bg-whatsapp/15 text-whatsapp",
+  marigold: "bg-marigold/15 text-marigold-deep",
+  teal: "bg-teal/15 text-teal-deep",
+  ink: "bg-ink/10 text-ink",
+  confidence: "bg-confidence/15 text-confidence",
+  gov: "bg-gov-blue/10 text-gov-blue",
+};
+
+const ProductVisual = ({ kind }: { kind: Product["visual"] }) => {
+  if (kind === "wa") {
+    return (
+      <div className="rounded-lg border border-border bg-[hsl(50_30%_94%)] p-2">
+        <div className="mb-1.5 flex items-center gap-1.5 rounded-md bg-whatsapp px-2 py-1 text-[10px] font-semibold text-white">
+          <MessageCircle className="h-3 w-3" /> WhatsApp inbox
+        </div>
+        <div className="space-y-1">
+          <div className="rounded bg-white px-2 py-1 text-[10px] text-ink shadow-sm">aadhaar_front.jpg</div>
+          <div className="rounded bg-white px-2 py-1 text-[10px] text-ink shadow-sm">marksheet.pdf</div>
+        </div>
+      </div>
+    );
+  }
+  if (kind === "profile") {
+    return (
+      <div className="rounded-lg border border-border bg-white p-2">
+        <div className="flex items-center gap-2">
+          <div className="grid h-8 w-8 place-items-center rounded-full bg-marigold/20 text-[11px] font-bold text-marigold-deep">RK</div>
+          <div>
+            <div className="text-[11px] font-semibold text-ink">Ramesh Kumar</div>
+            <div className="text-[9px] text-muted-foreground">+91 98•••• 4421 · 6 docs</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (kind === "files") {
+    return (
+      <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-border bg-paper-deep/60 p-2">
+        {["Aadhaar", "Photo", "PDF"].map((l) => (
+          <div key={l} className="rounded-md bg-white px-1 py-2 text-center text-[9px] font-medium text-ink shadow-sm ring-1 ring-ink/5">
+            <FileText className="mx-auto mb-1 h-3.5 w-3.5 text-ink/50" />
+            {l}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (kind === "photo") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-white p-2">
+        <div className="h-12 w-10 rounded-sm bg-gradient-to-br from-muted to-ink-soft/25 ring-1 ring-ink/10" />
+        <div className="space-y-1 text-[9px] text-ink-soft">
+          <div className="font-semibold text-ink">4.5 × 3.5 cm</div>
+          <div>White bg · print ready</div>
+          <div className="text-teal-deep">PDF export</div>
+        </div>
+      </div>
+    );
+  }
+  if (kind === "forms") {
+    return (
+      <div className="rounded-lg border border-border bg-white p-2">
+        <div className="mb-1 text-[9px] font-mono uppercase text-muted-foreground">Portal form</div>
+        <div className="space-y-1">
+          <div className="h-2 w-[80%] rounded bg-gov-blue/15" />
+          <div className="h-2 w-[60%] rounded bg-paper-deep" />
+          <div className="mt-1 inline-flex items-center gap-1 rounded bg-marigold/20 px-1.5 py-0.5 text-[9px] font-semibold text-marigold-deep">
+            <Sparkles className="h-3 w-3" /> AutoFill
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-border bg-white p-2">
+      <div className="grid grid-cols-2 gap-1">
+        {["Customers", "WhatsApp", "Files", "Photos"].map((l) => (
+          <div key={l} className="rounded bg-paper-deep/80 px-1.5 py-1.5 text-[9px] font-medium text-ink">
+            {l}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const ProductsSection = () => (
+  <section id="products" className="relative border-b border-border bg-paper-deep/35 py-14 sm:py-16">
+    <div className="container">
+      <div className="mb-8 max-w-2xl sm:mb-10">
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-[0.14em] text-marigold-deep">Our products</p>
+        <h2 className="font-display text-[clamp(1.75rem,3.5vw,2.75rem)] font-bold leading-tight tracking-tight text-ink">
+          What CyberControl actually is
+        </h2>
+        <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
+          Six parts of one café operating system — each built for a job you already do every day, explained simply so you know exactly what you&apos;re signing into.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {PRODUCTS.map((p) => {
+          const Icon = p.icon;
+          return (
+            <a
+              key={p.id}
+              href={p.href}
+              className="group flex flex-col rounded-2xl border border-ink/10 bg-white p-4 shadow-paper transition hover:-translate-y-0.5 hover:border-marigold/40 hover:shadow-lift sm:p-5"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className={`grid h-10 w-10 place-items-center rounded-xl ${toneIcon[p.tone]}`}>
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <ArrowRight className="h-4 w-4 text-ink/25 transition group-hover:translate-x-0.5 group-hover:text-marigold-deep" aria-hidden="true" />
+              </div>
+              <h3 className="font-display text-[18px] font-bold tracking-tight text-ink">{p.title}</h3>
+              <p className="mt-1 text-[13.5px] font-medium text-ink-soft">{p.blurb}</p>
+              <p className="mt-2 flex-1 text-[12.5px] leading-relaxed text-muted-foreground">{p.detail}</p>
+              <div className="mt-4">
+                <ProductVisual kind={p.visual} />
+              </div>
+            </a>
+          );
+        })}
       </div>
     </div>
   </section>
@@ -1239,9 +1414,10 @@ const Footer = () => (
         <span className="font-display font-semibold text-ink">CyberControl</span>
         <span>· Made in India for India's cybercafes</span>
       </div>
-      <div className="flex items-center gap-5">
-        <a href="#used-for" className="hover:text-ink">Services</a>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <a href="#products" className="hover:text-ink">Products</a>
         <a href="#extension" className="hover:text-ink">Extension</a>
+        <a href="/privacy" className="hover:text-ink">Privacy</a>
         <a href={APP_URL} className="hover:text-ink">Sign in</a>
         <a {...demoLinkProps} className="hover:text-ink">
           Contact
@@ -1260,10 +1436,11 @@ const Index = () => (
     <Nav />
     <main id="story">
       <Hero />
-      <DemoVideoSection />
+      <ProductsSection />
       <UsedForSection />
       <HumseSection />
       <MemorySection />
+      <DemoVideoSection />
       <ExtensionSection />
       <FinalCTA />
     </main>
