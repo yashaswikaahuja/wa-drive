@@ -62,9 +62,9 @@ function folderLabel(phone: string, name: string) {
 }
 
 function FileGlyph({ f, size = 36 }: { f: DriveFile; size?: number }) {
-  if (isPdf(f)) return <FilePdf size={size} className="text-red-400" weight="fill" />;
-  if (isImage(f)) return <ImageIcon size={size} className="text-sky-400" weight="fill" />;
-  return <FileIcon size={size} className="text-gray-400" weight="fill" />;
+  if (isPdf(f)) return <FilePdf size={size} weight="fill" style={{ color: 'hsl(0 65% 48%)' }} />;
+  if (isImage(f)) return <ImageIcon size={size} weight="fill" style={{ color: 'hsl(200 65% 40%)' }} />;
+  return <FileIcon size={size} weight="fill" style={{ color: 'hsl(var(--pt-muted))' }} />;
 }
 
 /** Authenticated thumbnail — Google Drive thumbnail URLs often fail in-app. */
@@ -590,15 +590,20 @@ export default function FileManager() {
     /* Phone (<md): fixed under mobile top bar. md+: fill Layout full-bleed main pane. */
     <div
       className="
-        flex flex-col min-h-0 overflow-hidden bg-[hsl(var(--background))]
+        flex flex-col min-h-0 overflow-hidden
         max-md:fixed max-md:z-20 max-md:inset-x-0 max-md:top-12 max-md:bottom-0
         md:relative md:flex-1 md:h-full
       "
+      style={{ background: 'hsl(var(--paper))' }}
     >
-      {/* Toolbar — stacks cleanly on phone */}
+      {/* Toolbar — paper header */}
       <div
         className="shrink-0 border-b px-2 sm:px-3 py-2 flex flex-col gap-2"
-        style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)))' }}
+        style={{
+          borderColor: 'hsl(var(--pt-border))',
+          background: 'hsl(var(--pt-card))',
+          boxShadow: '0 1px 0 hsl(var(--pt-border) / 0.8)',
+        }}
       >
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           {!atRoot && (
@@ -606,22 +611,28 @@ export default function FileManager() {
               <CaretLeft size={14} /> <span className="hidden xs:inline sm:inline">Back</span>
             </button>
           )}
-          <FolderOpen size={18} weight="fill" className="text-[hsl(27_95%_55%)] shrink-0" />
-          <nav className="flex items-center gap-1 text-xs text-[var(--muted-foreground)] min-w-0 flex-1">
-            <button type="button" className="hover:text-[hsl(27_95%_55%)] truncate" onClick={goRoot}>
+          <FolderOpen size={18} weight="fill" className="shrink-0" style={{ color: 'hsl(var(--marigold))' }} />
+          <nav className="flex items-center gap-1 text-xs min-w-0 flex-1" style={{ color: 'hsl(var(--pt-muted))' }}>
+            <button
+              type="button"
+              className="truncate transition-colors"
+              style={{ color: 'hsl(var(--pt-muted))' }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--marigold-deep))'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = 'hsl(var(--pt-muted))'; }}
+              onClick={goRoot}
+            >
               Customers
             </button>
             {activeFolder && (
               <>
-                <CaretRight size={12} className="shrink-0" />
-                <span className="text-[var(--foreground)] truncate font-medium">{activeFolder.name}</span>
+                <CaretRight size={12} className="shrink-0" style={{ color: 'hsl(var(--pt-muted))' }} />
+                <span className="truncate font-medium" style={{ color: 'hsl(var(--ink))' }}>{activeFolder.name}</span>
               </>
             )}
           </nav>
-          {/* Grey icon buttons — clearer on phone than tiny labeled pills */}
           <button
             type="button"
-            className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 text-gray-400 hover:text-gray-200 hover:bg-white/10 disabled:opacity-40"
+            className="pt-toolbtn w-10 h-10 sm:w-9 sm:h-9 !p-0 shrink-0"
             onClick={load}
             disabled={loading}
             title="Refresh"
@@ -631,7 +642,7 @@ export default function FileManager() {
           </button>
           <button
             type="button"
-            className="w-10 h-10 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center shrink-0 text-gray-400 hover:text-gray-200 hover:bg-white/10 disabled:opacity-40"
+            className="pt-toolbtn w-10 h-10 sm:w-9 sm:h-9 !p-0 shrink-0"
             disabled={uploading || atRoot || folderPhone === '__unassigned__'}
             title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
             aria-label="Upload"
@@ -643,7 +654,7 @@ export default function FileManager() {
         </div>
         <div className="flex items-center gap-2 relative">
           <div className="relative flex-1 min-w-0">
-            <MagnifyingGlass size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+            <MagnifyingGlass size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
             <input
               className="input-field text-sm sm:text-xs w-full pl-8 py-2 sm:py-1.5"
               placeholder={atRoot ? 'Search name or phone…' : 'Search files…'}
@@ -654,27 +665,39 @@ export default function FileManager() {
             {/* Autocomplete for customer folders */}
             {atRoot && autocompleteFolders.length > 0 && search.trim().length > 0 && (
               <ul
-                className="absolute left-0 right-0 top-full mt-1 z-40 max-h-64 overflow-y-auto rounded-xl border shadow-xl py-1"
-                style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)))' }}
+                className="absolute left-0 right-0 top-full mt-1 z-40 max-h-64 overflow-y-auto rounded-xl py-1"
+                style={{
+                  border: '1px solid hsl(var(--pt-border))',
+                  background: 'hsl(var(--pt-card))',
+                  boxShadow: 'var(--shadow-paper)',
+                }}
               >
                 {autocompleteFolders.map((fol) => (
                   <li key={fol.phone}>
                     <button
                       type="button"
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-white/5"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm transition-colors"
+                      style={{ color: 'hsl(var(--ink))' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--pt-secondary))'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                       onClick={() => {
                         openFolder(fol.phone);
                         setSearch('');
                       }}
                     >
-                      <Folder size={16} weight="fill" className="text-amber-400/90 shrink-0" />
+                      <Folder
+                        size={16}
+                        weight="fill"
+                        className="shrink-0"
+                        style={{ color: fol.phone === '__unassigned__' ? 'hsl(var(--pt-muted))' : 'hsl(var(--marigold))' }}
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-medium">{fol.name}</span>
                         {fol.phone !== '__unassigned__' && fol.name !== fol.phone && (
-                          <span className="block truncate text-[11px] text-[var(--muted-foreground)]">{fol.phone}</span>
+                          <span className="block truncate text-[11px]" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.phone}</span>
                         )}
                       </span>
-                      <span className="text-[11px] text-[var(--muted-foreground)]">{fol.count}</span>
+                      <span className="text-[11px]" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.count}</span>
                     </button>
                   </li>
                 ))}
@@ -682,11 +705,23 @@ export default function FileManager() {
             )}
           </div>
           {!atRoot && (
-            <div className="flex rounded-lg border overflow-hidden shrink-0" style={{ borderColor: 'var(--border)' }}>
-              <button type="button" className={`p-1.5 ${view === 'grid' ? 'bg-[hsl(27_95%_55%/0.2)]' : ''}`} title="Icons" onClick={() => setView('grid')}>
+            <div className="flex rounded-lg overflow-hidden shrink-0" style={{ border: '1px solid hsl(var(--pt-border))' }}>
+              <button
+                type="button"
+                className="pt-toolbtn !rounded-none !h-8 !px-2"
+                data-active={view === 'grid' ? 'true' : undefined}
+                title="Icons"
+                onClick={() => setView('grid')}
+              >
                 <SquaresFour size={15} />
               </button>
-              <button type="button" className={`p-1.5 ${view === 'list' ? 'bg-[hsl(27_95%_55%/0.2)]' : ''}`} title="List" onClick={() => setView('list')}>
+              <button
+                type="button"
+                className="pt-toolbtn !rounded-none !h-8 !px-2"
+                data-active={view === 'list' ? 'true' : undefined}
+                title="List"
+                onClick={() => setView('list')}
+              >
                 <ListBullets size={15} />
               </button>
             </div>
@@ -698,38 +733,66 @@ export default function FileManager() {
         {/* Sidebar folders */}
         <aside
           className={`w-52 lg:w-56 shrink-0 border-r overflow-y-auto ${isNarrow ? 'hidden' : 'block'}`}
-          style={{ borderColor: 'var(--border)', background: 'hsl(var(--pt-card, var(--card)) / 0.45)' }}
+          style={{
+            borderColor: 'hsl(var(--pt-border))',
+            background: 'hsl(var(--pt-card) / 0.55)',
+          }}
         >
-          <p className="text-[10px] uppercase tracking-wider text-gray-500 px-3 pt-3 pb-1">
+          <p className="pt-label text-[10px] px-3 pt-3 pb-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
             Customers{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
           </p>
           <button
             type="button"
             onClick={goRoot}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs ${atRoot ? 'bg-[hsl(27_95%_55%/0.15)] text-[hsl(27_95%_55%)]' : 'hover:bg-white/5'}`}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs rounded-[10px] mx-0 transition-all ${
+              atRoot ? 'sidebar-item active' : 'sidebar-item'
+            }`}
+            style={{ width: 'calc(100% - 0.5rem)', marginLeft: '0.25rem', marginRight: '0.25rem' }}
           >
-            <FolderOpen size={16} weight={atRoot ? 'fill' : 'regular'} />
+            <FolderOpen size={16} weight={atRoot ? 'fill' : 'regular'} style={atRoot ? { color: 'hsl(var(--marigold-deep))' } : undefined} />
             <span className="truncate flex-1">All customers</span>
-            <span className="text-[10px] opacity-60">{totalFolders}</span>
+            <span className="text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>{totalFolders}</span>
           </button>
-          {filteredFolders.map((fol) => (
-            <button
-              key={fol.phone}
-              type="button"
-              onClick={() => openFolder(fol.phone)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs ${folderPhone === fol.phone ? 'bg-[hsl(27_95%_55%/0.15)] text-[hsl(27_95%_55%)]' : 'hover:bg-white/5'}`}
-              title={fol.phone === '__unassigned__' ? 'Files without a customer phone' : fol.phone}
-            >
-              <Folder size={16} weight={folderPhone === fol.phone ? 'fill' : 'regular'} className={fol.phone === '__unassigned__' ? 'text-gray-500' : ''} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{fol.name}</span>
-                {fol.phone !== '__unassigned__' && fol.name !== fol.phone && (
-                  <span className="block truncate text-[10px] opacity-50">{fol.phone}</span>
-                )}
-              </span>
-              <span className="text-[10px] opacity-60">{fol.count}</span>
-            </button>
-          ))}
+          {filteredFolders.map((fol) => {
+            const active = folderPhone === fol.phone;
+            const unassigned = fol.phone === '__unassigned__';
+            return (
+              <button
+                key={fol.phone}
+                type="button"
+                onClick={() => openFolder(fol.phone)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs rounded-[10px] transition-all ${
+                  active ? 'sidebar-item active' : 'sidebar-item'
+                }`}
+                style={{
+                  width: 'calc(100% - 0.5rem)',
+                  marginLeft: '0.25rem',
+                  marginRight: '0.25rem',
+                  ...(unassigned && !active ? { color: 'hsl(var(--pt-muted))' } : {}),
+                }}
+                title={unassigned ? 'Files without a customer phone' : fol.phone}
+              >
+                <Folder
+                  size={16}
+                  weight={active ? 'fill' : 'regular'}
+                  style={{
+                    color: unassigned
+                      ? 'hsl(var(--pt-muted))'
+                      : active
+                        ? 'hsl(var(--marigold-deep))'
+                        : undefined,
+                  }}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{fol.name}</span>
+                  {!unassigned && fol.name !== fol.phone && (
+                    <span className="block truncate text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.phone}</span>
+                  )}
+                </span>
+                <span className="text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.count}</span>
+              </button>
+            );
+          })}
         </aside>
 
         <main
@@ -742,28 +805,39 @@ export default function FileManager() {
           <div className="flex gap-1.5 overflow-x-auto mb-3 pb-1 -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' } as any}>
             <button
               type="button"
-              className={`shrink-0 text-[11px] px-2.5 py-1 rounded-full border ${atRoot ? 'border-[hsl(27_95%_55%)] text-[hsl(27_95%_55%)]' : ''}`}
-              style={{ borderColor: 'var(--border)' }}
+              className="shrink-0 text-[11px] px-2.5 py-1 rounded-full border transition-colors"
+              style={{
+                borderColor: atRoot ? 'hsl(var(--marigold))' : 'hsl(var(--pt-border))',
+                color: atRoot ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
+                background: atRoot ? 'hsl(var(--marigold) / 0.12)' : 'hsl(var(--pt-card))',
+              }}
               onClick={goRoot}
             >
               All
             </button>
-            {filteredFolders.slice(0, 20).map((fol) => (
-              <button
-                key={fol.phone}
-                type="button"
-                className={`shrink-0 text-[11px] px-2.5 py-1 rounded-full border max-w-[140px] truncate ${folderPhone === fol.phone ? 'border-[hsl(27_95%_55%)] text-[hsl(27_95%_55%)]' : ''}`}
-                style={{ borderColor: 'var(--border)' }}
-                onClick={() => openFolder(fol.phone)}
-              >
-                {fol.name}
-              </button>
-            ))}
+            {filteredFolders.slice(0, 20).map((fol) => {
+              const active = folderPhone === fol.phone;
+              return (
+                <button
+                  key={fol.phone}
+                  type="button"
+                  className="shrink-0 text-[11px] px-2.5 py-1 rounded-full border max-w-[140px] truncate transition-colors"
+                  style={{
+                    borderColor: active ? 'hsl(var(--marigold))' : 'hsl(var(--pt-border))',
+                    color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
+                    background: active ? 'hsl(var(--marigold) / 0.12)' : 'hsl(var(--pt-card))',
+                  }}
+                  onClick={() => openFolder(fol.phone)}
+                >
+                  {fol.name}
+                </button>
+              );
+            })}
           </div>
           )}
 
           {loading && (
-            <div className="flex items-center justify-center gap-2 py-20 text-sm text-[var(--muted-foreground)]">
+            <div className="flex items-center justify-center gap-2 py-20 text-sm" style={{ color: 'hsl(var(--pt-muted))' }}>
               <SpinnerGap size={18} className="animate-spin" /> Loading files…
             </div>
           )}
@@ -772,32 +846,52 @@ export default function FileManager() {
           {!loading && atRoot && (
             <>
               {totalFolders > FOLDER_CAP && !search.trim() && (
-                <p className="text-[11px] text-[var(--muted-foreground)] mb-2 px-1">
+                <p className="text-[11px] mb-2 px-1" style={{ color: 'hsl(var(--pt-muted))' }}>
                   Showing {FOLDER_CAP} of {totalFolders} customers — type a name or phone to find others.
                 </p>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-                {filteredFolders.map((fol) => (
-                  <button
-                    key={fol.phone}
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); openFolder(fol.phone); setSearch(''); }}
-                    className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl hover:bg-white/5 border border-transparent hover:border-[var(--border)] text-center transition"
-                  >
-                    <Folder size={44} weight="fill" className={fol.phone === '__unassigned__' ? 'text-gray-500' : 'text-amber-400/90'} />
-                    <span className="text-xs font-medium truncate w-full">{fol.name}</span>
-                    <span className="text-[10px] text-[var(--muted-foreground)]">
-                      {fol.count} item{fol.count === 1 ? '' : 's'}
-                    </span>
-                    {fol.phone !== '__unassigned__' && fol.name !== fol.phone && (
-                      <span className="text-[10px] text-[var(--muted-foreground)]/70 truncate w-full">{fol.phone}</span>
-                    )}
-                  </button>
-                ))}
+                {filteredFolders.map((fol) => {
+                  const unassigned = fol.phone === '__unassigned__';
+                  return (
+                    <button
+                      key={fol.phone}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); openFolder(fol.phone); setSearch(''); }}
+                      className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-2xl text-center transition-all"
+                      style={{
+                        background: 'hsl(var(--pt-card))',
+                        border: '1px solid hsl(var(--pt-border))',
+                        boxShadow: 'var(--shadow-paper)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'hsl(var(--pt-secondary))';
+                        e.currentTarget.style.borderColor = 'hsl(var(--ink) / 0.18)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'hsl(var(--pt-card))';
+                        e.currentTarget.style.borderColor = 'hsl(var(--pt-border))';
+                      }}
+                    >
+                      <Folder
+                        size={44}
+                        weight="fill"
+                        style={{ color: unassigned ? 'hsl(var(--pt-muted))' : 'hsl(var(--marigold))' }}
+                      />
+                      <span className="text-xs font-semibold truncate w-full" style={{ color: 'hsl(var(--ink))' }}>{fol.name}</span>
+                      <span className="text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>
+                        {fol.count} item{fol.count === 1 ? '' : 's'}
+                      </span>
+                      {!unassigned && fol.name !== fol.phone && (
+                        <span className="text-[10px] truncate w-full" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.phone}</span>
+                      )}
+                    </button>
+                  );
+                })}
                 {filteredFolders.length === 0 && (
-                  <div className="col-span-full text-center py-16 px-4">
-                    <FolderOpen size={40} className="mx-auto mb-3 opacity-30" />
-                    <p className="text-sm text-[var(--muted-foreground)]">
+                  <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-4">
+                    <FolderOpen size={40} className="mb-3" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
+                    <p className="text-sm max-w-sm" style={{ color: 'hsl(var(--pt-muted))' }}>
                       {search ? 'No customers match your search.' : 'No files yet. Receive documents on WhatsApp or open a customer and upload.'}
                     </p>
                   </div>
@@ -821,28 +915,51 @@ export default function FileManager() {
                     onPointerUp={onFilePointerUpOrCancel}
                     onPointerLeave={onFilePointerUpOrCancel}
                     onPointerCancel={onFilePointerUpOrCancel}
-                    className={`relative flex flex-col items-stretch rounded-xl border p-2 text-left transition select-none ${
-                      isSel || openingId === f.id
-                        ? 'border-[hsl(27_95%_55%)] bg-[hsl(27_95%_55%/0.14)]'
-                        : 'border-transparent hover:bg-white/5 hover:border-[var(--border)]'
-                    }`}
+                    className="relative flex flex-col items-stretch rounded-xl p-2 text-left transition-all select-none"
+                    style={{
+                      background: isSel || openingId === f.id
+                        ? 'hsl(var(--marigold) / 0.12)'
+                        : 'hsl(var(--pt-card))',
+                      border: isSel || openingId === f.id
+                        ? '1px solid hsl(var(--marigold) / 0.55)'
+                        : '1px solid hsl(var(--pt-border))',
+                      boxShadow: isSel
+                        ? '0 0 0 2px hsl(var(--marigold) / 0.22), var(--shadow-paper)'
+                        : 'var(--shadow-paper)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSel && openingId !== f.id) {
+                        e.currentTarget.style.background = 'hsl(var(--pt-secondary))';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSel && openingId !== f.id) {
+                        e.currentTarget.style.background = 'hsl(var(--pt-card))';
+                      }
+                    }}
                     title={isNarrow ? 'Tap to open · Long-press to select' : 'Click open · Ctrl+click select'}
                   >
                     {isSel && (
-                      <span className="absolute top-2 left-2 z-10 w-5 h-5 rounded bg-[hsl(27_95%_55%)] text-white flex items-center justify-center shadow">
+                      <span
+                        className="absolute top-2 left-2 z-10 w-5 h-5 rounded flex items-center justify-center text-white shadow"
+                        style={{ background: 'hsl(var(--marigold))' }}
+                      >
                         <CheckSquare size={12} weight="bold" />
                       </span>
                     )}
-                    <div className="aspect-square rounded-lg bg-black/25 flex items-center justify-center overflow-hidden mb-2 relative">
+                    <div
+                      className="aspect-square rounded-lg flex items-center justify-center overflow-hidden mb-2 relative"
+                      style={{ background: 'hsl(var(--pt-secondary))' }}
+                    >
                       <Thumb f={f} />
                       {openingId === f.id && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: 'hsl(var(--ink) / 0.35)' }}>
                           <SpinnerGap size={22} className="animate-spin text-white" />
                         </div>
                       )}
                     </div>
-                    <span className="text-[11px] font-medium truncate">{displayName(f.fileName)}</span>
-                    <span className="text-[10px] text-[var(--muted-foreground)] truncate">
+                    <span className="text-[11px] font-medium truncate" style={{ color: 'hsl(var(--ink))' }}>{displayName(f.fileName)}</span>
+                    <span className="text-[10px] truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
                       {(f.source || 'whatsapp').replace('-', ' ')}
                       {f.timestamp ? ` · ${new Date(f.timestamp).toLocaleDateString()}` : ''}
                     </span>
@@ -850,9 +967,9 @@ export default function FileManager() {
                 );
               })}
               {visibleFiles.length === 0 && (
-                <div className="col-span-full text-center py-16 px-4">
-                  <Folder size={40} className="mx-auto mb-3 opacity-30" />
-                  <p className="text-sm text-[var(--muted-foreground)] mb-3">
+                <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-4">
+                  <Folder size={40} className="mb-3" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
+                  <p className="text-sm mb-3 max-w-sm" style={{ color: 'hsl(var(--pt-muted))' }}>
                     {search ? 'No files match your search in this folder.' : 'This folder is empty.'}
                   </p>
                   <button type="button" className="btn-secondary text-xs" onClick={goRoot}>
@@ -864,39 +981,62 @@ export default function FileManager() {
           )}
 
           {!loading && !atRoot && view === 'list' && (
-            <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+            <div
+              className="rounded-xl overflow-hidden"
+              style={{ border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))', boxShadow: 'var(--shadow-paper)' }}
+            >
               <div
-                className="grid grid-cols-[1fr_100px_110px_70px] gap-2 px-3 py-2 text-[10px] uppercase tracking-wider text-gray-500 border-b"
-                style={{ borderColor: 'var(--border)' }}
+                className="grid grid-cols-[1fr_100px_110px_70px] gap-2 px-3 py-2 pt-label text-[10px] border-b"
+                style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-secondary) / 0.45)' }}
               >
                 <span>Name</span><span>Source</span><span>Date</span><span>Type</span>
               </div>
-              {visibleFiles.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={(e) => onFileActivate(e, f)}
-                  onContextMenu={(e) => onContextMenu(e, f)}
-                  className={`w-full grid grid-cols-[1fr_100px_110px_70px] gap-2 px-3 py-2.5 text-left text-xs items-center border-b last:border-0 ${
-                    selectedIds.has(f.id) ? 'bg-[hsl(27_95%_55%/0.14)]' : 'hover:bg-white/5'
-                  }`}
-                  style={{ borderColor: 'var(--border)' }}
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    {openingId === f.id ? <SpinnerGap size={16} className="animate-spin shrink-0" /> : (
-                      <span className="w-7 h-7 rounded overflow-hidden shrink-0 bg-black/20 flex items-center justify-center">
-                        <Thumb f={f} />
-                      </span>
-                    )}
-                    <span className="truncate">{displayName(f.fileName)}</span>
-                  </span>
-                  <span className="truncate text-[var(--muted-foreground)]">{(f.source || 'whatsapp').replace('-', ' ')}</span>
-                  <span className="text-[var(--muted-foreground)]">{f.timestamp ? new Date(f.timestamp).toLocaleDateString() : '—'}</span>
-                  <span className="text-[var(--muted-foreground)]">{isPdf(f) ? 'PDF' : isImage(f) ? 'Image' : 'File'}</span>
-                </button>
-              ))}
+              {visibleFiles.map((f) => {
+                const isSel = selectedIds.has(f.id);
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={(e) => onFileActivate(e, f)}
+                    onContextMenu={(e) => onContextMenu(e, f)}
+                    className="w-full grid grid-cols-[1fr_100px_110px_70px] gap-2 px-3 py-2.5 text-left text-xs items-center border-b last:border-0 transition-colors"
+                    style={{
+                      borderColor: 'hsl(var(--pt-border))',
+                      background: isSel ? 'hsl(var(--marigold) / 0.12)' : 'transparent',
+                      color: 'hsl(var(--ink))',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSel) e.currentTarget.style.background = 'hsl(var(--pt-secondary))';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = isSel ? 'hsl(var(--marigold) / 0.12)' : 'transparent';
+                    }}
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      {openingId === f.id ? <SpinnerGap size={16} className="animate-spin shrink-0" style={{ color: 'hsl(var(--marigold-deep))' }} /> : (
+                        <span
+                          className="w-7 h-7 rounded overflow-hidden shrink-0 flex items-center justify-center"
+                          style={{ background: 'hsl(var(--pt-secondary))' }}
+                        >
+                          <Thumb f={f} />
+                        </span>
+                      )}
+                      <span className="truncate font-medium">{displayName(f.fileName)}</span>
+                    </span>
+                    <span className="truncate" style={{ color: 'hsl(var(--pt-muted))' }}>{(f.source || 'whatsapp').replace('-', ' ')}</span>
+                    <span style={{ color: 'hsl(var(--pt-muted))' }}>{f.timestamp ? new Date(f.timestamp).toLocaleDateString() : '—'}</span>
+                    <span style={{ color: 'hsl(var(--pt-muted))' }}>{isPdf(f) ? 'PDF' : isImage(f) ? 'Image' : 'File'}</span>
+                  </button>
+                );
+              })}
               {visibleFiles.length === 0 && (
-                <p className="text-sm text-[var(--muted-foreground)] text-center py-12">No files in this folder.</p>
+                <div className="flex flex-col items-center justify-center text-center py-12 px-4">
+                  <Folder size={36} className="mb-2" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
+                  <p className="text-sm mb-3" style={{ color: 'hsl(var(--pt-muted))' }}>No files in this folder.</p>
+                  <button type="button" className="btn-secondary text-xs" onClick={goRoot}>
+                    ← Back to all customers
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -907,10 +1047,14 @@ export default function FileManager() {
       {!preview && selectedIds.size > 0 && (
         <div
           className="shrink-0 border-t px-3 py-2 flex flex-wrap items-center gap-2"
-          style={{ borderColor: 'var(--border)', background: 'hsl(27 95% 55% / 0.12)' }}
+          style={{
+            borderColor: 'hsl(var(--pt-border))',
+            background: 'hsl(var(--marigold) / 0.12)',
+            color: 'hsl(var(--ink))',
+          }}
         >
-          <CheckSquare size={16} className="text-[hsl(27_95%_55%)]" weight="fill" />
-          <span className="text-xs font-medium">{selectedIds.size} selected</span>
+          <CheckSquare size={16} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
+          <span className="text-xs font-medium" style={{ color: 'hsl(var(--ink))' }}>{selectedIds.size} selected</span>
           <button type="button" className="btn-secondary text-xs py-1.5 px-2.5 flex items-center gap-1" onClick={() => {
             const first = visibleFiles.find((f) => selectedIds.has(f.id));
             if (first) void openFile(first);
@@ -925,16 +1069,30 @@ export default function FileManager() {
           }}>
             <DownloadSimple size={13} /> Download
           </button>
-          <button type="button" className="text-xs py-1.5 px-2.5 rounded-lg bg-red-500/20 text-red-300 hover:bg-red-500/30 flex items-center gap-1" onClick={() => void deleteSelected()}>
+          <button
+            type="button"
+            className="text-xs py-1.5 px-2.5 rounded-lg flex items-center gap-1 font-medium transition-colors"
+            style={{ background: 'hsl(0 70% 45% / 0.15)', color: 'hsl(0 65% 38%)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(0 70% 45% / 0.22)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'hsl(0 70% 45% / 0.15)'; }}
+            onClick={() => void deleteSelected()}
+          >
             <Trash size={13} /> Delete
           </button>
-          <button type="button" className="text-xs text-[var(--muted-foreground)] ml-auto px-2" onClick={clearSelection}>Clear</button>
+          <button
+            type="button"
+            className="text-xs ml-auto px-2"
+            style={{ color: 'hsl(var(--pt-muted))' }}
+            onClick={clearSelection}
+          >
+            Clear
+          </button>
         </div>
       )}
 
       <div
-        className="shrink-0 border-t px-3 py-1.5 text-[10px] text-[var(--muted-foreground)] flex flex-wrap justify-between gap-2"
-        style={{ borderColor: 'var(--border)' }}
+        className="shrink-0 border-t px-3 py-1.5 text-[10px] sm:text-[11px] flex flex-wrap justify-between gap-2"
+        style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-card) / 0.5)' }}
       >
         <span>
           {atRoot
@@ -948,18 +1106,41 @@ export default function FileManager() {
 
       {ctx && (
         <div
-          className="fixed z-[80] min-w-[170px] rounded-lg border shadow-xl py-1 text-xs"
-          style={{ left: ctx.x, top: ctx.y, background: 'hsl(var(--pt-card, var(--card)))', borderColor: 'var(--border)' }}
+          className="fixed z-[80] min-w-[170px] rounded-xl py-1 text-xs"
+          style={{
+            left: ctx.x,
+            top: ctx.y,
+            background: 'hsl(var(--pt-card))',
+            border: '1px solid hsl(var(--pt-border))',
+            boxShadow: 'var(--shadow-paper)',
+            color: 'hsl(var(--ink))',
+          }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button type="button" className="w-full px-3 py-2 text-left hover:bg-white/5" onClick={() => openFile(ctx.file)}>Open</button>
-          <button type="button" className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2" onClick={() => downloadFile(ctx.file)}>
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left transition-colors"
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--pt-secondary))'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            onClick={() => openFile(ctx.file)}
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left flex items-center gap-2 transition-colors"
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--pt-secondary))'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            onClick={() => downloadFile(ctx.file)}
+          >
             <DownloadSimple size={13} /> Download
           </button>
           {isImage(ctx.file) && (
             <button
               type="button"
-              className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2"
+              className="w-full px-3 py-2 text-left flex items-center gap-2 transition-colors"
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--pt-secondary))'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => {
                 setCtx(null);
                 const q = new URLSearchParams();
@@ -975,7 +1156,9 @@ export default function FileManager() {
           {(isImage(ctx.file) || isPdf(ctx.file)) && (
             <button
               type="button"
-              className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2"
+              className="w-full px-3 py-2 text-left flex items-center gap-2 transition-colors"
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--pt-secondary))'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               onClick={() => {
                 setCtx(null);
                 const q = new URLSearchParams();
@@ -989,8 +1172,15 @@ export default function FileManager() {
               <FilePdf size={13} /> Open in PDF Tool
             </button>
           )}
-          <div className="border-t my-1" style={{ borderColor: 'var(--border)' }} />
-          <button type="button" className="w-full px-3 py-2 text-left hover:bg-red-500/10 text-red-400 flex items-center gap-2" onClick={() => deleteFile(ctx.file)}>
+          <div className="my-1" style={{ borderTop: '1px solid hsl(var(--pt-border))' }} />
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left flex items-center gap-2 transition-colors"
+            style={{ color: 'hsl(0 65% 38%)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(0 70% 45% / 0.1)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            onClick={() => deleteFile(ctx.file)}
+          >
             <Trash size={13} /> Delete
           </button>
         </div>
