@@ -7,6 +7,18 @@
  * 2. shared/label-utils.ts — calcConfidence, getSemanticKey, normalizeFieldLabel
  * 3. autofill/rule-engine.ts — ccMatchOption delegation
  */
+const fs = require('fs');
+const path = require('path');
+const esbuild = require('esbuild');
+
+function evalSharedTs(relFromSharedSrc) {
+  const abs = path.join(__dirname, '../../../packages/cc-shared/src', relFromSharedSrc);
+  const raw = fs.readFileSync(abs, 'utf8');
+  // Strip TS annotations; sources are classic scripts (function decls → globals).
+  const code = esbuild.transformSync(raw, { loader: 'ts', target: 'es2018' }).code;
+  // Indirect eval so top-level function decls land on globalThis (label-utils).
+  (0, eval)(code);
+}
 
 // Minimal browser globals (no jsdom needed for pure-function tests)
 global.window = global;
@@ -21,7 +33,7 @@ function assert(condition, msg) {
 }
 
 // ── Load shared/option-match.ts ──
-eval(require('fs').readFileSync(__dirname + '/../../../packages/cc-shared/src/option-match.ts', 'utf8'));
+evalSharedTs('option-match.ts');
 
 console.log('\n=== shared/option-match.ts ===');
 
@@ -77,7 +89,7 @@ assert(extraResult && extraResult.value === '01', 'ExtraValues fallback');
 console.log('\n=== shared/label-utils.ts ===');
 
 // Load label-utils
-eval(require('fs').readFileSync(__dirname + '/../../../packages/cc-shared/src/label-utils.ts', 'utf8'));
+evalSharedTs('label-utils.ts');
 
 // calcConfidence — canonical formula
 assert(calcConfidence(0, 0) === 0.5, 'New mapping confidence = 0.5');

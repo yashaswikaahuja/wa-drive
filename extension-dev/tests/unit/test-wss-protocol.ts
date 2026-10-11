@@ -20,14 +20,76 @@ process.env.JWT_SECRET = 'test-secret-for-wss-phase-34';
 const jwt = require('jsonwebtoken');
 const { WebSocket } = require('ws');
 
-// Dynamic import of ES modules
+// Dynamic import of ES modules (prefer tsc emit under dist/; sources are .ts).
 import { pathToFileURL } from 'node:url';
-const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/server.js')).href);
-const { createHandlers } = await import(pathToFileURL(resolve(ROOT, 'apps/extension-service/src/ws/handlers.js')).href);
-// Moved to packages/cc-wss/ during monorepo migration (ESM package — use import not require)
-const { ReconnectManager, DEFAULTS } = await import(pathToFileURL(resolve(ROOT, 'packages/cc-wss/src/reconnect-manager.js')).href);
-const { WsClient, STATE } = await import(pathToFileURL(resolve(ROOT, 'packages/cc-wss/src/ws-client.js')).href);
+import { existsSync, readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import vm from 'node:vm';
 
+function resolveExtensionServiceWs(name) {
+  const candidates = [
+    resolve(ROOT, `apps/extension-service/.tsbuild/src/ws/${name}.js`),
+    resolve(ROOT, `apps/extension-service/dist/src/ws/${name}.js`),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
+
+function ensureExtensionServiceEmit() {
+  if (resolveExtensionServiceWs('server')) return;
+  try {
+    execSync('pnpm --filter cybercontrol-extension-service run build:tsc', {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    const detail = `${e.stdout || ''}\n${e.stderr || ''}\n${e.message || e}`;
+    throw new Error(`extension-service build:tsc failed:\n${detail}`);
+  }
+  if (!resolveExtensionServiceWs('server')) {
+    throw new Error('extension-service build:tsc did not emit .tsbuild/src/ws/server.js');
+  }
+}
+ensureExtensionServiceEmit();
+
+const { attachWebSocket, shutdown: shutdownWss, sessions } = await import(
+  pathToFileURL(resolveExtensionServiceWs('server')).href
+);
+const { createHandlers } = await import(
+  pathToFileURL(resolveExtensionServiceWs('handlers')).href
+);
+
+function loadIifeCjsSource(relPath) {
+  const requireFromRoot = createRequire(resolve(ROOT, 'package.json'));
+  const esbuild = requireFromRoot('esbuild');
+  const raw = readFileSync(resolve(ROOT, relPath), 'utf8');
+  // Emit CJS so vm.runInNewContext can evaluate ESM `export` sources as module.exports.
+  const code = relPath.endsWith('.ts')
+    ? esbuild.transformSync(raw, { loader: 'ts', target: 'es2018', format: 'cjs' }).code
+    : raw;
+  const module = { exports: {} };
+  const sandbox = {
+    module,
+    exports: module.exports,
+    globalThis,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    console,
+  };
+  vm.runInNewContext(code, sandbox);
+  return module.exports;
+}
+
+const { ReconnectManager, DEFAULTS } = loadIifeCjsSource('packages/cc-wss/src/reconnect-manager.ts');
+const { WsClient, STATE } = loadIifeCjsSource('packages/cc-wss/src/ws-client.ts');
+if (!ReconnectManager || !WsClient) {
+  throw new Error('failed to load ReconnectManager/WsClient from packages/cc-wss');
+}
 let passed = 0;
 let failed = 0;
 function ok(cond, msg) { if (cond) { passed++; } else { failed++; console.error(`  ✗ FAIL: ${msg}`); } }

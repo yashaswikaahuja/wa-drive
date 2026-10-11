@@ -10,6 +10,8 @@
     "noImplicitAny": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    // Emit must succeed after @ts-nocheck strip; semantic checks live in tsconfig.typecheck.json.
+    "noCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": false,
     "sourceMap": true,

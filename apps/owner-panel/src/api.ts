@@ -199,6 +199,30 @@ export async function patchAiSettings(cfg: Config, data: Partial<AiSettings>): P
 }
 
 
+export interface DocumentExtractMapsResponse {
+  docTypes: string[];
+  labels: Record<string, string>;
+  defaults: Record<string, string[]>;
+  maps: Record<string, string[]>;
+}
+
+export const fetchDocumentExtractMaps = (cfg: Config) =>
+  get<DocumentExtractMapsResponse>(cfg, '/owner/document-extract-maps');
+
+export async function putDocumentExtractMaps(cfg: Config, maps: Record<string, string[]>): Promise<DocumentExtractMapsResponse> {
+  const res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}/owner/document-extract-maps`, {
+    method: 'PUT',
+    headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ maps }),
+  });
+  if (!res.ok) {
+    let msg = 'Save failed';
+    try { msg = (await res.json()).error || msg; } catch {}
+    throw new ApiError(res.status, msg);
+  }
+  return res.json();
+}
+
 // ─── Forms catalog (Phase 2) ────────────────────────────────────────────────
 
 export interface CatalogForm {
@@ -243,3 +267,116 @@ export async function patchOwnerForm(cfg: Config, id: string, data: Partial<Cata
   }
   return res.json();
 }
+
+// ─── Learning (moved from Hub /admin) ────────────────────────────────────────
+
+export interface LearningStats {
+  sessions: number;
+  filled: number;
+  failed: number;
+  corrections: number;
+  forms: number;
+  fields: number;
+  unmapped: number;
+}
+
+export interface LearningSession {
+  id: string;
+  hostname: string | null;
+  semanticFormKey: string | null;
+  runtimeVersion: string | null;
+  totalFilled: number;
+  totalFailed: number;
+  receivedAt: string;
+  workspaceId?: string;
+  workspaceName?: string | null;
+  records?: any[];
+  metrics?: any;
+}
+
+export interface LearningCorrection {
+  id: string;
+  hostname: string | null;
+  semanticFormKey: string | null;
+  trigger: string | null;
+  correctionCount?: number;
+  corrections?: any[];
+  receivedAt: string;
+  workspaceId?: string;
+  workspaceName?: string | null;
+}
+
+export interface FormMappingSummary {
+  formKey: string;
+  hostname: string | null;
+  title: string | null;
+  fieldCount: number;
+  unmapped: number;
+  fills: number;
+  corrections: number;
+  lastSeen: string | null;
+}
+
+async function jsonSend<T>(cfg: Config, method: string, path: string, body?: unknown): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`${cfg.baseUrl.replace(/\/$/, '')}${path}`, {
+      method,
+      headers: { 'x-owner-key': cfg.key, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError(0, 'Cannot reach the owner API.');
+  }
+  if (res.status === 401) throw new ApiError(401, 'Invalid owner key.');
+  if (!res.ok) {
+    let m = `Request failed (${res.status}).`;
+    try { m = (await res.json()).error || m; } catch { /* ignore */ }
+    throw new ApiError(res.status, m);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}
+
+export const fetchLearningStats = (cfg: Config) =>
+  get<LearningStats>(cfg, '/owner/learning/stats');
+
+export const fetchLearningSessions = (cfg: Config, workspaceId?: string, limit = 50) => {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (workspaceId) q.set('workspaceId', workspaceId);
+  return get<LearningSession[]>(cfg, `/owner/learning/sessions?${q}`);
+};
+
+export const fetchLearningSession = (cfg: Config, id: string) =>
+  get<LearningSession>(cfg, `/owner/learning/sessions/${id}`);
+
+export const fetchLearningCorrections = (cfg: Config, workspaceId?: string, limit = 50) => {
+  const q = new URLSearchParams({ limit: String(limit) });
+  if (workspaceId) q.set('workspaceId', workspaceId);
+  return get<LearningCorrection[]>(cfg, `/owner/learning/corrections?${q}`);
+};
+
+export const fetchLearningCorrection = (cfg: Config, id: string) =>
+  get<LearningCorrection>(cfg, `/owner/learning/corrections/${id}`);
+
+export const fetchMappingList = (cfg: Config) =>
+  get<FormMappingSummary[]>(cfg, '/owner/learning/mappings/list');
+
+export const fetchMappingForm = (cfg: Config, formKey: string) =>
+  get<Record<string, any> | null>(cfg, `/owner/learning/mappings/${encodeURIComponent(formKey)}`);
+
+export const patchMappingField = (cfg: Config, formKey: string, label: string, body: Record<string, unknown>) =>
+  jsonSend<{ ok: boolean }>(cfg, 'PATCH', `/owner/learning/mappings/${encodeURIComponent(formKey)}/${encodeURIComponent(label)}`, body);
+
+export const deleteMappingField = (cfg: Config, formKey: string, label: string) =>
+  jsonSend<{ ok: boolean }>(cfg, 'DELETE', `/owner/learning/mappings/${encodeURIComponent(formKey)}/${encodeURIComponent(label)}`);
+
+export const deleteMappingForm = (cfg: Config, formKey: string) =>
+  jsonSend<{ ok: boolean }>(cfg, 'DELETE', `/owner/learning/mappings/${encodeURIComponent(formKey)}`);
+
+export const fetchMappingTranslations = (cfg: Config) =>
+  get<Record<string, string>>(cfg, '/owner/learning/mappings/translations');
+
+export const patchMappingTranslations = (cfg: Config, entries: Record<string, string | null>) =>
+  jsonSend<{ ok: boolean }>(cfg, 'PATCH', '/owner/learning/mappings/translations', { entries });
+
