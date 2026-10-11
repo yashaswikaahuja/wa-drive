@@ -28,6 +28,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes } from "react";
 import { toast } from "sonner";
+import { ProofBands } from "@/components/ProofDemos";
 
 /* ------------------------------------------------------------------ */
 /* Conversion config — single source of truth                          */
@@ -517,8 +518,8 @@ const Nav = () => {
   const [open, setOpen] = useState(false);
   const links = [
     { href: "#products", label: "Products" },
+    { href: "#proof", label: "See it working" },
     { href: "#humse", label: "Why cafés" },
-    { href: "#memory", label: "How it works" },
     { href: "#extension", label: "Extension" },
   ];
   return (
@@ -620,25 +621,25 @@ const Hero = () => (
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
         <a
-          href="#products"
+          href="#proof-forms"
           className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-marigold px-6 py-3.5 text-[14px] font-semibold text-ink shadow-paper transition hover:brightness-105 sm:w-auto"
         >
-          Explore Our Products
+          Watch form AutoFill
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </a>
+        <a
+          href="#products"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:bg-paper-deep sm:w-auto"
+        >
+          Explore Our Products
         </a>
         <a
           {...demoLinkProps}
           aria-label="Book a Hindi demo"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-ink/15 bg-white px-6 py-3.5 text-[14px] font-semibold text-ink transition hover:bg-paper-deep sm:w-auto"
+          className="inline-flex items-center justify-center gap-2 text-[13px] font-medium text-ink-soft underline-offset-4 hover:text-ink hover:underline"
         >
           <MessageCircle className="h-4 w-4 text-whatsapp" aria-hidden="true" />
           Book a Hindi Demo
-        </a>
-        <a
-          href={APP_URL}
-          className="text-center text-[13px] font-medium text-ink-soft underline-offset-4 hover:text-ink hover:underline sm:text-left"
-        >
-          Sign in to workspace
         </a>
       </div>
 
@@ -671,7 +672,7 @@ const PRODUCTS: Product[] = [
     blurb: "Customer chats and files land in one place.",
     detail: "Aadhaar, marksheets, photos — pulled from WhatsApp into the café workspace instead of phone galleries and random folders.",
     icon: MessageCircle,
-    href: `${APP_URL}/app/whatsapp`,
+    href: "#proof-wa",
     tone: "whatsapp",
     visual: "wa",
   },
@@ -681,7 +682,7 @@ const PRODUCTS: Product[] = [
     blurb: "Remember every customer. Stop retyping.",
     detail: "Name, phone, documents, and history stay linked — so the next visit starts where the last one ended.",
     icon: User,
-    href: `${APP_URL}/app/customers`,
+    href: "#proof-customers",
     tone: "marigold",
     visual: "profile",
   },
@@ -691,7 +692,7 @@ const PRODUCTS: Product[] = [
     blurb: "Documents organized per customer.",
     detail: "Browse, preview, and open files like a real drive — built for café desks, not cloud clutter.",
     icon: FileText,
-    href: `${APP_URL}/app/files`,
+    href: "#proof-files",
     tone: "ink",
     visual: "files",
   },
@@ -701,7 +702,7 @@ const PRODUCTS: Product[] = [
     blurb: "Passport photos, scans, print-ready files.",
     detail: "Crop, size, and prepare images and PDFs the way government counters actually ask for them.",
     icon: Camera,
-    href: `${APP_URL}/app/photos`,
+    href: "#proof-photo",
     tone: "teal",
     visual: "photo",
   },
@@ -711,7 +712,7 @@ const PRODUCTS: Product[] = [
     blurb: "Fill portals from saved profiles.",
     detail: "Chrome extension + mapped government forms — operator picks the customer, CyberControl fills the page.",
     icon: PenLine,
-    href: "#extension",
+    href: "#proof-forms",
     tone: "gov",
     visual: "forms",
   },
@@ -721,7 +722,7 @@ const PRODUCTS: Product[] = [
     blurb: "One OS for the whole café day.",
     detail: "Customers, WhatsApp, files, photos, and forms in a single signed-in workspace your staff can run.",
     icon: Store,
-    href: APP_URL,
+    href: "#proof-workspace",
     tone: "confidence",
     visual: "desk",
   },
@@ -847,6 +848,9 @@ const ProductsSection = () => (
               <p className="mt-2 flex-1 text-[12.5px] leading-relaxed text-muted-foreground">{p.detail}</p>
               <div className="mt-4">
                 <ProductVisual kind={p.visual} />
+              </div>
+              <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-marigold-deep">
+                See proof ↓
               </div>
             </a>
           );
@@ -1166,38 +1170,35 @@ const UsedForSection = () => (
 );
 
 /* ------------------------------------------------------------------ */
-/* Demo video — reserved placeholder (no video yet)                     */
+/* Demo CTA — points at proof clips (not an empty video box)            */
 /* ------------------------------------------------------------------ */
 
 const DemoVideoSection = () => (
   <section id="demo" className="container py-16">
     <div className="mx-auto max-w-3xl text-center">
-      <span className="label-mono text-marigold-deep">/// see it in action</span>
+      <span className="label-mono text-marigold-deep">/// proof over promises</span>
       <h2 className="mt-2 font-display text-[clamp(1.8rem,3.4vw,2.6rem)] font-bold leading-tight tracking-tight text-ink">
-        90 seconds, chaos to confidence
+        Don&apos;t trust the slogan — watch the desk
       </h2>
       <p className="mx-auto mt-3 max-w-lg text-[14.5px] leading-relaxed text-ink-soft">
-        Watch a real cybercafe handle a Railway form end-to-end — a short Hindi walkthrough.
+        Form AutoFill, WhatsApp documents, files, photos — each product has a visual walkthrough above.
+        Want it live in Hindi? Book a demo on WhatsApp.
       </p>
-    </div>
-
-    <div className="relative mx-auto mt-8 aspect-video max-w-4xl overflow-hidden rounded-2xl border border-ink/15 bg-ink shadow-lift">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.15]"
-        style={{
-          backgroundImage:
-            "linear-gradient(hsl(178 70% 80% / 0.4) 1px, transparent 1px), linear-gradient(90deg, hsl(178 70% 80% / 0.4) 1px, transparent 1px)",
-          backgroundSize: "32px 32px",
-        }}
-      />
-      <div className="absolute inset-0 grid place-items-center">
-        <div className="flex flex-col items-center gap-3 text-paper">
-          <span className="grid h-16 w-16 place-items-center rounded-full bg-marigold text-ink shadow-lift">
-            <Play className="h-7 w-7 translate-x-0.5" aria-hidden="true" />
-          </span>
-          <span className="label-mono text-marigold">demo video coming soon</span>
-          <span className="text-[12px] text-paper/60">45–60 second Hindi walkthrough</span>
-        </div>
+      <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a
+          href="#proof-forms"
+          className="inline-flex items-center gap-2 rounded-full bg-marigold px-5 py-3 text-[13px] font-semibold text-ink shadow-paper"
+        >
+          <Play className="h-4 w-4" aria-hidden="true" />
+          Replay form AutoFill
+        </a>
+        <a
+          {...demoLinkProps}
+          className="inline-flex items-center gap-2 rounded-full border border-ink/15 bg-white px-5 py-3 text-[13px] font-semibold text-ink"
+        >
+          <MessageCircle className="h-4 w-4 text-whatsapp" aria-hidden="true" />
+          Book Hindi demo
+        </a>
       </div>
     </div>
   </section>
@@ -1437,6 +1438,7 @@ const Index = () => (
     <main id="story">
       <Hero />
       <ProductsSection />
+      <ProofBands />
       <UsedForSection />
       <HumseSection />
       <MemorySection />
