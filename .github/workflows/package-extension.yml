@@ -34,7 +34,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # extension build uses node --experimental-strip-types (Node 22+)
+          node-version: 22
           cache: pnpm
 
       - name: Install + rebuild extension bundles

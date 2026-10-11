@@ -21,12 +21,12 @@
  */
 
 import { chromium } from 'playwright-core';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { EXT_DIR, injectExtensionHost } from './inject-extension-host.ts';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const EXT_DIR = resolve(__dirname, '../../../apps/extension');
 const FIXTURES = resolve(__dirname, '../fixtures');
 
 let pass = 0, fail = 0;
@@ -43,34 +43,8 @@ const CHROME_PATHS = [
 ].filter(Boolean);
 let executablePath = CHROME_PATHS.find(p => existsSync(p)) || undefined;
 
-// ── Extension script list ────────────────────────────────────────────
-// Turborepo: inject emitted @cc/* concat bundles (not deleted discrete .ts paths).
-const SHARED_SCRIPTS = [
-  'shared-bundle.js',
-  'autofill/plugins-bundle.js',
-  'autofill/extractor-bundle.js',
-  'autofill/mapper-bundle.js',
-  'autofill/executor-bundle.js',
-];
-
 async function injectExtension(page) {
-  for (const script of SHARED_SCRIPTS) {
-    const path = join(EXT_DIR, script);
-    if (!existsSync(path)) { console.warn(`  SKIP: ${script} not found`); continue; }
-    await page.addScriptTag({ content: readFileSync(path, 'utf8') });
-  }
-  // Inject test aliases (simulates service-provided aliases)
-  await page.evaluate(() => {
-    if (window.ccSemanticAliases && window.ccSemanticAliases.merge) {
-      window.ccSemanticAliases.merge({
-        'full_name': ['full name', 'name', 'applicant name'],
-        'dob': ['date of birth', 'dob'],
-        'state': ['state'],
-        'district': ['district'],
-        'category': ['category', 'caste'],
-      });
-    }
-  });
+  await injectExtensionHost(page);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
