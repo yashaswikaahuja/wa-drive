@@ -31,6 +31,7 @@ dist-ssr
 /playwright/.cache/
 .last-run.json
 
-# Private real-data recordings — never commit (#331)
+# Private recording scratch — never commit (#331)
 /public/proof/_private-rec/
+/public/proof/_ext_userdata/
 /public/proof/_rec_*/

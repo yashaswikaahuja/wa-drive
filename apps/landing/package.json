@@ -13,7 +13,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "record:proof": "node scripts/record-proof-clips.mjs"
+    "record:proof": "node scripts/record-proof-clips.mjs",
+    "record:pixel": "node scripts/record-extension-autofill.mjs && node scripts/record-pixel-hub.mjs",
+    "record:pixel:autofill": "node scripts/record-extension-autofill.mjs",
+    "record:pixel:hub": "node scripts/record-pixel-hub.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
