@@ -1,6 +1,7 @@
 /**
- * NPCI-style product proof: silent rendered WebM clips (muted / autoplay / loop).
- * Assets live in public/proof/*.webm — recorded via scripts/record-proof-clips.mjs.
+ * NPCI-style product proof: silent WebM clips recorded from the LIVE app
+ * (https://app.cybercontrol.fun), muted / autoplay / loop.
+ * Re-record with scripts/record-real-app-clips.mjs
  */
 import { ArrowRight, Check } from "lucide-react";
 
@@ -34,7 +35,7 @@ function SilentProofVideo({
         </div>
         <div className="truncate text-[11px] font-medium text-paper/80">{label}</div>
         <span className="ml-auto rounded-full bg-marigold/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-marigold">
-          Silent clip
+          Live product
         </span>
       </div>
       <video
@@ -55,7 +56,7 @@ export function FormFillClip() {
   return (
     <SilentProofVideo
       src={CLIP_SRC.form}
-      label="Form AutoFill · government application"
+      label="app.cybercontrol.fun · customer profile for AutoFill"
     />
   );
 }
@@ -76,8 +77,8 @@ const BANDS: ProofBand[] = [
   {
     id: "proof-forms",
     eyebrow: "Form AutoFill",
-    title: "Watch a government form fill from a saved profile",
-    body: "This is the proof operators ask for: pick the customer, run AutoFill, see fields populate — instead of typing the same Aadhaar details for the hundredth time.",
+    title: "Saved customer profiles feed AutoFill on government sites",
+    body: "This clip is the real CyberControl app: open a customer, see the identity and documents the Chrome extension uses to fill forms — so the desk stops retyping Aadhaar details.",
     bullets: [
       "Works with the CyberControl Chrome extension",
       "Uses the customer profile already in your workspace",
@@ -85,7 +86,7 @@ const BANDS: ProofBand[] = [
     ],
     cta: { href: "#extension", label: "Get the AutoFill extension" },
     clip: "form",
-    clipLabel: "Form AutoFill · government application",
+    clipLabel: "app.cybercontrol.fun · customer profile",
   },
   {
     id: "proof-wa",
@@ -95,7 +96,7 @@ const BANDS: ProofBand[] = [
     bullets: ["Chat + files in one place", "Linked to the customer", "Ready for forms and printing"],
     cta: { href: `${APP_URL}/app/whatsapp`, label: "Open WhatsApp desk" },
     clip: "wa",
-    clipLabel: "WhatsApp Documents · chat to folder",
+    clipLabel: "app.cybercontrol.fun · WhatsApp Documents",
     flip: true,
   },
   {
@@ -106,7 +107,7 @@ const BANDS: ProofBand[] = [
     bullets: ["Search by name or phone", "Documents attached", "History across visits"],
     cta: { href: `${APP_URL}/app/customers`, label: "See customer list" },
     clip: "customers",
-    clipLabel: "Customer Profiles · desk memory",
+    clipLabel: "app.cybercontrol.fun · Customers",
   },
   {
     id: "proof-files",
@@ -116,7 +117,7 @@ const BANDS: ProofBand[] = [
     bullets: ["Per-customer folders", "Preview before print", "Fast find at the counter"],
     cta: { href: `${APP_URL}/app/files`, label: "Open File Manager" },
     clip: "files",
-    clipLabel: "File Manager · per-customer drive",
+    clipLabel: "app.cybercontrol.fun · File Manager",
     flip: true,
   },
   {
@@ -127,7 +128,7 @@ const BANDS: ProofBand[] = [
     bullets: ["Exact sizes (e.g. 4.5×3.5)", "Print-ready export", "PDF tools for scans"],
     cta: { href: `${APP_URL}/app/photos`, label: "Open photo tools" },
     clip: "photo",
-    clipLabel: "Photo & PDF Tools · print ready",
+    clipLabel: "app.cybercontrol.fun · Photos",
   },
   {
     id: "proof-workspace",
@@ -137,7 +138,7 @@ const BANDS: ProofBand[] = [
     bullets: ["Single login", "Tools in one sidebar", "Built for Hindi + English desks"],
     cta: { href: APP_URL, label: "Sign in to workspace" },
     clip: "workspace",
-    clipLabel: "Operator Workspace · one desk",
+    clipLabel: "app.cybercontrol.fun · Today",
     flip: true,
   },
 ];
@@ -154,7 +155,7 @@ export function ProofBands() {
             Proof for every part of CyberControl
           </h2>
           <p className="mt-3 text-[15px] leading-relaxed text-ink-soft">
-            Silent product clips — muted, looping, no soundtrack. Watch how each part behaves, starting with real form fill.
+            Silent clips recorded from the live CyberControl app — muted, looping, no soundtrack.
           </p>
         </div>
 
