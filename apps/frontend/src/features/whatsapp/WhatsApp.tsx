@@ -153,7 +153,7 @@ const ActionBtn = ({ title, onClick, danger, accent, children }: any) => (
   </button>
 );
 
-const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelect, onDelete, onSetType }: any) => {
+const MessageCard = memo(({ msg, onClick, selected, onToggleSelect, onDelete, onSetType }: any) => {
   const [moreOpen, setMoreOpen] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const ext = msg.fileName?.split('.').pop()?.toLowerCase() || '';
@@ -252,17 +252,17 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
       }}
     >
       <div className="flex gap-3 p-3">
-        {selectionMode && (
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={() => onToggleSelect(msg)}
-            className="w-4 h-4 mt-1 cursor-pointer accent-[hsl(var(--marigold))] shrink-0"
-          />
-        )}
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(msg)}
+          className="w-5 h-5 mt-1 cursor-pointer accent-[hsl(var(--marigold))] shrink-0"
+          title={selected ? 'Deselect for Build Profile' : 'Select for Build Profile'}
+          aria-label={selected ? 'Deselect document' : 'Select document for Build Profile'}
+        />
         <button
           type="button"
-          onClick={() => (selectionMode ? onToggleSelect(msg) : onClick(msg))}
+          onClick={() => onClick(msg)}
           className="shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--marigold))]"
           title="Open"
         >
@@ -301,80 +301,78 @@ const MessageCard = memo(({ msg, onClick, selectionMode, selected, onToggleSelec
         </div>
       </div>
 
-      {!selectionMode && (
-        <div
-          className="flex items-center gap-1.5 px-3 py-2"
-          style={{
-            borderTop: '1px solid hsl(var(--pt-border))',
-            background: 'hsl(var(--pt-secondary) / 0.45)',
-          }}
+      <div
+        className="flex items-center gap-1.5 px-3 py-2"
+        style={{
+          borderTop: '1px solid hsl(var(--pt-border))',
+          background: 'hsl(var(--pt-secondary) / 0.45)',
+        }}
+      >
+        <ActionBtn title="Open" onClick={() => onClick(msg)}>
+          <Eye size={14} /> <span>Open</span>
+        </ActionBtn>
+        <ActionBtn
+          title={needsType ? 'Set document type' : 'Tag / set type'}
+          accent={needsType}
+          onClick={(e: any) => { e.stopPropagation(); onSetType?.(msg); }}
         >
-          <ActionBtn title="Open" onClick={() => onClick(msg)}>
-            <Eye size={14} /> <span>Open</span>
-          </ActionBtn>
+          <Tag size={14} /> <span>Tag</span>
+        </ActionBtn>
+        <div className="flex-1 min-w-[0.5rem]" />
+        <div className="relative" ref={moreRef}>
           <ActionBtn
-            title={needsType ? 'Set document type' : 'Tag / set type'}
-            accent={needsType}
-            onClick={(e: any) => { e.stopPropagation(); onSetType?.(msg); }}
+            title="More actions"
+            onClick={(e: any) => { e.stopPropagation(); setMoreOpen((v: boolean) => !v); }}
           >
-            <Tag size={14} /> <span>Tag</span>
+            <DotsThree size={16} weight="bold" />
           </ActionBtn>
-          <div className="flex-1 min-w-[0.5rem]" />
-          <div className="relative" ref={moreRef}>
-            <ActionBtn
-              title="More actions"
-              onClick={(e: any) => { e.stopPropagation(); setMoreOpen((v: boolean) => !v); }}
+          {moreOpen && (
+            <div
+              className="absolute right-0 bottom-full mb-1 z-30 min-w-[160px] rounded-xl py-1 overflow-hidden"
+              style={{
+                background: 'hsl(var(--pt-card))',
+                border: '1px solid hsl(var(--pt-border))',
+                boxShadow: 'var(--shadow-lift)',
+              }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <DotsThree size={16} weight="bold" />
-            </ActionBtn>
-            {moreOpen && (
-              <div
-                className="absolute right-0 bottom-full mb-1 z-30 min-w-[160px] rounded-xl py-1 overflow-hidden"
-                style={{
-                  background: 'hsl(var(--pt-card))',
-                  border: '1px solid hsl(var(--pt-border))',
-                  boxShadow: 'var(--shadow-lift)',
-                }}
-                onClick={(e) => e.stopPropagation()}
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
+                style={{ color: 'hsl(var(--ink))' }}
+                onClick={() => { setMoreOpen(false); doPrint(); }}
               >
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
-                  style={{ color: 'hsl(var(--ink))' }}
-                  onClick={() => { setMoreOpen(false); doPrint(); }}
-                >
-                  <Printer size={14} /> Print
-                </button>
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
-                  style={{ color: 'hsl(var(--ink))' }}
-                  onClick={() => { setMoreOpen(false); doPhotoEditor(); }}
-                >
-                  <Camera size={14} /> Photo Editor
-                </button>
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
-                  style={{ color: 'hsl(var(--ink))' }}
-                  onClick={() => { setMoreOpen(false); doDownload(); }}
-                >
-                  <DownloadSimple size={14} /> Download
-                </button>
-                <div style={{ borderTop: '1px solid hsl(var(--pt-border))', margin: '0.25rem 0' }} />
-                <button
-                  type="button"
-                  className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(0_70%_50%/0.08)]"
-                  style={{ color: 'hsl(0 65% 42%)' }}
-                  onClick={() => { setMoreOpen(false); doDelete(); }}
-                >
-                  <Trash size={14} /> Delete
-                </button>
-              </div>
-            )}
-          </div>
+                <Printer size={14} /> Print
+              </button>
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
+                style={{ color: 'hsl(var(--ink))' }}
+                onClick={() => { setMoreOpen(false); doPhotoEditor(); }}
+              >
+                <Camera size={14} /> Photo Editor
+              </button>
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(var(--pt-secondary))]"
+                style={{ color: 'hsl(var(--ink))' }}
+                onClick={() => { setMoreOpen(false); doDownload(); }}
+              >
+                <DownloadSimple size={14} /> Download
+              </button>
+              <div style={{ borderTop: '1px solid hsl(var(--pt-border))', margin: '0.25rem 0' }} />
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-xs flex items-center gap-2 hover:bg-[hsl(0_70%_50%/0.08)]"
+                style={{ color: 'hsl(0 65% 42%)' }}
+                onClick={() => { setMoreOpen(false); doDelete(); }}
+              >
+                <Trash size={14} /> Delete
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 });
@@ -454,7 +452,6 @@ export default function WhatsApp() {
   const [viewerResolved, setViewerResolved] = useState<MediaViewerFile | null>(null);
   const [viewerOpening, setViewerOpening] = useState(false);
   const viewerBlobUrlRef = useRef<string | null>(null);
-  const [selectionMode, setSelectionMode] = useState(false);
   const [selectedDocs, setSelectedDocs] = useState<Map<string, Message>>(new Map());
   const [showPicker, setShowPicker] = useState(false);
   const [unread, setUnread] = useState<Map<string, number>>(new Map());
@@ -711,7 +708,6 @@ export default function WhatsApp() {
 
   const handleSelectChat = useCallback((phone: string) => {
     setSelectedChat(phone);
-    setSelectionMode(false);
     setSelectedDocs(new Map());
     setUnread(prev => { const m = new Map(prev); m.delete(phone); const total = Array.from(m.values()).reduce((a,b)=>a+b,0); localStorage.setItem('cc-wa-unread', String(total)); return m; });
     userScrolledUpRef.current = false;
@@ -843,9 +839,23 @@ export default function WhatsApp() {
     });
   }, []);
 
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
+  const clearSelection = () => {
     setSelectedDocs(new Map());
+  };
+
+  const selectIdDocs = () => {
+    const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
+    const msgs = (selectedChat ? chats.get(selectedChat)?.messages : null) || [];
+    const next = new Map<string, Message>();
+    let n = 0;
+    for (const m of msgs) {
+      if (!m.fileName) continue;
+      const tag = m.tag || docCategory(m.fileName)?.category;
+      if (tag && ID_TAGS.includes(tag)) { next.set(m.id, m); n++; }
+    }
+    setSelectedDocs(next);
+    if (n === 0) toast.info('No ID documents detected yet — tick boxes manually');
+    else toast.success(`Selected ${n} ID document${n === 1 ? '' : 's'}`);
   };
 
   const startBuildProfile = async () => {
@@ -1012,7 +1022,7 @@ export default function WhatsApp() {
       }
       setExtractedSuggestions(null);
       setTargetPersonId(null);
-      exitSelectionMode();
+      clearSelection();
       if (target?.chooseProfile) {
         toast.success(`✅ Saved to ${target.chosenLabel || 'selected profile'}`);
       } else if (r.data?.created || r.data?.redirected) {
@@ -1251,52 +1261,26 @@ export default function WhatsApp() {
                   {activeChat.messages.length} document{activeChat.messages.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              {!selectionMode ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <input
-                    value={msgSearch}
-                    onChange={e => setMsgSearch(e.target.value)}
-                    placeholder="Search…"
-                    className="input-field w-28 text-xs py-1.5"
-                  />
-                  <ActionBtn title="Request documents" accent onClick={() => { if (activeChat) requestDocs(activeChat.phone); }}>
-                    <PaperPlaneTilt size={15} />
-                  </ActionBtn>
-                  <ActionBtn title="Profile" onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)}>
-                    <UserCircle size={15} />
-                  </ActionBtn>
-                  <ActionBtn title="Assign" onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }}>
-                    <AddressBook size={15} />
-                  </ActionBtn>
-                  <ActionBtn title="Select" onClick={() => setSelectionMode(true)}>
-                    <CheckSquare size={15} />
-                  </ActionBtn>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
-                      const msgs = activeChat?.messages || [];
-                      const next = new Map(selectedDocs);
-                      let n = 0;
-                      for (const m of msgs) {
-                        const tag = m.tag || (m.fileName ? docCategory(m.fileName)?.category : null);
-                        if (tag && ID_TAGS.includes(tag)) { next.set(m.id, m); n++; }
-                      }
-                      setSelectedDocs(next);
-                      if (n === 0) toast.info('No ID documents detected yet — select manually');
-                    }}
-                    className="text-xs font-semibold px-2.5 py-1.5 rounded-full"
-                    style={{ color: 'hsl(var(--teal-deep))', background: 'hsl(var(--teal) / 0.12)' }}
-                  >
-                    Select IDs
-                  </button>
-                  <button onClick={exitSelectionMode} className="text-xs font-medium" style={{ color: 'hsl(var(--pt-muted))' }}>
-                    Cancel
-                  </button>
-                </div>
-              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <input
+                  value={msgSearch}
+                  onChange={e => setMsgSearch(e.target.value)}
+                  placeholder="Search…"
+                  className="input-field w-28 text-xs py-1.5"
+                />
+                <ActionBtn title="Request documents" accent onClick={() => { if (activeChat) requestDocs(activeChat.phone); }}>
+                  <PaperPlaneTilt size={15} />
+                </ActionBtn>
+                <ActionBtn title="Profile" onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)}>
+                  <UserCircle size={15} />
+                </ActionBtn>
+                <ActionBtn title="Assign" onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }}>
+                  <AddressBook size={15} />
+                </ActionBtn>
+                <ActionBtn title="Select ID documents" onClick={selectIdDocs}>
+                  <CheckSquare size={15} />
+                </ActionBtn>
+              </div>
             </div>
             <div
               ref={msgContainerRef}
@@ -1329,7 +1313,6 @@ export default function WhatsApp() {
                     )}
                     <MessageCard
                       msg={msg} onClick={handleOpenFile}
-                      selectionMode={selectionMode}
                       selected={selectedDocs.has(msg.id)}
                       onToggleSelect={toggleDocSelection}
                       onDelete={handleDeleteDoc}
@@ -1341,7 +1324,7 @@ export default function WhatsApp() {
               <div ref={messagesEndRef} />
             </div>
 
-            {selectionMode && selectedDocs.size > 0 && (
+            {selectedDocs.size > 0 && (
               <div
                 className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full flex items-center gap-2.5 z-10 flex-wrap justify-center max-w-[95%]"
                 style={{ background: 'var(--gradient-marigold)', boxShadow: '0 12px 32px -10px hsl(var(--marigold) / 0.55)' }}
@@ -1371,6 +1354,9 @@ export default function WhatsApp() {
                 </button>
                 <button onClick={() => { window.location.href = '/app/photos/aadhaar'; }} className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
                   Aadhaar
+                </button>
+                <button onClick={clearSelection} className="px-3 py-1 bg-white/20 text-white rounded-full text-xs font-bold hover:bg-white/30">
+                  Clear
                 </button>
               </div>
             )}
