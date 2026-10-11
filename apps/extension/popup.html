@@ -131,62 +131,10 @@
       font-weight: 600;
     }
 
-    /* ── Site bar ── */
-    .site-bar {
-      flex-shrink: 0;
-      margin: var(--stack) var(--gutter) 0;
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      background: hsl(var(--pt-card));
-      border: 1px solid hsl(var(--pt-border));
-      border-radius: var(--radius);
-      box-shadow:
-        0 1px 0 hsl(35 18% 82% / 0.6),
-        0 8px 24px -16px hsl(30 30% 30% / 0.18);
-    }
-    .site-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      font-size: 17px;
-      background: hsl(var(--pt-marigold) / 0.12);
-      flex-shrink: 0;
-    }
-    .site-meta { flex: 1; min-width: 0; }
-    .site-label {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: hsl(var(--pt-muted));
-      margin-bottom: 4px;
-    }
-    .site-name {
-      font-size: 14px;
-      font-weight: 650;
-      color: hsl(var(--pt-ink));
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.3;
-    }
-    #site-confidence {
-      font-size: 11px;
-      color: hsl(var(--pt-success));
-      display: none;
-      margin-top: 4px;
-      font-weight: 500;
-      line-height: 1.35;
-    }
-
     /* ── Search ── */
     .search-wrap {
       flex-shrink: 0;
-      padding: var(--stack) var(--gutter);
+      padding: var(--stack) var(--gutter) 10px;
       position: relative;
     }
     .search-wrap::before {
@@ -849,15 +797,6 @@
     <div class="conn" title="Connection status">
       <div class="dot" id="conn-dot"></div>
       <div class="conn-text" id="conn-text">Checking…</div>
-    </div>
-  </div>
-
-  <div class="site-bar">
-    <div class="site-icon" id="site-icon">🌐</div>
-    <div class="site-meta">
-      <div class="site-label">Filling on</div>
-      <div class="site-name" id="site-name">Detecting page…</div>
-      <div id="site-confidence"></div>
     </div>
   </div>
 

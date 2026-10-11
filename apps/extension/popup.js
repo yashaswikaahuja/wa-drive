@@ -19,8 +19,6 @@ const agentCancelBtn = document.getElementById("agent-cancel");
 const statusEl = document.getElementById("status");
 const connDot = document.getElementById("conn-dot");
 const connText = document.getElementById("conn-text");
-const siteIcon = document.getElementById("site-icon");
-const siteName = document.getElementById("site-name");
 const progressEl = document.getElementById("progress");
 const progressText = document.getElementById("progress-text");
 const progressInner = document.getElementById("progress-inner");
@@ -195,15 +193,6 @@ function showStatus(msg, color) {
 statusEl == null ? void 0 : statusEl.addEventListener("click", () => {
   statusEl.style.display = "none";
 });
-const KNOWN_SITES = {
-  "ssc.nic.in": { icon: "\u{1F3DB}", name: "SSC" },
-  "ssc.gov.in": { icon: "\u{1F3DB}", name: "SSC" },
-  "rrbcdg.gov.in": { icon: "\u{1F682}", name: "RRB" },
-  "nta.ac.in": { icon: "\u{1F4DD}", name: "NTA" },
-  "upsc.gov.in": { icon: "\u{1F3DB}", name: "UPSC" },
-  "passportindia.gov.in": { icon: "\u{1F6C2}", name: "Passport Seva" },
-  "digilocker.gov.in": { icon: "\u{1F4C1}", name: "DigiLocker" }
-};
 function clearStaleFillSummary(activeTabId, activeHost) {
   if (!_lastFillTabId && !_lastFillHost) return;
   const sameTab = activeTabId && activeTabId === _lastFillTabId;
@@ -225,7 +214,7 @@ function clearStaleFillSummary(activeTabId, activeHost) {
     filledEl.style.display = "none";
   }
 }
-async function detectSite() {
+async function syncActivePage() {
   try {
     const tab = await getActivePageTab();
     let host = null;
@@ -234,67 +223,23 @@ async function detectSite() {
     } catch (e) {
     }
     clearStaleFillSummary((tab == null ? void 0 : tab.id) || null, host);
-    if (!(tab == null ? void 0 : tab.url) || tab.url.startsWith("chrome") || tab.url.startsWith("edge://") || tab.url.startsWith("about:")) {
-      siteIcon.textContent = "\u{1F310}";
-      siteName.textContent = "Open a form page in this window";
-      const conf = document.getElementById("site-confidence");
-      if (conf) conf.style.display = "none";
-      return;
-    }
-    if (!host) {
-      try {
-        host = new URL(tab.url).hostname.replace(/^www\./, "");
-      } catch (e) {
-      }
-    }
-    const match = Object.entries(KNOWN_SITES).find(([k]) => host.includes(k));
-    if (match) {
-      siteIcon.textContent = match[1].icon;
-      siteName.textContent = match[1].name + " \u2014 " + host;
-    } else {
-      siteIcon.textContent = "\u{1F310}";
-      siteName.textContent = host;
-    }
-    fetchConfidence(host);
   } catch (e) {
-    siteName.textContent = "Unknown page";
   }
 }
 if ((_a = chrome.tabs) == null ? void 0 : _a.onActivated) {
   chrome.tabs.onActivated.addListener(() => {
-    detectSite();
+    syncActivePage();
   });
 }
 if ((_b = chrome.tabs) == null ? void 0 : _b.onUpdated) {
-  chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  chrome.tabs.onUpdated.addListener((tabId, info) => {
     if (info.status === "complete" || info.url) {
       chrome.tabs.query({ active: true, currentWindow: true }).then(([active]) => {
-        if ((active == null ? void 0 : active.id) === tabId) detectSite();
+        if ((active == null ? void 0 : active.id) === tabId) syncActivePage();
       }).catch(() => {
       });
     }
   });
-}
-async function fetchConfidence(host) {
-  const el = document.getElementById("site-confidence");
-  if (!el) return;
-  try {
-    const data = await chrome.storage.local.get(["backendUrl", "accessToken"]);
-    const r = await fetch(data.backendUrl + "/forms/confidence?hostname=" + encodeURIComponent(host), {
-      headers: { Authorization: "Bearer " + data.accessToken }
-    });
-    if (!r.ok) return;
-    const { fills, confidence } = await r.json();
-    if (fills > 0) {
-      el.textContent = `\u2713 filled ${fills}\xD7 by operators` + (confidence != null ? ` \xB7 ${confidence}% success` : "");
-      el.style.display = "block";
-    } else {
-      el.textContent = `First time on this form \u2014 I'll fill what I'm sure about`;
-      el.style.color = "hsl(30 10% 40%)";
-      el.style.display = "block";
-    }
-  } catch (e) {
-  }
 }
 function showProgress(text) {
   resultsEl.style.display = "none";
@@ -522,7 +467,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 async function init() {
   document.getElementById("ver").textContent = "v" + VERSION;
   updateSelectedDock();
-  detectSite();
+  syncActivePage();
   await loadRecents();
   const data = await chrome.storage.local.get(["accessToken", "backendUrl", "user"]);
   if (!data.accessToken || !data.backendUrl) {
