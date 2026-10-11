@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>Workspace proof</title>
+<style>
+body{margin:0;background:#0f1218;font-family:Inter,system-ui,sans-serif}
+.stage{width:1280px;height:720px;margin:0 auto;padding:28px;box-sizing:border-box}
+.chrome{background:#111;color:#fff;border-radius:16px 16px 0 0;padding:12px 16px;font:600 13px Inter}
+.board{background:#f3efe7;padding:24px;height:640px;border-radius:0 0 16px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.tile{background:#fff;border:1px solid #e7e5e4;border-radius:14px;padding:18px;display:flex;gap:12px;align-items:center;opacity:0;animation:in .4s forwards}
+.tile:nth-child(1){animation-delay:.1s}.tile:nth-child(2){animation-delay:.25s}.tile:nth-child(3){animation-delay:.4s}
+.tile:nth-child(4){animation-delay:.55s}.tile:nth-child(5){animation-delay:.7s}.tile:nth-child(6){animation-delay:.85s}
+.ic{width:40px;height:40px;border-radius:10px;background:#111;color:#fff;display:grid;place-items:center;font-size:18px}
+@keyframes in{to{opacity:1}}
+</style></head>
+<body><div class="stage">
+<div class="chrome">CyberControl · Operator Workspace · silent clip</div>
+<div class="board">
+  <div class="tile"><div class="ic">👤</div><div style="font:700 15px Inter">Customers</div></div>
+  <div class="tile"><div class="ic">💬</div><div style="font:700 15px Inter">WhatsApp</div></div>
+  <div class="tile"><div class="ic">📁</div><div style="font:700 15px Inter">Files</div></div>
+  <div class="tile"><div class="ic">📷</div><div style="font:700 15px Inter">Photos</div></div>
+  <div class="tile"><div class="ic">📝</div><div style="font:700 15px Inter">Forms</div></div>
+  <div class="tile"><div class="ic">🏪</div><div style="font:700 15px Inter">Desk</div></div>
+</div></div></body></html>

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Form AutoFill proof clip</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: Inter, system-ui, sans-serif;
+      background: #0f1218; color: #111; overflow: hidden;
+    }
+    .stage { width: 1280px; height: 720px; margin: 0 auto; background: #1a1f2e; }
+    .chrome {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; background: #0b0e14; border-bottom: 1px solid rgba(255,255,255,.1);
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .url {
+      flex: 1; margin-left: 8px; padding: 6px 10px; border-radius: 6px;
+      background: rgba(255,255,255,.08); color: rgba(255,255,255,.7); font: 12px/1.2 ui-monospace, monospace;
+    }
+    .badge {
+      padding: 4px 10px; border-radius: 999px; background: rgba(249,115,22,.2);
+      color: #fb923c; font: 600 11px/1 Inter, sans-serif;
+    }
+    .grid { display: grid; grid-template-columns: 240px 1fr; height: calc(720px - 45px); }
+    .side { padding: 16px; background: rgba(0,0,0,.28); border-right: 1px solid rgba(255,255,255,.1); color: #fff; }
+    .side h4 { margin: 0 0 12px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.45); }
+    .card {
+      border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.05); transition: .25s;
+    }
+    .card.on { border-color: rgba(249,115,22,.55); background: rgba(249,115,22,.16); }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 999px; background: #f97316; color: #111;
+      display: grid; place-items: center; font: 700 12px Inter, sans-serif;
+    }
+    .row { display: flex; gap: 10px; align-items: center; }
+    .btn {
+      margin-top: 14px; width: 100%; border: 0; border-radius: 8px; padding: 10px;
+      font: 600 12px Inter, sans-serif; background: rgba(255,255,255,.12); color: rgba(255,255,255,.7);
+    }
+    .btn.on { background: #f97316; color: #111; }
+    .form { padding: 20px 22px; background: #f7f4ee; }
+    .form-head { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 13px; font-weight: 600; }
+    label { display: block; margin-bottom: 10px; }
+    label span { display: block; margin-bottom: 4px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: rgba(17,17,17,.45); font-weight: 600; }
+    .field {
+      height: 38px; border-radius: 8px; border: 1px solid rgba(17,17,17,.1);
+      background: rgba(255,255,255,.75); padding: 0 12px; display: flex; align-items: center;
+      font-size: 14px; color: rgba(17,17,17,.25); transition: .2s;
+    }
+    .field.filling { border-color: #f97316; background: rgba(249,115,22,.12); color: #c2410c; }
+    .field.filled { border-color: rgba(16,185,129,.4); background: #fff; color: #111; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .done {
+      display: none; margin-top: 8px; padding: 10px 12px; border-radius: 8px;
+      border: 1px solid rgba(16,185,129,.3); background: rgba(16,185,129,.12);
+      color: #047857; font: 600 12px Inter, sans-serif;
+    }
+    .done.show { display: block; }
+    .ok { margin-top: 8px; font-size: 11px; color: #fb923c; font-weight: 600; opacity: 0; }
+    .ok.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="chrome">
+      <span class="dot" style="background:#f87171"></span>
+      <span class="dot" style="background:#fbbf24"></span>
+      <span class="dot" style="background:#34d399"></span>
+      <div class="url">https://serviceonline.bihar.gov.in/…/application</div>
+      <div class="badge">Live fill · silent clip</div>
+    </div>
+    <div class="grid">
+      <aside class="side">
+        <h4>CyberControl</h4>
+        <div class="card" id="profile">
+          <div class="row">
+            <div class="avatar">RK</div>
+            <div>
+              <div style="font:600 13px Inter">Ramesh Kumar</div>
+              <div style="font:11px Inter;color:rgba(255,255,255,.55)">6 documents · ready</div>
+            </div>
+          </div>
+          <div class="ok" id="selected">✓ Profile selected</div>
+        </div>
+        <button class="btn" id="runBtn">Select & AutoFill</button>
+      </aside>
+      <main class="form">
+        <div class="form-head">
+          <div>Application form</div>
+          <div id="count" style="font-weight:500;color:#666;font-size:11px">Empty</div>
+        </div>
+        <div id="fields"></div>
+        <div class="done" id="done">✓ Form filled from customer profile — review & submit</div>
+      </main>
+    </div>
+  </div>
+  <script>
+    const FIELDS = [
+      ['Full name', 'Ramesh Kumar'],
+      ['Date of birth', '14/08/1992'],
+      ['Aadhaar / ID', '2847 9201 5536'],
+      ['Mobile', '98765 44120'],
+      ["Father's name", 'Suresh Kumar'],
+      ['Address', 'Ward 4, Near Bus Stand, Patna'],
+    ];
+    const fieldsEl = document.getElementById('fields');
+    FIELDS.forEach(([label], i) => {
+      const lab = document.createElement('label');
+      lab.innerHTML = '<span>' + label + '</span><div class="field" id="f' + i + '">—</div>';
+      fieldsEl.appendChild(lab);
+    });
+
+    async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function runOnce() {
+      const profile = document.getElementById('profile');
+      const selected = document.getElementById('selected');
+      const runBtn = document.getElementById('runBtn');
+      const done = document.getElementById('done');
+      const count = document.getElementById('count');
+      profile.classList.remove('on');
+      selected.classList.remove('show');
+      runBtn.classList.remove('on');
+      runBtn.textContent = 'Select & AutoFill';
+      done.classList.remove('show');
+      count.textContent = 'Empty';
+      FIELDS.forEach((_, i) => {
+        const el = document.getElementById('f' + i);
+        el.className = 'field';
+        el.textContent = '—';
+      });
+
+      await sleep(700);
+      profile.classList.add('on');
+      selected.classList.add('show');
+      runBtn.classList.add('on');
+      runBtn.textContent = 'AutoFill running…';
+      await sleep(800);
+
+      for (let i = 0; i < FIELDS.length; i++) {
+        const el = document.getElementById('f' + i);
+        el.className = 'field filling';
+        el.textContent = 'filling…';
+        await sleep(450);
+        el.className = 'field filled';
+        el.textContent = FIELDS[i][1];
+        count.textContent = (i + 1) + '/' + FIELDS.length + ' fields';
+        await sleep(350);
+      }
+      runBtn.textContent = 'Filled ✓';
+      done.classList.add('show');
+      count.textContent = 'Complete';
+      await sleep(1800);
+    }
+
+    window.__runClip = runOnce;
+    window.__ready = true;
+    runOnce();
+  </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>WhatsApp proof</title>
+<style>
+body{margin:0;background:#0f1218;font-family:Inter,system-ui,sans-serif}
+.stage{width:1280px;height:720px;margin:0 auto;padding:28px;box-sizing:border-box}
+.chrome{background:#111;color:#fff;border-radius:16px 16px 0 0;padding:12px 16px;font:600 13px Inter}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;background:#1a2030;padding:16px;height:640px;border-radius:0 0 16px 16px}
+.panel{border-radius:14px;overflow:hidden}
+.wa{background:#0b141a;color:#fff;padding:12px;height:100%;box-sizing:border-box}
+.bubble{max-width:85%;margin:8px 0;padding:8px 10px;border-radius:10px;font-size:13px}
+.me{margin-left:auto;background:#005c4b}
+.them{background:#1f2c34}
+.file{height:56px;display:grid;place-items:center;background:rgba(255,255,255,.08);border-radius:8px;margin-bottom:4px;font-size:12px}
+.desk{background:#fff;padding:14px;height:100%;box-sizing:border-box}
+.item{display:flex;gap:10px;align-items:center;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin:8px 0;opacity:0;transform:translateY(8px);animation:in .5s forwards}
+.item:nth-child(2){animation-delay:.6s}
+.item:nth-child(3){animation-delay:1.2s}
+.item:nth-child(4){animation-delay:1.8s}
+@keyframes in{to{opacity:1;transform:none}}
+.badge{display:inline-block;margin-left:auto;background:#d1fae5;color:#047857;font:600 11px Inter;padding:3px 8px;border-radius:999px}
+</style></head>
+<body><div class="stage">
+  <div class="chrome">CyberControl · WhatsApp Documents · silent clip</div>
+  <div class="grid">
+    <div class="panel wa">
+      <div style="font:600 13px Inter;margin-bottom:10px">Suresh Bhai</div>
+      <div class="bubble me">bhaiya aadhaar bhej raha hu</div>
+      <div class="bubble them"><div class="file">📄 aadhaar_front.jpg</div><div style="opacity:.5;font-size:11px">today 10:42</div></div>
+      <div class="bubble them"><div class="file">📄 marksheet_10th.pdf</div></div>
+    </div>
+    <div class="panel desk">
+      <div style="font:700 14px Inter;margin-bottom:8px">Saved to customer folder</div>
+      <div class="item"><span>📄</span><span style="flex:1;font:600 13px Inter">aadhaar_front.jpg</span><span class="badge">saved</span></div>
+      <div class="item"><span>📄</span><span style="flex:1;font:600 13px Inter">marksheet_10th.pdf</span><span class="badge">saved</span></div>
+      <div class="item"><span>📄</span><span style="flex:1;font:600 13px Inter">IMG_signature.jpg</span><span class="badge">saved</span></div>
+    </div>
+  </div>
+</div></body></html>

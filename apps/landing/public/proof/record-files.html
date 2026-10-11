@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><title>Files proof</title>
+<style>
+body{margin:0;background:#0f1218;font-family:Inter,system-ui,sans-serif}
+.stage{width:1280px;height:720px;margin:0 auto;padding:28px;box-sizing:border-box}
+.chrome{background:#111;color:#fff;border-radius:16px 16px 0 0;padding:12px 16px;font:600 13px Inter}
+.board{background:#f3efe7;padding:20px;height:640px;border-radius:0 0 16px 16px}
+.crumb{color:#666;font-size:13px;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.tile{background:#fff;border:1px solid #e7e5e4;border-radius:14px;padding:12px;opacity:0;animation:in .4s forwards}
+.tile:nth-child(1){animation-delay:.15s}.tile:nth-child(2){animation-delay:.35s}.tile:nth-child(3){animation-delay:.55s}.tile:nth-child(4){animation-delay:.75s}
+.preview{height:120px;border-radius:10px;background:linear-gradient(135deg,#e7e5e4,#d6d3d1);display:grid;place-items:center;font-size:28px;margin-bottom:10px}
+@keyframes in{to{opacity:1}}
+</style></head>
+<body><div class="stage">
+<div class="chrome">CyberControl · File Manager · silent clip</div>
+<div class="board">
+  <div class="crumb">Customers / Ramesh Kumar</div>
+  <div class="grid">
+    <div class="tile"><div class="preview">🪪</div><div style="font:700 13px Inter">Aadhaar</div><div style="color:#666;font-size:12px">JPG</div></div>
+    <div class="tile"><div class="preview">📄</div><div style="font:700 13px Inter">Marksheet</div><div style="color:#666;font-size:12px">PDF</div></div>
+    <div class="tile"><div class="preview">🖼️</div><div style="font:700 13px Inter">Photo 4.5×3.5</div><div style="color:#666;font-size:12px">JPG</div></div>
+    <div class="tile"><div class="preview">✍️</div><div style="font:700 13px Inter">Signature</div><div style="color:#666;font-size:12px">PNG</div></div>
+  </div>
+</div></div></body></html>
