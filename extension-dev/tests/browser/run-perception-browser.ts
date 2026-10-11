@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const ROOT = resolve(__dirname, '../../..');
-const EXT_DIR = resolve(ROOT, 'apps/extension');
+const EXT_DIR = resolve(ROOT, 'extension-legacy-best');
 const FIXTURES = resolve(ROOT, 'extension-dev/tests/fixtures');
 
 let pass = 0, fail = 0;
@@ -40,7 +40,7 @@ let executablePath = CHROME_PATHS.find((p) => existsSync(p)) || undefined;
 
 // ── Perception scripts to inject (isolated world simulation) ────────
 const PERCEPTION_SCRIPTS = [
-  'perception/binding-registry.ts',
+  'perception/binding-registry.js',
   'perception/revision-manager.js',
   'perception/canonical-hash.js',
   'perception/privacy-filter.js',
@@ -52,9 +52,9 @@ const PERCEPTION_SCRIPTS = [
   'perception/context-discovery.js',
   'perception/snapshot-builder.js',
   'perception/validator.js',
-  'perception/index.js',
-  'runtime/gateway/interaction.ts',
+  'runtime/gateway/interaction.js',
   'runtime/dom-gateway.js',
+  'perception/index.js',
 ];
 
 async function injectPerception(page) {
