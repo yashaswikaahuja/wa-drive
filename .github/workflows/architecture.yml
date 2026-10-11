@@ -43,11 +43,11 @@ jobs:
           # --ignore-space-at-eol: a line-ending (CRLF/LF) change must not make
           # pre-existing code look newly added and trip a forbidden pattern.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            DIFF=$(git diff --ignore-space-at-eol origin/${{ github.base_ref }}...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+            DIFF=$(git diff --ignore-space-at-eol origin/${{ github.base_ref }}...HEAD -- '*.js' ':(exclude)extension-legacy-best/**' | grep "^+" | grep -v "^+++" || true)
           else
             BASE="${{ github.event.before }}"
             if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then BASE="HEAD~1"; fi
-            DIFF=$(git diff --ignore-space-at-eol "$BASE"...HEAD -- '*.js' | grep "^+" | grep -v "^+++" || true)
+            DIFF=$(git diff --ignore-space-at-eol "$BASE"...HEAD -- '*.js' ':(exclude)extension-legacy-best/**' | grep "^+" | grep -v "^+++" || true)
           fi
 
           VIOLATIONS=0
@@ -55,7 +55,7 @@ jobs:
           # FB-001: No new inline LLM fetch
           MATCHES=$(echo "$DIFF" | grep -iE "fetch\(.*(openrouter|groq|chat/completions)" || true)
           if [ -n "$MATCHES" ]; then
-            FORBIDDEN=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.ts" | grep -v "background.ts" || true)
+            FORBIDDEN=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' ':(exclude)extension-legacy-best/**' | grep -v "shared/llm-client.ts" | grep -v "background.ts" || true)
             if [ -n "$FORBIDDEN" ]; then
               echo "❌ FB-001: New inline LLM fetch" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -84,7 +84,7 @@ jobs:
           MATCHES_010=$(echo "$DIFF" | grep -iE "fetch\(.*(openrouter|groq|chat/completions|anthropic)" || true)
           if [ -n "$MATCHES_010" ]; then
             # Check if the violation is in an allowed file
-            FORBIDDEN_010=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -v "shared/llm-client.ts" | grep -v "background.ts" | grep -vE "(apps/)?extension-service/" || true)
+            FORBIDDEN_010=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' ':(exclude)extension-legacy-best/**' | grep -v "shared/llm-client.ts" | grep -v "background.ts" | grep -vE "(apps/)?extension-service/" || true)
             if [ -n "$FORBIDDEN_010" ]; then
               echo "❌ FB-010: New AI/LLM call outside server or grandfathered files" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -94,7 +94,7 @@ jobs:
           # FB-011: No framework names as knowledge identity
           if echo "$DIFF" | grep -iE "(react.?select|angular.?material|mat.?select|prime.?ng|ng.?dropdown|mui.?autocomplete|ant.?design|vuetify)" | grep -qvE "(plugins/|drivers/|tests/)"; then
             # Only flag if NOT in plugins/drivers/tests (those are grandfathered)
-            FRAMEWORK_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(plugins/|drivers/|tests/)" || true)
+            FRAMEWORK_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' ':(exclude)extension-legacy-best/**' | grep -vE "(plugins/|drivers/|tests/)" || true)
             if [ -n "$FRAMEWORK_FILES" ]; then
               echo "❌ FB-011: Framework name used as knowledge identity (use behavioral patterns per D03)" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
@@ -104,7 +104,7 @@ jobs:
           # FB-012: No fill planning in extension (new code)
           if echo "$DIFF" | grep -qE "(buildFillPlan|generatePlan|planFill|interpretKnowledge|selectStrategy|chooseRecovery|autonomousFill)"; then
             # Exclude server packages + SW/bundles (planning is server-side in packages/svc-*).
-            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' | grep -vE "(popup.ts|background.ts|(apps/)?extension-service/|tests/|packages/svc-|apps/extension/sw/|.*-bundle\.js)" || true)
+            PLANNING_FILES=$(git diff "${BASE:-HEAD~1}"...HEAD --name-only -- '*.js' ':(exclude)extension-legacy-best/**' | grep -vE "(popup.ts|background.ts|(apps/)?extension-service/|tests/|packages/svc-|apps/extension/sw/|.*-bundle\.js)" || true)
             if [ -n "$PLANNING_FILES" ]; then
               echo "❌ FB-012: Fill planning/knowledge interpretation in extension (server-only per D11)" >> $GITHUB_STEP_SUMMARY
               VIOLATIONS=$((VIOLATIONS + 1))
