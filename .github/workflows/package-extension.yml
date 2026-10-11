@@ -55,6 +55,8 @@ jobs:
           ls -la apps/landing/public/cybercontrol-extension.zip
 
       - name: Commit the repackaged zip (if it changed)
+        # Only push from master — branch/workflow_dispatch runs still verify pack+copy.
+        if: github.ref == 'refs/heads/master'
         run: |
           git config user.name "cybercontrol-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -65,5 +67,5 @@ jobs:
             git commit -m "chore(extension): repackage download zip [skip ci]"
             # Master may move while we pack (other CI bots). Rebase then push.
             git pull --rebase origin master
-            git push
+            git push origin HEAD:master
           fi
