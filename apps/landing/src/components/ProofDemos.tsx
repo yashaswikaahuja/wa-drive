@@ -10,7 +10,7 @@ import { ArrowRight, Check } from "lucide-react";
 const APP_URL = String(import.meta.env.VITE_APP_URL ?? "https://app.cybercontrol.fun");
 
 /** Bump when replacing public/proof/*.webm so browsers/CDN skip stale cache. */
-const CLIP_V = "20261012d";
+const CLIP_V = "20261012e";
 
 const CLIP_SRC = {
   form: `/proof/clip-form-fill-v4.webm?v=${CLIP_V}`,
