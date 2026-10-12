@@ -10,10 +10,10 @@ import { ArrowRight, Check } from "lucide-react";
 const APP_URL = String(import.meta.env.VITE_APP_URL ?? "https://app.cybercontrol.fun");
 
 /** Bump when replacing public/proof/*.webm so browsers/CDN skip stale cache. */
-const CLIP_V = "20261012a";
+const CLIP_V = "20261012c";
 
 const CLIP_SRC = {
-  form: `/proof/clip-form-fill-v2.webm?v=${CLIP_V}`,
+  form: `/proof/clip-form-fill-v3.webm?v=${CLIP_V}`,
   wa: `/proof/clip-whatsapp.webm?v=${CLIP_V}`,
   customers: `/proof/clip-customers.webm?v=${CLIP_V}`,
   files: `/proof/clip-files.webm?v=${CLIP_V}`,
@@ -44,13 +44,14 @@ function SilentProofVideo({
         </span>
       </div>
       <video
-        className="aspect-video w-full bg-black object-cover"
+        key={src}
+        className="aspect-video w-full bg-[#e8eef5] object-contain"
         src={src}
         muted
         autoPlay
         loop
         playsInline
-        preload="metadata"
+        preload="auto"
         aria-label={label}
       />
     </div>

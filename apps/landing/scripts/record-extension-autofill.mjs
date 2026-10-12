@@ -322,8 +322,8 @@ try {
   const popupWebm = popupVideo ? await popupVideo.path() : null;
   console.log("videos", { formWebm, popupWebm });
 
-  // New filename avoids Windows file locks on the old postage-stamp clip-form-fill.webm
-  const dest = path.join(proofDir, "clip-form-fill-v2.webm");
+  // New filename avoids Windows file locks / CDN cache on older postage-stamp clips
+  const dest = path.join(proofDir, "clip-form-fill-v3.webm");
   const destTmp = path.join(recRoot, "clip-form-fill.next.webm");
   const debugDir = path.join(recRoot, "_debug_last");
   fs.rmSync(debugDir, { recursive: true, force: true });
