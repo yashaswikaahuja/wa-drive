@@ -178,13 +178,17 @@ services:
       NODE_ENV: production
       PORT: "3200"
       WA_SECRET: ${WA_SECRET}
+      SERVICE_SECRET: ${WA_SECRET}
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
     volumes:
       - wa_resolver_session:/app/session
       - wa_resolver_auth:/app/.wwebjs_auth
     expose:
       - "3200"
     # Chromium needs shm; without this wwebjs often crashes
-    shm_size: "256mb"
+    shm_size: "512mb"
+    # Cap runaway Chromium forks from failed init retries
+    pids_limit: 256
 
   nginx:
     image: nginx:1.27-alpine
