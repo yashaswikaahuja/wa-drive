@@ -1,8 +1,12 @@
 // whatsapp-web.js is CJS — use default import under ESM.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import wwebjs from 'whatsapp-web.js';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 type WwebClient = {
   on: (event: string, handler: (...args: unknown[]) => void) => void;
@@ -24,43 +28,66 @@ export interface ResolverClient {
 }
 
 const INIT_BACKOFF_MS = [10_000, 20_000, 40_000, 60_000, 120_000];
+const LOCK_NAMES = new Set(['SingletonLock', 'SingletonCookie', 'SingletonSocket']);
 
-/** Stale Chromium profile locks left after crash/restart block relaunch. */
+/**
+ * Chromium Singleton* entries are often dangling symlinks after a container
+ * restart. fs.existsSync follows the target and returns false, so we must
+ * lstat/rm without that check.
+ */
 function clearChromiumProfileLocks(sessionPath: string): void {
-  const roots = [sessionPath, path.join(sessionPath, 'session')];
-  const lockNames = ['SingletonLock', 'SingletonCookie', 'SingletonSocket'];
-  for (const root of roots) {
-    for (const name of lockNames) {
-      const full = path.join(root, name);
-      try {
-        if (fs.existsSync(full)) {
-          fs.unlinkSync(full);
-          console.log(`[Resolver] Removed stale ${name} under ${root}`);
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.warn(`[Resolver] Could not remove ${full}:`, msg);
-      }
-    }
-    // LocalAuth nests under session/<clientId>/ — walk one level for locks.
+  const absRoot = path.resolve(sessionPath);
+
+  function unlinkLock(full: string): void {
     try {
-      if (!fs.existsSync(root)) continue;
-      for (const ent of fs.readdirSync(root, { withFileTypes: true })) {
-        if (!ent.isDirectory()) continue;
-        for (const name of lockNames) {
-          const full = path.join(root, ent.name, name);
-          try {
-            if (fs.existsSync(full)) {
-              fs.unlinkSync(full);
-              console.log(`[Resolver] Removed stale ${name} under ${path.join(root, ent.name)}`);
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-      }
+      fs.lstatSync(full);
     } catch {
-      /* ignore */
+      return;
+    }
+    try {
+      fs.rmSync(full, { force: true });
+      console.log(`[Resolver] Removed stale ${path.basename(full)} at ${full}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(`[Resolver] Could not remove ${full}:`, msg);
+    }
+  }
+
+  function walk(dir: string, depth: number): void {
+    if (depth > 4) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (LOCK_NAMES.has(ent.name)) {
+        unlinkLock(full);
+        continue;
+      }
+      if (ent.isDirectory()) walk(full, depth + 1);
+    }
+  }
+
+  walk(absRoot, 0);
+}
+
+/** Kill leftover Chromium from a failed initialize() that never bound pupBrowser. */
+async function killOrphanChromium(): Promise<void> {
+  try {
+    await execFileAsync('pkill', ['-9', '-f', '/usr/lib/chromium/chromium'], {
+      timeout: 5_000,
+    });
+    console.log('[Resolver] Killed orphan chromium processes');
+  } catch (e: unknown) {
+    // pkill exits 1 when nothing matched — that is fine.
+    const code =
+      e && typeof e === 'object' && 'code' in e ? (e as { code?: number }).code : undefined;
+    if (code !== 1) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn('[Resolver] pkill chromium:', msg);
     }
   }
 }
@@ -123,18 +150,20 @@ export function createResolverClient({
     client = null;
     ready = false;
     currentQr = null;
-    if (!prev) return;
-    try {
-      await prev.destroy();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn('[Resolver] destroy() failed:', msg);
+    if (prev) {
       try {
-        await prev.pupBrowser?.close?.();
-      } catch {
-        /* ignore */
+        await prev.destroy();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('[Resolver] destroy() failed:', msg);
+        try {
+          await prev.pupBrowser?.close?.();
+        } catch {
+          /* ignore */
+        }
       }
     }
+    await killOrphanChromium();
   }
 
   function scheduleInit(delayMs: number) {
@@ -180,14 +209,15 @@ export function createResolverClient({
         ready = false;
         currentQr = null;
         console.error('[Resolver] Auth failure:', msg);
-        // Corrupt LocalAuth — wipe locks and retry after backoff; operator may
-        // need to clear the volume if this loops.
-        scheduleInit(INIT_BACKOFF_MS[Math.min(initAttempt, INIT_BACKOFF_MS.length - 1)]);
+        const delay = INIT_BACKOFF_MS[Math.min(initAttempt, INIT_BACKOFF_MS.length - 1)];
+        initAttempt += 1;
+        scheduleInit(delay);
       });
 
       client.on('disconnected', (reason) => {
         ready = false;
         console.log('[Resolver] Disconnected:', reason);
+        // Only auto-reinit when idle; overlapping initClient is gated by `initializing`.
         scheduleInit(5_000);
       });
 
