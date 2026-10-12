@@ -30,5 +30,9 @@ export async function sendMail(to: string, subject: string, html: string, text: 
     }));
     return;
   }
-  // no email provider configured → no-op
+  throw new Error(
+    EMAIL_PROVIDER
+      ? `Email provider "${EMAIL_PROVIDER}" is not ready (check RESEND_API_KEY / SES_FROM)`
+      : 'Email delivery is not configured on this server',
+  );
 }

@@ -20,18 +20,29 @@ export function hashCode(code: string): string {
 }
 
 export async function sendEmailOtp(email: string, code: string): Promise<void> {
-  if (!EMAIL_PROVIDER) return;
+  if (!EMAIL_PROVIDER) {
+    throw new Error('Email delivery is not configured on this server');
+  }
   const m = otpEmail(code);
   await sendMail(email, m.subject, m.html, m.text);
 }
 
+/** Prefer E.164-ish digits for wwebjs getNumberId (IN 10-digit → 91…). */
+function waDigits(phone: string): string {
+  const digits = String(phone).replace(/[^0-9]/g, '');
+  if (digits.length === 10 && /^[6-9]/.test(digits)) return `91${digits}`;
+  return digits;
+}
+
 // Low-level: send an arbitrary text to a WhatsApp number via the resolver oracle.
 async function sendWhatsApp(phone: string, message: string): Promise<void> {
-  if (!RESOLVER_URL) return;
+  if (!RESOLVER_URL) {
+    throw new Error('WhatsApp delivery is not configured on this server');
+  }
   const r = await fetch(`${RESOLVER_URL}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
-    body: JSON.stringify({ phone, message }),
+    body: JSON.stringify({ phone: waDigits(phone), message }),
   });
   if (!r.ok) {
     const e: any = await r.json().catch(() => ({}));
@@ -41,11 +52,13 @@ async function sendWhatsApp(phone: string, message: string): Promise<void> {
 
 // Low-level: send a base64 PNG (branded card) as an image with a caption.
 async function sendWhatsAppMedia(phone: string, media: string, caption: string): Promise<void> {
-  if (!RESOLVER_URL) return;
+  if (!RESOLVER_URL) {
+    throw new Error('WhatsApp delivery is not configured on this server');
+  }
   const r = await fetch(`${RESOLVER_URL}/send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-service-secret': WA_SECRET },
-    body: JSON.stringify({ phone, media, caption }),
+    body: JSON.stringify({ phone: waDigits(phone), media, caption }),
   });
   if (!r.ok) {
     const e: any = await r.json().catch(() => ({}));
@@ -61,7 +74,9 @@ export async function notifyWhatsApp(phone: string, message: string): Promise<vo
 // OTP → branded PNG card + a caption that still contains the code as text (so it stays copyable).
 // Falls back to plain text if rendering or media-send fails, so delivery never breaks.
 export async function sendPhoneOtp(phone: string, code: string): Promise<void> {
-  if (!RESOLVER_URL) return;
+  if (!RESOLVER_URL) {
+    throw new Error('WhatsApp delivery is not configured on this server');
+  }
   const caption = otpMessage(code);
   try {
     const png = await renderOtpCard(code);

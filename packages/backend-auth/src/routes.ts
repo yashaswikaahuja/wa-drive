@@ -281,6 +281,14 @@ router.post('/password/request-otp', authMiddleware, loginLimiter, async (req: a
           : 'No phone on this account. Add a WhatsApp number under Contact verification first.',
       });
     }
+    if (channel === 'email' && !EMAIL_VERIFY) {
+      return res.status(503).json({
+        error: 'Email delivery is not configured. Use WhatsApp, or ask an admin to enable Resend/SES.',
+      });
+    }
+    if (channel === 'phone' && !PHONE_VERIFY) {
+      return res.status(503).json({ error: 'WhatsApp delivery is not configured on this server' });
+    }
     // Dedicated OTP channels so password-change codes don't collide with contact-verify OTPs.
     const otpChannel = channel === 'email' ? 'pw_email' : 'pw_phone';
     const ex = (await pool.query(
@@ -299,8 +307,12 @@ router.post('/password/request-otp', authMiddleware, loginLimiter, async (req: a
          SET code_hash=EXCLUDED.code_hash, expires_at=EXCLUDED.expires_at, attempts=0, last_sent_at=now()`,
       [req.user.userId, otpChannel, hashCode(code), expiresAt]
     );
-    if (channel === 'email') await sendEmailOtp(contact, code);
-    else await sendPhoneOtp(contact, code);
+    try {
+      if (channel === 'email') await sendEmailOtp(contact, code);
+      else await sendPhoneOtp(contact, code);
+    } catch (e: any) {
+      return res.status(502).json({ error: e.message || 'Could not send verification code' });
+    }
     const masked = channel === 'email'
       ? String(contact).replace(/(^.).*(@.*$)/, '$1***$2')
       : String(contact).replace(/.(?=.{4})/g, '*');
