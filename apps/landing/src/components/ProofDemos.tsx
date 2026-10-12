@@ -9,13 +9,16 @@ import { ArrowRight, Check } from "lucide-react";
 
 const APP_URL = String(import.meta.env.VITE_APP_URL ?? "https://app.cybercontrol.fun");
 
+/** Bump when replacing public/proof/*.webm so browsers/CDN skip stale cache. */
+const CLIP_V = "20261012a";
+
 const CLIP_SRC = {
-  form: "/proof/clip-form-fill.webm",
-  wa: "/proof/clip-whatsapp.webm",
-  customers: "/proof/clip-customers.webm",
-  files: "/proof/clip-files.webm",
-  photo: "/proof/clip-photos.webm",
-  workspace: "/proof/clip-workspace.webm",
+  form: `/proof/clip-form-fill-v2.webm?v=${CLIP_V}`,
+  wa: `/proof/clip-whatsapp.webm?v=${CLIP_V}`,
+  customers: `/proof/clip-customers.webm?v=${CLIP_V}`,
+  files: `/proof/clip-files.webm?v=${CLIP_V}`,
+  photo: `/proof/clip-photos.webm?v=${CLIP_V}`,
+  workspace: `/proof/clip-workspace.webm?v=${CLIP_V}`,
 } as const;
 
 type ClipKind = keyof typeof CLIP_SRC;

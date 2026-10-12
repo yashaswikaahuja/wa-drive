@@ -55,41 +55,105 @@ function resolveFfmpeg() {
   return candidates.find((p) => p && fs.existsSync(p)) || null;
 }
 
-// Final canvas: form (left) + extension panel (right) filling the height — no postage-stamp popup.
+// Final canvas: form (left) + extension panel (right). Both sources are full-bleed.
 const FORM_W = 860;
 const POPUP_W = 420;
 const CLIP_H = 720;
-const POPUP_VP_W = 400; // viewport width used while recording the extension page
+const EXT_UI_W = 400; // natural extension chrome width before zoom-to-fill
+
+function runFfmpeg(args) {
+  const ffmpeg = resolveFfmpeg();
+  if (!ffmpeg) throw new Error("ffmpeg-static / ffmpeg not found");
+  return new Promise((resolve, reject) => {
+    const p = spawn(ffmpeg, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let err = "";
+    p.stderr.on("data", (d) => { err += d.toString(); });
+    p.on("error", reject);
+    p.on("exit", (code) => (code === 0 ? resolve(err) : reject(new Error(`ffmpeg ${code}: ${err.slice(-500)}`))));
+  });
+}
+
+/** Probe duration seconds via ffmpeg stderr. */
+async function probeDurationSec(webm) {
+  try {
+    const err = await runFfmpeg(["-i", webm]);
+    const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(err);
+    if (!m) return null;
+    return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  } catch (e) {
+    const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(String(e.message || ""));
+    if (!m) return null;
+    return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  }
+}
 
 /**
- * Playwright records every page at context recordVideo size (FORM_W×CLIP_H).
- * The popup page only paints POPUP_VP_W×CLIP_H in the center → letterbox.
- * Crop that content, then scale it up to fill the right panel.
+ * Detect letterboxed content width via cropdetect on the popup reel, then
+ * crop → scale to fill the right panel (full extension UI, including Fill).
  */
+async function detectPopupContentWidth(popupWebm) {
+  try {
+    const err = await runFfmpeg([
+      "-i", popupWebm,
+      "-vf", "cropdetect=24:2:0",
+      "-frames:v", "40",
+      "-f", "null",
+      "-",
+    ]);
+    const crops = [...err.matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+    if (!crops.length) return EXT_UI_W;
+    // Prefer a crop close to extension width and full height.
+    let best = null;
+    for (const m of crops) {
+      const w = Number(m[1]);
+      const h = Number(m[2]);
+      if (h >= CLIP_H - 4 && w >= 300 && w <= 520) best = w;
+    }
+    if (best) return best;
+    const last = crops[crops.length - 1];
+    return Number(last[1]) || EXT_UI_W;
+  } catch (e) {
+    const crops = [...String(e.message || "").matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+    if (crops.length) {
+      const last = crops[crops.length - 1];
+      const w = Number(last[1]);
+      if (w >= 300 && w <= 520) return w;
+    }
+    return EXT_UI_W;
+  }
+}
+
 async function hstack(formWebm, popupWebm, dest) {
   const ffmpeg = resolveFfmpeg();
   if (!ffmpeg) {
     fs.copyFileSync(formWebm, dest);
     return "form-only";
   }
+  let contentW = await detectPopupContentWidth(popupWebm);
+  // Playwright often scales the narrow popup viewport to fill the wide video frame
+  // (cropdetect then reports full width). Force the known extension width in that case.
+  if (contentW > EXT_UI_W + 40) {
+    console.log("popup_content_w_oversize", contentW, "→ force", EXT_UI_W);
+    contentW = EXT_UI_W;
+  } else {
+    console.log("popup_content_w", contentW);
+  }
+  // Playwright stretches the narrow popup viewport across the wide video frame.
+  // Scale width back to EXT_UI_W (correct aspect, full height), then to POPUP_W
+  // (~5% wider) so the panel is edge-to-edge with the Fill CTA fully visible.
+  // Never use force_original_aspect_ratio=increase + crop — that chops the CTA.
   const filter =
     `[0:v]scale=${FORM_W}:${CLIP_H}:force_original_aspect_ratio=decrease,` +
-    `pad=${FORM_W}:${CLIP_H}:(ow-iw)/2:(oh-ih)/2:color=0xe8eef5,setsar=1[left];` +
-    // Crop letterboxed popup content, scale to full panel height, pad width so Fill button stays visible.
-    `[1:v]crop=${POPUP_VP_W}:${CLIP_H}:(iw-${POPUP_VP_W})/2:0,` +
-    `scale=-1:${CLIP_H},pad=${POPUP_W}:${CLIP_H}:(ow-iw)/2:0:color=0xf7f3eb,setsar=1[right];` +
-    `[left][right]hstack=inputs=2[v]`;
-  await new Promise((resolve, reject) => {
-    const args = [
-      "-y", "-i", formWebm, "-i", popupWebm,
-      "-filter_complex", filter,
-      "-map", "[v]", "-an", "-c:v", "libvpx-vp9", "-b:v", "1.6M", "-row-mt", "1", dest,
-    ];
-    const p = spawn(ffmpeg, args, { stdio: "inherit" });
-    p.on("error", reject);
-    p.on("exit", (code) => (code === 0 ? resolve() : reject(new Error(`ffmpeg ${code}`))));
-  });
-  return "hstack-fitted";
+    `pad=${FORM_W}:${CLIP_H}:(ow-iw)/2:(oh-ih)/2:color=0xe8eef5,setsar=1,fps=25[left];` +
+    `[1:v]scale=${EXT_UI_W}:${CLIP_H},` +
+    `scale=${POPUP_W}:${CLIP_H},setsar=1,fps=25[right];` +
+    `[left][right]hstack=inputs=2,trim=duration=14,setpts=PTS-STARTPTS[v]`;
+  await runFfmpeg([
+    "-y", "-i", formWebm, "-i", popupWebm,
+    "-filter_complex", filter,
+    "-map", "[v]", "-an", "-c:v", "libvpx-vp9", "-b:v", "1.8M", "-row-mt", "1", dest,
+  ]);
+  return `hstack-unstretch-fill-${EXT_UI_W}`;
 }
 
 fs.mkdirSync(recRoot, { recursive: true });
@@ -150,7 +214,7 @@ const context = await chromium.launchPersistentContext(userDataDir, {
     "--no-default-browser-check",
   ],
   ignoreDefaultArgs: ["--disable-extensions"],
-  // All pages share this video size; popup viewport is narrower → letterboxed (cropped in hstack).
+  // Same size for every page. Popup HTML is zoomed to fill this frame (no letterbox).
   recordVideo: { dir: tmpVideoDir, size: { width: FORM_W, height: CLIP_H } },
 });
 
@@ -162,7 +226,8 @@ try {
   console.log("extensionId", extensionId);
 
   const popup = await context.newPage();
-  await popup.setViewportSize({ width: POPUP_VP_W, height: CLIP_H });
+  // Natural extension width; video frame is wider — we crop letterbox in hstack.
+  await popup.setViewportSize({ width: EXT_UI_W, height: CLIP_H });
   await popup.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "domcontentloaded" });
   await popup.evaluate(async ({ accessToken, backendUrl, user }) => {
     await chrome.storage.local.set({ accessToken, backendUrl, user });
@@ -218,11 +283,11 @@ try {
   }
   console.log("fill_clicked");
 
-  // Form: animate cursor across fields as they populate
+  // Form: animate cursor across fields as they populate (cap wait — empty optional fields)
   await formPage.bringToFront();
   const filledIds = await animateFieldsFilling(formPage, FIELD_IDS, {
     minFilled: 5,
-    timeoutMs: 120000,
+    timeoutMs: 25000,
   });
   console.log("animated_fields", filledIds.join(","));
 
@@ -257,20 +322,45 @@ try {
   const popupWebm = popupVideo ? await popupVideo.path() : null;
   console.log("videos", { formWebm, popupWebm });
 
-  const dest = path.join(proofDir, "clip-form-fill.webm");
+  // New filename avoids Windows file locks on the old postage-stamp clip-form-fill.webm
+  const dest = path.join(proofDir, "clip-form-fill-v2.webm");
+  const destTmp = path.join(recRoot, "clip-form-fill.next.webm");
+  const debugDir = path.join(recRoot, "_debug_last");
+  fs.rmSync(debugDir, { recursive: true, force: true });
+  fs.mkdirSync(debugDir, { recursive: true });
+  if (formWebm && fs.existsSync(formWebm)) fs.copyFileSync(formWebm, path.join(debugDir, "raw-form.webm"));
+  if (popupWebm && fs.existsSync(popupWebm)) fs.copyFileSync(popupWebm, path.join(debugDir, "raw-popup.webm"));
+
   let mode = "form-only";
   if (formWebm && popupWebm && fs.existsSync(formWebm) && fs.existsSync(popupWebm)) {
-    try {
-      mode = await hstack(formWebm, popupWebm, dest);
-    } catch (e) {
-      console.warn("hstack failed:", e.message);
-      fs.copyFileSync(formWebm, dest);
-      mode = "form-only-fallback";
-    }
+    mode = await hstack(formWebm, popupWebm, destTmp);
   } else if (formWebm && fs.existsSync(formWebm)) {
-    fs.copyFileSync(formWebm, dest);
+    fs.copyFileSync(formWebm, destTmp);
   } else {
     throw new Error("No form webm recorded");
+  }
+
+  const size = fs.statSync(destTmp).size;
+  const dur = await probeDurationSec(destTmp);
+  console.log("OK_tmp", destTmp, Math.round(size / 1024) + "KB", mode, "duration_s", dur);
+  if (size < 80_000) throw new Error(`Output too small (${size} bytes) — record failed`);
+  if (size > 2_800_000) throw new Error(`Output too large (${size} bytes) — likely unfitted/long take`);
+  if (dur != null && dur > 18) throw new Error(`Output too long (${dur}s) — refuse to publish`);
+
+  const framePath = path.join(debugDir, "check.png");
+  await runFfmpeg(["-y", "-ss", "00:00:06", "-i", destTmp, "-frames:v", "1", "-update", "1", framePath]);
+  console.log("frame_check", framePath);
+
+  // Replace public file (retry if OneDrive/viewer locks it).
+  for (let i = 0; i < 8; i++) {
+    try {
+      fs.copyFileSync(destTmp, dest);
+      break;
+    } catch (e) {
+      if (i === 7) throw e;
+      console.warn("dest locked, retry", e.message);
+      await new Promise((r) => setTimeout(r, 500));
+    }
   }
   console.log("OK", dest, Math.round(fs.statSync(dest).size / 1024) + "KB", mode);
 } catch (e) {
@@ -290,4 +380,4 @@ try {
 fs.rmSync(tmpVideoDir, { recursive: true, force: true });
 fs.rmSync(userDataDir, { recursive: true, force: true });
 if (!ok) process.exit(1);
-console.log("done — fitted popup panel, stub port", apiPort);
+console.log("done — unstretch+pad popup panel, stub port", apiPort);
