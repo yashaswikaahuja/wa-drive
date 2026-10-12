@@ -1,8 +1,8 @@
 /**
- * NPCI-style product proof: silent WebM clips of real product UI.
- * Form band: real unpacked Chrome extension AutoFill on a ServicePlus-style
- * demo portal (scripts/record-extension-autofill.mjs). Other bands: Hub
- * recordings (pixel fixtures via local stub APIs — pnpm record:pixel).
+ * NPCI-style product proof: silent WebM clips of product UI.
+ * Form band: HTML fixture with natural-size extension popup overlay
+ * (public/proof/record-form-fill.html via pnpm record:proof).
+ * Other bands: Hub fixtures (pnpm record:proof / record:pixel).
  * See issue #331.
  */
 import { ArrowRight, Check } from "lucide-react";
@@ -10,10 +10,10 @@ import { ArrowRight, Check } from "lucide-react";
 const APP_URL = String(import.meta.env.VITE_APP_URL ?? "https://app.cybercontrol.fun");
 
 /** Bump when replacing public/proof/*.webm so browsers/CDN skip stale cache. */
-const CLIP_V = "20261012c";
+const CLIP_V = "20261012d";
 
 const CLIP_SRC = {
-  form: `/proof/clip-form-fill-v3.webm?v=${CLIP_V}`,
+  form: `/proof/clip-form-fill-v4.webm?v=${CLIP_V}`,
   wa: `/proof/clip-whatsapp.webm?v=${CLIP_V}`,
   customers: `/proof/clip-customers.webm?v=${CLIP_V}`,
   files: `/proof/clip-files.webm?v=${CLIP_V}`,
