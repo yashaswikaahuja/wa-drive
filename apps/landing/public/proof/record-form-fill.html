@@ -6,62 +6,82 @@
   <title>Form AutoFill proof · product demo</title>
   <link rel="stylesheet" href="./demo-tokens.css" />
   <style>
-    .stage { background: #e8e4dc; }
-    .chrome {
-      display: flex; align-items: center; gap: 8px;
-      height: 44px; padding: 0 14px; background: #2b2f38; color: #fff;
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; }
+    .stage {
+      width: 1280px; height: 720px; position: relative;
+      background: #e8eef5;
+      font-family: "Segoe UI", Inter, system-ui, sans-serif;
+      color: #1a2332;
     }
-    .dot { width: 10px; height: 10px; border-radius: 50%; }
-    .url {
-      flex: 1; margin-left: 8px; padding: 6px 10px; border-radius: 6px;
-      background: rgba(255,255,255,.1); color: rgba(255,255,255,.75);
-      font: 12px/1.2 ui-monospace, monospace;
+
+    /* Bihar ServicePlus-style form (left) */
+    .demo-banner {
+      background: #ff8f18; color: #1a1208;
+      font: 700 11px/1 Inter, sans-serif;
+      letter-spacing: .06em; text-transform: uppercase;
+      padding: 7px 18px;
     }
-    .badge-demo { margin-left: 8px; }
-    .workspace {
-      position: relative; height: calc(720px - 44px);
-      background: #f4f1ea;
+    .top {
+      background: linear-gradient(90deg, #0b3d91, #1256c4);
+      color: #fff; padding: 10px 18px;
+      display: flex; align-items: center; gap: 12px;
+      border-bottom: 3px solid #f4c430;
     }
-    .gov {
-      max-width: 760px; margin: 18px 24px; padding: 18px 22px;
-      background: #fff; border: 1px solid #d9d2c4; border-radius: 6px;
-      box-shadow: 0 1px 2px rgba(0,0,0,.04);
-      font-family: "Segoe UI", Tahoma, sans-serif;
+    .top .emblem {
+      width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+      background: #fff; color: #0b3d91; display: grid; place-items: center;
+      font-weight: 800; font-size: 11px;
     }
-    .gov-head {
-      display: flex; gap: 12px; align-items: center;
-      padding-bottom: 12px; margin-bottom: 14px; border-bottom: 2px solid #1e3a5f;
+    .top h1 { margin: 0; font-size: 15px; font-weight: 700; }
+    .top p { margin: 2px 0 0; font-size: 11px; opacity: .9; }
+    .wrap {
+      position: absolute; left: 0; top: 0; right: 400px; bottom: 0;
+      overflow: hidden;
     }
-    .seal {
-      width: 42px; height: 42px; border-radius: 4px; background: #1e3a5f; color: #fff;
-      display: grid; place-items: center; font: 700 11px Inter, sans-serif;
+    .card {
+      margin: 14px 16px 16px; background: #fff;
+      border: 1px solid #c5d0e0; border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(11,61,145,.08); overflow: hidden;
     }
-    .gov h1 { margin: 0; font-size: 16px; color: #1e3a5f; }
-    .gov .sub { font-size: 12px; color: #666; margin-top: 2px; }
-    .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; }
-    label { display: block; }
-    label.full { grid-column: 1 / -1; }
-    label span {
-      display: block; margin-bottom: 4px; font-size: 11px; font-weight: 600; color: #444;
+    .card-h {
+      background: #f3f6fb; border-bottom: 1px solid #c5d0e0;
+      padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
     }
+    .card-h strong { font-size: 13px; color: #0b3d91; }
+    .badge {
+      font-size: 9px; font-weight: 700; letter-spacing: .04em;
+      background: #fff3cd; color: #856404; border: 1px solid #ffe08a;
+      padding: 3px 8px; border-radius: 999px;
+    }
+    .body { padding: 12px 14px 14px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+    label { display: block; font-size: 10px; font-weight: 600; color: #445; margin-bottom: 3px; }
+    label .req { color: #c0392b; }
     .field {
-      height: 34px; border: 1px solid #9aa3ad; border-radius: 2px;
-      background: #fff; padding: 0 10px; display: flex; align-items: center;
-      font-size: 13px; color: #999; transition: .2s;
+      height: 32px; border: 1px solid #b8c4d6; border-radius: 4px;
+      padding: 0 10px; font-size: 12.5px; background: #fbfcfe;
+      display: flex; align-items: center; color: #99a; transition: .15s;
     }
     .field.filling { border-color: #f98a1e; background: #fff7ed; color: #c2410c; }
     .field.filled { border-color: #2f9e6e; color: #131a2b; background: #fff; }
+    .full { grid-column: 1 / -1; }
+    .field.tall { height: 48px; align-items: flex-start; padding-top: 8px; }
+    .meta {
+      margin-top: 8px; font-size: 11px; color: #667;
+      display: flex; justify-content: space-between; align-items: center;
+    }
     .done {
-      display: none; margin-top: 14px; padding: 10px 12px; border-radius: 6px;
+      display: none; margin-top: 10px; padding: 8px 10px; border-radius: 6px;
       border: 1px solid rgba(47,158,110,.35); background: rgba(47,158,110,.1);
       color: #047857; font: 600 12px Inter, sans-serif;
     }
     .done.show { display: block; }
 
-    /* Real extension popup chrome (paper theme from popup.html).
-       Height leaves room for results + Fill CTA inside the 720 stage. */
+    /* Extension popup — natural size, denser, fills right column */
     .ext {
-      position: absolute; top: 12px; right: 28px; width: 360px; height: 640px;
+      position: absolute; top: 10px; right: 14px; bottom: 10px;
+      width: 372px;
       display: flex; flex-direction: column;
       background-color: hsl(var(--pt-bg));
       background-image:
@@ -71,61 +91,57 @@
       background-position: 0 0, 3px 5px;
       border-radius: 14px;
       border: 1px solid hsl(var(--pt-border));
-      box-shadow: var(--shadow-lift), 0 0 0 1px hsl(var(--marigold) / 0.12);
-      opacity: 0; transform: translateY(12px) scale(.97);
+      box-shadow: var(--shadow-lift), 0 12px 40px -12px rgba(19,26,43,.28);
+      opacity: 0; transform: translateY(10px) scale(.98);
       transition: opacity .35s ease, transform .35s ease;
       z-index: 40; overflow: hidden; color: hsl(var(--pt-ink));
       pointer-events: none;
     }
     .ext.show { opacity: 1; transform: none; pointer-events: auto; }
     .ext .header {
-      flex-shrink: 0; display: flex; align-items: center; gap: 10px;
-      height: 52px; padding: 0 14px; background: hsl(var(--pt-card));
+      flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+      min-height: 52px; padding: 8px 12px; background: hsl(var(--pt-card));
       border-bottom: 1px solid hsl(var(--pt-border));
     }
     .brand-mark {
       width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
-      background: hsl(var(--pt-ink)); color: hsl(var(--marigold)); font-size: 13px;
+      background: hsl(var(--pt-ink)); flex-shrink: 0;
     }
+    .brand-mark svg { display: block; width: 15px; height: 15px; }
+    .brand-copy { min-width: 0; flex: 1; }
     .ext .title { font-size: 14px; font-weight: 700; line-height: 1.1; }
     .ext .title span { color: hsl(var(--pt-marigold-deep)); }
+    .ext .subtitle { font-size: 10px; color: hsl(var(--pt-muted)); margin-top: 2px; }
     .conn {
-      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      display: flex; align-items: center; gap: 6px;
       padding: 4px 8px; border-radius: 999px;
       background: hsl(var(--pt-secondary) / 0.7); border: 1px solid hsl(var(--pt-border));
       font-size: 11px; color: hsl(var(--pt-muted)); font-weight: 500;
     }
-    .conn .dot { width: 7px; height: 7px; border-radius: 50%; background: hsl(var(--pt-success));
-      box-shadow: 0 0 0 3px hsl(var(--pt-success) / 0.15); }
-    .site-bar {
-      margin: 10px 12px 0; padding: 10px 12px; display: flex; align-items: center; gap: 10px;
-      background: hsl(var(--pt-card)); border: 1px solid hsl(var(--pt-border));
-      border-radius: 12px; box-shadow: var(--shadow-paper);
+    .conn .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: hsl(var(--pt-success));
+      box-shadow: 0 0 0 3px hsl(var(--pt-success) / 0.15);
     }
-    .site-icon {
-      width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center;
-      font-size: 15px; background: hsl(var(--pt-marigold) / 0.12);
-    }
-    .site-name { font-size: 12px; font-weight: 600; }
-    .site-conf { font-size: 10px; color: hsl(var(--pt-success)); font-weight: 500; margin-top: 2px; }
-    .search-wrap { padding: 10px 12px 8px; }
+    .search-wrap { padding: 10px 12px 6px; flex: 0 0 auto; }
     .search-wrap input {
-      width: 100%; padding: 10px 12px; background: hsl(var(--pt-card));
+      width: 100%; padding: 9px 12px 9px 34px; background: hsl(var(--pt-card));
       border: 1px solid hsl(var(--pt-border)); border-radius: 10px;
-      font: 13px Inter, sans-serif; color: hsl(var(--pt-ink)); outline: none;
+      font: 12.5px Inter, sans-serif; color: hsl(var(--pt-ink)); outline: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23555'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2' d='m21 21-4.3-4.3m1.3-5.2a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: 10px center; background-size: 14px;
     }
     .profiles-box {
-      flex: 1 1 auto; min-height: 72px; margin: 0 12px; background: hsl(var(--pt-card));
-      border: 1px solid hsl(var(--pt-border)); border-radius: 14px;
+      flex: 1 1 auto; min-height: 80px; margin: 0 12px; background: hsl(var(--pt-card));
+      border: 1px solid hsl(var(--pt-border)); border-radius: 12px;
       box-shadow: var(--shadow-paper); overflow: hidden;
     }
     .section-label {
-      padding: 8px 14px 4px; font: 9px/1 "JetBrains Mono", ui-monospace, monospace;
+      padding: 7px 12px 4px; font: 9px/1 "JetBrains Mono", ui-monospace, monospace;
       text-transform: uppercase; letter-spacing: .08em; color: hsl(var(--pt-muted));
       border-bottom: 1px solid hsl(var(--pt-border-soft));
     }
     .profile-item {
-      padding: 11px 14px; display: flex; align-items: center; gap: 11px;
+      padding: 10px 12px; display: flex; align-items: center; gap: 10px;
       border-bottom: 1px solid hsl(var(--pt-border-soft));
     }
     .profile-item.selected {
@@ -133,18 +149,19 @@
       box-shadow: inset 3px 0 0 hsl(var(--pt-marigold));
     }
     .avatar {
-      width: 34px; height: 34px; border-radius: 9px;
+      width: 32px; height: 32px; border-radius: 8px;
       background: hsl(var(--pt-marigold) / 0.14); color: hsl(var(--pt-marigold-deep));
-      display: grid; place-items: center; font: 700 12px Inter, sans-serif;
+      display: grid; place-items: center; font: 700 11px Inter, sans-serif;
     }
     .profile-name { font-size: 13px; font-weight: 600; }
-    .profile-phone { font-size: 11px; color: hsl(var(--pt-muted)); margin-top: 2px; }
+    .profile-phone { font-size: 11px; color: hsl(var(--pt-muted)); margin-top: 1px; }
+    #progress, #results { flex: 0 0 auto; }
     #progress {
-      display: none; margin: 8px 12px 0; padding: 12px 14px;
+      display: none; margin: 8px 12px 0; padding: 10px 12px;
       background: hsl(var(--pt-card)); border: 1px solid hsl(var(--pt-border)); border-radius: 12px;
     }
     #progress.show { display: block; }
-    .progress-text { font-size: 12px; color: hsl(var(--pt-marigold-deep)); margin-bottom: 8px; font-weight: 600; }
+    .progress-text { font-size: 12px; color: hsl(var(--pt-marigold-deep)); margin-bottom: 7px; font-weight: 600; }
     .progress-bar { height: 4px; border-radius: 999px; background: hsl(var(--pt-secondary)); overflow: hidden; }
     .progress-bar-inner {
       height: 100%; width: 18%; border-radius: 999px;
@@ -152,26 +169,21 @@
       transition: width .35s;
     }
     #results {
-      display: none; margin: 8px 12px 0; padding: 12px 14px;
+      display: none; margin: 8px 12px 0; padding: 10px 12px;
       background: hsl(var(--pt-card)); border: 1px solid hsl(var(--pt-border)); border-radius: 12px;
     }
     #results.show { display: block; }
-    .results-header { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: hsl(var(--pt-ink)); }
-    .results-stats { display: flex; gap: 16px; }
-    .stat-num { font-size: 18px; font-weight: 700; color: hsl(var(--pt-success)); }
+    .results-header { font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+    .results-stats { display: flex; gap: 14px; }
+    .stat-num { font-size: 17px; font-weight: 700; color: hsl(var(--pt-success)); }
     .stat-label { font-size: 10px; color: hsl(var(--pt-muted)); }
     .footer {
-      flex: 0 0 auto; padding: 12px; display: flex; gap: 8px;
+      flex: 0 0 auto; padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 6px;
     }
-    #progress, #results { flex: 0 0 auto; }
-    #mode-select {
-      height: 40px; padding: 0 8px; border: 1px solid hsl(var(--pt-border));
-      border-radius: 999px; font-size: 12px; background: #fff; color: hsl(var(--pt-ink));
-    }
+    .fill-hint { font-size: 11px; color: hsl(var(--pt-muted)); }
     #fill-btn {
-      flex: 1; height: 40px; padding: 0 14px; color: #fff; border: none; border-radius: 999px;
-      font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; height: 42px; padding: 0 14px; color: #fff; border: none; border-radius: 999px;
+      font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
       background: linear-gradient(180deg, hsl(27 95% 58%), hsl(22 92% 50%));
       box-shadow: 0 1px 0 hsl(22 90% 40% / 0.5) inset, 0 8px 20px -8px hsl(27 95% 55% / 0.55);
     }
@@ -184,96 +196,106 @@
 </head>
 <body>
   <div class="stage" id="stage">
-    <div class="chrome">
-      <span class="dot" style="background:#f87171"></span>
-      <span class="dot" style="background:#fbbf24"></span>
-      <span class="dot" style="background:#34d399"></span>
-      <div class="url">https://demo-portal.example.gov.in/application/new</div>
-      <span class="badge-demo">Demo · fictional data</span>
-    </div>
-    <div class="workspace">
-      <div class="gov">
-        <div class="gov-head">
-          <div class="seal">GOV</div>
-          <div>
-            <h1>Demo State Service Portal</h1>
-            <div class="sub">Sample application — fictional site for product demo</div>
-          </div>
+    <div class="wrap">
+      <div class="demo-banner">Demo portal · fictional Ananya Demo data · no live café PII</div>
+      <header class="top">
+        <div class="emblem">BR</div>
+        <div>
+          <h1>Government of Bihar · ServicePlus / RTPS</h1>
+          <p>Online Application · Permanent Residence Certificate</p>
         </div>
-        <div style="font:600 13px Inter;margin-bottom:10px">Application form <span id="count" style="font-weight:500;color:#78716c;font-size:11px;margin-left:8px">Empty</span></div>
-        <div class="fields" id="fields"></div>
-        <div class="done" id="done">✓ Form filled from demo profile — review before submit</div>
+      </header>
+      <div class="card">
+        <div class="card-h">
+          <strong>Applicant Details</strong>
+          <span class="badge">STEP 2 OF 4 · PERSONAL INFORMATION</span>
+        </div>
+        <div class="body">
+          <div class="grid" id="fields"></div>
+          <div class="meta">
+            <span id="count">Empty</span>
+            <span>Review before submit</span>
+          </div>
+          <div class="done" id="done">✓ Form filled from Ananya Demo — review before submit</div>
+        </div>
       </div>
-
-      <aside class="ext" id="ext" aria-label="CyberControl AutoFill extension popup">
-        <div class="header">
-          <div class="brand-mark">⚡</div>
-          <div class="title pt-display">Cyber<span>Control</span></div>
-          <div class="conn"><span class="dot"></span> online</div>
-        </div>
-        <div class="site-bar">
-          <div class="site-icon">🌐</div>
-          <div>
-            <div class="site-name">Demo State Service Portal</div>
-            <div class="site-conf">High confidence · form detected</div>
-          </div>
-        </div>
-        <div class="search-wrap">
-          <input type="text" value="" placeholder="Search by name or phone..." readonly />
-        </div>
-        <div class="profiles-box">
-          <div class="section-label">Profiles</div>
-          <div class="profile-item selected" id="profileChip">
-            <div class="avatar">AD</div>
-            <div>
-              <div class="profile-name">Ananya Demo</div>
-              <div class="profile-phone">90000 00001</div>
-            </div>
-          </div>
-          <div class="profile-item">
-            <div class="avatar">VD</div>
-            <div>
-              <div class="profile-name">Vikram Demo</div>
-              <div class="profile-phone">90000 00002</div>
-            </div>
-          </div>
-        </div>
-        <div id="progress">
-          <div class="progress-text" id="progress-text">Filling form...</div>
-          <div class="progress-bar"><div class="progress-bar-inner" id="progress-inner"></div></div>
-        </div>
-        <div id="results">
-          <div class="results-header">Fill Results</div>
-          <div class="results-stats">
-            <div><div class="stat-num" id="r-filled">0</div><div class="stat-label">Filled</div></div>
-            <div><div class="stat-num" style="color:hsl(var(--pt-warning))" id="r-skipped">0</div><div class="stat-label">Skipped</div></div>
-            <div><div class="stat-num" style="color:hsl(var(--pt-danger))" id="r-failed">0</div><div class="stat-label">Failed</div></div>
-          </div>
-        </div>
-        <div class="footer">
-          <select id="mode-select"><option>Auto</option></select>
-          <button id="fill-btn" type="button">⚡ Fill Form</button>
-        </div>
-        <div class="ver">DEMO FIXTURE · NO REAL PII</div>
-      </aside>
     </div>
+
+    <aside class="ext" id="ext" aria-label="CyberControl AutoFill extension popup">
+      <div class="header">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 256 256" fill="none">
+            <path d="M215.8 118.2l-112 88a8 8 0 0 1-12.9-7.2l12-72H56a8 8 0 0 1-6.9-12.2l64-88A8 8 0 0 1 128 32h56a8 8 0 0 1 6.9 12.2l-28 38.5 46.2 23.1a8 8 0 0 1 6.7 12.4z"
+              fill="hsl(27 95% 55%)"/>
+          </svg>
+        </div>
+        <div class="brand-copy">
+          <div class="title pt-display">Cyber<span>Control</span></div>
+          <div class="subtitle">Form fill for café operators</div>
+        </div>
+        <div class="conn"><span class="dot"></span> online</div>
+      </div>
+      <div class="search-wrap">
+        <input type="text" value="" placeholder="Search customer name or phone" readonly />
+      </div>
+      <div class="profiles-box">
+        <div class="section-label">Customers</div>
+        <div class="profile-item selected" id="profileChip">
+          <div class="avatar">AD</div>
+          <div>
+            <div class="profile-name">Ananya Demo</div>
+            <div class="profile-phone">90000 00001</div>
+          </div>
+        </div>
+        <div class="profile-item">
+          <div class="avatar">VD</div>
+          <div>
+            <div class="profile-name">Vikram Demo</div>
+            <div class="profile-phone">90000 00002</div>
+          </div>
+        </div>
+      </div>
+      <div id="progress">
+        <div class="progress-text" id="progress-text">Filling form…</div>
+        <div class="progress-bar"><div class="progress-bar-inner" id="progress-inner"></div></div>
+      </div>
+      <div id="results">
+        <div class="results-header">Fill summary</div>
+        <div class="results-stats">
+          <div><div class="stat-num" id="r-filled">0</div><div class="stat-label">Filled</div></div>
+          <div><div class="stat-num" style="color:hsl(var(--pt-warning))" id="r-skipped">0</div><div class="stat-label">Skipped</div></div>
+          <div><div class="stat-num" style="color:hsl(var(--pt-danger))" id="r-failed">0</div><div class="stat-label">Failed</div></div>
+        </div>
+      </div>
+      <div class="footer">
+        <div class="fill-hint" id="fill-hint">Ananya Demo selected · ready to fill</div>
+        <button id="fill-btn" type="button">Fill this form</button>
+      </div>
+      <div class="ver">DEMO FIXTURE · NO REAL PII</div>
+    </aside>
   </div>
   <script src="./demo-fx.js"></script>
   <script>
     const FIELDS = [
-      ['Full name', 'Ananya Demo', false],
-      ['Date of birth', '12/03/1995', false],
-      ['Aadhaar / ID', '0000 1111 2222', false],
-      ['Mobile', '90000 00001', false],
-      ["Father's name", 'Vikram Demo', false],
-      ['Address', 'Demo Ward 1, Sample Nagar, Demo City', true],
+      ['Full Name', 'Ananya Demo', false, false],
+      ["Father's / Husband's Name", 'Vikram Demo', false, false],
+      ['Date of Birth', '12/03/1995', false, false],
+      ['Gender', 'FEMALE', false, false],
+      ['Aadhaar Number', '000011112222', false, false],
+      ['Mobile Number', '9000000001', false, false],
+      ['Address', 'Demo Ward 1, Sample Nagar, Demo City', true, true],
+      ['District', 'Patna', false, false],
+      ['State', 'Bihar', false, false],
+      ['PIN Code', '800001', false, false],
     ];
     const fieldsEl = document.getElementById('fields');
-    FIELDS.forEach(([label, , full], i) => {
-      const lab = document.createElement('label');
-      if (full) lab.className = 'full';
-      lab.innerHTML = '<span>' + label + '</span><div class="field" id="f' + i + '">—</div>';
-      fieldsEl.appendChild(lab);
+    FIELDS.forEach(([label, , full, tall], i) => {
+      const wrap = document.createElement('div');
+      if (full) wrap.className = 'full';
+      wrap.innerHTML =
+        '<label>' + label + ' <span class="req">*</span></label>' +
+        '<div class="field' + (tall ? ' tall' : '') + '" id="f' + i + '">—</div>';
+      fieldsEl.appendChild(wrap);
     });
 
     async function runOnce() {
@@ -285,55 +307,59 @@
       const progress = document.getElementById('progress');
       const results = document.getElementById('results');
       const inner = document.getElementById('progress-inner');
+      const hint = document.getElementById('fill-hint');
 
       done.classList.remove('show');
       progress.classList.remove('show');
       results.classList.remove('show');
       fillBtn.disabled = false;
-      fillBtn.textContent = '⚡ Fill Form';
+      fillBtn.textContent = 'Fill this form';
+      hint.textContent = 'Ananya Demo selected · ready to fill';
       count.textContent = 'Empty';
       document.getElementById('r-filled').textContent = '0';
-      inner.style.width = '18%';
+      inner.style.width = '12%';
       FIELDS.forEach((_, i) => {
         const el = document.getElementById('f' + i);
-        el.className = 'field';
+        el.className = 'field' + (FIELDS[i][3] ? ' tall' : '');
         el.textContent = '—';
       });
       ext.classList.remove('show');
 
-      await fx.sleep(600);
+      await fx.sleep(500);
       ext.classList.add('show');
-      await fx.sleep(700);
+      await fx.sleep(650);
 
-      await fx.moveTo(document.getElementById('profileChip'), 500);
-      await fx.highlight(document.getElementById('profileChip'), 220);
-      await fx.sleep(200);
+      await fx.moveTo(document.getElementById('profileChip'), 480);
+      await fx.highlight(document.getElementById('profileChip'), 240);
+      await fx.sleep(180);
 
-      await fx.moveTo(fillBtn, 650);
+      await fx.moveTo(fillBtn, 600);
       await fx.highlight(fillBtn, 280);
       await fx.click(fillBtn);
       fillBtn.disabled = true;
       fillBtn.textContent = 'Filling…';
+      hint.textContent = 'Writing Ananya Demo into the open form';
       progress.classList.add('show');
-      await fx.sleep(280);
+      await fx.sleep(260);
 
       for (let i = 0; i < FIELDS.length; i++) {
         const el = document.getElementById('f' + i);
-        await fx.moveTo(el, 300);
-        await fx.typeInto(el, FIELDS[i][1], 34);
-        count.textContent = (i + 1) + '/' + FIELDS.length + ' fields';
+        await fx.moveTo(el, 280);
+        await fx.typeInto(el, FIELDS[i][1], 28);
+        count.textContent = (i + 1) + '/' + FIELDS.length + ' fields filled';
         inner.style.width = Math.round(((i + 1) / FIELDS.length) * 100) + '%';
         document.getElementById('r-filled').textContent = String(i + 1);
-        await fx.sleep(80);
+        await fx.sleep(60);
       }
 
       progress.classList.remove('show');
       results.classList.add('show');
       fillBtn.disabled = false;
-      fillBtn.textContent = '⚡ Fill Form';
+      fillBtn.textContent = 'Fill this form';
+      hint.textContent = 'Fill complete · review before submit';
       done.classList.add('show');
       count.textContent = 'Complete';
-      await fx.sleep(1000);
+      await fx.sleep(1100);
       window.__done = true;
     }
 
