@@ -6,7 +6,8 @@ const router: ExpressRouter = Router();
 
 // OAuth2 Step 1 — redirect to Google consent
 router.get('/auth', (req, res) => {
-  const wsId = (req.query.workspace as string) || '';
+  const wsId = String(req.query.workspace || '').trim();
+  if (!wsId) { res.status(400).send('workspace is required'); return; }
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -22,18 +23,17 @@ router.get('/callback', async (req, res) => {
   if (!code) { res.status(400).send('Missing code'); return; }
   try {
     const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-    const wsId = req.query.state as string;
+    oauth2Client.setCredentials({});
+    const wsId = String(req.query.state || '').trim();
+    if (!wsId) { res.status(400).send('Drive connect is missing a workspace'); return; }
     if (tokens.refresh_token) {
-      await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_refresh_token',$1,now()) ON CONFLICT(key) DO UPDATE SET value=$1,updated_at=now()`, [tokens.refresh_token]);
-      if (wsId) await pool.query(`INSERT INTO workspace_secrets(workspace_id,key,value,updated_at) VALUES($1,'drive_refresh_token',$2,now()) ON CONFLICT(workspace_id,key) DO UPDATE SET value=$2,updated_at=now()`, [wsId, tokens.refresh_token]);
+      await pool.query(`INSERT INTO workspace_secrets(workspace_id,key,value,updated_at) VALUES($1,'drive_refresh_token',$2,now()) ON CONFLICT(workspace_id,key) DO UPDATE SET value=$2,updated_at=now()`, [wsId, tokens.refresh_token]);
     }
     if (tokens.access_token) {
-      await pool.query(`INSERT INTO app_secrets(key,value,updated_at) VALUES('drive_access_token',$1,now()) ON CONFLICT(key) DO UPDATE SET value=$1,updated_at=now()`, [tokens.access_token]);
-      if (wsId) await pool.query(`INSERT INTO workspace_secrets(workspace_id,key,value,updated_at) VALUES($1,'drive_access_token',$2,now()) ON CONFLICT(workspace_id,key) DO UPDATE SET value=$2,updated_at=now()`, [wsId, tokens.access_token]);
+      await pool.query(`INSERT INTO workspace_secrets(workspace_id,key,value,updated_at) VALUES($1,'drive_access_token',$2,now()) ON CONFLICT(workspace_id,key) DO UPDATE SET value=$2,updated_at=now()`, [wsId, tokens.access_token]);
     }
-    console.log('[Drive] Connected for workspace:', wsId || 'global');
-    if (wsId) logActivity(wsId, 'drive.linked');
+    console.log('[Drive] Connected for workspace:', wsId.slice(0, 8));
+    logActivity(wsId, 'drive.linked');
     res.send('<script>window.opener?.postMessage({type:"DRIVE_CONNECTED"},"*");window.close();</script>');
   } catch (e: any) {
     console.error('[Drive] Callback error:', e.message);
@@ -58,10 +58,12 @@ router.get('/status', authMiddleware, async (req: any, res) => {
 // Query: ?source=whatsapp (WA Documents view) | ?source=all|omit (File Manager — every provenance)
 //         ?customerId=91… to scope to one phone
 router.get('/files/ws', authMiddleware, async (req: any, res) => {
+  const workspaceId = req.user?.workspaceId;
+  if (!workspaceId) return res.status(401).json({ error: 'Workspace required' });
   try {
     const source = String(req.query.source || '').trim().toLowerCase();
     const customerId = String(req.query.customerId || '').trim();
-    const params: any[] = [req.user.workspaceId];
+    const params: any[] = [workspaceId];
     let where = 'workspace_id = $1';
     if (source && source !== 'all') {
       params.push(source);
@@ -79,10 +81,8 @@ router.get('/files/ws', authMiddleware, async (req: any, res) => {
        FROM drive_files WHERE ${where} ORDER BY uploaded_at DESC`,
       params
     );
-    // Never scan the shared Google Drive when this workspace has no rows.
-    // That scan listed another café's customer folders for a new account.
     res.json(r.rows);
-  } catch (e: any) { console.error('[drive/files/ws]', e.message); res.json([]); }
+  } catch (e: any) { console.error('[drive/files/ws]', e.message); res.status(500).json({ error: 'Failed to load files' }); }
 });
 
 // Download proxy

@@ -118,7 +118,10 @@ export function setupSocket(httpServer: HttpServer) {
       const decoded: any = jwt.verify(token as string, JWT_SECRET);
       if (decoded.workspaceId) { socket.join(decoded.workspaceId); console.log('[Socket] Joined room:', decoded.workspaceId.slice(0, 8)); }
     } catch {}
-    socket.on('new_whatsapp_file', (file: any) => file.workspaceId ? io.to(file.workspaceId).emit('new_whatsapp_file', file) : io.emit('new_whatsapp_file', file));
+    socket.on('new_whatsapp_file', (file: any) => {
+      if (!file?.workspaceId) return;
+      io.to(file.workspaceId).emit('new_whatsapp_file', file);
+    });
     socket.on('upload:queued', (data: any) => io.emit('upload:queued', data));
     socket.on('upload:start', (data: any) => io.emit('upload:start', data));
     socket.on('upload:done', (data: any) => io.emit('upload:done', data));
