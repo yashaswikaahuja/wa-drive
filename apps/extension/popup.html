@@ -378,68 +378,6 @@
       box-shadow: 0 6px 16px -8px hsl(27 95% 55% / 0.55);
     }
 
-    /* ── Selected customer dock ── */
-    #selected-dock {
-      display: none;
-      flex-shrink: 0;
-      margin: var(--stack) var(--gutter) 0;
-      padding: 10px 12px;
-      background: hsl(var(--pt-card));
-      border: 1px solid hsl(var(--pt-marigold) / 0.35);
-      border-radius: var(--radius);
-      box-shadow: 0 8px 20px -14px hsl(27 95% 40% / 0.35);
-    }
-    #selected-dock.open { display: flex; align-items: center; gap: 10px; }
-    .dock-avatar {
-      width: 32px;
-      height: 32px;
-      border-radius: 9px;
-      background: hsl(var(--pt-marigold) / 0.16);
-      color: hsl(var(--pt-marigold-deep));
-      display: grid;
-      place-items: center;
-      font-size: 11px;
-      font-weight: 700;
-      flex-shrink: 0;
-    }
-    .dock-meta { flex: 1; min-width: 0; }
-    .dock-label {
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: hsl(var(--pt-marigold-deep));
-      margin-bottom: 1px;
-    }
-    .dock-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: hsl(var(--pt-ink));
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      line-height: 1.25;
-    }
-    .dock-phone {
-      font-size: 11px;
-      color: hsl(var(--pt-muted));
-      margin-top: 2px;
-      font-variant-numeric: tabular-nums;
-    }
-    .dock-clear {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      border: 1px solid hsl(var(--pt-border));
-      background: hsl(var(--pt-secondary));
-      color: hsl(var(--pt-ink-soft));
-      cursor: pointer;
-      font-size: 14px;
-      line-height: 1;
-      font-family: inherit;
-    }
-    .dock-clear:hover { background: hsl(var(--pt-paper-deep)); }
-
     /* ── Progress / results / status ── */
     #progress {
       display: none;
@@ -831,7 +769,6 @@
     }
 
     body.is-locked .search-block,
-    body.is-locked #selected-dock,
     body.is-locked #progress,
     body.is-locked #completeness-warn,
     body.is-locked #results,
@@ -903,16 +840,6 @@
 
   <div class="main">
     <div id="profiles" role="listbox" aria-label="Customers"><div class="empty">Loading customers…</div></div>
-  </div>
-
-  <div id="selected-dock" aria-live="polite">
-    <div class="dock-avatar" id="dock-avatar">?</div>
-    <div class="dock-meta">
-      <div class="dock-label">Selected customer</div>
-      <div class="dock-name" id="dock-name">—</div>
-      <div class="dock-phone" id="dock-phone"></div>
-    </div>
-    <button type="button" class="dock-clear" id="dock-clear" title="Clear selection">×</button>
   </div>
 
   <div id="progress">

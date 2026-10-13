@@ -25,11 +25,6 @@ const progressText = document.getElementById('progress-text');
 const progressInner = document.getElementById('progress-inner');
 const resultsEl = document.getElementById('results');
 const versionEl = document.getElementById('ver');
-const selectedDock = document.getElementById('selected-dock');
-const dockAvatar = document.getElementById('dock-avatar');
-const dockName = document.getElementById('dock-name');
-const dockPhone = document.getElementById('dock-phone');
-const dockClear = document.getElementById('dock-clear');
 const searchClear = document.getElementById('search-clear');
 const listCountEl = document.getElementById('list-count');
 const listHintEl = document.getElementById('list-hint');
@@ -77,31 +72,12 @@ function updateSearchClear() {
   searchClear.classList.toggle('visible', !!String(searchEl.value || '').trim());
 }
 
-function updateSelectedDock() {
-  if (!selectedDock) return;
-  if (!selectedProfile) {
-    selectedDock.classList.remove('open');
-    if (dockName) dockName.textContent = '—';
-    if (dockPhone) dockPhone.textContent = '';
-    if (dockAvatar) dockAvatar.textContent = '?';
-    updateFillHint();
-    return;
-  }
-  const name = selectedProfile.name || 'Unknown';
-  const phone = getPhone(selectedProfile);
-  if (dockAvatar) dockAvatar.textContent = initialsFor(name);
-  if (dockName) dockName.textContent = name;
-  if (dockPhone) dockPhone.textContent = phone ? `📱 ${phone}` : '';
-  selectedDock.classList.add('open');
-  updateFillHint();
-}
-
 function clearSelection() {
   selectedProfile = null;
   fillBtn.disabled = true;
   applyAgentVisibility();
   chrome.storage.session.remove('_cc_selected').catch(() => {});
-  updateSelectedDock();
+  updateFillHint();
   renderProfiles(searchEl?.value || '');
 }
 
@@ -480,7 +456,7 @@ function renderProfiles(query) {
     focusIdx = 0;
     fillBtn.disabled = false;
     applyAgentVisibility();
-    updateSelectedDock();
+    updateFillHint();
   }
 
   const visibleList = filteredProfiles.slice(0, 20);
@@ -532,7 +508,7 @@ function selectProfile(id) {
   } else {
     chrome.storage.session.remove('_cc_selected').catch(() => {});
   }
-  updateSelectedDock();
+  updateFillHint();
   renderProfiles(searchEl.value);
 }
 
@@ -635,7 +611,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 async function init() {
   document.getElementById('ver').textContent = 'v' + VERSION;
-  updateSelectedDock();
+  updateFillHint();
   syncActivePage();
   await loadRecents();
 
@@ -742,7 +718,7 @@ async function loadProfilesHttps(data?: any) {
     fillBtn.disabled = !selectedProfile;
     applyAgentVisibility();
   }
-  updateSelectedDock();
+  updateFillHint();
   if (!allProfiles.length) {
     profilesEl.innerHTML =
       `<div class="empty">` +
@@ -921,12 +897,6 @@ undoBtn.addEventListener('click', async () => {
     resultsEl.style.display = 'none';
     showStatus('↩ Fill undone', CC.success);
   } catch (e) { showStatus('Undo failed: ' + e.message, CC.danger); }
-});
-
-dockClear?.addEventListener('click', (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  clearSelection();
 });
 
 // Open CyberControl Hub

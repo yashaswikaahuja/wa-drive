@@ -24,11 +24,6 @@ const progressText = document.getElementById("progress-text");
 const progressInner = document.getElementById("progress-inner");
 const resultsEl = document.getElementById("results");
 const versionEl = document.getElementById("ver");
-const selectedDock = document.getElementById("selected-dock");
-const dockAvatar = document.getElementById("dock-avatar");
-const dockName = document.getElementById("dock-name");
-const dockPhone = document.getElementById("dock-phone");
-const dockClear = document.getElementById("dock-clear");
 const searchClear = document.getElementById("search-clear");
 const listCountEl = document.getElementById("list-count");
 const listHintEl = document.getElementById("list-hint");
@@ -59,31 +54,13 @@ function updateSearchClear() {
   if (!searchClear || !searchEl) return;
   searchClear.classList.toggle("visible", !!String(searchEl.value || "").trim());
 }
-function updateSelectedDock() {
-  if (!selectedDock) return;
-  if (!selectedProfile) {
-    selectedDock.classList.remove("open");
-    if (dockName) dockName.textContent = "\u2014";
-    if (dockPhone) dockPhone.textContent = "";
-    if (dockAvatar) dockAvatar.textContent = "?";
-    updateFillHint();
-    return;
-  }
-  const name = selectedProfile.name || "Unknown";
-  const phone = getPhone(selectedProfile);
-  if (dockAvatar) dockAvatar.textContent = initialsFor(name);
-  if (dockName) dockName.textContent = name;
-  if (dockPhone) dockPhone.textContent = phone ? `\u{1F4F1} ${phone}` : "";
-  selectedDock.classList.add("open");
-  updateFillHint();
-}
 function clearSelection() {
   selectedProfile = null;
   fillBtn.disabled = true;
   applyAgentVisibility();
   chrome.storage.session.remove("_cc_selected").catch(() => {
   });
-  updateSelectedDock();
+  updateFillHint();
   renderProfiles((searchEl == null ? void 0 : searchEl.value) || "");
 }
 function clearSearch() {
@@ -414,7 +391,7 @@ function renderProfiles(query) {
     focusIdx = 0;
     fillBtn.disabled = false;
     applyAgentVisibility();
-    updateSelectedDock();
+    updateFillHint();
   }
   const visibleList = filteredProfiles.slice(0, 20);
   const recentCount = !q ? recentIds.filter((id) => allProfiles.some((x) => x.id === id)).length : 0;
@@ -463,7 +440,7 @@ function selectProfile(id) {
     chrome.storage.session.remove("_cc_selected").catch(() => {
     });
   }
-  updateSelectedDock();
+  updateFillHint();
   renderProfiles(searchEl.value);
 }
 let _prefetchedProfile = null;
@@ -555,7 +532,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 async function init() {
   document.getElementById("ver").textContent = "v" + VERSION;
-  updateSelectedDock();
+  updateFillHint();
   syncActivePage();
   await loadRecents();
   const data = await chrome.storage.local.get(["accessToken", "backendUrl", "user"]);
@@ -645,7 +622,7 @@ async function loadProfilesHttps(data) {
     fillBtn.disabled = !selectedProfile;
     applyAgentVisibility();
   }
-  updateSelectedDock();
+  updateFillHint();
   if (!allProfiles.length) {
     profilesEl.innerHTML = `<div class="empty"><div class="empty-title">No customers yet</div>Open Hub, add customers for this caf\xE9, then tap Retry.<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" id="retry-profiles">Retry</button><button type="button" class="primary" id="open-hub-customers">Open Hub</button></div></div>`;
     const btn = document.getElementById("retry-profiles");
@@ -811,11 +788,6 @@ undoBtn.addEventListener("click", async () => {
   } catch (e) {
     showStatus("Undo failed: " + e.message, CC.danger);
   }
-});
-dockClear == null ? void 0 : dockClear.addEventListener("click", (e) => {
-  e.preventDefault();
-  e.stopPropagation();
-  clearSelection();
 });
 document.getElementById("open-btn").addEventListener("click", () => {
   openHub("/");
