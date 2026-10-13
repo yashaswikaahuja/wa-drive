@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('[wa-service] no package tests yet')\""
+    "test": "node --experimental-strip-types --test src/auth-wipe-policy.test.ts"
   },
   "dependencies": {
     "@cybercontrol/wa-auth": "workspace:*",

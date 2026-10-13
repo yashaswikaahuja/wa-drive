@@ -10,24 +10,23 @@ import { Boom } from '@hapi/boom';
 import { pino } from 'pino';
 import { usePostgresAuthState, clearPostgresAuthState } from '@cybercontrol/wa-auth';
 import { downloadMedia, getExtFromMsg } from './media.js';
+import { HARD_DESYNC_RE, SOFT_CRYPTO_RE, isHardDesync, shouldWipeAuthKeys } from './auth-wipe-policy.js';
 
-// Signal/session crypto failures can leave the TCP session "open" and the phone
-// linked-device status Active while inbound media never decrypts — silent receive death.
-const DESYNC_RE =
-  /over 2000 messages into the future|sessionerror|failed to decrypt message|invalidmessageexception|bad mac|signal.*desync|desync/i;
+// Hard Signal corruption may delete the saved login. Soft decrypt noise must not.
 const DESYNC_WINDOW_MS = 60_000;
-const DESYNC_HIT_THRESHOLD = 5;
-const MEDIA_FAIL_THRESHOLD = 5;
+const HARD_DESYNC_HIT_THRESHOLD = 3;
+const SOFT_CRYPTO_HIT_THRESHOLD = 25;
+const MEDIA_FAIL_THRESHOLD = 8;
 
-function createDesyncTracker(onThreshold: any) {
+function createDesyncTracker(matchRe: RegExp, threshold: number, onThreshold: any) {
   const hits: any = [];
   return {
     note(text: any) {
-      if (!DESYNC_RE.test(String(text || ''))) return false;
+      if (!matchRe.test(String(text || ''))) return false;
       const now = Date.now();
       while (hits.length && now - hits[0] > DESYNC_WINDOW_MS) hits.shift();
       hits.push(now);
-      if (hits.length >= DESYNC_HIT_THRESHOLD) {
+      if (hits.length >= threshold) {
         hits.length = 0;
         onThreshold(String(text).slice(0, 240));
         return true;
@@ -41,7 +40,8 @@ function createDesyncTracker(onThreshold: any) {
 }
 
 /** Baileys logger that stays quiet but watches decrypt/session errors. */
-function createBaileysLogger(tracker: any) {
+function createBaileysLogger(trackers: any) {
+  const list = Array.isArray(trackers) ? trackers : [trackers];
   const intercept = (args: any) => {
     try {
       const text = (args || [])
@@ -55,7 +55,7 @@ function createBaileysLogger(tracker: any) {
           return String(a);
         })
         .join(' ');
-      tracker.note(text);
+      for (const tracker of list) tracker.note(text);
     } catch {
       /* ignore */
     }
@@ -238,8 +238,7 @@ export function createSessionManager({
       phone: null,
       contacts: new Map(),
       workspaceId,
-      // Preserve across reconnects so the 3-attempt re-auth cap can accumulate.
-      // Reset only on successful open (below) or after an auth wipe.
+      // Soft reconnect counter. It never deletes the saved login.
       reconnectAttempts: prior?.reconnectAttempts || 0,
       reconnectTimer: null,
       lastDisconnectReason: prior?.lastDisconnectReason || null,
@@ -249,16 +248,24 @@ export function createSessionManager({
       failedMediaDownloads: 0,
       stopping: false,
       forcingReauth: false,
+      softRestarting: false,
       desyncReauthDone: false,
     };
 
-    const desyncTracker = createDesyncTracker((reason: any) => {
+    const hardTracker = createDesyncTracker(HARD_DESYNC_RE, HARD_DESYNC_HIT_THRESHOLD, (reason: any) => {
       forceReauthWhileConnected(reason).catch((e) =>
         console.error(`[WA:${workspaceId.slice(0, 8)}] Desync re-auth failed:`, e.message),
       );
     });
+    const softTracker = createDesyncTracker(SOFT_CRYPTO_RE, SOFT_CRYPTO_HIT_THRESHOLD, (reason: any) => {
+      softRestartWhileConnected(reason).catch((e) =>
+        console.error(`[WA:${workspaceId.slice(0, 8)}] Soft restart failed:`, e.message),
+      );
+    });
 
     async function forceReauthWhileConnected(reason: any) {
+      if (!isHardDesync(reason)) return;
+      if (!shouldWipeAuthKeys({ loggedOut: false, hardDesync: true })) return;
       if (!session || session.forcingReauth || session.stopping || session.desyncReauthDone) return;
       if (session.status !== 'connected' && session.status !== 'connecting') return;
       session.forcingReauth = true;
@@ -267,7 +274,7 @@ export function createSessionManager({
       session.lastDisconnectReason = `desync_while_connected:${reason}`;
       session.lastDisconnectAt = session.lastDesyncAt;
       console.warn(
-        `[WA:${workspaceId.slice(0, 8)}] Desync while connected — forcing re-auth (${reason})`,
+        `[WA:${workspaceId.slice(0, 8)}] Hard desync while connected — forcing re-auth (${reason})`,
       );
       notifyParent(workspaceId, 'reauth_required', {
         desynced: true,
@@ -289,7 +296,28 @@ export function createSessionManager({
       }
       session.reconnectAttempts = 0;
       session.status = 'qr_pending';
-      desyncTracker.reset();
+      hardTracker.reset();
+      softTracker.reset();
+      try {
+        // @ts-expect-error TS(2339): Property 'end' does not exist on type 'never'.
+        session.socket?.end?.(undefined);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    /** Drop the socket and reconnect with the same saved login. Never deletes keys. */
+    async function softRestartWhileConnected(reason: any) {
+      if (!session || session.forcingReauth || session.stopping || session.softRestarting) return;
+      if (session.status !== 'connected' && session.status !== 'connecting') return;
+      session.softRestarting = true;
+      session.lastDisconnectReason = `soft_restart:${reason}`;
+      session.lastDisconnectAt = new Date().toISOString();
+      console.warn(
+        `[WA:${workspaceId.slice(0, 8)}] Soft restart — keeping auth keys (${reason})`,
+      );
+      hardTracker.reset();
+      softTracker.reset();
       try {
         // @ts-expect-error TS(2339): Property 'end' does not exist on type 'never'.
         session.socket?.end?.(undefined);
@@ -302,7 +330,7 @@ export function createSessionManager({
       version,
       // @ts-expect-error TS(2322): Type '{ creds: any; keys: { get: (type: string, id... Remove this comment to see the full error message
       auth: state,
-      logger: createBaileysLogger(desyncTracker),
+      logger: createBaileysLogger([hardTracker, softTracker]),
       printQRInTerminal: false,
       markOnlineOnConnect: false,
       browser: ['CyberControl', 'Chrome', '1.0'],
@@ -351,7 +379,9 @@ export function createSessionManager({
         session.forcingReauth = false;
         session.desyncReauthDone = false;
         session.failedMediaDownloads = 0;
-        desyncTracker.reset();
+        session.softRestarting = false;
+        hardTracker.reset();
+        softTracker.reset();
         if (session.reconnectTimer) {
           clearTimeout(session.reconnectTimer);
           session.reconnectTimer = null;
@@ -384,10 +414,9 @@ export function createSessionManager({
         const reason = new Boom(disconnectError)?.output?.statusCode;
         const errorMessage = String(disconnectError?.message || disconnectError || '');
         const loggedOut = reason === DisconnectReason.loggedOut;
-        const desynced =
-          session.desyncReauthDone || DESYNC_RE.test(errorMessage);
+        const hardDesync = session.desyncReauthDone || isHardDesync(errorMessage);
         const nextAttempt = session.reconnectAttempts + 1;
-        const reauthRequired = !loggedOut && (desynced || nextAttempt >= 3);
+        const wipeAndReauth = shouldWipeAuthKeys({ loggedOut, hardDesync });
 
         session.reconnectAttempts = nextAttempt;
         // reason is a numeric Baileys/Boom statusCode (e.g. 408). Always store a
@@ -400,7 +429,7 @@ export function createSessionManager({
             ? String(reason)
             : errorMessage || 'unknown';
         session.lastDisconnectAt = new Date().toISOString();
-        session.status = loggedOut || reauthRequired ? 'logged_out' : 'disconnected';
+        session.status = wipeAndReauth ? 'logged_out' : 'disconnected';
         session.socket = null;
 
         // Intentional stop / force-restart: no reconnect scheduling.
@@ -427,17 +456,19 @@ export function createSessionManager({
         } else {
           console.log(
             `[WA:${workspaceId.slice(0, 8)}] Disconnected: ${reason} loggedOut=${loggedOut}` +
-              ` attempt=${nextAttempt} desynced=${desynced} reauth=${reauthRequired}`,
+              ` attempt=${nextAttempt} hardDesync=${hardDesync} wipe=${wipeAndReauth}`,
           );
-          notifyParent(workspaceId, reauthRequired ? 'reauth_required' : 'disconnected', {
-            loggedOut,
-            reason: reason || null,
-            attempt: nextAttempt,
-            desynced,
-          });
-          broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
+          if (wipeAndReauth) {
+            notifyParent(workspaceId, 'reauth_required', {
+              loggedOut,
+              reason: reason || null,
+              attempt: nextAttempt,
+              desynced: hardDesync,
+            });
+            broadcastToWs(workspaceId, { type: 'status', connected: false, workspaceId });
+          }
 
-          if (loggedOut || reauthRequired) {
+          if (wipeAndReauth) {
             try {
               if (pgPool) await clearPostgresAuthState(pgPool, workspaceId);
               else fs.rmSync(sessionDir, { recursive: true, force: true });
@@ -450,7 +481,7 @@ export function createSessionManager({
           }
         }
 
-        const delay = reauthRequired || loggedOut
+        const delay = wipeAndReauth || loggedOut
           ? 1000
           : Math.min(5000 * 2 ** Math.max(0, nextAttempt - 1), 30000);
 
@@ -565,7 +596,8 @@ export function createSessionManager({
               `[WA:${workspaceId.slice(0, 8)}] Media download empty (${session.failedMediaDownloads})`,
             );
             if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
-              await forceReauthWhileConnected('repeated media download failure while connected');
+              session.failedMediaDownloads = 0;
+              await softRestartWhileConnected('repeated media download failure while connected');
             }
             continue;
           }
@@ -581,11 +613,13 @@ export function createSessionManager({
           // @ts-expect-error TS(2571): Object is of type 'unknown'.
           console.error(`[WA:${workspaceId.slice(0, 8)}] Media error:`, e.message);
           // @ts-expect-error TS(2571): Object is of type 'unknown'.
-          desyncTracker.note(e.message);
+          hardTracker.note(e.message);
+          softTracker.note(e.message);
           session.failedMediaDownloads = (session.failedMediaDownloads || 0) + 1;
           if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
+            session.failedMediaDownloads = 0;
             // @ts-expect-error TS(2571): Object is of type 'unknown'.
-            await forceReauthWhileConnected(`repeated media error: ${e.message}`);
+            await softRestartWhileConnected(`repeated media error: ${e.message}`);
           }
         }
       }
