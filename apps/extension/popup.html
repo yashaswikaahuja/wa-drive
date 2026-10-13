@@ -132,15 +132,20 @@
     }
 
     /* ── Search ── */
-    .search-wrap {
+    .search-block {
       flex-shrink: 0;
       padding: var(--stack) var(--gutter) 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .search-wrap {
       position: relative;
     }
     .search-wrap::before {
       content: '';
       position: absolute;
-      left: calc(var(--gutter) + 12px);
+      left: 12px;
       top: 50%;
       width: 14px;
       height: 14px;
@@ -149,10 +154,11 @@
       background: no-repeat center / contain;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23555'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2' d='m21 21-4.3-4.3m1.3-5.2a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z'/%3E%3C/svg%3E");
       pointer-events: none;
+      z-index: 1;
     }
     #search {
       width: 100%;
-      padding: 10px 12px 10px 36px;
+      padding: 10px 34px 10px 36px;
       background: hsl(var(--pt-card));
       border: 1px solid hsl(var(--pt-border));
       border-radius: 10px;
@@ -169,6 +175,45 @@
       background: #fff;
     }
     #search::placeholder { color: hsl(var(--pt-muted)); }
+    #search-clear {
+      display: none;
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 24px;
+      height: 24px;
+      border: none;
+      border-radius: 999px;
+      background: hsl(var(--pt-secondary));
+      color: hsl(var(--pt-ink-soft));
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 0;
+    }
+    #search-clear.visible { display: grid; place-items: center; }
+    #search-clear:hover { background: hsl(var(--pt-paper-deep)); color: hsl(var(--pt-ink)); }
+    .list-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 14px;
+      padding: 0 2px;
+      font-size: 11px;
+      color: hsl(var(--pt-muted));
+      font-weight: 500;
+    }
+    .list-meta .meta-count { font-variant-numeric: tabular-nums; }
+    .list-meta .meta-hint {
+      color: hsl(var(--pt-marigold-deep));
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
     /* ── Profile list ── */
     .main {
@@ -238,6 +283,12 @@
       flex-shrink: 0;
     }
     .profile-body { min-width: 0; flex: 1; }
+    .profile-name-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
     .profile-name {
       font-size: 13px;
       font-weight: 650;
@@ -246,6 +297,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       line-height: 1.25;
+      min-width: 0;
     }
     .profile-phone {
       font-size: 11px;
@@ -253,6 +305,28 @@
       margin-top: 2px;
       font-variant-numeric: tabular-nums;
       line-height: 1.3;
+    }
+    .profile-badge {
+      flex-shrink: 0;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.2;
+    }
+    .profile-badge.ok {
+      color: hsl(var(--pt-success));
+      background: hsl(158 60% 32% / 0.12);
+    }
+    .profile-badge.warn {
+      color: hsl(28 90% 32%);
+      background: hsl(35 92% 48% / 0.14);
+    }
+    .profile-badge.low {
+      color: hsl(var(--pt-danger));
+      background: hsl(0 65% 48% / 0.1);
     }
     .profile-check {
       width: 18px;
@@ -556,8 +630,22 @@
       padding: 10px var(--gutter) calc(10px + var(--safe-b));
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      background: linear-gradient(180deg, transparent, hsl(var(--pt-bg) / 0.9) 18%);
+      gap: 6px;
+      background: hsl(var(--pt-bg) / 0.92);
+      border-top: 1px solid hsl(var(--pt-border));
+      box-shadow: 0 -10px 24px -18px hsl(30 30% 20% / 0.35);
+    }
+    .fill-hint {
+      font-size: 11px;
+      color: hsl(var(--pt-muted));
+      text-align: center;
+      min-height: 14px;
+      font-weight: 500;
+      line-height: 1.3;
+    }
+    .fill-hint.ready {
+      color: hsl(var(--pt-marigold-deep));
+      font-weight: 650;
     }
     .footer-row {
       display: flex;
@@ -627,7 +715,9 @@
       color: hsl(28 90% 30%);
     }
 
+    /* Café operators use Auto mode; keep select in DOM for fill path, hide chrome. */
     .advanced {
+      display: none;
       border-radius: 12px;
       border: 1px solid hsl(var(--pt-border-soft));
       background: hsl(var(--pt-card) / 0.65);
@@ -740,7 +830,7 @@
       letter-spacing: 0.03em;
     }
 
-    body.is-locked .search-wrap,
+    body.is-locked .search-block,
     body.is-locked #selected-dock,
     body.is-locked #progress,
     body.is-locked #completeness-warn,
@@ -800,12 +890,19 @@
     </div>
   </div>
 
-  <div class="search-wrap">
-    <input id="search" type="search" placeholder="Search customer name or phone" autocomplete="off" enterkeyhint="search" />
+  <div class="search-block">
+    <div class="search-wrap">
+      <input id="search" type="search" placeholder="Search customer name or phone" autocomplete="off" enterkeyhint="search" aria-label="Search customers" />
+      <button type="button" id="search-clear" title="Clear search" aria-label="Clear search">×</button>
+    </div>
+    <div class="list-meta" id="list-meta" aria-live="polite">
+      <span class="meta-count" id="list-count"></span>
+      <span class="meta-hint" id="list-hint"></span>
+    </div>
   </div>
 
   <div class="main">
-    <div id="profiles"><div class="empty">Loading customers…</div></div>
+    <div id="profiles" role="listbox" aria-label="Customers"><div class="empty">Loading customers…</div></div>
   </div>
 
   <div id="selected-dock" aria-live="polite">
@@ -841,8 +938,9 @@
   <div id="status"></div>
 
   <div class="footer">
+    <div class="fill-hint" id="fill-hint">Select a customer to fill the open form</div>
     <div class="footer-row">
-      <button id="fill-btn" disabled>Fill this form</button>
+      <button id="fill-btn" disabled title="Select a customer first">Fill this form</button>
       <button id="undo-btn" class="icon-btn" style="display:none" title="Undo last fill">↩</button>
       <button id="agent-btn" class="icon-btn" disabled title="AI Agent">🤖</button>
       <button id="open-btn" class="icon-btn" title="Open CyberControl Hub">⌂</button>

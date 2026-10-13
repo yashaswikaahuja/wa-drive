@@ -29,11 +29,35 @@ const dockAvatar = document.getElementById("dock-avatar");
 const dockName = document.getElementById("dock-name");
 const dockPhone = document.getElementById("dock-phone");
 const dockClear = document.getElementById("dock-clear");
+const searchClear = document.getElementById("search-clear");
+const listCountEl = document.getElementById("list-count");
+const listHintEl = document.getElementById("list-hint");
+const fillHintEl = document.getElementById("fill-hint");
 const FILL_BTN_LABEL = "Fill this form";
 versionEl.textContent = "v" + VERSION;
 const HUB_FALLBACK = "https://app.cybercontrol.fun";
+function escapeHtml(value) {
+  return String(value != null ? value : "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
 function initialsFor(name) {
   return String(name || "?").split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+}
+function updateFillHint() {
+  if (!fillHintEl || !fillBtn) return;
+  if (selectedProfile) {
+    const name = selectedProfile.name || "customer";
+    fillHintEl.textContent = `Ready to fill for ${name}`;
+    fillHintEl.classList.add("ready");
+    fillBtn.title = `Fill the open form for ${name}`;
+  } else {
+    fillHintEl.textContent = "Select a customer to fill the open form";
+    fillHintEl.classList.remove("ready");
+    fillBtn.title = "Select a customer first";
+  }
+}
+function updateSearchClear() {
+  if (!searchClear || !searchEl) return;
+  searchClear.classList.toggle("visible", !!String(searchEl.value || "").trim());
 }
 function updateSelectedDock() {
   if (!selectedDock) return;
@@ -42,6 +66,7 @@ function updateSelectedDock() {
     if (dockName) dockName.textContent = "\u2014";
     if (dockPhone) dockPhone.textContent = "";
     if (dockAvatar) dockAvatar.textContent = "?";
+    updateFillHint();
     return;
   }
   const name = selectedProfile.name || "Unknown";
@@ -50,6 +75,7 @@ function updateSelectedDock() {
   if (dockName) dockName.textContent = name;
   if (dockPhone) dockPhone.textContent = phone ? `\u{1F4F1} ${phone}` : "";
   selectedDock.classList.add("open");
+  updateFillHint();
 }
 function clearSelection() {
   selectedProfile = null;
@@ -59,6 +85,14 @@ function clearSelection() {
   });
   updateSelectedDock();
   renderProfiles((searchEl == null ? void 0 : searchEl.value) || "");
+}
+function clearSearch() {
+  if (!searchEl) return;
+  searchEl.value = "";
+  focusIdx = -1;
+  updateSearchClear();
+  renderProfiles("");
+  searchEl.focus();
 }
 async function openHub(path) {
   var _a2;
@@ -328,6 +362,38 @@ async function saveRecent(profileId) {
   recentIds = [profileId, ...recentIds.filter((id) => id !== profileId)].slice(0, 5);
   await chrome.storage.local.set({ _cc_recents: recentIds });
 }
+function badgeHtmlFor(profile) {
+  const { percent } = getCompleteness(profile);
+  const data = (profile == null ? void 0 : profile.data) || profile || {};
+  const hasSignal = REQUIRED_FIELDS.some((key) => {
+    const val = data[key];
+    const v = val && typeof val === "object" ? val.value : val;
+    return !!v;
+  }) || percent > 0 && ((profile == null ? void 0 : profile.data) || (profile == null ? void 0 : profile.aadhaar_number) || (profile == null ? void 0 : profile.father_name));
+  if (!hasSignal && percent === 0) return "";
+  const cls = percent >= 85 ? "ok" : percent >= 50 ? "warn" : "low";
+  return `<span class="profile-badge ${cls}" title="Profile ${percent}% ready for common govt fields">${percent}%</span>`;
+}
+function updateListMeta(query, visibleCount, totalFiltered) {
+  if (listCountEl) {
+    if (!allProfiles.length) {
+      listCountEl.textContent = "";
+    } else if (query) {
+      listCountEl.textContent = totalFiltered > visibleCount ? `${visibleCount} of ${totalFiltered} matches` : `${totalFiltered} match${totalFiltered === 1 ? "" : "es"}`;
+    } else {
+      listCountEl.textContent = totalFiltered > visibleCount ? `Showing ${visibleCount} of ${allProfiles.length}` : `${allProfiles.length} customer${allProfiles.length === 1 ? "" : "s"}`;
+    }
+  }
+  if (listHintEl) {
+    if (selectedProfile) {
+      listHintEl.textContent = "Enter to fill \xB7 Esc to clear";
+    } else if (totalFiltered > 0) {
+      listHintEl.textContent = "\u2191\u2193 to move \xB7 Enter to select";
+    } else {
+      listHintEl.textContent = "";
+    }
+  }
+}
 function renderProfiles(query) {
   const q = (query || "").toLowerCase().trim();
   let list = q ? allProfiles.filter((p) => (p.name || "").toLowerCase().includes(q) || getPhone(p).includes(q)) : allProfiles;
@@ -338,8 +404,9 @@ function renderProfiles(query) {
   }
   filteredProfiles = list;
   if (!filteredProfiles.length) {
-    profilesEl.innerHTML = q ? `<div class="empty"><div class="empty-title">No match</div>No customer matches \u201C${q}\u201D.</div>` : `<div class="empty"><div class="empty-title">No customers</div>Add customers in CyberControl Hub, then come back here.</div>`;
+    profilesEl.innerHTML = q ? `<div class="empty"><div class="empty-title">No match</div>No customer matches \u201C${escapeHtml(query)}\u201D. Try phone digits or another name.</div>` : `<div class="empty"><div class="empty-title">No customers yet</div>Add customers in CyberControl Hub for this caf\xE9, then come back here.</div>`;
     focusIdx = -1;
+    updateListMeta(q, 0, 0);
     return;
   }
   if (filteredProfiles.length === 1 && q) {
@@ -351,19 +418,26 @@ function renderProfiles(query) {
   }
   const visibleList = filteredProfiles.slice(0, 20);
   const recentCount = !q ? recentIds.filter((id) => allProfiles.some((x) => x.id === id)).length : 0;
+  updateListMeta(q, visibleList.length, filteredProfiles.length);
   profilesEl.innerHTML = visibleList.map((p, i) => {
-    const initials = initialsFor(p.name);
+    const initials = escapeHtml(initialsFor(p.name));
     const isSelected = (selectedProfile == null ? void 0 : selectedProfile.id) === p.id;
     const isFocused = i === focusIdx;
     const phone = getPhone(p);
+    const name = escapeHtml(p.name || "Unknown");
+    const phoneLabel = phone ? `\u{1F4F1} ${escapeHtml(phone)}` : "No phone on file";
+    const badge = badgeHtmlFor(p);
     let label = "";
     if (!q && i === 0 && recentCount > 0) label = '<div class="section-label">Recent</div>';
     if (!q && i === recentCount && recentCount > 0) label = '<div class="section-label">All customers</div>';
-    return `${label}<div class="profile-item${isSelected ? " selected" : ""}${isFocused ? " focused" : ""}" data-id="${p.id}" data-idx="${i}" role="option" aria-selected="${isSelected}">
+    return `${label}<div class="profile-item${isSelected ? " selected" : ""}${isFocused ? " focused" : ""}" data-id="${escapeHtml(p.id)}" data-idx="${i}" role="option" aria-selected="${isSelected}">
       <div class="avatar">${initials}</div>
       <div class="profile-body">
-        <div class="profile-name">${p.name || "Unknown"}</div>
-        <div class="profile-phone">${phone ? "\u{1F4F1} " + phone : "No phone on file"}</div>
+        <div class="profile-name-row">
+          <div class="profile-name">${name}</div>
+          ${badge}
+        </div>
+        <div class="profile-phone">${phoneLabel}</div>
       </div>
       <div class="profile-check" aria-hidden="true">\u2713</div>
     </div>`;
@@ -373,6 +447,10 @@ function renderProfiles(query) {
       selectProfile(el.dataset.id);
     });
   });
+  const focused = profilesEl.querySelector(".profile-item.focused") || profilesEl.querySelector(".profile-item.selected");
+  if (focused && typeof focused.scrollIntoView === "function") {
+    focused.scrollIntoView({ block: "nearest" });
+  }
 }
 function selectProfile(id) {
   selectedProfile = allProfiles.find((p) => p.id === id) || null;
@@ -420,7 +498,18 @@ searchEl.addEventListener("keydown", (e) => {
     } else if (filteredProfiles.length === 1) {
       selectProfile(filteredProfiles[0].id);
     }
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    if (String(searchEl.value || "").trim()) {
+      clearSearch();
+    } else if (selectedProfile) {
+      clearSelection();
+    }
   }
+});
+searchClear == null ? void 0 : searchClear.addEventListener("click", (e) => {
+  e.preventDefault();
+  clearSearch();
 });
 function applyWssPresence(wss, fallbackName) {
   if (!connDot || !connText) return;
@@ -504,7 +593,9 @@ async function loadProfilesHttps(data) {
     showLoginEmpty("Sign in required", "Open CyberControl Hub and sign in as the caf\xE9 account, then reopen this panel.");
     return;
   }
-  profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Loading customers\u2026</div>Fetching your caf\xE9 list.</div>';
+  profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Loading customers\u2026</div>Getting your caf\xE9 list ready.</div>';
+  if (listCountEl) listCountEl.textContent = "";
+  if (listHintEl) listHintEl.textContent = "";
   let profiles = null;
   let transport = "wss";
   try {
@@ -525,7 +616,7 @@ async function loadProfilesHttps(data) {
   } catch (e) {
     console.warn("[CC] WSS profiles failed, HTTPS fallback:", e.message);
     transport = "https-fallback";
-    profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Still loading\u2026</div>Live link busy \u2014 trying backup path.</div>';
+    profilesEl.innerHTML = '<div class="empty"><div class="empty-title">Still loading\u2026</div>Connection busy \u2014 trying another path.</div>';
     try {
       const r = await fetch(String(creds.backendUrl).replace(/\/$/, "") + "/profiles", {
         headers: { Authorization: "Bearer " + creds.accessToken }
@@ -541,7 +632,7 @@ async function loadProfilesHttps(data) {
       profiles = Array.isArray(body) ? body : body && body.profiles || [];
     } catch (e2) {
       console.error("[CC] loadProfiles", e2);
-      profilesEl.innerHTML = `<div class="empty"><div class="empty-title">Couldn\u2019t load customers</div>${e2.message}<br><button type="button" id="retry-profiles">Retry</button></div>`;
+      profilesEl.innerHTML = `<div class="empty"><div class="empty-title">Couldn\u2019t load customers</div>Check your connection, then retry.<br><span class="pt-muted" style="font-size:11px">${escapeHtml(e2.message)}</span><br><button type="button" id="retry-profiles">Retry</button></div>`;
       const btn = document.getElementById("retry-profiles");
       if (btn) btn.onclick = () => loadProfilesHttps();
       return;
@@ -556,7 +647,7 @@ async function loadProfilesHttps(data) {
   }
   updateSelectedDock();
   if (!allProfiles.length) {
-    profilesEl.innerHTML = `<div class="empty"><div class="empty-title">No customers yet</div>Add customers in CyberControl Hub for this caf\xE9 account, then tap Retry.<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" id="retry-profiles">Retry</button><button type="button" class="primary" id="open-hub-customers">Open Hub</button></div></div>`;
+    profilesEl.innerHTML = `<div class="empty"><div class="empty-title">No customers yet</div>Open Hub, add customers for this caf\xE9, then tap Retry.<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button type="button" id="retry-profiles">Retry</button><button type="button" class="primary" id="open-hub-customers">Open Hub</button></div></div>`;
     const btn = document.getElementById("retry-profiles");
     if (btn) btn.onclick = () => loadProfilesHttps();
     const hubBtn = document.getElementById("open-hub-customers");
@@ -569,6 +660,7 @@ async function loadProfilesHttps(data) {
 }
 searchEl.addEventListener("input", () => {
   focusIdx = -1;
+  updateSearchClear();
   renderProfiles(searchEl.value);
 });
 const undoBtn = document.getElementById("undo-btn");
@@ -585,6 +677,8 @@ function getCompleteness(profile) {
   }
   return { percent: Math.round(filled / REQUIRED_FIELDS.length * 100), missing };
 }
+updateSearchClear();
+updateFillHint();
 fillBtn.addEventListener("click", async () => {
   var _a2;
   if (!selectedProfile) return;
@@ -629,9 +723,15 @@ fillBtn.addEventListener("click", async () => {
       target: { tabId: tab.id },
       func: () => {
         const snapshot = {};
-        document.querySelectorAll("input, select, textarea").forEach((el) => {
-          const key = el.id || el.name || el.getAttribute("formcontrolname");
-          if (key) snapshot[key] = { value: el.value, type: el.type };
+        document.querySelectorAll("input, select, textarea").forEach((el, idx) => {
+          const key = el.id || el.name || el.getAttribute("formcontrolname") || `anon_${idx}`;
+          let selector = "";
+          if (el.id) selector = `#${CSS.escape(el.id)}`;
+          else if (el.name) selector = `[name="${CSS.escape(el.name)}"]`;
+          else if (el.getAttribute("formcontrolname")) {
+            selector = `[formcontrolname="${CSS.escape(el.getAttribute("formcontrolname"))}"]`;
+          }
+          snapshot[key] = { value: el.value, type: el.type, selector };
         });
         window.__ccUndoSnapshot = snapshot;
       }
