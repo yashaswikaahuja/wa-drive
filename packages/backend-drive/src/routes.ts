@@ -1,6 +1,6 @@
 import { Router, type Router as ExpressRouter } from 'express';
 import { pool, logActivity, authMiddleware } from '@cybercontrol/backend-core';
-import { oauth2Client, getDrive, getDriveAccessToken, getDriveForWorkspace } from './service.js';
+import { oauth2Client, getDriveForWorkspace } from './service.js';
 
 const router: ExpressRouter = Router();
 
@@ -41,17 +41,17 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-// Status check
+// Status check — this workspace only. A missing token is "not connected",
+// never the process-wide Drive used by another café.
 router.get('/status', authMiddleware, async (req: any, res) => {
   const wsId = req.user?.workspaceId;
-  if (wsId) {
-    try {
-      const r = await pool.query("SELECT value FROM workspace_secrets WHERE workspace_id=$1 AND key='drive_refresh_token'", [wsId]);
-      return res.json({ connected: r.rows.length > 0 && !!r.rows[0].value });
-    } catch {}
-  }
-  const connected = !!(oauth2Client.credentials.refresh_token || oauth2Client.credentials.access_token);
-  res.json({ connected });
+  if (!wsId) return res.json({ connected: false });
+  try {
+    const r = await pool.query("SELECT value FROM workspace_secrets WHERE workspace_id=$1 AND key='drive_refresh_token'", [wsId]);
+    if (r.rows.length > 0 && r.rows[0].value) return res.json({ connected: true });
+  } catch {}
+  const drive = await getDriveForWorkspace(wsId);
+  res.json({ connected: !!drive });
 });
 
 // Per-workspace Drive files (DB-backed)
@@ -79,22 +79,9 @@ router.get('/files/ws', authMiddleware, async (req: any, res) => {
        FROM drive_files WHERE ${where} ORDER BY uploaded_at DESC`,
       params
     );
-    if (r.rows.length > 0) return res.json(r.rows);
-    // Fallback: legacy Drive API scan
-    const drive = getDrive();
-    if (!drive) return res.json([]);
-    const folderRes = await drive.files.list({ q: "name='customers' and mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents", fields: 'files(id)', pageSize: 1 });
-    const customersId = folderRes.data.files?.[0]?.id;
-    if (!customersId) return res.json([]);
-    const subfoldersRes = await drive.files.list({ q: `'${customersId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`, fields: 'files(id,name)' });
-    const results: any[] = [];
-    for (const folder of subfoldersRes.data.files || []) {
-      const filesRes = await drive.files.list({ q: `'${folder.id}' in parents and trashed=false`, fields: 'files(id,name,createdTime,mimeType)', orderBy: 'createdTime desc', pageSize: 50 });
-      for (const file of filesRes.data.files || []) {
-        results.push({ id: file.id, customerId: folder.name, customerName: folder.name, fileName: file.name, fileUrl: `https://drive.google.com/thumbnail?id=${file.id}&sz=w200`, timestamp: file.createdTime });
-      }
-    }
-    res.json(results);
+    // Never scan the shared Google Drive when this workspace has no rows.
+    // That scan listed another café's customer folders for a new account.
+    res.json(r.rows);
   } catch (e: any) { console.error('[drive/files/ws]', e.message); res.json([]); }
 });
 
@@ -104,12 +91,20 @@ router.get('/download/:fileId', (req: any, res, next) => {
   authMiddleware(req, res, next);
 }, async (req: any, res) => {
   const { fileId } = req.params;
+  const owned = await pool.query(
+    `SELECT id, drive_file_id FROM drive_files
+     WHERE workspace_id = $1 AND (id::text = $2 OR drive_file_id = $2)
+     LIMIT 1`,
+    [req.user.workspaceId, fileId]
+  );
+  if (!owned.rows.length) return res.status(404).json({ error: 'File not found' });
   const drive = await getDriveForWorkspace(req.user.workspaceId);
   if (!drive) return res.status(401).json({ error: 'Drive not connected for this workspace' });
+  const googleId = owned.rows[0].drive_file_id || owned.rows[0].id;
   try {
-    const metaRes = await drive.files.get({ fileId, fields: 'mimeType,name' });
+    const metaRes = await drive.files.get({ fileId: googleId, fields: 'mimeType,name' });
     const mime = metaRes.data.mimeType || 'application/octet-stream';
-    const driveRes = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'arraybuffer' });
+    const driveRes = await drive.files.get({ fileId: googleId, alt: 'media' }, { responseType: 'arraybuffer' });
     const buffer = Buffer.from(driveRes.data as any);
     res.setHeader('Content-Type', mime);
     res.setHeader('Content-Disposition', `inline; filename="${metaRes.data.name || 'file'}"`);

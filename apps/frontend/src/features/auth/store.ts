@@ -30,7 +30,17 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken, isAuthenticated: true }),
       setUser: (user) => set({ user }),
-      logout: () => set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false }),
+      logout: () => {
+        // Drop café-local caches so the next account does not see the previous workspace.
+        try {
+          localStorage.removeItem('cc-drive-files');
+          localStorage.removeItem('cc-wa-connected');
+          localStorage.removeItem('cc-wa-unread');
+          localStorage.removeItem('cc-pinned-chats');
+        } catch { /* private mode */ }
+        try { caches?.delete?.('cc-drive-files-v1'); } catch { /* ignore */ }
+        set({ accessToken: null, refreshToken: null, user: null, isAuthenticated: false });
+      },
     }),
     // Persist refreshToken too — local vite (http://127.0.0.1:5173 → :3000) cannot rely on the
     // prod HttpOnly cookie (Secure + COOKIE_DOMAIN). API still returns refresh in the body.

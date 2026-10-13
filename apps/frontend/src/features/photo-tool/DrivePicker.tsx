@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { FolderOpen, MagnifyingGlass, ArrowsClockwise } from '@phosphor-icons/react';
 import api from '../../shared/api';
+import { useAuthStore } from '../auth/store';
 
 type DriveFile = {
   id: string;
@@ -29,11 +30,14 @@ interface Props {
 // Session cache so reopening the picker is instant (the /drive/files/ws call
 // hits Google Drive and is slow). Stale-while-revalidate: show cached results
 // immediately, refresh in the background when older than the TTL.
-let _driveCache: { data: DriveFile[]; at: number } | null = null;
+let _driveCache: { ws: string; data: DriveFile[]; at: number } | null = null;
 const DRIVE_CACHE_TTL = 120_000;
 
 export default function DrivePicker({ open, onClose, onPick }: Props) {
-  const [files, setFiles] = useState<DriveFile[]>(() => _driveCache?.data ?? []);
+  const [files, setFiles] = useState<DriveFile[]>(() => {
+    const ws = useAuthStore.getState().user?.workspaceId || '';
+    return _driveCache?.ws === ws ? _driveCache.data : [];
+  });
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -42,16 +46,17 @@ export default function DrivePicker({ open, onClose, onPick }: Props) {
   useEffect(() => {
     if (!open) return;
     let alive = true;
-    const hasCache = !!_driveCache;
-    const fresh = _driveCache && Date.now() - _driveCache.at < DRIVE_CACHE_TTL;
+    const ws = useAuthStore.getState().user?.workspaceId || '';
+    const hasCache = !!_driveCache && _driveCache.ws === ws;
+    const fresh = hasCache && Date.now() - _driveCache!.at < DRIVE_CACHE_TTL;
     if (hasCache) { setFiles(_driveCache!.data); setLoading(false); }
-    else { setLoading(true); }
+    else { setFiles([]); setLoading(true); }
     if (fresh) return;            // cache still fresh — no network needed
     setError('');
     api.get('/drive/files/ws')
       .then(res => {
         const data = Array.isArray(res.data) ? res.data : [];
-        _driveCache = { data, at: Date.now() };
+        _driveCache = { ws, data, at: Date.now() };
         if (alive) setFiles(data);
       })
       .catch(e => { if (alive && !hasCache) setError(e.response?.data?.error || e.message || 'Failed to load files'); })
@@ -65,8 +70,9 @@ export default function DrivePicker({ open, onClose, onPick }: Props) {
     _driveCache = null;
     setLoading(true);
     setError('');
+    const ws = useAuthStore.getState().user?.workspaceId || '';
     api.get('/drive/files/ws')
-      .then(res => { const data = Array.isArray(res.data) ? res.data : []; _driveCache = { data, at: Date.now() }; setFiles(data); })
+      .then(res => { const data = Array.isArray(res.data) ? res.data : []; _driveCache = { ws, data, at: Date.now() }; setFiles(data); })
       .catch(e => setError(e.response?.data?.error || e.message || 'Failed to load files'))
       .finally(() => setLoading(false));
   };

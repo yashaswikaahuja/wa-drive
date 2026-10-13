@@ -577,7 +577,8 @@ export default function WhatsApp() {
       if (r.data.qr) setQrCode(r.data.qr);
     }).catch(() => {});
     // Load cached data instantly, then refresh from server
-    const cached = localStorage.getItem('cc-drive-files');
+    const cacheKey = `cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`;
+    const cached = localStorage.getItem(cacheKey);
     if (cached) {
       try { const msgs = JSON.parse(cached); groupMessages(msgs); } catch {}
     }
@@ -586,7 +587,7 @@ export default function WhatsApp() {
         id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
         fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
       }));
-      localStorage.setItem('cc-drive-files', JSON.stringify(msgs));
+      localStorage.setItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`, JSON.stringify(msgs));
       groupMessages(msgs);
     }).catch(() => {});
     const baseUrl = SOCKET_URL;
@@ -771,7 +772,7 @@ export default function WhatsApp() {
               id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
               fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
             }));
-            if (msgs.length > 0) { localStorage.setItem('cc-drive-files', JSON.stringify(msgs)); groupMessages(msgs); }
+            if (msgs.length > 0) { localStorage.setItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`, JSON.stringify(msgs)); groupMessages(msgs); }
           }).catch(() => {});
           disconnectCount = 0;
         } else if (r.data.qr) {
@@ -780,7 +781,7 @@ export default function WhatsApp() {
           if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
         } else {
           disconnectCount++;
-          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); localStorage.removeItem('cc-drive-files'); }
+          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); localStorage.removeItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`); }
         }
       }).catch(() => {});
     }, interval);
@@ -908,7 +909,7 @@ export default function WhatsApp() {
       }
       return map;
     });
-    try { const cached = localStorage.getItem('cc-drive-files'); if (cached) localStorage.setItem('cc-drive-files', JSON.stringify(JSON.parse(cached).filter((m: any) => m.id !== id))); } catch {}
+    try { const key = `cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`; const cached = localStorage.getItem(key); if (cached) localStorage.setItem(key, JSON.stringify(JSON.parse(cached).filter((m: any) => m.id !== id))); } catch {}
   }, []);
 
   const toggleDocSelection = useCallback((msg: Message) => {
