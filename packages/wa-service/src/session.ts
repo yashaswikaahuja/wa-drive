@@ -610,16 +610,14 @@ export function createSessionManager({
           session.failedMediaDownloads = 0;
           console.log(`[WA:${workspaceId.slice(0, 8)}] Uploaded ${fileName} from ${pushName}`);
         } catch (e) {
-          // @ts-expect-error TS(2571): Object is of type 'unknown'.
-          console.error(`[WA:${workspaceId.slice(0, 8)}] Media error:`, e.message);
-          // @ts-expect-error TS(2571): Object is of type 'unknown'.
-          hardTracker.note(e.message);
-          softTracker.note(e.message);
+          const message = e instanceof Error ? e.message : String(e);
+          console.error(`[WA:${workspaceId.slice(0, 8)}] Media error:`, message);
+          hardTracker.note(message);
+          softTracker.note(message);
           session.failedMediaDownloads = (session.failedMediaDownloads || 0) + 1;
           if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
             session.failedMediaDownloads = 0;
-            // @ts-expect-error TS(2571): Object is of type 'unknown'.
-            await softRestartWhileConnected(`repeated media error: ${e.message}`);
+            await softRestartWhileConnected(`repeated media error: ${message}`);
           }
         }
       }
