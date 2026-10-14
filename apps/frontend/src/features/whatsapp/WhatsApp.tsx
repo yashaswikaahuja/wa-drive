@@ -39,11 +39,18 @@ interface Message {
   needsType?: boolean;
 }
 
-/** True when Build Profile would fail / skip this doc for missing document type. */
+/** True when the operator has set a real document type (not a filename guess). */
+function hasStoredDocType(msg: Message): boolean {
+  return !!msg.tag && msg.tag !== 'Needs type' && !msg.needsType;
+}
+
+/**
+ * Build Profile requires an explicit Tag.
+ * Filename heuristics (`docCategory`) stay visual hints only — they must not unlock extract
+ * (backend can still return needsType mid-run when the guess was wrong).
+ */
 function docNeedsTypeTag(msg: Message): boolean {
-  if (msg.tag === 'Needs type' || msg.needsType) return true;
-  if (msg.tag) return false;
-  return !docCategory(msg.fileName || '');
+  return !hasStoredDocType(msg);
 }
 interface Chat { phone: string; name: string; lastTime: string; messages: Message[]; newCount: number; dpUrl?: string; }
 
@@ -189,16 +196,16 @@ const MessageCard = memo(({ msg, onClick, selected, selectUiActive, onToggleSele
     : undefined;
   const showCheck = selectUiActive || selected;
   const ID_TAGS = ['Aadhaar','PAN','Passport','Voter ID','Driving License','Ration Card','Ayushman','10th Marksheet','12th Marksheet','Graduation','Post-Grad','Admit Card','Certificate','Bank'];
-  const needsType = msg.tag === 'Needs type' || msg.needsType;
-  const isJunkTag = msg.tag && !ID_TAGS.includes(msg.tag) && !needsType;
-  const category = needsType
-    ? { category: 'Needs type', color: 'bg-[hsl(35_92%_48%/0.16)] text-[hsl(28_90%_38%)]' }
-    : msg.tag
-    ? { category: msg.tag, color: isJunkTag ? 'bg-[hsl(var(--pt-secondary))] text-[hsl(var(--pt-muted))]' : 'bg-[hsl(158_55%_36%/0.12)] text-[hsl(158_55%_28%)]' }
-    : docCategory(msg.fileName || '');
-  const primaryTitle = category?.category && category.category !== 'Needs type'
-    ? category.category
-    : title;
+  const needsType = !hasStoredDocType(msg);
+  const isJunkTag = !!msg.tag && !ID_TAGS.includes(msg.tag) && msg.tag !== 'Needs type';
+  const guessed = !msg.tag || msg.tag === 'Needs type' || msg.needsType
+    ? docCategory(msg.fileName || '')
+    : null;
+  const category = hasStoredDocType(msg)
+    ? { category: msg.tag!, color: isJunkTag ? 'bg-[hsl(var(--pt-secondary))] text-[hsl(var(--pt-muted))]' : 'bg-[hsl(158_55%_36%/0.12)] text-[hsl(158_55%_28%)]' }
+    : { category: 'Needs type', color: 'bg-[hsl(35_92%_48%/0.16)] text-[hsl(28_90%_38%)]' };
+  // Confirmed tag wins the title; filename guess is a soft subtitle only.
+  const primaryTitle = hasStoredDocType(msg) ? msg.tag! : (guessed?.category || title);
 
   useEffect(() => {
     if (!moreOpen) return;
