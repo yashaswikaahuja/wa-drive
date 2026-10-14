@@ -189,12 +189,17 @@ export default function Layout() {
       <Sidebar user={user} logout={logout} open={open} onClose={() => setOpen(false)} collapsed={collapsed} onToggleCollapse={toggleCollapse} />
 
       <main
-        className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden ${
-          fullBleed ? 'p-0 flex flex-col' : 'p-4 md:p-7'
+        className={`flex-1 min-w-0 overflow-x-hidden ${
+          // Documents / File Manager own their scroll panes — page scroll breaks the phone inbox↔chat split.
+          fullBleed ? 'p-0 flex flex-col overflow-hidden' : 'p-4 md:p-7 overflow-y-auto'
         }`}
       >
-        <VerifyBanner />
-        <LocationBanner />
+        {!fullBleed && (
+          <>
+            <VerifyBanner />
+            <LocationBanner />
+          </>
+        )}
         <div className={fullBleed ? 'flex-1 min-h-0 flex flex-col' : 'mx-auto w-full max-w-6xl'}>
           <Outlet />
         </div>

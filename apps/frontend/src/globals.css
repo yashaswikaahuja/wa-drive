@@ -318,19 +318,16 @@ button:focus-visible {
 .text-gray-100, .text-gray-200 { color: hsl(var(--ink)); }
 .text-gray-300, .text-gray-400, .text-gray-500, .text-gray-600 { color: hsl(var(--pt-muted)); }
 
-/* Chat/list titles that still say text-white on paper surfaces */
+/* Chat/list titles that still say text-white on paper surfaces.
+   Skip spans — Documents green header + selection FAB use span.text-white.font-semibold. */
 .pt-paper main p.text-white,
 .pt-paper main h1.text-white,
 .pt-paper main h2.text-white,
-.pt-paper main h3.text-white,
-.pt-paper main span.text-white.font-medium,
-.pt-paper main span.text-white.font-semibold,
-.pt-paper main span.text-white.font-bold {
+.pt-paper main h3.text-white {
   color: hsl(var(--ink));
 }
-/* Keep real .bg-black for overlays / media viewers */
-.bg-gray-800, .bg-gray-900, .bg-gray-950,
-.bg-\[\#1c1c1e\], .bg-\[\#2c2c2e\], .bg-\[\#0a0a0a\] { background-color: hsl(var(--pt-card)); }
+/* Soft gray shells → paper. Keep #0a0a0a / #1c1c1e / #2c2c2e for MediaViewer overlays. */
+.bg-gray-800, .bg-gray-900, .bg-gray-950 { background-color: hsl(var(--pt-card)); }
 .bg-blue-500\/5 { background-color: hsl(var(--marigold) / 0.08); }
 .bg-blue-500\/10, .bg-blue-500\/20, .bg-\[\#0a84ff\]\/10 { background-color: hsl(var(--marigold) / 0.14); }
 .bg-\[\#0a84ff\], .bg-blue-500, .bg-blue-600 { background-color: hsl(var(--marigold)); }
