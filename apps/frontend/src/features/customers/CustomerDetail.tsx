@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
-  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check
+  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check,
+  ChatCircle, FolderOpen,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
+import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import { getCompleteness, flattenProfileData, buildVisibleSections } from '../../shared/profileSchema';
 import { ProvenanceChip } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
@@ -65,17 +67,6 @@ export default function CustomerDetail() {
   const [importMsg, setImportMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-
-  /** Digits-only phone compare so +91 / 0 / spaces still match (#305). */
-  const phoneDigits = (p: string) => String(p || '').replace(/\D/g, '');
-  const phonesMatch = (a: string, b: string) => {
-    const da = phoneDigits(a);
-    const db = phoneDigits(b);
-    if (!da || !db) return false;
-    if (da === db) return true;
-    // Last-10 match (India mobile without country code).
-    return da.slice(-10) === db.slice(-10) && da.slice(-10).length === 10;
-  };
 
   const loadHousehold = async () => {
     setLoading(true);
@@ -176,7 +167,14 @@ export default function CustomerDetail() {
     if (!confirm(`Delete "${personName}"? This cannot be undone.`)) return;
     try {
       await api.delete(`/customers/persons/${personId}`);
-      if (selectedPerson === personId) { setSelectedPerson(null); setPersonDetail(null); }
+      const remaining = (household?.persons || []).filter((p) => p.id !== personId);
+      if (selectedPerson === personId) {
+        setPersonDetail(null);
+        const nextId = remaining[0]?.id || null;
+        setSelectedPerson(nextId);
+        if (nextId) setSearchParams({ person: nextId }, { replace: true });
+        else setSearchParams({}, { replace: true });
+      }
       await loadHousehold();
     } catch (e: any) { setError(e.message); }
   };
@@ -307,35 +305,53 @@ export default function CustomerDetail() {
         <ArrowLeft size={15} /> Customers
       </button>
 
-      {/* Header — name first, phone secondary */}
-      <div className="flex items-center gap-4 mb-8">
-        <div
-          className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-semibold shrink-0"
-          style={{ background: 'hsl(var(--pt-marigold) / 0.12)', color: 'hsl(var(--pt-marigold-deep))' }}
-        >
-          {primaryName[0]?.toUpperCase()}
+      {/* Header — name/phone first; actions wrap cleanly on phone */}
+      <div className="flex flex-col gap-4 mb-6 sm:mb-8">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+          <div
+            className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-lg sm:text-xl font-semibold shrink-0"
+            style={{ background: 'hsl(var(--pt-marigold) / 0.12)', color: 'hsl(var(--pt-marigold-deep))' }}
+          >
+            {primaryName[0]?.toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="pt-display text-xl sm:text-2xl font-bold tracking-tight truncate" style={{ color: 'hsl(var(--pt-ink))' }}>{primaryName}</h1>
+            <p className="text-sm pt-muted truncate">
+              {formatPhoneDisplay(phone)}
+              {household.persons.length > 1 && ` · ${household.persons.length} people`}
+            </p>
+          </div>
         </div>
-        <div className="flex-1 min-w-0">
-          <h1 className="pt-display text-2xl font-bold tracking-tight truncate" style={{ color: 'hsl(var(--pt-ink))' }}>{primaryName}</h1>
-          <p className="text-sm pt-muted">
-            {phone.match(/^\d{10,13}$/) ? `+${phone}` : phone}
-            {household.persons.length > 1 && ` · ${household.persons.length} people`}
-          </p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+          <button
+            onClick={() => navigate(`/app/whatsapp?phone=${encodeURIComponent(phone)}`)}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity hover:opacity-80"
+            style={{ color: 'hsl(var(--whatsapp))', background: 'hsl(var(--whatsapp) / 0.1)' }}
+            title="Open Documents chat"
+          >
+            <ChatCircle size={15} /> Documents
+          </button>
+          <button
+            onClick={() => navigate(`/app/files?phone=${encodeURIComponent(phone)}`)}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity hover:opacity-80"
+            style={{ color: 'hsl(var(--pt-ink))', background: 'hsl(var(--pt-secondary))' }}
+            title="Open File Manager folder"
+          >
+            <FolderOpen size={15} /> Files
+          </button>
           <button
             onClick={() => setShowShareModal(true)}
             disabled={!selectedPerson}
-            className="flex items-center gap-1.5 text-xs transition-opacity disabled:opacity-40 hover:opacity-80"
-            style={{ color: 'hsl(var(--pt-marigold-deep))' }}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity disabled:opacity-40 hover:opacity-80"
+            style={{ color: 'hsl(var(--pt-marigold-deep))', background: 'hsl(var(--pt-marigold) / 0.12)' }}
             title="Share profile"
           >
             <ShareNetwork size={15} /> Share
           </button>
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
-            style={{ color: 'hsl(var(--confidence))' }}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity hover:opacity-80"
+            style={{ color: 'hsl(var(--confidence))', background: 'hsl(var(--pt-secondary))' }}
             title="Import shared profile"
           >
             <Export size={15} /> Import
@@ -343,40 +359,55 @@ export default function CustomerDetail() {
         </div>
       </div>
 
-      {/* People tabs (if household) */}
+      {/* People tabs — horizontal scroll on phone; delete visible on selected / touch */}
       {household.persons.length > 1 && (
-        <div className="flex items-center gap-2 mb-6 flex-wrap">
-          {household.persons.map(p => (
+        <div className="-mx-4 px-4 mb-6 sm:mx-0 sm:px-0">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {household.persons.map(p => {
+              const active = selectedPerson === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    if (p.id === selectedPerson) return;
+                    setPersonDetail(null); // avoid showing previous person's fields under new tab
+                    setSelectedPerson(p.id);
+                    setSearchParams({ person: p.id }, { replace: true });
+                  }}
+                  className="group flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full text-sm transition-all active:scale-[0.97] shrink-0"
+                  style={{
+                    background: active ? 'hsl(var(--pt-marigold) / 0.14)' : 'hsl(var(--pt-secondary))',
+                    color: active ? 'hsl(var(--pt-marigold-deep))' : 'hsl(var(--pt-muted))',
+                    transitionTimingFunction: EASE, transitionDuration: '200ms',
+                  }}
+                  aria-pressed={active}
+                >
+                  <span className="whitespace-nowrap">{p.displayLabel || p.name}</span>
+                  <span className="text-[10px] opacity-50 capitalize whitespace-nowrap">{p.relationship}</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); } }}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 transition-all ${active ? 'opacity-80' : 'opacity-50 md:opacity-0 md:group-hover:opacity-100'}`}
+                    aria-label={`Remove ${p.displayLabel || p.name}`}
+                    title="Remove person"
+                  >
+                    <X size={11} />
+                  </span>
+                </button>
+              );
+            })}
             <button
-              key={p.id}
-              onClick={() => {
-                if (p.id === selectedPerson) return;
-                setPersonDetail(null); // avoid showing previous person's fields under new tab
-                setSelectedPerson(p.id);
-                setSearchParams({ person: p.id }, { replace: true });
-              }}
-              className="group flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-full text-sm transition-all active:scale-[0.97]"
-              style={{
-                background: selectedPerson === p.id ? 'hsl(var(--pt-marigold) / 0.14)' : 'hsl(var(--pt-secondary))',
-                color: selectedPerson === p.id ? 'hsl(var(--pt-marigold-deep))' : 'hsl(var(--pt-muted))',
-                transitionTimingFunction: EASE, transitionDuration: '200ms',
-              }}
+              type="button"
+              onClick={() => setShowAddPerson(true)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm transition-colors shrink-0"
+              style={{ color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-secondary))' }}
             >
-              {p.displayLabel || p.name}
-              <span className="text-[10px] opacity-50 capitalize">{p.relationship}</span>
-              <span onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
-                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all">
-                <X size={11} />
-              </span>
+              <UserPlus size={14} /> Add
             </button>
-          ))}
-          <button
-            onClick={() => setShowAddPerson(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm transition-colors"
-            style={{ color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-secondary))' }}
-          >
-            <UserPlus size={14} /> Add
-          </button>
+          </div>
         </div>
       )}
       {household.persons.length <= 1 && (

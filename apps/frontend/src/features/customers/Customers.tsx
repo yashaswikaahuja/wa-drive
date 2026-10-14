@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash, MagnifyingGlass, Users } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import PageHeader from '../../shared/PageHeader';
+import { formatPhoneDisplay } from '../../shared/phone';
 
 const INK = 'hsl(var(--pt-ink))';
 
@@ -128,7 +129,7 @@ export default function Customers() {
               >
                 <div className="px-4 pt-2.5 pb-1.5 flex items-center justify-between" style={{ background: 'hsl(var(--pt-secondary) / 0.45)' }}>
                   <p className="text-[11px] pt-muted font-medium">
-                    {h.phone.match(/^\d{10,13}$/) ? `+${h.phone}` : h.phone}
+                    {formatPhoneDisplay(h.phone)}
                     {' · '}{h.persons.length} {h.persons.length === 1 ? 'person' : 'people'}
                   </p>
                   <button

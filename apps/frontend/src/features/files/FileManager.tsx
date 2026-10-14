@@ -3,6 +3,7 @@
  * Folders = customers · click file = open preview · right-click = actions.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   FolderOpen, Folder, MagnifyingGlass, UploadSimple, ArrowsClockwise,
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, SquaresFour,
@@ -17,6 +18,7 @@ import {
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
+import { phonesMatch } from '../../shared/phone';
 import { useAuthStore } from '../auth/store';
 import PdfThumb from './PdfThumb';
 
@@ -102,10 +104,13 @@ function Thumb({ f }: { f: DriveFile }) {
 }
 
 export default function FileManager() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [folderPhone, setFolderPhone] = useState<string | null>(null);
+  const deepPhoneAppliedRef = useRef<string | null>(null);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -179,6 +184,19 @@ export default function FileManager() {
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
   }, [files]);
+
+  // Profile / Today deep-link: /app/files?phone=… opens that customer folder.
+  useEffect(() => {
+    const want = searchParams.get('phone');
+    if (!want || folders.length === 0) return;
+    if (deepPhoneAppliedRef.current === want) return;
+    const match = folders.find(
+      (f) => f.phone !== '__unassigned__' && phonesMatch(f.phone, want),
+    );
+    if (!match) return;
+    deepPhoneAppliedRef.current = want;
+    setFolderPhone(match.phone);
+  }, [searchParams, folders]);
 
   const visibleFiles = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -368,7 +386,8 @@ export default function FileManager() {
     q.set('fileId', driveIdOf(f));
     if (f.customerId) q.set('phone', f.customerId);
     if (f.customerName) q.set('name', f.customerName);
-    window.location.href = `/app/photos/portal?${q}`;
+    q.set('from', '/app/files');
+    navigate(`/app/photos/portal?${q}`);
   };
 
   const previewIndex = preview
@@ -1171,7 +1190,8 @@ export default function FileManager() {
                 q.set('fileId', driveIdOf(ctx.file));
                 if (ctx.file.customerId) q.set('phone', ctx.file.customerId);
                 if (ctx.file.customerName) q.set('name', ctx.file.customerName);
-                window.location.href = `/app/photos/portal?${q}`;
+                q.set('from', '/app/files');
+                navigate(`/app/photos/portal?${q}`);
               }}
             >
               <Camera size={13} /> Open in Photo Editor
@@ -1190,7 +1210,8 @@ export default function FileManager() {
                 if (ctx.file.fileName) q.set('fileName', ctx.file.fileName);
                 if (ctx.file.customerId) q.set('phone', ctx.file.customerId);
                 if (ctx.file.customerName) q.set('name', ctx.file.customerName);
-                window.location.href = `/app/photos/scan?${q}`;
+                q.set('from', '/app/files');
+                navigate(`/app/photos/scan?${q}`);
               }}
             >
               <FilePdf size={13} /> Open in PDF Tool

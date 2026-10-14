@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { DocTypePickerModal } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
+import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import {
   MediaViewer,
   displayName,
@@ -18,7 +19,7 @@ import { useAuthStore } from '../auth/store';
 import {
   Printer, Camera, WhatsappLogo, Eye, Tag, DownloadSimple, Trash, UserCircle,
   PaperPlaneTilt, AddressBook, CheckSquare, ArrowClockwise, FilePdf, Image as ImageIcon,
-  FileVideo, FileAudio, File as FileIcon, Play, DotsThree, Check,
+  FileVideo, FileAudio, File as FileIcon, Play, DotsThree, Check, CaretLeft,
 } from '@phosphor-icons/react';
 
 const DOCS_RETURN = '/app/whatsapp';
@@ -484,7 +485,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
           {pinned && <span className="text-[10px]" title="Pinned">📌</span>}
         </div>
         <p className="text-[11px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
-          {/^\d{10,13}$/.test(chat.phone) ? `+${chat.phone.slice(0,2)} ${chat.phone.slice(2,7)} ${chat.phone.slice(7)}` : chat.phone}
+          {formatPhoneDisplay(chat.phone)}
           {' · '}{chat.newCount} doc{chat.newCount !== 1 ? 's' : ''}
         </p>
       </div>
@@ -504,9 +505,10 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); onPin(chat.phone); }}
-        className="text-xs opacity-0 group-hover:opacity-100 transition-opacity p-1"
-        style={{ color: 'hsl(var(--pt-muted))' }}
+        className={`text-xs p-1.5 rounded-lg transition-opacity ${pinned ? 'opacity-100' : 'opacity-70 md:opacity-0 md:group-hover:opacity-100'}`}
+        style={{ color: pinned ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))' }}
         title={pinned ? 'Unpin' : 'Pin'}
+        aria-label={pinned ? 'Unpin chat' : 'Pin chat'}
       >
         📌
       </button>
@@ -516,6 +518,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
 
 export default function WhatsApp() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // true = show inbox immediately when last session was linked; null = spinner until
   // /whatsapp/status returns. Never start as false (that caused a 2s Connect flash).
   const [connected, setConnected] = useState<boolean | null>(() => {
@@ -526,6 +529,7 @@ export default function WhatsApp() {
   const [qrExpired, setQrExpired] = useState(false);
   const qrStartRef = useRef<number | null>(null);
   const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const deepPhoneAppliedRef = useRef<string | null>(null);
   const QR_TIMEOUT_MS = 120_000; // 2 minutes
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
@@ -621,14 +625,13 @@ export default function WhatsApp() {
           setConnected(true); setQrCode(null); setReconnecting(false); setQrExpired(false);
           qrStartRef.current = null;
           localStorage.setItem('cc-wa-connected', 'true');
-          stopPolling();
+          // Keep polling so soft disconnects still hit the hysteresis path below.
         } else {
           if (r.data.qr) {
             // Track when QR first appeared; expire after 2 min
             if (!qrStartRef.current) qrStartRef.current = Date.now();
             if (Date.now() - qrStartRef.current > QR_TIMEOUT_MS) {
               setQrExpired(true);
-              stopPolling();
             } else {
               setQrCode(r.data.qr);
             }
@@ -655,18 +658,17 @@ export default function WhatsApp() {
       pollStatus();
       pollTimer = setInterval(pollStatus, 3000);
     };
-    // Kick off polling immediately
+    // Kick off polling immediately — single status loop (no second interval).
     startPolling();
-    // Connection events still come via socket (single emit, low cost) — these toggle polling
+    // Connection events still come via socket (single emit, low cost)
     socket.on('connection:status', (data: any) => {
       if (!mounted) return;
       if (data.connected) {
         statusMissesRef.current = 0;
         setConnected(true); setQrCode(null); setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
-        stopPolling();
       } else {
-        // Soft disconnect / resume — keep inbox if previously linked; poll to confirm.
+        // Soft disconnect / resume — keep inbox if previously linked; poll confirms.
         if (localStorage.getItem('cc-wa-connected') === 'true') {
           setReconnecting(true);
         }
@@ -757,36 +759,27 @@ export default function WhatsApp() {
     }, 2000);
   }, []);
 
-  // Poll status - detect connect/disconnect
+  // While linked, periodically refresh Drive-backed inbox (status lives in the socket poll above).
   useEffect(() => {
-    let disconnectCount = 0;
-    const interval = connected ? 3000 : 3000;
-    const poll = setInterval(() => {
-      api.get('/whatsapp/status').then(r => {
-        if (r.data.connected) {
-          if (!connected) { setConnected(true); setQrCode(null); setReconnecting(false); }
-          localStorage.setItem('cc-wa-connected', 'true');
-          // Refresh files when connected
-          api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then(fr => {
-            const msgs: Message[] = fr.data.map((f: any) => ({
-              id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-              fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
-            }));
-            if (msgs.length > 0) { localStorage.setItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`, JSON.stringify(msgs)); groupMessages(msgs); }
-          }).catch(() => {});
-          disconnectCount = 0;
-        } else if (r.data.qr) {
-          disconnectCount++;
-          if (disconnectCount >= 2 && !qrExpired) { setQrCode(r.data.qr || null); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
-          if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
-        } else {
-          disconnectCount++;
-          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); localStorage.removeItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`); }
+    if (connected !== true) return;
+    let alive = true;
+    const load = () => {
+      api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then((fr) => {
+        if (!alive) return;
+        const msgs: Message[] = fr.data.map((f: any) => ({
+          id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
+          fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag,
+        }));
+        if (msgs.length > 0) {
+          localStorage.setItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`, JSON.stringify(msgs));
+          groupMessages(msgs);
         }
       }).catch(() => {});
-    }, interval);
-    return () => clearInterval(poll);
-  }, [connected, qrExpired]);
+    };
+    load();
+    const poll = setInterval(load, 15_000);
+    return () => { alive = false; clearInterval(poll); };
+  }, [connected, groupMessages]);
 
   const handleSelectChat = useCallback((phone: string) => {
     setSelectedChat(phone);
@@ -796,6 +789,17 @@ export default function WhatsApp() {
     setMsgSearch('');
     setTimeout(() => messagesEndRef.current?.scrollIntoView(), 100);
   }, []);
+
+  // Today / Profile deep-link: /app/whatsapp?phone=… opens that customer's chat.
+  useEffect(() => {
+    const want = searchParams.get('phone');
+    if (!want || chats.size === 0) return;
+    if (deepPhoneAppliedRef.current === want) return;
+    const match = [...chats.keys()].find((p) => phonesMatch(p, want));
+    if (!match) return;
+    deepPhoneAppliedRef.current = want;
+    handleSelectChat(match);
+  }, [searchParams, chats, handleSelectChat]);
 
   const togglePin = useCallback((phone: string) => {
     setPinnedChats(prev => {
@@ -1277,10 +1281,10 @@ export default function WhatsApp() {
   }
 
   return (
-    <div className="h-full flex w-full min-w-0 overflow-hidden relative" style={{ background: 'hsl(var(--paper))' }}>
-      {/* Inbox */}
+    <div className="h-full min-h-0 flex w-full min-w-0 overflow-hidden relative" style={{ background: 'hsl(var(--paper))' }}>
+      {/* Inbox — always flex-col; hide on phone when a chat is open */}
       <div
-        className={`w-full md:w-80 border-r flex-col ${selectedChat ? 'hidden md:flex' : 'flex'}`}
+        className={`w-full md:w-80 border-r flex flex-col min-h-0 ${selectedChat ? 'hidden md:flex' : 'flex'}`}
         style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}
       >
         <div
@@ -1314,8 +1318,8 @@ export default function WhatsApp() {
         </div>
       </div>
 
-      {/* Conversation */}
-      <div className={`flex-1 min-w-0 flex-col relative ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
+      {/* Conversation — full width on phone when a chat is open */}
+      <div className={`flex-1 min-w-0 min-h-0 flex-col relative ${selectedChat ? 'flex' : 'hidden md:flex'}`}>
         {!activeChat ? (
           <div
             className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center"
@@ -1338,19 +1342,28 @@ export default function WhatsApp() {
         ) : (
           <>
             <div
-              className="min-h-[3.75rem] px-3 sm:px-4 py-2.5 flex flex-wrap items-center gap-2.5 border-b shrink-0"
+              className="min-h-[3.25rem] px-2 sm:px-4 py-2 flex items-center gap-2 border-b shrink-0"
               style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-card))', boxShadow: '0 1px 0 hsl(var(--pt-border) / 0.8)' }}
             >
               <button
-                onClick={() => setSelectedChat(null)}
-                className="md:hidden -ml-1 text-2xl leading-none px-1"
-                style={{ color: 'hsl(var(--pt-muted))' }}
+                type="button"
+                onClick={() => {
+                  setSelectedChat(null);
+                  deepPhoneAppliedRef.current = null;
+                  if (searchParams.get('phone')) {
+                    const next = new URLSearchParams(searchParams);
+                    next.delete('phone');
+                    navigate({ pathname: '/app/whatsapp', search: next.toString() ? `?${next}` : '' }, { replace: true });
+                  }
+                }}
+                className="md:hidden -ml-0.5 flex items-center justify-center w-9 h-9 rounded-full shrink-0"
+                style={{ color: 'hsl(var(--ink))', background: 'hsl(var(--pt-secondary))' }}
                 aria-label="Back to inbox"
               >
-                ‹
+                <CaretLeft size={18} weight="bold" />
               </button>
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden cursor-pointer shrink-0"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-semibold text-sm overflow-hidden cursor-pointer shrink-0"
                 style={{ background: 'hsl(var(--whatsapp) / 0.14)', color: 'hsl(142 64% 28%)' }}
                 onClick={() => activeChat.dpUrl && setDpPreview(activeChat.dpUrl)}
               >
@@ -1359,29 +1372,33 @@ export default function WhatsApp() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>{activeChat.name}</p>
-                <p className="text-xs" style={{ color: 'hsl(var(--pt-muted))' }}>
-                  {activeChat.messages.length} document{activeChat.messages.length !== 1 ? 's' : ''}
+                <p className="text-[11px] truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+                  {formatPhoneDisplay(activeChat.phone)} · {activeChat.messages.length} doc{activeChat.messages.length !== 1 ? 's' : ''}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="hidden sm:block">
                 <input
                   value={msgSearch}
                   onChange={e => setMsgSearch(e.target.value)}
                   placeholder="Search…"
                   className="input-field w-28 text-xs py-1.5"
                 />
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
                 <ActionBtn title="Request documents" accent onClick={() => { if (activeChat) requestDocs(activeChat.phone); }}>
                   <PaperPlaneTilt size={15} />
                 </ActionBtn>
                 <ActionBtn title="Profile" onClick={() => navigate(`/app/customers/${encodeURIComponent(activeChat.phone)}`)}>
                   <UserCircle size={15} />
                 </ActionBtn>
-                <ActionBtn title="Assign" onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }}>
-                  <AddressBook size={15} />
-                </ActionBtn>
-                <ActionBtn title="Select ID documents" onClick={selectIdDocs}>
-                  <CheckSquare size={15} />
-                </ActionBtn>
+                <span className="hidden sm:contents">
+                  <ActionBtn title="Assign" onClick={() => { if (activeChat) assignChat(activeChat.phone, activeChat.name); }}>
+                    <AddressBook size={15} />
+                  </ActionBtn>
+                  <ActionBtn title="Select ID documents" onClick={selectIdDocs}>
+                    <CheckSquare size={15} />
+                  </ActionBtn>
+                </span>
               </div>
             </div>
             <div
@@ -1429,8 +1446,9 @@ export default function WhatsApp() {
 
             {selectedDocs.size > 0 && (
               <div
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-full flex items-center gap-2 z-10 max-w-[95%]"
+                className="absolute left-1/2 -translate-x-1/2 px-3 sm:px-4 py-2.5 rounded-full flex items-center gap-1.5 sm:gap-2 z-20 max-w-[calc(100%-1rem)] sm:max-w-[95%]"
                 style={{
+                  bottom: 'max(1rem, env(safe-area-inset-bottom))',
                   background: untaggedSelected.length > 0
                     ? 'linear-gradient(180deg, hsl(28 90% 42%) 0%, hsl(22 85% 34%) 100%)'
                     : 'var(--gradient-marigold)',
@@ -1585,8 +1603,13 @@ export default function WhatsApp() {
         }}
         onDelete={() => {
           if (!viewerFile) return;
-          handleDeleteDoc(viewerFile.id);
-          handleCloseViewer();
+          const id = viewerFile.id;
+          api.delete('/drive/files/' + id).then(() => {
+            handleDeleteDoc(id);
+            handleCloseViewer();
+          }).catch((err: any) => {
+            toast.error(err?.response?.data?.error || err?.message || 'Delete failed');
+          });
         }}
         showDelete={!!viewerFile}
         showPrint
@@ -1597,16 +1620,25 @@ export default function WhatsApp() {
           fileId={typePickerFile.id}
           onClose={() => setTypePickerFile(null)}
           onDone={(tag) => {
+            const fileId = typePickerFile.id;
+            const apply = (m: Message) =>
+              m.id === fileId ? { ...m, tag, needsType: false } : m;
             setChats((prev) => {
               const next = new Map(prev);
               for (const [phone, chat] of next) {
-                const msgs = chat.messages.map((m) =>
-                  m.id === typePickerFile.id ? { ...m, tag, needsType: false } : m
-                );
-                next.set(phone, { ...chat, messages: msgs });
+                next.set(phone, { ...chat, messages: chat.messages.map(apply) });
               }
               return next;
             });
+            // Keep selection in sync so Build Profile unlocks after Tag (was stuck on stale needsType).
+            setSelectedDocs((prev) => {
+              if (!prev.has(fileId)) return prev;
+              const next = new Map(prev);
+              const cur = next.get(fileId)!;
+              next.set(fileId, { ...cur, tag, needsType: false });
+              return next;
+            });
+            setTypePickerFile(null);
           }}
         />
       )}
