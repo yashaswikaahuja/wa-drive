@@ -23,15 +23,16 @@ const routes: { name: string; path: string }[] = [
   { name: 'Dashboard', path: '/app' },
   { name: 'Customers', path: '/app/customers' },
   { name: 'Form Directory', path: '/app/forms' },
+  { name: 'File Manager', path: '/app/files' },
   { name: 'Documents', path: '/app/whatsapp' },
-  { name: 'Photos — prints', path: '/app/photos/prints' },
-  { name: 'Photos — process', path: '/app/photos/process' },
+  { name: 'Documents alias', path: '/app/documents' },
+  { name: 'Photos home', path: '/app/photos' },
+  { name: 'Photos — portal', path: '/app/photos/portal' },
+  { name: 'Photos — print', path: '/app/photos/print' },
+  { name: 'Photos — scan', path: '/app/photos/scan' },
   { name: 'Settings', path: '/app/settings' },
-  { name: 'Admin Overview', path: '/admin' },
-  { name: 'Sessions', path: '/admin/sessions' },
-  { name: 'Mappings', path: '/admin/mappings' },
-  { name: 'Corrections', path: '/admin/corrections' },
-  { name: 'Prepare Photo', path: `/app/photos/form?form=SSC%20CHSL&photo=${photoSpec}&signature=${sigSpec}` },
+  { name: 'Operators', path: '/admin/operators' },
+  { name: 'Prepare Photo', path: `/app/photos/portal?form=SSC%20CHSL&photo=${photoSpec}&signature=${sigSpec}` },
 ];
 
 test.beforeEach(async ({ page }) => {
@@ -62,3 +63,8 @@ for (const { name, path } of routes) {
     ).toBeLessThanOrEqual(clientW + 1);
   });
 }
+
+test('Documents alias redirects to WhatsApp receive desk', async ({ page }) => {
+  await page.goto('/app/documents', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/app\/whatsapp/);
+});

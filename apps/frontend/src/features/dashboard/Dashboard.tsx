@@ -125,8 +125,8 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {pending.map(c => (
                   <PendingCard key={c.phone} c={c}
-                    onProcess={() => navigate(`/app/customers/${encodeURIComponent(c.phone)}`)}
-                    onAsk={() => navigate('/app/whatsapp')} />
+                    onProcess={() => navigate(`/app/whatsapp?phone=${encodeURIComponent(c.phone)}`)}
+                    onAsk={() => navigate(`/app/whatsapp?phone=${encodeURIComponent(c.phone)}`)} />
                 ))}
               </div>
             </section>

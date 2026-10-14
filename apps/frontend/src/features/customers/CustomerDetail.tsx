@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Plus, PencilSimple, FileText,
-  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check
+  Sparkle, CheckCircle, X, FilePdf, UserPlus, UploadSimple, ShareNetwork, Export, CopySimple, Check,
+  ChatCircle, FolderOpen,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { toast } from '../../shared/toast';
@@ -322,7 +323,23 @@ export default function CustomerDetail() {
             {household.persons.length > 1 && ` · ${household.persons.length} people`}
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+          <button
+            onClick={() => navigate(`/app/whatsapp?phone=${encodeURIComponent(phone)}`)}
+            className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
+            style={{ color: 'hsl(var(--whatsapp))' }}
+            title="Open Documents chat"
+          >
+            <ChatCircle size={15} /> Documents
+          </button>
+          <button
+            onClick={() => navigate(`/app/files?phone=${encodeURIComponent(phone)}`)}
+            className="flex items-center gap-1.5 text-xs transition-opacity hover:opacity-80"
+            style={{ color: 'hsl(var(--pt-ink))' }}
+            title="Open File Manager folder"
+          >
+            <FolderOpen size={15} /> Files
+          </button>
           <button
             onClick={() => setShowShareModal(true)}
             disabled={!selectedPerson}

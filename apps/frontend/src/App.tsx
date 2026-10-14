@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useAuthStore } from './features/auth/store';
 import { extensionBridge } from './shared/extensionBridge';
 import Toasts from './shared/Toasts';
@@ -42,6 +41,16 @@ function PageLoader() {
 export default function App() {
   const { accessToken, refreshToken, user, setUser, logout } = useAuthStore();
   const authed = !!accessToken;
+  // Wait for zustand-persist so a saved session does not flash Login.
+  const [authReady, setAuthReady] = useState(() => useAuthStore.persist.hasHydrated());
+
+  useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setAuthReady(true);
+      return;
+    }
+    return useAuthStore.persist.onFinishHydration(() => setAuthReady(true));
+  }, []);
 
   useEffect(() => {
     if (authed) {
@@ -80,6 +89,7 @@ export default function App() {
   // Public preview route — design playground and shared profiles accessible without login
   const isPlayground = typeof window !== 'undefined' && window.location.pathname.startsWith('/design-playground');
   const isSharedProfile = typeof window !== 'undefined' && window.location.pathname.startsWith('/shared/');
+  if (!authReady) return <PageLoader />;
   if (!authed && !isPlayground && !isSharedProfile) return <Login />;
 
   return (
@@ -117,7 +127,8 @@ export default function App() {
           <Route path="/app/photos/form" element={<RedirectWithSearch to="/app/photos/portal" />} />
           <Route path="/app/stitch" element={<RedirectWithSearch to="/app/photos/aadhaar" />} />
           <Route path="/app/forms/photo" element={<RedirectWithSearch to="/app/photos/portal" />} />
-          <Route path="/app/documents" element={<Placeholder title="Documents" />} />
+          {/* Bookmarks / old links: Documents receive desk lives at /app/whatsapp */}
+          <Route path="/app/documents" element={<RedirectWithSearch to="/app/whatsapp" />} />
           <Route path="/app/settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
           <Route element={<AdminOnly />}>
             <Route path="/admin/operators" element={<Suspense fallback={<PageLoader />}><Operators /></Suspense>} />
@@ -146,11 +157,4 @@ function AdminOnly() {
   return <Outlet />;
 }
 
-function Placeholder({ title }: { title: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-      <p className="pt-display text-xl font-bold" style={{ color: 'hsl(var(--pt-ink))' }}>{title}</p>
-      <p className="text-sm pt-muted mt-1.5">This section is coming soon.</p>
-    </div>
-  );
-}
+

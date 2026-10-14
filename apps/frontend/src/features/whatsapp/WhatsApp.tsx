@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { DocTypePickerModal } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
+import { phonesMatch } from '../../shared/phone';
 import {
   MediaViewer,
   displayName,
@@ -516,6 +517,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
 
 export default function WhatsApp() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // true = show inbox immediately when last session was linked; null = spinner until
   // /whatsapp/status returns. Never start as false (that caused a 2s Connect flash).
   const [connected, setConnected] = useState<boolean | null>(() => {
@@ -526,6 +528,7 @@ export default function WhatsApp() {
   const [qrExpired, setQrExpired] = useState(false);
   const qrStartRef = useRef<number | null>(null);
   const qrPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const deepPhoneAppliedRef = useRef<string | null>(null);
   const QR_TIMEOUT_MS = 120_000; // 2 minutes
   const [chats, setChats] = useState<Map<string, Chat>>(new Map());
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
@@ -621,14 +624,13 @@ export default function WhatsApp() {
           setConnected(true); setQrCode(null); setReconnecting(false); setQrExpired(false);
           qrStartRef.current = null;
           localStorage.setItem('cc-wa-connected', 'true');
-          stopPolling();
+          // Keep polling so soft disconnects still hit the hysteresis path below.
         } else {
           if (r.data.qr) {
             // Track when QR first appeared; expire after 2 min
             if (!qrStartRef.current) qrStartRef.current = Date.now();
             if (Date.now() - qrStartRef.current > QR_TIMEOUT_MS) {
               setQrExpired(true);
-              stopPolling();
             } else {
               setQrCode(r.data.qr);
             }
@@ -655,18 +657,17 @@ export default function WhatsApp() {
       pollStatus();
       pollTimer = setInterval(pollStatus, 3000);
     };
-    // Kick off polling immediately
+    // Kick off polling immediately — single status loop (no second interval).
     startPolling();
-    // Connection events still come via socket (single emit, low cost) — these toggle polling
+    // Connection events still come via socket (single emit, low cost)
     socket.on('connection:status', (data: any) => {
       if (!mounted) return;
       if (data.connected) {
         statusMissesRef.current = 0;
         setConnected(true); setQrCode(null); setReconnecting(false);
         localStorage.setItem('cc-wa-connected', 'true');
-        stopPolling();
       } else {
-        // Soft disconnect / resume — keep inbox if previously linked; poll to confirm.
+        // Soft disconnect / resume — keep inbox if previously linked; poll confirms.
         if (localStorage.getItem('cc-wa-connected') === 'true') {
           setReconnecting(true);
         }
@@ -757,36 +758,27 @@ export default function WhatsApp() {
     }, 2000);
   }, []);
 
-  // Poll status - detect connect/disconnect
+  // While linked, periodically refresh Drive-backed inbox (status lives in the socket poll above).
   useEffect(() => {
-    let disconnectCount = 0;
-    const interval = connected ? 3000 : 3000;
-    const poll = setInterval(() => {
-      api.get('/whatsapp/status').then(r => {
-        if (r.data.connected) {
-          if (!connected) { setConnected(true); setQrCode(null); setReconnecting(false); }
-          localStorage.setItem('cc-wa-connected', 'true');
-          // Refresh files when connected
-          api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then(fr => {
-            const msgs: Message[] = fr.data.map((f: any) => ({
-              id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
-              fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag
-            }));
-            if (msgs.length > 0) { localStorage.setItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`, JSON.stringify(msgs)); groupMessages(msgs); }
-          }).catch(() => {});
-          disconnectCount = 0;
-        } else if (r.data.qr) {
-          disconnectCount++;
-          if (disconnectCount >= 2 && !qrExpired) { setQrCode(r.data.qr || null); setConnected(false); setReconnecting(false); localStorage.setItem('cc-wa-connected', 'false'); }
-          if (disconnectCount >= 2) { setConnected(false); localStorage.setItem('cc-wa-connected', 'false'); }
-        } else {
-          disconnectCount++;
-          if (disconnectCount >= 2) { setConnected(false); setReconnecting(true); localStorage.setItem('cc-wa-connected', 'false'); localStorage.removeItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`); }
+    if (connected !== true) return;
+    let alive = true;
+    const load = () => {
+      api.get('/drive/files/ws', { params: { source: 'whatsapp' } }).then((fr) => {
+        if (!alive) return;
+        const msgs: Message[] = fr.data.map((f: any) => ({
+          id: f.id, phone: f.customerId || 'unknown', name: f.customerName || f.customerId || 'Unknown',
+          fileName: f.fileName, fileUrl: f.fileUrl, timestamp: f.timestamp, dpUrl: f.dpUrl, tag: f.tag,
+        }));
+        if (msgs.length > 0) {
+          localStorage.setItem(`cc-drive-files:${useAuthStore.getState().user?.workspaceId || ''}`, JSON.stringify(msgs));
+          groupMessages(msgs);
         }
       }).catch(() => {});
-    }, interval);
-    return () => clearInterval(poll);
-  }, [connected, qrExpired]);
+    };
+    load();
+    const poll = setInterval(load, 15_000);
+    return () => { alive = false; clearInterval(poll); };
+  }, [connected, groupMessages]);
 
   const handleSelectChat = useCallback((phone: string) => {
     setSelectedChat(phone);
@@ -796,6 +788,17 @@ export default function WhatsApp() {
     setMsgSearch('');
     setTimeout(() => messagesEndRef.current?.scrollIntoView(), 100);
   }, []);
+
+  // Today / Profile deep-link: /app/whatsapp?phone=… opens that customer's chat.
+  useEffect(() => {
+    const want = searchParams.get('phone');
+    if (!want || chats.size === 0) return;
+    if (deepPhoneAppliedRef.current === want) return;
+    const match = [...chats.keys()].find((p) => phonesMatch(p, want));
+    if (!match) return;
+    deepPhoneAppliedRef.current = want;
+    handleSelectChat(match);
+  }, [searchParams, chats, handleSelectChat]);
 
   const togglePin = useCallback((phone: string) => {
     setPinnedChats(prev => {
@@ -1585,8 +1588,13 @@ export default function WhatsApp() {
         }}
         onDelete={() => {
           if (!viewerFile) return;
-          handleDeleteDoc(viewerFile.id);
-          handleCloseViewer();
+          const id = viewerFile.id;
+          api.delete('/drive/files/' + id).then(() => {
+            handleDeleteDoc(id);
+            handleCloseViewer();
+          }).catch((err: any) => {
+            toast.error(err?.response?.data?.error || err?.message || 'Delete failed');
+          });
         }}
         showDelete={!!viewerFile}
         showPrint
@@ -1597,16 +1605,25 @@ export default function WhatsApp() {
           fileId={typePickerFile.id}
           onClose={() => setTypePickerFile(null)}
           onDone={(tag) => {
+            const fileId = typePickerFile.id;
+            const apply = (m: Message) =>
+              m.id === fileId ? { ...m, tag, needsType: false } : m;
             setChats((prev) => {
               const next = new Map(prev);
               for (const [phone, chat] of next) {
-                const msgs = chat.messages.map((m) =>
-                  m.id === typePickerFile.id ? { ...m, tag, needsType: false } : m
-                );
-                next.set(phone, { ...chat, messages: msgs });
+                next.set(phone, { ...chat, messages: chat.messages.map(apply) });
               }
               return next;
             });
+            // Keep selection in sync so Build Profile unlocks after Tag (was stuck on stale needsType).
+            setSelectedDocs((prev) => {
+              if (!prev.has(fileId)) return prev;
+              const next = new Map(prev);
+              const cur = next.get(fileId)!;
+              next.set(fileId, { ...cur, tag, needsType: false });
+              return next;
+            });
+            setTypePickerFile(null);
           }}
         />
       )}
