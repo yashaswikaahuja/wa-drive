@@ -81,10 +81,51 @@ test.describe('File Manager phone folders drawer', () => {
     const drawer = page.getByRole('dialog', { name: 'Folders' });
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole('button', { name: /All customers/ })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: /Recent/ })).toBeVisible();
     await expect(drawer.getByPlaceholder('Search customers…')).toBeVisible();
 
     await drawer.getByRole('button', { name: 'Close folders' }).click();
     await expect(drawer).toHaveCount(0);
+  });
+
+  test('Recent view opens from drawer', async ({ page }) => {
+    await page.route('**/drive/files/**', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'r1',
+            fileName: 'aadhaar_front.jpg',
+            customerId: '919006615450',
+            customerName: 'Shubham Kumar',
+            source: 'whatsapp',
+            mimeType: 'image/jpeg',
+            timestamp: '2026-10-14T10:00:00Z',
+          },
+          {
+            id: 'r2',
+            fileName: 'pan.pdf',
+            customerId: '919031329418',
+            customerName: 'Om~',
+            source: 'whatsapp',
+            mimeType: 'application/pdf',
+            timestamp: '2026-10-13T10:00:00Z',
+          },
+        ]),
+      });
+    });
+
+    await page.goto('/app/files', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(500);
+
+    await page.getByRole('button', { name: 'Open folders' }).click();
+    const drawer = page.getByRole('dialog', { name: 'Folders' });
+    await drawer.getByRole('button', { name: /Recent/ }).click();
+    await expect(drawer).toHaveCount(0);
+
+    await expect(page.getByPlaceholder('Search recent files…')).toBeVisible();
+    await expect(page.getByText('Shubham Kumar').last()).toBeVisible();
   });
 });
 

@@ -8,7 +8,7 @@ import {
   FolderOpen, Folder, MagnifyingGlass, UploadSimple, ArrowsClockwise,
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, SquaresFour,
   ListBullets, DownloadSimple, Trash, Camera, SpinnerGap, CheckSquare,
-  House, List, X,
+  House, List, X, Clock,
 } from '@phosphor-icons/react';
 import {
   MediaViewer,
@@ -39,6 +39,38 @@ type FolderRow = { phone: string; name: string; count: number };
 
 /** Cap visible folders so 500–600 customers stay usable; search finds the rest. */
 const FOLDER_CAP = 50;
+/** Cap Recent list (opened + newest received). */
+const RECENT_CAP = 50;
+
+function openedStorageKey(workspaceId: string | undefined | null) {
+  return workspaceId ? `cc-fm-recent-opened:${workspaceId}` : null;
+}
+
+function readOpenedIds(workspaceId: string | undefined | null): string[] {
+  const key = openedStorageKey(workspaceId);
+  if (!key) return [];
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOpenedIds(workspaceId: string | undefined | null, ids: string[]) {
+  const key = openedStorageKey(workspaceId);
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(ids.slice(0, 40)));
+  } catch { /* private mode */ }
+}
+
+function customerLabelOf(f: DriveFile) {
+  const phone = (f.customerId || '').trim();
+  if (!phone) return 'Unassigned';
+  return folderLabel(phone, f.customerName || '');
+}
 
 function isImage(f: DriveFile) {
   const n = (f.fileName || '').toLowerCase();
@@ -106,11 +138,16 @@ function Thumb({ f }: { f: DriveFile }) {
 export default function FileManager() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const workspaceId = useAuthStore((s) => s.user?.workspaceId);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [folderPhone, setFolderPhone] = useState<string | null>(null);
+  /** Virtual “Recent” view (not a customer folder). */
+  const [recentMode, setRecentMode] = useState(false);
+  const [openedIds, setOpenedIds] = useState<string[]>(() => readOpenedIds(useAuthStore.getState().user?.workspaceId));
   const deepPhoneAppliedRef = useRef<string | null>(null);
+  const deepRecentAppliedRef = useRef(false);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -126,6 +163,10 @@ export default function FileManager() {
   const blobUrlCache = useRef<Map<string, string>>(new Map());
   const mainRef = useRef<HTMLElement>(null);
   const folderDrawerSearchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setOpenedIds(readOpenedIds(workspaceId));
+  }, [workspaceId]);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -203,26 +244,59 @@ export default function FileManager() {
     );
     if (!match) return;
     deepPhoneAppliedRef.current = want;
+    setRecentMode(false);
     setFolderPhone(match.phone);
   }, [searchParams, folders]);
 
+  // /app/files?view=recent
+  useEffect(() => {
+    if (searchParams.get('view') !== 'recent') return;
+    if (deepRecentAppliedRef.current) return;
+    deepRecentAppliedRef.current = true;
+    setFolderPhone(null);
+    setRecentMode(true);
+  }, [searchParams]);
+
+  const matchesFileSearch = useCallback((f: DriveFile, q: string) => {
+    if (!q) return true;
+    return (
+      (f.fileName || '').toLowerCase().includes(q)
+      || displayName(f.fileName || '').toLowerCase().includes(q)
+      || (f.customerName || '').toLowerCase().includes(q)
+      || (f.customerId || '').toLowerCase().includes(q)
+      || (f.tag || '').toLowerCase().includes(q)
+      || customerLabelOf(f).toLowerCase().includes(q)
+    );
+  }, []);
+
   const visibleFiles = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const byTs = (a: DriveFile, b: DriveFile) =>
+      String(b.timestamp || '').localeCompare(String(a.timestamp || ''));
+
+    if (recentMode && !folderPhone) {
+      const byId = new Map(files.map((f) => [f.id, f]));
+      const remembered: DriveFile[] = [];
+      const seen = new Set<string>();
+      for (const id of openedIds) {
+        const hit = byId.get(id);
+        if (hit && !seen.has(hit.id)) {
+          remembered.push(hit);
+          seen.add(hit.id);
+        }
+      }
+      const rest = files.filter((f) => !seen.has(f.id)).sort(byTs);
+      return [...remembered, ...rest].filter((f) => matchesFileSearch(f, q)).slice(0, RECENT_CAP);
+    }
+
     return files
       .filter((f) => {
         const phone = (f.customerId || '').trim() || '__unassigned__';
         if (folderPhone && phone !== folderPhone) return false;
-        if (!q) return true;
-        return (
-          (f.fileName || '').toLowerCase().includes(q)
-          || displayName(f.fileName || '').toLowerCase().includes(q)
-          || (f.customerName || '').toLowerCase().includes(q)
-          || (f.customerId || '').toLowerCase().includes(q)
-          || (f.tag || '').toLowerCase().includes(q)
-        );
+        return matchesFileSearch(f, q);
       })
-      .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')));
-  }, [files, folderPhone, search]);
+      .sort(byTs);
+  }, [files, folderPhone, search, recentMode, openedIds, matchesFileSearch]);
 
   const folderMatches = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -247,13 +321,16 @@ export default function FileManager() {
   }, [folders, folderMatches, folderPhone, search]);
 
   const activeFolder = folderPhone ? folders.find((f) => f.phone === folderPhone) : null;
-  const atRoot = !folderPhone;
+  const atRecent = recentMode && !folderPhone;
+  const atRoot = !folderPhone && !recentMode;
+  const showingFiles = !atRoot; // folder or Recent
+  const canUpload = !!folderPhone && folderPhone !== '__unassigned__';
   const totalFolders = folders.length;
 
   const autocompleteFolders = useMemo(() => {
-    if (folderPhone || search.trim().length < 1) return [];
+    if (folderPhone || recentMode || search.trim().length < 1) return [];
     return folderMatches.slice(0, FOLDER_CAP);
-  }, [folderPhone, search, folderMatches]);
+  }, [folderPhone, recentMode, search, folderMatches]);
 
   const clearSelection = () => {
     setSelectedIds(new Set());
@@ -365,6 +442,14 @@ export default function FileManager() {
     return url;
   };
 
+  const rememberOpened = (id: string) => {
+    setOpenedIds((prev) => {
+      const next = [id, ...prev.filter((x) => x !== id)];
+      writeOpenedIds(workspaceId, next);
+      return next;
+    });
+  };
+
   const openFile = async (f: DriveFile) => {
     setCtx(null);
     setSelectedId(f.id);
@@ -372,10 +457,12 @@ export default function FileManager() {
     try {
       if (!isImage(f) && !isPdf(f)) {
         const url = await ensureBlobUrl(f);
+        rememberOpened(f.id);
         window.open(url, '_blank', 'noopener');
         return;
       }
       const url = await ensureBlobUrl(f);
+      rememberOpened(f.id);
       setPreview({ file: f, url, kind: isImage(f) ? 'image' : 'pdf' });
     } catch (e: any) {
       toast.error(e.message || 'Could not open file');
@@ -456,6 +543,15 @@ export default function FileManager() {
 
   const goRoot = () => {
     setFolderPhone(null);
+    setRecentMode(false);
+    clearSelection();
+    setSearch('');
+    setFoldersOpen(false);
+  };
+
+  const openRecent = () => {
+    setFolderPhone(null);
+    setRecentMode(true);
     clearSelection();
     setSearch('');
     setFoldersOpen(false);
@@ -463,6 +559,7 @@ export default function FileManager() {
 
   const openFolder = (phone: string) => {
     setFolderPhone(phone);
+    setRecentMode(false);
     clearSelection();
     setSearch('');
     setFoldersOpen(false);
@@ -508,6 +605,20 @@ export default function FileManager() {
         <FolderOpen size={16} weight={atRoot ? 'fill' : 'regular'} style={atRoot ? { color: 'hsl(var(--marigold-deep))' } : undefined} />
         <span className="truncate flex-1 font-medium">All customers</span>
         <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>{totalFolders}</span>
+      </button>
+      <button
+        type="button"
+        onClick={openRecent}
+        className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs rounded-[10px] transition-all ${
+          atRecent ? 'sidebar-item active' : 'sidebar-item'
+        }`}
+        style={{ width: 'calc(100% - 0.5rem)', marginLeft: '0.25rem', marginRight: '0.25rem' }}
+      >
+        <Clock size={16} weight={atRecent ? 'fill' : 'regular'} style={atRecent ? { color: 'hsl(var(--marigold-deep))' } : undefined} />
+        <span className="truncate flex-1 font-medium">Recent</span>
+        <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>
+          {Math.min(files.length, RECENT_CAP)}
+        </span>
       </button>
       <p className="pt-label text-[10px] px-3 pt-3 pb-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
         Folders{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
@@ -609,6 +720,34 @@ export default function FileManager() {
           </span>
         </span>
         {atRoot && (
+          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: 'hsl(var(--marigold) / 0.2)', color: 'hsl(var(--marigold-deep))' }}>
+            Open
+          </span>
+        )}
+      </button>
+
+      <button
+        type="button"
+        onClick={openRecent}
+        className="w-full flex items-center gap-3.5 px-4 py-4 text-left active:opacity-80"
+        style={{
+          background: atRecent ? 'hsl(var(--marigold) / 0.12)' : 'transparent',
+          borderBottom: '1px solid hsl(var(--pt-border-soft))',
+        }}
+      >
+        <span
+          className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+          style={{ background: atRecent ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-secondary))' }}
+        >
+          <Clock size={22} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>Recent</span>
+          <span className="block text-[13px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+            Opened + newest files
+          </span>
+        </span>
+        {atRecent && (
           <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: 'hsl(var(--marigold) / 0.2)', color: 'hsl(var(--marigold-deep))' }}>
             Open
           </span>
@@ -837,10 +976,10 @@ export default function FileManager() {
             )}
             <div className="min-w-0 flex-1">
               <p className="text-[17px] font-semibold truncate leading-tight" style={{ color: 'hsl(var(--ink))' }}>
-                {activeFolder ? activeFolder.name : 'Customers'}
+                {activeFolder ? activeFolder.name : atRecent ? 'Recent' : 'Customers'}
               </p>
               <p className="text-[12px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
-                {activeFolder
+                {showingFiles
                   ? `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'}`
                   : `${totalFolders} folder${totalFolders === 1 ? '' : 's'}`}
               </p>
@@ -858,8 +997,8 @@ export default function FileManager() {
             <button
               type="button"
               className="pt-toolbtn w-11 h-11 !p-0 shrink-0"
-              disabled={uploading || atRoot || folderPhone === '__unassigned__'}
-              title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
+              disabled={uploading || !canUpload}
+              title={canUpload ? 'Upload' : 'Open a customer folder to upload into it'}
               aria-label="Upload"
               onClick={() => fileRef.current?.click()}
             >
@@ -916,6 +1055,12 @@ export default function FileManager() {
                 >
                   Customers
                 </button>
+                {atRecent && (
+                  <>
+                    <CaretRight size={11} className="shrink-0 opacity-60" />
+                    <span className="truncate font-semibold" style={{ color: 'hsl(var(--ink))' }}>Recent</span>
+                  </>
+                )}
                 {activeFolder && (
                   <>
                     <CaretRight size={11} className="shrink-0 opacity-60" />
@@ -938,8 +1083,8 @@ export default function FileManager() {
             <button
               type="button"
               className="pt-toolbtn w-9 h-9 !p-0 shrink-0"
-              disabled={uploading || atRoot || folderPhone === '__unassigned__'}
-              title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
+              disabled={uploading || !canUpload}
+              title={canUpload ? 'Upload' : 'Open a customer folder to upload into it'}
               aria-label="Upload"
               onClick={() => fileRef.current?.click()}
             >
@@ -958,7 +1103,7 @@ export default function FileManager() {
             />
             <input
               className={`input-field w-full ${isNarrow ? 'text-[15px] pl-10 py-3 rounded-2xl' : 'text-sm sm:text-xs pl-8 py-2 sm:py-1.5'}`}
-              placeholder={atRoot ? 'Search name or phone…' : 'Search files…'}
+              placeholder={atRoot ? 'Search name or phone…' : atRecent ? 'Search recent files…' : 'Search files…'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               autoComplete="off"
@@ -1004,7 +1149,7 @@ export default function FileManager() {
               </ul>
             )}
           </div>
-          {!atRoot && (
+          {showingFiles && (
             <div className="flex rounded-xl overflow-hidden shrink-0" style={{ border: '1px solid hsl(var(--pt-border))' }}>
               <button
                 type="button"
@@ -1154,8 +1299,8 @@ export default function FileManager() {
             </>
           )}
 
-          {/* INSIDE FOLDER: files */}
-          {!loading && !atRoot && view === 'grid' && (
+          {/* Folder or Recent: files */}
+          {!loading && showingFiles && view === 'grid' && (
             <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${isNarrow ? 'gap-3' : 'gap-1.5 sm:gap-2'}`}>
               {visibleFiles.map((f) => {
                 const isSel = selectedIds.has(f.id);
@@ -1222,17 +1367,22 @@ export default function FileManager() {
                       {displayName(f.fileName)}
                     </span>
                     <span className={`truncate ${isNarrow ? 'text-[11px] mt-0.5' : 'text-[10px]'}`} style={{ color: 'hsl(var(--pt-muted))' }}>
-                      {(f.source || 'whatsapp').replace('-', ' ')}
-                      {f.timestamp ? ` · ${new Date(f.timestamp).toLocaleDateString()}` : ''}
+                      {atRecent
+                        ? `${customerLabelOf(f)}${f.timestamp ? ` · ${new Date(f.timestamp).toLocaleDateString()}` : ''}`
+                        : `${(f.source || 'whatsapp').replace('-', ' ')}${f.timestamp ? ` · ${new Date(f.timestamp).toLocaleDateString()}` : ''}`}
                     </span>
                   </button>
                 );
               })}
               {visibleFiles.length === 0 && (
                 <div className="col-span-full flex flex-col items-center justify-center text-center py-16 px-4">
-                  <Folder size={40} className="mb-3" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
+                  {atRecent
+                    ? <Clock size={40} className="mb-3" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
+                    : <Folder size={40} className="mb-3" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />}
                   <p className="text-sm mb-3 max-w-sm" style={{ color: 'hsl(var(--pt-muted))' }}>
-                    {search ? 'No files match your search in this folder.' : 'This folder is empty.'}
+                    {search
+                      ? (atRecent ? 'No recent files match your search.' : 'No files match your search in this folder.')
+                      : (atRecent ? 'No files yet. Receive documents on WhatsApp or open a customer folder.' : 'This folder is empty.')}
                   </p>
                   <button type="button" className="btn-secondary text-xs" onClick={goRoot}>
                     ← Back to all customers
@@ -1242,16 +1392,19 @@ export default function FileManager() {
             </div>
           )}
 
-          {!loading && !atRoot && view === 'list' && (
+          {!loading && showingFiles && view === 'list' && (
             <div
               className="rounded-xl overflow-hidden"
               style={{ border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))', boxShadow: 'var(--shadow-paper)' }}
             >
               <div
-                className="grid grid-cols-[1fr_100px_110px_70px] gap-2 px-3 py-2 pt-label text-[10px] border-b"
+                className="grid grid-cols-[1fr_120px_100px_70px] gap-2 px-3 py-2 pt-label text-[10px] border-b"
                 style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-secondary) / 0.45)' }}
               >
-                <span>Name</span><span>Source</span><span>Date</span><span>Type</span>
+                <span>Name</span>
+                <span>{atRecent ? 'Customer' : 'Source'}</span>
+                <span>Date</span>
+                <span>Type</span>
               </div>
               {visibleFiles.map((f) => {
                 const isSel = selectedIds.has(f.id);
@@ -1261,7 +1414,7 @@ export default function FileManager() {
                     type="button"
                     onClick={(e) => onFileActivate(e, f)}
                     onContextMenu={(e) => onContextMenu(e, f)}
-                    className="w-full grid grid-cols-[1fr_100px_110px_70px] gap-2 px-3 py-2.5 text-left text-xs items-center border-b last:border-0 transition-colors"
+                    className="w-full grid grid-cols-[1fr_120px_100px_70px] gap-2 px-3 py-2.5 text-left text-xs items-center border-b last:border-0 transition-colors"
                     style={{
                       borderColor: 'hsl(var(--pt-border))',
                       background: isSel ? 'hsl(var(--marigold) / 0.12)' : 'transparent',
@@ -1285,7 +1438,9 @@ export default function FileManager() {
                       )}
                       <span className="truncate font-medium">{displayName(f.fileName)}</span>
                     </span>
-                    <span className="truncate" style={{ color: 'hsl(var(--pt-muted))' }}>{(f.source || 'whatsapp').replace('-', ' ')}</span>
+                    <span className="truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+                      {atRecent ? customerLabelOf(f) : (f.source || 'whatsapp').replace('-', ' ')}
+                    </span>
                     <span style={{ color: 'hsl(var(--pt-muted))' }}>{f.timestamp ? new Date(f.timestamp).toLocaleDateString() : '—'}</span>
                     <span style={{ color: 'hsl(var(--pt-muted))' }}>{isPdf(f) ? 'PDF' : isImage(f) ? 'Image' : 'File'}</span>
                   </button>
@@ -1293,8 +1448,12 @@ export default function FileManager() {
               })}
               {visibleFiles.length === 0 && (
                 <div className="flex flex-col items-center justify-center text-center py-12 px-4">
-                  <Folder size={36} className="mb-2" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
-                  <p className="text-sm mb-3" style={{ color: 'hsl(var(--pt-muted))' }}>No files in this folder.</p>
+                  {atRecent
+                    ? <Clock size={36} className="mb-2" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
+                    : <Folder size={36} className="mb-2" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />}
+                  <p className="text-sm mb-3" style={{ color: 'hsl(var(--pt-muted))' }}>
+                    {atRecent ? 'No recent files yet.' : 'No files in this folder.'}
+                  </p>
                   <button type="button" className="btn-secondary text-xs" onClick={goRoot}>
                     ← Back to all customers
                   </button>
@@ -1366,14 +1525,18 @@ export default function FileManager() {
           <span className="truncate">
             {atRoot
               ? `${filteredFolders.length} folder${filteredFolders.length === 1 ? '' : 's'}${totalFolders > FOLDER_CAP ? ` of ${totalFolders}` : ''} · ${files.length} files`
-              : `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'} in ${activeFolder?.name || 'folder'}`}
+              : atRecent
+                ? `${visibleFiles.length} recent file${visibleFiles.length === 1 ? '' : 's'}`
+                : `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'} in ${activeFolder?.name || 'folder'}`}
           </span>
           <span className="shrink-0">
             {atRoot
               ? 'Large icons · Search finds any customer'
-              : view === 'grid'
-                ? 'Large icons · Ctrl+click select'
-                : 'Details · Ctrl+click select'}
+              : atRecent
+                ? 'Recent · opened first, then newest'
+                : view === 'grid'
+                  ? 'Large icons · Ctrl+click select'
+                  : 'Details · Ctrl+click select'}
           </span>
         </div>
       )}
@@ -1400,6 +1563,21 @@ export default function FileManager() {
           >
             Open
           </button>
+          {atRecent && (
+            <button
+              type="button"
+              className="w-full px-3 py-2 text-left flex items-center gap-2 transition-colors"
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'hsl(var(--pt-secondary))'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+              onClick={() => {
+                const phone = (ctx.file.customerId || '').trim() || '__unassigned__';
+                setCtx(null);
+                openFolder(phone);
+              }}
+            >
+              <Folder size={13} /> Show in folder
+            </button>
+          )}
           <button
             type="button"
             className="w-full px-3 py-2 text-left flex items-center gap-2 transition-colors"
