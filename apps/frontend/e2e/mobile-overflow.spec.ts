@@ -68,3 +68,55 @@ test('Documents alias redirects to WhatsApp receive desk', async ({ page }) => {
   await page.goto('/app/documents', { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(/\/app\/whatsapp/);
 });
+
+/**
+ * NPCI-style desktop rail: icon strip by default, expands while the pointer
+ * is over it, collapses when the pointer leaves (unless pinned).
+ */
+test.describe('Desktop sidebar hover', () => {
+  test.use({
+    viewport: { width: 1280, height: 800 },
+    isMobile: false,
+    hasTouch: false,
+  });
+
+  test('expands on hover and collapses on leave', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('cc-sidebar-pinned', '0');
+      localStorage.removeItem('cc-sidebar-collapsed');
+    });
+    await page.goto('/app', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(400);
+
+    const aside = page.locator('aside[data-sidebar]');
+    await expect(aside).toBeVisible();
+    await expect(aside).toHaveAttribute('data-sidebar', 'rail');
+    await expect(aside).toHaveAttribute('aria-expanded', 'false');
+
+    await aside.hover();
+    await expect(aside).toHaveAttribute('data-sidebar', 'hover');
+    await expect(aside).toHaveAttribute('aria-expanded', 'true');
+    await expect(aside.getByText('Documents', { exact: true })).toBeVisible();
+
+    await page.locator('main').hover({ position: { x: 200, y: 200 } });
+    await expect(aside).toHaveAttribute('data-sidebar', 'rail');
+    await expect(aside).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('pin keeps sidebar open after pointer leaves', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('cc-sidebar-pinned', '0');
+    });
+    await page.goto('/app', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(400);
+
+    const aside = page.locator('aside[data-sidebar]');
+    await aside.hover();
+    await aside.getByRole('button', { name: 'Pin sidebar open' }).click();
+    await expect(aside).toHaveAttribute('data-sidebar', 'pinned');
+
+    await page.locator('main').hover({ position: { x: 200, y: 200 } });
+    await expect(aside).toHaveAttribute('data-sidebar', 'pinned');
+    await expect(aside).toHaveAttribute('aria-expanded', 'true');
+  });
+});
