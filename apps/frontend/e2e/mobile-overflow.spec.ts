@@ -81,7 +81,7 @@ test.describe('File Manager phone folders drawer', () => {
     const drawer = page.getByRole('dialog', { name: 'Folders' });
     await expect(drawer).toBeVisible();
     await expect(drawer.getByRole('button', { name: /All customers/ })).toBeVisible();
-    await expect(drawer.getByPlaceholder('Find folder…')).toBeVisible();
+    await expect(drawer.getByPlaceholder('Search customers…')).toBeVisible();
 
     await drawer.getByRole('button', { name: 'Close folders' }).click();
     await expect(drawer).toHaveCount(0);

@@ -494,27 +494,13 @@ export default function FileManager() {
     );
   }, [filteredFolders, folderNavSearch]);
 
-  const renderFolderNav = (opts?: { showSearch?: boolean }) => (
+  /** Desktop Navigation pane — Hub sidebar-item chrome. */
+  const renderDesktopFolderNav = () => (
     <>
-      {opts?.showSearch && (
-        <div className="px-3 pb-2">
-          <div className="relative">
-            <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
-            <input
-              ref={folderDrawerSearchRef}
-              className="input-field text-xs w-full pl-8 py-2"
-              placeholder="Find folder…"
-              value={folderNavSearch}
-              onChange={(e) => setFolderNavSearch(e.target.value)}
-              autoComplete="off"
-            />
-          </div>
-        </div>
-      )}
       <button
         type="button"
         onClick={goRoot}
-        className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs rounded-[10px] transition-all ${
+        className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs rounded-[10px] transition-all ${
           atRoot ? 'sidebar-item active' : 'sidebar-item'
         }`}
         style={{ width: 'calc(100% - 0.5rem)', marginLeft: '0.25rem', marginRight: '0.25rem' }}
@@ -525,9 +511,8 @@ export default function FileManager() {
       </button>
       <p className="pt-label text-[10px] px-3 pt-3 pb-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
         Folders{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
-        {opts?.showSearch && folderNavSearch.trim() ? ` · ${navFolders.length} match${navFolders.length === 1 ? '' : 'es'}` : ''}
       </p>
-      {navFolders.map((fol) => {
+      {filteredFolders.map((fol) => {
         const active = folderPhone === fol.phone;
         const unassigned = fol.phone === '__unassigned__';
         return (
@@ -535,7 +520,7 @@ export default function FileManager() {
             key={fol.phone}
             type="button"
             onClick={() => openFolder(fol.phone)}
-            className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs rounded-[10px] transition-all ${
+            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs rounded-[10px] transition-all ${
               active ? 'sidebar-item active' : 'sidebar-item'
             }`}
             style={{
@@ -554,12 +539,12 @@ export default function FileManager() {
                   ? 'hsl(var(--pt-muted))'
                   : active
                     ? 'hsl(var(--marigold-deep))'
-                    : undefined,
+                    : 'hsl(var(--marigold))',
               }}
             />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{fol.name}</span>
-              {!unassigned && (
+              {!unassigned && fol.name !== fol.phone && (
                 <span className="block truncate text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>
                   {formatPhoneDisplay(fol.phone)}
                 </span>
@@ -569,9 +554,130 @@ export default function FileManager() {
           </button>
         );
       })}
+    </>
+  );
+
+  /** Phone drawer — clean file-manager rows (not Hub sidebar-item). */
+  const renderPhoneFolderDrawer = () => (
+    <>
+      <div
+        className="sticky top-0 z-10 px-3 pt-3 pb-2"
+        style={{ background: 'hsl(var(--pt-card))', borderBottom: '1px solid hsl(var(--pt-border-soft))' }}
+      >
+        <div className="relative">
+          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
+          <input
+            ref={folderDrawerSearchRef}
+            className="input-field text-sm w-full pl-9 py-2.5 rounded-xl"
+            placeholder="Search customers…"
+            value={folderNavSearch}
+            onChange={(e) => setFolderNavSearch(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={goRoot}
+        className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:opacity-80"
+        style={{
+          background: atRoot ? 'hsl(var(--marigold) / 0.12)' : 'transparent',
+          borderBottom: '1px solid hsl(var(--pt-border-soft))',
+        }}
+      >
+        <span
+          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: atRoot ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-secondary))' }}
+        >
+          <FolderOpen size={20} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>All customers</span>
+          <span className="block text-xs truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+            {totalFolders} folder{totalFolders === 1 ? '' : 's'}
+          </span>
+        </span>
+        {atRoot && (
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'hsl(var(--marigold) / 0.2)', color: 'hsl(var(--marigold-deep))' }}>
+            Open
+          </span>
+        )}
+      </button>
+
+      <p className="px-4 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'hsl(var(--pt-muted))' }}>
+        {folderNavSearch.trim()
+          ? `${navFolders.length} result${navFolders.length === 1 ? '' : 's'}`
+          : totalFolders > FOLDER_CAP
+            ? `Customers · showing ${FOLDER_CAP}`
+            : 'Customers'}
+      </p>
+
+      <ul className="pb-6">
+        {navFolders.map((fol) => {
+          const active = folderPhone === fol.phone;
+          const unassigned = fol.phone === '__unassigned__';
+          return (
+            <li key={fol.phone}>
+              <button
+                type="button"
+                onClick={() => openFolder(fol.phone)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left active:opacity-80"
+                style={{
+                  background: active ? 'hsl(var(--marigold) / 0.12)' : 'transparent',
+                  borderBottom: '1px solid hsl(var(--pt-border-soft))',
+                }}
+                title={unassigned ? 'Files without a customer phone' : fol.phone}
+              >
+                <span
+                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{
+                    background: unassigned
+                      ? 'hsl(var(--pt-secondary))'
+                      : active
+                        ? 'hsl(var(--marigold) / 0.22)'
+                        : 'hsl(var(--marigold) / 0.12)',
+                  }}
+                >
+                  <Folder
+                    size={20}
+                    weight="fill"
+                    style={{ color: unassigned ? 'hsl(var(--pt-muted))' : 'hsl(var(--marigold-deep))' }}
+                  />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>
+                    {fol.name}
+                  </span>
+                  {!unassigned && (
+                    <span className="block text-xs truncate tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>
+                      {formatPhoneDisplay(fol.phone)}
+                    </span>
+                  )}
+                  {unassigned && (
+                    <span className="block text-xs truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+                      No customer phone
+                    </span>
+                  )}
+                </span>
+                <span
+                  className="min-w-[1.5rem] h-6 px-1.5 rounded-full text-[11px] font-semibold tabular-nums flex items-center justify-center shrink-0"
+                  style={{
+                    background: active ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-secondary))',
+                    color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))',
+                  }}
+                >
+                  {fol.count}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
       {navFolders.length === 0 && (
-        <p className="px-4 py-6 text-xs text-center" style={{ color: 'hsl(var(--pt-muted))' }}>
-          No folders match “{folderNavSearch.trim()}”.
+        <p className="px-6 py-10 text-sm text-center" style={{ color: 'hsl(var(--pt-muted))' }}>
+          No customers match “{folderNavSearch.trim()}”.
         </p>
       )}
     </>
@@ -890,48 +996,61 @@ export default function FileManager() {
               Navigation
             </p>
           </div>
-          {renderFolderNav()}
+          {renderDesktopFolderNav()}
         </aside>
 
-        {/* Phone folders drawer — hamburger opens Navigation like a phone file manager */}
+        {/* Phone folders drawer — clean file-manager list (not Hub sidebar chrome) */}
         {isNarrow && foldersOpen && (
           <>
             <button
               type="button"
               className="absolute inset-0 z-40 border-0 p-0 cursor-default"
-              style={{ background: 'hsl(220 30% 8% / 0.35)', backdropFilter: 'blur(2px)' }}
+              style={{ background: 'hsl(220 30% 8% / 0.4)' }}
               aria-label="Close folders"
               onClick={() => setFoldersOpen(false)}
             />
             <aside
-              className="absolute inset-y-0 left-0 z-50 w-[min(20rem,88vw)] flex flex-col border-r shadow-xl"
+              className="absolute inset-y-0 left-0 z-50 w-[min(22rem,92vw)] flex flex-col overflow-hidden"
               style={{
-                borderColor: 'hsl(var(--pt-border))',
                 background: 'hsl(var(--pt-card))',
-                boxShadow: '8px 0 28px -12px hsl(220 30% 8% / 0.35)',
+                boxShadow: '12px 0 40px -16px hsl(220 30% 8% / 0.45)',
+                borderRight: '1px solid hsl(var(--pt-border))',
               }}
               role="dialog"
               aria-modal="true"
               aria-label="Folders"
             >
               <div
-                className="h-12 flex items-center gap-2 px-3 border-b shrink-0"
-                style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--ink))' }}
+                className="h-14 flex items-center gap-3 px-4 shrink-0"
+                style={{
+                  borderBottom: '1px solid hsl(var(--pt-border))',
+                  background: 'hsl(var(--paper))',
+                }}
               >
-                <FolderOpen size={16} weight="fill" style={{ color: 'hsl(var(--marigold))' }} />
-                <span className="text-sm font-semibold text-white flex-1">Folders</span>
+                <span
+                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: 'hsl(var(--marigold) / 0.16)' }}
+                >
+                  <FolderOpen size={18} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[15px] font-semibold leading-tight" style={{ color: 'hsl(var(--ink))' }}>Folders</p>
+                  <p className="text-[11px] truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+                    {activeFolder ? activeFolder.name : 'All customers'}
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="pt-toolbtn !h-9 !w-9 !p-0 text-white/90"
-                  style={{ color: 'rgba(255,255,255,0.9)', background: 'hsl(0 0% 100% / 0.08)' }}
+                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: 'hsl(var(--pt-secondary))', color: 'hsl(var(--ink-soft))' }}
                   onClick={() => setFoldersOpen(false)}
                   aria-label="Close folders"
                 >
-                  <X size={16} weight="bold" />
+                  <X size={18} weight="bold" />
                 </button>
               </div>
-              <div className="flex-1 min-h-0 overflow-y-auto pt-2 pb-4" style={{ WebkitOverflowScrolling: 'touch' } as any}>
-                {renderFolderNav({ showSearch: true })}
+              <div className="flex-1 min-h-0 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' } as any}>
+                {renderPhoneFolderDrawer()}
               </div>
             </aside>
           </>
