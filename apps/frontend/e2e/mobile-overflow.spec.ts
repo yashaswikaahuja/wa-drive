@@ -69,6 +69,25 @@ test('Documents alias redirects to WhatsApp receive desk', async ({ page }) => {
   await expect(page).toHaveURL(/\/app\/whatsapp/);
 });
 
+test.describe('File Manager phone folders drawer', () => {
+  test('hamburger opens folders navigation drawer', async ({ page }) => {
+    await page.goto('/app/files', { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(500);
+
+    const openFolders = page.getByRole('button', { name: 'Open folders' });
+    await expect(openFolders).toBeVisible();
+    await openFolders.click();
+
+    const drawer = page.getByRole('dialog', { name: 'Folders' });
+    await expect(drawer).toBeVisible();
+    await expect(drawer.getByRole('button', { name: /All customers/ })).toBeVisible();
+    await expect(drawer.getByPlaceholder('Find folder…')).toBeVisible();
+
+    await drawer.getByRole('button', { name: 'Close folders' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+});
+
 /**
  * NPCI-style desktop rail: icon strip by default, expands while the pointer
  * is over it, collapses when the pointer leaves (unless pinned).

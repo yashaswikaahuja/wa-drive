@@ -8,7 +8,7 @@ import {
   FolderOpen, Folder, MagnifyingGlass, UploadSimple, ArrowsClockwise,
   File as FileIcon, Image as ImageIcon, FilePdf, CaretRight, CaretLeft, SquaresFour,
   ListBullets, DownloadSimple, Trash, Camera, SpinnerGap, CheckSquare,
-  House,
+  House, List, X,
 } from '@phosphor-icons/react';
 import {
   MediaViewer,
@@ -18,7 +18,7 @@ import {
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
-import { phonesMatch } from '../../shared/phone';
+import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import { useAuthStore } from '../auth/store';
 import PdfThumb from './PdfThumb';
 
@@ -120,9 +120,12 @@ export default function FileManager() {
   const [ctx, setCtx] = useState<{ x: number; y: number; file: DriveFile } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isNarrow, setIsNarrow] = useState(false); // phone / small tablet portrait
+  const [foldersOpen, setFoldersOpen] = useState(false); // phone folders drawer
+  const [folderNavSearch, setFolderNavSearch] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const blobUrlCache = useRef<Map<string, string>>(new Map());
   const mainRef = useRef<HTMLElement>(null);
+  const folderDrawerSearchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -450,13 +453,124 @@ export default function FileManager() {
     setFolderPhone(null);
     clearSelection();
     setSearch('');
+    setFoldersOpen(false);
   };
 
   const openFolder = (phone: string) => {
     setFolderPhone(phone);
     clearSelection();
     setSearch('');
+    setFoldersOpen(false);
   };
+
+  // Phone folders drawer: Esc closes; focus search when opened.
+  useEffect(() => {
+    if (!foldersOpen) return;
+    const t = window.setTimeout(() => folderDrawerSearchRef.current?.focus(), 50);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFoldersOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [foldersOpen]);
+
+  const navFolders = useMemo(() => {
+    const q = folderNavSearch.trim().toLowerCase();
+    const base = filteredFolders;
+    if (!q) return base;
+    return base.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.phone.toLowerCase().includes(q) ||
+        formatPhoneDisplay(f.phone).toLowerCase().includes(q),
+    );
+  }, [filteredFolders, folderNavSearch]);
+
+  const renderFolderNav = (opts?: { showSearch?: boolean }) => (
+    <>
+      {opts?.showSearch && (
+        <div className="px-3 pb-2">
+          <div className="relative">
+            <MagnifyingGlass size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
+            <input
+              ref={folderDrawerSearchRef}
+              className="input-field text-xs w-full pl-8 py-2"
+              placeholder="Find folder…"
+              value={folderNavSearch}
+              onChange={(e) => setFolderNavSearch(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={goRoot}
+        className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs rounded-[10px] transition-all ${
+          atRoot ? 'sidebar-item active' : 'sidebar-item'
+        }`}
+        style={{ width: 'calc(100% - 0.5rem)', marginLeft: '0.25rem', marginRight: '0.25rem' }}
+      >
+        <FolderOpen size={16} weight={atRoot ? 'fill' : 'regular'} style={atRoot ? { color: 'hsl(var(--marigold-deep))' } : undefined} />
+        <span className="truncate flex-1 font-medium">All customers</span>
+        <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>{totalFolders}</span>
+      </button>
+      <p className="pt-label text-[10px] px-3 pt-3 pb-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+        Folders{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
+        {opts?.showSearch && folderNavSearch.trim() ? ` · ${navFolders.length} match${navFolders.length === 1 ? '' : 'es'}` : ''}
+      </p>
+      {navFolders.map((fol) => {
+        const active = folderPhone === fol.phone;
+        const unassigned = fol.phone === '__unassigned__';
+        return (
+          <button
+            key={fol.phone}
+            type="button"
+            onClick={() => openFolder(fol.phone)}
+            className={`w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs rounded-[10px] transition-all ${
+              active ? 'sidebar-item active' : 'sidebar-item'
+            }`}
+            style={{
+              width: 'calc(100% - 0.5rem)',
+              marginLeft: '0.25rem',
+              marginRight: '0.25rem',
+              ...(unassigned && !active ? { color: 'hsl(var(--pt-muted))' } : {}),
+            }}
+            title={unassigned ? 'Files without a customer phone' : fol.phone}
+          >
+            <Folder
+              size={16}
+              weight={active ? 'fill' : 'regular'}
+              style={{
+                color: unassigned
+                  ? 'hsl(var(--pt-muted))'
+                  : active
+                    ? 'hsl(var(--marigold-deep))'
+                    : undefined,
+              }}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{fol.name}</span>
+              {!unassigned && (
+                <span className="block truncate text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>
+                  {formatPhoneDisplay(fol.phone)}
+                </span>
+              )}
+            </span>
+            <span className="text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.count}</span>
+          </button>
+        );
+      })}
+      {navFolders.length === 0 && (
+        <p className="px-4 py-6 text-xs text-center" style={{ color: 'hsl(var(--pt-muted))' }}>
+          No folders match “{folderNavSearch.trim()}”.
+        </p>
+      )}
+    </>
+  );
 
   const deleteSelected = async () => {
     const ids = [...selectedIds];
@@ -586,6 +700,21 @@ export default function FileManager() {
         }}
       >
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          {isNarrow && (
+            <button
+              type="button"
+              className="pt-toolbtn w-10 h-10 !p-0 shrink-0"
+              onClick={() => {
+                setFolderNavSearch('');
+                setFoldersOpen(true);
+              }}
+              title="Folders"
+              aria-label="Open folders"
+              aria-expanded={foldersOpen}
+            >
+              <List size={18} weight="bold" />
+            </button>
+          )}
           <div
             className="flex items-center rounded-lg overflow-hidden shrink-0"
             style={{ border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}
@@ -742,8 +871,8 @@ export default function FileManager() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 flex">
-        {/* Navigation pane — Explorer-style */}
+      <div className="flex-1 min-h-0 flex relative">
+        {/* Navigation pane — Explorer-style (desktop) */}
         <aside
           className={`w-56 lg:w-60 shrink-0 border-r overflow-y-auto ${isNarrow ? 'hidden' : 'block'}`}
           style={{
@@ -756,104 +885,58 @@ export default function FileManager() {
               Navigation
             </p>
           </div>
-          <button
-            type="button"
-            onClick={goRoot}
-            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs rounded-[10px] mx-0 transition-all ${
-              atRoot ? 'sidebar-item active' : 'sidebar-item'
-            }`}
-            style={{ width: 'calc(100% - 0.5rem)', marginLeft: '0.25rem', marginRight: '0.25rem' }}
-          >
-            <FolderOpen size={16} weight={atRoot ? 'fill' : 'regular'} style={atRoot ? { color: 'hsl(var(--marigold-deep))' } : undefined} />
-            <span className="truncate flex-1 font-medium">All customers</span>
-            <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>{totalFolders}</span>
-          </button>
-          <p className="pt-label text-[10px] px-3 pt-3 pb-1.5" style={{ color: 'hsl(var(--pt-muted))' }}>
-            Folders{totalFolders > FOLDER_CAP ? ` · top ${FOLDER_CAP}` : ''}
-          </p>
-          {filteredFolders.map((fol) => {
-            const active = folderPhone === fol.phone;
-            const unassigned = fol.phone === '__unassigned__';
-            return (
-              <button
-                key={fol.phone}
-                type="button"
-                onClick={() => openFolder(fol.phone)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs rounded-[10px] transition-all ${
-                  active ? 'sidebar-item active' : 'sidebar-item'
-                }`}
-                style={{
-                  width: 'calc(100% - 0.5rem)',
-                  marginLeft: '0.25rem',
-                  marginRight: '0.25rem',
-                  ...(unassigned && !active ? { color: 'hsl(var(--pt-muted))' } : {}),
-                }}
-                title={unassigned ? 'Files without a customer phone' : fol.phone}
-              >
-                <Folder
-                  size={16}
-                  weight={active ? 'fill' : 'regular'}
-                  style={{
-                    color: unassigned
-                      ? 'hsl(var(--pt-muted))'
-                      : active
-                        ? 'hsl(var(--marigold-deep))'
-                        : undefined,
-                  }}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{fol.name}</span>
-                  {!unassigned && fol.name !== fol.phone && (
-                    <span className="block truncate text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.phone}</span>
-                  )}
-                </span>
-                <span className="text-[10px]" style={{ color: 'hsl(var(--pt-muted))' }}>{fol.count}</span>
-              </button>
-            );
-          })}
+          {renderFolderNav()}
         </aside>
+
+        {/* Phone folders drawer — hamburger opens Navigation like a phone file manager */}
+        {isNarrow && foldersOpen && (
+          <>
+            <button
+              type="button"
+              className="absolute inset-0 z-40 border-0 p-0 cursor-default"
+              style={{ background: 'hsl(220 30% 8% / 0.35)', backdropFilter: 'blur(2px)' }}
+              aria-label="Close folders"
+              onClick={() => setFoldersOpen(false)}
+            />
+            <aside
+              className="absolute inset-y-0 left-0 z-50 w-[min(20rem,88vw)] flex flex-col border-r shadow-xl"
+              style={{
+                borderColor: 'hsl(var(--pt-border))',
+                background: 'hsl(var(--pt-card))',
+                boxShadow: '8px 0 28px -12px hsl(220 30% 8% / 0.35)',
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Folders"
+            >
+              <div
+                className="h-12 flex items-center gap-2 px-3 border-b shrink-0"
+                style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--ink))' }}
+              >
+                <FolderOpen size={16} weight="fill" style={{ color: 'hsl(var(--marigold))' }} />
+                <span className="text-sm font-semibold text-white flex-1">Folders</span>
+                <button
+                  type="button"
+                  className="pt-toolbtn !h-9 !w-9 !p-0 text-white/90"
+                  style={{ color: 'rgba(255,255,255,0.9)', background: 'hsl(0 0% 100% / 0.08)' }}
+                  onClick={() => setFoldersOpen(false)}
+                  aria-label="Close folders"
+                >
+                  <X size={16} weight="bold" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto pt-2 pb-4" style={{ WebkitOverflowScrolling: 'touch' } as any}>
+                {renderFolderNav({ showSearch: true })}
+              </div>
+            </aside>
+          </>
+        )}
 
         <main
           ref={mainRef as any}
           className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4"
           onClick={() => clearSelection()}
         >
-          {/* Phone folder chips when sidebar is hidden */}
-          {isNarrow && (
-          <div className="flex gap-1.5 overflow-x-auto mb-3 pb-1 -mx-1 px-1" style={{ WebkitOverflowScrolling: 'touch' } as any}>
-            <button
-              type="button"
-              className="shrink-0 text-[11px] px-2.5 py-1 rounded-full border transition-colors"
-              style={{
-                borderColor: atRoot ? 'hsl(var(--marigold))' : 'hsl(var(--pt-border))',
-                color: atRoot ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
-                background: atRoot ? 'hsl(var(--marigold) / 0.12)' : 'hsl(var(--pt-card))',
-              }}
-              onClick={goRoot}
-            >
-              All
-            </button>
-            {filteredFolders.slice(0, 20).map((fol) => {
-              const active = folderPhone === fol.phone;
-              return (
-                <button
-                  key={fol.phone}
-                  type="button"
-                  className="shrink-0 text-[11px] px-2.5 py-1 rounded-full border max-w-[140px] truncate transition-colors"
-                  style={{
-                    borderColor: active ? 'hsl(var(--marigold))' : 'hsl(var(--pt-border))',
-                    color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
-                    background: active ? 'hsl(var(--marigold) / 0.12)' : 'hsl(var(--pt-card))',
-                  }}
-                  onClick={() => openFolder(fol.phone)}
-                >
-                  {fol.name}
-                </button>
-              );
-            })}
-          </div>
-          )}
-
           {loading && (
             <div className="flex items-center justify-center gap-2 py-20 text-sm" style={{ color: 'hsl(var(--pt-muted))' }}>
               <SpinnerGap size={18} className="animate-spin" /> Loading files…
@@ -1065,27 +1148,6 @@ export default function FileManager() {
         </main>
       </div>
 
-      {/* Explorer status bar */}
-      {!preview && (
-        <div
-          className="shrink-0 border-t px-3 py-1.5 flex items-center justify-between gap-3 text-[11px]"
-          style={{
-            borderColor: 'hsl(var(--pt-border))',
-            background: 'hsl(var(--pt-card))',
-            color: 'hsl(var(--pt-muted))',
-          }}
-        >
-          <span className="truncate">
-            {atRoot
-              ? `${filteredFolders.length} folder${filteredFolders.length === 1 ? '' : 's'}${totalFolders > FOLDER_CAP ? ` (of ${totalFolders})` : ''}`
-              : `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'}${selectedIds.size > 0 ? ` · ${selectedIds.size} selected` : ''}`}
-          </span>
-          <span className="shrink-0 tabular-nums hidden sm:inline">
-            {atRoot ? 'Large icons' : view === 'grid' ? 'Large icons' : 'Details'}
-          </span>
-        </div>
-      )}
-
       {/* Multi-select action bar */}
       {!preview && selectedIds.size > 0 && (
         <div
@@ -1094,6 +1156,7 @@ export default function FileManager() {
             borderColor: 'hsl(var(--pt-border))',
             background: 'hsl(var(--marigold) / 0.12)',
             color: 'hsl(var(--ink))',
+            paddingBottom: isNarrow ? 'max(0.5rem, env(safe-area-inset-bottom))' : undefined,
           }}
         >
           <CheckSquare size={16} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
@@ -1133,19 +1196,33 @@ export default function FileManager() {
         </div>
       )}
 
-      <div
-        className="shrink-0 border-t px-3 py-1.5 text-[10px] sm:text-[11px] flex flex-wrap justify-between gap-2"
-        style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-card) / 0.5)' }}
-      >
-        <span>
-          {atRoot
-            ? `${filteredFolders.length}${totalFolders > FOLDER_CAP && !search.trim() ? `/${totalFolders}` : ''} customers · ${files.length} files`
-            : `${visibleFiles.length} item(s) in ${activeFolder?.name || 'folder'}${selectedIds.size ? ` · ${selectedIds.size} selected` : ''}`}
-        </span>
-        <span className="hidden sm:inline">
-          {isNarrow ? 'Tap open · Long-press select' : 'Click open · Ctrl+click select · Search finds any customer'}
-        </span>
-      </div>
+      {/* Single Explorer status bar (was duplicated on phone and ate vertical space) */}
+      {!preview && selectedIds.size === 0 && (
+        <div
+          className="shrink-0 border-t px-3 py-1.5 text-[10px] sm:text-[11px] flex flex-wrap items-center justify-between gap-2"
+          style={{
+            borderColor: 'hsl(var(--pt-border))',
+            color: 'hsl(var(--pt-muted))',
+            background: 'hsl(var(--pt-card))',
+            paddingBottom: isNarrow ? 'max(0.375rem, env(safe-area-inset-bottom))' : undefined,
+          }}
+        >
+          <span className="truncate">
+            {atRoot
+              ? `${filteredFolders.length} folder${filteredFolders.length === 1 ? '' : 's'}${totalFolders > FOLDER_CAP ? ` of ${totalFolders}` : ''} · ${files.length} files`
+              : `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'} in ${activeFolder?.name || 'folder'}`}
+          </span>
+          <span className="shrink-0">
+            {isNarrow
+              ? 'Folders · Tap open · Long-press select'
+              : atRoot
+                ? 'Large icons · Search finds any customer'
+                : view === 'grid'
+                  ? 'Large icons · Ctrl+click select'
+                  : 'Details · Ctrl+click select'}
+          </span>
+        </div>
+      )}
 
       {ctx && (
         <div
