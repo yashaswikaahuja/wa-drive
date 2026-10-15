@@ -4,13 +4,13 @@
     "module": "None",
     "lib": ["ES2020", "DOM"],
     "rootDir": ".",
-    "outDir": ".",
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "declaration": false,
     "sourceMap": false,
-    "removeComments": false
+    "removeComments": false,
+    "noEmit": true
   },
   "include": ["diagnose.ts"],
   "exclude": ["node_modules"]

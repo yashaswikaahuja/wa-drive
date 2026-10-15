@@ -11,7 +11,7 @@
     "build:providers": "tsc -p providers/tsconfig.json",
     "build:assets": "tsc -p src/assets/tsconfig.json",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit && tsc -p providers/tsconfig.json --noEmit && tsc -p src/assets/tsconfig.json --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p providers/tsconfig.json && tsc -p src/assets/tsconfig.json"
   },
   "dependencies": {
     "@cybercontrol/backend-core": "workspace:*",

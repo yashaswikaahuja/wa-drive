@@ -32,6 +32,10 @@ apps/whatsapp-service/session/
 *.heapsnapshot
 *.json.bak
 
+# Backend provider/asset sources are .ts only — do not re-commit emit-in-place .js
+apps/backend/providers/*.js
+apps/backend/src/assets/*.js
+
 # Legacy/obsolete (local only)
 /whatsapp/
 gateway/
