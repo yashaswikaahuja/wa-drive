@@ -49,7 +49,13 @@ export default function App() {
       setAuthReady(true);
       return;
     }
-    return useAuthStore.persist.onFinishHydration(() => setAuthReady(true));
+    const unsub = useAuthStore.persist.onFinishHydration(() => setAuthReady(true));
+    // Phone Chrome + slow storage: never leave the boot spinner forever.
+    const t = window.setTimeout(() => setAuthReady(true), 2500);
+    return () => {
+      unsub?.();
+      window.clearTimeout(t);
+    };
   }, []);
 
   useEffect(() => {

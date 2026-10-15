@@ -131,8 +131,13 @@ export default function FileManager() {
     const mq = window.matchMedia('(max-width: 767px)');
     const apply = () => setIsNarrow(mq.matches);
     apply();
-    mq.addEventListener('change', apply);
-    return () => mq.removeEventListener('change', apply);
+    // Older WebViews used addListener; phone Chrome supports addEventListener.
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', apply);
+      return () => mq.removeEventListener('change', apply);
+    }
+    mq.addListener(apply);
+    return () => mq.removeListener(apply);
   }, []);
 
   const load = useCallback(async () => {

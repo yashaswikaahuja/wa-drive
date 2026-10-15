@@ -20,4 +20,4 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
   );
 });
 
-// cache-bust file-manager-provenance 2026-09-20
+// cache-bust phone-blank-boot 2026-10-15
