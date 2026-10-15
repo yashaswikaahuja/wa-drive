@@ -560,60 +560,62 @@ export default function FileManager() {
   /** Phone drawer — clean file-manager rows (not Hub sidebar-item). */
   const renderPhoneFolderDrawer = () => (
     <>
+      {/* Search + close — no Folders banner; more list height */}
       <div
-        className="sticky top-0 z-10 px-3 pt-3 pb-2"
+        className="sticky top-0 z-10 flex items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3"
         style={{ background: 'hsl(var(--pt-card))', borderBottom: '1px solid hsl(var(--pt-border-soft))' }}
       >
-        <div className="relative">
-          <MagnifyingGlass size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
+        <div className="relative flex-1 min-w-0">
+          <MagnifyingGlass size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
           <input
             ref={folderDrawerSearchRef}
-            className="input-field text-sm w-full pl-9 py-2.5 rounded-xl"
+            className="input-field text-[15px] w-full pl-10 pr-3 py-3 rounded-2xl"
             placeholder="Search customers…"
             value={folderNavSearch}
             onChange={(e) => setFolderNavSearch(e.target.value)}
             autoComplete="off"
           />
         </div>
+        <button
+          type="button"
+          className="w-11 h-11 rounded-full flex items-center justify-center shrink-0"
+          style={{ background: 'hsl(var(--pt-secondary))', color: 'hsl(var(--ink-soft))' }}
+          onClick={() => setFoldersOpen(false)}
+          aria-label="Close folders"
+        >
+          <X size={18} weight="bold" />
+        </button>
       </div>
 
       <button
         type="button"
         onClick={goRoot}
-        className="w-full flex items-center gap-3 px-4 py-3.5 text-left active:opacity-80"
+        className="w-full flex items-center gap-3.5 px-4 py-4 text-left active:opacity-80"
         style={{
           background: atRoot ? 'hsl(var(--marigold) / 0.12)' : 'transparent',
           borderBottom: '1px solid hsl(var(--pt-border-soft))',
         }}
       >
         <span
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+          className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
           style={{ background: atRoot ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-secondary))' }}
         >
-          <FolderOpen size={20} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
+          <FolderOpen size={22} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[15px] font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>All customers</span>
-          <span className="block text-xs truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+          <span className="block text-base font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>All customers</span>
+          <span className="block text-[13px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
             {totalFolders} folder{totalFolders === 1 ? '' : 's'}
           </span>
         </span>
         {atRoot && (
-          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full" style={{ background: 'hsl(var(--marigold) / 0.2)', color: 'hsl(var(--marigold-deep))' }}>
+          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full" style={{ background: 'hsl(var(--marigold) / 0.2)', color: 'hsl(var(--marigold-deep))' }}>
             Open
           </span>
         )}
       </button>
 
-      <p className="px-4 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: 'hsl(var(--pt-muted))' }}>
-        {folderNavSearch.trim()
-          ? `${navFolders.length} result${navFolders.length === 1 ? '' : 's'}`
-          : totalFolders > FOLDER_CAP
-            ? `Customers · showing ${FOLDER_CAP}`
-            : 'Customers'}
-      </p>
-
-      <ul className="pb-6">
+      <ul className="pb-8">
         {navFolders.map((fol) => {
           const active = folderPhone === fol.phone;
           const unassigned = fol.phone === '__unassigned__';
@@ -622,7 +624,7 @@ export default function FileManager() {
               <button
                 type="button"
                 onClick={() => openFolder(fol.phone)}
-                className="w-full flex items-center gap-3 px-4 py-3 text-left active:opacity-80"
+                className="w-full flex items-center gap-3.5 px-4 py-4 text-left active:opacity-80"
                 style={{
                   background: active ? 'hsl(var(--marigold) / 0.12)' : 'transparent',
                   borderBottom: '1px solid hsl(var(--pt-border-soft))',
@@ -630,7 +632,7 @@ export default function FileManager() {
                 title={unassigned ? 'Files without a customer phone' : fol.phone}
               >
                 <span
-                  className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  className="w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
                   style={{
                     background: unassigned
                       ? 'hsl(var(--pt-secondary))'
@@ -640,28 +642,28 @@ export default function FileManager() {
                   }}
                 >
                   <Folder
-                    size={20}
+                    size={22}
                     weight="fill"
                     style={{ color: unassigned ? 'hsl(var(--pt-muted))' : 'hsl(var(--marigold-deep))' }}
                   />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[15px] font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>
+                  <span className="block text-base font-semibold truncate" style={{ color: 'hsl(var(--ink))' }}>
                     {fol.name}
                   </span>
                   {!unassigned && (
-                    <span className="block text-xs truncate tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>
+                    <span className="block text-[13px] truncate tabular-nums mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
                       {formatPhoneDisplay(fol.phone)}
                     </span>
                   )}
                   {unassigned && (
-                    <span className="block text-xs truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+                    <span className="block text-[13px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
                       No customer phone
                     </span>
                   )}
                 </span>
                 <span
-                  className="min-w-[1.5rem] h-6 px-1.5 rounded-full text-[11px] font-semibold tabular-nums flex items-center justify-center shrink-0"
+                  className="min-w-[1.75rem] h-7 px-2 rounded-full text-xs font-semibold tabular-nums flex items-center justify-center shrink-0"
                   style={{
                     background: active ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-secondary))',
                     color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))',
@@ -676,7 +678,7 @@ export default function FileManager() {
       </ul>
 
       {navFolders.length === 0 && (
-        <p className="px-6 py-10 text-sm text-center" style={{ color: 'hsl(var(--pt-muted))' }}>
+        <p className="px-6 py-14 text-[15px] text-center" style={{ color: 'hsl(var(--pt-muted))' }}>
           No customers match “{folderNavSearch.trim()}”.
         </p>
       )}
@@ -802,19 +804,19 @@ export default function FileManager() {
       "
       style={{ background: 'hsl(var(--paper))' }}
     >
-      {/* Explorer-style toolbar: Back/Up · address bar · search · view */}
+      {/* Toolbar — phone: airy title bar; desktop: Explorer chrome */}
       <div
-        className="shrink-0 border-b px-2 sm:px-3 py-2 flex flex-col gap-2"
+        className={`shrink-0 border-b flex flex-col ${isNarrow ? 'px-3 py-3 gap-3' : 'px-2 sm:px-3 py-2 gap-2'}`}
         style={{
           borderColor: 'hsl(var(--pt-border))',
           background: 'linear-gradient(180deg, hsl(var(--pt-card)) 0%, hsl(var(--paper)) 100%)',
         }}
       >
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-          {isNarrow && (
+        {isNarrow ? (
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
-              className="pt-toolbtn w-10 h-10 !p-0 shrink-0"
+              className="pt-toolbtn w-11 h-11 !p-0 shrink-0"
               onClick={() => {
                 setFolderNavSearch('');
                 setFoldersOpen(true);
@@ -823,94 +825,142 @@ export default function FileManager() {
               aria-label="Open folders"
               aria-expanded={foldersOpen}
             >
-              <List size={18} weight="bold" />
+              <List size={20} weight="bold" />
             </button>
-          )}
-          <div
-            className="flex items-center rounded-lg overflow-hidden shrink-0"
-            style={{ border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}
-          >
-            <button
-              type="button"
-              className="pt-toolbtn !rounded-none !h-9 !w-9 !p-0 disabled:opacity-35"
-              disabled={atRoot}
-              onClick={goRoot}
-              title="Up to customers"
-              aria-label="Up"
-            >
-              <CaretLeft size={16} weight="bold" />
-            </button>
-            <button
-              type="button"
-              className="pt-toolbtn !rounded-none !h-9 !w-9 !p-0 border-l disabled:opacity-35"
-              style={{ borderColor: 'hsl(var(--pt-border))' }}
-              disabled={atRoot}
-              onClick={goRoot}
-              title="Customers home"
-              aria-label="Home"
-            >
-              <House size={15} weight="fill" />
-            </button>
-          </div>
-
-          {/* Address bar */}
-          <div
-            className="flex items-center gap-1.5 min-w-0 flex-1 h-9 px-2.5 rounded-lg text-xs"
-            style={{
-              border: '1px solid hsl(var(--pt-border))',
-              background: 'hsl(var(--pt-card))',
-              boxShadow: 'inset 0 1px 0 hsl(var(--ink) / 0.03)',
-            }}
-          >
-            <FolderOpen size={15} weight="fill" className="shrink-0" style={{ color: 'hsl(var(--marigold))' }} />
-            <nav className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden" style={{ color: 'hsl(var(--pt-muted))' }}>
+            {!atRoot && (
               <button
                 type="button"
-                className="truncate font-medium transition-colors shrink-0"
-                style={{ color: atRoot ? 'hsl(var(--ink))' : 'hsl(var(--pt-muted))' }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--marigold-deep))'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = atRoot ? 'hsl(var(--ink))' : 'hsl(var(--pt-muted))'; }}
+                className="pt-toolbtn w-11 h-11 !p-0 shrink-0"
                 onClick={goRoot}
+                title="Back to customers"
+                aria-label="Back"
               >
-                Customers
+                <CaretLeft size={18} weight="bold" />
               </button>
-              {activeFolder && (
-                <>
-                  <CaretRight size={11} className="shrink-0 opacity-60" />
-                  <span className="truncate font-semibold" style={{ color: 'hsl(var(--ink))' }}>{activeFolder.name}</span>
-                </>
-              )}
-            </nav>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="text-[17px] font-semibold truncate leading-tight" style={{ color: 'hsl(var(--ink))' }}>
+                {activeFolder ? activeFolder.name : 'Customers'}
+              </p>
+              <p className="text-[12px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+                {activeFolder
+                  ? `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'}`
+                  : `${totalFolders} folder${totalFolders === 1 ? '' : 's'}`}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="pt-toolbtn w-11 h-11 !p-0 shrink-0"
+              onClick={load}
+              disabled={loading}
+              title="Refresh"
+              aria-label="Refresh"
+            >
+              <ArrowsClockwise size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              type="button"
+              className="pt-toolbtn w-11 h-11 !p-0 shrink-0"
+              disabled={uploading || atRoot || folderPhone === '__unassigned__'}
+              title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
+              aria-label="Upload"
+              onClick={() => fileRef.current?.click()}
+            >
+              <UploadSimple size={18} />
+            </button>
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => uploadLocal(e.target.files)} />
           </div>
+        ) : (
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            <div
+              className="flex items-center rounded-lg overflow-hidden shrink-0"
+              style={{ border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}
+            >
+              <button
+                type="button"
+                className="pt-toolbtn !rounded-none !h-9 !w-9 !p-0 disabled:opacity-35"
+                disabled={atRoot}
+                onClick={goRoot}
+                title="Up to customers"
+                aria-label="Up"
+              >
+                <CaretLeft size={16} weight="bold" />
+              </button>
+              <button
+                type="button"
+                className="pt-toolbtn !rounded-none !h-9 !w-9 !p-0 border-l disabled:opacity-35"
+                style={{ borderColor: 'hsl(var(--pt-border))' }}
+                disabled={atRoot}
+                onClick={goRoot}
+                title="Customers home"
+                aria-label="Home"
+              >
+                <House size={15} weight="fill" />
+              </button>
+            </div>
 
-          <button
-            type="button"
-            className="pt-toolbtn w-10 h-10 sm:w-9 sm:h-9 !p-0 shrink-0"
-            onClick={load}
-            disabled={loading}
-            title="Refresh"
-            aria-label="Refresh"
-          >
-            <ArrowsClockwise size={18} className={loading ? 'animate-spin' : ''} />
-          </button>
-          <button
-            type="button"
-            className="pt-toolbtn w-10 h-10 sm:w-9 sm:h-9 !p-0 shrink-0"
-            disabled={uploading || atRoot || folderPhone === '__unassigned__'}
-            title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
-            aria-label="Upload"
-            onClick={() => fileRef.current?.click()}
-          >
-            <UploadSimple size={18} />
-          </button>
-          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => uploadLocal(e.target.files)} />
-        </div>
+            <div
+              className="flex items-center gap-1.5 min-w-0 flex-1 h-9 px-2.5 rounded-lg text-xs"
+              style={{
+                border: '1px solid hsl(var(--pt-border))',
+                background: 'hsl(var(--pt-card))',
+                boxShadow: 'inset 0 1px 0 hsl(var(--ink) / 0.03)',
+              }}
+            >
+              <FolderOpen size={15} weight="fill" className="shrink-0" style={{ color: 'hsl(var(--marigold))' }} />
+              <nav className="flex items-center gap-1 min-w-0 flex-1 overflow-hidden" style={{ color: 'hsl(var(--pt-muted))' }}>
+                <button
+                  type="button"
+                  className="truncate font-medium transition-colors shrink-0"
+                  style={{ color: atRoot ? 'hsl(var(--ink))' : 'hsl(var(--pt-muted))' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'hsl(var(--marigold-deep))'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = atRoot ? 'hsl(var(--ink))' : 'hsl(var(--pt-muted))'; }}
+                  onClick={goRoot}
+                >
+                  Customers
+                </button>
+                {activeFolder && (
+                  <>
+                    <CaretRight size={11} className="shrink-0 opacity-60" />
+                    <span className="truncate font-semibold" style={{ color: 'hsl(var(--ink))' }}>{activeFolder.name}</span>
+                  </>
+                )}
+              </nav>
+            </div>
+
+            <button
+              type="button"
+              className="pt-toolbtn w-9 h-9 !p-0 shrink-0"
+              onClick={load}
+              disabled={loading}
+              title="Refresh"
+              aria-label="Refresh"
+            >
+              <ArrowsClockwise size={18} className={loading ? 'animate-spin' : ''} />
+            </button>
+            <button
+              type="button"
+              className="pt-toolbtn w-9 h-9 !p-0 shrink-0"
+              disabled={uploading || atRoot || folderPhone === '__unassigned__'}
+              title={atRoot ? 'Open a customer folder to upload into it' : 'Upload'}
+              aria-label="Upload"
+              onClick={() => fileRef.current?.click()}
+            >
+              <UploadSimple size={18} />
+            </button>
+            <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => uploadLocal(e.target.files)} />
+          </div>
+        )}
 
         <div className="flex items-center gap-2 relative">
           <div className="relative flex-1 min-w-0">
-            <MagnifyingGlass size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: 'hsl(var(--pt-muted))' }} />
+            <MagnifyingGlass
+              size={isNarrow ? 16 : 14}
+              className={`absolute top-1/2 -translate-y-1/2 pointer-events-none ${isNarrow ? 'left-3.5' : 'left-2.5'}`}
+              style={{ color: 'hsl(var(--pt-muted))' }}
+            />
             <input
-              className="input-field text-sm sm:text-xs w-full pl-8 py-2 sm:py-1.5"
+              className={`input-field w-full ${isNarrow ? 'text-[15px] pl-10 py-3 rounded-2xl' : 'text-sm sm:text-xs pl-8 py-2 sm:py-1.5'}`}
               placeholder={atRoot ? 'Search name or phone…' : 'Search files…'}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -958,24 +1008,24 @@ export default function FileManager() {
             )}
           </div>
           {!atRoot && (
-            <div className="flex rounded-lg overflow-hidden shrink-0" style={{ border: '1px solid hsl(var(--pt-border))' }}>
+            <div className="flex rounded-xl overflow-hidden shrink-0" style={{ border: '1px solid hsl(var(--pt-border))' }}>
               <button
                 type="button"
-                className="pt-toolbtn !rounded-none !h-8 !px-2"
+                className={`pt-toolbtn !rounded-none ${isNarrow ? '!h-11 !px-3' : '!h-8 !px-2'}`}
                 data-active={view === 'grid' ? 'true' : undefined}
                 title="Large icons"
                 onClick={() => setView('grid')}
               >
-                <SquaresFour size={15} />
+                <SquaresFour size={isNarrow ? 17 : 15} />
               </button>
               <button
                 type="button"
-                className="pt-toolbtn !rounded-none !h-8 !px-2"
+                className={`pt-toolbtn !rounded-none ${isNarrow ? '!h-11 !px-3' : '!h-8 !px-2'}`}
                 data-active={view === 'list' ? 'true' : undefined}
                 title="Details"
                 onClick={() => setView('list')}
               >
-                <ListBullets size={15} />
+                <ListBullets size={isNarrow ? 17 : 15} />
               </button>
             </div>
           )}
@@ -1020,35 +1070,6 @@ export default function FileManager() {
               aria-modal="true"
               aria-label="Folders"
             >
-              <div
-                className="h-14 flex items-center gap-3 px-4 shrink-0"
-                style={{
-                  borderBottom: '1px solid hsl(var(--pt-border))',
-                  background: 'hsl(var(--paper))',
-                }}
-              >
-                <span
-                  className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: 'hsl(var(--marigold) / 0.16)' }}
-                >
-                  <FolderOpen size={18} weight="fill" style={{ color: 'hsl(var(--marigold-deep))' }} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-semibold leading-tight" style={{ color: 'hsl(var(--ink))' }}>Folders</p>
-                  <p className="text-[11px] truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
-                    {activeFolder ? activeFolder.name : 'All customers'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                  style={{ background: 'hsl(var(--pt-secondary))', color: 'hsl(var(--ink-soft))' }}
-                  onClick={() => setFoldersOpen(false)}
-                  aria-label="Close folders"
-                >
-                  <X size={18} weight="bold" />
-                </button>
-              </div>
               <div className="flex-1 min-h-0 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' } as any}>
                 {renderPhoneFolderDrawer()}
               </div>
@@ -1058,7 +1079,7 @@ export default function FileManager() {
 
         <main
           ref={mainRef as any}
-          className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4"
+          className={`flex-1 min-w-0 overflow-y-auto ${isNarrow ? 'p-4' : 'p-3 sm:p-4'}`}
           onClick={() => clearSelection()}
         >
           {loading && (
@@ -1071,11 +1092,11 @@ export default function FileManager() {
           {!loading && atRoot && (
             <>
               {totalFolders > FOLDER_CAP && !search.trim() && (
-                <p className="text-[11px] mb-2 px-1" style={{ color: 'hsl(var(--pt-muted))' }}>
+                <p className={`mb-3 px-1 ${isNarrow ? 'text-[13px]' : 'text-[11px]'}`} style={{ color: 'hsl(var(--pt-muted))' }}>
                   Showing {FOLDER_CAP} of {totalFolders} customers — type a name or phone to find others.
                 </p>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-3">
+              <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${isNarrow ? 'gap-3' : 'gap-2 sm:gap-3'}`}>
                 {filteredFolders.map((fol) => {
                   const unassigned = fol.phone === '__unassigned__';
                   return (
@@ -1083,7 +1104,11 @@ export default function FileManager() {
                       key={fol.phone}
                       type="button"
                       onClick={(e) => { e.stopPropagation(); openFolder(fol.phone); setSearch(''); }}
-                      className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl text-center transition-all min-h-[132px]"
+                      className={`flex flex-col items-center text-center transition-all ${
+                        isNarrow
+                          ? 'gap-2.5 p-4 rounded-2xl min-h-[156px]'
+                          : 'gap-2 p-3 sm:p-4 rounded-xl min-h-[132px]'
+                      }`}
                       style={{
                         background: 'hsl(var(--pt-card))',
                         border: '1px solid hsl(var(--pt-border))',
@@ -1101,15 +1126,20 @@ export default function FileManager() {
                       }}
                     >
                       <Folder
-                        size={56}
+                        size={isNarrow ? 64 : 56}
                         weight="fill"
                         style={{
                           color: unassigned ? 'hsl(var(--pt-muted))' : 'hsl(var(--marigold))',
                           filter: unassigned ? undefined : 'drop-shadow(0 3px 6px hsl(var(--marigold) / 0.28))',
                         }}
                       />
-                      <span className="text-xs sm:text-[13px] font-semibold truncate w-full leading-tight" style={{ color: 'hsl(var(--ink))' }}>{fol.name}</span>
-                      <span className="text-[10px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>
+                      <span
+                        className={`font-semibold truncate w-full leading-snug ${isNarrow ? 'text-[14px]' : 'text-xs sm:text-[13px]'}`}
+                        style={{ color: 'hsl(var(--ink))' }}
+                      >
+                        {fol.name}
+                      </span>
+                      <span className={`tabular-nums ${isNarrow ? 'text-[12px]' : 'text-[10px]'}`} style={{ color: 'hsl(var(--pt-muted))' }}>
                         {fol.count} item{fol.count === 1 ? '' : 's'}
                       </span>
                     </button>
@@ -1129,7 +1159,7 @@ export default function FileManager() {
 
           {/* INSIDE FOLDER: files */}
           {!loading && !atRoot && view === 'grid' && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 sm:gap-2">
+            <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${isNarrow ? 'gap-3' : 'gap-1.5 sm:gap-2'}`}>
               {visibleFiles.map((f) => {
                 const isSel = selectedIds.has(f.id);
                 return (
@@ -1142,7 +1172,9 @@ export default function FileManager() {
                     onPointerUp={onFilePointerUpOrCancel}
                     onPointerLeave={onFilePointerUpOrCancel}
                     onPointerCancel={onFilePointerUpOrCancel}
-                    className="relative flex flex-col items-stretch rounded-xl p-2 text-left transition-all select-none"
+                    className={`relative flex flex-col items-stretch text-left transition-all select-none ${
+                      isNarrow ? 'rounded-2xl p-2.5' : 'rounded-xl p-2'
+                    }`}
                     style={{
                       background: isSel || openingId === f.id
                         ? 'hsl(var(--marigold) / 0.14)'
@@ -1177,7 +1209,9 @@ export default function FileManager() {
                       </span>
                     )}
                     <div
-                      className="aspect-square rounded-lg flex items-center justify-center overflow-hidden mb-2 relative"
+                      className={`aspect-square flex items-center justify-center overflow-hidden relative ${
+                        isNarrow ? 'rounded-xl mb-2.5' : 'rounded-lg mb-2'
+                      }`}
                       style={{ background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
                     >
                       <Thumb f={f} />
@@ -1187,8 +1221,10 @@ export default function FileManager() {
                         </div>
                       )}
                     </div>
-                    <span className="text-[11px] font-medium truncate" style={{ color: 'hsl(var(--ink))' }}>{displayName(f.fileName)}</span>
-                    <span className="text-[10px] truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
+                    <span className={`font-medium truncate ${isNarrow ? 'text-[13px]' : 'text-[11px]'}`} style={{ color: 'hsl(var(--ink))' }}>
+                      {displayName(f.fileName)}
+                    </span>
+                    <span className={`truncate ${isNarrow ? 'text-[11px] mt-0.5' : 'text-[10px]'}`} style={{ color: 'hsl(var(--pt-muted))' }}>
                       {(f.source || 'whatsapp').replace('-', ' ')}
                       {f.timestamp ? ` · ${new Date(f.timestamp).toLocaleDateString()}` : ''}
                     </span>
@@ -1320,15 +1356,14 @@ export default function FileManager() {
         </div>
       )}
 
-      {/* Single Explorer status bar (was duplicated on phone and ate vertical space) */}
-      {!preview && selectedIds.size === 0 && (
+      {/* Desktop status bar only — phone title already shows counts */}
+      {!preview && selectedIds.size === 0 && !isNarrow && (
         <div
           className="shrink-0 border-t px-3 py-1.5 text-[10px] sm:text-[11px] flex flex-wrap items-center justify-between gap-2"
           style={{
             borderColor: 'hsl(var(--pt-border))',
             color: 'hsl(var(--pt-muted))',
             background: 'hsl(var(--pt-card))',
-            paddingBottom: isNarrow ? 'max(0.375rem, env(safe-area-inset-bottom))' : undefined,
           }}
         >
           <span className="truncate">
@@ -1337,13 +1372,11 @@ export default function FileManager() {
               : `${visibleFiles.length} item${visibleFiles.length === 1 ? '' : 's'} in ${activeFolder?.name || 'folder'}`}
           </span>
           <span className="shrink-0">
-            {isNarrow
-              ? 'Folders · Tap open · Long-press select'
-              : atRoot
-                ? 'Large icons · Search finds any customer'
-                : view === 'grid'
-                  ? 'Large icons · Ctrl+click select'
-                  : 'Details · Ctrl+click select'}
+            {atRoot
+              ? 'Large icons · Search finds any customer'
+              : view === 'grid'
+                ? 'Large icons · Ctrl+click select'
+                : 'Details · Ctrl+click select'}
           </span>
         </div>
       )}
