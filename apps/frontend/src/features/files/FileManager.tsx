@@ -795,13 +795,10 @@ export default function FileManager() {
   };
 
   return (
-    /* Phone (<md): fixed under mobile top bar. md+: fill Layout full-bleed main pane. */
+    /* Fill Layout full-bleed main (same as Documents). Do not pin top-12 —
+       that left a blank strip when the Hub CyberControl bar was scrolled/hidden. */
     <div
-      className="
-        flex flex-col min-h-0 overflow-hidden
-        max-md:fixed max-md:z-20 max-md:inset-x-0 max-md:top-12 max-md:bottom-0
-        md:relative md:flex-1 md:h-full
-      "
+      className="flex flex-col flex-1 h-full min-h-0 overflow-hidden"
       style={{ background: 'hsl(var(--paper))' }}
     >
       {/* Toolbar — phone: airy title bar; desktop: Explorer chrome */}

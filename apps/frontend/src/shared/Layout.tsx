@@ -218,10 +218,10 @@ export default function Layout() {
   } as const;
 
   return (
-    <div className="pt-paper h-screen flex flex-col md:flex-row">
-      {/* Mobile top bar — ink strip like landing header */}
+    <div className="pt-paper h-dvh max-h-dvh flex flex-col md:flex-row overflow-hidden">
+      {/* Mobile top bar — ink strip like landing header (sticky so it cannot scroll away and leave a gap above fixed panes) */}
       <div
-        className="md:hidden flex items-center justify-between h-12 px-3 border-b shrink-0"
+        className="md:hidden sticky top-0 z-30 flex items-center justify-between h-12 px-3 border-b shrink-0"
         style={{ borderColor: 'hsl(var(--ink) / 0.35)', background: 'hsl(var(--ink))' }}
       >
         <button onClick={() => setMobileOpen(true)} className="pt-toolbtn text-white/90 hover:text-white" aria-label="Open menu" style={{ color: 'rgba(255,255,255,0.9)' }}>
