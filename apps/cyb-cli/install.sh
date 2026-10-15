@@ -38,6 +38,10 @@ if [ ! -f "$PKG/package.json" ]; then
   exit 1
 fi
 
+# Emit bin/cyb.js from .ts (entry shell is gitignored; .ts is source of truth)
+( cd "$PKG" && npm install --omit=dev >/dev/null 2>&1 || true )
+( cd "$PKG" && node --experimental-strip-types scripts/build-entry.ts )
+
 # Install package files into prefix
 rm -rf "$PREFIX/cli"
 mkdir -p "$PREFIX/cli"

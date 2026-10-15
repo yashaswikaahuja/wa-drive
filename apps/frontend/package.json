@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "emit:sw": "node --experimental-strip-types scripts/emit-sw.ts",
+    "dev": "node --experimental-strip-types scripts/emit-sw.ts && vite",
+    "build": "node --experimental-strip-types scripts/emit-sw.ts && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "node -e \"console.log('[frontend] unit tests not configured; use test:e2e')\"",

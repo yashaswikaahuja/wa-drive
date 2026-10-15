@@ -14,6 +14,7 @@
   "scripts": {
     "build": "node --experimental-strip-types scripts/build-entry.ts && node --check bin/cyb.js",
     "build:entry": "node --experimental-strip-types scripts/build-entry.ts",
+    "prepare": "node --experimental-strip-types scripts/build-entry.ts",
     "test": "node --experimental-strip-types scripts/run-test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

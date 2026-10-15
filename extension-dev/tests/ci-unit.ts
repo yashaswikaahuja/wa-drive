@@ -75,6 +75,14 @@ let allPass = true;
 let totalPassed = 0;
 console.log('CyberControl CI — Unit & Knowledge Tests (turborepo)\n');
 
+// Entry .js files are emit-in-place from .ts (gitignored). Suites that read
+// apps/extension/popup.js etc. need them present before running.
+console.log('Emitting extension entry .js from .ts…');
+execSync(`${NODE_TS} apps/extension/scripts/build-extension-entries.ts`, {
+  cwd: ROOT,
+  stdio: 'inherit',
+});
+
 // Unit CI never talks to a real DB; stub URL for modules that validate env at import.
 const suiteEnv = {
   ...process.env,

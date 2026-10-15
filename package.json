@@ -8,6 +8,7 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "build:bundles": "node --experimental-strip-types build-all.ts",
+    "emit:js-twins": "node --experimental-strip-types apps/extension/scripts/build-extension-entries.ts && node --experimental-strip-types extension-legacy-best/scripts/build-entries.ts && node --experimental-strip-types apps/frontend/scripts/emit-sw.ts && pnpm --filter cybercontrol-whatsapp-service build:entry && pnpm --filter cybercontrol-whatsapp-resolver build:entry && pnpm --filter cybercontrol-cli build:entry",
     "safety": "node --experimental-strip-types tooling/turborepo-safety-check.ts",
     "safety:dns": "node --experimental-strip-types tooling/turborepo-safety-check.ts"
   },

@@ -10,9 +10,15 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
 import vm from 'node:vm';
 
 const ROOT = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
+// Entry .js are emit-in-place from .ts (gitignored); ensure popup.js etc. exist.
+execSync('node --experimental-strip-types apps/extension/scripts/build-extension-entries.ts', {
+  cwd: ROOT,
+  stdio: 'inherit',
+});
 const read = (rel) => readFileSync(resolve(ROOT, rel), 'utf8').replace(/^\uFEFF/, '');
 const TRUSTED = 'https://app.cybercontrol.fun';
 const HOSTILE = 'https://evil.example';
