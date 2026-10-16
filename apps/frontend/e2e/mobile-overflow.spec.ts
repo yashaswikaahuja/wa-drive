@@ -134,6 +134,13 @@ test.describe('File Manager phone folders drawer', () => {
     await expect(filters.getByRole('tab', { name: /PDFs/ })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByText('Om~').last()).toBeVisible();
     await expect(page.getByText(/aadhaar/i)).toHaveCount(0);
+
+    await filters.getByRole('tab', { name: /All/ }).click();
+    const sort = page.getByRole('group', { name: 'Sort files' });
+    await expect(sort.getByRole('button', { name: 'Newest' })).toHaveAttribute('aria-pressed', 'true');
+    await sort.getByRole('button', { name: 'Name' }).click();
+    await expect(sort.getByRole('button', { name: 'Name' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText(/aadhaar/i).first()).toBeVisible();
   });
 });
 

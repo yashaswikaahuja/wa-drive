@@ -37,6 +37,7 @@ type DriveFile = {
 
 type FolderRow = { phone: string; name: string; count: number };
 type TypeFilter = 'all' | 'photos' | 'pdfs';
+type SortMode = 'newest' | 'name';
 
 /** Cap visible folders so 500–600 customers stay usable; search finds the rest. */
 const FOLDER_CAP = 50;
@@ -47,6 +48,11 @@ const TYPE_FILTERS: { id: TypeFilter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'photos', label: 'Photos' },
   { id: 'pdfs', label: 'PDFs' },
+];
+
+const SORT_MODES: { id: SortMode; label: string }[] = [
+  { id: 'newest', label: 'Newest' },
+  { id: 'name', label: 'Name' },
 ];
 
 function openedStorageKey(workspaceId: string | undefined | null) {
@@ -158,6 +164,8 @@ export default function FileManager() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
   /** Type filter for folder / Recent file lists. */
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  /** Sort for folder / Recent: Newest = date desc; Name = A–Z. */
+  const [sortMode, setSortMode] = useState<SortMode>('newest');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
@@ -289,11 +297,19 @@ export default function FileManager() {
     const q = search.trim().toLowerCase();
     const byTs = (a: DriveFile, b: DriveFile) =>
       String(b.timestamp || '').localeCompare(String(a.timestamp || ''));
+    const byName = (a: DriveFile, b: DriveFile) =>
+      displayName(a.fileName || '').localeCompare(displayName(b.fileName || ''), undefined, { sensitivity: 'base' });
+    const sortFiles = (list: DriveFile[]) =>
+      [...list].sort(sortMode === 'name' ? byName : byTs);
 
     const applyFilters = (list: DriveFile[]) =>
       list.filter((f) => matchesFileSearch(f, q) && matchesTypeFilter(f, typeFilter));
 
     if (recentMode && !folderPhone) {
+      // Name: plain A–Z. Newest: files you opened first, then newest received.
+      if (sortMode === 'name') {
+        return sortFiles(applyFilters(files)).slice(0, RECENT_CAP);
+      }
       const byId = new Map(files.map((f) => [f.id, f]));
       const remembered: DriveFile[] = [];
       const seen = new Set<string>();
@@ -308,14 +324,16 @@ export default function FileManager() {
       return applyFilters([...remembered, ...rest]).slice(0, RECENT_CAP);
     }
 
-    return applyFilters(
-      files.filter((f) => {
-        const phone = (f.customerId || '').trim() || '__unassigned__';
-        if (folderPhone && phone !== folderPhone) return false;
-        return true;
-      }),
-    ).sort(byTs);
-  }, [files, folderPhone, search, recentMode, openedIds, typeFilter, matchesFileSearch, matchesTypeFilter]);
+    return sortFiles(
+      applyFilters(
+        files.filter((f) => {
+          const phone = (f.customerId || '').trim() || '__unassigned__';
+          if (folderPhone && phone !== folderPhone) return false;
+          return true;
+        }),
+      ),
+    );
+  }, [files, folderPhone, search, recentMode, openedIds, typeFilter, sortMode, matchesFileSearch, matchesTypeFilter]);
 
   /** Counts for type chips (same scope as current view, before type filter). */
   const typeFilterCounts = useMemo(() => {
@@ -1212,53 +1230,86 @@ export default function FileManager() {
         </div>
 
         {showingFiles && (
-          <div
-            className="flex items-center gap-2 overflow-x-auto"
-            style={{ WebkitOverflowScrolling: 'touch' } as any}
-            role="tablist"
-            aria-label="File type filter"
-          >
-            {TYPE_FILTERS.map((chip) => {
-              const active = typeFilter === chip.id;
-              const count =
-                chip.id === 'all'
-                  ? typeFilterCounts.all
-                  : chip.id === 'photos'
-                    ? typeFilterCounts.photos
-                    : typeFilterCounts.pdfs;
-              return (
-                <button
-                  key={chip.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => {
-                    setTypeFilter(chip.id);
-                    clearSelection();
-                  }}
-                  className={`shrink-0 inline-flex items-center gap-1.5 rounded-full font-semibold transition-colors ${
-                    isNarrow ? 'text-[13px] px-3.5 py-2' : 'text-xs px-3 py-1.5'
-                  }`}
-                  style={{
-                    background: active ? 'hsl(var(--marigold) / 0.2)' : 'hsl(var(--pt-secondary))',
-                    color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
-                    border: active ? '1px solid hsl(var(--marigold) / 0.45)' : '1px solid transparent',
-                  }}
-                >
-                  {chip.label}
-                  <span
-                    className="tabular-nums rounded-full min-w-[1.25rem] px-1 text-center"
+          <div className="flex items-center gap-2 min-w-0">
+            <div
+              className="flex items-center gap-2 overflow-x-auto min-w-0 flex-1"
+              style={{ WebkitOverflowScrolling: 'touch' } as any}
+              role="tablist"
+              aria-label="File type filter"
+            >
+              {TYPE_FILTERS.map((chip) => {
+                const active = typeFilter === chip.id;
+                const count =
+                  chip.id === 'all'
+                    ? typeFilterCounts.all
+                    : chip.id === 'photos'
+                      ? typeFilterCounts.photos
+                      : typeFilterCounts.pdfs;
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => {
+                      setTypeFilter(chip.id);
+                      clearSelection();
+                    }}
+                    className={`shrink-0 inline-flex items-center gap-1.5 rounded-full font-semibold transition-colors ${
+                      isNarrow ? 'text-[13px] px-3.5 py-2' : 'text-xs px-3 py-1.5'
+                    }`}
                     style={{
-                      fontSize: isNarrow ? 11 : 10,
-                      background: active ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-card))',
+                      background: active ? 'hsl(var(--marigold) / 0.2)' : 'hsl(var(--pt-secondary))',
+                      color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
+                      border: active ? '1px solid hsl(var(--marigold) / 0.45)' : '1px solid transparent',
+                    }}
+                  >
+                    {chip.label}
+                    <span
+                      className="tabular-nums rounded-full min-w-[1.25rem] px-1 text-center"
+                      style={{
+                        fontSize: isNarrow ? 11 : 10,
+                        background: active ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-card))',
+                        color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))',
+                      }}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              className="flex rounded-full overflow-hidden shrink-0"
+              style={{ border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-secondary))' }}
+              role="group"
+              aria-label="Sort files"
+            >
+              {SORT_MODES.map((mode) => {
+                const active = sortMode === mode.id;
+                return (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setSortMode(mode.id);
+                      clearSelection();
+                    }}
+                    className={`font-semibold transition-colors ${
+                      isNarrow ? 'text-[12px] px-3 py-2' : 'text-[11px] px-2.5 py-1.5'
+                    }`}
+                    style={{
+                      background: active ? 'hsl(var(--marigold) / 0.22)' : 'transparent',
                       color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))',
                     }}
                   >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -1631,10 +1682,10 @@ export default function FileManager() {
             {atRoot
               ? 'Large icons · Search finds any customer'
               : atRecent
-                ? 'Recent · opened first, then newest'
+                ? (sortMode === 'name' ? 'Recent · A–Z' : 'Recent · opened first, then newest')
                 : view === 'grid'
-                  ? 'Large icons · Ctrl+click select'
-                  : 'Details · Ctrl+click select'}
+                  ? (sortMode === 'name' ? 'Large icons · A–Z' : 'Large icons · newest first')
+                  : (sortMode === 'name' ? 'Details · A–Z' : 'Details · newest first')}
           </span>
         </div>
       )}
