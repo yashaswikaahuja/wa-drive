@@ -126,6 +126,14 @@ test.describe('File Manager phone folders drawer', () => {
 
     await expect(page.getByPlaceholder('Search recent files…')).toBeVisible();
     await expect(page.getByText('Shubham Kumar').last()).toBeVisible();
+
+    const filters = page.getByRole('tablist', { name: 'File type filter' });
+    await expect(filters).toBeVisible();
+    await expect(filters.getByRole('tab', { name: /All/ })).toHaveAttribute('aria-selected', 'true');
+    await filters.getByRole('tab', { name: /PDFs/ }).click();
+    await expect(filters.getByRole('tab', { name: /PDFs/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByText('Om~').last()).toBeVisible();
+    await expect(page.getByText(/aadhaar/i)).toHaveCount(0);
   });
 });
 

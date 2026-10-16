@@ -36,11 +36,18 @@ type DriveFile = {
 };
 
 type FolderRow = { phone: string; name: string; count: number };
+type TypeFilter = 'all' | 'photos' | 'pdfs';
 
 /** Cap visible folders so 500–600 customers stay usable; search finds the rest. */
 const FOLDER_CAP = 50;
 /** Cap Recent list (opened + newest received). */
 const RECENT_CAP = 50;
+
+const TYPE_FILTERS: { id: TypeFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'photos', label: 'Photos' },
+  { id: 'pdfs', label: 'PDFs' },
+];
 
 function openedStorageKey(workspaceId: string | undefined | null) {
   return workspaceId ? `cc-fm-recent-opened:${workspaceId}` : null;
@@ -149,6 +156,8 @@ export default function FileManager() {
   const deepPhoneAppliedRef = useRef<string | null>(null);
   const deepRecentAppliedRef = useRef(false);
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  /** Type filter for folder / Recent file lists. */
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [anchorId, setAnchorId] = useState<string | null>(null);
@@ -269,10 +278,20 @@ export default function FileManager() {
     );
   }, []);
 
+  const matchesTypeFilter = useCallback((f: DriveFile, filter: TypeFilter) => {
+    if (filter === 'all') return true;
+    if (filter === 'photos') return isImage(f);
+    if (filter === 'pdfs') return isPdf(f);
+    return true;
+  }, []);
+
   const visibleFiles = useMemo(() => {
     const q = search.trim().toLowerCase();
     const byTs = (a: DriveFile, b: DriveFile) =>
       String(b.timestamp || '').localeCompare(String(a.timestamp || ''));
+
+    const applyFilters = (list: DriveFile[]) =>
+      list.filter((f) => matchesFileSearch(f, q) && matchesTypeFilter(f, typeFilter));
 
     if (recentMode && !folderPhone) {
       const byId = new Map(files.map((f) => [f.id, f]));
@@ -286,17 +305,36 @@ export default function FileManager() {
         }
       }
       const rest = files.filter((f) => !seen.has(f.id)).sort(byTs);
-      return [...remembered, ...rest].filter((f) => matchesFileSearch(f, q)).slice(0, RECENT_CAP);
+      return applyFilters([...remembered, ...rest]).slice(0, RECENT_CAP);
     }
 
-    return files
-      .filter((f) => {
+    return applyFilters(
+      files.filter((f) => {
         const phone = (f.customerId || '').trim() || '__unassigned__';
         if (folderPhone && phone !== folderPhone) return false;
-        return matchesFileSearch(f, q);
-      })
-      .sort(byTs);
-  }, [files, folderPhone, search, recentMode, openedIds, matchesFileSearch]);
+        return true;
+      }),
+    ).sort(byTs);
+  }, [files, folderPhone, search, recentMode, openedIds, typeFilter, matchesFileSearch, matchesTypeFilter]);
+
+  /** Counts for type chips (same scope as current view, before type filter). */
+  const typeFilterCounts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let pool: DriveFile[];
+    if (recentMode && !folderPhone) {
+      pool = files;
+    } else if (folderPhone) {
+      pool = files.filter((f) => ((f.customerId || '').trim() || '__unassigned__') === folderPhone);
+    } else {
+      pool = [];
+    }
+    const matched = pool.filter((f) => matchesFileSearch(f, q));
+    return {
+      all: recentMode && !folderPhone ? Math.min(matched.length, RECENT_CAP) : matched.length,
+      photos: matched.filter(isImage).length,
+      pdfs: matched.filter(isPdf).length,
+    };
+  }, [files, folderPhone, recentMode, search, matchesFileSearch]);
 
   const folderMatches = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1172,6 +1210,57 @@ export default function FileManager() {
             </div>
           )}
         </div>
+
+        {showingFiles && (
+          <div
+            className="flex items-center gap-2 overflow-x-auto"
+            style={{ WebkitOverflowScrolling: 'touch' } as any}
+            role="tablist"
+            aria-label="File type filter"
+          >
+            {TYPE_FILTERS.map((chip) => {
+              const active = typeFilter === chip.id;
+              const count =
+                chip.id === 'all'
+                  ? typeFilterCounts.all
+                  : chip.id === 'photos'
+                    ? typeFilterCounts.photos
+                    : typeFilterCounts.pdfs;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    setTypeFilter(chip.id);
+                    clearSelection();
+                  }}
+                  className={`shrink-0 inline-flex items-center gap-1.5 rounded-full font-semibold transition-colors ${
+                    isNarrow ? 'text-[13px] px-3.5 py-2' : 'text-xs px-3 py-1.5'
+                  }`}
+                  style={{
+                    background: active ? 'hsl(var(--marigold) / 0.2)' : 'hsl(var(--pt-secondary))',
+                    color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--ink-soft))',
+                    border: active ? '1px solid hsl(var(--marigold) / 0.45)' : '1px solid transparent',
+                  }}
+                >
+                  {chip.label}
+                  <span
+                    className="tabular-nums rounded-full min-w-[1.25rem] px-1 text-center"
+                    style={{
+                      fontSize: isNarrow ? 11 : 10,
+                      background: active ? 'hsl(var(--marigold) / 0.22)' : 'hsl(var(--pt-card))',
+                      color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))',
+                    }}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 flex relative">
@@ -1380,10 +1469,19 @@ export default function FileManager() {
                     ? <Clock size={40} className="mb-3" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />
                     : <Folder size={40} className="mb-3" style={{ color: 'hsl(var(--pt-muted))', opacity: 0.45 }} />}
                   <p className="text-sm mb-3 max-w-sm" style={{ color: 'hsl(var(--pt-muted))' }}>
-                    {search
-                      ? (atRecent ? 'No recent files match your search.' : 'No files match your search in this folder.')
+                    {search || typeFilter !== 'all'
+                      ? (typeFilter === 'photos'
+                        ? 'No photos match.'
+                        : typeFilter === 'pdfs'
+                          ? 'No PDFs match.'
+                          : (atRecent ? 'No recent files match your search.' : 'No files match your search in this folder.'))
                       : (atRecent ? 'No files yet. Receive documents on WhatsApp or open a customer folder.' : 'This folder is empty.')}
                   </p>
+                  {typeFilter !== 'all' && !search && (
+                    <button type="button" className="btn-secondary text-xs mb-2" onClick={() => setTypeFilter('all')}>
+                      Show all types
+                    </button>
+                  )}
                   <button type="button" className="btn-secondary text-xs" onClick={goRoot}>
                     ← Back to all customers
                   </button>
