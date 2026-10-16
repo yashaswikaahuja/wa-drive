@@ -9,7 +9,6 @@ import api from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import { getCompleteness, flattenProfileData, buildVisibleSections } from '../../shared/profileSchema';
-import { ProvenanceChip } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
@@ -271,21 +270,21 @@ export default function CustomerDetail() {
   }
 
   if (loading && !household) return (
-    <div className="max-w-4xl mx-auto pt-4 space-y-4 animate-pulse" aria-busy="true">
-      <div className="h-6 w-24 rounded" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
-      <div className="h-16 rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
+    <div className="max-w-3xl mx-auto pt-3 pb-10 px-1 sm:px-0 space-y-4 animate-pulse" aria-busy="true">
+      <div className="h-5 w-24 rounded" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
+      <div className="h-28 rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
       <div className="h-40 rounded-2xl" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />
     </div>
   );
 
   if (notFound || !household) return (
-    <div className="max-w-4xl mx-auto pt-4">
-      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0">
-        <ArrowLeft size={15} /> Customers
+    <div className="max-w-3xl mx-auto pt-3 pb-10 px-1 sm:px-0">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-3 px-0 text-sm">
+        <ArrowLeft size={16} /> Customers
       </button>
-      <div className="rounded-2xl p-6 text-center" style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))' }}>
-        <p className="text-sm mb-1" style={{ color: 'hsl(var(--pt-ink))' }}>Customer not found</p>
-        <p className="text-xs pt-muted mb-4">
+      <div className="rounded-2xl p-6 text-center" style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}>
+        <p className="text-[15px] font-medium mb-1" style={{ color: 'hsl(var(--ink))' }}>Customer not found</p>
+        <p className="text-[13px] mb-4" style={{ color: 'hsl(var(--pt-muted))' }}>
           No household matches <span className="font-mono">{phone}</span>.
           It may use a different phone format, or the profile was never created.
         </p>
@@ -300,68 +299,111 @@ export default function CustomerDetail() {
   const primaryName = selectedMeta?.displayLabel || selectedMeta?.name || phone;
 
   return (
-    <div className="max-w-4xl mx-auto pt-4">
-      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-4 px-0">
-        <ArrowLeft size={15} /> Customers
+    <div className="max-w-3xl mx-auto pt-3 pb-10 px-1 sm:px-0">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-3 px-0 text-sm">
+        <ArrowLeft size={16} /> Customers
       </button>
 
-      {/* Header — name/phone first; actions wrap cleanly on phone */}
-      <div className="flex flex-col gap-4 mb-6 sm:mb-8">
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+      {/* Hero — one paper card: identity + completeness + primary actions */}
+      <div
+        className="rounded-2xl p-4 sm:p-5 mb-5"
+        style={{
+          background: 'hsl(var(--pt-card))',
+          border: '1px solid hsl(var(--pt-border))',
+          boxShadow: 'var(--shadow-paper)',
+        }}
+      >
+        <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
           <div
-            className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-lg sm:text-xl font-semibold shrink-0"
-            style={{ background: 'hsl(var(--pt-marigold) / 0.12)', color: 'hsl(var(--pt-marigold-deep))' }}
+            className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-xl sm:text-2xl font-semibold shrink-0"
+            style={{
+              background: 'hsl(var(--marigold) / 0.16)',
+              color: 'hsl(var(--marigold-deep))',
+              boxShadow: 'inset 0 0 0 1px hsl(var(--marigold) / 0.22)',
+            }}
           >
-            {primaryName[0]?.toUpperCase()}
+            {(primaryName[0] || '?').toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="pt-display text-xl sm:text-2xl font-bold tracking-tight truncate" style={{ color: 'hsl(var(--pt-ink))' }}>{primaryName}</h1>
-            <p className="text-sm pt-muted truncate">
+            <h1 className="pt-display text-[1.35rem] sm:text-2xl font-bold tracking-tight leading-tight truncate" style={{ color: 'hsl(var(--ink))' }}>
+              {primaryName}
+            </h1>
+            <p className="text-[13px] mt-1 truncate" style={{ color: 'hsl(var(--pt-muted))' }}>
               {formatPhoneDisplay(phone)}
               {household.persons.length > 1 && ` · ${household.persons.length} people`}
             </p>
+            {personDetail && (
+              <div className="mt-3 flex items-center gap-2.5">
+                <div className="flex-1 h-1.5 rounded-full overflow-hidden max-w-[10rem]" style={{ background: 'hsl(var(--pt-secondary))' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${completeness.percent}%`,
+                      background: completeness.percent >= 80
+                        ? 'hsl(var(--confidence))'
+                        : completeness.percent >= 40
+                          ? 'hsl(var(--marigold))'
+                          : 'hsl(var(--chaos))',
+                      transitionTimingFunction: EASE,
+                      transitionDuration: '500ms',
+                    }}
+                  />
+                </div>
+                <span className="text-[11px] font-semibold tabular-nums shrink-0" style={{ color: 'hsl(var(--pt-muted))' }}>
+                  {completeness.percent}% profile
+                </span>
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+
+        <div className="mt-4 flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={() => navigate(`/app/whatsapp?phone=${encodeURIComponent(phone)}`)}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity hover:opacity-80"
-            style={{ color: 'hsl(var(--whatsapp))', background: 'hsl(var(--whatsapp) / 0.1)' }}
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3.5 py-2 rounded-xl transition-opacity hover:opacity-90"
+            style={{ color: '#fff', background: 'hsl(var(--whatsapp))' }}
             title="Open Documents chat"
           >
-            <ChatCircle size={15} /> Documents
+            <ChatCircle size={16} weight="fill" /> Documents
           </button>
           <button
+            type="button"
             onClick={() => navigate(`/app/files?phone=${encodeURIComponent(phone)}`)}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity hover:opacity-80"
-            style={{ color: 'hsl(var(--pt-ink))', background: 'hsl(var(--pt-secondary))' }}
+            className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3.5 py-2 rounded-xl transition-opacity hover:opacity-90"
+            style={{ color: 'hsl(var(--ink))', background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
             title="Open File Manager folder"
           >
-            <FolderOpen size={15} /> Files
+            <FolderOpen size={16} weight="fill" /> Files
           </button>
+          <div className="flex-1" />
           <button
+            type="button"
             onClick={() => setShowShareModal(true)}
             disabled={!selectedPerson}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity disabled:opacity-40 hover:opacity-80"
-            style={{ color: 'hsl(var(--pt-marigold-deep))', background: 'hsl(var(--pt-marigold) / 0.12)' }}
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-opacity disabled:opacity-40 hover:opacity-80"
+            style={{ color: 'hsl(var(--marigold-deep))', background: 'hsl(var(--marigold) / 0.12)' }}
             title="Share profile"
+            aria-label="Share profile"
           >
-            <ShareNetwork size={15} /> Share
+            <ShareNetwork size={18} />
           </button>
           <button
+            type="button"
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-opacity hover:opacity-80"
+            className="w-10 h-10 rounded-xl flex items-center justify-center transition-opacity hover:opacity-80"
             style={{ color: 'hsl(var(--confidence))', background: 'hsl(var(--pt-secondary))' }}
             title="Import shared profile"
+            aria-label="Import shared profile"
           >
-            <Export size={15} /> Import
+            <Export size={18} />
           </button>
         </div>
       </div>
 
-      {/* People tabs — horizontal scroll on phone; delete visible on selected / touch */}
+      {/* People tabs — horizontal scroll on phone */}
       {household.persons.length > 1 && (
-        <div className="-mx-4 px-4 mb-6 sm:mx-0 sm:px-0">
+        <div className="mb-5 -mx-1 px-1">
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
             {household.persons.map(p => {
               const active = selectedPerson === p.id;
@@ -371,30 +413,31 @@ export default function CustomerDetail() {
                   type="button"
                   onClick={() => {
                     if (p.id === selectedPerson) return;
-                    setPersonDetail(null); // avoid showing previous person's fields under new tab
+                    setPersonDetail(null);
                     setSelectedPerson(p.id);
                     setSearchParams({ person: p.id }, { replace: true });
                   }}
-                  className="group flex items-center gap-1.5 pl-3 pr-1.5 py-1.5 rounded-full text-sm transition-all active:scale-[0.97] shrink-0"
+                  className="group flex items-center gap-1.5 pl-3.5 pr-2 py-2 rounded-full text-[13px] font-medium transition-all active:scale-[0.97] shrink-0"
                   style={{
-                    background: active ? 'hsl(var(--pt-marigold) / 0.14)' : 'hsl(var(--pt-secondary))',
-                    color: active ? 'hsl(var(--pt-marigold-deep))' : 'hsl(var(--pt-muted))',
+                    background: active ? 'hsl(var(--marigold) / 0.16)' : 'hsl(var(--pt-card))',
+                    color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))',
+                    border: active ? '1px solid hsl(var(--marigold) / 0.35)' : '1px solid hsl(var(--pt-border))',
                     transitionTimingFunction: EASE, transitionDuration: '200ms',
                   }}
                   aria-pressed={active}
                 >
                   <span className="whitespace-nowrap">{p.displayLabel || p.name}</span>
-                  <span className="text-[10px] opacity-50 capitalize whitespace-nowrap">{p.relationship}</span>
+                  <span className="text-[10px] opacity-60 capitalize whitespace-nowrap">{p.relationship}</span>
                   <span
                     role="button"
                     tabIndex={0}
                     onClick={(e) => { e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); }}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); deletePerson(p.id, p.displayLabel || p.name); } }}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 transition-all ${active ? 'opacity-80' : 'opacity-50 md:opacity-0 md:group-hover:opacity-100'}`}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-500/15 hover:text-red-500 transition-all ${active ? 'opacity-80' : 'opacity-40 md:opacity-0 md:group-hover:opacity-100'}`}
                     aria-label={`Remove ${p.displayLabel || p.name}`}
                     title="Remove person"
                   >
-                    <X size={11} />
+                    <X size={12} />
                   </span>
                 </button>
               );
@@ -402,8 +445,8 @@ export default function CustomerDetail() {
             <button
               type="button"
               onClick={() => setShowAddPerson(true)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm transition-colors shrink-0"
-              style={{ color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-secondary))' }}
+              className="flex items-center gap-1 px-3.5 py-2 rounded-full text-[13px] transition-colors shrink-0"
+              style={{ color: 'hsl(var(--pt-muted))', background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))' }}
             >
               <UserPlus size={14} /> Add
             </button>
@@ -411,30 +454,34 @@ export default function CustomerDetail() {
         </div>
       )}
       {household.persons.length <= 1 && (
-        <div className="mb-6">
+        <div className="mb-5">
           <button
+            type="button"
             onClick={() => setShowAddPerson(true)}
-            className="flex items-center gap-1.5 text-sm transition-opacity hover:opacity-80"
+            className="flex items-center gap-1.5 text-[13px] transition-opacity hover:opacity-80"
             style={{ color: 'hsl(var(--pt-muted))' }}
           >
             <UserPlus size={15} /> Add family member
           </button>
         </div>
       )}
-      {showAddPerson && <div className="mb-6"><AddPersonForm onSubmit={addPerson} onCancel={() => setShowAddPerson(false)} /></div>}
+      {showAddPerson && <div className="mb-5"><AddPersonForm onSubmit={addPerson} onCancel={() => setShowAddPerson(false)} /></div>}
 
       {personDetail && (
         <>
-          {/* Readiness — per form (architecture: "SSC 85%, missing 10th marksheet") */}
-          <section className="card mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs uppercase tracking-[0.15em] pt-muted">Form readiness</h2>
-              <span className="text-xs pt-muted tabular-nums">{completeness.filled}/{completeness.total} core fields</span>
+          {/* Form readiness */}
+          <section
+            className="rounded-2xl p-4 sm:p-5 mb-5"
+            style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
+          >
+            <div className="flex items-center justify-between mb-3.5">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'hsl(var(--pt-muted))' }}>Form readiness</h2>
+              <span className="text-[11px] tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>{completeness.filled}/{completeness.total} core</span>
             </div>
             {readiness.length === 0 ? (
-              <p className="text-xs pt-muted">No form data. Visit Find Form to see requirements.</p>
+              <p className="text-[13px]" style={{ color: 'hsl(var(--pt-muted))' }}>No form data yet. Open Find Form to see requirements.</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 {readiness.slice(0, 5).map((f: any) => {
                   const color = f.percent >= 80
                     ? 'hsl(var(--confidence))'
@@ -443,19 +490,23 @@ export default function CustomerDetail() {
                       : 'hsl(var(--chaos))';
                   return (
                     <div key={f.id} className="flex items-center gap-3">
-                      <div className="w-28 shrink-0">
-                        <p className="text-sm truncate" style={{ color: 'hsl(var(--pt-ink))' }}>{f.short_name}</p>
+                      <div className="w-[7.5rem] shrink-0 min-w-0">
+                        <p className="text-[13px] font-medium truncate" style={{ color: 'hsl(var(--ink))' }}>{f.short_name}</p>
                         {f.missing.length > 0 && f.percent < 100 && (
-                          <p className="text-[10px] pt-muted truncate">need {f.missing[0].replace(/_/g, ' ')}{f.missing.length > 1 ? ` +${f.missing.length - 1}` : ''}</p>
+                          <p className="text-[10px] truncate mt-0.5" style={{ color: 'hsl(var(--pt-muted))' }}>
+                            need {f.missing[0].replace(/_/g, ' ')}{f.missing.length > 1 ? ` +${f.missing.length - 1}` : ''}
+                          </p>
                         )}
                       </div>
                       <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'hsl(var(--pt-secondary))' }}>
-                        <div className="h-full rounded-full transition-all"
-                          style={{ width: `${f.percent}%`, background: color, transitionTimingFunction: EASE, transitionDuration: '600ms' }} />
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${f.percent}%`, background: color, transitionTimingFunction: EASE, transitionDuration: '600ms' }}
+                        />
                       </div>
-                      <span className="text-sm font-semibold tabular-nums w-10 text-right" style={{ color }}>{f.percent}%</span>
+                      <span className="text-[13px] font-semibold tabular-nums w-10 text-right" style={{ color }}>{f.percent}%</span>
                       {f.percent === 100
-                        ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-medium shrink-0 w-12 text-right hover:underline" style={{ color: 'hsl(var(--confidence))' }}>Fill →</a>
+                        ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold shrink-0 w-12 text-right hover:underline" style={{ color: 'hsl(var(--confidence))' }}>Fill →</a>
                         : <span className="w-12 shrink-0" />}
                     </div>
                   );
@@ -465,13 +516,12 @@ export default function CustomerDetail() {
           </section>
 
           {/* Classic sections: Personal / Identity / Contact / Education / Bank / Travel */}
-          <section className="mb-6">
-            <h2 className="text-xs uppercase tracking-[0.15em] pt-muted mb-3 px-1">Profile data</h2>
+          <section className="mb-5">
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] mb-3 px-1" style={{ color: 'hsl(var(--pt-muted))' }}>Profile data</h2>
             <div className="space-y-3">
               {visibleSections.map((section) => {
                 const raw = personDetail.data || {};
                 const sflat = flattenProfileData(raw);
-                // Schema sections: filled + required missing. Dynamic: filled only.
                 const rows = section.dynamic
                   ? section.fields.filter((f) => !!sflat[f.key])
                   : section.fields.filter((f) => !!sflat[f.key] || f.required).concat(
@@ -484,55 +534,75 @@ export default function CustomerDetail() {
                     );
                 if (!rows.length) return null;
                 return (
-                  <div key={section.id} className="card">
-                    <p className="text-[11px] font-medium uppercase tracking-wider mb-3 pt-muted">
-                      {section.icon ? `${section.icon} ` : ''}{section.title}
-                    </p>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  <div
+                    key={section.id}
+                    className="rounded-2xl overflow-hidden"
+                    style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
+                  >
+                    <div
+                      className="px-4 py-3"
+                      style={{ borderBottom: '1px solid hsl(var(--pt-border-soft, var(--pt-border)))', background: 'hsl(var(--pt-secondary) / 0.35)' }}
+                    >
+                      <p className="text-[13px] font-semibold" style={{ color: 'hsl(var(--ink))' }}>
+                        {section.title}
+                      </p>
+                    </div>
+                    <div className="divide-y divide-[hsl(var(--pt-border-soft))]">
                       {rows.map((f) => {
                         const val = sflat[f.key];
                         const rawVal = raw[f.key];
-                        const docId = rawVal && typeof rawVal === 'object' && rawVal.documentId;
+                        const fromDoc = rawVal && typeof rawVal === 'object' && (rawVal.documentId || rawVal.source === 'document' || rawVal.source === 'ai');
+                        const needsReview = rawVal && typeof rawVal === 'object' && rawVal.needsReview;
                         const isEditing = editingField === f.key;
+                        const display = val ? (typeof val === 'string' ? val : String(val)) : '';
                         return (
-                          <div key={f.key} className="flex flex-col gap-0.5">
+                          <div key={f.key} className="px-4 py-3 sm:grid sm:grid-cols-[9rem_1fr] sm:gap-4 sm:items-start">
                             <span
-                              className="text-[10px] uppercase tracking-wide"
-                              style={{ color: val ? 'hsl(var(--pt-muted))' : 'hsl(var(--chaos) / 0.7)' }}
+                              className="block text-[11px] font-medium mb-1 sm:mb-0 sm:pt-0.5"
+                              style={{ color: val ? 'hsl(var(--pt-muted))' : 'hsl(var(--chaos) / 0.75)' }}
                             >
                               {f.label}{f.required && !val ? ' *' : ''}
                             </span>
                             {isEditing ? (
-                              <input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                              <input
+                                autoFocus
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
                                 onBlur={() => { if (editValue !== (val || '')) saveField(f.key, editValue); else setEditingField(null); }}
                                 onKeyDown={(e) => { if (e.key === 'Enter') saveField(f.key, editValue); if (e.key === 'Escape') setEditingField(null); }}
-                                className="text-sm rounded-md px-2 py-1 outline-none w-full"
+                                className="text-[15px] rounded-lg px-2.5 py-1.5 outline-none w-full"
                                 style={{
-                                  background: 'hsl(var(--pt-marigold) / 0.1)',
-                                  border: '1px solid hsl(var(--pt-marigold) / 0.35)',
-                                  color: 'hsl(var(--pt-ink))',
+                                  background: 'hsl(var(--marigold) / 0.1)',
+                                  border: '1px solid hsl(var(--marigold) / 0.4)',
+                                  color: 'hsl(var(--ink))',
                                 }}
                               />
                             ) : (
-                              <button onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
-                                className="flex items-center gap-1.5 group text-left">
-                                <span
-                                  className="text-sm truncate"
-                                  style={{ color: val ? 'hsl(var(--pt-ink))' : 'hsl(var(--pt-muted))' }}
-                                  title={val || ''}
-                                >
-                                  {val ? (typeof val === 'string' ? val : String(val)) : '—'}
+                              <button
+                                type="button"
+                                onClick={() => { setEditingField(f.key); setEditValue(val || ''); }}
+                                className="w-full flex items-start gap-2 group text-left min-w-0"
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span
+                                    className="block text-[15px] leading-snug break-words"
+                                    style={{ color: display ? 'hsl(var(--ink))' : 'hsl(var(--pt-muted))' }}
+                                    title={display || undefined}
+                                  >
+                                    {display || '—'}
+                                  </span>
+                                  {needsReview && (
+                                    <span className="inline-block mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ color: 'hsl(35 92% 38%)', background: 'hsl(35 92% 48% / 0.12)' }}>
+                                      Needs review
+                                    </span>
+                                  )}
                                 </span>
-                                {docId && <Sparkle size={10} weight="fill" className="shrink-0" style={{ color: 'hsl(var(--pt-marigold) / 0.7)' }} />}
-                                {rawVal && typeof rawVal === 'object' && (
-                                  <ProvenanceChip
-                                    source={rawVal.source}
-                                    documentType={rawVal.documentType}
-                                    confidence={rawVal.confidence}
-                                    needsReview={rawVal.needsReview}
-                                  />
+                                {fromDoc && !needsReview && (
+                                  <span className="shrink-0 mt-1 opacity-50" title="From document" style={{ color: 'hsl(var(--marigold-deep))' }}>
+                                    <Sparkle size={12} weight="fill" />
+                                  </span>
                                 )}
-                                <PencilSimple size={11} className="pt-muted opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
+                                <PencilSimple size={13} className="shrink-0 mt-1 opacity-40 md:opacity-0 md:group-hover:opacity-50 transition-opacity" style={{ color: 'hsl(var(--pt-muted))' }} />
                               </button>
                             )}
                           </div>
@@ -540,26 +610,35 @@ export default function CustomerDetail() {
                       })}
                     </div>
                     {addingInSection === section.id ? (
-                      <div className="flex gap-2 mt-3">
-                        <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-xs py-1.5 flex-1" />
-                        <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-xs py-1.5 flex-1" />
-                        <button onClick={handleAddField} className="text-xs px-2" style={{ color: 'hsl(var(--confidence))' }}>Save</button>
-                        <button onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-xs pt-muted px-1">✕</button>
+                      <div className="flex flex-col sm:flex-row gap-2 p-4" style={{ borderTop: '1px solid hsl(var(--pt-border))' }}>
+                        <input placeholder="Field name" value={newFieldKey} onChange={(e) => setNewFieldKey(e.target.value)} className="input-field text-sm py-2 flex-1" />
+                        <input placeholder="Value" value={newFieldValue} onChange={(e) => setNewFieldValue(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddField(); }} className="input-field text-sm py-2 flex-1" />
+                        <div className="flex gap-2">
+                          <button type="button" onClick={handleAddField} className="text-sm font-semibold px-3 py-2" style={{ color: 'hsl(var(--confidence))' }}>Save</button>
+                          <button type="button" onClick={() => { setAddingInSection(null); setNewFieldKey(''); setNewFieldValue(''); }} className="text-sm px-2" style={{ color: 'hsl(var(--pt-muted))' }}>Cancel</button>
+                        </div>
                       </div>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => setAddingInSection(section.id)}
-                        className="text-xs mt-3 flex items-center gap-1 transition-opacity hover:opacity-80"
-                        style={{ color: 'hsl(var(--pt-marigold-deep))' }}
+                        className="w-full text-left text-[13px] px-4 py-3 flex items-center gap-1.5 transition-opacity hover:opacity-80"
+                        style={{ color: 'hsl(var(--marigold-deep))', borderTop: '1px solid hsl(var(--pt-border-soft, var(--pt-border)))' }}
                       >
-                        <Plus size={12} /> Add field
+                        <Plus size={14} /> Add field
                       </button>
                     )}
                   </div>
                 );
               })}
               {visibleSections.length === 0 && (
-                <p className="text-xs pt-muted px-1">No profile details yet — extract from Documents.</p>
+                <div
+                  className="rounded-2xl p-6 text-center"
+                  style={{ background: 'hsl(var(--pt-card))', border: '1px dashed hsl(var(--pt-border))' }}
+                >
+                  <p className="text-[14px]" style={{ color: 'hsl(var(--pt-muted))' }}>No profile details yet</p>
+                  <p className="text-[12px] mt-1" style={{ color: 'hsl(var(--pt-muted))' }}>Extract from Documents to fill this profile.</p>
+                </div>
               )}
             </div>
           </section>
@@ -567,18 +646,20 @@ export default function CustomerDetail() {
       )}
 
       {/* Documents */}
-      {documents.length > 0 && (
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-xs uppercase tracking-[0.15em] pt-muted">Documents · {documents.length}</h2>
-            <label
-              className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-opacity hover:opacity-80 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
-              style={{ color: 'hsl(var(--pt-marigold-deep))' }}
-            >
-              <UploadSimple size={13} weight="bold" /> {uploading ? 'Uploading…' : 'Upload'}
-              <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
-            </label>
-          </div>
+      <section className="mb-6">
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'hsl(var(--pt-muted))' }}>
+            Documents{documents.length > 0 ? ` · ${documents.length}` : ''}
+          </h2>
+          <label
+            className={`flex items-center gap-1.5 text-[12px] font-semibold cursor-pointer transition-opacity hover:opacity-80 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
+            style={{ color: 'hsl(var(--marigold-deep))' }}
+          >
+            <UploadSimple size={14} weight="bold" /> {uploading ? 'Uploading…' : 'Upload'}
+            <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
+          </label>
+        </div>
+        {documents.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {documents.slice(0, 12).map(d => {
               const ext = d.fileName?.split('.').pop()?.toLowerCase() || '';
@@ -593,56 +674,43 @@ export default function CustomerDetail() {
               return (
                 <div
                   key={d.id}
-                  className="rounded-xl p-1.5"
-                  style={{ background: 'hsl(var(--pt-secondary) / 0.45)', border: '1px solid hsl(var(--pt-border))' }}
+                  className="rounded-2xl overflow-hidden"
+                  style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
                 >
-                  <div className="rounded-lg overflow-hidden" style={{ background: 'hsl(var(--pt-card))' }}>
-                    <div className="aspect-[4/3] flex items-center justify-center overflow-hidden relative" style={{ background: 'hsl(var(--pt-secondary))' }}>
-                      {thumb
-                        ? <DocThumb src={thumb} isPdf={isPdf} />
-                        : <FileText size={32} className="pt-muted" />}
-                    </div>
-                    <div className="p-2.5">
-                      <p className="text-[11px] pt-muted truncate mb-1.5">{ext.toUpperCase()} · {new Date(d.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                      <button
-                        onClick={() => handleExtract(d)}
-                        disabled={extracting === d.id || !selectedPerson}
-                        className="flex items-center gap-1 text-[11px] transition-opacity hover:opacity-80 disabled:opacity-40"
-                        style={{ color: 'hsl(var(--pt-marigold-deep))' }}
-                      >
-                        <Sparkle size={11} weight="fill" /> {extracting === d.id ? 'Extracting…' : 'Extract data'}
-                      </button>
-                    </div>
+                  <div className="aspect-[4/3] flex items-center justify-center overflow-hidden" style={{ background: 'hsl(var(--pt-secondary))' }}>
+                    {thumb
+                      ? <DocThumb src={thumb} isPdf={isPdf} />
+                      : <FileText size={32} style={{ color: 'hsl(var(--pt-muted))' }} />}
+                  </div>
+                  <div className="p-3">
+                    <p className="text-[11px] truncate mb-2" style={{ color: 'hsl(var(--pt-muted))' }}>
+                      {ext.toUpperCase()} · {new Date(d.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleExtract(d)}
+                      disabled={extracting === d.id || !selectedPerson}
+                      className="flex items-center gap-1 text-[12px] font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
+                      style={{ color: 'hsl(var(--marigold-deep))' }}
+                    >
+                      <Sparkle size={12} weight="fill" /> {extracting === d.id ? 'Extracting…' : 'Extract data'}
+                    </button>
                   </div>
                 </div>
               );
             })}
           </div>
-        </section>
-      )}
-
-      {/* Upload section when no documents */}
-      {documents.length === 0 && (
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-xs uppercase tracking-[0.15em] pt-muted">Documents</h2>
-            <label
-              className={`flex items-center gap-1.5 text-[11px] cursor-pointer transition-opacity hover:opacity-80 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
-              style={{ color: 'hsl(var(--pt-marigold-deep))' }}
-            >
-              <UploadSimple size={13} weight="bold" /> {uploading ? 'Uploading…' : 'Upload'}
-              <input type="file" accept="image/*,.pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
-            </label>
-          </div>
+        ) : (
           <div
-            className="rounded-xl border border-dashed p-6 flex flex-col items-center gap-2 text-xs pt-muted"
-            style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-secondary) / 0.35)' }}
+            className="rounded-2xl border border-dashed p-8 flex flex-col items-center gap-2 text-[13px]"
+            style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-card))', color: 'hsl(var(--pt-muted))' }}
           >
-            <UploadSimple size={24} className="pt-muted" />
-            <p>No documents yet. Upload a hardcopy scan to get started.</p>
+            <UploadSimple size={28} style={{ color: 'hsl(var(--pt-muted))', opacity: 0.55 }} />
+            <p>No documents yet</p>
+            <p className="text-[12px] text-center">Upload a hardcopy scan or receive files on WhatsApp.</p>
           </div>
-        </section>
-      )}
+        )}
+      </section>
 
       {/* Extraction confirm */}
       {extractedSuggestions && (
@@ -771,19 +839,24 @@ function AddPersonForm({ onSubmit, onCancel }: { onSubmit: (f: any) => void; onC
   const [name, setName] = useState('');
   const [relationship, setRelationship] = useState('self');
   return (
-    <div className="card flex gap-3 items-end">
-      <div className="flex-1">
-        <label className="text-xs pt-muted mb-1 block">Name</label>
+    <div
+      className="rounded-2xl p-4 flex flex-col sm:flex-row gap-3 sm:items-end"
+      style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
+    >
+      <div className="flex-1 min-w-0">
+        <label className="text-[11px] font-medium mb-1 block" style={{ color: 'hsl(var(--pt-muted))' }}>Name</label>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Family member name" className="input-field" />
       </div>
-      <div className="w-36">
-        <label className="text-xs pt-muted mb-1 block">Relationship</label>
+      <div className="sm:w-36">
+        <label className="text-[11px] font-medium mb-1 block" style={{ color: 'hsl(var(--pt-muted))' }}>Relationship</label>
         <select value={relationship} onChange={e => setRelationship(e.target.value)} className="input-field">
           {RELATIONSHIPS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
         </select>
       </div>
-      <button onClick={() => onSubmit({ name, relationship })} disabled={!name} className="btn-primary">Add</button>
-      <button onClick={onCancel} className="btn-ghost">Cancel</button>
+      <div className="flex gap-2">
+        <button type="button" onClick={() => onSubmit({ name, relationship })} disabled={!name} className="btn-primary flex-1 sm:flex-none">Add</button>
+        <button type="button" onClick={onCancel} className="btn-ghost">Cancel</button>
+      </div>
     </div>
   );
 }
