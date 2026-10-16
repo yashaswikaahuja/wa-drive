@@ -298,7 +298,10 @@ export default function Layout() {
             <LocationBanner />
           </>
         )}
-        <div className={fullBleed ? 'flex-1 min-h-0 flex flex-col' : 'mx-auto w-full max-w-6xl'}>
+        <div
+          key={pathname}
+          className={`page-enter ${fullBleed ? 'flex-1 min-h-0 flex flex-col' : 'mx-auto w-full max-w-6xl'}`}
+        >
           <Outlet />
         </div>
       </main>
