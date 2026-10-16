@@ -7,8 +7,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { startDemoApiServer, DEMO_OPERATOR } from "./demo-api-server.mjs";
-import { injectDemoFx, fxClick, fxMove } from "./lib/inject-demo-fx.mjs";
+import { startDemoApiServer, DEMO_OPERATOR } from "./demo-api-server.mts";
+import { injectDemoFx, fxClick, fxMove } from "./lib/inject-demo-fx.mts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const landingRoot = path.resolve(__dirname, "..");

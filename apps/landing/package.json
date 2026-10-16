@@ -9,14 +9,15 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.scripts.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "record:proof": "node scripts/record-proof-clips.mjs",
-    "record:pixel": "node scripts/record-extension-autofill.mjs && node scripts/record-pixel-hub.mjs",
-    "record:pixel:autofill": "node scripts/record-extension-autofill.mjs",
-    "record:pixel:hub": "node scripts/record-pixel-hub.mjs"
+    "record:proof": "node --experimental-strip-types scripts/emit-demo-fx.mts && node --experimental-strip-types scripts/record-proof-clips.mts",
+    "record:pixel": "node --experimental-strip-types scripts/record-extension-autofill.mts && node --experimental-strip-types scripts/record-pixel-hub.mts",
+    "record:pixel:autofill": "node --experimental-strip-types scripts/record-extension-autofill.mts",
+    "record:pixel:hub": "node --experimental-strip-types scripts/record-pixel-hub.mts",
+    "emit:demo-fx": "node --experimental-strip-types scripts/emit-demo-fx.mts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -6,12 +6,26 @@
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import http from "node:http";
+import http, { type Server } from "node:http";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { startDemoApiServer, DEMO_PROFILE, DEMO_OPERATOR } from "./demo-api-server.mjs";
-import { injectDemoFx, fxClick, fxMove, animateFieldsFilling } from "./lib/inject-demo-fx.mjs";
+import { startDemoApiServer, DEMO_PROFILE, DEMO_OPERATOR } from "./demo-api-server.mts";
+import { injectDemoFx, fxClick, fxMove, animateFieldsFilling } from "./lib/inject-demo-fx.mts";
+
+declare const chrome: {
+  storage: { local: { set: (items: Record<string, unknown>) => Promise<void> } };
+};
+
+function errMessage(e: unknown) {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function listenPort(server: Server): number {
+  const addr = server.address();
+  if (addr && typeof addr === "object") return addr.port;
+  throw new Error("server has no port");
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const landingRoot = path.resolve(__dirname, "..");
@@ -29,7 +43,7 @@ const FIELD_IDS = [
   "phone", "address", "village", "district", "state", "pincode", "post_office",
 ];
 
-function assertLocalOnly(url) {
+function assertLocalOnly(url: string) {
   const u = String(url);
   if (/cybercontrol\.fun|amazonaws|\.prod\./i.test(u)) {
     throw new Error(`REFUSED (#331): production URL not allowed: ${u}`);
@@ -39,11 +53,12 @@ function assertLocalOnly(url) {
   }
 }
 
-function resolveFfmpeg() {
-  const candidates = [];
+function resolveFfmpeg(): string | null {
+  const candidates: string[] = [];
   try {
     const require = createRequire(path.join(landingRoot, "package.json"));
-    candidates.push(require("ffmpeg-static"));
+    const packed = require("ffmpeg-static") as string | null;
+    if (packed) candidates.push(packed);
   } catch { /* optional */ }
   const which = spawnSync(process.platform === "win32" ? "where.exe" : "which", ["ffmpeg"], {
     encoding: "utf8",
@@ -61,7 +76,7 @@ const POPUP_W = 420;
 const CLIP_H = 720;
 const EXT_UI_W = 400; // natural extension chrome width before zoom-to-fill
 
-function runFfmpeg(args) {
+function runFfmpeg(args: string[]): Promise<string> {
   const ffmpeg = resolveFfmpeg();
   if (!ffmpeg) throw new Error("ffmpeg-static / ffmpeg not found");
   return new Promise((resolve, reject) => {
@@ -74,14 +89,15 @@ function runFfmpeg(args) {
 }
 
 /** Probe duration seconds via ffmpeg stderr. */
-async function probeDurationSec(webm) {
+async function probeDurationSec(webm: string) {
   try {
     const err = await runFfmpeg(["-i", webm]);
     const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(err);
     if (!m) return null;
     return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
-  } catch (e) {
-    const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(String(e.message || ""));
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(msg);
     if (!m) return null;
     return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
   }
@@ -91,7 +107,7 @@ async function probeDurationSec(webm) {
  * Detect letterboxed content width via cropdetect on the popup reel, then
  * crop → scale to fill the right panel (full extension UI, including Fill).
  */
-async function detectPopupContentWidth(popupWebm) {
+async function detectPopupContentWidth(popupWebm: string) {
   try {
     const err = await runFfmpeg([
       "-i", popupWebm,
@@ -112,8 +128,8 @@ async function detectPopupContentWidth(popupWebm) {
     if (best) return best;
     const last = crops[crops.length - 1];
     return Number(last[1]) || EXT_UI_W;
-  } catch (e) {
-    const crops = [...String(e.message || "").matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
+  } catch (e: unknown) {
+    const crops = [...errMessage(e).matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)];
     if (crops.length) {
       const last = crops[crops.length - 1];
       const w = Number(last[1]);
@@ -123,7 +139,7 @@ async function detectPopupContentWidth(popupWebm) {
   }
 }
 
-async function hstack(formWebm, popupWebm, dest) {
+async function hstack(formWebm: string, popupWebm: string, dest: string) {
   const ffmpeg = resolveFfmpeg();
   if (!ffmpeg) {
     fs.copyFileSync(formWebm, dest);
@@ -168,7 +184,7 @@ const { server: apiServer, apiBase, port: apiPort } = await startDemoApiServer(0
 assertLocalOnly(apiBase);
 console.log("stub API", apiBase);
 
-function startFormServer() {
+function startFormServer(): Promise<{ server: Server; port: number }> {
   const server = http.createServer((req, res) => {
     const urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
     const file = path.join(
@@ -190,7 +206,7 @@ function startFormServer() {
     fs.createReadStream(file).pipe(res);
   });
   return new Promise((resolve) => {
-    server.listen(0, "127.0.0.1", () => resolve({ server, port: server.address().port }));
+    server.listen(0, "127.0.0.1", () => resolve({ server, port: listenPort(server) }));
   });
 }
 
@@ -270,7 +286,7 @@ try {
   await popup.waitForTimeout(350);
 
   await popup.waitForFunction(() => {
-    const b = document.getElementById("fill-btn");
+    const b = document.getElementById("fill-btn") as HTMLButtonElement | null;
     return b && !b.disabled;
   }, null, { timeout: 15000 });
 
@@ -291,9 +307,12 @@ try {
   });
   console.log("animated_fields", filledIds.join(","));
 
-  const values = await formPage.evaluate((ids) => {
-    const out = {};
-    for (const id of ids) out[id] = document.getElementById(id)?.value || "";
+  const values = await formPage.evaluate((ids: string[]) => {
+    const out: Record<string, string> = {};
+    for (const id of ids) {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      out[id] = el?.value || "";
+    }
     return out;
   }, FIELD_IDS);
   console.log("filled_values", JSON.stringify(values));
@@ -356,15 +375,15 @@ try {
     try {
       fs.copyFileSync(destTmp, dest);
       break;
-    } catch (e) {
+    } catch (e: unknown) {
       if (i === 7) throw e;
-      console.warn("dest locked, retry", e.message);
+      console.warn("dest locked, retry", errMessage(e));
       await new Promise((r) => setTimeout(r, 500));
     }
   }
   console.log("OK", dest, Math.round(fs.statSync(dest).size / 1024) + "KB", mode);
-} catch (e) {
-  console.error("FAIL", e.message);
+} catch (e: unknown) {
+  console.error("FAIL", errMessage(e));
   try {
     for (const p of context.pages()) {
       console.log("page", p.url(), (await p.locator("body").innerText().catch(() => "")).slice(0, 400));

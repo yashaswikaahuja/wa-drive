@@ -1,6 +1,6 @@
 /**
  * PRIVATE debug recorder against the REAL CyberControl app.
- * Public marketing clips MUST use record-proof-clips.mjs (fictional fixtures) per #331.
+ * Public marketing clips MUST use record-proof-clips.mts (fictional fixtures) per #331.
  *
  * Gate: set ALLOW_REAL_DATA=1 to run. Outputs go to public/proof/_private-rec/
  * (never overwrite public clip-*.webm). Do NOT commit those WebMs.
@@ -14,11 +14,11 @@ import { fileURLToPath } from "url";
 
 if (process.env.ALLOW_REAL_DATA !== "1") {
   console.error(`
-REFUSED (#331): record-real-app-clips.mjs must not write public proof clips.
+REFUSED (#331): record-real-app-clips.mts must not write public proof clips.
 
 Public WebMs use fictional fixtures only:
   pnpm record:proof
-  (or: node scripts/record-proof-clips.mjs)
+  (or: node --experimental-strip-types scripts/record-proof-clips.mts)
 
 For private debugging against live data, set ALLOW_REAL_DATA=1.
 Outputs then go to public/proof/_private-rec/ — NEVER commit those files.

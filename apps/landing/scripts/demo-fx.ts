@@ -1,8 +1,24 @@
 /**
  * Shared cursor / click / type FX for fictional landing proof clips (#331).
+ * Source of truth — emit to public/proof/demo-fx.js via scripts/emit-demo-fx.mts.
  * Exposes window.DemoFx — pages set __ready after load, __done when sequence ends.
  */
-(function () {
+
+type Point = { x: number; y: number };
+type Target = string | Element | Point | [number, number] | null | undefined;
+
+type DemoFxApi = {
+  moveTo: (elOrXY: Target, ms?: number) => Promise<void>;
+  click: (el?: Target) => Promise<void>;
+  highlight: (el: Target, ms?: number) => Promise<void>;
+  typeInto: (el: Target, text: string, cps?: number) => Promise<void>;
+  sleep: (ms: number) => Promise<void>;
+  cursor: HTMLElement;
+};
+
+type DemoWindow = Window & { DemoFx?: DemoFxApi };
+
+(function installDemoFx() {
   const STYLE_ID = "cc-demo-fx-style";
   if (!document.getElementById(STYLE_ID)) {
     const style = document.createElement("style");
@@ -57,26 +73,27 @@
   let y = 360;
   cursor.style.transform = `translate(${x}px, ${y}px)`;
 
-  function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms));
+  function sleep(ms: number) {
+    return new Promise<void>((r) => setTimeout(r, ms));
   }
 
-  function easeInOutCubic(t) {
+  function easeInOutCubic(t: number) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
-  function resolvePoint(elOrXY) {
+  function resolvePoint(elOrXY: Target): Point {
     if (Array.isArray(elOrXY)) return { x: elOrXY[0], y: elOrXY[1] };
     if (elOrXY && typeof elOrXY === "object" && "x" in elOrXY && "y" in elOrXY) {
       return { x: elOrXY.x, y: elOrXY.y };
     }
-    const el = typeof elOrXY === "string" ? document.querySelector(elOrXY) : elOrXY;
-    if (!el) return { x, y };
+    const el =
+      typeof elOrXY === "string" ? document.querySelector(elOrXY) : (elOrXY as Element | null);
+    if (!el || !("getBoundingClientRect" in el)) return { x, y };
     const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
-  async function moveTo(elOrXY, ms = 500) {
+  async function moveTo(elOrXY: Target, ms = 500) {
     const target = resolvePoint(elOrXY);
     const sx = x;
     const sy = y;
@@ -84,13 +101,13 @@
     const dy = target.y - sy;
     const dur = Math.max(1, ms);
     const t0 = performance.now();
-    await new Promise((resolve) => {
-      function frame(now) {
+    await new Promise<void>((resolve) => {
+      function frame(now: number) {
         const t = Math.min(1, (now - t0) / dur);
         const e = easeInOutCubic(t);
         x = sx + dx * e;
         y = sy + dy * e;
-        cursor.style.transform = `translate(${x}px, ${y}px)`;
+        cursor!.style.transform = `translate(${x}px, ${y}px)`;
         if (t < 1) requestAnimationFrame(frame);
         else resolve();
       }
@@ -98,34 +115,36 @@
     });
   }
 
-  async function click(el) {
+  async function click(el?: Target) {
     if (el) {
       const point = resolvePoint(el);
       x = point.x;
       y = point.y;
-      cursor.style.transform = `translate(${x}px, ${y}px)`;
+      cursor!.style.transform = `translate(${x}px, ${y}px)`;
     }
-    ripple.style.left = `${x + 4}px`;
-    ripple.style.top = `${y + 4}px`;
-    ripple.classList.remove("on");
-    void ripple.offsetWidth;
-    ripple.classList.add("on");
-    cursor.style.transform = `translate(${x}px, ${y}px) scale(.92)`;
+    ripple!.style.left = `${x + 4}px`;
+    ripple!.style.top = `${y + 4}px`;
+    ripple!.classList.remove("on");
+    void ripple!.offsetWidth;
+    ripple!.classList.add("on");
+    cursor!.style.transform = `translate(${x}px, ${y}px) scale(.92)`;
     await sleep(90);
-    cursor.style.transform = `translate(${x}px, ${y}px) scale(1)`;
+    cursor!.style.transform = `translate(${x}px, ${y}px) scale(1)`;
     await sleep(160);
   }
 
-  async function highlight(el, ms = 400) {
-    const node = typeof el === "string" ? document.querySelector(el) : el;
-    if (!node) return sleep(ms);
+  async function highlight(el: Target, ms = 400) {
+    const node =
+      typeof el === "string" ? document.querySelector(el) : (el as Element | null);
+    if (!node || !("classList" in node)) return sleep(ms);
     node.classList.add("cc-fx-highlight");
     await sleep(ms);
     node.classList.remove("cc-fx-highlight");
   }
 
-  async function typeInto(el, text, cps = 28) {
-    const node = typeof el === "string" ? document.querySelector(el) : el;
+  async function typeInto(el: Target, text: string, cps = 28) {
+    const node =
+      typeof el === "string" ? document.querySelector(el) : (el as Element | null);
     if (!node) return;
     const delay = Math.max(18, Math.round(1000 / cps));
     node.textContent = "";
@@ -138,5 +157,5 @@
     node.classList.add("filled");
   }
 
-  window.DemoFx = { moveTo, click, highlight, typeInto, sleep, cursor };
+  (window as DemoWindow).DemoFx = { moveTo, click, highlight, typeInto, sleep, cursor };
 })();

@@ -45,6 +45,7 @@ apps/extension/sw/auth-refresh.js
 apps/extension/sw/wss-bridge.js
 apps/extension/application/fill-orchestrator.js
 apps/frontend/public/sw.js
+apps/landing/public/proof/demo-fx.js
 apps/whatsapp-service/index.js
 apps/whatsapp-service/migrate-sessions-to-db.js
 apps/whatsapp-resolver/index.js

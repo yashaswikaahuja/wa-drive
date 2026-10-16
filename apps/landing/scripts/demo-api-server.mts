@@ -2,7 +2,7 @@
  * Local stub API for pixel-exact proof clips (#331).
  * Fictional Ananya Demo only — never production.
  */
-import http from "node:http";
+import http, { type IncomingMessage, type ServerResponse, type Server } from "node:http";
 
 export const DEMO_OPERATOR = {
   id: "demo-op-1",
@@ -100,7 +100,7 @@ const DRIVE_FILES = [
   },
 ];
 
-function json(res, status, body) {
+function json(res: ServerResponse, status: number, body: unknown) {
   const raw = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -111,11 +111,11 @@ function json(res, status, body) {
   res.end(raw);
 }
 
-function stripApi(pathname) {
+function stripApi(pathname: string) {
   return pathname.replace(/^\/api(?=\/|$)/, "") || "/";
 }
 
-function handle(req, res) {
+function handle(req: IncomingMessage, res: ServerResponse) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -184,7 +184,14 @@ function handle(req, res) {
   json(res, 200, {});
 }
 
-export function startDemoApiServer(port = 0) {
+export type DemoApiHandle = {
+  server: Server;
+  port: number;
+  origin: string;
+  apiBase: string;
+};
+
+export function startDemoApiServer(port = 0): Promise<DemoApiHandle> {
   const server = http.createServer(handle);
   return new Promise((resolve) => {
     server.listen(port, "127.0.0.1", () => {
@@ -200,8 +207,12 @@ export function startDemoApiServer(port = 0) {
   });
 }
 
-if (import.meta.url === `file://${process.argv[1].replace(/\\/g, "/")}` ||
-    process.argv[1] && process.argv[1].endsWith("demo-api-server.mjs")) {
+const entryArg = process.argv[1] || "";
+const isMain =
+  entryArg.endsWith("demo-api-server.mts") ||
+  entryArg.endsWith("demo-api-server.ts") ||
+  entryArg.endsWith("demo-api-server.mjs");
+if (isMain) {
   const fixed = Number(process.env.DEMO_API_PORT || 4077);
   const { port, apiBase } = await startDemoApiServer(fixed);
   console.log("demo-api listening", apiBase, "port", port);
