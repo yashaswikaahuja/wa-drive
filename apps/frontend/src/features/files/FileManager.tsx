@@ -19,6 +19,7 @@ import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob } from '../../shared/fileCache';
 import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
+import { useReveal } from '../../shared/useReveal';
 import { useAuthStore } from '../auth/store';
 import PdfThumb from './PdfThumb';
 
@@ -152,6 +153,7 @@ export default function FileManager() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workspaceId = useAuthStore((s) => s.user?.workspaceId);
+  const { reveal, trigger } = useReveal({ auto: false });
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -208,8 +210,9 @@ export default function FileManager() {
       setFiles([]);
     } finally {
       setLoading(false);
+      trigger();
     }
-  }, []);
+  }, [trigger]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -1002,6 +1005,7 @@ export default function FileManager() {
         style={{
           borderColor: 'hsl(var(--pt-border))',
           background: 'linear-gradient(180deg, hsl(var(--pt-card)) 0%, hsl(var(--paper)) 100%)',
+          ...reveal(0),
         }}
       >
         {isNarrow ? (
@@ -1314,7 +1318,7 @@ export default function FileManager() {
         )}
       </div>
 
-      <div className="flex-1 min-h-0 flex relative">
+      <div className="flex-1 min-h-0 flex relative" style={reveal(1)}>
         {/* Navigation pane — Explorer-style (desktop) */}
         <aside
           className={`w-56 lg:w-60 shrink-0 border-r overflow-y-auto ${isNarrow ? 'hidden' : 'block'}`}

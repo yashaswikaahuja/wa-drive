@@ -4,6 +4,7 @@
 import { Link, useSearchParams } from 'react-router-dom';
 import { Images, FilePdf } from '@phosphor-icons/react';
 import PageHeader from '../../shared/PageHeader';
+import { useReveal } from '../../shared/useReveal';
 
 const JOBS = [
   {
@@ -28,23 +29,26 @@ export default function MediaDeskHome() {
   const [params] = useSearchParams();
   const q = params.toString();
   const suffix = q ? `?${q}` : '';
+  const { reveal } = useReveal();
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
-      <PageHeader
-        title="Photos"
-        subtitle="Photo Editor and PDF Tool — files stay in File Manager / Drive."
-      />
+      <div style={reveal(0)}>
+        <PageHeader
+          title="Photos"
+          subtitle="Photo Editor and PDF Tool — files stay in File Manager / Drive."
+        />
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {JOBS.map((job) => {
+        {JOBS.map((job, i) => {
           const Icon = job.icon;
           return (
             <Link
               key={job.to}
               to={`${job.to}${suffix}`}
               className="card group flex gap-4 p-4 md:p-5 items-start transition-colors"
-              style={{ borderColor: 'hsl(var(--pt-border))' }}
+              style={{ borderColor: 'hsl(var(--pt-border))', ...reveal(1 + i) }}
               onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--marigold) / 0.55)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'hsl(var(--pt-border))'; }}
             >

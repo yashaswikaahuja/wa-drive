@@ -10,8 +10,7 @@ import { toast } from '../../shared/toast';
 import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import { getCompleteness, flattenProfileData, buildVisibleSections } from '../../shared/profileSchema';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
-
-const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
+import { REVEAL_EASE as EASE, useReveal } from '../../shared/useReveal';
 
 interface Person { id: string; name: string; displayLabel: string; relationship: string; createdAt: string; updatedAt: string; }
 interface Household { phone: string; person_count: string; persons: Person[]; }
@@ -66,6 +65,7 @@ export default function CustomerDetail() {
   const [importMsg, setImportMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const { reveal, trigger } = useReveal({ auto: false });
 
   const loadHousehold = async () => {
     setLoading(true);
@@ -92,6 +92,7 @@ export default function CustomerDetail() {
       setError(e?.response?.data?.error || e?.message || 'Could not load customer');
     } finally {
       setLoading(false);
+      trigger();
     }
   };
   const loadDocuments = async () => {
@@ -300,7 +301,7 @@ export default function CustomerDetail() {
 
   return (
     <div className="max-w-3xl mx-auto pt-3 pb-10 px-1 sm:px-0">
-      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-3 px-0 text-sm">
+      <button onClick={() => navigate('/app/customers')} className="btn-ghost flex items-center gap-1.5 mb-3 px-0 text-sm" style={reveal(0)}>
         <ArrowLeft size={16} /> Customers
       </button>
 
@@ -311,6 +312,7 @@ export default function CustomerDetail() {
           background: 'hsl(var(--pt-card))',
           border: '1px solid hsl(var(--pt-border))',
           boxShadow: 'var(--shadow-paper)',
+          ...reveal(1),
         }}
       >
         <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
@@ -403,7 +405,7 @@ export default function CustomerDetail() {
 
       {/* People tabs — horizontal scroll on phone */}
       {household.persons.length > 1 && (
-        <div className="mb-5 -mx-1 px-1">
+        <div className="mb-5 -mx-1 px-1" style={reveal(2)}>
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none" style={{ WebkitOverflowScrolling: 'touch' }}>
             {household.persons.map(p => {
               const active = selectedPerson === p.id;
@@ -454,7 +456,7 @@ export default function CustomerDetail() {
         </div>
       )}
       {household.persons.length <= 1 && (
-        <div className="mb-5">
+        <div className="mb-5" style={reveal(2)}>
           <button
             type="button"
             onClick={() => setShowAddPerson(true)}
@@ -465,14 +467,14 @@ export default function CustomerDetail() {
           </button>
         </div>
       )}
-      {showAddPerson && <div className="mb-5"><AddPersonForm onSubmit={addPerson} onCancel={() => setShowAddPerson(false)} /></div>}
+      {showAddPerson && <div className="mb-5" style={reveal(2)}><AddPersonForm onSubmit={addPerson} onCancel={() => setShowAddPerson(false)} /></div>}
 
       {personDetail && (
         <>
           {/* Form readiness */}
           <section
             className="rounded-2xl p-4 sm:p-5 mb-5"
-            style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
+            style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)', ...reveal(3) }}
           >
             <div className="flex items-center justify-between mb-3.5">
               <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'hsl(var(--pt-muted))' }}>Form readiness</h2>
@@ -516,7 +518,7 @@ export default function CustomerDetail() {
           </section>
 
           {/* Classic sections: Personal / Identity / Contact / Education / Bank / Travel */}
-          <section className="mb-5">
+          <section className="mb-5" style={reveal(4)}>
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] mb-3 px-1" style={{ color: 'hsl(var(--pt-muted))' }}>Profile data</h2>
             <div className="space-y-3">
               {visibleSections.map((section) => {
@@ -646,7 +648,7 @@ export default function CustomerDetail() {
       )}
 
       {/* Documents */}
-      <section className="mb-6">
+      <section className="mb-6" style={reveal(5)}>
         <div className="flex items-center justify-between mb-3 px-1">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'hsl(var(--pt-muted))' }}>
             Documents{documents.length > 0 ? ` · ${documents.length}` : ''}

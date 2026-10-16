@@ -5,12 +5,14 @@ import { useAuthStore } from '../../features/auth/store';
 import PageHeader from '../../shared/PageHeader';
 import { VerifyModal, type VerifyStatus, type Channel } from '../../shared/VerifyBanner';
 import { toast } from '../../shared/toast';
+import { useReveal } from '../../shared/useReveal';
 
 export default function Settings() {
   const { user, logout, setUser } = useAuthStore();
   const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('loading');
   const [vstatus, setVstatus] = useState<VerifyStatus | null>(null);
   const [verifyChannel, setVerifyChannel] = useState<Channel | null>(null);
+  const { reveal } = useReveal();
 
   const loadVerify = useCallback(() => {
     api.get('/auth/verify-status', { skipErrorToast: true } as any).then(r => setVstatus(r.data)).catch(() => setVstatus(null));
@@ -76,9 +78,11 @@ export default function Settings() {
 
   return (
     <div className="max-w-lg">
-      <PageHeader title="Settings" />
+      <div style={reveal(0)}>
+        <PageHeader title="Settings" />
+      </div>
 
-      <section className="card mb-4">
+      <section className="card mb-4" style={reveal(1)}>
         <div className="flex items-center gap-2 mb-4">
           <User size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
           <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Account</h3>
@@ -116,7 +120,7 @@ export default function Settings() {
         </button>
       </section>
 
-      <section className="card mb-4">
+      <section className="card mb-4" style={reveal(2)}>
         <div className="flex items-center gap-2 mb-4">
           <SealCheck size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
           <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Contact verification</h3>
@@ -135,7 +139,7 @@ export default function Settings() {
         </div>
       </section>
 
-      <section className="card mb-4">
+      <section className="card mb-4" style={reveal(3)}>
         <div className="flex items-center gap-2 mb-4">
           <GoogleDriveLogo size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
           <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Google Drive</h3>
@@ -155,7 +159,7 @@ export default function Settings() {
       </section>
 
 
-      <section className="card">
+      <section className="card" style={reveal(4)}>
         <h3 className="text-sm font-semibold mb-3" style={{ color: 'hsl(var(--ink))' }}>Platform</h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between gap-3">

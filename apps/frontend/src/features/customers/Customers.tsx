@@ -4,6 +4,7 @@ import { Plus, Trash, MagnifyingGlass, Users } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import PageHeader from '../../shared/PageHeader';
 import { formatPhoneDisplay } from '../../shared/phone';
+import { useReveal } from '../../shared/useReveal';
 
 const INK = 'hsl(var(--pt-ink))';
 
@@ -20,11 +21,13 @@ export default function Customers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
+  const { reveal, trigger } = useReveal({ auto: false });
 
   const load = async () => {
     setLoading(true);
     try { const r = await api.get('/customers/households'); setHouseholds(r.data); } catch {}
     setLoading(false);
+    trigger();
   };
   useEffect(() => { load(); }, []);
 
@@ -70,18 +73,20 @@ export default function Customers() {
 
   return (
     <div className="max-w-3xl">
-      <PageHeader
-        title="Customers"
-        subtitle={`${households.length} household${households.length === 1 ? '' : 's'} in this workspace`}
-        actions={
-          <button onClick={() => setShowCreate(!showCreate)} className="btn-primary flex items-center gap-2">
-            <Plus size={16} /> New Customer
-          </button>
-        }
-      />
+      <div style={reveal(0)}>
+        <PageHeader
+          title="Customers"
+          subtitle={`${households.length} household${households.length === 1 ? '' : 's'} in this workspace`}
+          actions={
+            <button onClick={() => setShowCreate(!showCreate)} className="btn-primary flex items-center gap-2">
+              <Plus size={16} /> New Customer
+            </button>
+          }
+        />
+      </div>
 
       {showCreate && (
-        <form onSubmit={handleCreate} className="card mb-4 flex gap-3 items-end">
+        <form onSubmit={handleCreate} className="card mb-4 flex gap-3 items-end" style={reveal(1)}>
           <div className="flex-1">
             <label className="text-xs pt-muted mb-1 block">Name</label>
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input-field" placeholder="Customer name" />
@@ -94,7 +99,7 @@ export default function Customers() {
         </form>
       )}
 
-      <div className="relative mb-4">
+      <div className="relative mb-4" style={reveal(1)}>
         <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 pt-muted" />
         <input value={search} onChange={(e) => setSearch(e.target.value)} className="input-field pl-9" placeholder="Search by name or phone..." />
       </div>
@@ -104,14 +109,14 @@ export default function Customers() {
           {[1, 2, 3].map((i) => <div key={i} className="h-16 rounded-lg animate-pulse" style={{ background: 'hsl(var(--pt-secondary) / 0.6)' }} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16">
+        <div className="text-center py-16" style={reveal(2)}>
           <Users size={40} className="mx-auto pt-muted mb-3" />
           <p className="text-sm pt-muted">{search ? `No results for "${search}"` : 'No customers yet'}</p>
           {!search && <p className="text-xs pt-muted mt-1">Add your first customer to get started</p>}
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((h) => {
+          {filtered.map((h, hi) => {
             const qMatch = q
               ? h.persons.filter((p) =>
                   (p.name || '').toLowerCase().includes(q) ||
@@ -125,7 +130,12 @@ export default function Customers() {
               <div
                 key={h.phone}
                 className="rounded-2xl overflow-hidden"
-                style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }}
+                style={{
+                  background: 'hsl(var(--pt-card))',
+                  border: '1px solid hsl(var(--pt-border))',
+                  boxShadow: 'var(--shadow-paper)',
+                  ...reveal(2 + Math.min(hi, 8)),
+                }}
               >
                 <div className="px-4 pt-2.5 pb-1.5 flex items-center justify-between" style={{ background: 'hsl(var(--pt-secondary) / 0.45)' }}>
                   <p className="text-[11px] pt-muted font-medium">

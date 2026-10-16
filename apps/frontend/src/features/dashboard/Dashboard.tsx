@@ -6,8 +6,7 @@ import {
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { extensionBridge } from '../../shared/extensionBridge';
-
-const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
+import { REVEAL_EASE as EASE, useReveal } from '../../shared/useReveal';
 const INK = 'hsl(var(--pt-ink))';
 const MARIGOLD = 'hsl(var(--pt-marigold))';
 const MARIGOLD_DEEP = 'hsl(var(--pt-marigold-deep))';
@@ -34,17 +33,17 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
   const [search, setSearch] = useState('');
   const [formResults, setFormResults] = useState<FormResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const { reveal, trigger } = useReveal({ auto: false, stepMs: 60 });
 
   useEffect(() => {
     api.get('/dashboard/queue')
       .then(r => setQueue(r.data || []))
       .catch(() => {})
-      .finally(() => { setLoading(false); requestAnimationFrame(() => setMounted(true)); });
-  }, []);
+      .finally(() => { setLoading(false); trigger(); });
+  }, [trigger]);
 
   useEffect(() => {
     const q = search.trim();
@@ -65,12 +64,6 @@ export default function Dashboard() {
 
   const pending = useMemo(() => queue.filter(q => q.status === 'new' || q.status === 'pending'), [queue]);
   const ready = useMemo(() => queue.filter(q => q.status === 'ready'), [queue]);
-
-  const reveal = (i: number) => ({
-    transform: mounted ? 'translateY(0)' : 'translateY(14px)',
-    opacity: mounted ? 1 : 0,
-    transition: `transform 600ms ${EASE} ${i * 60}ms, opacity 600ms ${EASE} ${i * 60}ms`,
-  });
 
   const isSearching = search.trim().length > 0;
 

@@ -4,8 +4,7 @@ import {
   Signature, CurrencyInr, CheckCircle, Buildings
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
-
-const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
+import { REVEAL_EASE as EASE, useReveal } from '../../shared/useReveal';
 
 interface FormSpec { width: number; height: number; minKB: number; maxKB: number; format: string; bg: string; }
 interface Form {
@@ -46,27 +45,21 @@ export default function FormDirectory() {
   const [forms, setForms] = useState<Form[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Form | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const { reveal, trigger } = useReveal({ auto: false });
 
   const load = useCallback(async (q: string) => {
     setLoading(true);
     try { const r = await api.get(`/forms/search?q=${encodeURIComponent(q)}`); setForms(r.data); }
     catch {}
     setLoading(false);
-    requestAnimationFrame(() => setMounted(true));
-  }, []);
+    trigger();
+  }, [trigger]);
 
   useEffect(() => { load(''); }, [load]);
   useEffect(() => {
     const t = setTimeout(() => load(search), 250);
     return () => clearTimeout(t);
   }, [search, load]);
-
-  const reveal = (i: number) => ({
-    transform: mounted ? 'translateY(0)' : 'translateY(14px)',
-    opacity: mounted ? 1 : 0,
-    transition: `transform 600ms ${EASE} ${i * 50}ms, opacity 600ms ${EASE} ${i * 50}ms`,
-  });
 
   return (
     <div className="max-w-3xl mx-auto pt-4">

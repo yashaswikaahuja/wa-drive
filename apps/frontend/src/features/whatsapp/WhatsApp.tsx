@@ -7,6 +7,7 @@ import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/Extra
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
+import { useReveal } from '../../shared/useReveal';
 import {
   MediaViewer,
   displayName,
@@ -526,6 +527,7 @@ const ChatItem = memo(({ chat, selected, onClick, unreadCount, pinned, onPin }: 
 export default function WhatsApp() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { reveal, trigger } = useReveal({ auto: false });
   // true = show inbox immediately when last session was linked; null = spinner until
   // /whatsapp/status returns. Never start as false (that caused a 2s Connect flash).
   const [connected, setConnected] = useState<boolean | null>(() => {
@@ -1213,6 +1215,10 @@ export default function WhatsApp() {
     if (!userScrolledUpRef.current) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [reversedMessages.length]);
 
+  useEffect(() => {
+    if (connected !== null) trigger();
+  }, [connected, trigger]);
+
   if (connected === null) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -1226,7 +1232,7 @@ export default function WhatsApp() {
 
   if (!connected) {
     return (
-      <div className="h-full flex flex-col items-center justify-center max-w-md mx-auto text-center px-6">
+      <div className="h-full flex flex-col items-center justify-center max-w-md mx-auto text-center px-6" style={reveal(0)}>
         <div
           className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4"
           style={{ background: 'hsl(var(--whatsapp) / 0.12)', boxShadow: 'var(--shadow-paper)' }}
@@ -1288,7 +1294,7 @@ export default function WhatsApp() {
   }
 
   return (
-    <div className="h-full min-h-0 flex w-full min-w-0 overflow-hidden relative" style={{ background: 'hsl(var(--paper))' }}>
+    <div className="h-full min-h-0 flex w-full min-w-0 overflow-hidden relative" style={{ background: 'hsl(var(--paper))', ...reveal(0) }}>
       {/* Inbox — always flex-col; hide on phone when a chat is open */}
       <div
         className={`w-full md:w-80 border-r flex flex-col min-h-0 ${selectedChat ? 'hidden md:flex' : 'flex'}`}
