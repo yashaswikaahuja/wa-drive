@@ -38,5 +38,6 @@ test('session source cannot wipe auth after N reconnects or soft decrypt', () =>
   assert.match(src, /Replacing dead socket/);
   assert.match(src, /historyAfterSec/);
   assert.match(src, /ephemeralMessage/);
+  assert.match(src, /getMessage:/);
   assert.doesNotMatch(src, /shouldSyncHistoryMessage:\s*\(\)\s*=>\s*false/);
 });

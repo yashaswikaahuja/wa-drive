@@ -92,10 +92,11 @@ function createBaileysLogger(trackers: any) {
   // Level 'error' so decrypt failures (Baileys logger.error) still invoke hooks;
   // we swallow output and only feed the desync tracker.
   return pino({
-    level: 'error',
+    level: 'info',
     hooks: {
-      logMethod(inputArgs: unknown[]) {
+      logMethod(inputArgs: unknown[], method: any, level: number) {
         intercept(inputArgs);
+        if (level >= 30 && typeof method === 'function') method.apply(this, inputArgs);
       },
     },
   });
@@ -310,6 +311,17 @@ export function createSessionManager({
       desyncReauthDone: false,
     };
 
+    const recentMessages = new Map<string, any>();
+    const rememberMessage = (msg: any) => {
+      const id = msg?.key?.id;
+      if (!id || !msg?.message) return;
+      recentMessages.set(id, msg.message);
+      if (recentMessages.size > 400) {
+        const oldest = recentMessages.keys().next().value;
+        if (oldest) recentMessages.delete(oldest);
+      }
+    };
+
     const hardTracker = createDesyncTracker(HARD_DESYNC_RE, HARD_DESYNC_HIT_THRESHOLD, (reason: any) => {
       forceReauthWhileConnected(reason).catch((e) =>
         console.error(`[WA:${workspaceId.slice(0, 8)}] Desync re-auth failed:`, e.message),
@@ -363,6 +375,8 @@ export function createSessionManager({
       // @ts-expect-error TS(2322): Type '{ creds: any; keys: { get: (type: string, id... Remove this comment to see the full error message
       auth: state,
       logger: createBaileysLogger(hardTracker),
+      // Required so a failed decrypt can be retried and the sender re-encrypts.
+      getMessage: async (key: any) => recentMessages.get(key?.id) || undefined,
       printQRInTerminal: false,
       markOnlineOnConnect: false,
       browser: ['CyberControl', 'Chrome', '1.0'],
@@ -536,6 +550,13 @@ export function createSessionManager({
     sock.ev.on('messages.upsert', async ({ messages }) => {
       for (const msg of messages) {
         if (msg.key.fromMe) continue;
+        rememberMessage(msg);
+        if (!msg.message && msg.messageStubType) {
+          console.warn(
+            `[WA:${workspaceId.slice(0, 8)}] Undecryptable message from ${msg.key.remoteJid || '?'} stub=${msg.messageStubType}`,
+          );
+          continue;
+        }
         const innerMsg = unwrapMessage(msg.message);
         const hasMedia = innerMsg.imageMessage || innerMsg.documentMessage;
         if (!hasMedia) continue;
