@@ -23,7 +23,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"console.log('[wa-auth] no package tests yet')\""
+    "test": "node --experimental-strip-types --test src/postgres.test.ts"
   },
   "dependencies": {
     "baileys": "^6.7.16",
