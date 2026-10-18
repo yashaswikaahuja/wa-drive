@@ -10,13 +10,23 @@ import { Boom } from '@hapi/boom';
 import { pino } from 'pino';
 import { usePostgresAuthState, clearPostgresAuthState } from '@cybercontrol/wa-auth';
 import { downloadMedia, getExtFromMsg } from './media.js';
-import { HARD_DESYNC_RE, SOFT_CRYPTO_RE, isHardDesync, shouldWipeAuthKeys } from './auth-wipe-policy.js';
+import { HARD_DESYNC_RE, isHardDesync, shouldWipeAuthKeys } from './auth-wipe-policy.js';
 
-// Hard Signal corruption may delete the saved login. Soft decrypt noise must not.
+// Hard Signal corruption may delete the saved login. A single old message that
+// cannot be decrypted must not close the socket.
 const DESYNC_WINDOW_MS = 60_000;
 const HARD_DESYNC_HIT_THRESHOLD = 3;
-const SOFT_CRYPTO_HIT_THRESHOLD = 25;
-const MEDIA_FAIL_THRESHOLD = 8;
+const CONNECT_GRACE_MS = 45_000;
+
+function isSocketLive(session: any) {
+  if (!session?.socket) return false;
+  if (session.status === 'qr_pending') return true;
+  const ws = session.socket.ws;
+  const open = ws?.isOpen === true || ws?.readyState === 1;
+  if (session.status === 'connected' && open) return true;
+  const age = Date.now() - (session.startedAt || 0);
+  return session.status === 'connecting' && age < CONNECT_GRACE_MS;
+}
 
 function createDesyncTracker(matchRe: RegExp, threshold: number, onThreshold: any) {
   const hits: any = [];
@@ -209,9 +219,21 @@ export function createSessionManager({
   }
 
   async function startSession(workspaceId: any) {
-    if (sessions.has(workspaceId) && sessions.get(workspaceId).socket) {
+    const existing = sessions.get(workspaceId);
+    if (isSocketLive(existing)) {
       console.log(`[WA:${workspaceId.slice(0, 8)}] Session already active`);
       return;
+    }
+    if (existing?.socket) {
+      console.warn(`[WA:${workspaceId.slice(0, 8)}] Replacing dead socket (status=${existing.status})`);
+      existing.replacing = true;
+      existing.stopping = true;
+      try { existing.socket.end(undefined); } catch { /* already closed */ }
+      existing.socket = null;
+      if (existing.reconnectTimer) {
+        clearTimeout(existing.reconnectTimer);
+        existing.reconnectTimer = null;
+      }
     }
 
     const sessionDir = path.join(AUTH_DIR, workspaceId);
@@ -246,20 +268,16 @@ export function createSessionManager({
       lastUploadAt: prior?.lastUploadAt || null,
       lastDesyncAt: prior?.lastDesyncAt || null,
       failedMediaDownloads: 0,
+      startedAt: Date.now(),
       stopping: false,
+      replacing: false,
       forcingReauth: false,
-      softRestarting: false,
       desyncReauthDone: false,
     };
 
     const hardTracker = createDesyncTracker(HARD_DESYNC_RE, HARD_DESYNC_HIT_THRESHOLD, (reason: any) => {
       forceReauthWhileConnected(reason).catch((e) =>
         console.error(`[WA:${workspaceId.slice(0, 8)}] Desync re-auth failed:`, e.message),
-      );
-    });
-    const softTracker = createDesyncTracker(SOFT_CRYPTO_RE, SOFT_CRYPTO_HIT_THRESHOLD, (reason: any) => {
-      softRestartWhileConnected(reason).catch((e) =>
-        console.error(`[WA:${workspaceId.slice(0, 8)}] Soft restart failed:`, e.message),
       );
     });
 
@@ -297,27 +315,6 @@ export function createSessionManager({
       session.reconnectAttempts = 0;
       session.status = 'qr_pending';
       hardTracker.reset();
-      softTracker.reset();
-      try {
-        // @ts-expect-error TS(2339): Property 'end' does not exist on type 'never'.
-        session.socket?.end?.(undefined);
-      } catch {
-        /* ignore */
-      }
-    }
-
-    /** Drop the socket and reconnect with the same saved login. Never deletes keys. */
-    async function softRestartWhileConnected(reason: any) {
-      if (!session || session.forcingReauth || session.stopping || session.softRestarting) return;
-      if (session.status !== 'connected' && session.status !== 'connecting') return;
-      session.softRestarting = true;
-      session.lastDisconnectReason = `soft_restart:${reason}`;
-      session.lastDisconnectAt = new Date().toISOString();
-      console.warn(
-        `[WA:${workspaceId.slice(0, 8)}] Soft restart — keeping auth keys (${reason})`,
-      );
-      hardTracker.reset();
-      softTracker.reset();
       try {
         // @ts-expect-error TS(2339): Property 'end' does not exist on type 'never'.
         session.socket?.end?.(undefined);
@@ -330,12 +327,14 @@ export function createSessionManager({
       version,
       // @ts-expect-error TS(2322): Type '{ creds: any; keys: { get: (type: string, id... Remove this comment to see the full error message
       auth: state,
-      logger: createBaileysLogger([hardTracker, softTracker]),
+      logger: createBaileysLogger(hardTracker),
       printQRInTerminal: false,
       markOnlineOnConnect: false,
       browser: ['CyberControl', 'Chrome', '1.0'],
-      syncFullHistory: true,
-      shouldSyncHistoryMessage: () => true,
+      // Old history has no Signal session here. Pulling it caused
+      // "No matching sessions found" and a restart loop that dropped the login.
+      syncFullHistory: false,
+      shouldSyncHistoryMessage: () => false,
     });
     // @ts-expect-error TS(2322): Type '{ logger: ILogger; getOrderDetails: (orderId... Remove this comment to see the full error message
     session.socket = sock;
@@ -379,9 +378,7 @@ export function createSessionManager({
         session.forcingReauth = false;
         session.desyncReauthDone = false;
         session.failedMediaDownloads = 0;
-        session.softRestarting = false;
         hardTracker.reset();
-        softTracker.reset();
         if (session.reconnectTimer) {
           clearTimeout(session.reconnectTimer);
           session.reconnectTimer = null;
@@ -410,6 +407,7 @@ export function createSessionManager({
       }
 
       if (connection === 'close') {
+        if (session.replacing) return;
         const disconnectError = lastDisconnect?.error;
         const reason = new Boom(disconnectError)?.output?.statusCode;
         const errorMessage = String(disconnectError?.message || disconnectError || '');
@@ -591,14 +589,7 @@ export function createSessionManager({
         try {
           const buffer = await downloadMedia(sock, msg);
           if (!buffer) {
-            session.failedMediaDownloads = (session.failedMediaDownloads || 0) + 1;
-            console.warn(
-              `[WA:${workspaceId.slice(0, 8)}] Media download empty (${session.failedMediaDownloads})`,
-            );
-            if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
-              session.failedMediaDownloads = 0;
-              await softRestartWhileConnected('repeated media download failure while connected');
-            }
+            console.warn(`[WA:${workspaceId.slice(0, 8)}] Media download empty — message skipped`);
             continue;
           }
 
@@ -613,12 +604,6 @@ export function createSessionManager({
           const message = e instanceof Error ? e.message : String(e);
           console.error(`[WA:${workspaceId.slice(0, 8)}] Media error:`, message);
           hardTracker.note(message);
-          softTracker.note(message);
-          session.failedMediaDownloads = (session.failedMediaDownloads || 0) + 1;
-          if (session.failedMediaDownloads >= MEDIA_FAIL_THRESHOLD) {
-            session.failedMediaDownloads = 0;
-            await softRestartWhileConnected(`repeated media error: ${message}`);
-          }
         }
       }
     });

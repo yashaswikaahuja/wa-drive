@@ -32,4 +32,8 @@ test('session source cannot wipe auth after N reconnects or soft decrypt', () =>
   assert.doesNotMatch(src, /failed to decrypt message\|invalidmessageexception\|bad mac\|signal\.\*desync\|desync/i);
   const wipeCalls = src.split('await clearPostgresAuthState').length - 1;
   assert.equal(wipeCalls, 3, `await clearPostgresAuthState appears ${wipeCalls} times`);
+  assert.doesNotMatch(src, /softRestartWhileConnected/);
+  assert.doesNotMatch(src, /syncFullHistory:\s*true/);
+  assert.match(src, /isSocketLive/);
+  assert.match(src, /Replacing dead socket/);
 });
