@@ -28,6 +28,25 @@ function isSocketLive(session: any) {
   return session.status === 'connecting' && age < CONNECT_GRACE_MS;
 }
 
+/** Disappearing chats wrap the real image inside ephemeralMessage. */
+function unwrapMessage(message: any) {
+  let current = message || {};
+  for (let i = 0; i < 6; i++) {
+    const inner =
+      current.ephemeralMessage?.message ||
+      current.viewOnceMessage?.message ||
+      current.viewOnceMessageV2?.message ||
+      current.viewOnceMessageV2Extension?.message ||
+      current.documentWithCaptionMessage?.message ||
+      current.editedMessage?.message ||
+      current.associatedChildMessage?.message ||
+      null;
+    if (!inner) break;
+    current = inner;
+  }
+  return current;
+}
+
 function createDesyncTracker(matchRe: RegExp, threshold: number, onThreshold: any) {
   const hits: any = [];
   return {
@@ -246,6 +265,22 @@ export function createSessionManager({
       ({ state, saveCreds } = await useMultiFileAuthState(sessionDir));
     }
     const { version } = await fetchLatestBaileysVersion();
+    // Catch images that arrived while the socket was dead, without replaying
+    // the whole archive (that decrypt storm is what dropped the connection).
+    let historyAfterSec = Math.floor(Date.now() / 1000) - 3 * 24 * 60 * 60;
+    if (pgPool) {
+      try {
+        const latest = await pgPool.query(
+          `SELECT extract(epoch from max(uploaded_at))::bigint AS ts
+           FROM drive_files WHERE workspace_id = $1 AND source = 'whatsapp'`,
+          [workspaceId],
+        );
+        const ts = Number(latest.rows[0]?.ts || 0);
+        if (ts > 0) historyAfterSec = ts - 120;
+      } catch {
+        /* table missing or no rows — keep the 3-day window */
+      }
+    }
 
     const prior = sessions.get(workspaceId);
     if (prior?.reconnectTimer) {
@@ -331,10 +366,13 @@ export function createSessionManager({
       printQRInTerminal: false,
       markOnlineOnConnect: false,
       browser: ['CyberControl', 'Chrome', '1.0'],
-      // Old history has no Signal session here. Pulling it caused
-      // "No matching sessions found" and a restart loop that dropped the login.
+      // Full archive caused "No matching sessions found" and a restart loop.
+      // Only messages newer than the last saved WhatsApp file are accepted.
       syncFullHistory: false,
-      shouldSyncHistoryMessage: () => false,
+      shouldSyncHistoryMessage: (msg: any) => {
+        const ts = Number(msg?.messageTimestamp || 0);
+        return ts >= historyAfterSec;
+      },
     });
     // @ts-expect-error TS(2322): Type '{ logger: ILogger; getOrderDetails: (orderId... Remove this comment to see the full error message
     session.socket = sock;
@@ -498,16 +536,8 @@ export function createSessionManager({
     sock.ev.on('messages.upsert', async ({ messages }) => {
       for (const msg of messages) {
         if (msg.key.fromMe) continue;
-        const innerMsg =
-          msg.message?.viewOnceMessage?.message ||
-          msg.message?.viewOnceMessageV2?.message ||
-          msg.message?.documentWithCaptionMessage?.message ||
-          msg.message ||
-          {};
-        const hasMedia =
-          innerMsg.imageMessage ||
-          innerMsg.documentMessage ||
-          msg.message?.documentWithCaptionMessage?.message?.documentMessage;
+        const innerMsg = unwrapMessage(msg.message);
+        const hasMedia = innerMsg.imageMessage || innerMsg.documentMessage;
         if (!hasMedia) continue;
 
         const rawJid = msg.key.remoteJid || '';

@@ -8,13 +8,26 @@ export async function downloadMedia(sock: any, msg: any) {
   }
 }
 
+function unwrapMessage(message: any) {
+  let current = message || {};
+  for (let i = 0; i < 6; i++) {
+    const inner =
+      current.ephemeralMessage?.message ||
+      current.viewOnceMessage?.message ||
+      current.viewOnceMessageV2?.message ||
+      current.viewOnceMessageV2Extension?.message ||
+      current.documentWithCaptionMessage?.message ||
+      current.editedMessage?.message ||
+      current.associatedChildMessage?.message ||
+      null;
+    if (!inner) break;
+    current = inner;
+  }
+  return current;
+}
+
 export function getExtFromMsg(msg: any) {
-  const m =
-    msg.message?.viewOnceMessage?.message ||
-    msg.message?.viewOnceMessageV2?.message ||
-    msg.message?.documentWithCaptionMessage?.message ||
-    msg.message ||
-    {};
+  const m = unwrapMessage(msg.message);
   if (m.imageMessage) return 'jpg';
   if (m.videoMessage) return 'mp4';
   if (m.audioMessage) return 'ogg';
