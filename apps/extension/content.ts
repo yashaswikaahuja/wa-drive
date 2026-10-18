@@ -41,6 +41,7 @@
   var ALLOWED_TYPES = [
     'CONNECT',
     'PING',
+    'SET_THEME',
     'OPEN_AND_DISPATCH',
     'DISPATCH_JOB',
     'DISPATCH_JOB_DIRECT',

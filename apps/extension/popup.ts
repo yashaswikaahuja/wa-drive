@@ -33,6 +33,46 @@ const FILL_BTN_LABEL = 'Fill this form';
 versionEl.textContent = 'v' + VERSION;
 
 const HUB_FALLBACK = 'https://app.cybercontrol.fun';
+const THEME_KEY = 'cc-theme';
+
+function resolveThemePref(pref) {
+  if (pref === 'light' || pref === 'dark') return pref;
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function applyPopupTheme(pref) {
+  const resolved = resolveThemePref(pref || 'system');
+  document.documentElement.dataset.theme = resolved;
+  document.documentElement.style.colorScheme = resolved;
+  return resolved;
+}
+
+async function initPopupTheme() {
+  try {
+    const data = await chrome.storage.local.get(THEME_KEY);
+    applyPopupTheme(data[THEME_KEY]);
+  } catch {
+    applyPopupTheme('system');
+  }
+  try {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = async () => {
+      const data = await chrome.storage.local.get(THEME_KEY);
+      if ((data[THEME_KEY] || 'system') === 'system') applyPopupTheme('system');
+    };
+    if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onChange);
+    else if (typeof mq.addListener === 'function') mq.addListener(onChange);
+  } catch { /* ignore */ }
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes[THEME_KEY]) return;
+  applyPopupTheme(changes[THEME_KEY].newValue);
+});
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -611,6 +651,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 async function init() {
   document.getElementById('ver').textContent = 'v' + VERSION;
+  await initPopupTheme();
   updateFillHint();
   syncActivePage();
   await loadRecents();

@@ -54,7 +54,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     console.warn('[CC] rejected ' + msg.type + ' from untrusted:', ccSenderOrigin(sender));
     sendResponse({ ok: false, error: 'untrusted sender' }); return true;
   }
-  if (msg.type === 'CONNECT' || msg.type === 'PING' || msg.type === 'OPEN_AND_DISPATCH') {
+  if (msg.type === 'CONNECT' || msg.type === 'PING' || msg.type === 'SET_THEME' || msg.type === 'OPEN_AND_DISPATCH') {
     handleBridgeMessage(msg, sendResponse, trusted); return true;
   }
   if (msg.type === 'TEACH_JOB') {

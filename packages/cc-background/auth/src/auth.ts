@@ -40,7 +40,7 @@ function resolveTrustedFrontendOrigins() {
 }
 var CC_TRUSTED_FRONTEND_ORIGINS = resolveTrustedFrontendOrigins();
 
-var CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
+var CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, SET_THEME: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 
 /** Phase 4.1: always false — legacy paths permanently disabled. */
 async function isLegacyClientFillAllowed() {

@@ -31,7 +31,7 @@ function resolveTrustedFrontendOrigins() {
   return origins;
 }
 var CC_TRUSTED_FRONTEND_ORIGINS = resolveTrustedFrontendOrigins();
-var CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
+var CC_TRUSTED_ONLY_TYPES = { CONNECT: 1, SET_THEME: 1, OPEN_AND_DISPATCH: 1, DISPATCH_JOB_DIRECT: 1 };
 async function isLegacyClientFillAllowed() {
   return false;
 }
@@ -260,14 +260,32 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
     return;
   }
   if (msg.type === "CONNECT") {
-    const { token, refreshToken, user, backendUrl } = msg;
+    const { token, refreshToken, user, backendUrl, theme } = msg;
     if (!token || !backendUrl) {
       sendResponse({ ok: false, error: "missing token or backendUrl" });
       return;
     }
-    chrome.storage.local.set({ accessToken: token, refreshToken: refreshToken || null, user: user || null, backendUrl }, () => {
+    const payload = {
+      accessToken: token,
+      refreshToken: refreshToken || null,
+      user: user || null,
+      backendUrl
+    };
+    if (theme === "light" || theme === "dark" || theme === "system") payload["cc-theme"] = theme;
+    chrome.storage.local.set(payload, () => {
       ccEnsureWss("CONNECT");
       sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
+    return;
+  }
+  if (msg.type === "SET_THEME") {
+    const theme = msg.theme;
+    if (theme !== "light" && theme !== "dark" && theme !== "system") {
+      sendResponse({ ok: false, error: "invalid theme" });
+      return;
+    }
+    chrome.storage.local.set({ "cc-theme": theme }, () => {
+      sendResponse({ ok: true, theme });
     });
     return;
   }
@@ -306,19 +324,32 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === "CONNECT") {
-    const { token, refreshToken, user, backendUrl } = msg;
+    const { token, refreshToken, user, backendUrl, theme } = msg;
     if (!token || !backendUrl) {
       sendResponse({ ok: false, error: "missing token or backendUrl" });
       return;
     }
-    chrome.storage.local.set({
+    const payload = {
       accessToken: token,
       refreshToken: refreshToken || null,
       user: user || null,
       backendUrl
-    }, () => {
+    };
+    if (theme === "light" || theme === "dark" || theme === "system") payload["cc-theme"] = theme;
+    chrome.storage.local.set(payload, () => {
       ccEnsureWss("CONNECT_EXTERNAL");
       sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
+    return true;
+  }
+  if (msg.type === "SET_THEME") {
+    const theme = msg.theme;
+    if (theme !== "light" && theme !== "dark" && theme !== "system") {
+      sendResponse({ ok: false, error: "invalid theme" });
+      return true;
+    }
+    chrome.storage.local.set({ "cc-theme": theme }, () => {
+      sendResponse({ ok: true, theme });
     });
     return true;
   }
@@ -1204,7 +1235,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: false, error: "untrusted sender" });
     return true;
   }
-  if (msg.type === "CONNECT" || msg.type === "PING" || msg.type === "OPEN_AND_DISPATCH") {
+  if (msg.type === "CONNECT" || msg.type === "PING" || msg.type === "SET_THEME" || msg.type === "OPEN_AND_DISPATCH") {
     handleBridgeMessage(msg, sendResponse, trusted);
     return true;
   }

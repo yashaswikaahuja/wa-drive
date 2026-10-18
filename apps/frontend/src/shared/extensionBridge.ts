@@ -68,12 +68,18 @@ async function attemptConnect() {
   _retryAttempt++;
   // First attempt: 10s timeout (cold SW). Subsequent: 5s.
   const timeout = _retryAttempt === 1 ? 10000 : 5000;
+  let theme: 'light' | 'dark' | 'system' = 'system';
+  try {
+    const t = localStorage.getItem('cc-theme');
+    if (t === 'light' || t === 'dark' || t === 'system') theme = t;
+  } catch { /* private mode */ }
   const result = await sendToExtension({
     type: 'CONNECT',
     token: _currentPayload.accessToken,
     refreshToken: _currentPayload.refreshToken,
     user: _currentPayload.user,
     backendUrl: _currentPayload.backendUrl,
+    theme,
   }, timeout);
 
   if (result.ok) {
@@ -135,5 +141,10 @@ export const extensionBridge = {
 
   async openAndDispatch(envelope: any, formUrl: string): Promise<{ ok: boolean; tabId?: number; error?: string }> {
     return sendToExtension({ type: 'OPEN_AND_DISPATCH', envelope, formUrl }, 8000);
+  },
+
+  /** Push Hub theme preference into chrome.storage.local (popup follows). */
+  async setTheme(theme: 'light' | 'dark' | 'system'): Promise<{ ok: boolean; error?: string }> {
+    return sendToExtension({ type: 'SET_THEME', theme }, 3000);
   },
 };

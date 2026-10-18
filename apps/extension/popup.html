@@ -4,6 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CyberControl Fill</title>
+  <!-- Apply Hub theme before paint (chrome.storage.local cc-theme). -->
+  <script>
+    (function () {
+      function resolve(pref) {
+        if (pref === 'light' || pref === 'dark') return pref;
+        try {
+          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        } catch (e) { return 'light'; }
+      }
+      function apply(pref) {
+        var resolved = resolve(pref || 'system');
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.style.colorScheme = resolved;
+      }
+      try {
+        chrome.storage.local.get('cc-theme', function (data) {
+          apply(data && data['cc-theme']);
+        });
+      } catch (e) { apply('system'); }
+    })();
+  </script>
   <style>
     :root {
       --pt-bg: 42 38% 94%;
@@ -15,15 +36,43 @@
       --pt-border-soft: 38 20% 88%;
       --pt-secondary: 38 30% 90%;
       --pt-paper-deep: 38 30% 88%;
+      --pt-chrome: 220 45% 10%;
       --pt-marigold: 27 95% 55%;
       --pt-marigold-deep: 22 90% 48%;
       --pt-success: 158 60% 32%;
       --pt-warning: 35 92% 42%;
       --pt-danger: 0 65% 48%;
+      --dot-a: hsl(30 25% 78% / 0.35);
+      --dot-b: hsl(30 25% 70% / 0.18);
+      --footer-shadow: 0 -10px 24px -18px hsl(30 30% 20% / 0.35);
+      --search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23555'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2' d='m21 21-4.3-4.3m1.3-5.2a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z'/%3E%3C/svg%3E");
       --radius: 12px;
       --gutter: 12px;
       --stack: 8px;
       --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* Matches Hub Settings theme (cc-theme → chrome.storage.local). */
+    html[data-theme="dark"] {
+      --pt-bg: 220 28% 8%;
+      --pt-ink: 38 28% 94%;
+      --pt-ink-soft: 35 16% 78%;
+      --pt-muted: 35 12% 62%;
+      --pt-card: 220 24% 12%;
+      --pt-border: 220 16% 22%;
+      --pt-border-soft: 220 14% 18%;
+      --pt-secondary: 220 20% 16%;
+      --pt-paper-deep: 220 26% 11%;
+      --pt-chrome: 220 40% 7%;
+      --pt-marigold: 28 95% 58%;
+      --pt-marigold-deep: 28 92% 62%;
+      --pt-success: 158 55% 48%;
+      --pt-warning: 35 90% 58%;
+      --pt-danger: 358 75% 62%;
+      --dot-a: hsl(38 30% 90% / 0.06);
+      --dot-b: hsl(38 30% 90% / 0.03);
+      --footer-shadow: 0 -10px 24px -18px hsl(0 0% 0% / 0.55);
+      --search-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23a39a8c'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2' d='m21 21-4.3-4.3m1.3-5.2a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z'/%3E%3C/svg%3E");
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,8 +93,8 @@
       letter-spacing: -0.01em;
       background-color: hsl(var(--pt-bg));
       background-image:
-        radial-gradient(hsl(30 25% 78% / 0.35) 1px, transparent 1px),
-        radial-gradient(hsl(30 25% 70% / 0.18) 1px, transparent 1px);
+        radial-gradient(var(--dot-a) 1px, transparent 1px),
+        radial-gradient(var(--dot-b) 1px, transparent 1px);
       background-size: 22px 22px, 7px 7px;
       background-position: 0 0, 3px 5px;
     }
@@ -84,7 +133,7 @@
       border-radius: 8px;
       display: grid;
       place-items: center;
-      background: hsl(var(--pt-ink));
+      background: hsl(var(--pt-chrome));
       flex-shrink: 0;
     }
     .brand-mark svg { display: block; width: 15px; height: 15px; }
@@ -152,7 +201,7 @@
       transform: translateY(-50%);
       opacity: 0.45;
       background: no-repeat center / contain;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23555'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2.2' d='m21 21-4.3-4.3m1.3-5.2a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z'/%3E%3C/svg%3E");
+      background-image: var(--search-icon);
       pointer-events: none;
       z-index: 1;
     }
@@ -172,7 +221,7 @@
     #search:focus {
       border-color: hsl(var(--pt-marigold));
       box-shadow: 0 0 0 3px hsl(var(--pt-marigold) / 0.18);
-      background: #fff;
+      background: hsl(var(--pt-card));
     }
     #search::placeholder { color: hsl(var(--pt-muted)); }
     #search-clear {
@@ -571,7 +620,7 @@
       gap: 6px;
       background: hsl(var(--pt-bg) / 0.92);
       border-top: 1px solid hsl(var(--pt-border));
-      box-shadow: 0 -10px 24px -18px hsl(30 30% 20% / 0.35);
+      box-shadow: var(--footer-shadow);
     }
     .fill-hint {
       font-size: 11px;

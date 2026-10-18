@@ -29,18 +29,28 @@ export function applyTheme(pref: ThemePreference = getThemePreference()): Resolv
   return resolved;
 }
 
+function pushThemeToExtension(pref: ThemePreference): void {
+  // Best-effort — Hub still works when the extension is offline.
+  void import('./extensionBridge')
+    .then(({ extensionBridge }) => extensionBridge.setTheme(pref))
+    .catch(() => {});
+}
+
 export function setThemePreference(pref: ThemePreference): ResolvedTheme {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, pref);
   } catch { /* private mode */ }
   const resolved = applyTheme(pref);
   window.dispatchEvent(new CustomEvent('cc-theme', { detail: { preference: pref, resolved } }));
+  pushThemeToExtension(pref);
   return resolved;
 }
 
 /** Call once at boot. Keeps system preference in sync when mode is system. */
 export function initTheme(): void {
-  applyTheme(getThemePreference());
+  const pref = getThemePreference();
+  applyTheme(pref);
+  pushThemeToExtension(pref);
   try {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => {

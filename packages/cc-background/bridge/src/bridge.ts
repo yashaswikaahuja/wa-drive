@@ -35,11 +35,29 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
     return;
   }
   if (msg.type === 'CONNECT') {
-    const { token, refreshToken, user, backendUrl } = msg;
+    const { token, refreshToken, user, backendUrl, theme } = msg;
     if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
-    chrome.storage.local.set({ accessToken: token, refreshToken: refreshToken || null, user: user || null, backendUrl }, () => {
+    const payload: Record<string, unknown> = {
+      accessToken: token,
+      refreshToken: refreshToken || null,
+      user: user || null,
+      backendUrl,
+    };
+    if (theme === 'light' || theme === 'dark' || theme === 'system') payload['cc-theme'] = theme;
+    chrome.storage.local.set(payload, () => {
       ccEnsureWss('CONNECT');
       sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
+    return;
+  }
+  if (msg.type === 'SET_THEME') {
+    const theme = msg.theme;
+    if (theme !== 'light' && theme !== 'dark' && theme !== 'system') {
+      sendResponse({ ok: false, error: 'invalid theme' });
+      return;
+    }
+    chrome.storage.local.set({ 'cc-theme': theme }, () => {
+      sendResponse({ ok: true, theme });
     });
     return;
   }
@@ -77,16 +95,29 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'CONNECT') {
-    const { token, refreshToken, user, backendUrl } = msg;
+    const { token, refreshToken, user, backendUrl, theme } = msg;
     if (!token || !backendUrl) { sendResponse({ ok: false, error: 'missing token or backendUrl' }); return; }
-    chrome.storage.local.set({
+    const payload: Record<string, unknown> = {
       accessToken: token,
       refreshToken: refreshToken || null,
       user: user || null,
       backendUrl,
-    }, () => {
+    };
+    if (theme === 'light' || theme === 'dark' || theme === 'system') payload['cc-theme'] = theme;
+    chrome.storage.local.set(payload, () => {
       ccEnsureWss('CONNECT_EXTERNAL');
       sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    });
+    return true;
+  }
+  if (msg.type === 'SET_THEME') {
+    const theme = msg.theme;
+    if (theme !== 'light' && theme !== 'dark' && theme !== 'system') {
+      sendResponse({ ok: false, error: 'invalid theme' });
+      return true;
+    }
+    chrome.storage.local.set({ 'cc-theme': theme }, () => {
+      sendResponse({ ok: true, theme });
     });
     return true;
   }
