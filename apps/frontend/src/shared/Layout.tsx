@@ -102,7 +102,7 @@ const SidebarBody = memo(({ user, logout, expanded, pinned, onTogglePin, onNavig
     <>
       <div
         className={`h-14 flex items-center gap-2.5 px-4 border-b shrink-0 ${expanded ? '' : 'px-0 justify-center'}`}
-        style={{ borderColor: 'hsl(var(--pt-border))', background: 'linear-gradient(180deg, hsl(var(--ink)) 0%, hsl(220 40% 14%) 100%)' }}
+        style={{ borderColor: 'hsl(var(--pt-border))', background: 'linear-gradient(180deg, hsl(var(--chrome)) 0%, hsl(var(--chrome-deep)) 100%)' }}
       >
         <span className="grid h-8 w-8 place-items-center rounded-lg shrink-0" style={{ background: 'hsl(var(--marigold) / 0.18)' }}>
           <Lightning size={16} weight="fill" style={{ color: 'hsl(var(--marigold))' }} />
@@ -222,7 +222,7 @@ export default function Layout() {
       {/* Mobile top bar — ink strip like landing header (sticky so it cannot scroll away and leave a gap above fixed panes) */}
       <div
         className="md:hidden sticky top-0 z-30 flex items-center justify-between h-12 px-3 border-b shrink-0"
-        style={{ borderColor: 'hsl(var(--ink) / 0.35)', background: 'hsl(var(--ink))' }}
+        style={{ borderColor: 'hsl(var(--chrome) / 0.55)', background: 'hsl(var(--chrome))' }}
       >
         <button onClick={() => setMobileOpen(true)} className="pt-toolbtn text-white/90 hover:text-white" aria-label="Open menu" style={{ color: 'rgba(255,255,255,0.9)' }}>
           <List size={20} />

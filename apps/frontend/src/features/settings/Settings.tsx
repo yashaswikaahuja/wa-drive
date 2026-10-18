@@ -1,17 +1,32 @@
 import { useState, useEffect, useCallback } from 'react';
-import { User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck, WarningCircle, EnvelopeSimple, Phone, PencilSimple, Key } from '@phosphor-icons/react';
+import {
+  User, GoogleDriveLogo, SignOut, CloudCheck, CloudSlash, Spinner, SealCheck,
+  WarningCircle, EnvelopeSimple, Phone, PencilSimple, Key, MoonStars, Sun, Desktop,
+} from '@phosphor-icons/react';
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
 import { useAuthStore } from '../../features/auth/store';
 import PageHeader from '../../shared/PageHeader';
 import { VerifyModal, type VerifyStatus, type Channel } from '../../shared/VerifyBanner';
 import { toast } from '../../shared/toast';
 import { useReveal } from '../../shared/useReveal';
+import {
+  getThemePreference,
+  setThemePreference,
+  type ThemePreference,
+} from '../../shared/theme';
+
+const THEME_OPTIONS: { id: ThemePreference; label: string; Icon: typeof Sun }[] = [
+  { id: 'light', label: 'Light', Icon: Sun },
+  { id: 'dark', label: 'Dark', Icon: MoonStars },
+  { id: 'system', label: 'System', Icon: Desktop },
+];
 
 export default function Settings() {
   const { user, logout, setUser } = useAuthStore();
   const [driveStatus, setDriveStatus] = useState<'disconnected' | 'connected' | 'loading'>('loading');
   const [vstatus, setVstatus] = useState<VerifyStatus | null>(null);
   const [verifyChannel, setVerifyChannel] = useState<Channel | null>(null);
+  const [themePref, setThemePref] = useState<ThemePreference>(() => getThemePreference());
   const { reveal } = useReveal();
 
   const loadVerify = useCallback(() => {
@@ -141,6 +156,56 @@ export default function Settings() {
 
       <section className="card mb-4" style={reveal(3)}>
         <div className="flex items-center gap-2 mb-4">
+          <MoonStars size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
+          <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Theme</h3>
+        </div>
+        <p className="text-xs mb-3" style={{ color: 'hsl(var(--pt-muted))' }}>
+          Choose light, dark, or match this device.
+        </p>
+        <div
+          className="grid grid-cols-3 gap-1.5 p-1 rounded-xl"
+          style={{ background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
+          role="radiogroup"
+          aria-label="Theme"
+        >
+          {THEME_OPTIONS.map(({ id, label, Icon }) => {
+            const active = themePref === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => {
+                  setThemePref(id);
+                  setThemePreference(id);
+                }}
+                className="flex flex-col items-center gap-1.5 rounded-lg px-2 py-2.5 text-[12px] font-semibold transition-all"
+                style={
+                  active
+                    ? {
+                        background: 'hsl(var(--pt-card))',
+                        color: 'hsl(var(--ink))',
+                        boxShadow: 'var(--shadow-paper)',
+                        border: '1px solid hsl(var(--marigold) / 0.35)',
+                      }
+                    : {
+                        background: 'transparent',
+                        color: 'hsl(var(--pt-muted))',
+                        border: '1px solid transparent',
+                      }
+                }
+              >
+                <Icon size={18} weight={active ? 'fill' : 'regular'} style={{ color: active ? 'hsl(var(--marigold-deep))' : undefined }} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="card mb-4" style={reveal(4)}>
+        <div className="flex items-center gap-2 mb-4">
           <GoogleDriveLogo size={16} style={{ color: 'hsl(var(--pt-muted))' }} />
           <h3 className="text-sm font-semibold" style={{ color: 'hsl(var(--ink))' }}>Google Drive</h3>
         </div>
@@ -158,8 +223,7 @@ export default function Settings() {
         </div>
       </section>
 
-
-      <section className="card" style={reveal(4)}>
+      <section className="card" style={reveal(5)}>
         <h3 className="text-sm font-semibold mb-3" style={{ color: 'hsl(var(--ink))' }}>Platform</h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between gap-3">

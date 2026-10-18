@@ -7,12 +7,16 @@
   <!-- Critical paint: never leave phone Chrome on a blank white void while fonts/JS load. -->
   <style>
     html, body, #root { min-height: 100%; margin: 0; background: #f7f3eb; color: #121a2b; }
+    html[data-theme="dark"], html[data-theme="dark"] body, html[data-theme="dark"] #root {
+      background: #111820; color: #f3eee6;
+    }
     #cc-boot {
       position: fixed; inset: 0; display: flex; flex-direction: column;
       align-items: center; justify-content: center; gap: 12px;
       font: 500 14px system-ui, -apple-system, sans-serif; color: #3a4558;
       pointer-events: none; z-index: 0;
     }
+    html[data-theme="dark"] #cc-boot { color: #a39a8c; }
     #cc-boot .spin {
       width: 28px; height: 28px; border-radius: 999px;
       border: 2px solid rgba(242, 140, 40, 0.25); border-top-color: #f28c28;
@@ -25,6 +29,17 @@
       background: #f28c28; color: #fff; font: 600 13px system-ui, sans-serif;
     }
   </style>
+  <!-- Theme before paint — avoids cream flash when dark/system is preferred. -->
+  <script>
+    (function () {
+      try {
+        var p = localStorage.getItem('cc-theme') || 'system';
+        var dark = p === 'dark' || (p !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      } catch (e) {}
+    })();
+  </script>
   <!-- Fonts: non-blocking. CSS @import was stalling first paint on slow/restricted mobile networks. -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

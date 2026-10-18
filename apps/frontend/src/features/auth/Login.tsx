@@ -143,7 +143,7 @@ export default function Login() {
   return (
     <div className="pt-paper min-h-[100dvh] flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm overflow-hidden rounded-2xl" style={{ boxShadow: 'var(--shadow-lift)', border: '1px solid hsl(var(--pt-border))', background: 'hsl(var(--pt-card))' }}>
-        <div className="px-8 pt-7 pb-5" style={{ background: 'linear-gradient(180deg, hsl(var(--ink)) 0%, hsl(220 40% 14%) 100%)' }}>
+        <div className="px-8 pt-7 pb-5" style={{ background: 'linear-gradient(180deg, hsl(var(--chrome)) 0%, hsl(var(--chrome-deep)) 100%)' }}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'hsl(var(--marigold) / 0.2)' }}>
               <Lightning size={22} weight="fill" style={{ color: 'hsl(var(--marigold))' }} />
