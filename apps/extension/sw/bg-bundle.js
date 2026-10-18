@@ -274,7 +274,11 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
     if (theme === "light" || theme === "dark" || theme === "system") payload["cc-theme"] = theme;
     chrome.storage.local.set(payload, () => {
       ccEnsureWss("CONNECT");
-      sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+      sendResponse({
+        ok: true,
+        version: chrome.runtime.getManifest().version,
+        extensionId: chrome.runtime.id
+      });
     });
     return;
   }
@@ -285,12 +289,12 @@ function handleBridgeMessage(msg, sendResponse, trusted) {
       return;
     }
     chrome.storage.local.set({ "cc-theme": theme }, () => {
-      sendResponse({ ok: true, theme });
+      sendResponse({ ok: true, theme, extensionId: chrome.runtime.id });
     });
     return;
   }
   if (msg.type === "PING") {
-    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    sendResponse({ ok: true, version: chrome.runtime.getManifest().version, extensionId: chrome.runtime.id });
     return;
   }
   if (msg.type === "OPEN_AND_DISPATCH") {
@@ -338,7 +342,11 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
     if (theme === "light" || theme === "dark" || theme === "system") payload["cc-theme"] = theme;
     chrome.storage.local.set(payload, () => {
       ccEnsureWss("CONNECT_EXTERNAL");
-      sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+      sendResponse({
+        ok: true,
+        version: chrome.runtime.getManifest().version,
+        extensionId: chrome.runtime.id
+      });
     });
     return true;
   }
@@ -349,12 +357,12 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
       return true;
     }
     chrome.storage.local.set({ "cc-theme": theme }, () => {
-      sendResponse({ ok: true, theme });
+      sendResponse({ ok: true, theme, extensionId: chrome.runtime.id });
     });
     return true;
   }
   if (msg.type === "PING") {
-    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
+    sendResponse({ ok: true, version: chrome.runtime.getManifest().version, extensionId: chrome.runtime.id });
     return true;
   }
   if (msg.type === "DISPATCH_JOB_DIRECT") {

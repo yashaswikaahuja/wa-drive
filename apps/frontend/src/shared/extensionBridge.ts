@@ -10,7 +10,78 @@
 
 let _reqCounter = 0;
 
-function sendToExtension(msg: Record<string, unknown>, timeoutMs = 5000): Promise<any> {
+/** Packed CRX id (PEM). Unpacked loads use a path-based id discovered via CONNECT. */
+const PACKED_EXTENSION_ID = 'ijaoidbgnmaejomkpiiolkcilkidlmcm';
+const EXT_ID_STORAGE_KEY = 'cc-extension-id';
+
+function rememberExtensionId(id: unknown): void {
+  if (typeof id !== 'string' || !id) return;
+  try { localStorage.setItem(EXT_ID_STORAGE_KEY, id); } catch { /* private mode */ }
+}
+
+function knownExtensionIds(): string[] {
+  const ids: string[] = [];
+  try {
+    const stored = localStorage.getItem(EXT_ID_STORAGE_KEY);
+    if (stored) ids.push(stored);
+  } catch { /* private mode */ }
+  if (!ids.includes(PACKED_EXTENSION_ID)) ids.push(PACKED_EXTENSION_ID);
+  return ids;
+}
+
+function sendViaExternal(msg: Record<string, unknown>, timeoutMs: number): Promise<any> {
+  const chromeRuntime = (window as any).chrome?.runtime;
+  if (!chromeRuntime?.sendMessage) {
+    return Promise.resolve({ ok: false, error: 'chrome.runtime unavailable' });
+  }
+  const ids = knownExtensionIds();
+  return new Promise((resolve) => {
+    let pending = ids.length;
+    let settled = false;
+    if (!pending) {
+      resolve({ ok: false, error: 'no extension id' });
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve({ ok: false, error: 'Extension external message timed out' });
+      }
+    }, timeoutMs);
+
+    for (const id of ids) {
+      try {
+        chromeRuntime.sendMessage(id, msg, (response: any) => {
+          const err = chromeRuntime.lastError?.message;
+          if (settled) return;
+          if (err || !response) {
+            pending -= 1;
+            if (pending <= 0) {
+              settled = true;
+              clearTimeout(timer);
+              resolve({ ok: false, error: err || 'no external response' });
+            }
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          rememberExtensionId(id);
+          rememberExtensionId(response.extensionId);
+          resolve(response);
+        });
+      } catch (e: any) {
+        pending -= 1;
+        if (pending <= 0 && !settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve({ ok: false, error: e?.message || String(e) });
+        }
+      }
+    }
+  });
+}
+
+function sendViaContentScript(msg: Record<string, unknown>, timeoutMs: number): Promise<any> {
   return new Promise((resolve) => {
     const reqId = ++_reqCounter;
     const timer = setTimeout(() => {
@@ -23,11 +94,26 @@ function sendToExtension(msg: Record<string, unknown>, timeoutMs = 5000): Promis
       clearTimeout(timer);
       window.removeEventListener('message', handler);
       if (event.data.err) resolve({ ok: false, error: event.data.err });
-      else resolve(event.data.response ?? { ok: false });
+      else {
+        const response = event.data.response ?? { ok: false };
+        rememberExtensionId(response.extensionId);
+        resolve(response);
+      }
     }
 
     window.addEventListener('message', handler);
     window.postMessage({ _cc: true, _reqId: reqId, ...msg }, '*');
+  });
+}
+
+/** Prefer content-script bridge; fall back to externally_connectable. */
+function sendToExtension(msg: Record<string, unknown>, timeoutMs = 5000): Promise<any> {
+  return sendViaContentScript(msg, timeoutMs).then((viaCs) => {
+    if (viaCs?.ok) return viaCs;
+    return sendViaExternal(msg, Math.min(timeoutMs, 2500)).then((viaExt) => {
+      if (viaExt?.ok) return viaExt;
+      return viaCs?.error ? viaCs : viaExt;
+    });
   });
 }
 
@@ -83,6 +169,7 @@ async function attemptConnect() {
   }, timeout);
 
   if (result.ok) {
+    rememberExtensionId(result.extensionId);
     setStatus('connected', result.version || null);
     _retryAttempt = 0;
     if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; }
@@ -145,6 +232,18 @@ export const extensionBridge = {
 
   /** Push Hub theme preference into chrome.storage.local (popup follows). */
   async setTheme(theme: 'light' | 'dark' | 'system'): Promise<{ ok: boolean; error?: string }> {
-    return sendToExtension({ type: 'SET_THEME', theme }, 3000);
+    let last: { ok: boolean; error?: string } = { ok: false, error: 'not attempted' };
+    for (let i = 0; i < 3; i++) {
+      last = await sendToExtension({ type: 'SET_THEME', theme }, 2500);
+      if (last.ok) {
+        // Also refresh CONNECT so storage stays aligned if the side panel missed SET_THEME.
+        if (_currentPayload) void attemptConnect();
+        return last;
+      }
+      await new Promise((r) => setTimeout(r, 300 * (i + 1)));
+    }
+    // Last resort: CONNECT carries theme in its payload.
+    if (_currentPayload) void attemptConnect();
+    return last;
   },
 };

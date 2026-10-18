@@ -1,3 +1,5 @@
+import { extensionBridge } from './extensionBridge';
+
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
@@ -31,9 +33,7 @@ export function applyTheme(pref: ThemePreference = getThemePreference()): Resolv
 
 function pushThemeToExtension(pref: ThemePreference): void {
   // Best-effort — Hub still works when the extension is offline.
-  void import('./extensionBridge')
-    .then(({ extensionBridge }) => extensionBridge.setTheme(pref))
-    .catch(() => {});
+  void extensionBridge.setTheme(pref).catch(() => {});
 }
 
 export function setThemePreference(pref: ThemePreference): ResolvedTheme {
@@ -54,7 +54,10 @@ export function initTheme(): void {
   try {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => {
-      if (getThemePreference() === 'system') applyTheme('system');
+      if (getThemePreference() === 'system') {
+        applyTheme('system');
+        pushThemeToExtension('system');
+      }
     };
     if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onChange);
     else if (typeof (mq as any).addListener === 'function') (mq as any).addListener(onChange);

@@ -51,13 +51,17 @@ function applyPopupTheme(pref) {
   return resolved;
 }
 
-async function initPopupTheme() {
+async function readAndApplyPopupTheme() {
   try {
     const data = await chrome.storage.local.get(THEME_KEY);
     applyPopupTheme(data[THEME_KEY]);
   } catch {
     applyPopupTheme('system');
   }
+}
+
+async function initPopupTheme() {
+  await readAndApplyPopupTheme();
   try {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = async () => {
@@ -67,6 +71,11 @@ async function initPopupTheme() {
     if (typeof mq.addEventListener === 'function') mq.addEventListener('change', onChange);
     else if (typeof mq.addListener === 'function') mq.addListener(onChange);
   } catch { /* ignore */ }
+  // Side panel can miss storage events while backgrounded — re-read when shown.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void readAndApplyPopupTheme();
+  });
+  window.addEventListener('focus', () => { void readAndApplyPopupTheme(); });
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
