@@ -314,7 +314,7 @@ html[data-theme="dark"] {
     @apply outline-none;
     border-color: hsl(var(--marigold));
     box-shadow: 0 0 0 3px hsl(var(--marigold) / 0.18);
-    background: #fff;
+    background: hsl(var(--pt-card));
   }
 
   /* Badges */

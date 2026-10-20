@@ -139,7 +139,15 @@ function FormRow({ f, isOpen, onToggle, style }: { f: Form; isOpen: boolean; onT
   }, [isOpen]);
 
   return (
-    <div style={{ ...style, border: '1px solid hsl(var(--pt-border))', boxShadow: 'var(--shadow-paper)' }} className="rounded-2xl overflow-hidden bg-white">
+    <div
+      style={{
+        ...style,
+        background: 'hsl(var(--pt-card))',
+        border: '1px solid hsl(var(--pt-border))',
+        boxShadow: 'var(--shadow-paper)',
+      }}
+      className="rounded-2xl overflow-hidden"
+    >
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-3.5 px-4 py-4 text-left active:scale-[0.99] transition-transform"
