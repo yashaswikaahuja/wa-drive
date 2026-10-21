@@ -156,15 +156,22 @@ export default function MediaViewer({
   const detachPinchRef = useRef<(() => void) | null>(null);
   const applyZoomAtRef = useRef<(z: number, clientX: number, clientY: number) => void>(() => {});
 
-  const clampZoom = (z: number) => Math.min(4, Math.max(0.5, Number(z.toFixed(2))));
+  /** Fit (1×) is the floor — zooming out past fit left a tiny off-center stamp. */
+  const clampZoom = (z: number) => Math.min(4, Math.max(1, Number(z.toFixed(2))));
 
-  /** Zoom so the content under (clientX, clientY) stays fixed on screen. */
+  /**
+   * Zoom toward (clientX, clientY). Zoom-in keeps the focal point fixed.
+   * Zoom-out eases pan back toward center so fit (1×) always recenters the photo.
+   */
   const applyZoomAt = useCallback((rawZoom: number, clientX: number, clientY: number) => {
-    let next = clampZoom(rawZoom);
     const prev = zoomRef.current;
+    let next = clampZoom(rawZoom);
     let nextPan = { ...panRef.current };
 
-    if (next === 1) {
+    // At fit (or anything ≤1 after clamp), always center — clears leftover pan
+    // from zoom-in-on-right then zoom-out-on-left.
+    if (next <= 1) {
+      next = 1;
       nextPan = { x: 0, y: 0 };
     } else if (imgRef.current && prev > 0 && next !== prev) {
       const rect = imgRef.current.getBoundingClientRect();
@@ -173,10 +180,21 @@ export default function MediaViewer({
       const dx = clientX - vx;
       const dy = clientY - vy;
       const ratio = next / prev;
-      nextPan = {
+      const focalPan = {
         x: panRef.current.x + dx * (1 - ratio),
         y: panRef.current.y + dy * (1 - ratio),
       };
+
+      if (next < prev && prev > 1) {
+        // Zooming out: blend focal pan toward center. Weight → 1 as we approach 1×.
+        const centerWeight = Math.min(1, Math.max(0, (prev - next) / (prev - 1)));
+        nextPan = {
+          x: focalPan.x * (1 - centerWeight),
+          y: focalPan.y * (1 - centerWeight),
+        };
+      } else {
+        nextPan = focalPan;
+      }
     }
 
     zoomRef.current = next;

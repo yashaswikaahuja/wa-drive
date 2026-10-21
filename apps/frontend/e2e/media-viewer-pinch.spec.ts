@@ -311,6 +311,83 @@ test.describe('Media viewer desktop trackpad pinch', () => {
     expect(tx).not.toBe(0);
   });
 
+  test('zoom-out recenters after focal zoom-in on the opposite side', async ({ page }) => {
+    await page.unroute('**/api/**');
+    await mockDriveRoutes(page, BIG_SVG, 'image/svg+xml');
+    await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
+    await page.getByText(/aadhaar/i).first().click();
+
+    const dialog = page.getByRole('dialog');
+    const img = dialog.locator('img[alt="aadhaar_front.jpg"]');
+    await expect(img).toBeVisible();
+    await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+
+    const box = (await img.boundingBox())!;
+    const midX = box.x + box.width / 2;
+    const midY = box.y + box.height / 2;
+    const rightX = box.x + box.width * 0.85;
+    const leftX = box.x + box.width * 0.15;
+
+    // Zoom in from the right edge (accumulates pan).
+    await page.evaluate(
+      ({ x, y }) => {
+        window.dispatchEvent(
+          new WheelEvent('wheel', {
+            deltaY: -600,
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      },
+      { x: rightX, y: midY },
+    );
+    await expect(dialog.locator('[data-mv-dock="1"]').getByText(/%/)).toBeVisible({ timeout: 3000 });
+
+    // Zoom out from the left edge — must settle back to center at 1× (not a 50% stamp).
+    for (let i = 0; i < 8; i++) {
+      await page.evaluate(
+        ({ x, y }) => {
+          window.dispatchEvent(
+            new WheelEvent('wheel', {
+              deltaY: 500,
+              ctrlKey: true,
+              bubbles: true,
+              cancelable: true,
+              clientX: x,
+              clientY: y,
+            }),
+          );
+        },
+        { x: leftX, y: midY },
+      );
+    }
+
+    await expect(dialog.getByRole('button', { name: /zoom in/i })).toBeVisible({ timeout: 3000 });
+    await expect
+      .poll(async () => {
+        return img.evaluate((el) => {
+          const t = getComputedStyle(el).transform;
+          if (!t || t === 'none') return 1;
+          const m = t.match(/matrix\(([^,]+)/);
+          return m ? Number(m[1]) : 1;
+        });
+      })
+      .toBeLessThanOrEqual(1.05);
+
+    const after = (await img.boundingBox())!;
+    const stage = dialog.locator('[data-pinch-surface="1"] .relative.flex-1');
+    const stageBox = (await stage.boundingBox())!;
+    const imgMidX = after.x + after.width / 2;
+    const stageMidX = stageBox.x + stageBox.width / 2;
+    expect(Math.abs(imgMidX - stageMidX)).toBeLessThanOrEqual(24);
+    // Must not remain a shrunk off-center stamp.
+    expect(after.width).toBeGreaterThan(box.width * 0.85);
+  });
+
   test('drag pans when zoomed; double-click toggles zoom', async ({ page }) => {
     await page.unroute('**/api/**');
     await mockDriveRoutes(page, BIG_SVG, 'image/svg+xml');
