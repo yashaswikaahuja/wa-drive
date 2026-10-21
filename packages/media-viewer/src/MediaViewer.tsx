@@ -76,11 +76,16 @@ export type MediaViewerProps = {
   zIndexClass?: string;
 };
 
-const BTN =
-  'rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/90 active:scale-95 transition-transform';
-const BTN_ICON = `w-9 h-9 sm:w-11 sm:h-11 ${BTN}`;
-/** Hub marigold — active filmstrip / accent on dark stage */
-const ACCENT_RING = 'ring-2 ring-[hsl(28,95%,55%)] ring-offset-1 ring-offset-transparent';
+/** Tool buttons on dark frosted bars (obvious vs old floating white pills). */
+const BAR_BTN =
+  'h-9 w-9 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center text-white/90 hover:text-white hover:bg-white/15 active:scale-95 transition-colors';
+const BAR_BTN_LABEL =
+  'h-9 sm:h-10 px-2.5 sm:px-3 rounded-xl flex items-center justify-center gap-1.5 text-white/95 hover:bg-white/15 active:scale-95 transition-colors text-[12px] sm:text-[13px] font-semibold';
+const NAV_BTN =
+  'w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/55 hover:bg-black/70 text-white border border-white/20 backdrop-blur-md flex items-center justify-center shadow-lg active:scale-95 transition-transform';
+/** Hub marigold — active filmstrip */
+const ACCENT_RING = 'ring-2 ring-[hsl(28,95%,55%)] ring-offset-1 ring-offset-black';
+const CHROME_VER = 'dock-v2';
 
 function DefaultStripThumb({ item }: { item: MediaViewerStripItem }) {
   const [broken, setBroken] = useState(false);
@@ -598,9 +603,6 @@ export default function MediaViewer({
     else onPrev?.();
   };
 
-  const counter =
-    index >= 0 && items.length > 0 ? ` · File ${index + 1} of ${items.length}` : '';
-
   const stepZoomButton = () => {
     if (zoomed) {
       resetZoomPan();
@@ -621,10 +623,11 @@ export default function MediaViewer({
       role="dialog"
       aria-modal="true"
       aria-label={displayName(file.fileName)}
+      data-mv-chrome={kind === 'image' ? CHROME_VER : undefined}
     >
       <div
         ref={bindPinchSurface}
-        className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
+        className="relative flex-1 min-h-0 flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         style={{
           touchAction: kind === 'pdf' ? 'auto' : 'none',
@@ -636,266 +639,276 @@ export default function MediaViewer({
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(40,40,45,0.9) 0%, rgba(10,10,10,1) 70%)',
+              'radial-gradient(ellipse at center, rgba(36,36,40,0.95) 0%, rgba(10,10,10,1) 72%)',
           }}
         />
 
-        {/* Floating controls — photos only. PDF uses Mozilla toolbar. */}
+        {/* Top app bar — photos only (replaces floating white pills). */}
         {kind === 'image' && (
-          <>
+          <header
+            className={`relative z-30 flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 border-b border-white/10 bg-black/75 backdrop-blur-md transition-opacity ${
+              chromeDim ? 'opacity-35' : 'opacity-100'
+            }`}
+            style={{ paddingTop: 'max(0.5rem, env(safe-area-inset-top, 0px))' }}
+            data-mv-topbar="1"
+          >
             <button
               type="button"
               onClick={onClose}
-              className={`absolute top-2 left-2 sm:top-4 sm:left-4 z-20 h-9 sm:h-11 px-2.5 sm:px-3.5 gap-1 ${BTN} ${
-                chromeDim ? 'opacity-40' : 'opacity-100'
-              } transition-opacity`}
+              className={BAR_BTN_LABEL}
               title="Back (Esc)"
               aria-label="Back"
             >
               <ArrowBendUpLeft size={16} weight="bold" />
-              <span className="text-[11px] sm:text-xs font-semibold">Back</span>
+              <span>Back</span>
             </button>
 
-            <div
-              className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2 transition-opacity ${
-                chromeDim ? 'opacity-40' : 'opacity-100'
-              }`}
+            <div className="min-w-0 flex-1 px-1">
+              <div className="text-[12px] sm:text-[13px] font-medium text-white truncate leading-tight">
+                {displayName(file.fileName)}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-white/55 truncate leading-tight">
+                {index >= 0 && items.length > 0
+                  ? `File ${index + 1} of ${items.length}`
+                  : 'Photo'}
+                {zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : ''}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className={BAR_BTN}
+              title={zoomed ? 'Reset zoom' : 'Zoom in'}
+              aria-label={zoomed ? 'Reset zoom' : 'Zoom in'}
+              onClick={stepZoomButton}
             >
+              {zoomed ? (
+                <MagnifyingGlassMinus size={18} weight="bold" />
+              ) : (
+                <MagnifyingGlassPlus size={18} weight="bold" />
+              )}
+            </button>
+            {showPrint && onPrint && (
               <button
                 type="button"
-                className={BTN_ICON}
-                title={zoomed ? 'Reset zoom' : 'Zoom in'}
-                aria-label={zoomed ? 'Reset zoom' : 'Zoom in'}
-                onClick={stepZoomButton}
+                className={`hidden sm:flex ${BAR_BTN}`}
+                title="Print"
+                aria-label="Print"
+                onClick={onPrint}
               >
-                {zoomed ? (
-                  <MagnifyingGlassMinus size={18} weight="bold" />
-                ) : (
-                  <MagnifyingGlassPlus size={18} weight="bold" />
-                )}
+                <Printer size={18} weight="bold" />
               </button>
-              {showPrint && onPrint && (
-                <button
-                  type="button"
-                  className={`hidden sm:flex ${BTN_ICON}`}
-                  title="Print"
-                  aria-label="Print"
-                  onClick={onPrint}
+            )}
+            {showPhotoEditor && onOpenInPhotoEditor && (
+              <button
+                type="button"
+                className={`hidden sm:flex ${BAR_BTN}`}
+                title="Edit in Photo Editor"
+                aria-label="Photo Editor"
+                onClick={onOpenInPhotoEditor}
+              >
+                <PencilSimple size={18} weight="bold" />
+              </button>
+            )}
+            {showDelete && onDelete && (
+              <button
+                type="button"
+                className={BAR_BTN}
+                title="Delete"
+                aria-label="Delete"
+                onClick={onDelete}
+              >
+                <Trash size={18} weight="bold" />
+              </button>
+            )}
+            <div className="relative" ref={moreWrapRef}>
+              <button
+                type="button"
+                className={BAR_BTN}
+                title="More"
+                aria-label="More actions"
+                aria-expanded={moreOpen}
+                onClick={() => setMoreOpen((v: boolean) => !v)}
+              >
+                <DotsThree size={20} weight="bold" />
+              </button>
+              {moreOpen && (
+                <div
+                  className="absolute right-0 top-[calc(100%+6px)] min-w-[180px] rounded-xl border border-white/15 bg-[#1c1c1e]/95 backdrop-blur-md shadow-2xl py-1.5 text-sm text-white z-40"
+                  onClick={(e) => e.stopPropagation()}
+                  role="menu"
                 >
-                  <Printer size={18} weight="bold" />
-                </button>
-              )}
-              {showPhotoEditor && onOpenInPhotoEditor && (
-                <button
-                  type="button"
-                  className={`hidden sm:flex ${BTN_ICON}`}
-                  title="Edit in Photo Editor"
-                  aria-label="Photo Editor"
-                  onClick={onOpenInPhotoEditor}
-                >
-                  <PencilSimple size={20} weight="bold" />
-                </button>
-              )}
-              {showDelete && onDelete && (
-                <button
-                  type="button"
-                  className={BTN_ICON}
-                  title="Delete"
-                  aria-label="Delete"
-                  onClick={onDelete}
-                >
-                  <Trash size={18} weight="bold" />
-                </button>
-              )}
-              <div className="relative" ref={moreWrapRef}>
-                <button
-                  type="button"
-                  className={BTN_ICON}
-                  title="More"
-                  aria-label="More actions"
-                  aria-expanded={moreOpen}
-                  onClick={() => setMoreOpen((v: boolean) => !v)}
-                >
-                  <DotsThree size={22} weight="bold" />
-                </button>
-                {moreOpen && (
-                  <div
-                    className="absolute right-0 min-w-[180px] rounded-xl border border-white/15 bg-[#2c2c2e]/95 backdrop-blur-md shadow-2xl py-1.5 text-sm text-white z-30"
-                    style={{ top: '3.25rem' }}
-                    onClick={(e) => e.stopPropagation()}
-                    role="menu"
-                  >
-                    {onDownload && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5"
-                        onClick={() => {
-                          setMoreOpen(false);
-                          onDownload();
-                        }}
-                      >
-                        <DownloadSimple size={16} /> Download
-                      </button>
-                    )}
-                    {showPrint && onPrint && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5 sm:hidden"
-                        onClick={() => {
-                          setMoreOpen(false);
-                          onPrint();
-                        }}
-                      >
-                        <Printer size={16} /> Print
-                      </button>
-                    )}
-                    {showPhotoEditor && onOpenInPhotoEditor && (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5 sm:hidden"
-                        onClick={() => {
-                          setMoreOpen(false);
-                          onOpenInPhotoEditor();
-                        }}
-                      >
-                        <Camera size={16} /> Photo Editor
-                      </button>
-                    )}
+                  {onDownload && (
                     <button
                       type="button"
                       role="menuitem"
-                      className="w-full px-3.5 py-2.5 text-left hover:bg-white/10"
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5"
                       onClick={() => {
-                        resetZoomPan();
                         setMoreOpen(false);
+                        onDownload();
                       }}
                     >
-                      Reset zoom
+                      <DownloadSimple size={16} /> Download
                     </button>
-                  </div>
-                )}
-              </div>
+                  )}
+                  {showPrint && onPrint && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5 sm:hidden"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onPrint();
+                      }}
+                    >
+                      <Printer size={16} /> Print
+                    </button>
+                  )}
+                  {showPhotoEditor && onOpenInPhotoEditor && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5 sm:hidden"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        onOpenInPhotoEditor();
+                      }}
+                    >
+                      <Camera size={16} /> Photo Editor
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="w-full px-3.5 py-2.5 text-left hover:bg-white/10"
+                    onClick={() => {
+                      resetZoomPan();
+                      setMoreOpen(false);
+                    }}
+                  >
+                    Reset zoom
+                  </button>
+                </div>
+              )}
             </div>
-          </>
+          </header>
         )}
 
-        {kind === 'image' && canNavigate && !zoomed && (
-          <>
-            <button
-              type="button"
-              className={`absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-12 sm:h-12 ${BTN} ${
-                chromeDim ? 'opacity-30' : 'opacity-90 hover:opacity-100'
-              } transition-opacity`}
-              onClick={onPrev}
-              title="Previous file"
-              aria-label="Previous file"
-            >
-              <CaretLeft size={22} weight="bold" className="sm:hidden" />
-              <CaretLeft size={26} weight="bold" className="hidden sm:block" />
-            </button>
-            <button
-              type="button"
-              className={`absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-12 sm:h-12 ${BTN} ${
-                chromeDim ? 'opacity-30' : 'opacity-90 hover:opacity-100'
-              } transition-opacity`}
-              onClick={onNext}
-              title="Next file"
-              aria-label="Next file"
-            >
-              <CaretRight size={22} weight="bold" className="sm:hidden" />
-              <CaretRight size={26} weight="bold" className="hidden sm:block" />
-            </button>
-          </>
-        )}
-
-        {kind === 'pdf' && canNavigate && (
-          <>
-            <div
-              className="absolute left-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
-              style={{ touchAction: 'pan-y' }}
-              onTouchStart={onTouchStartPdf}
-              onTouchEnd={onTouchEndPdf}
-              title="Swipe for previous file"
-            />
-            <div
-              className="absolute right-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
-              style={{ touchAction: 'pan-y' }}
-              onTouchStart={onTouchStartPdf}
-              onTouchEnd={onTouchEndPdf}
-              title="Swipe for next file"
-            />
-          </>
-        )}
-
-        {opening && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10">
-            <SpinnerGap size={32} className="animate-spin text-white" />
-          </div>
-        )}
-
-        <div className="absolute inset-0 z-[5] overflow-hidden">
-          {kind === 'image' ? (
-            <div className="w-full h-full flex items-center justify-center overflow-hidden px-8 sm:px-14 py-[3.75rem] sm:py-[4.5rem]">
-              <img
-                ref={imgRef}
-                src={file.url}
-                alt={file.fileName}
-                className={`max-w-full max-h-full object-contain object-center shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center select-none ${
-                  pinching || panning ? '' : 'transition-transform duration-150'
+        {/* Stage */}
+        <div className="relative flex-1 min-h-0 overflow-hidden">
+          {kind === 'image' && canNavigate && !zoomed && (
+            <>
+              <button
+                type="button"
+                className={`absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BTN} ${
+                  chromeDim ? 'opacity-30' : 'opacity-100'
                 }`}
-                style={{
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                  touchAction: 'none',
-                }}
-                draggable={false}
+                onClick={onPrev}
+                title="Previous file"
+                aria-label="Previous file"
+              >
+                <CaretLeft size={22} weight="bold" />
+              </button>
+              <button
+                type="button"
+                className={`absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BTN} ${
+                  chromeDim ? 'opacity-30' : 'opacity-100'
+                }`}
+                onClick={onNext}
+                title="Next file"
+                aria-label="Next file"
+              >
+                <CaretRight size={22} weight="bold" />
+              </button>
+            </>
+          )}
+
+          {kind === 'pdf' && canNavigate && (
+            <>
+              <div
+                className="absolute left-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
+                style={{ touchAction: 'pan-y' }}
+                onTouchStart={onTouchStartPdf}
+                onTouchEnd={onTouchEndPdf}
+                title="Swipe for previous file"
               />
-            </div>
-          ) : (
-            <div className="w-full h-full min-h-0 bg-[#525659]">
-              <MozillaPdfEmbed
-                fileUrl={file.url}
-                onBack={onClose}
-                onDelete={showDelete ? onDelete : undefined}
-                onPrevFile={onPrev}
-                onNextFile={onNext}
+              <div
+                className="absolute right-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
+                style={{ touchAction: 'pan-y' }}
+                onTouchStart={onTouchStartPdf}
+                onTouchEnd={onTouchEndPdf}
+                title="Swipe for next file"
               />
+            </>
+          )}
+
+          {opening && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10">
+              <SpinnerGap size={32} className="animate-spin text-white" />
             </div>
           )}
+
+          <div className="absolute inset-0 z-[5] overflow-hidden">
+            {kind === 'image' ? (
+              <div className="w-full h-full flex items-center justify-center overflow-hidden px-12 sm:px-16 py-3">
+                <img
+                  ref={imgRef}
+                  src={file.url}
+                  alt={file.fileName}
+                  className={`max-w-full max-h-full object-contain object-center shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center select-none ${
+                    pinching || panning ? '' : 'transition-transform duration-150'
+                  }`}
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    touchAction: 'none',
+                  }}
+                  draggable={false}
+                />
+              </div>
+            ) : (
+              <div className="w-full h-full min-h-0 bg-[#525659]">
+                <MozillaPdfEmbed
+                  fileUrl={file.url}
+                  onBack={onClose}
+                  onDelete={showDelete ? onDelete : undefined}
+                  onPrevFile={onPrev}
+                  onNextFile={onNext}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
-        {kind === 'image' && (
-          <div
-            className={`absolute bottom-[3.5rem] sm:bottom-[4.25rem] left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-opacity ${
-              chromeDim ? 'opacity-0' : 'opacity-100'
-            }`}
-          >
-            <div className="px-3 py-1 rounded-full bg-black/55 text-white/95 text-[11px] sm:text-[12px] font-medium shadow-lg max-w-[80vw] truncate backdrop-blur-sm border border-white/10">
-              {displayName(file.fileName)}
-              {counter}
-              {zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : ''}
-            </div>
-          </div>
-        )}
-
+        {/* Bottom dock with filmstrip — solid bar, not floating thumbs. */}
         {kind === 'image' && items.length > 0 && (
-          <div
-            className={`absolute inset-x-0 bottom-0 z-20 pointer-events-none transition-opacity ${
+          <footer
+            className={`relative z-30 border-t border-white/10 bg-black/80 backdrop-blur-md transition-opacity ${
               chromeDim ? 'opacity-40' : 'opacity-100'
             }`}
             onClick={(e) => e.stopPropagation()}
             data-filmstrip
+            data-mv-dock="1"
+            style={{
+              paddingBottom: 'max(0.4rem, env(safe-area-inset-bottom, 0px))',
+            }}
           >
+            <div className="px-3 pt-1.5 pb-1 flex items-center justify-between gap-2 text-[10px] sm:text-[11px] text-white/55">
+              <span className="truncate">
+                {index >= 0 ? `File ${index + 1} of ${items.length}` : `${items.length} files`}
+              </span>
+              {zoom !== 1 && (
+                <span className="shrink-0 rounded-full bg-[hsl(28,95%,55%)]/20 text-[hsl(28,95%,70%)] px-2 py-0.5 font-semibold">
+                  {Math.round(zoom * 100)}%
+                </span>
+              )}
+            </div>
             <div
               ref={filmstripRef}
-              className="pointer-events-auto flex gap-1.5 sm:gap-2 overflow-x-auto justify-start sm:justify-center scroll-smooth px-2 sm:px-4 pt-2 bg-gradient-to-t from-black/50 to-transparent"
+              className="flex gap-2 overflow-x-auto justify-start sm:justify-center scroll-smooth px-3 pb-2"
               style={
                 {
                   scrollbarWidth: 'none',
                   WebkitOverflowScrolling: 'touch',
-                  paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))',
                 } as CSSProperties
               }
             >
@@ -907,15 +920,15 @@ export default function MediaViewer({
                     type="button"
                     data-file-id={item.id}
                     onClick={() => onSelectItem?.(item.id)}
-                    className={`shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-md overflow-hidden transition-all shadow-md ${
+                    className={`shrink-0 w-11 h-11 sm:w-12 sm:h-12 rounded-lg overflow-hidden transition-all ${
                       active
                         ? `${ACCENT_RING} scale-105`
-                        : 'opacity-70 hover:opacity-100 ring-1 ring-white/35'
+                        : 'opacity-65 hover:opacity-100 ring-1 ring-white/25'
                     }`}
                     title={displayName(item.fileName)}
                     aria-current={active ? 'true' : undefined}
                   >
-                    <div className="w-full h-full bg-black/40 flex items-center justify-center">
+                    <div className="w-full h-full bg-white/5 flex items-center justify-center">
                       {renderStripThumb ? (
                         renderStripThumb(item, active)
                       ) : (
@@ -926,7 +939,7 @@ export default function MediaViewer({
                 );
               })}
             </div>
-          </div>
+          </footer>
         )}
       </div>
     </div>

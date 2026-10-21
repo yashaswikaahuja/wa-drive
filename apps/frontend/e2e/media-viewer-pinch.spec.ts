@@ -115,7 +115,7 @@ test.describe('Media viewer image pinch zoom', () => {
       touchPoints: [],
     });
 
-    await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
+    await expect(dialog.locator('[data-mv-dock="1"]').getByText(/%/)).toBeVisible({ timeout: 3000 });
     const scale = await img.evaluate((el) => {
       const t = getComputedStyle(el).transform;
       if (!t || t === 'none') return 1;
@@ -164,7 +164,7 @@ test.describe('Media viewer image pinch zoom', () => {
       touchPoints: [],
     });
 
-    await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
+    await expect(dialog.locator('[data-mv-dock="1"]').getByText(/%/)).toBeVisible({ timeout: 3000 });
     const after = (await img.boundingBox())!;
     const afterCenterX = after.x + after.width / 2;
     // Zooming in left of center pushes the visual center right.
@@ -188,30 +188,31 @@ test.describe('Media viewer desktop trackpad pinch', () => {
     await mockDriveRoutes(page, TINY_JPEG, 'image/jpeg');
   });
 
-  test('image sits near the vertical middle of the viewer', async ({ page }) => {
+  test('dock chrome is visible and image is centered in the stage', async ({ page }) => {
     await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
     await page.getByText(/aadhaar/i).first().click();
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveAttribute('data-mv-chrome', 'dock-v2');
+    await expect(dialog.locator('[data-mv-topbar="1"]')).toBeVisible();
+    await expect(dialog.locator('[data-mv-dock="1"]')).toBeVisible();
+
     const img = dialog.locator('img[alt="aadhaar_front.jpg"]');
     await expect(img).toBeVisible();
-
     await expect(img).toHaveClass(/object-center/);
-    const wrap = img.locator('xpath=..');
-    await expect(wrap).toHaveClass(/items-center/);
 
+    // Centered within the photo stage (between top bar and bottom dock).
     const offsetY = await page.evaluate(() => {
-      const dlg = document.querySelector('[role="dialog"]');
-      const image = dlg?.querySelector('img[alt="aadhaar_front.jpg"]');
-      if (!dlg || !image) return 9999;
-      const d = dlg.getBoundingClientRect();
+      const stage = document.querySelector('[data-pinch-surface="1"] .relative.flex-1');
+      const image = document.querySelector('img[alt="aadhaar_front.jpg"]');
+      if (!stage || !image) return 9999;
+      const d = stage.getBoundingClientRect();
       const i = image.getBoundingClientRect();
       return i.top + i.height / 2 - (d.top + d.height / 2);
     });
-    // Equal py clears chrome/filmstrip; allow small slack for badge/strip height.
-    expect(Math.abs(offsetY)).toBeLessThanOrEqual(48);
+    expect(Math.abs(offsetY)).toBeLessThanOrEqual(56);
   });
 
   test('ctrl+wheel zooms image only (not the page)', async ({ page }) => {
@@ -247,7 +248,7 @@ test.describe('Media viewer desktop trackpad pinch', () => {
       { x: box.x + box.width / 2, y: box.y + box.height / 2 },
     );
 
-    await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
+    await expect(dialog.locator('[data-mv-dock="1"]').getByText(/%/)).toBeVisible({ timeout: 3000 });
     const scale = await img.evaluate((el) => {
       const t = getComputedStyle(el).transform;
       if (!t || t === 'none') return 1;
@@ -294,7 +295,7 @@ test.describe('Media viewer desktop trackpad pinch', () => {
       { x: fx, y: fy },
     );
 
-    await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
+    await expect(dialog.locator('[data-mv-dock="1"]').getByText(/%/)).toBeVisible({ timeout: 3000 });
     const after = (await img.boundingBox())!;
     expect(after.x + after.width / 2).toBeGreaterThan(centerX + 8);
     expect(after.y + after.height / 2).toBeGreaterThan(centerY + 8);
@@ -329,7 +330,9 @@ test.describe('Media viewer desktop trackpad pinch', () => {
     // Zoom via toolbar (reliable under mobile project + desktop overrides).
     await dialog.getByRole('button', { name: /zoom in/i }).click();
     await expect(dialog.getByRole('button', { name: /reset zoom/i })).toBeVisible();
-    await expect(dialog.getByText(/200%/)).toBeVisible({ timeout: 3000 });
+    await expect(dialog.locator('[data-mv-dock="1"]').getByText('200%', { exact: true })).toBeVisible({
+      timeout: 3000,
+    });
 
     // Wait for transition-transform to settle (150ms).
     await expect
