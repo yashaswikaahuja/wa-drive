@@ -15,17 +15,20 @@ export default function PhotosHub() {
       ? fromRaw
       : '';
   const backTo = from || '/app/photos';
+  const isDocPrint = loc.pathname.includes('/doc-print');
   const backLabel = from.includes('whatsapp')
     ? 'Documents'
     : from.includes('/files')
       ? 'File Manager'
-      : loc.pathname.includes('doc-print')
-        ? 'Back'
-        : 'Media Desk';
+      : 'Media Desk';
 
   return (
-    <div className="flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">
-      {!atHome && (
+    <div
+      className={`flex flex-col w-full max-w-full overflow-x-hidden ${
+        isDocPrint ? 'h-full min-h-0 overflow-hidden' : 'h-full md:h-[calc(100vh-4rem)]'
+      }`}
+    >
+      {!atHome && !isDocPrint && (
         <div
           className="px-3 py-2.5 border-b shrink-0"
           style={{ borderColor: 'hsl(var(--pt-border))', background: 'hsl(var(--pt-card) / 0.7)' }}
@@ -41,7 +44,7 @@ export default function PhotosHub() {
           </Link>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className={isDocPrint ? 'flex-1 min-h-0 overflow-hidden flex flex-col' : 'flex-1 min-h-0 overflow-y-auto'}>
         <Outlet />
       </div>
     </div>

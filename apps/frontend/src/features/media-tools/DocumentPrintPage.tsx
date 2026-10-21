@@ -85,6 +85,7 @@ export default function DocumentPrintPage() {
 
   const addFileRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
 
   const [paperId, setPaperId] = useState<DocPaperId>(
     initialPaper in DOC_PAPERS ? initialPaper : 'a4',
@@ -97,6 +98,7 @@ export default function DocumentPrintPage() {
   const [busy, setBusy] = useState(false);
   const [scale, setScale] = useState(1);
   const [stageZoom, setStageZoom] = useState(1);
+  const [stageBox, setStageBox] = useState({ w: 0, h: 0 });
   const [marginMm, setMarginMm] = useState(10);
   const [addMode, setAddMode] = useState<'new-page' | 'this-page'>('new-page');
   const [cropOpen, setCropOpen] = useState(false);
@@ -219,15 +221,30 @@ export default function DocumentPrintPage() {
   }, [page, paper, selectedId]);
 
   useEffect(() => {
-    const el = canvasRef.current;
+    const el = stageRef.current;
     if (!el) return;
-    const obs = new ResizeObserver(() => {
+    const measure = () => {
       const rect = el.getBoundingClientRect();
-      if (rect.width > 0) setScale(paper.w / rect.width);
-    });
+      setStageBox({ w: rect.width, h: rect.height });
+    };
+    measure();
+    const obs = new ResizeObserver(measure);
     obs.observe(el);
     return () => obs.disconnect();
-  }, [paper.w, pageIndex, pages.length, stageZoom]);
+  }, [paper.w, pageIndex, pages.length]);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const sync = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0) setScale(paper.w / rect.width);
+    };
+    sync();
+    const obs = new ResizeObserver(sync);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [paper.w, pageIndex, pages.length, stageZoom, stageBox.w, stageBox.h]);
 
   const toPaper = useCallback(
     (e: React.PointerEvent) => {
@@ -539,148 +556,149 @@ export default function DocumentPrintPage() {
   const fitMode = selectedCell?.fitMode || 'contain';
   const brightness = selectedCell?.brightness ?? 0;
   const contrast = selectedCell?.contrast ?? 0;
-  const baseMaxW = paperId === '4x6' ? 480 : 560;
+  const pad = 28;
+  const availW = Math.max(160, stageBox.w - pad * 2);
+  const availH = Math.max(160, stageBox.h - pad * 2);
+  const aspect = paper.w / Math.max(1, paper.h);
+  let sheetW = availW;
+  let sheetH = sheetW / aspect;
+  if (sheetH > availH) {
+    sheetH = availH;
+    sheetW = sheetH * aspect;
+  }
+  sheetW = Math.round(sheetW * stageZoom);
+  sheetH = Math.round(sheetH * stageZoom);
+
+  const chip = (on: boolean) =>
+    ({
+      borderColor: on ? 'hsl(27 95% 55%)' : 'var(--border)',
+      background: on ? 'hsl(27 95% 55% / 0.14)' : 'transparent',
+      color: on ? 'hsl(18 80% 32%)' : 'inherit',
+    }) as const;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-3 p-3 md:p-4 h-full min-h-0" data-doc-print="1">
-      <aside className="w-full lg:w-80 shrink-0 space-y-3 overflow-y-auto">
-        <div>
-          <h1 className="text-base font-semibold">Print on paper</h1>
-          <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{subtitle}</p>
-          <p className="text-[11px] text-[var(--muted-foreground)] mt-1.5 leading-snug">
-            Crop, rotate, fit the photo on the page, then Print. PDF uses the exact paper size.
-          </p>
-          <div
-            className="mt-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
-            style={{ background: 'hsl(27 95% 55% / 0.15)', color: 'hsl(27 95% 35%)' }}
-            data-doc-print-paper={paperId}
-          >
-            Selected: {paperSizeLabel}
-          </div>
+    <div className="flex flex-col h-full min-h-0" data-doc-print="1">
+      <header
+        className="shrink-0 border-b px-2 py-1.5 flex flex-wrap items-center gap-1.5"
+        style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}
+        data-doc-print-edit="1"
+      >
+        <button
+          type="button"
+          className="btn-secondary text-xs py-1.5 px-2"
+          onClick={() => navigate(backTo)}
+        >
+          <CaretLeft size={14} className="inline" /> Back
+        </button>
+        <span className="text-xs font-semibold truncate max-w-[9rem]" title={subtitle}>
+          {subtitle}
+        </span>
+        <span
+          className="text-[11px] font-semibold rounded-full px-2 py-0.5"
+          style={{ background: 'hsl(27 95% 55% / 0.15)', color: 'hsl(27 95% 32%)' }}
+          data-doc-print-paper={paperId}
+        >
+          {paperSizeLabel}
+        </span>
+
+        <div className="flex items-center gap-1">
+          {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="text-xs rounded-md px-2 py-1.5 border font-medium"
+              style={chip(paperId === id)}
+              onClick={() => changePaper(id)}
+            >
+              {DOC_PAPERS[id].label.replace(' Portrait', '').replace(' Landscape', ' wide')}
+            </button>
+          ))}
         </div>
 
-        <div className="card space-y-2">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">Paper</p>
-          <div className="grid grid-cols-1 gap-1.5">
-            {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
-              <button
-                key={id}
-                type="button"
-                className="text-left text-sm rounded-lg py-2.5 px-3 border"
-                style={{
-                  borderColor: paperId === id ? 'hsl(27 95% 55%)' : 'var(--border)',
-                  background: paperId === id ? 'hsl(27 95% 55% / 0.12)' : 'transparent',
-                }}
-                onClick={() => changePaper(id)}
-              >
-                <span className="font-medium">{DOC_PAPERS[id].label}</span>
-                <span className="block text-[10px] text-[var(--muted-foreground)] mt-0.5">
-                  {DOC_PAPERS[id].wMm.toFixed(0)}×{DOC_PAPERS[id].hMm.toFixed(0)} mm
-                </span>
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] uppercase tracking-wider text-gray-500 pt-1">Margin (mm)</p>
-          <div className="flex gap-1" data-doc-print-margin="1">
-            {MARGIN_PRESETS.map((m) => (
-              <button
-                key={m.mm}
-                type="button"
-                className="flex-1 text-xs rounded-lg py-2 border font-medium"
-                style={{
-                  borderColor: marginMm === m.mm ? 'hsl(27 95% 55%)' : 'var(--border)',
-                  background: marginMm === m.mm ? 'hsl(27 95% 55% / 0.12)' : 'transparent',
-                }}
-                onClick={() => applyMargin(m.mm)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-0.5" data-doc-print-margin="1" title="Page margin">
+          {MARGIN_PRESETS.map((m) => (
+            <button
+              key={m.mm}
+              type="button"
+              className="text-[11px] rounded-md w-7 py-1.5 border font-medium"
+              style={chip(marginMm === m.mm)}
+              onClick={() => applyMargin(m.mm)}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
 
-        {/* Always-visible edit bar for the active image */}
-        <div className="card space-y-2.5" data-doc-print-edit="1">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">Edit image</p>
+        <span className="w-px h-6 mx-0.5 hidden md:block" style={{ background: 'hsl(var(--pt-border))' }} />
 
+        <button
+          type="button"
+          className="btn-primary text-xs py-1.5 px-2.5 flex items-center gap-1"
+          onClick={() => setCropOpen(true)}
+          disabled={!selectedCell}
+          data-doc-print-crop="1"
+        >
+          <Crop size={14} /> Crop
+        </button>
+        <button
+          type="button"
+          className="btn-secondary text-xs py-1.5 px-2"
+          onClick={() => rotateSelected(-90)}
+          disabled={!selectedCell}
+          aria-label="Rotate left"
+          data-doc-print-rotate-left="1"
+          title="Rotate left"
+        >
+          <ArrowCounterClockwise size={15} />
+        </button>
+        <button
+          type="button"
+          className="btn-secondary text-xs py-1.5 px-2"
+          onClick={() => rotateSelected(90)}
+          disabled={!selectedCell}
+          aria-label="Rotate right"
+          data-doc-print-rotate-right="1"
+          title="Rotate right"
+        >
+          <ArrowClockwise size={15} />
+        </button>
+        <button
+          type="button"
+          className="btn-secondary text-xs py-1.5 px-2"
+          onClick={flipSelected}
+          disabled={!selectedCell}
+          aria-label="Flip horizontal"
+          data-doc-print-flip="1"
+          title="Flip"
+        >
+          <ArrowsLeftRight size={15} />
+        </button>
+        {(
+          [
+            ['contain', 'Fit'],
+            ['cover', 'Fill'],
+          ] as const
+        ).map(([mode, label]) => (
           <button
+            key={mode}
             type="button"
-            className="btn-primary w-full text-sm py-2.5 flex items-center justify-center gap-1.5"
-            onClick={() => setCropOpen(true)}
-            disabled={!selectedCell}
-            data-doc-print-crop="1"
+            className="text-xs rounded-md px-2 py-1.5 border font-medium"
+            style={chip(fitMode === mode)}
+            onClick={() => setFitMode(mode)}
+            data-doc-print-fit={mode}
           >
-            <Crop size={16} /> Crop
+            {label}
           </button>
+        ))}
+        <button type="button" className="btn-secondary text-[11px] py-1.5 px-2" onClick={fitSelected}>
+          Margin
+        </button>
+        <button type="button" className="btn-secondary text-[11px] py-1.5 px-2" onClick={fillPageSelected}>
+          Bleed
+        </button>
 
-          <div className="grid grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              className="btn-secondary text-xs py-2.5 flex flex-col items-center gap-0.5"
-              onClick={() => rotateSelected(-90)}
-              disabled={!selectedCell}
-              aria-label="Rotate left"
-              data-doc-print-rotate-left="1"
-            >
-              <ArrowCounterClockwise size={16} /> Left
-            </button>
-            <button
-              type="button"
-              className="btn-secondary text-xs py-2.5 flex flex-col items-center gap-0.5"
-              onClick={() => rotateSelected(90)}
-              disabled={!selectedCell}
-              aria-label="Rotate right"
-              data-doc-print-rotate-right="1"
-            >
-              <ArrowClockwise size={16} /> Right
-            </button>
-            <button
-              type="button"
-              className="btn-secondary text-xs py-2.5 flex flex-col items-center gap-0.5"
-              onClick={flipSelected}
-              disabled={!selectedCell}
-              aria-label="Flip horizontal"
-              data-doc-print-flip="1"
-            >
-              <ArrowsLeftRight size={16} /> Flip
-            </button>
-          </div>
-
-          <p className="text-[11px] text-gray-500">Fit on page</p>
-          <div className="flex gap-1">
-            {(
-              [
-                ['contain', 'Fit'],
-                ['cover', 'Fill'],
-              ] as const
-            ).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                className="flex-1 text-xs rounded-lg py-2 border font-medium"
-                style={{
-                  borderColor: fitMode === mode ? 'hsl(27 95% 55%)' : 'var(--border)',
-                  background: fitMode === mode ? 'hsl(27 95% 55% / 0.12)' : 'transparent',
-                }}
-                onClick={() => setFitMode(mode)}
-                data-doc-print-fit={mode}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1">
-            <button type="button" className="btn-secondary flex-1 text-xs py-2" onClick={fitSelected}>
-              Fit + margin
-            </button>
-            <button type="button" className="btn-secondary flex-1 text-xs py-2" onClick={fillPageSelected}>
-              Edge to edge
-            </button>
-          </div>
-
-          <label className="block text-[11px] text-gray-500">
-            Brightness <span className="float-right tabular-nums">{brightness}</span>
-          </label>
+        <label className="flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] min-w-[7rem]">
+          B
           <input
             type="range"
             min={-40}
@@ -689,12 +707,13 @@ export default function DocumentPrintPage() {
             value={brightness}
             disabled={!selectedCell}
             onChange={(e) => applyToneToSelected(+e.target.value, contrast)}
-            className="w-full"
+            className="w-16"
             data-doc-print-brightness="1"
+            aria-label="Brightness"
           />
-          <label className="block text-[11px] text-gray-500">
-            Contrast <span className="float-right tabular-nums">{contrast}</span>
-          </label>
+        </label>
+        <label className="flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] min-w-[7rem]">
+          C
           <input
             type="range"
             min={-40}
@@ -703,85 +722,164 @@ export default function DocumentPrintPage() {
             value={contrast}
             disabled={!selectedCell}
             onChange={(e) => applyToneToSelected(brightness, +e.target.value)}
-            className="w-full"
+            className="w-16"
             data-doc-print-contrast="1"
+            aria-label="Contrast"
           />
+        </label>
 
-          <p className="text-[10px] text-[var(--muted-foreground)] flex items-center gap-1">
-            <ArrowsOut size={10} /> Drag to move · corner to resize
-          </p>
+        <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
-            className="btn-secondary w-full text-sm py-2 flex items-center justify-center gap-1.5 text-red-600"
+            className="btn-secondary text-xs py-1.5 px-2"
+            onClick={handleDownloadPdf}
+            disabled={busy || !pages.length}
+            data-doc-print-download="1"
+          >
+            <DownloadSimple size={14} /> PDF
+          </button>
+          <button
+            type="button"
+            className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
+            onClick={handlePrint}
+            disabled={busy || !pages.length}
+            data-doc-print-submit="1"
+          >
+            {busy ? <SpinnerGap size={14} className="animate-spin" /> : <Printer size={14} />}
+            Print
+          </button>
+        </div>
+      </header>
+
+      <div
+        ref={stageRef}
+        className="flex-1 min-h-0 overflow-auto flex items-center justify-center"
+        style={{ background: '#bdbdbd' }}
+        data-doc-print-stage="1"
+      >
+        <canvas
+          ref={canvasRef}
+          className="block shadow-2xl cursor-grab active:cursor-grabbing select-none bg-white"
+          style={{
+            touchAction: 'none',
+            width: sheetW,
+            height: sheetH,
+            boxShadow: '0 18px 50px rgba(0,0,0,0.28)',
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        />
+      </div>
+
+      <footer
+        className="shrink-0 border-t px-2 py-1.5 flex flex-wrap items-center gap-2 text-xs"
+        style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}
+      >
+        <span className="inline-flex items-center gap-1 text-[var(--muted-foreground)]">
+          <ArrowsOut size={12} /> Drag · corner resize
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="btn-secondary p-1.5"
+            onClick={() => setStageZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
+            aria-label="Zoom out"
+          >
+            <MagnifyingGlassMinus size={14} />
+          </button>
+          <input
+            type="range"
+            min={0.5}
+            max={2.4}
+            step={0.05}
+            value={stageZoom}
+            onChange={(e) => setStageZoom(+e.target.value)}
+            className="w-24"
+            data-doc-print-stage-zoom="1"
+            aria-label="Page zoom"
+          />
+          <button
+            type="button"
+            className="btn-secondary p-1.5"
+            onClick={() => setStageZoom((z) => Math.min(2.4, +(z + 0.1).toFixed(2)))}
+            aria-label="Zoom in"
+          >
+            <MagnifyingGlassPlus size={14} />
+          </button>
+          <button type="button" className="btn-secondary text-[11px] px-2 py-1" onClick={() => setStageZoom(1)}>
+            Fit page
+          </button>
+          <span className="tabular-nums w-10">{Math.round(stageZoom * 100)}%</span>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            className="btn-secondary p-1.5"
+            disabled={pageIndex <= 0}
+            onClick={() => {
+              setPageIndex((i) => i - 1);
+              setSelected(null);
+            }}
+            aria-label="Previous page"
+          >
+            <CaretLeft size={14} />
+          </button>
+          <span className="font-medium tabular-nums">
+            {pageIndex + 1}/{pages.length}
+          </span>
+          <button
+            type="button"
+            className="btn-secondary p-1.5"
+            disabled={pageIndex >= pages.length - 1}
+            onClick={() => {
+              setPageIndex((i) => i + 1);
+              setSelected(null);
+            }}
+            aria-label="Next page"
+          >
+            <CaretRight size={14} />
+          </button>
+          {pages.length > 1 && (
+            <button type="button" className="text-[11px] text-red-600 px-1" onClick={removePage}>
+              Remove page
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1 ml-auto">
+          {(
+            [
+              ['new-page', 'New page'],
+              ['this-page', 'This page'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className="text-[11px] rounded-md px-2 py-1 border"
+              style={chip(addMode === id)}
+              onClick={() => setAddMode(id)}
+            >
+              {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="btn-secondary text-[11px] py-1 px-2 flex items-center gap-1"
+            onClick={() => addFileRef.current?.click()}
+          >
+            <UploadSimple size={13} /> Add
+          </button>
+          <button
+            type="button"
+            className="btn-secondary text-[11px] py-1 px-2 text-red-600"
             onClick={removeSelected}
             disabled={!selectedCell || (page?.cells.length === 1 && pages.length === 1)}
           >
-            <Trash size={14} /> Remove image
-          </button>
-        </div>
-
-        <div className="card space-y-2">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">Preview zoom</p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-secondary p-2"
-              onClick={() => setStageZoom((z) => Math.max(0.6, +(z - 0.1).toFixed(1)))}
-              aria-label="Zoom out"
-            >
-              <MagnifyingGlassMinus size={16} />
-            </button>
-            <input
-              type="range"
-              min={0.6}
-              max={1.6}
-              step={0.05}
-              value={stageZoom}
-              onChange={(e) => setStageZoom(+e.target.value)}
-              className="flex-1"
-              data-doc-print-stage-zoom="1"
-            />
-            <button
-              type="button"
-              className="btn-secondary p-2"
-              onClick={() => setStageZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(1)))}
-              aria-label="Zoom in"
-            >
-              <MagnifyingGlassPlus size={16} />
-            </button>
-            <span className="text-xs tabular-nums w-10 text-right">{Math.round(stageZoom * 100)}%</span>
-          </div>
-        </div>
-
-        <div className="card space-y-2">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">Add images</p>
-          <div className="flex gap-1">
-            {(
-              [
-                ['new-page', 'New page'],
-                ['this-page', 'This page'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                className="flex-1 text-xs rounded-lg py-2 border"
-                style={{
-                  borderColor: addMode === id ? 'hsl(27 95% 55%)' : 'var(--border)',
-                  background: addMode === id ? 'hsl(27 95% 55% / 0.12)' : 'transparent',
-                }}
-                onClick={() => setAddMode(id)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className="btn-secondary w-full text-sm flex items-center justify-center gap-2 py-2.5"
-            onClick={() => addFileRef.current?.click()}
-          >
-            <UploadSimple size={16} /> Add image
+            <Trash size={13} />
           </button>
           <input
             ref={addFileRef}
@@ -791,90 +889,7 @@ export default function DocumentPrintPage() {
             onChange={onAddLocal}
           />
         </div>
-
-        <div className="card space-y-2">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">
-            Pages · {pages.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="btn-secondary p-2"
-              disabled={pageIndex <= 0}
-              onClick={() => {
-                setPageIndex((i) => i - 1);
-                setSelected(null);
-              }}
-              aria-label="Previous page"
-            >
-              <CaretLeft size={16} />
-            </button>
-            <span className="flex-1 text-center text-sm font-medium">
-              Page {pageIndex + 1} of {pages.length}
-            </span>
-            <button
-              type="button"
-              className="btn-secondary p-2"
-              disabled={pageIndex >= pages.length - 1}
-              onClick={() => {
-                setPageIndex((i) => i + 1);
-                setSelected(null);
-              }}
-              aria-label="Next page"
-            >
-              <CaretRight size={16} />
-            </button>
-          </div>
-          {pages.length > 1 && (
-            <button type="button" className="btn-secondary w-full text-xs py-2 text-red-600" onClick={removePage}>
-              Remove this page
-            </button>
-          )}
-        </div>
-
-        <button
-          type="button"
-          className="btn-primary w-full text-sm flex items-center justify-center gap-2 py-3"
-          onClick={handlePrint}
-          disabled={busy || !pages.length}
-          data-doc-print-submit="1"
-        >
-          {busy ? <SpinnerGap size={18} className="animate-spin" /> : <Printer size={18} />}
-          {busy ? 'Preparing PDF…' : `Print ${paper.label} PDF`}
-        </button>
-        <button
-          type="button"
-          className="btn-secondary w-full text-sm flex items-center justify-center gap-2 py-2.5"
-          onClick={handleDownloadPdf}
-          disabled={busy || !pages.length}
-          data-doc-print-download="1"
-        >
-          <DownloadSimple size={16} /> Download PDF ({paper.label})
-        </button>
-        <p className="text-[10px] text-center text-[var(--muted-foreground)] leading-snug">
-          In the printer dialog, paper should show {paper.label}. If it still says A4, pick{' '}
-          {paper.label} once (PDF page is already {paper.wMm.toFixed(0)}×{paper.hMm.toFixed(0)} mm).
-        </p>
-      </aside>
-
-      <div
-        className="flex-1 min-h-[280px] rounded-xl flex items-center justify-center overflow-auto p-3"
-        style={{ background: '#d4d4d4' }}
-      >
-        <canvas
-          ref={canvasRef}
-          className="block rounded shadow-xl h-auto cursor-grab active:cursor-grabbing select-none bg-white"
-          style={{
-            touchAction: 'none',
-            width: '100%',
-            maxWidth: Math.round(baseMaxW * stageZoom),
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-        />
-      </div>
+      </footer>
 
       <AspectCropModal
         open={cropOpen}

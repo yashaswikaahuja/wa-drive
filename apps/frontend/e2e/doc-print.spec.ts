@@ -62,7 +62,14 @@ test.describe('Document print layout (operator)', () => {
     // Operator picks 4×6
     await page.getByRole('button', { name: /4×6/i }).click();
     await expect(page.locator('[data-doc-print-paper]')).toHaveAttribute('data-doc-print-paper', '4x6');
-    await expect(page.getByText(/Selected:.*4×6/i)).toBeVisible();
+    await expect(page.locator('[data-doc-print-paper]')).toContainText(/4×6/);
+
+    // Page canvas must fill the editor stage — not a postage-stamp preview.
+    const sheet = await page.locator('[data-doc-print-stage="1"] canvas').boundingBox();
+    const vp = page.viewportSize();
+    expect(sheet).toBeTruthy();
+    expect(sheet!.width).toBeGreaterThan((vp?.width ?? 1280) * 0.45);
+    expect(sheet!.height).toBeGreaterThan((vp?.height ?? 800) * 0.45);
 
     // Operator edit bar must be present (crop / rotate / fit / tone / zoom).
     await expect(page.locator('[data-doc-print-edit="1"]')).toBeVisible();
