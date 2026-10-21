@@ -4,6 +4,7 @@
  * Mozilla PDF.js embed for PDFs. Shared by File Manager and WhatsApp Documents.
  */
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -113,15 +114,16 @@ export default function MediaViewer({
   const [pinching, setPinching] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const filmstripRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const stageElRef = useRef<HTMLDivElement | null>(null);
   const swipeStartX = useRef<number | null>(null);
-  /** Two-finger pinch: scale content zoom without browser page zoom. */
+  /** Two-finger / Safari gesture pinch → content scale (not browser page zoom). */
   const pinchStartDist = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
   const pinchActive = useRef(false);
   const kindRef = useRef<MediaKind>('image');
   const onPrevRef = useRef(onPrev);
   const onNextRef = useRef(onNext);
+  const detachPinchRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -171,8 +173,11 @@ export default function MediaViewer({
   const kind = file?.kind ?? 'image';
   kindRef.current = kind;
 
-  useEffect(() => {
-    const el = stageRef.current;
+  /** Bind pinch/swipe on the stage node as soon as it mounts (stable callback ref). */
+  const bindPinchSurface = useCallback((el: HTMLDivElement | null) => {
+    detachPinchRef.current?.();
+    detachPinchRef.current = null;
+    stageElRef.current = el;
     if (!el) return;
 
     const touchDistance = (a: Touch, b: Touch) => {
@@ -181,9 +186,16 @@ export default function MediaViewer({
       return Math.hypot(dx, dy);
     };
     const clampZoom = (z: number) => Math.min(4, Math.max(0.5, Number(z.toFixed(2))));
+    const applyZoom = (z: number) => {
+      const next = clampZoom(z);
+      zoomRef.current = next;
+      setZoom(next);
+    };
 
-    const onStart = (e: TouchEvent) => {
-      if (kindRef.current === 'image' && e.touches.length >= 2) {
+    const onTouchStart = (e: TouchEvent) => {
+      if (kindRef.current !== 'image') return;
+      if (e.touches.length >= 2) {
+        e.preventDefault();
         pinchActive.current = true;
         setPinching(true);
         pinchStartDist.current = touchDistance(e.touches[0], e.touches[1]);
@@ -196,21 +208,25 @@ export default function MediaViewer({
       }
     };
 
-    const onMove = (e: TouchEvent) => {
+    const onTouchMove = (e: TouchEvent) => {
       if (kindRef.current !== 'image') return;
-      if (e.touches.length >= 2 && pinchStartDist.current && pinchStartDist.current > 0) {
+      if (e.touches.length >= 2) {
         e.preventDefault();
+        // Second finger may land after move started — (re)seed baseline.
+        if (!pinchStartDist.current || pinchStartDist.current <= 0) {
+          pinchStartDist.current = touchDistance(e.touches[0], e.touches[1]);
+          pinchStartZoom.current = zoomRef.current;
+        }
         pinchActive.current = true;
         setPinching(true);
         swipeStartX.current = null;
         const dist = touchDistance(e.touches[0], e.touches[1]);
-        const next = clampZoom(pinchStartZoom.current * (dist / pinchStartDist.current));
-        zoomRef.current = next;
-        setZoom(next);
+        applyZoom(pinchStartZoom.current * (dist / pinchStartDist.current));
       }
     };
 
-    const onEnd = (e: TouchEvent) => {
+    const onTouchEnd = (e: TouchEvent) => {
+      if (kindRef.current !== 'image') return;
       if (e.touches.length < 2) pinchStartDist.current = null;
       if (e.touches.length === 0) {
         const wasPinch = pinchActive.current;
@@ -231,17 +247,56 @@ export default function MediaViewer({
       else onPrevRef.current?.();
     };
 
-    el.addEventListener('touchstart', onStart, { passive: true });
-    el.addEventListener('touchmove', onMove, { passive: false });
-    el.addEventListener('touchend', onEnd);
-    el.addEventListener('touchcancel', onEnd);
-    return () => {
-      el.removeEventListener('touchstart', onStart);
-      el.removeEventListener('touchmove', onMove);
-      el.removeEventListener('touchend', onEnd);
-      el.removeEventListener('touchcancel', onEnd);
+    // Safari / iOS Safari expose non-standard gesture* events for pinch.
+    const onGestureStart = (e: Event) => {
+      if (kindRef.current !== 'image') return;
+      e.preventDefault();
+      pinchActive.current = true;
+      setPinching(true);
+      pinchStartZoom.current = zoomRef.current;
+      swipeStartX.current = null;
     };
-  }, [file?.id]);
+    const onGestureChange = (e: Event) => {
+      if (kindRef.current !== 'image') return;
+      e.preventDefault();
+      const scale = (e as Event & { scale?: number }).scale;
+      if (typeof scale !== 'number' || !Number.isFinite(scale)) return;
+      pinchActive.current = true;
+      setPinching(true);
+      applyZoom(pinchStartZoom.current * scale);
+    };
+    const onGestureEnd = (e: Event) => {
+      e.preventDefault();
+      pinchActive.current = false;
+      setPinching(false);
+      pinchStartDist.current = null;
+      swipeStartX.current = null;
+    };
+
+    const opts = { capture: true, passive: false } as const;
+    el.addEventListener('touchstart', onTouchStart, opts);
+    el.addEventListener('touchmove', onTouchMove, opts);
+    el.addEventListener('touchend', onTouchEnd, opts);
+    el.addEventListener('touchcancel', onTouchEnd, opts);
+    el.addEventListener('gesturestart', onGestureStart, opts);
+    el.addEventListener('gesturechange', onGestureChange, opts);
+    el.addEventListener('gestureend', onGestureEnd, opts);
+
+    detachPinchRef.current = () => {
+      el.removeEventListener('touchstart', onTouchStart, true);
+      el.removeEventListener('touchmove', onTouchMove, true);
+      el.removeEventListener('touchend', onTouchEnd, true);
+      el.removeEventListener('touchcancel', onTouchEnd, true);
+      el.removeEventListener('gesturestart', onGestureStart, true);
+      el.removeEventListener('gesturechange', onGestureChange, true);
+      el.removeEventListener('gestureend', onGestureEnd, true);
+    };
+  }, []);
+
+  useEffect(() => () => {
+    detachPinchRef.current?.();
+    detachPinchRef.current = null;
+  }, []);
 
   if (!file) {
     if (!opening) return null;
@@ -279,7 +334,9 @@ export default function MediaViewer({
     // Trackpad pinch arrives as ctrl/meta + wheel.
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      setZoom((z: number) => Math.min(4, Math.max(0.5, Number((z - e.deltaY * 0.002).toFixed(2)))));
+      const next = Math.min(4, Math.max(0.5, Number((zoomRef.current - e.deltaY * 0.002).toFixed(2))));
+      zoomRef.current = next;
+      setZoom(next);
     }
   };
 
@@ -297,10 +354,11 @@ export default function MediaViewer({
       aria-label={displayName(file.fileName)}
     >
       <div
-        ref={stageRef}
+        ref={bindPinchSurface}
         className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         style={{ touchAction: kind === 'pdf' ? 'auto' : 'none' }}
+        data-pinch-surface={kind === 'image' ? '1' : undefined}
       >
         <div
           className="pointer-events-none absolute inset-0"
