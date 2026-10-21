@@ -10,7 +10,6 @@ import {
   useState,
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
-  type WheelEvent as ReactWheelEvent,
 } from 'react';
 import {
   ArrowBendUpLeft,
@@ -173,6 +172,35 @@ export default function MediaViewer({
   const kind = file?.kind ?? 'image';
   kindRef.current = kind;
 
+  /**
+   * Desktop trackpad pinch arrives as ctrl/meta + wheel. React onWheel is passive,
+   * so preventDefault there cannot stop browser page zoom — use a native listener.
+   */
+  useEffect(() => {
+    if (!file || file.kind !== 'image') return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const next = Math.min(
+        4,
+        Math.max(0.5, Number((zoomRef.current - e.deltaY * 0.002).toFixed(2))),
+      );
+      zoomRef.current = next;
+      setZoom(next);
+      setPinching(Math.abs(e.deltaY) > 0.5);
+    };
+    const clearPinching = () => setPinching(false);
+    window.addEventListener('wheel', onWheel, { passive: false, capture: true });
+    window.addEventListener('mouseup', clearPinching);
+    window.addEventListener('keyup', clearPinching);
+    return () => {
+      window.removeEventListener('wheel', onWheel, true);
+      window.removeEventListener('mouseup', clearPinching);
+      window.removeEventListener('keyup', clearPinching);
+      setPinching(false);
+    };
+  }, [file?.id, file?.kind]);
+
   /** Bind pinch/swipe on the stage node as soon as it mounts (stable callback ref). */
   const bindPinchSurface = useCallback((el: HTMLDivElement | null) => {
     detachPinchRef.current?.();
@@ -273,6 +301,14 @@ export default function MediaViewer({
       swipeStartX.current = null;
     };
 
+    const onWheel = (e: WheelEvent) => {
+      if (kindRef.current !== 'image') return;
+      // Trackpad pinch / ctrl+scroll — keep zoom on the photo, not the page.
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      applyZoom(zoomRef.current - e.deltaY * 0.002);
+    };
+
     const opts = { capture: true, passive: false } as const;
     el.addEventListener('touchstart', onTouchStart, opts);
     el.addEventListener('touchmove', onTouchMove, opts);
@@ -281,6 +317,7 @@ export default function MediaViewer({
     el.addEventListener('gesturestart', onGestureStart, opts);
     el.addEventListener('gesturechange', onGestureChange, opts);
     el.addEventListener('gestureend', onGestureEnd, opts);
+    el.addEventListener('wheel', onWheel, opts);
 
     detachPinchRef.current = () => {
       el.removeEventListener('touchstart', onTouchStart, true);
@@ -290,6 +327,7 @@ export default function MediaViewer({
       el.removeEventListener('gesturestart', onGestureStart, true);
       el.removeEventListener('gesturechange', onGestureChange, true);
       el.removeEventListener('gestureend', onGestureEnd, true);
+      el.removeEventListener('wheel', onWheel, true);
     };
   }, []);
 
@@ -329,17 +367,6 @@ export default function MediaViewer({
     else onPrev?.();
   };
 
-  const onWheel = (e: ReactWheelEvent) => {
-    if (kind !== 'image') return;
-    // Trackpad pinch arrives as ctrl/meta + wheel.
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const next = Math.min(4, Math.max(0.5, Number((zoomRef.current - e.deltaY * 0.002).toFixed(2))));
-      zoomRef.current = next;
-      setZoom(next);
-    }
-  };
-
   const counter =
     index >= 0 && items.length > 0 ? ` · File ${index + 1} of ${items.length}` : '';
 
@@ -348,7 +375,6 @@ export default function MediaViewer({
       className={`fixed inset-0 ${zIndexClass} bg-[#0a0a0a] flex flex-col overscroll-none`}
       style={{ touchAction: kind === 'pdf' ? 'auto' : 'none' }}
       onClick={onClose}
-      onWheel={onWheel}
       role="dialog"
       aria-modal="true"
       aria-label={displayName(file.fileName)}

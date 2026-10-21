@@ -111,3 +111,89 @@ test.describe('Media viewer image pinch zoom', () => {
     expect(scale).toBeGreaterThan(1.3);
   });
 });
+
+test.describe('Media viewer desktop trackpad pinch', () => {
+  test.use({
+    viewport: { width: 1280, height: 800 },
+    isMobile: false,
+    hasTouch: false,
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript((auth) => {
+      localStorage.setItem('cc-auth', JSON.stringify(auth));
+    }, AUTH);
+    await page.route('**/socket.io/**', (route) => route.abort());
+    await page.route('**/api/**', async (route) => {
+      const url = route.request().url();
+      if (url.includes('/drive/files')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'img1',
+              fileName: 'aadhaar_front.jpg',
+              customerId: '919006615450',
+              customerName: 'Shubham Kumar',
+              source: 'whatsapp',
+              mimeType: 'image/jpeg',
+              timestamp: '2026-10-14T10:00:00Z',
+              driveFileId: 'drv-img1',
+            },
+          ]),
+        });
+        return;
+      }
+      if (url.includes('/drive/download/')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'image/jpeg',
+          body: TINY_JPEG,
+        });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
+  });
+
+  test('ctrl+wheel zooms image only (not the page)', async ({ page }) => {
+    await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
+    await page.getByText(/aadhaar/i).first().click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    const img = dialog.locator('img[alt="aadhaar_front.jpg"]');
+    await expect(img).toBeVisible();
+
+    const pageScaleBefore = await page.evaluate(() => window.visualViewport?.scale ?? 1);
+
+    // Trackpad pinch = ctrl + wheel (must be cancelled by non-passive listener).
+    await img.hover();
+    await page.mouse.wheel(0, -400);
+    // Playwright mouse.wheel does not set ctrlKey; dispatch a real WheelEvent.
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new WheelEvent('wheel', {
+          deltaY: -400,
+          ctrlKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+
+    await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
+    const scale = await img.evaluate((el) => {
+      const t = getComputedStyle(el).transform;
+      if (!t || t === 'none') return 1;
+      const m = t.match(/matrix\(([^,]+)/);
+      return m ? Number(m[1]) : 1;
+    });
+    expect(scale).toBeGreaterThan(1.2);
+
+    const pageScaleAfter = await page.evaluate(() => window.visualViewport?.scale ?? 1);
+    expect(pageScaleAfter).toBe(pageScaleBefore);
+  });
+});
