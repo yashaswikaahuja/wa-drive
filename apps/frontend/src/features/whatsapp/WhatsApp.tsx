@@ -1597,8 +1597,8 @@ export default function WhatsApp() {
           const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
           if (!driveId || !viewerFile) return;
           const kind = mediaKindOf(viewerFile.fileName || '');
-          // JPEG/PNG docs: layout on paper → silent PDF → print (avoids OS page/margin prompts).
-          if (kind === 'image') {
+          // JPEG and PDF: paper editor, then silent PDF print.
+          if (kind === 'image' || kind === 'pdf') {
             navigate(
               docPrintPath(driveId, {
                 phone: viewerFile.phone,

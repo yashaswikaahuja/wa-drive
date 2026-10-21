@@ -190,12 +190,19 @@ export function fitImageOnPage(
   };
 }
 
+/** Empty sheet. Images, text, and whiteout are added onto it. */
+export function blankPage(paper: DocPaperDef): DocPage {
+  void paper;
+  return { id: makeId('p'), cells: [], marks: [] };
+}
+
 /** Resize a single cell to sit in the page with the given margin (mm). */
 export function cellInMargin(
   cell: DocCell,
   paper: DocPaperDef,
   marginMm: number,
 ): Pick<DocCell, 'x' | 'y' | 'w' | 'h'> {
+  void cell;
   const margin = mm(marginMm);
   return {
     x: margin,

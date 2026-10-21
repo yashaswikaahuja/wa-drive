@@ -168,4 +168,33 @@ test.describe('Document print layout (operator)', () => {
       .toEqual({ w: 152.4, h: 101.6 });
     await page.screenshot({ path: 'C:/Users/yasha/AppData/Local/Temp/doc-print-op/03-after-print.png', fullPage: true });
   });
+
+  test('blank paper takes an image and opens the Mozilla PDF viewer', async ({ page }) => {
+    await page.goto('/app/photos/doc-print?paper=a4&from=/app/whatsapp&name=Shubham', {
+      waitUntil: 'domcontentloaded',
+    });
+    const later = page.getByRole('button', { name: /^Later$/i });
+    if (await later.isVisible().catch(() => false)) await later.click();
+
+    await expect(page.locator('[data-doc-print="1"]')).toBeVisible({ timeout: 15000 });
+    const add = page.locator('[data-doc-print-add-image="1"]');
+    await expect(add).toBeVisible();
+
+    const [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      add.click(),
+    ]);
+    await chooser.setFiles('C:/Users/yasha/AppData/Local/Temp/doc-print-fixture.png');
+    await expect(page.locator('[data-doc-print-crop="1"]')).toBeVisible();
+    await expect(add).toHaveCount(0);
+
+    await page.locator('[data-doc-print-blank="1"]').click();
+    await expect(page.locator('[data-doc-print-add-image="1"]')).toBeVisible();
+
+    await page.locator('[data-doc-print-surface="pdf"]').click();
+    const frame = page.frameLocator('iframe[title="PDF document"]');
+    await expect(frame.locator('#viewerContainer')).toBeVisible({ timeout: 20000 });
+    await expect(frame.locator('.page').first()).toBeVisible({ timeout: 20000 });
+    await expect(frame.locator('#cyberBackButton')).toHaveCount(0);
+  });
 });

@@ -544,9 +544,9 @@ export default function FileManager() {
     navigate(`/app/photos/portal?${q}`);
   };
 
-  /** JPEG docs → paper layout → silent PDF print; PDFs print as-is. */
+  /** JPEG and PDF → paper editor (Mozilla viewer + blank sheet). */
   const openDocumentPrint = (f: DriveFile) => {
-    if (isImage(f)) {
+    if (isImage(f) || isPdf(f)) {
       const q = new URLSearchParams();
       q.set('fileId', driveIdOf(f));
       if (f.customerId) q.set('phone', f.customerId);

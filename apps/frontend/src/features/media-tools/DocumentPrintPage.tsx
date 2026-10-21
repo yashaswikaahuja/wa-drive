@@ -33,8 +33,10 @@ import {
   rotateCanvas,
 } from './imageOps';
 import AspectCropModal from './AspectCropModal';
+import MozillaPdfEmbed from '../files/MozillaPdfEmbed';
 import {
   DOC_PAPERS,
+  blankPage,
   cellInMargin,
   cloneCanvas,
   type DocCell,
@@ -50,6 +52,7 @@ import {
   readPdfMediaBoxPts,
   renderPageCanvas,
 } from './documentPrintLayout';
+import { pdfBytesToPages } from './pdfPaper';
 
 const MARGIN_PRESETS = [
   { mm: 0, label: '0' },
@@ -79,15 +82,18 @@ function PageThumb({
   return <canvas ref={ref} className="block w-full h-auto bg-white" />;
 }
 
-async function loadDriveImage(fileId: string): Promise<HTMLCanvasElement> {
-  const blob = await getCachedBlob(fileId, async () => {
+async function loadDriveBlob(fileId: string): Promise<Blob> {
+  return getCachedBlob(fileId, async () => {
     const res = await api.get(`/drive/download/${fileId}`, { responseType: 'blob' });
     return new Blob([res.data], {
-      type: String(res.headers['content-type'] ?? 'image/jpeg'),
+      type: String(res.headers['content-type'] ?? 'application/octet-stream'),
     });
   });
-  const img = await loadImageFromFile(blob);
-  return imageToCanvas(img);
+}
+
+function isPdfBlob(blob: Blob, head: Uint8Array): boolean {
+  const sig = String.fromCharCode(head[0] || 0, head[1] || 0, head[2] || 0, head[3] || 0, head[4] || 0);
+  return blob.type.includes('pdf') || sig === '%PDF-';
 }
 
 export default function DocumentPrintPage() {
@@ -128,6 +134,11 @@ export default function DocumentPrintPage() {
   const [marginMm, setMarginMm] = useState(10);
   const [cropOpen, setCropOpen] = useState(false);
   const [tool, setTool] = useState<'select' | 'text' | 'box'>('select');
+  const [surface, setSurface] = useState<'edit' | 'pdf'>('edit');
+  const [edited, setEdited] = useState(false);
+  const [originalPdfUrl, setOriginalPdfUrl] = useState('');
+  const [layoutPdfUrl, setLayoutPdfUrl] = useState('');
+  const originalUrlRef = useRef('');
 
   const dragRef = useRef<{
     cellId: string;
@@ -167,37 +178,65 @@ export default function DocumentPrintPage() {
     if (!known) setSelected(page.cells[0]?.id ?? null);
   }, [page, selected]);
 
-  // ── Load primary + extras ───────────────────────────────────────
+  // ── Load primary + extras, or start on a blank sheet ───────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const p = DOC_PAPERS[paperId];
       if (!fileId) {
+        setPages([blankPage(p)]);
+        setPageIndex(0);
+        setSelected(null);
+        setSurface('edit');
         setLoading(false);
-        toast.error('No file to print');
         return;
       }
       setLoading(true);
       try {
         const ids = [fileId, ...extraIds.filter((id) => id !== fileId)];
-        const canvases: HTMLCanvasElement[] = [];
-        for (const id of ids) {
+        const built: DocPage[] = [];
+        let firstPdfUrl = '';
+        for (let i = 0; i < ids.length; i++) {
           try {
-            canvases.push(await loadDriveImage(id));
+            const blob = await loadDriveBlob(ids[i]);
+            const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+            if (isPdfBlob(blob, head)) {
+              const data = await blob.arrayBuffer();
+              built.push(...(await pdfBytesToPages(data, p)));
+              if (!firstPdfUrl) firstPdfUrl = URL.createObjectURL(blob);
+            } else {
+              const img = await loadImageFromFile(blob);
+              built.push(fitImageOnPage(imageToCanvas(img), p, marginMm, i === 0 ? name || undefined : undefined));
+            }
           } catch {
             /* skip missing */
           }
         }
-        if (cancelled) return;
-        if (!canvases.length) throw new Error('Could not load image');
-        const p = DOC_PAPERS[paperId];
-        const built = canvases.map((c, i) =>
-          fitImageOnPage(c, p, marginMm, i === 0 ? name || undefined : undefined),
-        );
+        if (cancelled) {
+          if (firstPdfUrl) URL.revokeObjectURL(firstPdfUrl);
+          return;
+        }
+        if (!built.length) throw new Error('Could not load document');
         setPages(built);
         setPageIndex(0);
         setSelected(built[0]?.cells[0]?.id ?? null);
+        setEdited(false);
+        if (firstPdfUrl) {
+          if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
+          originalUrlRef.current = firstPdfUrl;
+          setOriginalPdfUrl(firstPdfUrl);
+          setSurface('pdf');
+        } else {
+          setSurface('edit');
+        }
       } catch (e: any) {
-        toast.error(e?.message || 'Failed to load image');
+        if (!cancelled) {
+          toast.error(e?.message || 'Failed to load document');
+          setPages([blankPage(p)]);
+          setPageIndex(0);
+          setSelected(null);
+          setSurface('edit');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -208,8 +247,15 @@ export default function DocumentPrintPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId]);
 
+  useEffect(() => {
+    return () => {
+      if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
+    };
+  }, []);
+
   const changePaper = (next: DocPaperId) => {
     const prevPaper = DOC_PAPERS[paperId];
+    setEdited(true);
     setPaperId(next);
     const p = DOC_PAPERS[next];
     const sx = p.w / Math.max(1, prevPaper.w);
@@ -222,7 +268,7 @@ export default function DocumentPrintPage() {
         w: Math.max(28, Math.round(m.w * sx)),
         h: Math.max(28, Math.round(m.h * sy)),
       };
-      if (scaled.kind === 'text') {
+      if (m.kind === 'text' && scaled.kind === 'text') {
         scaled.size = Math.max(12, Math.round(m.size * Math.min(sx, sy)));
       }
       return scaled;
@@ -282,7 +328,7 @@ export default function DocumentPrintPage() {
     const obs = new ResizeObserver(measure);
     obs.observe(el);
     return () => obs.disconnect();
-  }, [paper.w, pageIndex, pages.length, loading]);
+  }, [paper.w, pageIndex, pages.length, loading, surface]);
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -328,6 +374,7 @@ export default function DocumentPrintPage() {
   };
 
   const updateCell = (cellId: string, patch: Partial<DocCell>) => {
+    setEdited(true);
     setPages((prev) =>
       prev.map((pg, i) =>
         i !== pageIndex
@@ -341,6 +388,7 @@ export default function DocumentPrintPage() {
   };
 
   const updateMark = (markId: string, patch: Partial<DocMark>) => {
+    setEdited(true);
     setPages((prev) =>
       prev.map((pg, i) =>
         i !== pageIndex
@@ -354,6 +402,7 @@ export default function DocumentPrintPage() {
   };
 
   const addMark = (mark: DocMark) => {
+    setEdited(true);
     setPages((prev) =>
       prev.map((pg, i) => (i === pageIndex ? { ...pg, marks: [...(pg.marks || []), mark] } : pg)),
     );
@@ -533,22 +582,21 @@ export default function DocumentPrintPage() {
   };
 
   // ── Add / remove ────────────────────────────────────────────────
-  const addCanvas = (c: HTMLCanvasElement, label?: string) => {
-    const mode = addModeRef.current;
-    if (mode === 'this-page' && pages[pageIndex]) {
-      const box = cellInMargin(
-        { id: '', x: 0, y: 0, w: 0, h: 0, canvas: c },
-        paper,
-        marginMm,
-      );
-      const nw = Math.max(mmMin(), Math.round(box.w * 0.46));
-      const nh = Math.max(mmMin(), Math.round(box.h * 0.46));
-      const cell: DocCell = {
+  const addBlankPage = () => {
+    const pg = blankPage(paper);
+    setEdited(true);
+    setPages((prev) => [...prev, pg]);
+    setPageIndex(pages.length);
+    setSelected(null);
+    setSurface('edit');
+  };
+
+  const placeImage = (c: HTMLCanvasElement, label: string | undefined, onBlank: boolean): DocCell => {
+    const box = cellInMargin({ id: '', x: 0, y: 0, w: 0, h: 0, canvas: c }, paper, marginMm);
+    if (onBlank) {
+      return {
         id: makeId('c'),
-        x: Math.min(paper.w - nw, box.x + Math.round(box.w * 0.5)),
-        y: Math.min(paper.h - nh, box.y + Math.round((box.h - nh) / 2)),
-        w: nw,
-        h: nh,
+        ...box,
         canvas: c,
         baseCanvas: cloneCanvas(c),
         fitMode: 'contain',
@@ -556,6 +604,31 @@ export default function DocumentPrintPage() {
         contrast: 0,
         label,
       };
+    }
+    const nw = Math.max(mmMin(), Math.round(box.w * 0.46));
+    const nh = Math.max(mmMin(), Math.round(box.h * 0.46));
+    return {
+      id: makeId('c'),
+      x: Math.min(paper.w - nw, box.x + Math.round(box.w * 0.5)),
+      y: Math.min(paper.h - nh, box.y + Math.round((box.h - nh) / 2)),
+      w: nw,
+      h: nh,
+      canvas: c,
+      baseCanvas: cloneCanvas(c),
+      fitMode: 'contain',
+      brightness: 0,
+      contrast: 0,
+      label,
+    };
+  };
+
+  const addCanvas = (c: HTMLCanvasElement, label?: string) => {
+    const mode = addModeRef.current;
+    setEdited(true);
+    setSurface('edit');
+    if (mode === 'this-page' && pages[pageIndex]) {
+      const onBlank = pages[pageIndex].cells.length === 0;
+      const cell = placeImage(c, label, onBlank);
       setPages((prev) =>
         prev.map((pg, i) => (i === pageIndex ? { ...pg, cells: [...pg.cells, cell] } : pg)),
       );
@@ -594,24 +667,12 @@ export default function DocumentPrintPage() {
       return;
     }
     if (!selectedCell) return;
-    setPages((prev) => {
-      const next = prev
-        .map((pg, i) =>
-          i !== pageIndex ? pg : { ...pg, cells: pg.cells.filter((c) => c.id !== selectedCell.id) },
-        )
-        .filter((pg) => pg.cells.length > 0);
-      return next.length ? next : prev;
-    });
-    setSelected(null);
-  };
-
-  const removePage = () => {
-    if (pages.length <= 1) {
-      toast.error('Keep at least one page');
-      return;
-    }
-    setPages((prev) => prev.filter((_, i) => i !== pageIndex));
-    setPageIndex((i) => Math.max(0, Math.min(i, pages.length - 2)));
+    setEdited(true);
+    setPages((prev) =>
+      prev.map((pg, i) =>
+        i !== pageIndex ? pg : { ...pg, cells: pg.cells.filter((c) => c.id !== selectedCell.id) },
+      ),
+    );
     setSelected(null);
   };
 
@@ -631,6 +692,28 @@ export default function DocumentPrintPage() {
     }
     return pdfBlob;
   };
+
+  // Mozilla viewer shows the original PDF until the sheet is edited, then the print layout.
+  useEffect(() => {
+    if (surface !== 'pdf' || (originalPdfUrl && !edited)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = await pagesToPdfBlob(pages, paper);
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        setLayoutPdfUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return url;
+        });
+      } catch (e: any) {
+        if (!cancelled) toast.error(e?.message || 'Could not open the PDF viewer');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [surface, edited, pages, paper, originalPdfUrl]);
 
   const handlePrint = async () => {
     if (!pages.length) return;
@@ -713,6 +796,7 @@ export default function DocumentPrintPage() {
   sheetW = Math.round(sheetW * stageZoom);
   sheetH = Math.round(sheetH * stageZoom);
   const sheetFits = sheetH <= availH + 4;
+  const viewerUrl = originalPdfUrl && !edited ? originalPdfUrl : layoutPdfUrl;
 
   const chip = (on: boolean) =>
     ({
@@ -776,7 +860,10 @@ export default function DocumentPrintPage() {
               type="button"
               className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium"
               style={toolBtn(tool === id)}
-              onClick={() => setTool(id)}
+              onClick={() => {
+                setSurface('edit');
+                setTool(id);
+              }}
               data-doc-print-tool={id}
             >
               {icon}
@@ -787,6 +874,7 @@ export default function DocumentPrintPage() {
             type="button"
             className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium"
             onClick={() => {
+              setSurface('edit');
               addModeRef.current = 'this-page';
               addFileRef.current?.click();
             }}
@@ -794,6 +882,26 @@ export default function DocumentPrintPage() {
           >
             <ImageIcon size={18} />
             Image
+          </button>
+          <span className="w-px h-6 mx-1 shrink-0" style={{ background: 'hsl(var(--pt-border))' }} />
+          <button
+            type="button"
+            className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0"
+            style={chip(surface === 'edit')}
+            onClick={() => setSurface('edit')}
+            data-doc-print-surface="edit"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0"
+            style={chip(surface === 'pdf')}
+            onClick={() => setSurface('pdf')}
+            title="Mozilla PDF viewer"
+            data-doc-print-surface="pdf"
+          >
+            Viewer
           </button>
           <span className="w-px h-6 mx-1 shrink-0" style={{ background: 'hsl(var(--pt-border))' }} />
           {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
@@ -824,6 +932,7 @@ export default function DocumentPrintPage() {
               onClick={() => {
                 setPageIndex(i);
                 setSelected(null);
+                setSurface('edit');
               }}
             >
               <div
@@ -835,6 +944,14 @@ export default function DocumentPrintPage() {
               <div className="text-[10px] text-center mt-0.5 text-[var(--muted-foreground)]">{i + 1}</div>
             </button>
           ))}
+          <button
+            type="button"
+            className="w-16 md:w-full shrink-0 text-[10px] rounded border border-dashed py-2"
+            onClick={addBlankPage}
+            data-doc-print-blank="1"
+          >
+            Blank
+          </button>
           <button
             type="button"
             className="w-16 md:w-full shrink-0 text-[10px] rounded border border-dashed py-2"
@@ -935,18 +1052,41 @@ export default function DocumentPrintPage() {
               </>
             )}
             {!selectedCell && !selectedMark && (
-              <span className="text-[var(--muted-foreground)]">Select the page, or add Text, Image, or Whiteout.</span>
+              <span className="text-[var(--muted-foreground)]">
+                {page.cells.length ? 'Select the page, or add Text, Image, or Whiteout.' : 'Blank paper. Add an image, or drop a photo on the page.'}
+              </span>
             )}
           </div>
 
+          {surface === 'pdf' ? (
+            <div className="flex-1 min-h-0" data-doc-print-pdf="1">
+              {viewerUrl ? (
+                <MozillaPdfEmbed key={viewerUrl} fileUrl={viewerUrl} mode="editor" />
+              ) : (
+                <div className="h-full flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]">
+                  <SpinnerGap size={22} className="animate-spin" /> Opening PDF…
+                </div>
+              )}
+            </div>
+          ) : (
           <div
             ref={stageRef}
             className="flex-1 min-h-0 overflow-auto"
             style={{ background: '#d0d0d0' }}
             data-doc-print-stage="1"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const file = e.dataTransfer.files?.[0];
+              if (!file || !file.type.startsWith('image/')) return;
+              addModeRef.current = 'this-page';
+              void loadImageFromFile(file)
+                .then((img) => addCanvas(imageToCanvas(img), file.name))
+                .catch(() => toast.error('Could not load image'));
+            }}
           >
             <div
-              className="flex justify-center p-4 box-border"
+              className="relative flex justify-center p-4 box-border"
               style={{ minHeight: '100%', alignItems: sheetFits ? 'center' : 'flex-start' }}
             >
               <canvas
@@ -964,11 +1104,27 @@ export default function DocumentPrintPage() {
                 onPointerUp={onPointerUp}
                 onPointerCancel={onPointerUp}
               />
+              {!page.cells.length && (
+                <button
+                  type="button"
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 btn-primary text-sm px-4 py-2 shadow"
+                  data-doc-print-add-image="1"
+                  onClick={() => {
+                    addModeRef.current = 'this-page';
+                    addFileRef.current?.click();
+                  }}
+                >
+                  Add image
+                </button>
+              )}
             </div>
           </div>
+          )}
         </div>
       </div>
 
+      <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={onAddLocal} />
+      {surface === 'edit' && (
       <footer
         className="shrink-0 h-10 border-t px-3 flex items-center gap-2 text-xs overflow-x-auto whitespace-nowrap"
         style={{ background: '#fff', borderColor: 'hsl(var(--pt-border))' }}
@@ -988,8 +1144,8 @@ export default function DocumentPrintPage() {
           <span className="tabular-nums w-10">{Math.round(stageZoom * 100)}%</span>
         </div>
         <span className="tabular-nums">{pageIndex + 1} / {pages.length}</span>
-        <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={onAddLocal} />
       </footer>
+      )}
 
       <AspectCropModal
         open={cropOpen}

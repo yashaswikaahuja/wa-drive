@@ -2,6 +2,14 @@
 (async function () {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const ORIGIN = window.location.origin;
+  const editorMode = new URLSearchParams(window.location.search).get("cyber") === "editor";
+
+  function armChrome() {
+    if (editorMode) return;
+    injectToolbarButtons();
+    bindFileSwitchKeys();
+    bindEdgeSwipe();
+  }
 
   async function appReady() {
     for (let i = 0; i < 200; i++) {
@@ -225,11 +233,9 @@
     try {
       const app = await appReady();
       if (!app) throw new Error("PDFViewerApplication not ready");
-      injectToolbarButtons();
-      bindFileSwitchKeys();
-      bindEdgeSwipe();
+      armChrome();
       await app.open({ data: e.data.data });
-      injectToolbarButtons();
+      armChrome();
     } catch (err) {
       console.error("cyber-open-pdf failed", err);
       post("cyber-pdf-error", { message: String(err) });
@@ -238,9 +244,7 @@
 
   try {
     await appReady();
-    injectToolbarButtons();
-    bindFileSwitchKeys();
-    bindEdgeSwipe();
+    armChrome();
     notifyReady();
   } catch {}
 })();

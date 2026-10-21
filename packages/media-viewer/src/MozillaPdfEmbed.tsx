@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 export type MozillaPdfEmbedProps = {
   fileUrl: string;
   className?: string;
+  /** `editor` hides File Manager back/delete/file-switch chrome. */
+  mode?: 'files' | 'editor';
   onBack?: () => void;
   onDelete?: () => void;
   onPrevFile?: () => void;
@@ -16,6 +18,7 @@ export type MozillaPdfEmbedProps = {
 export default function MozillaPdfEmbed({
   fileUrl,
   className = '',
+  mode = 'files',
   onBack,
   onDelete,
   onPrevFile,
@@ -96,7 +99,11 @@ export default function MozillaPdfEmbed({
       <iframe
         ref={iframeRef}
         title="PDF document"
-        src="/pdfjs/web/viewer.html#zoom=page-width"
+        src={
+          mode === 'editor'
+            ? '/pdfjs/web/viewer.html?cyber=editor#zoom=page-width'
+            : '/pdfjs/web/viewer.html#zoom=page-width'
+        }
         className="w-full h-full border-0 bg-[#525659]"
         allow="fullscreen"
       />
