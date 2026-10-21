@@ -15,11 +15,55 @@ const AUTH = {
   version: 0,
 };
 
-/** 1×1 JPEG */
+/** 1×1 JPEG — fine for scale-only checks */
 const TINY_JPEG = Buffer.from(
   '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAn/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAGcP//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAQUCf//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQMBAT8Bf//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQIBAT8Bf//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEABj8Cf//EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAT8hf//Z',
   'base64',
 );
+
+/** Large SVG so focal zoom can shift the image center measurably */
+const BIG_SVG = Buffer.from(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
+    <rect width="800" height="600" fill="#6b7280"/>
+    <rect x="40" y="40" width="80" height="80" fill="#ef4444"/>
+    <rect x="680" y="480" width="80" height="80" fill="#22c55e"/>
+  </svg>`,
+  'utf8',
+);
+
+function mockDriveRoutes(
+  page: import('@playwright/test').Page,
+  body: Buffer,
+  contentType: string,
+) {
+  return page.route('**/api/**', async (route) => {
+    const url = route.request().url();
+    if (url.includes('/drive/files')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([
+          {
+            id: 'img1',
+            fileName: 'aadhaar_front.jpg',
+            customerId: '919006615450',
+            customerName: 'Shubham Kumar',
+            source: 'whatsapp',
+            mimeType: 'image/jpeg',
+            timestamp: '2026-10-14T10:00:00Z',
+            driveFileId: 'drv-img1',
+          },
+        ]),
+      });
+      return;
+    }
+    if (url.includes('/drive/download/')) {
+      await route.fulfill({ status: 200, contentType, body });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+}
 
 test.describe('Media viewer image pinch zoom', () => {
   test.use({
@@ -31,37 +75,7 @@ test.describe('Media viewer image pinch zoom', () => {
       localStorage.setItem('cc-auth', JSON.stringify(auth));
     }, AUTH);
     await page.route('**/socket.io/**', (route) => route.abort());
-    await page.route('**/api/**', async (route) => {
-      const url = route.request().url();
-      if (url.includes('/drive/files')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([
-            {
-              id: 'img1',
-              fileName: 'aadhaar_front.jpg',
-              customerId: '919006615450',
-              customerName: 'Shubham Kumar',
-              source: 'whatsapp',
-              mimeType: 'image/jpeg',
-              timestamp: '2026-10-14T10:00:00Z',
-              driveFileId: 'drv-img1',
-            },
-          ]),
-        });
-        return;
-      }
-      if (url.includes('/drive/download/')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'image/jpeg',
-          body: TINY_JPEG,
-        });
-        return;
-      }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-    });
+    await mockDriveRoutes(page, TINY_JPEG, 'image/jpeg');
   });
 
   test('pinch scales image and shows zoom percent', async ({ page }) => {
@@ -110,6 +124,53 @@ test.describe('Media viewer image pinch zoom', () => {
     });
     expect(scale).toBeGreaterThan(1.3);
   });
+
+  test('pinch zooms toward the pinch midpoint', async ({ page }) => {
+    await page.unroute('**/api/**');
+    await mockDriveRoutes(page, BIG_SVG, 'image/svg+xml');
+    await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
+    await page.getByText(/aadhaar/i).first().click();
+
+    const dialog = page.getByRole('dialog');
+    const img = dialog.locator('img[alt="aadhaar_front.jpg"]');
+    await expect(img).toBeVisible();
+    await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+
+    const box = (await img.boundingBox())!;
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    // Pinch on the upper-left quadrant (not the image center).
+    const fx = box.x + box.width * 0.25;
+    const fy = box.y + box.height * 0.25;
+
+    const client = await page.context().newCDPSession(page);
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [
+        { x: fx - 40, y: fy },
+        { x: fx + 40, y: fy },
+      ],
+    });
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [
+        { x: fx - 80, y: fy },
+        { x: fx + 80, y: fy },
+      ],
+    });
+    await client.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+
+    await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
+    const after = (await img.boundingBox())!;
+    const afterCenterX = after.x + after.width / 2;
+    // Zooming in left of center pushes the visual center right.
+    expect(afterCenterX).toBeGreaterThan(centerX + 8);
+    expect(after.y + after.height / 2).toBeGreaterThan(centerY + 8);
+  });
 });
 
 test.describe('Media viewer desktop trackpad pinch', () => {
@@ -124,37 +185,7 @@ test.describe('Media viewer desktop trackpad pinch', () => {
       localStorage.setItem('cc-auth', JSON.stringify(auth));
     }, AUTH);
     await page.route('**/socket.io/**', (route) => route.abort());
-    await page.route('**/api/**', async (route) => {
-      const url = route.request().url();
-      if (url.includes('/drive/files')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify([
-            {
-              id: 'img1',
-              fileName: 'aadhaar_front.jpg',
-              customerId: '919006615450',
-              customerName: 'Shubham Kumar',
-              source: 'whatsapp',
-              mimeType: 'image/jpeg',
-              timestamp: '2026-10-14T10:00:00Z',
-              driveFileId: 'drv-img1',
-            },
-          ]),
-        });
-        return;
-      }
-      if (url.includes('/drive/download/')) {
-        await route.fulfill({
-          status: 200,
-          contentType: 'image/jpeg',
-          body: TINY_JPEG,
-        });
-        return;
-      }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
-    });
+    await mockDriveRoutes(page, TINY_JPEG, 'image/jpeg');
   });
 
   test('image sits near the vertical middle of the viewer', async ({ page }) => {
@@ -198,17 +229,23 @@ test.describe('Media viewer desktop trackpad pinch', () => {
     // Trackpad pinch = ctrl + wheel (must be cancelled by non-passive listener).
     await img.hover();
     await page.mouse.wheel(0, -400);
-    // Playwright mouse.wheel does not set ctrlKey; dispatch a real WheelEvent.
-    await page.evaluate(() => {
-      window.dispatchEvent(
-        new WheelEvent('wheel', {
-          deltaY: -400,
-          ctrlKey: true,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-    });
+    // Playwright mouse.wheel does not set ctrlKey; dispatch a real WheelEvent with cursor coords.
+    const box = (await img.boundingBox())!;
+    await page.evaluate(
+      ({ x, y }) => {
+        window.dispatchEvent(
+          new WheelEvent('wheel', {
+            deltaY: -400,
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      },
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
 
     await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
     const scale = await img.evaluate((el) => {
@@ -221,5 +258,55 @@ test.describe('Media viewer desktop trackpad pinch', () => {
 
     const pageScaleAfter = await page.evaluate(() => window.visualViewport?.scale ?? 1);
     expect(pageScaleAfter).toBe(pageScaleBefore);
+  });
+
+  test('ctrl+wheel zooms toward the cursor', async ({ page }) => {
+    await page.unroute('**/api/**');
+    await mockDriveRoutes(page, BIG_SVG, 'image/svg+xml');
+    await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
+    await page.getByText(/aadhaar/i).first().click();
+
+    const dialog = page.getByRole('dialog');
+    const img = dialog.locator('img[alt="aadhaar_front.jpg"]');
+    await expect(img).toBeVisible();
+    await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+
+    const box = (await img.boundingBox())!;
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const fx = box.x + box.width * 0.2;
+    const fy = box.y + box.height * 0.2;
+
+    await page.evaluate(
+      ({ x, y }) => {
+        window.dispatchEvent(
+          new WheelEvent('wheel', {
+            deltaY: -500,
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+          }),
+        );
+      },
+      { x: fx, y: fy },
+    );
+
+    await expect(dialog.getByText(/%/)).toBeVisible({ timeout: 3000 });
+    const after = (await img.boundingBox())!;
+    expect(after.x + after.width / 2).toBeGreaterThan(centerX + 8);
+    expect(after.y + after.height / 2).toBeGreaterThan(centerY + 8);
+
+    const tx = await img.evaluate((el) => {
+      const t = getComputedStyle(el).transform;
+      if (!t || t === 'none') return 0;
+      const m = t.match(/matrix\(([^)]+)\)/);
+      if (!m) return 0;
+      const parts = m[1].split(',').map((v) => Number(v.trim()));
+      return parts[4] ?? 0; // translate X
+    });
+    expect(tx).not.toBe(0);
   });
 });

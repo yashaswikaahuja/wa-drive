@@ -110,6 +110,10 @@ export default function MediaViewer({
 }: MediaViewerProps) {
   const [zoom, setZoom] = useState(1);
   const zoomRef = useRef(1);
+  /** Pan offset (px) so scale can stay anchored under pinch/cursor. */
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panRef = useRef({ x: 0, y: 0 });
+  const imgRef = useRef<HTMLImageElement | null>(null);
   const [pinching, setPinching] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const filmstripRef = useRef<HTMLDivElement>(null);
@@ -123,23 +127,64 @@ export default function MediaViewer({
   const onPrevRef = useRef(onPrev);
   const onNextRef = useRef(onNext);
   const detachPinchRef = useRef<(() => void) | null>(null);
+  const applyZoomAtRef = useRef<(z: number, clientX: number, clientY: number) => void>(() => {});
+
+  const clampZoom = (z: number) => Math.min(4, Math.max(0.5, Number(z.toFixed(2))));
+
+  /** Zoom so the content under (clientX, clientY) stays fixed on screen. */
+  const applyZoomAt = useCallback((rawZoom: number, clientX: number, clientY: number) => {
+    let next = clampZoom(rawZoom);
+    const prev = zoomRef.current;
+    let nextPan = { ...panRef.current };
+
+    if (next === 1) {
+      nextPan = { x: 0, y: 0 };
+    } else if (imgRef.current && prev > 0 && next !== prev) {
+      const rect = imgRef.current.getBoundingClientRect();
+      const vx = rect.left + rect.width / 2;
+      const vy = rect.top + rect.height / 2;
+      const dx = clientX - vx;
+      const dy = clientY - vy;
+      const ratio = next / prev;
+      nextPan = {
+        x: panRef.current.x + dx * (1 - ratio),
+        y: panRef.current.y + dy * (1 - ratio),
+      };
+    }
+
+    zoomRef.current = next;
+    panRef.current = nextPan;
+    setZoom(next);
+    setPan(nextPan);
+  }, []);
+
+  applyZoomAtRef.current = applyZoomAt;
+
+  const resetZoomPan = useCallback(() => {
+    zoomRef.current = 1;
+    panRef.current = { x: 0, y: 0 };
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
 
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
   useEffect(() => {
     onPrevRef.current = onPrev;
     onNextRef.current = onNext;
   }, [onPrev, onNext]);
 
   useEffect(() => {
-    setZoom(1);
-    zoomRef.current = 1;
+    resetZoomPan();
     setPinching(false);
     setMoreOpen(false);
     pinchStartDist.current = null;
     pinchActive.current = false;
-  }, [file?.id]);
+  }, [file?.id, resetZoomPan]);
 
   useEffect(() => {
     if (!file?.id) return;
@@ -175,18 +220,14 @@ export default function MediaViewer({
   /**
    * Desktop trackpad pinch arrives as ctrl/meta + wheel. React onWheel is passive,
    * so preventDefault there cannot stop browser page zoom — use a native listener.
+   * Zoom toward the cursor (clientX/Y), not the image center.
    */
   useEffect(() => {
     if (!file || file.kind !== 'image') return;
     const onWheel = (e: WheelEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
-      const next = Math.min(
-        4,
-        Math.max(0.5, Number((zoomRef.current - e.deltaY * 0.002).toFixed(2))),
-      );
-      zoomRef.current = next;
-      setZoom(next);
+      applyZoomAtRef.current(zoomRef.current - e.deltaY * 0.002, e.clientX, e.clientY);
       setPinching(Math.abs(e.deltaY) > 0.5);
     };
     const clearPinching = () => setPinching(false);
@@ -213,12 +254,10 @@ export default function MediaViewer({
       const dy = a.clientY - b.clientY;
       return Math.hypot(dx, dy);
     };
-    const clampZoom = (z: number) => Math.min(4, Math.max(0.5, Number(z.toFixed(2))));
-    const applyZoom = (z: number) => {
-      const next = clampZoom(z);
-      zoomRef.current = next;
-      setZoom(next);
-    };
+    const touchMidpoint = (a: Touch, b: Touch) => ({
+      x: (a.clientX + b.clientX) / 2,
+      y: (a.clientY + b.clientY) / 2,
+    });
 
     const onTouchStart = (e: TouchEvent) => {
       if (kindRef.current !== 'image') return;
@@ -249,7 +288,12 @@ export default function MediaViewer({
         setPinching(true);
         swipeStartX.current = null;
         const dist = touchDistance(e.touches[0], e.touches[1]);
-        applyZoom(pinchStartZoom.current * (dist / pinchStartDist.current));
+        const mid = touchMidpoint(e.touches[0], e.touches[1]);
+        applyZoomAtRef.current(
+          pinchStartZoom.current * (dist / pinchStartDist.current),
+          mid.x,
+          mid.y,
+        );
       }
     };
 
@@ -287,11 +331,26 @@ export default function MediaViewer({
     const onGestureChange = (e: Event) => {
       if (kindRef.current !== 'image') return;
       e.preventDefault();
-      const scale = (e as Event & { scale?: number }).scale;
+      const ge = e as Event & { scale?: number; clientX?: number; clientY?: number };
+      const scale = ge.scale;
       if (typeof scale !== 'number' || !Number.isFinite(scale)) return;
       pinchActive.current = true;
       setPinching(true);
-      applyZoom(pinchStartZoom.current * scale);
+      const img = imgRef.current;
+      const rect = img?.getBoundingClientRect();
+      const fx =
+        typeof ge.clientX === 'number' && Number.isFinite(ge.clientX)
+          ? ge.clientX
+          : rect
+            ? rect.left + rect.width / 2
+            : 0;
+      const fy =
+        typeof ge.clientY === 'number' && Number.isFinite(ge.clientY)
+          ? ge.clientY
+          : rect
+            ? rect.top + rect.height / 2
+            : 0;
+      applyZoomAtRef.current(pinchStartZoom.current * scale, fx, fy);
     };
     const onGestureEnd = (e: Event) => {
       e.preventDefault();
@@ -299,14 +358,6 @@ export default function MediaViewer({
       setPinching(false);
       pinchStartDist.current = null;
       swipeStartX.current = null;
-    };
-
-    const onWheel = (e: WheelEvent) => {
-      if (kindRef.current !== 'image') return;
-      // Trackpad pinch / ctrl+scroll — keep zoom on the photo, not the page.
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      applyZoom(zoomRef.current - e.deltaY * 0.002);
     };
 
     const opts = { capture: true, passive: false } as const;
@@ -317,7 +368,7 @@ export default function MediaViewer({
     el.addEventListener('gesturestart', onGestureStart, opts);
     el.addEventListener('gesturechange', onGestureChange, opts);
     el.addEventListener('gestureend', onGestureEnd, opts);
-    el.addEventListener('wheel', onWheel, opts);
+    // Wheel is handled on window (above) so trackpad pinch is not applied twice.
 
     detachPinchRef.current = () => {
       el.removeEventListener('touchstart', onTouchStart, true);
@@ -327,7 +378,6 @@ export default function MediaViewer({
       el.removeEventListener('gesturestart', onGestureStart, true);
       el.removeEventListener('gesturechange', onGestureChange, true);
       el.removeEventListener('gestureend', onGestureEnd, true);
-      el.removeEventListener('wheel', onWheel, true);
     };
   }, []);
 
@@ -412,7 +462,17 @@ export default function MediaViewer({
                 type="button"
                 className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
                 title="Zoom"
-                onClick={() => setZoom((z: number) => (z >= 2 ? 1 : Number((z + 0.5).toFixed(1))))}
+                onClick={() => {
+                  if (zoom >= 2) {
+                    resetZoomPan();
+                    return;
+                  }
+                  const img = imgRef.current;
+                  const rect = img?.getBoundingClientRect();
+                  const cx = rect ? rect.left + rect.width / 2 : 0;
+                  const cy = rect ? rect.top + rect.height / 2 : 0;
+                  applyZoomAt(Number((zoom + 0.5).toFixed(1)), cx, cy);
+                }}
               >
                 <MagnifyingGlassPlus size={18} weight="bold" />
               </button>
@@ -501,7 +561,7 @@ export default function MediaViewer({
                       type="button"
                       className="w-full px-3.5 py-2.5 text-left hover:bg-white/10"
                       onClick={() => {
-                        setZoom(1);
+                        resetZoomPan();
                         setMoreOpen(false);
                       }}
                     >
@@ -566,12 +626,16 @@ export default function MediaViewer({
           {kind === 'image' ? (
             <div className="w-full h-full flex items-center justify-center overflow-hidden px-10 sm:px-14 py-[3.75rem] sm:py-[4.5rem]">
               <img
+                ref={imgRef}
                 src={file.url}
                 alt={file.fileName}
                 className={`max-w-full max-h-full object-contain object-center shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center ${
                   pinching ? '' : 'transition-transform duration-150'
                 }`}
-                style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
+                style={{
+                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                  touchAction: 'none',
+                }}
                 draggable={false}
               />
             </div>
