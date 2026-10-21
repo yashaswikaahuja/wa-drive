@@ -227,8 +227,9 @@ export default function PassportEditor() {
     toast.success(editMode === 'signature' ? 'Signature framed' : 'Face framed');
   };
 
-  const handlePrintBlob = async (blob: Blob) => {
-    await printBlob(blob);
+  const handlePrintBlob = async (blob: Blob, paper: '4x6' | 'a4' = '4x6') => {
+    const mm = paper === '4x6' ? { w: 152.4, h: 101.6 } : { w: 210, h: 297 };
+    printBlob(blob, { widthMm: mm.w, heightMm: mm.h, fileName: `sheet_${paper}.jpg` });
   };
 
   const handleSaveSheet = async (blob: Blob) => {

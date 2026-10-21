@@ -101,7 +101,14 @@ export default function PrintSheet() {
         {sheetUrl && (
           <div className="flex gap-2">
             <button type="button" className="btn-primary flex-1 text-sm flex items-center justify-center gap-1.5 py-2.5"
-              onClick={async () => { printBlob(await (await fetch(sheetUrl)).blob()); }}>
+              onClick={async () => {
+                const mm = paper === '4x6' ? { w: 152.4, h: 101.6 } : { w: 210, h: 297 };
+                printBlob(await (await fetch(sheetUrl)).blob(), {
+                  widthMm: mm.w,
+                  heightMm: mm.h,
+                  fileName: `passport_sheet_x${count}.jpg`,
+                });
+              }}>
               <Printer size={16} /> Print
             </button>
             <button type="button" className="btn-secondary flex-1 text-sm flex items-center justify-center gap-1.5 py-2.5"

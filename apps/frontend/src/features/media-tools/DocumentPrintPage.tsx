@@ -12,11 +12,12 @@ import {
   SpinnerGap,
   UploadSimple,
   ArrowsOut,
+  DownloadSimple,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { toast } from '../../shared/toast';
-import { loadImageFromFile } from './imageOps';
+import { downloadBlob, loadImageFromFile } from './imageOps';
 import {
   DOC_PAPERS,
   type DocCell,
@@ -26,6 +27,8 @@ import {
   imageToCanvas,
   makeId,
   pagesToPdfBlob,
+  ptsToMm,
+  readPdfMediaBoxPts,
   renderPageCanvas,
 } from './documentPrintLayout';
 
@@ -346,16 +349,51 @@ export default function DocumentPrintPage() {
     });
   };
 
-  // ── Print (silent PDF) ──────────────────────────────────────────
+  const paperSizeLabel = `${paper.label} · ${paper.wMm.toFixed(0)}×${paper.hMm.toFixed(0)} mm`;
+
+  const buildPdf = async () => {
+    const pdfBlob = await pagesToPdfBlob(pages, paper);
+    const box = await readPdfMediaBoxPts(pdfBlob);
+    if (box) {
+      const wMm = ptsToMm(box.w);
+      const hMm = ptsToMm(box.h);
+      if (Math.abs(wMm - paper.wMm) > 2 || Math.abs(hMm - paper.hMm) > 2) {
+        throw new Error(
+          `PDF is ${wMm.toFixed(0)}×${hMm.toFixed(0)} mm but you chose ${paper.wMm.toFixed(0)}×${paper.hMm.toFixed(0)} mm`,
+        );
+      }
+    }
+    return pdfBlob;
+  };
+
+  // ── Print (silent PDF at exact paper size) ──────────────────────
   const handlePrint = async () => {
     if (!pages.length) return;
     setBusy(true);
     try {
-      const pdfBlob = await pagesToPdfBlob(pages, paper);
-      printBlob(pdfBlob);
-      toast.success('Opening print dialog…');
+      const pdfBlob = await buildPdf();
+      printBlob(pdfBlob, {
+        widthMm: paper.wMm,
+        heightMm: paper.hMm,
+        fileName: `print_${paperId}.pdf`,
+      });
+      toast.success(`Print ${paper.label} PDF… check paper size in the dialog`);
     } catch (e: any) {
       toast.error(e?.message || 'Print failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!pages.length) return;
+    setBusy(true);
+    try {
+      const pdfBlob = await buildPdf();
+      downloadBlob(pdfBlob, `document_${paperId}_${pages.length}p.pdf`);
+      toast.success(`Saved ${paper.label} PDF`);
+    } catch (e: any) {
+      toast.error(e?.message || 'PDF failed');
     } finally {
       setBusy(false);
     }
@@ -394,9 +432,16 @@ export default function DocumentPrintPage() {
           <h1 className="text-base font-semibold">Print on paper</h1>
           <p className="text-xs text-[var(--muted-foreground)] mt-0.5">{subtitle}</p>
           <p className="text-[11px] text-[var(--muted-foreground)] mt-1.5 leading-snug">
-            Layout here (page size + margins). When you Print, we build a PDF so the device dialog
-            does not ask for page and margins again.
+            Choose paper, place the photo, then Print. We convert to a PDF at that exact page size
+            so the printer dialog matches (not a raw JPEG on A4).
           </p>
+          <div
+            className="mt-2 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+            style={{ background: 'hsl(27 95% 55% / 0.15)', color: 'hsl(27 95% 35%)' }}
+            data-doc-print-paper={paperId}
+          >
+            Selected: {paperSizeLabel}
+          </div>
         </div>
 
         <div className="card space-y-2">
@@ -413,7 +458,10 @@ export default function DocumentPrintPage() {
                 }}
                 onClick={() => changePaper(id)}
               >
-                {DOC_PAPERS[id].label}
+                <span className="font-medium">{DOC_PAPERS[id].label}</span>
+                <span className="block text-[10px] text-[var(--muted-foreground)] mt-0.5">
+                  {DOC_PAPERS[id].wMm.toFixed(0)}×{DOC_PAPERS[id].hMm.toFixed(0)} mm
+                </span>
               </button>
             ))}
           </div>
@@ -525,10 +573,21 @@ export default function DocumentPrintPage() {
           data-doc-print-submit="1"
         >
           {busy ? <SpinnerGap size={18} className="animate-spin" /> : <Printer size={18} />}
-          {busy ? 'Preparing PDF…' : 'Print'}
+          {busy ? 'Preparing PDF…' : `Print ${paper.label} PDF`}
         </button>
-        <p className="text-[10px] text-center text-[var(--muted-foreground)]">
-          Converts layout to PDF, then opens the printer dialog
+        <button
+          type="button"
+          className="btn-secondary w-full text-sm flex items-center justify-center gap-2 py-2.5"
+          onClick={handleDownloadPdf}
+          disabled={busy || !pages.length}
+          data-doc-print-download="1"
+        >
+          <DownloadSimple size={16} /> Download PDF ({paper.label})
+        </button>
+        <p className="text-[10px] text-center text-[var(--muted-foreground)] leading-snug">
+          In the printer dialog, paper should show {paper.label}. If it still says A4, pick{' '}
+          {paper.label} once in the dialog (PDF page is already {paper.wMm.toFixed(0)}×
+          {paper.hMm.toFixed(0)} mm).
         </p>
       </aside>
 

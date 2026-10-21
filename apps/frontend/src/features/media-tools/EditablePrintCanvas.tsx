@@ -40,7 +40,7 @@ interface Props {
   initCount?: number;
   paper?: PaperId;
   onPaperChange?: (p: PaperId) => void;
-  onPrint?: (blob: Blob) => void;
+  onPrint?: (blob: Blob, paper: PaperId) => void;
   onSave?: (blob: Blob) => void;
   onPickDrive?: () => Promise<HTMLCanvasElement | null>;
 }
@@ -366,7 +366,7 @@ export default function EditablePrintCanvas({
     }
   }, [cells, paperDef]);
 
-  const handlePrint = async () => { const b = await doRender(); onPrint?.(b); };
+  const handlePrint = async () => { const b = await doRender(); onPrint?.(b, paper); };
   const handleSave = async () => { const b = await doRender(); onSave?.(b); };
   const handleDownload = async () => {
     const b = await doRender();

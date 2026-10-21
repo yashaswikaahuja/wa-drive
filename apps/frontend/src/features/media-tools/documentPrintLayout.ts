@@ -156,16 +156,16 @@ function canvasToJpegDataUrl(c: HTMLCanvasElement, quality = 0.92): string {
 
 /**
  * Build a print-ready PDF: each layout page → one PDF page at the chosen paper size.
- * OS print dialog then mostly asks printer/copies, not page/margins.
+ *
+ * jsPDF custom formats: orientation decides which side is width.
+ * - landscape + [152.4, 101.6] → 152.4×101.6 (4×6 photo paper)
+ * - portrait  + [152.4, 101.6] → 101.6×152.4 (swapped — wrong for 4×6)
+ * Always pass paper.orient so MediaBox matches the paper picker.
  */
 export async function pagesToPdfBlob(pages: DocPage[], paper: DocPaperDef): Promise<Blob> {
   if (!pages.length) throw new Error('Nothing to print');
 
-  const format: string | [number, number] =
-    paper.id.startsWith('a4')
-      ? 'a4'
-      : [paper.wMm, paper.hMm];
-
+  const format: [number, number] = [paper.wMm, paper.hMm];
   const pdf = new jsPDF({
     orientation: paper.orient,
     unit: 'mm',
@@ -173,14 +173,40 @@ export async function pagesToPdfBlob(pages: DocPage[], paper: DocPaperDef): Prom
     compress: true,
   });
 
+  const pw = pdf.internal.pageSize.getWidth();
+  const ph = pdf.internal.pageSize.getHeight();
+  if (Math.abs(pw - paper.wMm) > 0.6 || Math.abs(ph - paper.hMm) > 0.6) {
+    throw new Error(
+      `PDF page size mismatch: got ${pw.toFixed(1)}×${ph.toFixed(1)} mm, expected ${paper.wMm}×${paper.hMm} mm`,
+    );
+  }
+
   pages.forEach((page, i) => {
     if (i > 0) pdf.addPage(format, paper.orient);
     const sheet = renderPageCanvas(page, paper, null);
-    const data = canvasToJpegDataUrl(sheet);
-    pdf.addImage(data, 'JPEG', 0, 0, paper.wMm, paper.hMm, undefined, 'FAST');
+    const data = canvasToJpegDataUrl(sheet, 0.93);
+    pdf.addImage(data, 'JPEG', 0, 0, pw, ph, undefined, 'FAST');
   });
 
-  return pdf.output('blob');
+  const blob = pdf.output('blob');
+  // Ensure MIME is PDF so Chrome print viewer reads MediaBox.
+  return new Blob([blob], { type: 'application/pdf' });
+}
+
+/** Parse first MediaBox from a PDF blob (points). 1 pt = 1/72 in. */
+export async function readPdfMediaBoxPts(blob: Blob): Promise<{ w: number; h: number } | null> {
+  const text = await blob.text();
+  const m = text.match(/\/MediaBox\s*\[\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s*\]/);
+  if (!m) return null;
+  const x0 = Number(m[1]);
+  const y0 = Number(m[2]);
+  const x1 = Number(m[3]);
+  const y1 = Number(m[4]);
+  return { w: x1 - x0, h: y1 - y0 };
+}
+
+export function ptsToMm(pts: number) {
+  return (pts * 25.4) / 72;
 }
 
 /** Deep-link from media-viewer Print (JPEG). */

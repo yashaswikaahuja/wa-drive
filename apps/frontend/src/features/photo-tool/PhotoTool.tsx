@@ -188,15 +188,17 @@ export default function PhotoTool() {
     // Express paper size in mm so any printer respects it.
     const paperWmm = (template.paper.w / 300) * 25.4;
     const paperHmm = (template.paper.h / 300) * 25.4;
-    const orientation = template.paper.w >= template.paper.h ? 'landscape' : 'portrait';
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print</title><style>
 @page { size: ${paperWmm}mm ${paperHmm}mm; margin: 0; }
 html, body { margin: 0; padding: 0; }
 img { display: block; width: ${paperWmm}mm; height: ${paperHmm}mm; }
 </style></head><body><img src="${dataUrl}"/></body></html>`;
     const blob = new Blob([html], { type: 'text/html' });
-    printBlob(blob);
-    void orientation;
+    printBlob(blob, {
+      widthMm: paperWmm,
+      heightMm: paperHmm,
+      fileName: `print_${template.id || 'sheet'}.html`,
+    });
   }, [template]);
 
   useEffect(() => {
