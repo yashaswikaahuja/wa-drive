@@ -4,11 +4,127 @@
   const ORIGIN = window.location.origin;
   const editorMode = new URLSearchParams(window.location.search).get("cyber") === "editor";
 
+  const EDITOR_MODES = { none: 0, text: 3, highlight: 9, image: 13, draw: 15 };
+
   function armChrome() {
-    if (editorMode) return;
+    if (editorMode) {
+      armEditor();
+      return;
+    }
     injectToolbarButtons();
     bindFileSwitchKeys();
     bindEdgeSwipe();
+  }
+
+  // Café print owns save/print. PDF.js must not download when this frame is replaced.
+  function patchClose(app) {
+    if (!app || app.__cyberClosePatched) return;
+    const orig = app.close.bind(app);
+    app.close = async function () {
+      app._annotationStorageModified = false;
+      return orig();
+    };
+    app.__cyberClosePatched = true;
+  }
+
+  function revealEditorButtons() {
+    ["editorHighlightButton", "editorFreeTextButton", "editorInkButton", "editorStampButton"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = false;
+    });
+  }
+
+  function injectDriveStamp() {
+    const menu = document.querySelector("#editorStampParamsToolbar .menuContainer");
+    if (!menu || document.getElementById("cyberStampFromFiles")) return;
+    const btn = document.createElement("button");
+    btn.id = "cyberStampFromFiles";
+    btn.type = "button";
+    btn.className = "toolbarButton labeled";
+    btn.title = "From File Manager";
+    const span = document.createElement("span");
+    span.className = "editorParamsLabel";
+    span.textContent = "From File Manager";
+    btn.append(span);
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      post("cyber-pick-drive-image");
+    });
+    menu.append(btn);
+  }
+
+  function armEditor() {
+    document.documentElement.classList.add("cyber-editor");
+    injectDriveStamp();
+    const app = globalThis.PDFViewerApplication;
+    if (app) patchClose(app);
+    if (app?.pdfViewer && app.pdfViewer.annotationEditorMode !== -1) revealEditorButtons();
+  }
+
+  function asImageFile(raw) {
+    if (raw instanceof File) return raw;
+    if (raw instanceof Blob) {
+      return new File([raw], "image.jpg", { type: raw.type || "image/jpeg" });
+    }
+    return null;
+  }
+
+  async function editorApp() {
+    const app = await appReady();
+    if (!app?.pdfViewer) return null;
+    for (let i = 0; i < 80; i++) {
+      const ui = app.pdfViewer._layerProperties?.annotationEditorUIManager;
+      if (ui && app.pdfViewer.annotationEditorMode !== -1) return app;
+      await sleep(50);
+    }
+    return app;
+  }
+
+  async function setEditorMode(name) {
+    const mode = EDITOR_MODES[name] ?? 0;
+    const app = await editorApp();
+    const viewer = app?.pdfViewer;
+    if (!viewer || viewer.annotationEditorMode === -1) throw new Error("PDF editor is not ready");
+    if (viewer.annotationEditorMode !== mode) viewer.annotationEditorMode = { mode };
+    revealEditorButtons();
+    if (name === "image") {
+      for (let i = 0; i < 30 && viewer.annotationEditorMode !== EDITOR_MODES.image; i++) await sleep(40);
+      document.getElementById("editorStampAddImage")?.click();
+    }
+  }
+
+  async function placeImageFile(raw) {
+    const file = asImageFile(raw);
+    if (!file) throw new Error("No image");
+    if (file.type && !file.type.startsWith("image/")) throw new Error("Choose a photo (JPG or PNG)");
+    const app = await editorApp();
+    const viewer = app?.pdfViewer;
+    if (!viewer) throw new Error("PDF editor is not ready");
+    let layer = null;
+    for (let i = 0; i < 80; i++) {
+      const ui = viewer._layerProperties?.annotationEditorUIManager;
+      const page = (viewer.currentPageNumber || 1) - 1;
+      layer = ui?.getLayer(page) || ui?.currentLayer || null;
+      if (layer?.pasteEditor) {
+        ui.setPreference("enableNewAltTextWhenAddingImage", false);
+        await layer.pasteEditor({ mode: EDITOR_MODES.image }, { bitmapFile: file });
+        revealEditorButtons();
+        post("cyber-stamp-placed");
+        return;
+      }
+      await sleep(50);
+    }
+    throw new Error("Page is not ready for an image");
+  }
+
+  async function exportPdf(id) {
+    const app = await appReady();
+    const doc = app?.pdfDocument;
+    if (!doc) throw new Error("PDF is not open");
+    const data = await doc.saveDocument();
+    const copy = new Uint8Array(data);
+    parent.postMessage({ type: "cyber-pdf-bytes", id, data: copy.buffer }, ORIGIN, [copy.buffer]);
   }
 
   async function appReady() {
@@ -229,13 +345,49 @@
       notifyReady();
       return;
     }
+    if (e.data.type === "cyber-editor-mode") {
+      try {
+        await setEditorMode(e.data.mode);
+      } catch (err) {
+        post("cyber-pdf-error", { message: String(err.message || err) });
+      }
+      return;
+    }
+    if (e.data.type === "cyber-stamp-file") {
+      try {
+        await placeImageFile(e.data.file);
+      } catch (err) {
+        post("cyber-pdf-error", { message: String(err.message || err) });
+      }
+      return;
+    }
+    if (e.data.type === "cyber-export-pdf") {
+      try {
+        await exportPdf(e.data.id);
+      } catch (err) {
+        parent.postMessage(
+          { type: "cyber-pdf-export-error", id: e.data.id, message: String(err.message || err) },
+          ORIGIN,
+        );
+      }
+      return;
+    }
     if (e.data.type !== "cyber-open-pdf") return;
     try {
       const app = await appReady();
       if (!app) throw new Error("PDFViewerApplication not ready");
+      patchClose(app);
       armChrome();
       await app.open({ data: e.data.data });
       armChrome();
+      // Editor buttons start disabled in the HTML and flip on after the first page draws.
+      for (let i = 0; i < 40; i++) {
+        if (app.pdfViewer?.annotationEditorMode !== -1) {
+          revealEditorButtons();
+          break;
+        }
+        await sleep(50);
+      }
     } catch (err) {
       console.error("cyber-open-pdf failed", err);
       post("cyber-pdf-error", { message: String(err) });

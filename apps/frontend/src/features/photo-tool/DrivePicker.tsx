@@ -25,6 +25,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onPick: (file: File) => void;
+  /** Hide PDFs and office files. Photos with no extension still show. */
+  imagesOnly?: boolean;
 }
 
 // Session cache so reopening the picker is instant (the /drive/files/ws call
@@ -33,7 +35,11 @@ interface Props {
 let _driveCache: { ws: string; data: DriveFile[]; at: number } | null = null;
 const DRIVE_CACHE_TTL = 120_000;
 
-export default function DrivePicker({ open, onClose, onPick }: Props) {
+function isOfficeOrPdf(name: string) {
+  return /\.(pdf|docx?|xlsx?|pptx?|zip|txt|csv)$/i.test(name);
+}
+
+export default function DrivePicker({ open, onClose, onPick, imagesOnly = false }: Props) {
   const [files, setFiles] = useState<DriveFile[]>(() => {
     const ws = useAuthStore.getState().user?.workspaceId || '';
     return _driveCache?.ws === ws ? _driveCache.data : [];
@@ -77,11 +83,12 @@ export default function DrivePicker({ open, onClose, onPick }: Props) {
       .finally(() => setLoading(false));
   };
 
+  const pool = imagesOnly ? files.filter((f) => !isOfficeOrPdf(f.fileName || '')) : files;
   const filtered = search.trim()
-    ? files.filter(f =>
+    ? pool.filter(f =>
         (f.customerName || '').toLowerCase().includes(search.toLowerCase()) ||
         (f.fileName || '').toLowerCase().includes(search.toLowerCase()))
-    : files;
+    : pool;
 
   const handlePick = async (df: DriveFile) => {
     setPickingId(df.id);

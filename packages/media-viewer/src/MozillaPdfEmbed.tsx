@@ -1,8 +1,21 @@
 /**
  * Mozilla PDF.js viewer with Back/Delete/file-nav integrated into its toolbar.
  * Expects same-origin /pdfjs/web/viewer.html (Hub public/pdfjs assets).
+ *
+ * `mode="editor"` hides File Manager chrome and exposes the PDF.js editors
+ * (text, draw, highlight, image) plus a File Manager stamp.
  */
-import { useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+
+export type PdfEditorMode = 'none' | 'text' | 'draw' | 'highlight' | 'image';
+
+export type MozillaPdfHandle = {
+  setEditorMode: (mode: PdfEditorMode) => void;
+  /** Place a Drive/local image on the current PDF page. */
+  stampFile: (file: File) => void;
+  /** Annotated PDF bytes currently shown in the viewer. */
+  exportPdf: () => Promise<Blob>;
+};
 
 export type MozillaPdfEmbedProps = {
   fileUrl: string;
@@ -13,9 +26,11 @@ export type MozillaPdfEmbedProps = {
   onDelete?: () => void;
   onPrevFile?: () => void;
   onNextFile?: () => void;
+  /** Operator asked for a File Manager image from inside the viewer. */
+  onPickDriveImage?: () => void;
 };
 
-export default function MozillaPdfEmbed({
+const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(function MozillaPdfEmbed({
   fileUrl,
   className = '',
   mode = 'files',
@@ -23,17 +38,64 @@ export default function MozillaPdfEmbed({
   onDelete,
   onPrevFile,
   onNextFile,
-}: MozillaPdfEmbedProps) {
+  onPickDriveImage,
+}, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState<string | null>(null);
   const onBackRef = useRef(onBack);
   const onDeleteRef = useRef(onDelete);
   const onPrevRef = useRef(onPrevFile);
   const onNextRef = useRef(onNextFile);
+  const onPickRef = useRef(onPickDriveImage);
   onBackRef.current = onBack;
   onDeleteRef.current = onDelete;
   onPrevRef.current = onPrevFile;
   onNextRef.current = onNextFile;
+  onPickRef.current = onPickDriveImage;
+
+  const pendingExport = useRef(
+    new Map<string, { resolve: (blob: Blob) => void; reject: (err: Error) => void }>(),
+  );
+  const exportSeq = useRef(0);
+
+  const postToViewer = (msg: Record<string, unknown>) => {
+    iframeRef.current?.contentWindow?.postMessage(msg, window.location.origin);
+  };
+
+  useImperativeHandle(ref, () => ({
+    setEditorMode(modeName) {
+      postToViewer({ type: 'cyber-editor-mode', mode: modeName });
+    },
+    stampFile(file) {
+      postToViewer({ type: 'cyber-stamp-file', file });
+    },
+    exportPdf() {
+      return new Promise((resolve, reject) => {
+        const win = iframeRef.current?.contentWindow;
+        if (!win) {
+          reject(new Error('PDF viewer is not open'));
+          return;
+        }
+        const id = `exp-${++exportSeq.current}`;
+        const timer = window.setTimeout(() => {
+          if (!pendingExport.current.has(id)) return;
+          pendingExport.current.delete(id);
+          reject(new Error('PDF viewer did not answer'));
+        }, 15000);
+        pendingExport.current.set(id, {
+          resolve: (blob) => {
+            window.clearTimeout(timer);
+            resolve(blob);
+          },
+          reject: (err) => {
+            window.clearTimeout(timer);
+            reject(err);
+          },
+        });
+        win.postMessage({ type: 'cyber-export-pdf', id }, window.location.origin);
+      });
+    },
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +123,7 @@ export default function MozillaPdfEmbed({
 
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
+      if (e.source !== iframe.contentWindow) return;
       const type = e.data?.type;
       if (type === 'cyber-pdf-ready') {
         void sendOpen();
@@ -72,6 +135,18 @@ export default function MozillaPdfEmbed({
         onPrevRef.current?.();
       } else if (type === 'cyber-pdf-next-file') {
         onNextRef.current?.();
+      } else if (type === 'cyber-pick-drive-image') {
+        onPickRef.current?.();
+      } else if (type === 'cyber-pdf-bytes') {
+        const pending = pendingExport.current.get(e.data?.id);
+        if (!pending || !e.data?.data) return;
+        pendingExport.current.delete(e.data.id);
+        pending.resolve(new Blob([e.data.data as ArrayBuffer], { type: 'application/pdf' }));
+      } else if (type === 'cyber-pdf-export-error') {
+        const pending = pendingExport.current.get(e.data?.id);
+        if (!pending) return;
+        pendingExport.current.delete(e.data.id);
+        pending.reject(new Error(e.data?.message || 'Could not save the PDF'));
       } else if (type === 'cyber-pdf-error') {
         setError(e.data?.message || 'PDF viewer error');
       }
@@ -91,6 +166,8 @@ export default function MozillaPdfEmbed({
       cancelled = true;
       window.removeEventListener('message', onMessage);
       iframe.removeEventListener('load', onLoad);
+      pendingExport.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
+      pendingExport.current.clear();
     };
   }, [fileUrl]);
 
@@ -114,4 +191,6 @@ export default function MozillaPdfEmbed({
       )}
     </div>
   );
-}
+});
+
+export default MozillaPdfEmbed;

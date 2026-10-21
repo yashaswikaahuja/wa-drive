@@ -21,6 +21,8 @@ import {
   TextT,
   Square,
   Image as ImageIcon,
+  FolderOpen,
+  PencilSimple,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
@@ -33,7 +35,8 @@ import {
   rotateCanvas,
 } from './imageOps';
 import AspectCropModal from './AspectCropModal';
-import MozillaPdfEmbed from '../files/MozillaPdfEmbed';
+import MozillaPdfEmbed, { type MozillaPdfHandle, type PdfEditorMode } from '../files/MozillaPdfEmbed';
+import DrivePicker from '../photo-tool/DrivePicker';
 import {
   DOC_PAPERS,
   blankPage,
@@ -135,10 +138,17 @@ export default function DocumentPrintPage() {
   const [cropOpen, setCropOpen] = useState(false);
   const [tool, setTool] = useState<'select' | 'text' | 'box'>('select');
   const [surface, setSurface] = useState<'edit' | 'pdf'>('edit');
-  const [edited, setEdited] = useState(false);
+  const [sheetRev, setSheetRev] = useState(0);
   const [originalPdfUrl, setOriginalPdfUrl] = useState('');
   const [layoutPdfUrl, setLayoutPdfUrl] = useState('');
+  const [driveOpen, setDriveOpen] = useState(false);
   const originalUrlRef = useRef('');
+  const layoutKeyRef = useRef('');
+  const pdfRef = useRef<MozillaPdfHandle>(null);
+  const driveTargetRef = useRef<'canvas' | 'viewer'>('canvas');
+  const touchSheet = () => {
+    setSheetRev((n) => n + 1);
+  };
 
   const dragRef = useRef<{
     cellId: string;
@@ -196,14 +206,27 @@ export default function DocumentPrintPage() {
         const ids = [fileId, ...extraIds.filter((id) => id !== fileId)];
         const built: DocPage[] = [];
         let firstPdfUrl = '';
+        let sawPdf = false;
         for (let i = 0; i < ids.length; i++) {
           try {
             const blob = await loadDriveBlob(ids[i]);
             const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
             if (isPdfBlob(blob, head)) {
+              sawPdf = true;
               const data = await blob.arrayBuffer();
+              // Keep a copy: pdf.js detaches the buffer it is given.
+              const copy = data.slice(0);
+              const box = await readPdfMediaBoxPts(new Blob([copy], { type: 'application/pdf' }));
+              const fits =
+                !!box &&
+                Math.abs(ptsToMm(box.w) - p.wMm) <= 2 &&
+                Math.abs(ptsToMm(box.h) - p.hMm) <= 2;
               built.push(...(await pdfBytesToPages(data, p)));
-              if (!firstPdfUrl) firstPdfUrl = URL.createObjectURL(blob);
+              // Sharp original only when it is already the chosen paper. Otherwise the
+              // viewer shows the composed sheet so text and stamps print at that size.
+              if (!firstPdfUrl && fits) {
+                firstPdfUrl = URL.createObjectURL(new Blob([copy], { type: 'application/pdf' }));
+              }
             } else {
               const img = await loadImageFromFile(blob);
               built.push(fitImageOnPage(imageToCanvas(img), p, marginMm, i === 0 ? name || undefined : undefined));
@@ -220,15 +243,12 @@ export default function DocumentPrintPage() {
         setPages(built);
         setPageIndex(0);
         setSelected(built[0]?.cells[0]?.id ?? null);
-        setEdited(false);
-        if (firstPdfUrl) {
-          if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
-          originalUrlRef.current = firstPdfUrl;
-          setOriginalPdfUrl(firstPdfUrl);
-          setSurface('pdf');
-        } else {
-          setSurface('edit');
-        }
+        setSheetRev(0);
+        layoutKeyRef.current = '';
+        if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
+        originalUrlRef.current = firstPdfUrl;
+        setOriginalPdfUrl(firstPdfUrl);
+        setSurface(sawPdf ? 'pdf' : 'edit');
       } catch (e: any) {
         if (!cancelled) {
           toast.error(e?.message || 'Failed to load document');
@@ -255,7 +275,7 @@ export default function DocumentPrintPage() {
 
   const changePaper = (next: DocPaperId) => {
     const prevPaper = DOC_PAPERS[paperId];
-    setEdited(true);
+    touchSheet();
     setPaperId(next);
     const p = DOC_PAPERS[next];
     const sx = p.w / Math.max(1, prevPaper.w);
@@ -297,6 +317,7 @@ export default function DocumentPrintPage() {
   };
 
   const applyMargin = (nextMm: number) => {
+    touchSheet();
     setMarginMm(nextMm);
     setPages((prev) =>
       prev.map((pg) => {
@@ -374,7 +395,7 @@ export default function DocumentPrintPage() {
   };
 
   const updateCell = (cellId: string, patch: Partial<DocCell>) => {
-    setEdited(true);
+    touchSheet();
     setPages((prev) =>
       prev.map((pg, i) =>
         i !== pageIndex
@@ -388,7 +409,7 @@ export default function DocumentPrintPage() {
   };
 
   const updateMark = (markId: string, patch: Partial<DocMark>) => {
-    setEdited(true);
+    touchSheet();
     setPages((prev) =>
       prev.map((pg, i) =>
         i !== pageIndex
@@ -402,7 +423,7 @@ export default function DocumentPrintPage() {
   };
 
   const addMark = (mark: DocMark) => {
-    setEdited(true);
+    touchSheet();
     setPages((prev) =>
       prev.map((pg, i) => (i === pageIndex ? { ...pg, marks: [...(pg.marks || []), mark] } : pg)),
     );
@@ -584,7 +605,7 @@ export default function DocumentPrintPage() {
   // ── Add / remove ────────────────────────────────────────────────
   const addBlankPage = () => {
     const pg = blankPage(paper);
-    setEdited(true);
+    touchSheet();
     setPages((prev) => [...prev, pg]);
     setPageIndex(pages.length);
     setSelected(null);
@@ -624,7 +645,7 @@ export default function DocumentPrintPage() {
 
   const addCanvas = (c: HTMLCanvasElement, label?: string) => {
     const mode = addModeRef.current;
-    setEdited(true);
+    touchSheet();
     setSurface('edit');
     if (mode === 'this-page' && pages[pageIndex]) {
       const onBlank = pages[pageIndex].cells.length === 0;
@@ -658,6 +679,7 @@ export default function DocumentPrintPage() {
   const removeSelected = () => {
     if (!selected || !page) return;
     if (selectedMark) {
+      touchSheet();
       setPages((prev) =>
         prev.map((pg, i) =>
           i !== pageIndex ? pg : { ...pg, marks: (pg.marks || []).filter((m) => m.id !== selected) },
@@ -667,7 +689,7 @@ export default function DocumentPrintPage() {
       return;
     }
     if (!selectedCell) return;
-    setEdited(true);
+    touchSheet();
     setPages((prev) =>
       prev.map((pg, i) =>
         i !== pageIndex ? pg : { ...pg, cells: pg.cells.filter((c) => c.id !== selectedCell.id) },
@@ -678,8 +700,7 @@ export default function DocumentPrintPage() {
 
   const paperSizeLabel = `${paper.label} · ${paper.wMm.toFixed(0)}×${paper.hMm.toFixed(0)} mm`;
 
-  const buildPdf = async () => {
-    const pdfBlob = await pagesToPdfBlob(pages, paper);
+  const assertPaper = async (pdfBlob: Blob) => {
     const box = await readPdfMediaBoxPts(pdfBlob);
     if (box) {
       const wMm = ptsToMm(box.w);
@@ -693,17 +714,29 @@ export default function DocumentPrintPage() {
     return pdfBlob;
   };
 
-  // Mozilla viewer shows the original PDF until the sheet is edited, then the print layout.
+  const buildPdf = async () => assertPaper(await pagesToPdfBlob(pages, paper));
+
+  // Sharp original while it already matches the paper. After a layout change, or when
+  // the file is a different size, the viewer shows the composed sheet. Re-opening the
+  // viewer with the same sheet keeps stamps and text already placed on it.
   useEffect(() => {
-    if (surface !== 'pdf' || (originalPdfUrl && !edited)) return;
+    if (surface !== 'pdf') return;
+    if (originalPdfUrl && sheetRev === 0) return;
+    const key = `${paper.wMm}x${paper.hMm}@${sheetRev}`;
+    if (layoutKeyRef.current === key) return;
     let cancelled = false;
     (async () => {
       try {
         const blob = await pagesToPdfBlob(pages, paper);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        layoutKeyRef.current = key;
         setLayoutPdfUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
+          if (prev && prev !== url) URL.revokeObjectURL(prev);
           return url;
         });
       } catch (e: any) {
@@ -713,13 +746,25 @@ export default function DocumentPrintPage() {
     return () => {
       cancelled = true;
     };
-  }, [surface, edited, pages, paper, originalPdfUrl]);
+  }, [surface, sheetRev, pages, paper, originalPdfUrl]);
+
+  const outputPdf = async () => {
+    if (surface === 'pdf' && pdfRef.current) {
+      try {
+        return await assertPaper(await pdfRef.current.exportPdf());
+      } catch (e: any) {
+        const msg = String(e?.message || '');
+        if (msg.includes('mm')) throw e;
+      }
+    }
+    return buildPdf();
+  };
 
   const handlePrint = async () => {
     if (!pages.length) return;
     setBusy(true);
     try {
-      const pdfBlob = await buildPdf();
+      const pdfBlob = await outputPdf();
       printBlob(pdfBlob, {
         widthMm: paper.wMm,
         heightMm: paper.hMm,
@@ -737,7 +782,7 @@ export default function DocumentPrintPage() {
     if (!pages.length) return;
     setBusy(true);
     try {
-      const pdfBlob = await buildPdf();
+      const pdfBlob = await outputPdf();
       downloadBlob(pdfBlob, `document_${paperId}_${pages.length}p.pdf`);
       toast.success(`Saved ${paper.label} PDF`);
     } catch (e: any) {
@@ -745,6 +790,38 @@ export default function DocumentPrintPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const openDrive = (target: 'canvas' | 'viewer') => {
+    driveTargetRef.current = target;
+    if (target === 'canvas') addModeRef.current = 'this-page';
+    setDriveOpen(true);
+  };
+
+  const onDrivePick = async (file: File) => {
+    const looksImage = !file.type || file.type.startsWith('image/');
+    if (!looksImage) {
+      toast.error('Choose a photo (JPG or PNG)');
+      return;
+    }
+    if (driveTargetRef.current === 'viewer') {
+      setSurface('pdf');
+      pdfRef.current?.stampFile(file);
+      toast.success('Image placed on the PDF');
+      return;
+    }
+    try {
+      const img = await loadImageFromFile(file);
+      addCanvas(imageToCanvas(img), file.name);
+      toast.success(addModeRef.current === 'new-page' ? 'Added as new page' : 'Added to this page');
+    } catch {
+      toast.error('Could not load image');
+    }
+  };
+
+  const setViewerTool = (mode: PdfEditorMode) => {
+    setSurface('pdf');
+    pdfRef.current?.setEditorMode(mode);
   };
 
   const backTo = from || '/app/whatsapp';
@@ -796,7 +873,7 @@ export default function DocumentPrintPage() {
   sheetW = Math.round(sheetW * stageZoom);
   sheetH = Math.round(sheetH * stageZoom);
   const sheetFits = sheetH <= availH + 4;
-  const viewerUrl = originalPdfUrl && !edited ? originalPdfUrl : layoutPdfUrl;
+  const viewerUrl = originalPdfUrl && sheetRev === 0 ? originalPdfUrl : layoutPdfUrl;
 
   const chip = (on: boolean) =>
     ({
@@ -861,6 +938,14 @@ export default function DocumentPrintPage() {
               className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium"
               style={toolBtn(tool === id)}
               onClick={() => {
+                if (surface === 'pdf' && id === 'text') {
+                  setViewerTool('text');
+                  return;
+                }
+                if (surface === 'pdf' && id === 'select') {
+                  setViewerTool('none');
+                  return;
+                }
                 setSurface('edit');
                 setTool(id);
               }}
@@ -874,14 +959,29 @@ export default function DocumentPrintPage() {
             type="button"
             className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium"
             onClick={() => {
+              if (surface === 'pdf') {
+                setViewerTool('image');
+                return;
+              }
               setSurface('edit');
               addModeRef.current = 'this-page';
               addFileRef.current?.click();
             }}
             data-doc-print-tool="image"
+            title="Add an image from this computer"
           >
             <ImageIcon size={18} />
             Image
+          </button>
+          <button
+            type="button"
+            className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium"
+            onClick={() => openDrive(surface === 'pdf' ? 'viewer' : 'canvas')}
+            data-doc-print-tool="files"
+            title="Choose an image from File Manager"
+          >
+            <FolderOpen size={18} />
+            Files
           </button>
           <span className="w-px h-6 mx-1 shrink-0" style={{ background: 'hsl(var(--pt-border))' }} />
           <button
@@ -965,6 +1065,30 @@ export default function DocumentPrintPage() {
         </aside>
 
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          {surface === 'pdf' ? (
+          <div
+            className="shrink-0 h-10 border-b px-2 flex items-center gap-1.5 text-xs overflow-x-auto whitespace-nowrap [&>*]:shrink-0"
+            style={{ background: '#fafafa', borderColor: 'hsl(var(--pt-border))' }}
+            data-doc-print-pdf-tools="1"
+          >
+            <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium" onClick={() => setViewerTool('text')} data-doc-print-viewer-tool="text">
+              <TextT size={14} className="inline mr-1" /> Text
+            </button>
+            <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium" onClick={() => setViewerTool('draw')} data-doc-print-viewer-tool="draw">
+              <PencilSimple size={14} className="inline mr-1" /> Draw
+            </button>
+            <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium" onClick={() => setViewerTool('highlight')} data-doc-print-viewer-tool="highlight">
+              Highlight
+            </button>
+            <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium" onClick={() => setViewerTool('image')} data-doc-print-viewer-tool="image">
+              <ImageIcon size={14} className="inline mr-1" /> Image
+            </button>
+            <button type="button" className="btn-primary text-[11px] py-1 px-2" onClick={() => openDrive('viewer')} data-doc-print-viewer-tool="files">
+              <FolderOpen size={14} className="inline mr-1" /> From files
+            </button>
+            <span className="text-[var(--muted-foreground)]">Text, drawing, and images here print on this {paper.label}.</span>
+          </div>
+          ) : (
           <div
             className="shrink-0 h-10 border-b px-2 flex items-center gap-1.5 text-xs overflow-x-auto whitespace-nowrap [&>*]:shrink-0"
             style={{ background: '#fafafa', borderColor: 'hsl(var(--pt-border))' }}
@@ -1057,11 +1181,18 @@ export default function DocumentPrintPage() {
               </span>
             )}
           </div>
+          )}
 
           {surface === 'pdf' ? (
             <div className="flex-1 min-h-0" data-doc-print-pdf="1">
               {viewerUrl ? (
-                <MozillaPdfEmbed key={viewerUrl} fileUrl={viewerUrl} mode="editor" />
+                <MozillaPdfEmbed
+                  key={viewerUrl}
+                  ref={pdfRef}
+                  fileUrl={viewerUrl}
+                  mode="editor"
+                  onPickDriveImage={() => openDrive('viewer')}
+                />
               ) : (
                 <div className="h-full flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]">
                   <SpinnerGap size={22} className="animate-spin" /> Opening PDF…
@@ -1105,17 +1236,27 @@ export default function DocumentPrintPage() {
                 onPointerCancel={onPointerUp}
               />
               {!page.cells.length && (
-                <button
-                  type="button"
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 btn-primary text-sm px-4 py-2 shadow"
-                  data-doc-print-add-image="1"
-                  onClick={() => {
-                    addModeRef.current = 'this-page';
-                    addFileRef.current?.click();
-                  }}
-                >
-                  Add image
-                </button>
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-2">
+                  <button
+                    type="button"
+                    className="btn-primary text-sm px-4 py-2 shadow"
+                    data-doc-print-add-image="1"
+                    onClick={() => {
+                      addModeRef.current = 'this-page';
+                      addFileRef.current?.click();
+                    }}
+                  >
+                    Add image
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary text-sm px-4 py-2 shadow"
+                    data-doc-print-add-drive="1"
+                    onClick={() => openDrive('canvas')}
+                  >
+                    From files
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1124,6 +1265,15 @@ export default function DocumentPrintPage() {
       </div>
 
       <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={onAddLocal} />
+      <DrivePicker
+        open={driveOpen}
+        imagesOnly
+        onClose={() => setDriveOpen(false)}
+        onPick={(file) => {
+          setDriveOpen(false);
+          void onDrivePick(file);
+        }}
+      />
       {surface === 'edit' && (
       <footer
         className="shrink-0 h-10 border-t px-3 flex items-center gap-2 text-xs overflow-x-auto whitespace-nowrap"

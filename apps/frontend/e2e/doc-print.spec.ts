@@ -35,6 +35,21 @@ test.describe('Document print layout (operator)', () => {
     await page.route('**/socket.io/**', (route) => route.abort());
     await page.route('**/api/**', async (route) => {
       const url = route.request().url();
+      if (url.includes('/drive/files/ws')) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([
+            {
+              id: 'drv-photo1',
+              fileName: 'customer.jpg',
+              fileUrl: 'https://api.cybercontrol.fun/api/drive/download/drv-photo1',
+              customerName: 'Shubham',
+            },
+          ]),
+        });
+        return;
+      }
       if (url.includes('/drive/download/')) {
         await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
         return;
@@ -196,5 +211,66 @@ test.describe('Document print layout (operator)', () => {
     await expect(frame.locator('#viewerContainer')).toBeVisible({ timeout: 20000 });
     await expect(frame.locator('.page').first()).toBeVisible({ timeout: 20000 });
     await expect(frame.locator('#cyberBackButton')).toHaveCount(0);
+    await expect(frame.locator('#editorFreeTextButton')).toBeEnabled({ timeout: 20000 });
+    await expect(page.locator('[data-doc-print-pdf-tools="1"]')).toBeVisible();
+  });
+
+  test('PDF viewer accepts text and a File Manager image, print stays A4', async ({ page }) => {
+    await page.goto('/app/photos/doc-print?paper=a4&from=/app/whatsapp&name=Shubham', {
+      waitUntil: 'domcontentloaded',
+    });
+    const later = page.getByRole('button', { name: /^Later$/i });
+    if (await later.isVisible().catch(() => false)) await later.click();
+
+    await expect(page.locator('[data-doc-print-add-drive="1"]')).toBeVisible({ timeout: 15000 });
+    await page.locator('[data-doc-print-add-drive="1"]').click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('button', { name: /Shubham/ })).toBeVisible();
+    await dialog.getByRole('button', { name: /Shubham/ }).click();
+    await expect(page.locator('[data-doc-print-crop="1"]')).toBeVisible({ timeout: 10000 });
+
+    await page.locator('[data-doc-print-surface="pdf"]').click();
+    const frame = page.frameLocator('iframe[title="PDF document"]');
+    const textBtn = frame.locator('#editorFreeTextButton');
+    await expect(frame.locator('.page').first()).toBeVisible({ timeout: 20000 });
+    await expect(textBtn).toBeEnabled({ timeout: 20000 });
+    await page.locator('[data-doc-print-viewer-tool="text"]').click();
+    await expect(textBtn).toHaveAttribute('aria-expanded', 'true', { timeout: 10000 });
+
+    await page.locator('[data-doc-print-viewer-tool="files"]').click();
+    await dialog.getByRole('button', { name: /Shubham/ }).click();
+    await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 15000 });
+
+    page.on('dialog', (d) => d.dismiss().catch(() => {}));
+    const box = await page.evaluate(async () => {
+      const btn = document.querySelector('[data-doc-print-submit="1"]') as HTMLButtonElement | null;
+      if (!btn) return { error: 'no print' };
+      const blobs: Blob[] = [];
+      const orig = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = ((obj: Blob | MediaSource) => {
+        if (obj instanceof Blob && (obj.type === 'application/pdf' || obj.size > 500)) blobs.push(obj);
+        return orig(obj);
+      }) as typeof URL.createObjectURL;
+      btn.click();
+      const start = Date.now();
+      while (Date.now() - start < 15000) {
+        if (blobs.length) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      URL.createObjectURL = orig;
+      if (!blobs.length) return { error: 'no pdf blob' };
+      const text = await blobs[blobs.length - 1].text();
+      const m = text.match(/\/MediaBox\s*\[\s*([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s+([0-9.]+)\s*\]/);
+      if (!m) return { error: 'no mediabox', head: text.slice(0, 180) };
+      const wPt = Number(m[3]) - Number(m[1]);
+      const hPt = Number(m[4]) - Number(m[2]);
+      return { w: (wPt * 25.4) / 72, h: (hPt * 25.4) / 72 };
+    });
+    expect(box, JSON.stringify(box)).toMatchObject({ w: expect.any(Number), h: expect.any(Number) });
+    expect((box as { error?: string }).error).toBeUndefined();
+    expect((box as { w: number }).w).toBeGreaterThan(200);
+    expect((box as { w: number }).w).toBeLessThan(220);
+    expect((box as { h: number }).h).toBeGreaterThan(285);
+    expect((box as { h: number }).h).toBeLessThan(310);
   });
 });

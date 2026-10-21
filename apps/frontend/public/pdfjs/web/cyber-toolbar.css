@@ -66,3 +66,21 @@
 .toolbarButton.cyberIconBtn:is(:hover, :focus-visible) svg {
   opacity: 1;
 }
+
+/* Doc-print uses the page Print button so the paper size stays exact. */
+html.cyber-editor #printButton,
+html.cyber-editor #downloadButton,
+html.cyber-editor #secondaryPrint,
+html.cyber-editor #secondaryDownload,
+html.cyber-editor #secondaryOpenFile {
+  display: none !important;
+}
+
+html.cyber-editor #editorModeButtons {
+  display: flex !important;
+}
+
+html.cyber-editor #cyberStampFromFiles {
+  width: auto !important;
+  padding-inline: 8px !important;
+}
