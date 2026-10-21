@@ -41,14 +41,21 @@ export const DOC_PAPERS: Record<DocPaperId, DocPaperDef> = {
   },
 };
 
+export type DocFitMode = 'contain' | 'cover';
+
 export type DocCell = {
   id: string;
   x: number;
   y: number;
   w: number;
   h: number;
-  /** Source bitmap for this cell. */
+  /** Working bitmap for this cell (after crop/rotate/flip/tone). */
   canvas: HTMLCanvasElement;
+  /** Pre-tone bitmap so brightness/contrast can be re-applied. */
+  baseCanvas?: HTMLCanvasElement;
+  fitMode?: DocFitMode;
+  brightness?: number;
+  contrast?: number;
   label?: string;
 };
 
@@ -70,7 +77,7 @@ export function imageToCanvas(img: HTMLImageElement | HTMLCanvasElement): HTMLCa
   return c;
 }
 
-/** Place image contain-fitted inside a box (document Xerox — no face crop). */
+/** Place image contain-fitted inside a box (document Xerox — letterbox). */
 export function drawContain(
   ctx: CanvasRenderingContext2D,
   src: HTMLCanvasElement,
@@ -95,12 +102,46 @@ export function drawContain(
   ctx.drawImage(src, dx, dy, dw, dh);
 }
 
+/** Cover-fit: fill the box, crop overflow (photo paper fill). */
+export function drawCover(
+  ctx: CanvasRenderingContext2D,
+  src: HTMLCanvasElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  const sa = src.width / Math.max(1, src.height);
+  const da = w / Math.max(1, h);
+  let sw = src.width;
+  let sh = src.height;
+  let sx = 0;
+  let sy = 0;
+  if (sa > da) {
+    sw = src.height * da;
+    sx = (src.width - sw) / 2;
+  } else {
+    sh = src.width / da;
+    sy = (src.height - sh) / 2;
+  }
+  ctx.drawImage(src, sx, sy, sw, sh, x, y, w, h);
+}
+
+export function cloneCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  c.getContext('2d')!.drawImage(src, 0, 0);
+  return c;
+}
+
 /** One image → one page, fitted with margin (default café document layout). */
 export function fitImageOnPage(
   src: HTMLCanvasElement,
   paper: DocPaperDef,
   marginMm = 10,
   label?: string,
+  fitMode: DocFitMode = 'contain',
 ): DocPage {
   const margin = mm(marginMm);
   return {
@@ -113,9 +154,28 @@ export function fitImageOnPage(
         w: Math.max(mm(20), paper.w - margin * 2),
         h: Math.max(mm(20), paper.h - margin * 2),
         canvas: src,
+        baseCanvas: cloneCanvas(src),
+        fitMode,
+        brightness: 0,
+        contrast: 0,
         label,
       },
     ],
+  };
+}
+
+/** Resize a single cell to sit in the page with the given margin (mm). */
+export function cellInMargin(
+  cell: DocCell,
+  paper: DocPaperDef,
+  marginMm: number,
+): Pick<DocCell, 'x' | 'y' | 'w' | 'h'> {
+  const margin = mm(marginMm);
+  return {
+    x: margin,
+    y: margin,
+    w: Math.max(mm(20), paper.w - margin * 2),
+    h: Math.max(mm(20), paper.h - margin * 2),
   };
 }
 
@@ -130,7 +190,9 @@ export function renderPageCanvas(page: DocPage, paper: DocPaperDef, selectedId?:
   ctx.imageSmoothingQuality = 'high';
 
   for (const cell of page.cells) {
-    drawContain(ctx, cell.canvas, cell.x, cell.y, cell.w, cell.h);
+    const mode = cell.fitMode || 'contain';
+    if (mode === 'cover') drawCover(ctx, cell.canvas, cell.x, cell.y, cell.w, cell.h);
+    else drawContain(ctx, cell.canvas, cell.x, cell.y, cell.w, cell.h);
     if (cell.id === selectedId) {
       ctx.strokeStyle = 'hsl(27 95% 55%)';
       ctx.lineWidth = 6;

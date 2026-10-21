@@ -63,6 +63,18 @@ test.describe('Document print layout (operator)', () => {
     await page.getByRole('button', { name: /4×6/i }).click();
     await expect(page.locator('[data-doc-print-paper]')).toHaveAttribute('data-doc-print-paper', '4x6');
     await expect(page.getByText(/Selected:.*4×6/i)).toBeVisible();
+
+    // Operator edit bar must be present (crop / rotate / fit / tone / zoom).
+    await expect(page.locator('[data-doc-print-edit="1"]')).toBeVisible();
+    await expect(page.locator('[data-doc-print-crop="1"]')).toBeEnabled();
+    await expect(page.locator('[data-doc-print-rotate-right="1"]')).toBeEnabled();
+    await expect(page.locator('[data-doc-print-fit="cover"]')).toBeVisible();
+    await expect(page.locator('[data-doc-print-brightness="1"]')).toBeVisible();
+    await page.locator('[data-doc-print-fit="cover"]').click();
+    await page.locator('[data-doc-print-rotate-right="1"]').click();
+    await page.locator('[data-doc-print-crop="1"]').click();
+    await expect(page.getByText(/Crop document/i)).toBeVisible();
+    await page.getByRole('button', { name: /^Cancel$/i }).click();
     await page.screenshot({ path: 'C:/Users/yasha/AppData/Local/Temp/doc-print-op/02-4x6-selected.png', fullPage: true });
 
     // Wait until Download is enabled (pages loaded).

@@ -13,10 +13,26 @@ type Props = {
   targetH: number;
   onApply: (framed: HTMLCanvasElement) => void;
   onClose: () => void;
+  /** Override copy for document crop vs face frame. */
+  title?: string;
+  hint?: string;
+  applyLabel?: string;
+  /** Face-guide line at ~35% (passport). Off for document trim. */
+  showFaceGuide?: boolean;
 };
 
 export default function AspectCropModal({
-  open, source, aspect, targetW, targetH, onApply, onClose,
+  open,
+  source,
+  aspect,
+  targetW,
+  targetH,
+  onApply,
+  onClose,
+  title = 'Frame the face',
+  hint = 'Drag to pan · pinch/wheel to zoom · keep head & shoulders in the box',
+  applyLabel = 'Apply frame',
+  showFaceGuide = true,
 }: Props) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [vw, setVw] = useState(400);
@@ -105,10 +121,8 @@ export default function AspectCropModal({
       <div className="card w-full max-w-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold">Frame the face</p>
-            <p className="text-[11px] text-[var(--muted-foreground)]">
-              Drag to pan · pinch/wheel to zoom · keep head & shoulders in the box
-            </p>
+            <p className="text-sm font-semibold">{title}</p>
+            <p className="text-[11px] text-[var(--muted-foreground)]">{hint}</p>
           </div>
           <button type="button" className="text-xs text-[var(--muted-foreground)]" onClick={onClose}>✕</button>
         </div>
@@ -132,8 +146,9 @@ export default function AspectCropModal({
               style={{ width: dispW, height: dispH, left, top }}
             />
           )}
-          {/* Guide: eyes roughly upper third */}
-          <div className="absolute left-0 right-0 border-t border-dashed border-white/30 pointer-events-none" style={{ top: '35%' }} />
+          {showFaceGuide && (
+            <div className="absolute left-0 right-0 border-t border-dashed border-white/30 pointer-events-none" style={{ top: '35%' }} />
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -149,7 +164,7 @@ export default function AspectCropModal({
 
         <div className="flex gap-2">
           <button type="button" className="btn-secondary flex-1" onClick={onClose}>Cancel</button>
-          <button type="button" className="btn-primary flex-1" onClick={apply}>Apply frame</button>
+          <button type="button" className="btn-primary flex-1" onClick={apply} data-crop-apply="1">{applyLabel}</button>
         </div>
       </div>
     </div>
