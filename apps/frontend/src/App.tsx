@@ -22,6 +22,7 @@ const PhotosHub = lazy(() => import('./features/photos/PhotosHub'));
 const MediaDeskHome = lazy(() => import('./features/media-tools/MediaDeskHome'));
 const PassportEditor = lazy(() => import('./features/media-tools/PassportEditor'));
 const PrintSheet = lazy(() => import('./features/media-tools/PrintSheet'));
+const DocumentPrintPage = lazy(() => import('./features/media-tools/DocumentPrintPage'));
 const PdfScan = lazy(() => import('./features/media-tools/PdfScan'));
 const AadhaarLayout = lazy(() => import('./features/media-tools/AadhaarLayout'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
@@ -121,6 +122,7 @@ export default function App() {
             <Route path="portal" element={<Suspense fallback={<PageLoader />}><PassportEditor /></Suspense>} />
             <Route path="editor" element={<RedirectWithSearch to="/app/photos/portal" />} />
             <Route path="print" element={<Suspense fallback={<PageLoader />}><PrintSheet /></Suspense>} />
+            <Route path="doc-print" element={<Suspense fallback={<PageLoader />}><DocumentPrintPage /></Suspense>} />
             <Route path="scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
             <Route path="aadhaar" element={<Suspense fallback={<PageLoader />}><AadhaarLayout /></Suspense>} />
           </Route>

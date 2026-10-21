@@ -19,7 +19,9 @@ export default function PhotosHub() {
     ? 'Documents'
     : from.includes('/files')
       ? 'File Manager'
-      : 'Media Desk';
+      : loc.pathname.includes('doc-print')
+        ? 'Back'
+        : 'Media Desk';
 
   return (
     <div className="flex flex-col h-full md:h-[calc(100vh-4rem)] w-full max-w-full overflow-x-hidden">

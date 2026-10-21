@@ -34,6 +34,16 @@ function photoEditorPath(driveId: string, msg?: { phone?: string; name?: string 
   return `/app/photos/portal?${q}`;
 }
 
+function docPrintPath(driveId: string, msg?: { phone?: string; name?: string; fileName?: string }) {
+  const q = new URLSearchParams();
+  q.set('fileId', driveId);
+  if (msg?.phone) q.set('phone', msg.phone);
+  if (msg?.name) q.set('name', msg.name);
+  q.set('from', DOCS_RETURN);
+  q.set('paper', 'a4');
+  return `/app/photos/doc-print?${q}`;
+}
+
 interface Message {
   id: string; phone: string; name: string; fileName?: string; text?: string;
   fileUrl?: string; timestamp: string; type?: string; dpUrl?: string; tag?: string;
@@ -1585,7 +1595,20 @@ export default function WhatsApp() {
         }}
         onPrint={() => {
           const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
-          if (!driveId) return;
+          if (!driveId || !viewerFile) return;
+          const kind = mediaKindOf(viewerFile.fileName || '');
+          // JPEG/PNG docs: layout on paper → silent PDF → print (avoids OS page/margin prompts).
+          if (kind === 'image') {
+            navigate(
+              docPrintPath(driveId, {
+                phone: viewerFile.phone,
+                name: viewerFile.name,
+                fileName: viewerFile.fileName,
+              }),
+            );
+            handleCloseViewer();
+            return;
+          }
           void getCachedBlob(driveId, async () => {
             const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
             return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });

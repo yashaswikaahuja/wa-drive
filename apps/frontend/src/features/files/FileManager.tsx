@@ -17,7 +17,7 @@ import {
 } from '@cybercontrol/media-viewer';
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
-import { getCachedBlob } from '../../shared/fileCache';
+import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import { useReveal } from '../../shared/useReveal';
 import { useAuthStore } from '../auth/store';
@@ -542,6 +542,35 @@ export default function FileManager() {
     if (f.customerName) q.set('name', f.customerName);
     q.set('from', '/app/files');
     navigate(`/app/photos/portal?${q}`);
+  };
+
+  /** JPEG docs → paper layout → silent PDF print; PDFs print as-is. */
+  const openDocumentPrint = (f: DriveFile) => {
+    if (isImage(f)) {
+      const q = new URLSearchParams();
+      q.set('fileId', driveIdOf(f));
+      if (f.customerId) q.set('phone', f.customerId);
+      if (f.customerName) q.set('name', f.customerName);
+      q.set('from', '/app/files');
+      q.set('paper', 'a4');
+      closePreview();
+      navigate(`/app/photos/doc-print?${q}`);
+      return;
+    }
+    void (async () => {
+      try {
+        const id = driveIdOf(f);
+        const blob = await getCachedBlob(id, async () => {
+          const res = await api.get(`/drive/download/${id}`, { responseType: 'blob' });
+          return new Blob([res.data], {
+            type: String(res.headers['content-type'] ?? 'application/pdf'),
+          });
+        });
+        printBlob(blob);
+      } catch (e: any) {
+        toast.error(e?.message || 'Print failed');
+      }
+    })();
   };
 
   const previewIndex = preview
@@ -1817,8 +1846,10 @@ export default function FileManager() {
         onDelete={preview ? () => void deleteFile(preview.file) : undefined}
         onDownload={preview ? () => void downloadFile(preview.file) : undefined}
         onOpenInPhotoEditor={preview ? () => openInPhotoEditor(preview.file) : undefined}
+        onPrint={preview ? () => openDocumentPrint(preview.file) : undefined}
         showDelete
         showPhotoEditor
+        showPrint={!!preview && isImage(preview.file)}
         renderStripThumb={(item) => {
           const f = visibleFiles.find((x) => x.id === item.id);
           return f ? <Thumb f={f} /> : null;
