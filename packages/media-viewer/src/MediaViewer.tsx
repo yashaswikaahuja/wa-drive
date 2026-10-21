@@ -562,17 +562,13 @@ export default function MediaViewer({
           </div>
         )}
 
-        <div
-          className={`absolute inset-0 z-[5] overflow-hidden ${
-            kind === 'pdf' ? 'pt-0 pb-0' : 'pt-12 pb-0'
-          }`}
-        >
+        <div className="absolute inset-0 z-[5] overflow-hidden">
           {kind === 'image' ? (
-            <div className="w-full h-full flex items-start justify-center overflow-hidden px-10 sm:px-14 pt-1 pb-[3.75rem] sm:pb-[4.5rem]">
+            <div className="w-full h-full flex items-center justify-center overflow-hidden px-10 sm:px-14 py-[3.75rem] sm:py-[4.5rem]">
               <img
                 src={file.url}
                 alt={file.fileName}
-                className={`max-w-full max-h-full object-contain object-top shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center ${
+                className={`max-w-full max-h-full object-contain object-center shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center ${
                   pinching ? '' : 'transition-transform duration-150'
                 }`}
                 style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
