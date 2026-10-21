@@ -309,4 +309,74 @@ test.describe('Media viewer desktop trackpad pinch', () => {
     });
     expect(tx).not.toBe(0);
   });
+
+  test('drag pans when zoomed; double-click toggles zoom', async ({ page }) => {
+    await page.unroute('**/api/**');
+    await mockDriveRoutes(page, BIG_SVG, 'image/svg+xml');
+    await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
+    await page.getByText(/aadhaar/i).first().click();
+
+    const dialog = page.getByRole('dialog');
+    const img = dialog.locator('img[alt="aadhaar_front.jpg"]');
+    await expect(img).toBeVisible();
+    await expect.poll(async () => (await img.boundingBox())?.width ?? 0).toBeGreaterThan(100);
+
+    const box = (await img.boundingBox())!;
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+
+    // Zoom via toolbar (reliable under mobile project + desktop overrides).
+    await dialog.getByRole('button', { name: /zoom in/i }).click();
+    await expect(dialog.getByRole('button', { name: /reset zoom/i })).toBeVisible();
+    await expect(dialog.getByText(/200%/)).toBeVisible({ timeout: 3000 });
+
+    // Wait for transition-transform to settle (150ms).
+    await expect
+      .poll(async () => {
+        return img.evaluate((el) => {
+          const t = getComputedStyle(el).transform;
+          if (!t || t === 'none') return 1;
+          const m = t.match(/matrix\(([^,]+)/);
+          return m ? Number(m[1]) : 1;
+        });
+      })
+      .toBeGreaterThan(1.5);
+
+    const before = (await img.boundingBox())!;
+    const beforeMidX = before.x + before.width / 2;
+
+    // Drag right while zoomed — image should pan with the pointer.
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 80, cy, { steps: 8 });
+    await page.mouse.up();
+
+    const after = (await img.boundingBox())!;
+    expect(after.x + after.width / 2).toBeGreaterThan(beforeMidX + 20);
+
+    // Double-click on the stage resets to 1×.
+    await page.locator('[data-pinch-surface="1"]').evaluate((el, point) => {
+      el.dispatchEvent(
+        new MouseEvent('dblclick', {
+          bubbles: true,
+          cancelable: true,
+          clientX: point.x,
+          clientY: point.y,
+          view: window,
+        }),
+      );
+    }, { x: cx, y: cy });
+    await expect(dialog.getByRole('button', { name: /zoom in/i })).toBeVisible({ timeout: 3000 });
+    await expect
+      .poll(async () => {
+        return img.evaluate((el) => {
+          const t = getComputedStyle(el).transform;
+          if (!t || t === 'none') return 1;
+          const m = t.match(/matrix\(([^,]+)/);
+          return m ? Number(m[1]) : 1;
+        });
+      })
+      .toBeLessThanOrEqual(1.05);
+  });
 });

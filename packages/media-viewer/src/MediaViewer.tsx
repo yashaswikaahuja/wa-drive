@@ -2,12 +2,16 @@
  * Windows Photos–style media viewer overlay.
  * Dark stage (#0a0a0a), frosted white controls, filmstrip for images,
  * Mozilla PDF.js embed for PDFs. Shared by File Manager and WhatsApp Documents.
+ *
+ * Café-operator UX: inspect ID photos quickly — focal pinch/cursor zoom,
+ * pan while zoomed, filmstrip nav, frosted chrome that stays readable on dark photos.
  */
 import {
   useCallback,
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
   type TouchEvent as ReactTouchEvent,
 } from 'react';
@@ -21,6 +25,7 @@ import {
   File as FileIcon,
   FilePdf,
   Image as ImageIcon,
+  MagnifyingGlassMinus,
   MagnifyingGlassPlus,
   PencilSimple,
   Printer,
@@ -71,6 +76,12 @@ export type MediaViewerProps = {
   zIndexClass?: string;
 };
 
+const BTN =
+  'rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white/90 active:scale-95 transition-transform';
+const BTN_ICON = `w-9 h-9 sm:w-11 sm:h-11 ${BTN}`;
+/** Hub marigold — active filmstrip / accent on dark stage */
+const ACCENT_RING = 'ring-2 ring-[hsl(28,95%,55%)] ring-offset-1 ring-offset-transparent';
+
 function DefaultStripThumb({ item }: { item: MediaViewerStripItem }) {
   const [broken, setBroken] = useState(false);
   if (item.thumbUrl && !broken) {
@@ -115,10 +126,21 @@ export default function MediaViewer({
   const panRef = useRef({ x: 0, y: 0 });
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [pinching, setPinching] = useState(false);
+  const [panning, setPanning] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const moreWrapRef = useRef<HTMLDivElement | null>(null);
   const filmstripRef = useRef<HTMLDivElement>(null);
   const stageElRef = useRef<HTMLDivElement | null>(null);
   const swipeStartX = useRef<number | null>(null);
+  /** One-finger / mouse drag while zoomed. */
+  const dragRef = useRef<{
+    pointerX: number;
+    pointerY: number;
+    panX: number;
+    panY: number;
+    moved: boolean;
+  } | null>(null);
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
   /** Two-finger / Safari gesture pinch → content scale (not browser page zoom). */
   const pinchStartDist = useRef<number | null>(null);
   const pinchStartZoom = useRef(1);
@@ -167,6 +189,11 @@ export default function MediaViewer({
     setPan({ x: 0, y: 0 });
   }, []);
 
+  const setPanBoth = useCallback((next: { x: number; y: number }) => {
+    panRef.current = next;
+    setPan(next);
+  }, []);
+
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
@@ -181,9 +208,12 @@ export default function MediaViewer({
   useEffect(() => {
     resetZoomPan();
     setPinching(false);
+    setPanning(false);
     setMoreOpen(false);
     pinchStartDist.current = null;
     pinchActive.current = false;
+    dragRef.current = null;
+    lastTapRef.current = null;
   }, [file?.id, resetZoomPan]);
 
   useEffect(() => {
@@ -201,6 +231,14 @@ export default function MediaViewer({
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if (e.key === 'Escape') {
         e.preventDefault();
+        if (moreOpen) {
+          setMoreOpen(false);
+          return;
+        }
+        if (zoomRef.current !== 1) {
+          resetZoomPan();
+          return;
+        }
         onClose();
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -208,11 +246,38 @@ export default function MediaViewer({
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         onNext?.();
+      } else if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        const img = imgRef.current;
+        const rect = img?.getBoundingClientRect();
+        const cx = rect ? rect.left + rect.width / 2 : 0;
+        const cy = rect ? rect.top + rect.height / 2 : 0;
+        applyZoomAtRef.current(zoomRef.current + 0.25, cx, cy);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        const img = imgRef.current;
+        const rect = img?.getBoundingClientRect();
+        const cx = rect ? rect.left + rect.width / 2 : 0;
+        const cy = rect ? rect.top + rect.height / 2 : 0;
+        applyZoomAtRef.current(zoomRef.current - 0.25, cx, cy);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        resetZoomPan();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [file?.id, onClose, onPrev, onNext]);
+  }, [file?.id, onClose, onPrev, onNext, moreOpen, resetZoomPan]);
+
+  /** Close overflow menu on outside click. */
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!moreWrapRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    window.addEventListener('pointerdown', onPointer, true);
+    return () => window.removeEventListener('pointerdown', onPointer, true);
+  }, [moreOpen]);
 
   const kind = file?.kind ?? 'image';
   kindRef.current = kind;
@@ -242,7 +307,7 @@ export default function MediaViewer({
     };
   }, [file?.id, file?.kind]);
 
-  /** Bind pinch/swipe on the stage node as soon as it mounts (stable callback ref). */
+  /** Bind pinch / pan / swipe on the stage node as soon as it mounts. */
   const bindPinchSurface = useCallback((el: HTMLDivElement | null) => {
     detachPinchRef.current?.();
     detachPinchRef.current = null;
@@ -259,19 +324,48 @@ export default function MediaViewer({
       y: (a.clientY + b.clientY) / 2,
     });
 
+    const maybeDoubleTap = (clientX: number, clientY: number) => {
+      const now = Date.now();
+      const prev = lastTapRef.current;
+      lastTapRef.current = { t: now, x: clientX, y: clientY };
+      if (!prev || now - prev.t > 320) return false;
+      if (Math.hypot(clientX - prev.x, clientY - prev.y) > 36) return false;
+      lastTapRef.current = null;
+      if (zoomRef.current > 1.05) {
+        applyZoomAtRef.current(1, clientX, clientY);
+      } else {
+        applyZoomAtRef.current(2, clientX, clientY);
+      }
+      return true;
+    };
+
     const onTouchStart = (e: TouchEvent) => {
       if (kindRef.current !== 'image') return;
       if (e.touches.length >= 2) {
         e.preventDefault();
         pinchActive.current = true;
         setPinching(true);
+        setPanning(false);
+        dragRef.current = null;
         pinchStartDist.current = touchDistance(e.touches[0], e.touches[1]);
         pinchStartZoom.current = zoomRef.current;
         swipeStartX.current = null;
         return;
       }
       if (e.touches.length === 1 && !pinchActive.current) {
-        swipeStartX.current = e.touches[0].clientX;
+        const t = e.touches[0];
+        swipeStartX.current = t.clientX;
+        if (zoomRef.current > 1.01) {
+          dragRef.current = {
+            pointerX: t.clientX,
+            pointerY: t.clientY,
+            panX: panRef.current.x,
+            panY: panRef.current.y,
+            moved: false,
+          };
+        } else {
+          dragRef.current = null;
+        }
       }
     };
 
@@ -279,14 +373,15 @@ export default function MediaViewer({
       if (kindRef.current !== 'image') return;
       if (e.touches.length >= 2) {
         e.preventDefault();
-        // Second finger may land after move started — (re)seed baseline.
         if (!pinchStartDist.current || pinchStartDist.current <= 0) {
           pinchStartDist.current = touchDistance(e.touches[0], e.touches[1]);
           pinchStartZoom.current = zoomRef.current;
         }
         pinchActive.current = true;
         setPinching(true);
+        setPanning(false);
         swipeStartX.current = null;
+        dragRef.current = null;
         const dist = touchDistance(e.touches[0], e.touches[1]);
         const mid = touchMidpoint(e.touches[0], e.touches[1]);
         applyZoomAtRef.current(
@@ -294,6 +389,18 @@ export default function MediaViewer({
           mid.x,
           mid.y,
         );
+        return;
+      }
+      if (e.touches.length === 1 && dragRef.current && zoomRef.current > 1.01) {
+        e.preventDefault();
+        const t = e.touches[0];
+        const d = dragRef.current;
+        const dx = t.clientX - d.pointerX;
+        const dy = t.clientY - d.pointerY;
+        if (Math.hypot(dx, dy) > 4) d.moved = true;
+        setPanning(true);
+        setPanBoth({ x: d.panX + dx, y: d.panY + dy });
+        swipeStartX.current = null;
       }
     };
 
@@ -302,21 +409,43 @@ export default function MediaViewer({
       if (e.touches.length < 2) pinchStartDist.current = null;
       if (e.touches.length === 0) {
         const wasPinch = pinchActive.current;
+        const drag = dragRef.current;
         pinchActive.current = false;
         pinchStartDist.current = null;
         setPinching(false);
+        setPanning(false);
+        dragRef.current = null;
+
         if (wasPinch) {
           swipeStartX.current = null;
           return;
         }
+
+        // Double-tap zoom / reset at tap point (only if we did not pan).
+        if (drag?.moved) {
+          swipeStartX.current = null;
+          return;
+        }
+        if (e.changedTouches.length > 0) {
+          const t = e.changedTouches[0];
+          if (maybeDoubleTap(t.clientX, t.clientY)) {
+            swipeStartX.current = null;
+            return;
+          }
+        }
+
+        // File swipe only at 1× — when zoomed, drag pans instead.
+        if (zoomRef.current > 1.01) {
+          swipeStartX.current = null;
+          return;
+        }
+        if (swipeStartX.current == null || e.changedTouches.length === 0) return;
+        const dx = e.changedTouches[0].clientX - swipeStartX.current;
+        swipeStartX.current = null;
+        if (Math.abs(dx) < 60) return;
+        if (dx < 0) onNextRef.current?.();
+        else onPrevRef.current?.();
       }
-      if (swipeStartX.current == null || e.changedTouches.length === 0) return;
-      if (pinchActive.current) return;
-      const dx = e.changedTouches[0].clientX - swipeStartX.current;
-      swipeStartX.current = null;
-      if (Math.abs(dx) < 60) return;
-      if (dx < 0) onNextRef.current?.();
-      else onPrevRef.current?.();
     };
 
     // Safari / iOS Safari expose non-standard gesture* events for pinch.
@@ -327,6 +456,7 @@ export default function MediaViewer({
       setPinching(true);
       pinchStartZoom.current = zoomRef.current;
       swipeStartX.current = null;
+      dragRef.current = null;
     };
     const onGestureChange = (e: Event) => {
       if (kindRef.current !== 'image') return;
@@ -360,6 +490,49 @@ export default function MediaViewer({
       swipeStartX.current = null;
     };
 
+    const onMouseDown = (e: MouseEvent) => {
+      if (kindRef.current !== 'image') return;
+      if (e.button !== 0) return;
+      if (zoomRef.current <= 1.01) return;
+      // Ignore clicks on chrome buttons / filmstrip.
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('button, a, [data-filmstrip]')) return;
+      dragRef.current = {
+        pointerX: e.clientX,
+        pointerY: e.clientY,
+        panX: panRef.current.x,
+        panY: panRef.current.y,
+        moved: false,
+      };
+      setPanning(true);
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current || kindRef.current !== 'image') return;
+      if (zoomRef.current <= 1.01) return;
+      e.preventDefault();
+      const d = dragRef.current;
+      const dx = e.clientX - d.pointerX;
+      const dy = e.clientY - d.pointerY;
+      if (Math.hypot(dx, dy) > 3) d.moved = true;
+      setPanBoth({ x: d.panX + dx, y: d.panY + dy });
+    };
+    const onMouseUp = () => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      setPanning(false);
+      if (drag && !drag.moved && kindRef.current === 'image') {
+        // Treat as click — double-click handled via dblclick.
+      }
+    };
+    const onDblClick = (e: MouseEvent) => {
+      if (kindRef.current !== 'image') return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('button, a, [data-filmstrip]')) return;
+      e.preventDefault();
+      if (zoomRef.current > 1.05) applyZoomAtRef.current(1, e.clientX, e.clientY);
+      else applyZoomAtRef.current(2, e.clientX, e.clientY);
+    };
+
     const opts = { capture: true, passive: false } as const;
     el.addEventListener('touchstart', onTouchStart, opts);
     el.addEventListener('touchmove', onTouchMove, opts);
@@ -368,7 +541,10 @@ export default function MediaViewer({
     el.addEventListener('gesturestart', onGestureStart, opts);
     el.addEventListener('gesturechange', onGestureChange, opts);
     el.addEventListener('gestureend', onGestureEnd, opts);
-    // Wheel is handled on window (above) so trackpad pinch is not applied twice.
+    el.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    el.addEventListener('dblclick', onDblClick);
 
     detachPinchRef.current = () => {
       el.removeEventListener('touchstart', onTouchStart, true);
@@ -378,8 +554,12 @@ export default function MediaViewer({
       el.removeEventListener('gesturestart', onGestureStart, true);
       el.removeEventListener('gesturechange', onGestureChange, true);
       el.removeEventListener('gestureend', onGestureEnd, true);
+      el.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      el.removeEventListener('dblclick', onDblClick);
     };
-  }, []);
+  }, [setPanBoth]);
 
   useEffect(() => () => {
     detachPinchRef.current?.();
@@ -401,13 +581,14 @@ export default function MediaViewer({
   }
 
   const canNavigate = items.length > 1 && !!(onPrev || onNext);
+  const zoomed = zoom > 1.01;
+  const chromeDim = pinching || panning;
 
-  const onTouchStart = (e: ReactTouchEvent) => {
-    // PDF edge swipes still use React handlers; image pinch uses native listeners on stage.
+  const onTouchStartPdf = (e: ReactTouchEvent) => {
     if (kind !== 'pdf') return;
     if (e.touches.length === 1) swipeStartX.current = e.touches[0].clientX;
   };
-  const onTouchEnd = (e: ReactTouchEvent) => {
+  const onTouchEndPdf = (e: ReactTouchEvent) => {
     if (kind !== 'pdf') return;
     if (swipeStartX.current == null || e.changedTouches.length === 0) return;
     const dx = e.changedTouches[0].clientX - swipeStartX.current;
@@ -419,6 +600,18 @@ export default function MediaViewer({
 
   const counter =
     index >= 0 && items.length > 0 ? ` · File ${index + 1} of ${items.length}` : '';
+
+  const stepZoomButton = () => {
+    if (zoomed) {
+      resetZoomPan();
+      return;
+    }
+    const img = imgRef.current;
+    const rect = img?.getBoundingClientRect();
+    const cx = rect ? rect.left + rect.width / 2 : 0;
+    const cy = rect ? rect.top + rect.height / 2 : 0;
+    applyZoomAt(2, cx, cy);
+  };
 
   return (
     <div
@@ -433,7 +626,10 @@ export default function MediaViewer({
         ref={bindPinchSurface}
         className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
         onClick={(e) => e.stopPropagation()}
-        style={{ touchAction: kind === 'pdf' ? 'auto' : 'none' }}
+        style={{
+          touchAction: kind === 'pdf' ? 'auto' : 'none',
+          cursor: kind === 'image' && zoomed ? (panning ? 'grabbing' : 'grab') : undefined,
+        }}
         data-pinch-surface={kind === 'image' ? '1' : undefined}
       >
         <div
@@ -450,37 +646,40 @@ export default function MediaViewer({
             <button
               type="button"
               onClick={onClose}
-              className="absolute top-2 left-2 sm:top-4 sm:left-4 z-20 h-9 sm:h-11 px-2.5 sm:px-3.5 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center gap-1 shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+              className={`absolute top-2 left-2 sm:top-4 sm:left-4 z-20 h-9 sm:h-11 px-2.5 sm:px-3.5 gap-1 ${BTN} ${
+                chromeDim ? 'opacity-40' : 'opacity-100'
+              } transition-opacity`}
               title="Back (Esc)"
+              aria-label="Back"
             >
               <ArrowBendUpLeft size={16} weight="bold" />
               <span className="text-[11px] sm:text-xs font-semibold">Back</span>
             </button>
 
-            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2.5">
+            <div
+              className={`absolute top-2 right-2 sm:top-4 sm:right-4 z-20 flex items-center gap-1.5 sm:gap-2 transition-opacity ${
+                chromeDim ? 'opacity-40' : 'opacity-100'
+              }`}
+            >
               <button
                 type="button"
-                className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
-                title="Zoom"
-                onClick={() => {
-                  if (zoom >= 2) {
-                    resetZoomPan();
-                    return;
-                  }
-                  const img = imgRef.current;
-                  const rect = img?.getBoundingClientRect();
-                  const cx = rect ? rect.left + rect.width / 2 : 0;
-                  const cy = rect ? rect.top + rect.height / 2 : 0;
-                  applyZoomAt(Number((zoom + 0.5).toFixed(1)), cx, cy);
-                }}
+                className={BTN_ICON}
+                title={zoomed ? 'Reset zoom' : 'Zoom in'}
+                aria-label={zoomed ? 'Reset zoom' : 'Zoom in'}
+                onClick={stepZoomButton}
               >
-                <MagnifyingGlassPlus size={18} weight="bold" />
+                {zoomed ? (
+                  <MagnifyingGlassMinus size={18} weight="bold" />
+                ) : (
+                  <MagnifyingGlassPlus size={18} weight="bold" />
+                )}
               </button>
               {showPrint && onPrint && (
                 <button
                   type="button"
-                  className="hidden sm:flex w-11 h-11 rounded-full bg-white/95 hover:bg-white text-black items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                  className={`hidden sm:flex ${BTN_ICON}`}
                   title="Print"
+                  aria-label="Print"
                   onClick={onPrint}
                 >
                   <Printer size={18} weight="bold" />
@@ -489,8 +688,9 @@ export default function MediaViewer({
               {showPhotoEditor && onOpenInPhotoEditor && (
                 <button
                   type="button"
-                  className="hidden sm:flex w-11 h-11 rounded-full bg-white/95 hover:bg-white text-black items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                  className={`hidden sm:flex ${BTN_ICON}`}
                   title="Edit in Photo Editor"
+                  aria-label="Photo Editor"
                   onClick={onOpenInPhotoEditor}
                 >
                   <PencilSimple size={20} weight="bold" />
@@ -499,31 +699,36 @@ export default function MediaViewer({
               {showDelete && onDelete && (
                 <button
                   type="button"
-                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                  className={BTN_ICON}
                   title="Delete"
+                  aria-label="Delete"
                   onClick={onDelete}
                 >
                   <Trash size={18} weight="bold" />
                 </button>
               )}
-              <div className="relative">
+              <div className="relative" ref={moreWrapRef}>
                 <button
                   type="button"
-                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center shadow-[0_4px_24px_rgba(0,0,0,0.55)] border border-white"
+                  className={BTN_ICON}
                   title="More"
+                  aria-label="More actions"
+                  aria-expanded={moreOpen}
                   onClick={() => setMoreOpen((v: boolean) => !v)}
                 >
                   <DotsThree size={22} weight="bold" />
                 </button>
                 {moreOpen && (
                   <div
-                    className="absolute right-0 min-w-[170px] rounded-xl border border-white/20 bg-[#2c2c2e] shadow-2xl py-1.5 text-sm text-white z-30"
+                    className="absolute right-0 min-w-[180px] rounded-xl border border-white/15 bg-[#2c2c2e]/95 backdrop-blur-md shadow-2xl py-1.5 text-sm text-white z-30"
                     style={{ top: '3.25rem' }}
                     onClick={(e) => e.stopPropagation()}
+                    role="menu"
                   >
                     {onDownload && (
                       <button
                         type="button"
+                        role="menuitem"
                         className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5"
                         onClick={() => {
                           setMoreOpen(false);
@@ -536,6 +741,7 @@ export default function MediaViewer({
                     {showPrint && onPrint && (
                       <button
                         type="button"
+                        role="menuitem"
                         className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5 sm:hidden"
                         onClick={() => {
                           setMoreOpen(false);
@@ -548,7 +754,8 @@ export default function MediaViewer({
                     {showPhotoEditor && onOpenInPhotoEditor && (
                       <button
                         type="button"
-                        className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5"
+                        role="menuitem"
+                        className="w-full px-3.5 py-2.5 text-left hover:bg-white/10 flex items-center gap-2.5 sm:hidden"
                         onClick={() => {
                           setMoreOpen(false);
                           onOpenInPhotoEditor();
@@ -559,6 +766,7 @@ export default function MediaViewer({
                     )}
                     <button
                       type="button"
+                      role="menuitem"
                       className="w-full px-3.5 py-2.5 text-left hover:bg-white/10"
                       onClick={() => {
                         resetZoomPan();
@@ -574,25 +782,31 @@ export default function MediaViewer({
           </>
         )}
 
-        {kind === 'image' && canNavigate && (
+        {kind === 'image' && canNavigate && !zoomed && (
           <>
             <button
               type="button"
-              className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
+              className={`absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-12 sm:h-12 ${BTN} ${
+                chromeDim ? 'opacity-30' : 'opacity-90 hover:opacity-100'
+              } transition-opacity`}
               onClick={onPrev}
               title="Previous file"
+              aria-label="Previous file"
             >
               <CaretLeft size={22} weight="bold" className="sm:hidden" />
-              <CaretLeft size={28} weight="bold" className="hidden sm:block" />
+              <CaretLeft size={26} weight="bold" className="hidden sm:block" />
             </button>
             <button
               type="button"
-              className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-white/95 hover:bg-white text-black flex items-center justify-center border border-white shadow-[0_6px_28px_rgba(0,0,0,0.55)]"
+              className={`absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-12 sm:h-12 ${BTN} ${
+                chromeDim ? 'opacity-30' : 'opacity-90 hover:opacity-100'
+              } transition-opacity`}
               onClick={onNext}
               title="Next file"
+              aria-label="Next file"
             >
               <CaretRight size={22} weight="bold" className="sm:hidden" />
-              <CaretRight size={28} weight="bold" className="hidden sm:block" />
+              <CaretRight size={26} weight="bold" className="hidden sm:block" />
             </button>
           </>
         )}
@@ -602,15 +816,15 @@ export default function MediaViewer({
             <div
               className="absolute left-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
               style={{ touchAction: 'pan-y' }}
-              onTouchStart={onTouchStart}
-              onTouchEnd={onTouchEnd}
+              onTouchStart={onTouchStartPdf}
+              onTouchEnd={onTouchEndPdf}
               title="Swipe for previous file"
             />
             <div
               className="absolute right-0 top-10 bottom-0 w-10 sm:w-6 z-40 md:hidden"
               style={{ touchAction: 'pan-y' }}
-              onTouchStart={onTouchStart}
-              onTouchEnd={onTouchEnd}
+              onTouchStart={onTouchStartPdf}
+              onTouchEnd={onTouchEndPdf}
               title="Swipe for next file"
             />
           </>
@@ -624,13 +838,13 @@ export default function MediaViewer({
 
         <div className="absolute inset-0 z-[5] overflow-hidden">
           {kind === 'image' ? (
-            <div className="w-full h-full flex items-center justify-center overflow-hidden px-10 sm:px-14 py-[3.75rem] sm:py-[4.5rem]">
+            <div className="w-full h-full flex items-center justify-center overflow-hidden px-8 sm:px-14 py-[3.75rem] sm:py-[4.5rem]">
               <img
                 ref={imgRef}
                 src={file.url}
                 alt={file.fileName}
-                className={`max-w-full max-h-full object-contain object-center shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center ${
-                  pinching ? '' : 'transition-transform duration-150'
+                className={`max-w-full max-h-full object-contain object-center shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center select-none ${
+                  pinching || panning ? '' : 'transition-transform duration-150'
                 }`}
                 style={{
                   transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -653,8 +867,12 @@ export default function MediaViewer({
         </div>
 
         {kind === 'image' && (
-          <div className="absolute bottom-[3.25rem] sm:bottom-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-            <div className="px-3 py-1 rounded-full bg-white/95 text-[11px] sm:text-[12px] font-medium text-black shadow-lg max-w-[80vw] truncate">
+          <div
+            className={`absolute bottom-[3.5rem] sm:bottom-[4.25rem] left-1/2 -translate-x-1/2 z-20 pointer-events-none transition-opacity ${
+              chromeDim ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <div className="px-3 py-1 rounded-full bg-black/55 text-white/95 text-[11px] sm:text-[12px] font-medium shadow-lg max-w-[80vw] truncate backdrop-blur-sm border border-white/10">
               {displayName(file.fileName)}
               {counter}
               {zoom !== 1 ? ` · ${Math.round(zoom * 100)}%` : ''}
@@ -664,13 +882,22 @@ export default function MediaViewer({
 
         {kind === 'image' && items.length > 0 && (
           <div
-            className="absolute inset-x-0 bottom-0 z-20 pointer-events-none safe-pb"
+            className={`absolute inset-x-0 bottom-0 z-20 pointer-events-none transition-opacity ${
+              chromeDim ? 'opacity-40' : 'opacity-100'
+            }`}
             onClick={(e) => e.stopPropagation()}
+            data-filmstrip
           >
             <div
               ref={filmstripRef}
-              className="pointer-events-auto flex gap-1.5 sm:gap-2 overflow-x-auto justify-start sm:justify-center scroll-smooth px-2 sm:px-4 py-2 bg-transparent"
-              style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+              className="pointer-events-auto flex gap-1.5 sm:gap-2 overflow-x-auto justify-start sm:justify-center scroll-smooth px-2 sm:px-4 pt-2 bg-gradient-to-t from-black/50 to-transparent"
+              style={
+                {
+                  scrollbarWidth: 'none',
+                  WebkitOverflowScrolling: 'touch',
+                  paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))',
+                } as CSSProperties
+              }
             >
               {items.map((item) => {
                 const active = item.id === file.id;
@@ -680,12 +907,13 @@ export default function MediaViewer({
                     type="button"
                     data-file-id={item.id}
                     onClick={() => onSelectItem?.(item.id)}
-                    className={`shrink-0 w-9 h-9 sm:w-12 sm:h-12 rounded-md overflow-hidden transition-all shadow-md ${
+                    className={`shrink-0 w-9 h-9 sm:w-11 sm:h-11 rounded-md overflow-hidden transition-all shadow-md ${
                       active
-                        ? 'ring-2 ring-[#4da3ff] ring-offset-1 ring-offset-transparent scale-105'
-                        : 'opacity-75 hover:opacity-100 ring-1 ring-white/40'
+                        ? `${ACCENT_RING} scale-105`
+                        : 'opacity-70 hover:opacity-100 ring-1 ring-white/35'
                     }`}
                     title={displayName(item.fileName)}
+                    aria-current={active ? 'true' : undefined}
                   >
                     <div className="w-full h-full bg-black/40 flex items-center justify-center">
                       {renderStripThumb ? (
