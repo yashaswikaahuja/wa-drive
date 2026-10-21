@@ -59,9 +59,34 @@ export type DocCell = {
   label?: string;
 };
 
+export type DocTextMark = {
+  id: string;
+  kind: 'text';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+  size: number;
+  color: string;
+};
+
+export type DocBoxMark = {
+  id: string;
+  kind: 'box';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fill: string;
+};
+
+export type DocMark = DocTextMark | DocBoxMark;
+
 export type DocPage = {
   id: string;
   cells: DocCell[];
+  marks: DocMark[];
 };
 
 export function makeId(prefix = 'd') {
@@ -161,6 +186,7 @@ export function fitImageOnPage(
         label,
       },
     ],
+    marks: [],
   };
 }
 
@@ -179,6 +205,50 @@ export function cellInMargin(
   };
 }
 
+function drawSelection(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  ctx.strokeStyle = 'hsl(27 95% 55%)';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+  const hs = 28;
+  ctx.fillStyle = 'hsl(27 95% 55%)';
+  ctx.fillRect(x + w - hs, y + h - hs, hs, hs);
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + w - hs, y + h - hs, hs, hs);
+}
+
+function drawMark(ctx: CanvasRenderingContext2D, mark: DocMark) {
+  if (mark.kind === 'box') {
+    ctx.fillStyle = mark.fill;
+    ctx.fillRect(mark.x, mark.y, mark.w, mark.h);
+    return;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(mark.x, mark.y, mark.w, mark.h);
+  ctx.clip();
+  ctx.fillStyle = mark.color;
+  ctx.font = `600 ${mark.size}px Inter, sans-serif`;
+  ctx.textBaseline = 'top';
+  const words = (mark.text || ' ').split(/\s+/);
+  let line = '';
+  let y = mark.y + 4;
+  const lh = Math.round(mark.size * 1.25);
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > mark.w - 8 && line) {
+      ctx.fillText(line, mark.x + 6, y);
+      line = word;
+      y += lh;
+      if (y > mark.y + mark.h) break;
+    } else {
+      line = test;
+    }
+  }
+  if (line && y <= mark.y + mark.h) ctx.fillText(line, mark.x + 6, y);
+  ctx.restore();
+}
+
 export function renderPageCanvas(page: DocPage, paper: DocPaperDef, selectedId?: string | null): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = paper.w;
@@ -193,21 +263,14 @@ export function renderPageCanvas(page: DocPage, paper: DocPaperDef, selectedId?:
     const mode = cell.fitMode || 'contain';
     if (mode === 'cover') drawCover(ctx, cell.canvas, cell.x, cell.y, cell.w, cell.h);
     else drawContain(ctx, cell.canvas, cell.x, cell.y, cell.w, cell.h);
-    if (cell.id === selectedId) {
-      ctx.strokeStyle = 'hsl(27 95% 55%)';
-      ctx.lineWidth = 6;
-      ctx.strokeRect(cell.x + 3, cell.y + 3, cell.w - 6, cell.h - 6);
-      const hs = 28;
-      ctx.fillStyle = 'hsl(27 95% 55%)';
-      ctx.fillRect(cell.x + cell.w - hs, cell.y + cell.h - hs, hs, hs);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(cell.x + cell.w - hs, cell.y + cell.h - hs, hs, hs);
-    } else {
-      ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(cell.x + 1, cell.y + 1, cell.w - 2, cell.h - 2);
-    }
+  }
+  for (const mark of page.marks || []) drawMark(ctx, mark);
+
+  for (const cell of page.cells) {
+    if (cell.id === selectedId) drawSelection(ctx, cell.x, cell.y, cell.w, cell.h);
+  }
+  for (const mark of page.marks || []) {
+    if (mark.id === selectedId) drawSelection(ctx, mark.x, mark.y, mark.w, mark.h);
   }
   return c;
 }

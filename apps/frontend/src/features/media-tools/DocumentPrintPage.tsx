@@ -8,9 +8,7 @@ import {
   Printer,
   Trash,
   CaretLeft,
-  CaretRight,
   SpinnerGap,
-  UploadSimple,
   ArrowsOut,
   DownloadSimple,
   Crop,
@@ -19,6 +17,10 @@ import {
   ArrowsLeftRight,
   MagnifyingGlassPlus,
   MagnifyingGlassMinus,
+  Cursor,
+  TextT,
+  Square,
+  Image as ImageIcon,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
@@ -37,6 +39,7 @@ import {
   cloneCanvas,
   type DocCell,
   type DocFitMode,
+  type DocMark,
   type DocPage,
   type DocPaperId,
   fitImageOnPage,
@@ -54,6 +57,27 @@ const MARGIN_PRESETS = [
   { mm: 10, label: '10' },
   { mm: 15, label: '15' },
 ] as const;
+
+function PageThumb({
+  page,
+  paper,
+}: {
+  page: DocPage;
+  paper: (typeof DOC_PAPERS)[DocPaperId];
+}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const sheet = renderPageCanvas(page, paper, null);
+    const el = ref.current;
+    if (!el) return;
+    const w = 120;
+    const h = Math.max(64, Math.round(w * (paper.h / paper.w)));
+    el.width = w * 2;
+    el.height = h * 2;
+    el.getContext('2d')!.drawImage(sheet, 0, 0, el.width, el.height);
+  }, [page, paper]);
+  return <canvas ref={ref} className="block w-full h-auto bg-white" />;
+}
 
 async function loadDriveImage(fileId: string): Promise<HTMLCanvasElement> {
   const blob = await getCachedBlob(fileId, async () => {
@@ -102,6 +126,7 @@ export default function DocumentPrintPage() {
   const [marginMm, setMarginMm] = useState(10);
   const [addMode, setAddMode] = useState<'new-page' | 'this-page'>('new-page');
   const [cropOpen, setCropOpen] = useState(false);
+  const [tool, setTool] = useState<'select' | 'text' | 'box'>('select');
 
   const dragRef = useRef<{
     cellId: string;
@@ -119,18 +144,18 @@ export default function DocumentPrintPage() {
   } | null>(null);
 
   const page = pages[pageIndex] || null;
-  const selectedCell = page?.cells.find((c) => c.id === selected) || page?.cells[0] || null;
-  const selectedId = selectedCell?.id ?? null;
+  const selectedCell = page?.cells.find((c) => c.id === selected) || null;
+  const selectedMark = (page?.marks || []).find((m) => m.id === selected) || null;
+  const selectedId = selected ?? page?.cells[0]?.id ?? null;
 
-  // Keep selection on a real cell when pages change
   useEffect(() => {
     if (!page) {
       setSelected(null);
       return;
     }
-    if (!selected || !page.cells.some((c) => c.id === selected)) {
-      setSelected(page.cells[0]?.id ?? null);
-    }
+    const known =
+      page.cells.some((c) => c.id === selected) || (page.marks || []).some((m) => m.id === selected);
+    if (!known) setSelected(page.cells[0]?.id ?? null);
   }, [page, selected]);
 
   // ── Load primary + extras ───────────────────────────────────────
@@ -255,8 +280,13 @@ export default function DocumentPrintPage() {
   );
 
   const hitTest = useCallback(
-    (px: number, py: number): DocCell | null => {
+    (px: number, py: number): { id: string; x: number; y: number; w: number; h: number } | null => {
       if (!page) return null;
+      const marks = page.marks || [];
+      for (let i = marks.length - 1; i >= 0; i--) {
+        const m = marks[i];
+        if (px >= m.x && px <= m.x + m.w && py >= m.y && py <= m.y + m.h) return m;
+      }
       for (let i = page.cells.length - 1; i >= 0; i--) {
         const c = page.cells[i];
         if (px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h) return c;
@@ -266,9 +296,9 @@ export default function DocumentPrintPage() {
     [page],
   );
 
-  const isHandle = (cell: DocCell, px: number, py: number) => {
-    const hs = 28;
-    return px >= cell.x + cell.w - hs && py >= cell.y + cell.h - hs;
+  const isHandle = (box: { x: number; y: number; w: number; h: number }, px: number, py: number) => {
+    const hs = 36;
+    return px >= box.x + box.w - hs && py >= box.y + box.h - hs;
   };
 
   const updateCell = (cellId: string, patch: Partial<DocCell>) => {
@@ -284,6 +314,27 @@ export default function DocumentPrintPage() {
     );
   };
 
+  const updateMark = (markId: string, patch: Partial<DocMark>) => {
+    setPages((prev) =>
+      prev.map((pg, i) =>
+        i !== pageIndex
+          ? pg
+          : {
+              ...pg,
+              marks: (pg.marks || []).map((m) => (m.id === markId ? ({ ...m, ...patch } as DocMark) : m)),
+            },
+      ),
+    );
+  };
+
+  const addMark = (mark: DocMark) => {
+    setPages((prev) =>
+      prev.map((pg, i) => (i === pageIndex ? { ...pg, marks: [...(pg.marks || []), mark] } : pg)),
+    );
+    setSelected(mark.id);
+    setTool('select');
+  };
+
   const replaceBitmap = (cellId: string, next: HTMLCanvasElement) => {
     updateCell(cellId, {
       canvas: next,
@@ -297,6 +348,32 @@ export default function DocumentPrintPage() {
     e.preventDefault();
     if (!page) return;
     const { x, y } = toPaper(e);
+    if (tool === 'text') {
+      addMark({
+        id: makeId('t'),
+        kind: 'text',
+        x: Math.max(0, Math.round(x)),
+        y: Math.max(0, Math.round(y)),
+        w: Math.round(paper.w * 0.42),
+        h: Math.round(paper.h * 0.12),
+        text: 'Text',
+        size: Math.round(paper.w * 0.035),
+        color: '#111111',
+      });
+      return;
+    }
+    if (tool === 'box') {
+      addMark({
+        id: makeId('b'),
+        kind: 'box',
+        x: Math.max(0, Math.round(x - 40)),
+        y: Math.max(0, Math.round(y - 24)),
+        w: Math.round(paper.w * 0.22),
+        h: Math.round(paper.h * 0.08),
+        fill: '#ffffff',
+      });
+      return;
+    }
     const cell = hitTest(x, y);
     if (!cell) return;
     setSelected(cell.id);
@@ -322,18 +399,24 @@ export default function DocumentPrintPage() {
 
   const onPointerMove = (e: React.PointerEvent) => {
     const { x, y } = toPaper(e);
+    const patchPos = (id: string, px: number, py: number) => {
+      const isMark = (page?.marks || []).some((m) => m.id === id);
+      const patch = { x: Math.max(0, Math.round(px)), y: Math.max(0, Math.round(py)) };
+      if (isMark) updateMark(id, patch);
+      else updateCell(id, patch);
+    };
+    const patchSize = (id: string, w: number, h: number) => {
+      const isMark = (page?.marks || []).some((m) => m.id === id);
+      const patch = { w: Math.max(mmMin(), Math.round(w)), h: Math.max(mmMin(), Math.round(h)) };
+      if (isMark) updateMark(id, patch);
+      else updateCell(id, patch);
+    };
     if (dragRef.current) {
       const { cellId, startCellX, startCellY, startPointerX, startPointerY } = dragRef.current;
-      updateCell(cellId, {
-        x: Math.max(0, Math.round(startCellX + (x - startPointerX))),
-        y: Math.max(0, Math.round(startCellY + (y - startPointerY))),
-      });
+      patchPos(cellId, startCellX + (x - startPointerX), startCellY + (y - startPointerY));
     } else if (resizeRef.current) {
       const { cellId, startW, startH, startPointerX, startPointerY } = resizeRef.current;
-      updateCell(cellId, {
-        w: Math.max(mmMin(), Math.round(startW + (x - startPointerX))),
-        h: Math.max(mmMin(), Math.round(startH + (y - startPointerY))),
-      });
+      patchSize(cellId, startW + (x - startPointerX), startH + (y - startPointerY));
     }
   };
 
@@ -451,7 +534,17 @@ export default function DocumentPrintPage() {
   };
 
   const removeSelected = () => {
-    if (!selectedCell || !page) return;
+    if (!selected || !page) return;
+    if (selectedMark) {
+      setPages((prev) =>
+        prev.map((pg, i) =>
+          i !== pageIndex ? pg : { ...pg, marks: (pg.marks || []).filter((m) => m.id !== selected) },
+        ),
+      );
+      setSelected(page.cells[0]?.id ?? null);
+      return;
+    }
+    if (!selectedCell) return;
     setPages((prev) => {
       const next = prev
         .map((pg, i) =>
@@ -576,319 +669,263 @@ export default function DocumentPrintPage() {
       color: on ? 'hsl(18 80% 32%)' : 'inherit',
     }) as const;
 
+  const textMark = selectedMark?.kind === 'text' ? selectedMark : null;
+  const toolBtn = (on: boolean) =>
+    ({
+      color: on ? 'hsl(18 80% 32%)' : 'inherit',
+      background: on ? 'hsl(27 95% 55% / 0.16)' : 'transparent',
+      borderRadius: 8,
+    }) as const;
+
   return (
     <div className="flex flex-col h-full min-h-0" data-doc-print="1">
       <header
-        className="shrink-0 border-b px-2 py-1.5 flex flex-wrap items-center gap-1.5"
-        style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}
-        data-doc-print-edit="1"
+        className="shrink-0 h-14 border-b px-2 flex items-center gap-1"
+        style={{ background: '#fff', borderColor: 'hsl(var(--pt-border))' }}
       >
-        <button
-          type="button"
-          className="btn-secondary text-xs py-1.5 px-2"
-          onClick={() => navigate(backTo)}
-        >
+        <button type="button" className="btn-secondary text-xs py-1.5 px-2 shrink-0" onClick={() => navigate(backTo)}>
           <CaretLeft size={14} className="inline" /> Back
         </button>
-        <span className="text-xs font-semibold truncate max-w-[9rem]" title={subtitle}>
-          {subtitle}
-        </span>
-        <span
-          className="text-[11px] font-semibold rounded-full px-2 py-0.5"
-          style={{ background: 'hsl(27 95% 55% / 0.15)', color: 'hsl(27 95% 32%)' }}
-          data-doc-print-paper={paperId}
-        >
-          {paperSizeLabel}
-        </span>
+        <span className="text-sm font-semibold truncate max-w-[10rem] px-1" title={subtitle}>{subtitle}</span>
 
-        <div className="flex items-center gap-1">
-          {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
-            <button
-              key={id}
-              type="button"
-              className="text-xs rounded-md px-2 py-1.5 border font-medium"
-              style={chip(paperId === id)}
-              onClick={() => changePaper(id)}
-            >
-              {DOC_PAPERS[id].label.replace(' Portrait', '').replace(' Landscape', ' wide')}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex items-center gap-0.5" data-doc-print-margin="1" title="Page margin">
-          {MARGIN_PRESETS.map((m) => (
-            <button
-              key={m.mm}
-              type="button"
-              className="text-[11px] rounded-md w-7 py-1.5 border font-medium"
-              style={chip(marginMm === m.mm)}
-              onClick={() => applyMargin(m.mm)}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-
-        <span className="w-px h-6 mx-0.5 hidden md:block" style={{ background: 'hsl(var(--pt-border))' }} />
-
-        <button
-          type="button"
-          className="btn-primary text-xs py-1.5 px-2.5 flex items-center gap-1"
-          onClick={() => setCropOpen(true)}
-          disabled={!selectedCell}
-          data-doc-print-crop="1"
-        >
-          <Crop size={14} /> Crop
-        </button>
-        <button
-          type="button"
-          className="btn-secondary text-xs py-1.5 px-2"
-          onClick={() => rotateSelected(-90)}
-          disabled={!selectedCell}
-          aria-label="Rotate left"
-          data-doc-print-rotate-left="1"
-          title="Rotate left"
-        >
-          <ArrowCounterClockwise size={15} />
-        </button>
-        <button
-          type="button"
-          className="btn-secondary text-xs py-1.5 px-2"
-          onClick={() => rotateSelected(90)}
-          disabled={!selectedCell}
-          aria-label="Rotate right"
-          data-doc-print-rotate-right="1"
-          title="Rotate right"
-        >
-          <ArrowClockwise size={15} />
-        </button>
-        <button
-          type="button"
-          className="btn-secondary text-xs py-1.5 px-2"
-          onClick={flipSelected}
-          disabled={!selectedCell}
-          aria-label="Flip horizontal"
-          data-doc-print-flip="1"
-          title="Flip"
-        >
-          <ArrowsLeftRight size={15} />
-        </button>
-        {(
-          [
-            ['contain', 'Fit'],
-            ['cover', 'Fill'],
-          ] as const
-        ).map(([mode, label]) => (
-          <button
-            key={mode}
-            type="button"
-            className="text-xs rounded-md px-2 py-1.5 border font-medium"
-            style={chip(fitMode === mode)}
-            onClick={() => setFitMode(mode)}
-            data-doc-print-fit={mode}
-          >
-            {label}
-          </button>
-        ))}
-        <button type="button" className="btn-secondary text-[11px] py-1.5 px-2" onClick={fitSelected}>
-          Margin
-        </button>
-        <button type="button" className="btn-secondary text-[11px] py-1.5 px-2" onClick={fillPageSelected}>
-          Bleed
-        </button>
-
-        <label className="flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] min-w-[7rem]">
-          B
-          <input
-            type="range"
-            min={-40}
-            max={40}
-            step={1}
-            value={brightness}
-            disabled={!selectedCell}
-            onChange={(e) => applyToneToSelected(+e.target.value, contrast)}
-            className="w-16"
-            data-doc-print-brightness="1"
-            aria-label="Brightness"
-          />
-        </label>
-        <label className="flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] min-w-[7rem]">
-          C
-          <input
-            type="range"
-            min={-40}
-            max={40}
-            step={1}
-            value={contrast}
-            disabled={!selectedCell}
-            onChange={(e) => applyToneToSelected(brightness, +e.target.value)}
-            className="w-16"
-            data-doc-print-contrast="1"
-            aria-label="Contrast"
-          />
-        </label>
-
-        <div className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            className="btn-secondary text-xs py-1.5 px-2"
-            onClick={handleDownloadPdf}
-            disabled={busy || !pages.length}
-            data-doc-print-download="1"
-          >
-            <DownloadSimple size={14} /> PDF
-          </button>
-          <button
-            type="button"
-            className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
-            onClick={handlePrint}
-            disabled={busy || !pages.length}
-            data-doc-print-submit="1"
-          >
-            {busy ? <SpinnerGap size={14} className="animate-spin" /> : <Printer size={14} />}
-            Print
-          </button>
-        </div>
-      </header>
-
-      <div
-        ref={stageRef}
-        className="flex-1 min-h-0 overflow-auto flex items-center justify-center"
-        style={{ background: '#bdbdbd' }}
-        data-doc-print-stage="1"
-      >
-        <canvas
-          ref={canvasRef}
-          className="block shadow-2xl cursor-grab active:cursor-grabbing select-none bg-white"
-          style={{
-            touchAction: 'none',
-            width: sheetW,
-            height: sheetH,
-            boxShadow: '0 18px 50px rgba(0,0,0,0.28)',
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
-        />
-      </div>
-
-      <footer
-        className="shrink-0 border-t px-2 py-1.5 flex flex-wrap items-center gap-2 text-xs"
-        style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}
-      >
-        <span className="inline-flex items-center gap-1 text-[var(--muted-foreground)]">
-          <ArrowsOut size={12} /> Drag · corner resize
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="btn-secondary p-1.5"
-            onClick={() => setStageZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))}
-            aria-label="Zoom out"
-          >
-            <MagnifyingGlassMinus size={14} />
-          </button>
-          <input
-            type="range"
-            min={0.5}
-            max={2.4}
-            step={0.05}
-            value={stageZoom}
-            onChange={(e) => setStageZoom(+e.target.value)}
-            className="w-24"
-            data-doc-print-stage-zoom="1"
-            aria-label="Page zoom"
-          />
-          <button
-            type="button"
-            className="btn-secondary p-1.5"
-            onClick={() => setStageZoom((z) => Math.min(2.4, +(z + 0.1).toFixed(2)))}
-            aria-label="Zoom in"
-          >
-            <MagnifyingGlassPlus size={14} />
-          </button>
-          <button type="button" className="btn-secondary text-[11px] px-2 py-1" onClick={() => setStageZoom(1)}>
-            Fit page
-          </button>
-          <span className="tabular-nums w-10">{Math.round(stageZoom * 100)}%</span>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className="btn-secondary p-1.5"
-            disabled={pageIndex <= 0}
-            onClick={() => {
-              setPageIndex((i) => i - 1);
-              setSelected(null);
-            }}
-            aria-label="Previous page"
-          >
-            <CaretLeft size={14} />
-          </button>
-          <span className="font-medium tabular-nums">
-            {pageIndex + 1}/{pages.length}
-          </span>
-          <button
-            type="button"
-            className="btn-secondary p-1.5"
-            disabled={pageIndex >= pages.length - 1}
-            onClick={() => {
-              setPageIndex((i) => i + 1);
-              setSelected(null);
-            }}
-            aria-label="Next page"
-          >
-            <CaretRight size={14} />
-          </button>
-          {pages.length > 1 && (
-            <button type="button" className="text-[11px] text-red-600 px-1" onClick={removePage}>
-              Remove page
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="flex items-center gap-0.5 mx-auto">
           {(
             [
-              ['new-page', 'New page'],
-              ['this-page', 'This page'],
+              ['select', 'Select', <Cursor size={18} key="c" />],
+              ['text', 'Text', <TextT size={18} key="t" />],
+              ['box', 'Whiteout', <Square size={18} key="s" />],
             ] as const
-          ).map(([id, label]) => (
+          ).map(([id, label, icon]) => (
             <button
               key={id}
               type="button"
-              className="text-[11px] rounded-md px-2 py-1 border"
-              style={chip(addMode === id)}
-              onClick={() => setAddMode(id)}
+              className="flex flex-col items-center justify-center w-14 h-12 text-[10px] font-medium"
+              style={toolBtn(tool === id)}
+              onClick={() => setTool(id)}
+              data-doc-print-tool={id}
             >
+              {icon}
               {label}
             </button>
           ))}
           <button
             type="button"
-            className="btn-secondary text-[11px] py-1 px-2 flex items-center gap-1"
+            className="flex flex-col items-center justify-center w-14 h-12 text-[10px] font-medium"
             onClick={() => addFileRef.current?.click()}
+            data-doc-print-tool="image"
           >
-            <UploadSimple size={13} /> Add
+            <ImageIcon size={18} />
+            Image
           </button>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="text-[11px] rounded-md px-2 py-1 border font-medium"
+              style={chip(paperId === id)}
+              onClick={() => changePaper(id)}
+            >
+              {id === 'a4' ? 'A4' : id === 'a4-landscape' ? 'A4 wide' : '4×6'}
+            </button>
+          ))}
+        </div>
+        <span className="sr-only" data-doc-print-paper={paperId}>{paperSizeLabel}</span>
+        <button
+          type="button"
+          className="btn-secondary text-xs py-1.5 px-2 shrink-0"
+          onClick={handleDownloadPdf}
+          disabled={busy || !pages.length}
+          data-doc-print-download="1"
+        >
+          <DownloadSimple size={14} /> PDF
+        </button>
+        <button
+          type="button"
+          className="btn-primary text-xs py-1.5 px-3 shrink-0 flex items-center gap-1"
+          onClick={handlePrint}
+          disabled={busy || !pages.length}
+          data-doc-print-submit="1"
+        >
+          {busy ? <SpinnerGap size={14} className="animate-spin" /> : <Printer size={14} />}
+          Print
+        </button>
+      </header>
+
+      <div className="flex flex-1 min-h-0">
+        <aside
+          className="w-[104px] shrink-0 overflow-y-auto border-r py-2 px-2 space-y-2"
+          style={{ background: '#ececec', borderColor: 'hsl(var(--pt-border))' }}
+          data-doc-print-rail="1"
+        >
+          {pages.map((pg, i) => (
+            <button
+              key={pg.id}
+              type="button"
+              className="w-full text-left"
+              onClick={() => {
+                setPageIndex(i);
+                setSelected(null);
+              }}
+            >
+              <div
+                className="rounded overflow-hidden bg-white"
+                style={{ boxShadow: i === pageIndex ? '0 0 0 2px hsl(27 95% 55%)' : '0 1px 3px rgba(0,0,0,.2)' }}
+              >
+                <PageThumb page={pg} paper={paper} />
+              </div>
+              <div className="text-[10px] text-center mt-0.5 text-[var(--muted-foreground)]">{i + 1}</div>
+            </button>
+          ))}
           <button
             type="button"
-            className="btn-secondary text-[11px] py-1 px-2 text-red-600"
-            onClick={removeSelected}
-            disabled={!selectedCell || (page?.cells.length === 1 && pages.length === 1)}
+            className="w-full text-[10px] rounded border border-dashed py-2"
+            onClick={() => {
+              setAddMode('new-page');
+              addFileRef.current?.click();
+            }}
           >
-            <Trash size={13} />
+            + Page
           </button>
-          <input
-            ref={addFileRef}
-            type="file"
-            accept="image/jpeg,image/jpg,image/png,image/webp,image/*"
-            className="hidden"
-            onChange={onAddLocal}
-          />
+        </aside>
+
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          <div
+            className="shrink-0 min-h-10 border-b px-2 py-1 flex flex-wrap items-center gap-1.5 text-xs"
+            style={{ background: '#fafafa', borderColor: 'hsl(var(--pt-border))' }}
+            data-doc-print-edit="1"
+          >
+            {textMark && (
+              <>
+                <input
+                  className="input-field text-xs py-1 w-48"
+                  value={textMark.text}
+                  onChange={(e) => updateMark(textMark.id, { text: e.target.value })}
+                  aria-label="Text"
+                />
+                <input
+                  type="number"
+                  className="input-field text-xs py-1 w-16"
+                  min={12}
+                  max={200}
+                  value={textMark.size}
+                  onChange={(e) => updateMark(textMark.id, { size: Math.max(12, +e.target.value || 12) })}
+                  aria-label="Font size"
+                />
+                <input
+                  type="color"
+                  value={textMark.color}
+                  onChange={(e) => updateMark(textMark.id, { color: e.target.value })}
+                  aria-label="Text color"
+                />
+                <button type="button" className="btn-secondary text-xs py-1 text-red-600" onClick={removeSelected}>
+                  <Trash size={13} /> Delete
+                </button>
+              </>
+            )}
+            {selectedMark?.kind === 'box' && (
+              <button type="button" className="btn-secondary text-xs py-1 text-red-600" onClick={removeSelected}>
+                <Trash size={13} /> Delete whiteout
+              </button>
+            )}
+            {selectedCell && (
+              <>
+                <button type="button" className="btn-primary text-xs py-1 px-2 flex items-center gap-1" onClick={() => setCropOpen(true)} data-doc-print-crop="1">
+                  <Crop size={14} /> Crop
+                </button>
+                <button type="button" className="btn-secondary text-xs py-1 px-2" onClick={() => rotateSelected(-90)} aria-label="Rotate left" data-doc-print-rotate-left="1">
+                  <ArrowCounterClockwise size={14} />
+                </button>
+                <button type="button" className="btn-secondary text-xs py-1 px-2" onClick={() => rotateSelected(90)} aria-label="Rotate right" data-doc-print-rotate-right="1">
+                  <ArrowClockwise size={14} />
+                </button>
+                <button type="button" className="btn-secondary text-xs py-1 px-2" onClick={flipSelected} aria-label="Flip horizontal" data-doc-print-flip="1">
+                  <ArrowsLeftRight size={14} />
+                </button>
+                {(
+                  [
+                    ['contain', 'Fit'],
+                    ['cover', 'Fill'],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button key={mode} type="button" className="text-xs rounded-md px-2 py-1 border" style={chip(fitMode === mode)} onClick={() => setFitMode(mode)} data-doc-print-fit={mode}>
+                    {label}
+                  </button>
+                ))}
+                <div className="flex gap-0.5" data-doc-print-margin="1">
+                  {MARGIN_PRESETS.map((m) => (
+                    <button key={m.mm} type="button" className="text-[11px] w-7 py-1 border rounded" style={chip(marginMm === m.mm)} onClick={() => applyMargin(m.mm)}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-1 text-[10px]">
+                  B
+                  <input type="range" min={-40} max={40} value={brightness} onChange={(e) => applyToneToSelected(+e.target.value, contrast)} className="w-16" data-doc-print-brightness="1" aria-label="Brightness" />
+                </label>
+                <label className="flex items-center gap-1 text-[10px]">
+                  C
+                  <input type="range" min={-40} max={40} value={contrast} onChange={(e) => applyToneToSelected(brightness, +e.target.value)} className="w-16" data-doc-print-contrast="1" aria-label="Contrast" />
+                </label>
+                <button type="button" className="btn-secondary text-xs py-1" onClick={fitSelected}>Margin</button>
+                <button type="button" className="btn-secondary text-xs py-1" onClick={fillPageSelected}>Bleed</button>
+                <button type="button" className="btn-secondary text-xs py-1 text-red-600" onClick={removeSelected} disabled={page.cells.length === 1 && pages.length === 1 && !selectedMark}>
+                  <Trash size={13} />
+                </button>
+              </>
+            )}
+            {!selectedCell && !selectedMark && (
+              <span className="text-[var(--muted-foreground)]">Select the page, or add Text, Image, or Whiteout.</span>
+            )}
+          </div>
+
+          <div
+            ref={stageRef}
+            className="flex-1 min-h-0 overflow-auto flex items-center justify-center"
+            style={{ background: '#d0d0d0' }}
+            data-doc-print-stage="1"
+          >
+            <canvas
+              ref={canvasRef}
+              className="block select-none bg-white"
+              style={{
+                touchAction: 'none',
+                width: sheetW,
+                height: sheetH,
+                cursor: tool === 'select' ? 'grab' : 'crosshair',
+                boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+            />
+          </div>
         </div>
+      </div>
+
+      <footer
+        className="shrink-0 h-10 border-t px-3 flex items-center gap-2 text-xs"
+        style={{ background: '#fff', borderColor: 'hsl(var(--pt-border))' }}
+      >
+        <span className="inline-flex items-center gap-1 text-[var(--muted-foreground)]">
+          <ArrowsOut size={12} /> Drag to move · corner to resize
+        </span>
+        <div className="flex items-center gap-1 mx-auto">
+          <button type="button" className="btn-secondary p-1.5" onClick={() => setStageZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(2)))} aria-label="Zoom out">
+            <MagnifyingGlassMinus size={14} />
+          </button>
+          <input type="range" min={0.5} max={2.4} step={0.05} value={stageZoom} onChange={(e) => setStageZoom(+e.target.value)} className="w-28" data-doc-print-stage-zoom="1" aria-label="Page zoom" />
+          <button type="button" className="btn-secondary p-1.5" onClick={() => setStageZoom((z) => Math.min(2.4, +(z + 0.1).toFixed(2)))} aria-label="Zoom in">
+            <MagnifyingGlassPlus size={14} />
+          </button>
+          <button type="button" className="btn-secondary text-[11px] px-2 py-1" onClick={() => setStageZoom(1)}>Fit page</button>
+          <span className="tabular-nums w-10">{Math.round(stageZoom * 100)}%</span>
+        </div>
+        <span className="tabular-nums">{pageIndex + 1} / {pages.length}</span>
+        <input ref={addFileRef} type="file" accept="image/*" className="hidden" onChange={onAddLocal} />
       </footer>
 
       <AspectCropModal
