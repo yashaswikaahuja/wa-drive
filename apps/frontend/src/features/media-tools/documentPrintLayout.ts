@@ -217,10 +217,18 @@ function drawSelection(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.strokeRect(x + w - hs, y + h - hs, hs, hs);
 }
 
-function drawMark(ctx: CanvasRenderingContext2D, mark: DocMark) {
+function drawMark(ctx: CanvasRenderingContext2D, mark: DocMark, guides: boolean) {
   if (mark.kind === 'box') {
     ctx.fillStyle = mark.fill;
     ctx.fillRect(mark.x, mark.y, mark.w, mark.h);
+    if (guides) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(20,20,20,0.55)';
+      ctx.setLineDash([14, 10]);
+      ctx.lineWidth = 4;
+      ctx.strokeRect(mark.x + 2, mark.y + 2, Math.max(1, mark.w - 4), Math.max(1, mark.h - 4));
+      ctx.restore();
+    }
     return;
   }
   ctx.save();
@@ -249,7 +257,12 @@ function drawMark(ctx: CanvasRenderingContext2D, mark: DocMark) {
   ctx.restore();
 }
 
-export function renderPageCanvas(page: DocPage, paper: DocPaperDef, selectedId?: string | null): HTMLCanvasElement {
+export function renderPageCanvas(
+  page: DocPage,
+  paper: DocPaperDef,
+  selectedId?: string | null,
+  guides = false,
+): HTMLCanvasElement {
   const c = document.createElement('canvas');
   c.width = paper.w;
   c.height = paper.h;
@@ -264,7 +277,7 @@ export function renderPageCanvas(page: DocPage, paper: DocPaperDef, selectedId?:
     if (mode === 'cover') drawCover(ctx, cell.canvas, cell.x, cell.y, cell.w, cell.h);
     else drawContain(ctx, cell.canvas, cell.x, cell.y, cell.w, cell.h);
   }
-  for (const mark of page.marks || []) drawMark(ctx, mark);
+  for (const mark of page.marks || []) drawMark(ctx, mark, guides);
 
   for (const cell of page.cells) {
     if (cell.id === selectedId) drawSelection(ctx, cell.x, cell.y, cell.w, cell.h);

@@ -108,6 +108,8 @@ export default function DocumentPrintPage() {
   const initialPaper = (params.get('paper') as DocPaperId) || 'a4';
 
   const addFileRef = useRef<HTMLInputElement>(null);
+  const addModeRef = useRef<'new-page' | 'this-page'>('new-page');
+  const textInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -124,7 +126,6 @@ export default function DocumentPrintPage() {
   const [stageZoom, setStageZoom] = useState(1);
   const [stageBox, setStageBox] = useState({ w: 0, h: 0 });
   const [marginMm, setMarginMm] = useState(10);
-  const [addMode, setAddMode] = useState<'new-page' | 'this-page'>('new-page');
   const [cropOpen, setCropOpen] = useState(false);
   const [tool, setTool] = useState<'select' | 'text' | 'box'>('select');
 
@@ -146,6 +147,14 @@ export default function DocumentPrintPage() {
   const page = pages[pageIndex] || null;
   const selectedCell = page?.cells.find((c) => c.id === selected) || null;
   const selectedMark = (page?.marks || []).find((m) => m.id === selected) || null;
+  const textMarkId = selectedMark?.kind === 'text' ? selectedMark.id : null;
+  useEffect(() => {
+    if (!textMarkId) return;
+    const el = textInputRef.current;
+    if (!el) return;
+    el.focus();
+    el.select();
+  }, [textMarkId]);
   const selectedId = selected ?? page?.cells[0]?.id ?? null;
 
   useEffect(() => {
@@ -200,24 +209,41 @@ export default function DocumentPrintPage() {
   }, [fileId]);
 
   const changePaper = (next: DocPaperId) => {
+    const prevPaper = DOC_PAPERS[paperId];
     setPaperId(next);
     const p = DOC_PAPERS[next];
+    const sx = p.w / Math.max(1, prevPaper.w);
+    const sy = p.h / Math.max(1, prevPaper.h);
+    const scaleMark = (m: DocMark): DocMark => {
+      const scaled: DocMark = {
+        ...m,
+        x: Math.max(0, Math.round(m.x * sx)),
+        y: Math.max(0, Math.round(m.y * sy)),
+        w: Math.max(28, Math.round(m.w * sx)),
+        h: Math.max(28, Math.round(m.h * sy)),
+      };
+      if (scaled.kind === 'text') {
+        scaled.size = Math.max(12, Math.round(m.size * Math.min(sx, sy)));
+      }
+      return scaled;
+    };
     setPages((prev) =>
       prev.map((pg) => {
+        const marks = (pg.marks || []).map(scaleMark);
         if (pg.cells.length === 1) {
           const c = pg.cells[0];
-          return fitImageOnPage(c.canvas, p, marginMm, c.label, c.fitMode || 'contain');
+          return { ...pg, cells: [{ ...c, ...cellInMargin(c, p, marginMm) }], marks };
         }
-        const sx = p.w / Math.max(1, DOC_PAPERS[paperId].w);
-        const sy = p.h / Math.max(1, DOC_PAPERS[paperId].h);
+        const minCell = Math.round((10 * 300) / 25.4);
         return {
           ...pg,
+          marks,
           cells: pg.cells.map((c) => ({
             ...c,
             x: Math.round(c.x * sx),
             y: Math.round(c.y * sy),
-            w: Math.round(c.w * sx),
-            h: Math.round(c.h * sy),
+            w: Math.max(minCell, Math.round(c.w * sx)),
+            h: Math.max(minCell, Math.round(c.h * sy)),
           })),
         };
       }),
@@ -239,7 +265,7 @@ export default function DocumentPrintPage() {
   useEffect(() => {
     const el = canvasRef.current;
     if (!el || !page) return;
-    const sheet = renderPageCanvas(page, paper, selectedId);
+    const sheet = renderPageCanvas(page, paper, selectedId, true);
     el.width = sheet.width;
     el.height = sheet.height;
     el.getContext('2d')!.drawImage(sheet, 0, 0);
@@ -256,7 +282,7 @@ export default function DocumentPrintPage() {
     const obs = new ResizeObserver(measure);
     obs.observe(el);
     return () => obs.disconnect();
-  }, [paper.w, pageIndex, pages.length]);
+  }, [paper.w, pageIndex, pages.length, loading]);
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -349,15 +375,18 @@ export default function DocumentPrintPage() {
     if (!page) return;
     const { x, y } = toPaper(e);
     if (tool === 'text') {
+      const size = Math.round(paper.w * 0.028);
+      const tw = Math.round(size * 7);
+      const th = Math.round(size * 1.7);
       addMark({
         id: makeId('t'),
         kind: 'text',
-        x: Math.max(0, Math.round(x)),
-        y: Math.max(0, Math.round(y)),
-        w: Math.round(paper.w * 0.42),
-        h: Math.round(paper.h * 0.12),
+        x: Math.max(0, Math.min(paper.w - tw, Math.round(x))),
+        y: Math.max(0, Math.min(paper.h - th, Math.round(y))),
+        w: tw,
+        h: th,
         text: 'Text',
-        size: Math.round(paper.w * 0.035),
+        size,
         color: '#111111',
       });
       return;
@@ -399,15 +428,29 @@ export default function DocumentPrintPage() {
 
   const onPointerMove = (e: React.PointerEvent) => {
     const { x, y } = toPaper(e);
+    const findBox = (id: string) =>
+      (page?.marks || []).find((m) => m.id === id) || page?.cells.find((c) => c.id === id) || null;
     const patchPos = (id: string, px: number, py: number) => {
-      const isMark = (page?.marks || []).some((m) => m.id === id);
-      const patch = { x: Math.max(0, Math.round(px)), y: Math.max(0, Math.round(py)) };
-      if (isMark) updateMark(id, patch);
+      const box = findBox(id);
+      const maxX = Math.max(0, paper.w - (box?.w ?? 0));
+      const maxY = Math.max(0, paper.h - (box?.h ?? 0));
+      const patch = {
+        x: Math.min(maxX, Math.max(0, Math.round(px))),
+        y: Math.min(maxY, Math.max(0, Math.round(py))),
+      };
+      if ((page?.marks || []).some((m) => m.id === id)) updateMark(id, patch);
       else updateCell(id, patch);
     };
     const patchSize = (id: string, w: number, h: number) => {
+      const box = findBox(id);
       const isMark = (page?.marks || []).some((m) => m.id === id);
-      const patch = { w: Math.max(mmMin(), Math.round(w)), h: Math.max(mmMin(), Math.round(h)) };
+      const min = isMark ? 28 : mmMin();
+      const maxW = Math.max(min, paper.w - (box?.x ?? 0));
+      const maxH = Math.max(min, paper.h - (box?.y ?? 0));
+      const patch = {
+        w: Math.min(maxW, Math.max(min, Math.round(w))),
+        h: Math.min(maxH, Math.max(min, Math.round(h))),
+      };
       if (isMark) updateMark(id, patch);
       else updateCell(id, patch);
     };
@@ -420,9 +463,11 @@ export default function DocumentPrintPage() {
     }
   };
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
     dragRef.current = null;
     resizeRef.current = null;
+    const el = e.currentTarget as Element;
+    if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
   };
 
   function mmMin() {
@@ -489,17 +534,21 @@ export default function DocumentPrintPage() {
 
   // ── Add / remove ────────────────────────────────────────────────
   const addCanvas = (c: HTMLCanvasElement, label?: string) => {
-    if (addMode === 'this-page' && pages[pageIndex]) {
+    const mode = addModeRef.current;
+    if (mode === 'this-page' && pages[pageIndex]) {
       const box = cellInMargin(
         { id: '', x: 0, y: 0, w: 0, h: 0, canvas: c },
         paper,
         marginMm,
       );
+      const nw = Math.max(mmMin(), Math.round(box.w * 0.46));
+      const nh = Math.max(mmMin(), Math.round(box.h * 0.46));
       const cell: DocCell = {
         id: makeId('c'),
-        ...box,
-        w: Math.round(box.w / 2),
-        h: Math.round(box.h / 2),
+        x: Math.min(paper.w - nw, box.x + Math.round(box.w * 0.5)),
+        y: Math.min(paper.h - nh, box.y + Math.round((box.h - nh) / 2)),
+        w: nw,
+        h: nh,
         canvas: c,
         baseCanvas: cloneCanvas(c),
         fitMode: 'contain',
@@ -527,7 +576,7 @@ export default function DocumentPrintPage() {
     try {
       const img = await loadImageFromFile(file);
       addCanvas(imageToCanvas(img), file.name);
-      toast.success(addMode === 'new-page' ? 'Added as new page' : 'Added to this page');
+      toast.success(addModeRef.current === 'new-page' ? 'Added as new page' : 'Added to this page');
     } catch {
       toast.error('Could not load image');
     }
@@ -653,14 +702,17 @@ export default function DocumentPrintPage() {
   const availW = Math.max(160, stageBox.w - pad * 2);
   const availH = Math.max(160, stageBox.h - pad * 2);
   const aspect = paper.w / Math.max(1, paper.h);
+  // Portrait pages fill the stage width and scroll (PDF-editor style).
+  // Landscape pages shrink to stay fully visible.
   let sheetW = availW;
   let sheetH = sheetW / aspect;
-  if (sheetH > availH) {
+  if (aspect >= 1 && sheetH > availH) {
     sheetH = availH;
     sheetW = sheetH * aspect;
   }
   sheetW = Math.round(sheetW * stageZoom);
   sheetH = Math.round(sheetH * stageZoom);
+  const sheetFits = sheetH <= availH + 4;
 
   const chip = (on: boolean) =>
     ({
@@ -680,15 +732,38 @@ export default function DocumentPrintPage() {
   return (
     <div className="flex flex-col h-full min-h-0" data-doc-print="1">
       <header
-        className="shrink-0 h-14 border-b px-2 flex items-center gap-1"
+        className="shrink-0 border-b"
         style={{ background: '#fff', borderColor: 'hsl(var(--pt-border))' }}
       >
+        <div className="h-12 px-2 flex items-center gap-1">
         <button type="button" className="btn-secondary text-xs py-1.5 px-2 shrink-0" onClick={() => navigate(backTo)}>
           <CaretLeft size={14} className="inline" /> Back
         </button>
-        <span className="text-sm font-semibold truncate max-w-[10rem] px-1" title={subtitle}>{subtitle}</span>
-
-        <div className="flex items-center gap-0.5 mx-auto">
+        <span className="text-sm font-semibold truncate min-w-0 flex-1 px-1" title={subtitle}>{subtitle}</span>
+        <span className="sr-only" data-doc-print-paper={paperId}>{paperSizeLabel}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            className="btn-secondary text-xs py-1.5 px-2 shrink-0"
+            onClick={handleDownloadPdf}
+            disabled={busy || !pages.length}
+            data-doc-print-download="1"
+          >
+            <DownloadSimple size={14} /> PDF
+          </button>
+          <button
+            type="button"
+            className="btn-primary text-xs py-1.5 px-3 shrink-0 flex items-center gap-1"
+            onClick={handlePrint}
+            disabled={busy || !pages.length}
+            data-doc-print-submit="1"
+          >
+            {busy ? <SpinnerGap size={14} className="animate-spin" /> : <Printer size={14} />}
+            Print
+          </button>
+        </div>
+        </div>
+        <div className="flex items-center gap-0.5 px-2 overflow-x-auto border-t" style={{ borderColor: 'hsl(var(--pt-border))' }}>
           {(
             [
               ['select', 'Select', <Cursor size={18} key="c" />],
@@ -699,7 +774,7 @@ export default function DocumentPrintPage() {
             <button
               key={id}
               type="button"
-              className="flex flex-col items-center justify-center w-14 h-12 text-[10px] font-medium"
+              className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium"
               style={toolBtn(tool === id)}
               onClick={() => setTool(id)}
               data-doc-print-tool={id}
@@ -710,21 +785,22 @@ export default function DocumentPrintPage() {
           ))}
           <button
             type="button"
-            className="flex flex-col items-center justify-center w-14 h-12 text-[10px] font-medium"
-            onClick={() => addFileRef.current?.click()}
+            className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium"
+            onClick={() => {
+              addModeRef.current = 'this-page';
+              addFileRef.current?.click();
+            }}
             data-doc-print-tool="image"
           >
             <ImageIcon size={18} />
             Image
           </button>
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
+          <span className="w-px h-6 mx-1 shrink-0" style={{ background: 'hsl(var(--pt-border))' }} />
           {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
             <button
               key={id}
               type="button"
-              className="text-[11px] rounded-md px-2 py-1 border font-medium"
+              className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0"
               style={chip(paperId === id)}
               onClick={() => changePaper(id)}
             >
@@ -732,31 +808,11 @@ export default function DocumentPrintPage() {
             </button>
           ))}
         </div>
-        <span className="sr-only" data-doc-print-paper={paperId}>{paperSizeLabel}</span>
-        <button
-          type="button"
-          className="btn-secondary text-xs py-1.5 px-2 shrink-0"
-          onClick={handleDownloadPdf}
-          disabled={busy || !pages.length}
-          data-doc-print-download="1"
-        >
-          <DownloadSimple size={14} /> PDF
-        </button>
-        <button
-          type="button"
-          className="btn-primary text-xs py-1.5 px-3 shrink-0 flex items-center gap-1"
-          onClick={handlePrint}
-          disabled={busy || !pages.length}
-          data-doc-print-submit="1"
-        >
-          {busy ? <SpinnerGap size={14} className="animate-spin" /> : <Printer size={14} />}
-          Print
-        </button>
       </header>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
         <aside
-          className="w-[104px] shrink-0 overflow-y-auto border-r py-2 px-2 space-y-2"
+          className="w-full md:w-[104px] shrink-0 overflow-x-auto md:overflow-y-auto border-b md:border-b-0 md:border-r py-2 px-2 flex md:flex-col flex-row gap-2"
           style={{ background: '#ececec', borderColor: 'hsl(var(--pt-border))' }}
           data-doc-print-rail="1"
         >
@@ -764,7 +820,7 @@ export default function DocumentPrintPage() {
             <button
               key={pg.id}
               type="button"
-              className="w-full text-left"
+              className="w-16 md:w-full shrink-0 text-left"
               onClick={() => {
                 setPageIndex(i);
                 setSelected(null);
@@ -781,9 +837,9 @@ export default function DocumentPrintPage() {
           ))}
           <button
             type="button"
-            className="w-full text-[10px] rounded border border-dashed py-2"
+            className="w-16 md:w-full shrink-0 text-[10px] rounded border border-dashed py-2"
             onClick={() => {
-              setAddMode('new-page');
+              addModeRef.current = 'new-page';
               addFileRef.current?.click();
             }}
           >
@@ -793,15 +849,17 @@ export default function DocumentPrintPage() {
 
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           <div
-            className="shrink-0 min-h-10 border-b px-2 py-1 flex flex-wrap items-center gap-1.5 text-xs"
+            className="shrink-0 h-10 border-b px-2 flex items-center gap-1.5 text-xs overflow-x-auto whitespace-nowrap [&>*]:shrink-0"
             style={{ background: '#fafafa', borderColor: 'hsl(var(--pt-border))' }}
             data-doc-print-edit="1"
           >
             {textMark && (
               <>
                 <input
+                  ref={textInputRef}
                   className="input-field text-xs py-1 w-48"
                   value={textMark.text}
+                  data-doc-print-text="1"
                   onChange={(e) => updateMark(textMark.id, { text: e.target.value })}
                   aria-label="Text"
                 />
@@ -883,34 +941,39 @@ export default function DocumentPrintPage() {
 
           <div
             ref={stageRef}
-            className="flex-1 min-h-0 overflow-auto flex items-center justify-center"
+            className="flex-1 min-h-0 overflow-auto"
             style={{ background: '#d0d0d0' }}
             data-doc-print-stage="1"
           >
-            <canvas
-              ref={canvasRef}
-              className="block select-none bg-white"
-              style={{
-                touchAction: 'none',
-                width: sheetW,
-                height: sheetH,
-                cursor: tool === 'select' ? 'grab' : 'crosshair',
-                boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
-              }}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-            />
+            <div
+              className="flex justify-center p-4 box-border"
+              style={{ minHeight: '100%', alignItems: sheetFits ? 'center' : 'flex-start' }}
+            >
+              <canvas
+                ref={canvasRef}
+                className="block select-none bg-white shrink-0"
+                style={{
+                  touchAction: 'pan-y',
+                  width: sheetW,
+                  height: sheetH,
+                  cursor: tool === 'select' ? 'grab' : 'crosshair',
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+                }}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerCancel={onPointerUp}
+              />
+            </div>
           </div>
         </div>
       </div>
 
       <footer
-        className="shrink-0 h-10 border-t px-3 flex items-center gap-2 text-xs"
+        className="shrink-0 h-10 border-t px-3 flex items-center gap-2 text-xs overflow-x-auto whitespace-nowrap"
         style={{ background: '#fff', borderColor: 'hsl(var(--pt-border))' }}
       >
-        <span className="inline-flex items-center gap-1 text-[var(--muted-foreground)]">
+        <span className="hidden md:inline-flex items-center gap-1 text-[var(--muted-foreground)]">
           <ArrowsOut size={12} /> Drag to move · corner to resize
         </span>
         <div className="flex items-center gap-1 mx-auto">
