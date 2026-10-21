@@ -157,6 +157,32 @@ test.describe('Media viewer desktop trackpad pinch', () => {
     });
   });
 
+  test('image sits near the vertical middle of the viewer', async ({ page }) => {
+    await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
+    await page.getByText(/aadhaar/i).first().click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    const img = dialog.locator('img[alt="aadhaar_front.jpg"]');
+    await expect(img).toBeVisible();
+
+    await expect(img).toHaveClass(/object-center/);
+    const wrap = img.locator('xpath=..');
+    await expect(wrap).toHaveClass(/items-center/);
+
+    const offsetY = await page.evaluate(() => {
+      const dlg = document.querySelector('[role="dialog"]');
+      const image = dlg?.querySelector('img[alt="aadhaar_front.jpg"]');
+      if (!dlg || !image) return 9999;
+      const d = dlg.getBoundingClientRect();
+      const i = image.getBoundingClientRect();
+      return i.top + i.height / 2 - (d.top + d.height / 2);
+    });
+    // Equal py clears chrome/filmstrip; allow small slack for badge/strip height.
+    expect(Math.abs(offsetY)).toBeLessThanOrEqual(48);
+  });
+
   test('ctrl+wheel zooms image only (not the page)', async ({ page }) => {
     await page.goto('/app/files?view=recent', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText(/aadhaar/i).first()).toBeVisible({ timeout: 10000 });
