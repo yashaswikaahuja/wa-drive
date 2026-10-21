@@ -109,13 +109,35 @@ export default function MediaViewer({
   zIndexClass = 'z-[100]',
 }: MediaViewerProps) {
   const [zoom, setZoom] = useState(1);
+  const zoomRef = useRef(1);
+  const [pinching, setPinching] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const filmstripRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const swipeStartX = useRef<number | null>(null);
+  /** Two-finger pinch: scale content zoom without browser page zoom. */
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartZoom = useRef(1);
+  const pinchActive = useRef(false);
+  const kindRef = useRef<MediaKind>('image');
+  const onPrevRef = useRef(onPrev);
+  const onNextRef = useRef(onNext);
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+  useEffect(() => {
+    onPrevRef.current = onPrev;
+    onNextRef.current = onNext;
+  }, [onPrev, onNext]);
 
   useEffect(() => {
     setZoom(1);
+    zoomRef.current = 1;
+    setPinching(false);
     setMoreOpen(false);
+    pinchStartDist.current = null;
+    pinchActive.current = false;
   }, [file?.id]);
 
   useEffect(() => {
@@ -146,6 +168,81 @@ export default function MediaViewer({
     return () => window.removeEventListener('keydown', onKey);
   }, [file?.id, onClose, onPrev, onNext]);
 
+  const kind = file?.kind ?? 'image';
+  kindRef.current = kind;
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+
+    const touchDistance = (a: Touch, b: Touch) => {
+      const dx = a.clientX - b.clientX;
+      const dy = a.clientY - b.clientY;
+      return Math.hypot(dx, dy);
+    };
+    const clampZoom = (z: number) => Math.min(4, Math.max(0.5, Number(z.toFixed(2))));
+
+    const onStart = (e: TouchEvent) => {
+      if (kindRef.current === 'image' && e.touches.length >= 2) {
+        pinchActive.current = true;
+        setPinching(true);
+        pinchStartDist.current = touchDistance(e.touches[0], e.touches[1]);
+        pinchStartZoom.current = zoomRef.current;
+        swipeStartX.current = null;
+        return;
+      }
+      if (e.touches.length === 1 && !pinchActive.current) {
+        swipeStartX.current = e.touches[0].clientX;
+      }
+    };
+
+    const onMove = (e: TouchEvent) => {
+      if (kindRef.current !== 'image') return;
+      if (e.touches.length >= 2 && pinchStartDist.current && pinchStartDist.current > 0) {
+        e.preventDefault();
+        pinchActive.current = true;
+        setPinching(true);
+        swipeStartX.current = null;
+        const dist = touchDistance(e.touches[0], e.touches[1]);
+        const next = clampZoom(pinchStartZoom.current * (dist / pinchStartDist.current));
+        zoomRef.current = next;
+        setZoom(next);
+      }
+    };
+
+    const onEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinchStartDist.current = null;
+      if (e.touches.length === 0) {
+        const wasPinch = pinchActive.current;
+        pinchActive.current = false;
+        pinchStartDist.current = null;
+        setPinching(false);
+        if (wasPinch) {
+          swipeStartX.current = null;
+          return;
+        }
+      }
+      if (swipeStartX.current == null || e.changedTouches.length === 0) return;
+      if (pinchActive.current) return;
+      const dx = e.changedTouches[0].clientX - swipeStartX.current;
+      swipeStartX.current = null;
+      if (Math.abs(dx) < 60) return;
+      if (dx < 0) onNextRef.current?.();
+      else onPrevRef.current?.();
+    };
+
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, [file?.id]);
+
   if (!file) {
     if (!opening) return null;
     return (
@@ -161,12 +258,14 @@ export default function MediaViewer({
   }
 
   const canNavigate = items.length > 1 && !!(onPrev || onNext);
-  const kind = file.kind;
 
   const onTouchStart = (e: ReactTouchEvent) => {
+    // PDF edge swipes still use React handlers; image pinch uses native listeners on stage.
+    if (kind !== 'pdf') return;
     if (e.touches.length === 1) swipeStartX.current = e.touches[0].clientX;
   };
   const onTouchEnd = (e: ReactTouchEvent) => {
+    if (kind !== 'pdf') return;
     if (swipeStartX.current == null || e.changedTouches.length === 0) return;
     const dx = e.changedTouches[0].clientX - swipeStartX.current;
     swipeStartX.current = null;
@@ -177,9 +276,10 @@ export default function MediaViewer({
 
   const onWheel = (e: ReactWheelEvent) => {
     if (kind !== 'image') return;
+    // Trackpad pinch arrives as ctrl/meta + wheel.
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      setZoom((z: number) => Math.min(3, Math.max(0.5, Number((z - e.deltaY * 0.002).toFixed(2)))));
+      setZoom((z: number) => Math.min(4, Math.max(0.5, Number((z - e.deltaY * 0.002).toFixed(2)))));
     }
   };
 
@@ -197,10 +297,9 @@ export default function MediaViewer({
       aria-label={displayName(file.fileName)}
     >
       <div
+        ref={stageRef}
         className="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden"
         onClick={(e) => e.stopPropagation()}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
         style={{ touchAction: kind === 'pdf' ? 'auto' : 'none' }}
       >
         <div
@@ -389,7 +488,9 @@ export default function MediaViewer({
               <img
                 src={file.url}
                 alt={file.fileName}
-                className="max-w-full max-h-full object-contain object-top shadow-[0_0_80px_rgba(0,0,0,0.65)] transition-transform duration-150 origin-center"
+                className={`max-w-full max-h-full object-contain object-top shadow-[0_0_80px_rgba(0,0,0,0.65)] origin-center ${
+                  pinching ? '' : 'transition-transform duration-150'
+                }`}
                 style={{ transform: `scale(${zoom})`, touchAction: 'none' }}
                 draggable={false}
               />
