@@ -59,6 +59,7 @@ test.describe('Document print layout (operator)', () => {
   });
 
   test('4×6 PDF MediaBox matches paper; print iframe uses 4×6 mm', async ({ page }) => {
+    test.setTimeout(90_000);
     await page.goto(
       '/app/photos/doc-print?fileId=drv-doc1&paper=a4&from=/app/whatsapp&name=Shubham',
       { waitUntil: 'domcontentloaded' },
@@ -71,32 +72,35 @@ test.describe('Document print layout (operator)', () => {
     const root = page.locator('[data-doc-print="1"]');
     await expect(root).toBeVisible({ timeout: 15000 });
     await expect(page.locator('[data-doc-print-paper]')).toHaveAttribute('data-doc-print-paper', 'a4');
+    await expect(page.locator('[data-doc-print-surface]')).toHaveCount(0);
+    await expect(page.locator('[data-doc-print-stage="1"]')).toHaveCount(0);
 
     await page.screenshot({ path: 'C:/Users/yasha/AppData/Local/Temp/doc-print-op/01-a4-loaded.png', fullPage: true });
 
-    // Operator picks 4×6
+    // Operator picks 4×6. Wait until THAT sheet is the open PDF, not the previous A4.
     await page.getByRole('button', { name: /4×6/i }).click();
     await expect(page.locator('[data-doc-print-paper]')).toHaveAttribute('data-doc-print-paper', '4x6');
     await expect(page.locator('[data-doc-print-paper]')).toContainText(/4×6/);
+    await expect(page.locator('[data-doc-print-pdf="1"]')).toHaveAttribute(
+      'data-doc-print-sheet',
+      '152.4x101.6',
+      { timeout: 25000 },
+    );
 
-    // Page canvas must fill the editor stage — not a postage-stamp preview.
-    const sheet = await page.locator('[data-doc-print-stage="1"] canvas').boundingBox();
+    const frame = page.frameLocator('iframe[title="PDF document"]');
+    const pdfPage = frame.locator('.page').first();
+    await expect(pdfPage).toBeVisible({ timeout: 25000 });
+    await expect(frame.locator('#thumbnailView')).toBeVisible({ timeout: 15000 });
+    const sheet = await pdfPage.boundingBox();
     const vp = page.viewportSize();
     expect(sheet).toBeTruthy();
-    expect(sheet!.width).toBeGreaterThan((vp?.width ?? 1280) * 0.45);
-    expect(sheet!.height).toBeGreaterThan((vp?.height ?? 800) * 0.45);
+    expect(sheet!.width).toBeGreaterThan((vp?.width ?? 1280) * 0.4);
+    expect(sheet!.height).toBeGreaterThan(240);
 
-    // Operator edit bar must be present (crop / rotate / fit / tone / zoom).
-    await expect(page.locator('[data-doc-print-edit="1"]')).toBeVisible();
-    await expect(page.locator('[data-doc-print-crop="1"]')).toBeEnabled();
-    await expect(page.locator('[data-doc-print-rotate-right="1"]')).toBeEnabled();
-    await expect(page.locator('[data-doc-print-fit="cover"]')).toBeVisible();
-    await expect(page.locator('[data-doc-print-brightness="1"]')).toBeVisible();
-    await page.locator('[data-doc-print-fit="cover"]').click();
-    await page.locator('[data-doc-print-rotate-right="1"]').click();
-    await page.locator('[data-doc-print-crop="1"]').click();
-    await expect(page.getByText(/Crop document/i)).toBeVisible();
-    await page.getByRole('button', { name: /^Cancel$/i }).click();
+    // One toolbar edits the PDF itself.
+    await expect(frame.locator('#editorFreeTextButton')).toBeEnabled({ timeout: 20000 });
+    await page.locator('[data-doc-print-viewer-tool="text"]').click();
+    await expect(frame.locator('#editorFreeTextButton')).toHaveAttribute('aria-expanded', 'true', { timeout: 10000 });
     await page.screenshot({ path: 'C:/Users/yasha/AppData/Local/Temp/doc-print-op/02-4x6-selected.png', fullPage: true });
 
     // Wait until Download is enabled (pages loaded).
@@ -184,7 +188,8 @@ test.describe('Document print layout (operator)', () => {
     await page.screenshot({ path: 'C:/Users/yasha/AppData/Local/Temp/doc-print-op/03-after-print.png', fullPage: true });
   });
 
-  test('blank paper takes an image and opens the Mozilla PDF viewer', async ({ page }) => {
+  test('blank paper is the PDF editor and can add a page', async ({ page }) => {
+    test.setTimeout(90_000);
     await page.goto('/app/photos/doc-print?paper=a4&from=/app/whatsapp&name=Shubham', {
       waitUntil: 'domcontentloaded',
     });
@@ -192,44 +197,35 @@ test.describe('Document print layout (operator)', () => {
     if (await later.isVisible().catch(() => false)) await later.click();
 
     await expect(page.locator('[data-doc-print="1"]')).toBeVisible({ timeout: 15000 });
-    const add = page.locator('[data-doc-print-add-image="1"]');
-    await expect(add).toBeVisible();
+    await expect(page.locator('[data-doc-print-surface]')).toHaveCount(0);
+    await expect(page.locator('[data-doc-print-stage="1"]')).toHaveCount(0);
+    await expect(page.locator('[data-doc-print-pdf="1"]')).toHaveAttribute('data-doc-print-sheet', '210x297', {
+      timeout: 25000,
+    });
 
-    const [chooser] = await Promise.all([
-      page.waitForEvent('filechooser'),
-      add.click(),
-    ]);
-    await chooser.setFiles('C:/Users/yasha/AppData/Local/Temp/doc-print-fixture.png');
-    await expect(page.locator('[data-doc-print-crop="1"]')).toBeVisible();
-    await expect(add).toHaveCount(0);
-
-    await page.locator('[data-doc-print-blank="1"]').click();
-    await expect(page.locator('[data-doc-print-add-image="1"]')).toBeVisible();
-
-    await page.locator('[data-doc-print-surface="pdf"]').click();
     const frame = page.frameLocator('iframe[title="PDF document"]');
     await expect(frame.locator('#viewerContainer')).toBeVisible({ timeout: 20000 });
     await expect(frame.locator('.page').first()).toBeVisible({ timeout: 20000 });
     await expect(frame.locator('#cyberBackButton')).toHaveCount(0);
     await expect(frame.locator('#editorFreeTextButton')).toBeEnabled({ timeout: 20000 });
     await expect(page.locator('[data-doc-print-pdf-tools="1"]')).toBeVisible();
+    await expect(frame.locator('#editorModeButtons')).toBeHidden();
+
+    await page.locator('[data-doc-print-blank="1"]').click();
+    await expect(frame.locator('#numPages')).toContainText('2', { timeout: 30000 });
   });
 
   test('PDF viewer accepts text and a File Manager image, print stays A4', async ({ page }) => {
+    test.setTimeout(90_000);
     await page.goto('/app/photos/doc-print?paper=a4&from=/app/whatsapp&name=Shubham', {
       waitUntil: 'domcontentloaded',
     });
     const later = page.getByRole('button', { name: /^Later$/i });
     if (await later.isVisible().catch(() => false)) await later.click();
 
-    await expect(page.locator('[data-doc-print-add-drive="1"]')).toBeVisible({ timeout: 15000 });
-    await page.locator('[data-doc-print-add-drive="1"]').click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('button', { name: /Shubham/ })).toBeVisible();
-    await dialog.getByRole('button', { name: /Shubham/ }).click();
-    await expect(page.locator('[data-doc-print-crop="1"]')).toBeVisible({ timeout: 10000 });
-
-    await page.locator('[data-doc-print-surface="pdf"]').click();
+    await expect(page.locator('[data-doc-print-pdf="1"]')).toHaveAttribute('data-doc-print-sheet', '210x297', {
+      timeout: 25000,
+    });
     const frame = page.frameLocator('iframe[title="PDF document"]');
     const textBtn = frame.locator('#editorFreeTextButton');
     await expect(frame.locator('.page').first()).toBeVisible({ timeout: 20000 });
@@ -237,6 +233,7 @@ test.describe('Document print layout (operator)', () => {
     await page.locator('[data-doc-print-viewer-tool="text"]').click();
     await expect(textBtn).toHaveAttribute('aria-expanded', 'true', { timeout: 10000 });
 
+    const dialog = page.getByRole('dialog');
     await page.locator('[data-doc-print-viewer-tool="files"]').click();
     await dialog.getByRole('button', { name: /Shubham/ }).click();
     await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 15000 });

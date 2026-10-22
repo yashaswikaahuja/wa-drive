@@ -345,6 +345,14 @@
       notifyReady();
       return;
     }
+    if (e.data.type === "cyber-go-page") {
+      try {
+        const app = await appReady();
+        const n = Number(e.data.page) || 1;
+        if (app) app.page = n;
+      } catch {}
+      return;
+    }
     if (e.data.type === "cyber-editor-mode") {
       try {
         await setEditorMode(e.data.mode);
@@ -388,6 +396,10 @@
         }
         await sleep(50);
       }
+      // One editor: page thumbnails on the left, tools on this PDF (iLovePDF-style).
+      try {
+        app.pdfSidebar?.switchView(1, true);
+      } catch {}
     } catch (err) {
       console.error("cyber-open-pdf failed", err);
       post("cyber-pdf-error", { message: String(err) });
