@@ -37,8 +37,48 @@ function readPixels(src: HTMLCanvasElement) {
   return { out, ctx, img };
 }
 
-function sampleStep(w: number, h: number) {
-  return Math.max(1, Math.floor(Math.sqrt((w * h) / 40000)));
+type CleanMode = 'auto' | 'light' | 'gray' | 'whiteboard';
+
+/** Local paper brightness, spread so text and the QR do not set the background. */
+function localPaper(d: Uint8ClampedArray, w: number, h: number) {
+  const block = clamp(Math.round(Math.min(w, h) / 16), 12, 48);
+  const bw = Math.max(1, Math.ceil(w / block));
+  const bh = Math.max(1, Math.ceil(h / block));
+  const grid = new Float32Array(bw * bh);
+  for (let by = 0; by < bh; by++) {
+    for (let bx = 0; bx < bw; bx++) {
+      const vals: number[] = [];
+      const x0 = bx * block;
+      const y0 = by * block;
+      const x1 = Math.min(w, x0 + block);
+      const y1 = Math.min(h, y0 + block);
+      const step = Math.max(1, Math.floor(block / 6));
+      for (let y = y0; y < y1; y += step) {
+        const row = y * w;
+        for (let x = x0; x < x1; x += step) {
+          const i = (row + x) * 4;
+          vals.push(luma(d[i], d[i + 1], d[i + 2]));
+        }
+      }
+      grid[by * bw + bx] = percentile(vals, 88);
+    }
+  }
+  const spread = new Float32Array(grid.length);
+  const rad = 3;
+  for (let by = 0; by < bh; by++) {
+    for (let bx = 0; bx < bw; bx++) {
+      let m = 0;
+      for (let dy = -rad; dy <= rad; dy++) {
+        const ny = clamp(by + dy, 0, bh - 1);
+        for (let dx = -rad; dx <= rad; dx++) {
+          const nx = clamp(bx + dx, 0, bw - 1);
+          m = Math.max(m, grid[ny * bw + nx]);
+        }
+      }
+      spread[by * bw + bx] = m;
+    }
+  }
+  return { paper: spread, block, bw, bh };
 }
 
 export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): HTMLCanvasElement {
@@ -49,83 +89,53 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   const d = img.data;
   const w = out.width;
   const h = out.height;
-  const step = sampleStep(w, h);
-  if (filter === 'gray') paintGray(d, w, h, step);
-  else if (filter === 'auto') paintAuto(d, w, h, step);
-  else if (filter === 'light') paintLight(d, w, h, step);
-  else paintWhiteboard(d, w, h, step);
+  if (filter === 'gray') cleanSheet(d, w, h, 'gray');
+  else if (filter === 'auto') cleanSheet(d, w, h, 'auto');
+  else if (filter === 'light') cleanSheet(d, w, h, 'light');
+  else cleanSheet(d, w, h, 'whiteboard');
   ctx.putImageData(img, 0, 0);
   return out;
 }
 
-/** Paper tone of the scan, so the page can be lifted to pure white. */
-function paperLevel(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  const ys: number[] = [];
-  for (let y = 0; y < h; y += step) {
-    for (let x = 0; x < w; x += step) {
-      const i = (y * w + x) * 4;
-      ys.push(luma(d[i], d[i + 1], d[i + 2]));
-    }
-  }
-  return Math.max(8, percentile(ys, 68));
-}
-
 /**
- * Lift the sheet to crisp white and darken the writing.
- * `gain` is how hard ink is pushed. `snap` is how close to the paper
- * a pixel must be before it becomes white.
+ * The gray around a photographed page is paper too. Compare each pixel
+ * with the local sheet, turn that sheet white, and darken the writing.
  */
-function cleanSheet(
-  d: Uint8ClampedArray,
-  w: number,
-  h: number,
-  step: number,
-  gain: number,
-  snap: number,
-  mode: 'color' | 'gray' | 'ink',
-) {
-  const paper = paperLevel(d, w, h, step);
-  for (let i = 0; i < d.length; i += 4) {
-    const y = luma(d[i], d[i + 1], d[i + 2]);
-    const rel = (paper - y) / paper;
-    if (rel <= snap) {
-      d[i] = d[i + 1] = d[i + 2] = 255;
-      continue;
+function cleanSheet(d: Uint8ClampedArray, w: number, h: number, mode: CleanMode) {
+  const { paper, block, bw, bh } = localPaper(d, w, h);
+  const near = mode === 'light' ? 0.92 : mode === 'whiteboard' ? 0.58 : 0.72;
+  const pale = mode === 'light' ? 208 : mode === 'whiteboard' ? 96 : 118;
+  for (let y = 0; y < h; y++) {
+    const by = Math.min(bh - 1, Math.floor(y / block));
+    const row = y * w;
+    for (let x = 0; x < w; x++) {
+      const bx = Math.min(bw - 1, Math.floor(x / block));
+      const bg = Math.max(16, paper[by * bw + bx]);
+      const i = (row + x) * 4;
+      const r = d[i];
+      const g = d[i + 1];
+      const b = d[i + 2];
+      const tone = luma(r, g, b);
+      const spread = Math.max(r, g, b) - Math.min(r, g, b);
+      const isPaper = spread < 30 && (tone >= pale || tone >= bg * near);
+      if (isPaper) {
+        d[i] = d[i + 1] = d[i + 2] = 255;
+        continue;
+      }
+      if (mode === 'auto' && spread >= 30) {
+        const target = clamp(tone * 0.7, 0, 170);
+        const s = tone < 1 ? 0 : target / tone;
+        d[i] = clamp(r * s, 0, 255);
+        d[i + 1] = clamp(g * s, 0, 255);
+        d[i + 2] = clamp(b * s, 0, 255);
+        continue;
+      }
+      const v = mode === 'whiteboard'
+        ? (tone < 80 ? 0 : 16)
+        : mode === 'light'
+          ? clamp(tone * 0.45, 0, 100)
+          : clamp((tone / 118) * 48, 0, 64);
+      d[i] = d[i + 1] = d[i + 2] = v;
     }
-    let ny = clamp(255 - (paper - y) * gain, 0, 255);
-    if (ny > 232) ny = 255;
-    if (mode === 'gray' || mode === 'ink') {
-      if (mode === 'ink') ny = ny > 170 ? 255 : clamp(ny * 0.45, 0, 255);
-      d[i] = d[i + 1] = d[i + 2] = ny;
-      continue;
-    }
-    const s = y < 1 ? 0 : ny / y;
-    let r = clamp(d[i] * s, 0, 255);
-    let g = clamp(d[i + 1] * s, 0, 255);
-    let b = clamp(d[i + 2] * s, 0, 255);
-    const spread = Math.max(r, g, b) - Math.min(r, g, b);
-    if (spread < 36) {
-      const v = clamp(luma(r, g, b) * 0.72, 0, 255);
-      r = g = b = v;
-    }
-    d[i] = r;
-    d[i + 1] = g;
-    d[i + 2] = b;
   }
-}
-
-function paintGray(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  cleanSheet(d, w, h, step, 1.85, 0.1, 'gray');
-}
-
-function paintAuto(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  cleanSheet(d, w, h, step, 1.9, 0.1, 'color');
-}
-
-function paintLight(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  cleanSheet(d, w, h, step, 2.6, 0.05, 'color');
-}
-
-function paintWhiteboard(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  cleanSheet(d, w, h, step, 3.2, 0.14, 'ink');
 }
