@@ -6,7 +6,7 @@
  * The bytes flow Drive → hub (streaming proxy) → browser. No transformation.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CaretLeft, Folder, FolderOpen, MagnifyingGlass, ArrowsClockwise, File as FileIcon } from '@phosphor-icons/react';
 import { displayName } from '@cybercontrol/media-viewer';
 import api from '../../shared/api';
@@ -28,6 +28,15 @@ interface Props {
   onPick: (file: File) => void;
   /** Hide PDFs and office files. Photos with no extension still show. */
   imagesOnly?: boolean;
+  /**
+   * Open this customer's folder when the picker opens, if that folder has
+   * something to show. customerId wins, then the customer name, then fileId.
+   */
+  folderHint?: {
+    customerId?: string;
+    customerName?: string;
+    fileId?: string;
+  };
 }
 
 type FolderRow = { key: string; name: string; count: number };
@@ -58,7 +67,42 @@ function folderNameOf(f: DriveFile, key: string) {
   return key;
 }
 
-export default function DrivePicker({ open, onClose, onPick, imagesOnly = false }: Props) {
+/** Folder that holds the photo or document already on the page. */
+function resolveFolderKey(
+  hint: { customerId: string; customerName: string; fileId: string },
+  allFiles: DriveFile[],
+  visible: DriveFile[],
+): string | null {
+  if (!allFiles.length) return null;
+  const visibleKeys = new Set(visible.map(folderKeyOf));
+  const accept = (key: string | null) => (key && visibleKeys.has(key) ? key : null);
+
+  if (hint.customerId && allFiles.some((f) => folderKeyOf(f) === hint.customerId)) {
+    const hit = accept(hint.customerId);
+    if (hit) return hit;
+  }
+  if (hint.customerName) {
+    const nameKey = `name:${hint.customerName}`;
+    if (allFiles.some((f) => folderKeyOf(f) === nameKey)) {
+      const hit = accept(nameKey);
+      if (hit) return hit;
+    }
+    const byLabel = allFiles.find(
+      (f) => folderNameOf(f, folderKeyOf(f)).toLowerCase() === hint.customerName.toLowerCase(),
+    );
+    if (byLabel) {
+      const hit = accept(folderKeyOf(byLabel));
+      if (hit) return hit;
+    }
+  }
+  if (hint.fileId) {
+    const file = allFiles.find((f) => f.id === hint.fileId);
+    if (file) return accept(folderKeyOf(file));
+  }
+  return null;
+}
+
+export default function DrivePicker({ open, onClose, onPick, imagesOnly = false, folderHint }: Props) {
   const [files, setFiles] = useState<DriveFile[]>(() => {
     const ws = useAuthStore.getState().user?.workspaceId || '';
     return _driveCache?.ws === ws ? _driveCache.data : [];
@@ -68,6 +112,28 @@ export default function DrivePicker({ open, onClose, onPick, imagesOnly = false 
   const [error, setError] = useState('');
   const [pickingId, setPickingId] = useState<string | null>(null);
   const [folderKey, setFolderKey] = useState<string | null>(null);
+  const hintId = (folderHint?.customerId || '').trim();
+  const hintName = (folderHint?.customerName || '').trim();
+  const hintFileId = (folderHint?.fileId || '').trim();
+  const hasHint = !!(hintId || hintName || hintFileId);
+  const jumped = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      jumped.current = false;
+      return;
+    }
+    if (!hasHint || jumped.current || files.length === 0) return;
+    const visible = imagesOnly ? files.filter((f) => !isOfficeOrPdf(f.fileName || '')) : files;
+    const key = resolveFolderKey(
+      { customerId: hintId, customerName: hintName, fileId: hintFileId },
+      files,
+      visible,
+    );
+    jumped.current = true;
+    setFolderKey(key);
+    setSearch('');
+  }, [open, hasHint, hintId, hintName, hintFileId, files, imagesOnly]);
 
   useEffect(() => {
     if (!open) return;
@@ -162,12 +228,11 @@ export default function DrivePicker({ open, onClose, onPick, imagesOnly = false 
   const itemCount = openFolder ? folderFiles.length : shownFolders.length;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-6" onClick={onClose} role="dialog" aria-modal="true" aria-label="Choose a file">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-3 sm:p-6" onClick={onClose} role="dialog" aria-modal="true" aria-label="Choose a file" data-drive-picker="1" data-drive-picker-folder={openFolder ? openFolder.name : ''}>
       <div
         className="rounded-xl shadow-2xl border w-full max-w-3xl h-[min(86vh,720px)] flex flex-col"
         style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}
         onClick={e => e.stopPropagation()}
-        data-drive-picker="1"
       >
         <header className="px-3 py-2 border-b flex items-center gap-2" style={{ borderColor: 'hsl(var(--pt-border))' }}>
           <button

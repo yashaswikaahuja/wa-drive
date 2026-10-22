@@ -17,6 +17,7 @@ import {
   FolderOpen,
   PencilSimple,
   Highlighter,
+  Crop,
 } from '@phosphor-icons/react';
 import api from '../../shared/api';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
@@ -24,11 +25,13 @@ import { toast } from '../../shared/toast';
 import { downloadBlob, loadImageFromFile } from './imageOps';
 import MozillaPdfEmbed, { type MozillaPdfHandle, type PdfEditorMode } from '../files/MozillaPdfEmbed';
 import DrivePicker from '../photo-tool/DrivePicker';
+import AspectCropModal from './AspectCropModal';
 import {
   DOC_PAPERS,
   blankPage,
   blankSheetsPdfBlob,
   cellInMargin,
+  cloneCanvas,
   type DocCell,
   type DocMark,
   type DocPage,
@@ -84,6 +87,16 @@ function photoRect(cell: DocCell): { x: number; y: number; w: number; h: number 
   return { x: cell.x + (cell.w - w) / 2, y: cell.y, w, h: cell.h };
 }
 
+function cropSize(source: HTMLCanvasElement) {
+  const long = Math.max(source.width, source.height, 1);
+  const scale = long > 2400 ? 2400 / long : 1;
+  return {
+    aspect: source.width / Math.max(1, source.height),
+    targetW: Math.max(1, Math.round(source.width * scale)),
+    targetH: Math.max(1, Math.round(source.height * scale)),
+  };
+}
+
 function whiteoutFile(): Promise<File> {
   const canvas = document.createElement('canvas');
   canvas.width = 480;
@@ -132,9 +145,13 @@ export default function DocumentPrintPage() {
   const [originalPdfUrl, setOriginalPdfUrl] = useState('');
   const [layoutPdfUrl, setLayoutPdfUrl] = useState('');
   const [driveOpen, setDriveOpen] = useState(false);
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropSource, setCropSource] = useState<HTMLCanvasElement | null>(null);
   const [activeTool, setActiveTool] = useState<PdfEditorMode | 'whiteout'>('none');
   /** Paper of the PDF currently open in the viewer. Empty while a new sheet is building. */
   const [openSheet, setOpenSheet] = useState('');
+  /** Bumps when a new sheet PDF is actually open, so a rebuild can be waited on. */
+  const [sheetReady, setSheetReady] = useState(0);
   const originalUrlRef = useRef('');
   const layoutKeyRef = useRef('');
   const pdfRef = useRef<MozillaPdfHandle>(null);
@@ -142,6 +159,10 @@ export default function DocumentPrintPage() {
   const paperRef = useRef(paper);
   const stampOnOpenRef = useRef(false);
   const placedForUrl = useRef('');
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const cropIntent = useRef<
+    { kind: 'stamp' } | { kind: 'parent'; pageIndex: number; cellId: string }
+  >({ kind: 'stamp' });
   pagesRef.current = pages;
   paperRef.current = paper;
   const touchSheet = () => setSheetRev((n) => n + 1);
@@ -290,6 +311,7 @@ export default function DocumentPrintPage() {
         }
         layoutKeyRef.current = key;
         setOpenSheet(`${paper.wMm}x${paper.hMm}`);
+        setSheetReady((n) => n + 1);
         setLayoutPdfUrl((prev) => {
           if (prev && prev !== url) URL.revokeObjectURL(prev);
           return url;
@@ -416,15 +438,63 @@ export default function DocumentPrintPage() {
     }
   };
 
-  const onDrivePick = async (file: File) => {
+  const beginCrop = async (file: File) => {
     const looksImage = !file.type || file.type.startsWith('image/');
     if (!looksImage) {
       toast.error('Choose a photo (JPG or PNG)');
       return;
     }
-    setActiveTool('image');
-    pdfRef.current?.stampFile(file);
-    toast.success('Image placed on the page');
+    try {
+      const img = await loadImageFromFile(file);
+      cropIntent.current = { kind: 'stamp' };
+      setCropSource(imageToCanvas(img));
+      setCropOpen(true);
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not open that photo');
+    }
+  };
+
+  const openParentCrop = () => {
+    const list = pagesRef.current;
+    for (let i = 0; i < list.length; i++) {
+      const cell = list[i].cells[0];
+      if (!cell) continue;
+      cropIntent.current = { kind: 'parent', pageIndex: i, cellId: cell.id };
+      setCropSource(cell.canvas);
+      setCropOpen(true);
+      return;
+    }
+    imageInputRef.current?.click();
+  };
+
+  const applyCrop = async (framed: HTMLCanvasElement) => {
+    setCropOpen(false);
+    const intent = cropIntent.current;
+    if (intent.kind === 'parent') {
+      setPages((prev) =>
+        prev.map((pg, i) => {
+          if (i !== intent.pageIndex) return pg;
+          return {
+            ...pg,
+            cells: pg.cells.map((c) =>
+              c.id === intent.cellId ? { ...c, canvas: framed, baseCanvas: cloneCanvas(framed) } : c,
+            ),
+          };
+        }),
+      );
+      layoutKeyRef.current = '';
+      touchSheet();
+      toast.success('Photo cropped');
+      return;
+    }
+    try {
+      const stamped = await canvasFile(framed);
+      setActiveTool('none');
+      await pdfRef.current?.stampFile(stamped);
+      toast.success('Image placed on the page');
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not place the photo');
+    }
   };
 
   const addBlankPage = async () => {
@@ -542,8 +612,11 @@ export default function DocumentPrintPage() {
           <button type="button" className="flex flex-col items-center justify-center w-14 sm:w-16 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'whiteout')} onClick={() => void placeWhiteout()} data-doc-print-tool="box" data-doc-print-viewer-tool="whiteout">
             <Square size={18} /> Whiteout
           </button>
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'image')} onClick={() => setViewerTool('image')} data-doc-print-tool="image" data-doc-print-viewer-tool="image" title="Add an image from this computer">
+          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'image')} onClick={() => imageInputRef.current?.click()} data-doc-print-tool="image" data-doc-print-viewer-tool="image" title="Add an image from this computer">
             <ImageIcon size={18} /> Image
+          </button>
+          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(cropOpen)} onClick={openParentCrop} data-doc-print-tool="crop" data-doc-print-viewer-tool="crop" title="Crop the photo">
+            <Crop size={18} /> Crop
           </button>
           <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" onClick={() => setDriveOpen(true)} data-doc-print-tool="files" data-doc-print-viewer-tool="files" title="Choose an image from File Manager">
             <FolderOpen size={18} /> Files
@@ -566,7 +639,7 @@ export default function DocumentPrintPage() {
         </div>
       </header>
 
-      <div className="flex-1 min-h-0" data-doc-print-pdf="1" data-doc-print-sheet={openSheet}>
+      <div className="flex-1 min-h-0" data-doc-print-pdf="1" data-doc-print-sheet={openSheet} data-doc-print-ready={sheetReady}>
         {viewerUrl ? (
           <MozillaPdfEmbed
             key={viewerUrl}
@@ -586,12 +659,38 @@ export default function DocumentPrintPage() {
       <DrivePicker
         open={driveOpen}
         imagesOnly
+        folderHint={{ customerId: phone, customerName: name, fileId }}
         onClose={() => setDriveOpen(false)}
         onPick={(file) => {
           setDriveOpen(false);
-          void onDrivePick(file);
+          void beginCrop(file);
         }}
       />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        data-doc-print-image-input="1"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void beginCrop(file);
+        }}
+      />
+      {cropSource && (
+        <AspectCropModal
+          open={cropOpen}
+          source={cropSource}
+          {...cropSize(cropSource)}
+          title="Crop the photo"
+          hint="Drag to move the photo. Zoom in to trim it."
+          applyLabel="Use this crop"
+          showFaceGuide={false}
+          onApply={(framed) => { void applyCrop(framed); }}
+          onClose={() => setCropOpen(false)}
+        />
+      )}
     </div>
   );
 }

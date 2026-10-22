@@ -117,7 +117,7 @@ export default function AspectCropModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3" data-image-crop="1">
       <div className="card w-full max-w-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div>

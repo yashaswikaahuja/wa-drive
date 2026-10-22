@@ -97,8 +97,15 @@ test.describe('Document print layout (operator)', () => {
     expect(sheet!.width).toBeGreaterThan((vp?.width ?? 1280) * 0.4);
     expect(sheet!.height).toBeGreaterThan(240);
 
-    // The photo is an object: click for handles, drag to move, pull a corner to resize.
+    // Crop the photo already on the sheet. Wait until that rebuild is the open PDF, then move it.
     const stamp = frame.locator('.stampEditor[data-cyber-placed="1"]').first();
+    await expect(stamp).toBeVisible({ timeout: 20000 });
+    const pdf = page.locator('[data-doc-print-pdf="1"]');
+    const readyBeforeCrop = await pdf.getAttribute('data-doc-print-ready');
+    await page.locator('[data-doc-print-viewer-tool="crop"]').click();
+    await expect(page.locator('[data-image-crop="1"]')).toBeVisible();
+    await page.locator('[data-crop-apply="1"]').click();
+    await expect(pdf).not.toHaveAttribute('data-doc-print-ready', readyBeforeCrop || '0', { timeout: 25000 });
     await expect(stamp).toBeVisible({ timeout: 20000 });
     const before = await stamp.boundingBox();
     expect(before).toBeTruthy();
@@ -243,9 +250,10 @@ test.describe('Document print layout (operator)', () => {
 
   test('PDF viewer accepts text and a File Manager image, print stays A4', async ({ page }) => {
     test.setTimeout(90_000);
-    await page.goto('/app/photos/doc-print?paper=a4&from=/app/whatsapp&name=Shubham', {
-      waitUntil: 'domcontentloaded',
-    });
+    await page.goto(
+      '/app/photos/doc-print?paper=a4&from=/app/whatsapp&name=Shubham&phone=cust-shubham',
+      { waitUntil: 'domcontentloaded' },
+    );
     const later = page.getByRole('button', { name: /^Later$/i });
     if (await later.isVisible().catch(() => false)) await later.click();
 
@@ -263,6 +271,7 @@ test.describe('Document print layout (operator)', () => {
       id: i === 0 ? 'drv-photo1' : `drv-extra-${i}`,
       fileName: i === 0 ? 'customer.jpg' : `photo-${String(i).padStart(2, '0')}.jpg`,
       fileUrl: 'https://api.cybercontrol.fun/api/drive/download/drv-photo1',
+      customerId: 'cust-shubham',
       customerName: 'Shubham',
     }));
     await page.route('**/api/**', async (route) => {
@@ -279,10 +288,16 @@ test.describe('Document print layout (operator)', () => {
     });
     const dialog = page.getByRole('dialog');
     await page.locator('[data-doc-print-viewer-tool="files"]').click();
-    await dialog.getByRole('button', { name: /Shubham/ }).click();
+    await expect(dialog).toHaveAttribute('data-drive-picker-folder', 'Shubham', { timeout: 15000 });
     await expect(dialog.locator('[data-drive-picker-list="1"] button')).toHaveCount(70);
     await expect(dialog.getByText('70 items')).toBeVisible();
+    await dialog.getByRole('button', { name: 'Back to folders' }).click();
+    await expect(dialog).toHaveAttribute('data-drive-picker-folder', '');
+    await dialog.getByRole('button', { name: /Shubham/ }).click();
+    await expect(dialog.locator('[data-drive-picker-list="1"] button')).toHaveCount(70);
     await dialog.getByRole('button', { name: /customer\.jpg/i }).click();
+    await expect(page.locator('[data-image-crop="1"]')).toBeVisible({ timeout: 10000 });
+    await page.locator('[data-crop-apply="1"]').click();
     await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 15000 });
 
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
