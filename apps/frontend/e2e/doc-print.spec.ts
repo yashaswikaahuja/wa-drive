@@ -259,9 +259,30 @@ test.describe('Document print layout (operator)', () => {
     await page.locator('[data-doc-print-viewer-tool="text"]').click();
     await expect(textBtn).toHaveAttribute('aria-expanded', 'true', { timeout: 10000 });
 
+    const many = Array.from({ length: 70 }, (_, i) => ({
+      id: i === 0 ? 'drv-photo1' : `drv-extra-${i}`,
+      fileName: i === 0 ? 'customer.jpg' : `photo-${String(i).padStart(2, '0')}.jpg`,
+      fileUrl: 'https://api.cybercontrol.fun/api/drive/download/drv-photo1',
+      customerName: 'Shubham',
+    }));
+    await page.route('**/api/**', async (route) => {
+      const url = route.request().url();
+      if (url.includes('/drive/files/ws')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(many) });
+        return;
+      }
+      if (url.includes('/drive/download/')) {
+        await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
     const dialog = page.getByRole('dialog');
     await page.locator('[data-doc-print-viewer-tool="files"]').click();
     await dialog.getByRole('button', { name: /Shubham/ }).click();
+    await expect(dialog.locator('[data-drive-picker-list="1"] button')).toHaveCount(70);
+    await expect(dialog.getByText('70 items')).toBeVisible();
+    await dialog.getByRole('button', { name: /customer\.jpg/i }).click();
     await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 15000 });
 
     page.on('dialog', (d) => d.dismiss().catch(() => {}));
