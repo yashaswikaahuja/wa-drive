@@ -138,7 +138,7 @@ export default function DocumentPrintPage() {
   const [driveOpen, setDriveOpen] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSource, setCropSource] = useState<HTMLCanvasElement | null>(null);
-  const [docFilter, setDocFilter] = useState<DocScanFilter>('original');
+  const [docFilter, setDocFilter] = useState<DocScanFilter>('auto');
   const [activeTool, setActiveTool] = useState<PdfEditorMode | 'whiteout'>('none');
   /** Paper of the PDF currently open in the viewer. Empty while a new sheet is building. */
   const [openSheet, setOpenSheet] = useState('');
@@ -155,7 +155,7 @@ export default function DocumentPrintPage() {
   const cropIntent = useRef<
     { kind: 'stamp' } | { kind: 'parent'; pageIndex: number; cellId: string }
   >({ kind: 'stamp' });
-  const filterRef = useRef<DocScanFilter>('original');
+  const filterRef = useRef<DocScanFilter>('auto');
   filterRef.current = docFilter;
   pagesRef.current = pages;
   paperRef.current = paper;
@@ -206,7 +206,17 @@ export default function DocumentPrintPage() {
           return;
         }
         if (!built.length) throw new Error('Could not load document');
-        setPages(built);
+        setPages(built.map((pg) => ({
+          ...pg,
+          cells: pg.cells.map((c) => {
+            const base = c.baseCanvas || c.canvas;
+            return {
+              ...c,
+              baseCanvas: c.baseCanvas || cloneCanvas(c.canvas),
+              canvas: applyDocFilter(base, 'auto'),
+            };
+          }),
+        })));
         setSheetRev(0);
         layoutKeyRef.current = '';
         if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
@@ -285,7 +295,7 @@ export default function DocumentPrintPage() {
   // Any sheet change rebuilds the print PDF. Same sheet keeps the open PDF.
   useEffect(() => {
     if (!pages.length) return;
-    if (originalPdfUrl && sheetRev === 0) {
+    if (originalPdfUrl && sheetRev === 0 && filterRef.current === 'original') {
       stampOnOpenRef.current = false;
       return;
     }
@@ -319,7 +329,7 @@ export default function DocumentPrintPage() {
     };
   }, [sheetRev, pages, paper, originalPdfUrl]);
 
-  const viewerUrl = originalPdfUrl && sheetRev === 0 ? originalPdfUrl : layoutPdfUrl;
+  const viewerUrl = originalPdfUrl && sheetRev === 0 && docFilter === 'original' ? originalPdfUrl : layoutPdfUrl;
   const viewerUrlRef = useRef(viewerUrl);
   viewerUrlRef.current = viewerUrl;
 
@@ -642,6 +652,21 @@ export default function DocumentPrintPage() {
             <FolderOpen size={18} /> Files
           </button>
           <span className="w-px h-6 mx-1 shrink-0" style={{ background: 'hsl(var(--pt-border))' }} />
+          <label className="flex items-center gap-1 shrink-0 text-[11px] font-medium">
+            Filter
+            <select
+              aria-label="Filter"
+              data-doc-print-filter={docFilter}
+              value={docFilter}
+              onChange={(e) => chooseFilter(e.target.value as DocScanFilter)}
+              className="text-[11px] rounded-md border px-1.5 py-1 font-medium bg-transparent"
+              style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))' }}
+            >
+              {DOC_SCAN_FILTERS.map((f) => (
+                <option key={f.id} value={f.id}>{f.label}</option>
+              ))}
+            </select>
+          </label>
           <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0" onClick={() => void addBlankPage()} data-doc-print-blank="1">
             + Page
           </button>
@@ -654,24 +679,6 @@ export default function DocumentPrintPage() {
               onClick={() => changePaper(id)}
             >
               {id === 'a4' ? 'A4' : id === 'a4-landscape' ? 'A4 wide' : '4×6'}
-            </button>
-          ))}
-        </div>
-        <div
-          className="flex items-center gap-1 px-2 py-1 overflow-x-auto border-t"
-          style={{ borderColor: 'hsl(var(--pt-border))' }}
-          data-doc-print-filters="1"
-        >
-          {DOC_SCAN_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0"
-              style={chip(docFilter === f.id)}
-              data-doc-print-filter={f.id}
-              onClick={() => chooseFilter(f.id)}
-            >
-              {f.label}
             </button>
           ))}
         </div>

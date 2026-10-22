@@ -50,7 +50,7 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   const w = out.width;
   const h = out.height;
   const step = sampleStep(w, h);
-  if (filter === 'gray') paintGray(d);
+  if (filter === 'gray') paintGray(d, w, h, step);
   else if (filter === 'auto') paintAuto(d, w, h, step);
   else if (filter === 'light') paintLight(d, w, h, step);
   else paintWhiteboard(d, w, h, step);
@@ -58,71 +58,74 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   return out;
 }
 
-function paintGray(d: Uint8ClampedArray) {
+/** Paper tone of the scan, so the page can be lifted to pure white. */
+function paperLevel(d: Uint8ClampedArray, w: number, h: number, step: number) {
+  const ys: number[] = [];
+  for (let y = 0; y < h; y += step) {
+    for (let x = 0; x < w; x += step) {
+      const i = (y * w + x) * 4;
+      ys.push(luma(d[i], d[i + 1], d[i + 2]));
+    }
+  }
+  return Math.max(8, percentile(ys, 68));
+}
+
+/**
+ * Lift the sheet to crisp white and darken the writing.
+ * `gain` is how hard ink is pushed. `snap` is how close to the paper
+ * a pixel must be before it becomes white.
+ */
+function cleanSheet(
+  d: Uint8ClampedArray,
+  w: number,
+  h: number,
+  step: number,
+  gain: number,
+  snap: number,
+  mode: 'color' | 'gray' | 'ink',
+) {
+  const paper = paperLevel(d, w, h, step);
   for (let i = 0; i < d.length; i += 4) {
     const y = luma(d[i], d[i + 1], d[i + 2]);
-    d[i] = d[i + 1] = d[i + 2] = y;
+    const rel = (paper - y) / paper;
+    if (rel <= snap) {
+      d[i] = d[i + 1] = d[i + 2] = 255;
+      continue;
+    }
+    let ny = clamp(255 - (paper - y) * gain, 0, 255);
+    if (ny > 232) ny = 255;
+    if (mode === 'gray' || mode === 'ink') {
+      if (mode === 'ink') ny = ny > 170 ? 255 : clamp(ny * 0.45, 0, 255);
+      d[i] = d[i + 1] = d[i + 2] = ny;
+      continue;
+    }
+    const s = y < 1 ? 0 : ny / y;
+    let r = clamp(d[i] * s, 0, 255);
+    let g = clamp(d[i + 1] * s, 0, 255);
+    let b = clamp(d[i + 2] * s, 0, 255);
+    const spread = Math.max(r, g, b) - Math.min(r, g, b);
+    if (spread < 36) {
+      const v = clamp(luma(r, g, b) * 0.72, 0, 255);
+      r = g = b = v;
+    }
+    d[i] = r;
+    d[i + 1] = g;
+    d[i + 2] = b;
   }
+}
+
+function paintGray(d: Uint8ClampedArray, w: number, h: number, step: number) {
+  cleanSheet(d, w, h, step, 1.85, 0.1, 'gray');
 }
 
 function paintAuto(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  const rs: number[] = [];
-  const gs: number[] = [];
-  const bs: number[] = [];
-  for (let y = 0; y < h; y += step) {
-    for (let x = 0; x < w; x += step) {
-      const i = (y * w + x) * 4;
-      rs.push(d[i]);
-      gs.push(d[i + 1]);
-      bs.push(d[i + 2]);
-    }
-  }
-  const lo = [percentile(rs, 2), percentile(gs, 2), percentile(bs, 2)];
-  const hi = [percentile(rs, 98), percentile(gs, 98), percentile(bs, 98)];
-  const wide = hi[0] - lo[0] > 230 && hi[1] - lo[1] > 230 && hi[2] - lo[2] > 230;
-  for (let i = 0; i < d.length; i += 4) {
-    for (let c = 0; c < 3; c++) {
-      const v = d[i + c];
-      d[i + c] = wide
-        ? clamp((v - 128) * 1.08 + 134, 0, 255)
-        : clamp(((v - lo[c]) * 255) / Math.max(2, hi[c] - lo[c]), 0, 255);
-    }
-  }
+  cleanSheet(d, w, h, step, 1.9, 0.1, 'color');
 }
 
 function paintLight(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  const ys: number[] = [];
-  for (let y = 0; y < h; y += step) {
-    for (let x = 0; x < w; x += step) {
-      const i = (y * w + x) * 4;
-      ys.push(luma(d[i], d[i + 1], d[i + 2]));
-    }
-  }
-  const paper = percentile(ys, 90);
-  for (let i = 0; i < d.length; i += 4) {
-    const y = luma(d[i], d[i + 1], d[i + 2]);
-    const ny = y >= paper ? 255 : clamp(paper - (paper - y) * 1.7, 0, 255);
-    const s = y < 1 ? 0 : ny / y;
-    d[i] = clamp(d[i] * s, 0, 255);
-    d[i + 1] = clamp(d[i + 1] * s, 0, 255);
-    d[i + 2] = clamp(d[i + 2] * s, 0, 255);
-  }
+  cleanSheet(d, w, h, step, 2.6, 0.05, 'color');
 }
 
 function paintWhiteboard(d: Uint8ClampedArray, w: number, h: number, step: number) {
-  const ys: number[] = [];
-  for (let y = 0; y < h; y += step) {
-    for (let x = 0; x < w; x += step) {
-      const i = (y * w + x) * 4;
-      ys.push(luma(d[i], d[i + 1], d[i + 2]));
-    }
-  }
-  const black = percentile(ys, 12);
-  const white = Math.max(black + 8, percentile(ys, 72));
-  for (let i = 0; i < d.length; i += 4) {
-    const y = luma(d[i], d[i + 1], d[i + 2]);
-    const t = clamp((y - black) / (white - black), 0, 1);
-    const s = 255 / (1 + Math.exp(-14 * (t - 0.58)));
-    d[i] = d[i + 1] = d[i + 2] = s;
-  }
+  cleanSheet(d, w, h, step, 3.2, 0.14, 'ink');
 }

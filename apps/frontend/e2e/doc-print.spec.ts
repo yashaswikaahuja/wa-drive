@@ -86,6 +86,7 @@ test.describe('Document print layout (operator)', () => {
       '152.4x101.6',
       { timeout: 25000 },
     );
+    await expect(page.locator('select[aria-label="Filter"]')).toHaveValue('auto');
 
     const frame = page.frameLocator('iframe[title="PDF document"]');
     const pdfPage = frame.locator('.page').first();
@@ -117,7 +118,7 @@ test.describe('Document print layout (operator)', () => {
     await expect(pdf).not.toHaveAttribute('data-doc-print-ready', readyBeforeCrop || '0', { timeout: 25000 });
     await expect(stamp).toBeVisible({ timeout: 20000 });
     const readyBeforeFilter = await pdf.getAttribute('data-doc-print-ready');
-    await page.locator('[data-doc-print-filter="whiteboard"]').click();
+    await page.locator('select[aria-label="Filter"]').selectOption('whiteboard');
     await expect(pdf).not.toHaveAttribute('data-doc-print-ready', readyBeforeFilter || '0', { timeout: 25000 });
     await expect(stamp).toBeVisible({ timeout: 20000 });
     const before = await stamp.boundingBox();
