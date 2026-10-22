@@ -2,9 +2,11 @@
  * Document filters matching Adobe Scan: Original, Auto, Light text,
  * Grayscale, and Whiteboard. Each run starts from the unfiltered photo.
  *
- * Auto whitens the document's own paper and darkens the writing on it.
- * The page is one straight rectangle of that paper, so a concrete floor
- * or a gray desk outside it is left as photographed, and so is a portrait.
+ * Auto estimates the page's slow illumination and lifts the paper toward
+ * white with one capped gain. Writing, including faint ink and anti-aliased
+ * edges, keeps its ratio to that paper. Nothing is forced to pure white.
+ * The page is one straight rectangle, so a desk or a concrete floor outside
+ * it stays as photographed, and so does a portrait.
  */
 import { cloneCanvas } from './documentPrintLayout';
 
@@ -105,6 +107,15 @@ function maxFilter(src: Float32Array, w: number, h: number, radius: number) {
     for (let y = 0; y < h; y++) out[y * w + x] = dest[y];
   }
   return out;
+}
+
+/** Darkest nearby value. With maxFilter this closes thin dark strokes into paper. */
+function minFilter(src: Float32Array, w: number, h: number, radius: number) {
+  const neg = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i++) neg[i] = -src[i];
+  const low = maxFilter(neg, w, h, radius);
+  for (let i = 0; i < low.length; i++) low[i] = -low[i];
+  return low;
 }
 
 function percentile(values: number[], p: number) {
@@ -288,22 +299,13 @@ function extendSheet(
   }
   guard = 0;
   while (box.y0 > 1 && continues(true, box.y0 - 1) && guard++ < h) box.y0--;
+  // The heading is a dark line on the sheet, so its local deviation is high
+  // and the shade walk stops under it. Keep climbing while the middle of
+  // the row is still paper, writing, or the printed border.
+  const climbCap = Math.round(h * 0.22);
   guard = 0;
-  while (box.y0 > 1 && guard < 42) {
-    const y = box.y0 - 1;
-    const vals: number[] = [];
-    const stds: number[] = [];
-    for (let x = box.x0; x <= box.x1; x += 3) {
-      const i = y * w + x;
-      if (spread[i] > 28) continue;
-      vals.push(tone[i]);
-      stds.push(std[i]);
-    }
-    if (vals.length < 8) break;
-    const med = percentile(vals, 0.55);
-    const medStd = percentile(stds, 0.5);
-    if (med < box.mode - 34 || medStd > 26) break;
-    box.y0 = y;
+  while (box.y0 > 1 && guard < climbCap && pageRow(tone, spread, std, w, box, box.y0 - 1)) {
+    box.y0--;
     guard++;
   }
   guard = 0;
@@ -312,92 +314,130 @@ function extendSheet(
   while (box.x0 > 1 && continues(false, box.x0 - 1) && guard++ < w) box.x0--;
 }
 
-/**
- * Cut a darker desk off at a straight brightness step.
- * A table rule has the same paper on both sides, so the page stays whole.
- */
-function clipDesk(tone: Float32Array, w: number, box: PageBox) {
-  const median = (x0: number, y0: number, x1: number, y1: number) => {
-    if (x1 < x0 || y1 < y0) return -1;
-    const vals: number[] = [];
-    for (let y = y0; y <= y1; y += 6) {
-      const row = y * w;
-      for (let x = x0; x <= x1; x += 4) vals.push(tone[row + x]);
+/** Center of one row: bright paper, writing, or the printed border — not the desk. */
+function pageRow(
+  tone: Float32Array,
+  spread: Float32Array,
+  std: Float32Array,
+  w: number,
+  box: PageBox,
+  y: number,
+) {
+  const span = box.x1 - box.x0;
+  const a = box.x0 + Math.round(span * 0.18);
+  const b = Math.max(a, box.x0 + Math.round(span * 0.82));
+  let n = 0;
+  let ink = 0;
+  let bright = 0;
+  const vals: number[] = [];
+  const stds: number[] = [];
+  for (let x = a; x <= b; x += 2) {
+    const i = y * w + x;
+    n++;
+    const t = tone[i];
+    const sp = spread[i];
+    if (sp <= 36) {
+      vals.push(t);
+      stds.push(std[i]);
     }
-    return vals.length ? percentile(vals, 0.5) : -1;
+    if (t < box.mode - 55 && sp < 55) ink++;
+    if (t >= box.mode - 16 && sp <= 20 && std[i] <= 16) bright++;
+  }
+  if (n < 8) return false;
+  const med = vals.length ? percentile(vals, 0.5) : 0;
+  const medStd = stds.length ? percentile(stds, 0.5) : 99;
+  const inkF = ink / n;
+  const brightF = bright / n;
+  const roughBlank = medStd > 30 && inkF < 0.07 && med < box.mode - 10;
+  const grayDesk = inkF < 0.03 && brightF < 0.22 && med < box.mode - 18;
+  if (roughBlank || grayDesk) return false;
+  if (brightF > 0.42 || med >= box.mode - 20) return true;
+  if (inkF > 0.03 && brightF > 0.12) return true;
+  if (inkF > 0.2 && med < box.mode - 50) return true;
+  if (inkF > 0.15 && med >= box.mode - 42) return true;
+  if (inkF > 0.22 && med > 100) return true;
+  return false;
+}
+
+type Band = { n: number; ink: number; bright: number; med: number; medStd: number };
+
+/** A smooth strip darker than the sheet, with almost no writing. */
+function deskBand(box: PageBox, band: Band) {
+  if (band.n < 6) return false;
+  if (band.ink > 0.055) return false;
+  if (band.bright > 0.28) return false;
+  if (band.medStd > 22) return false;
+  return band.med < box.mode - 16;
+}
+
+/**
+ * Pull a gray margin back off the page. The shade walk treats that margin
+ * as more paper. Stop at the printed border or at bright paper, and do
+ * nothing if the page edge is not found inside the cap.
+ */
+function shrinkMargins(
+  tone: Float32Array,
+  spread: Float32Array,
+  std: Float32Array,
+  w: number,
+  h: number,
+  box: PageBox,
+) {
+  const bandOf = (x0: number, y0: number, x1: number, y1: number, stepX: number, stepY: number): Band => {
+    let n = 0;
+    let ink = 0;
+    let bright = 0;
+    const vals: number[] = [];
+    const stds: number[] = [];
+    for (let y = y0; y <= y1; y += stepY) {
+      const row = y * w;
+      for (let x = x0; x <= x1; x += stepX) {
+        const i = row + x;
+        n++;
+        const t = tone[i];
+        const sp = spread[i];
+        if (sp <= 36) {
+          vals.push(t);
+          stds.push(std[i]);
+        }
+        if (t < box.mode - 55 && sp < 55) ink++;
+        if (t >= box.mode - 16 && sp <= 20 && std[i] <= 16) bright++;
+      }
+    }
+    return {
+      n,
+      ink: n ? ink / n : 0,
+      bright: n ? bright / n : 0,
+      med: vals.length ? percentile(vals, 0.5) : 255,
+      medStd: stds.length ? percentile(stds, 0.5) : 0,
+    };
   };
   const yA = Math.round(box.y0 + (box.y1 - box.y0) * 0.12);
-  const yB = Math.round(box.y1 - (box.y1 - box.y0) * 0.12);
-  const lefts: number[] = [];
-  const jumpLimit = Math.round(box.x0 + (box.x1 - box.x0) * 0.3);
-  for (let y = yA; y <= yB; y += 4) {
-    const row = y * w;
-    for (let x = box.x0 + 6; x < jumpLimit; x++) {
-      let left = 0;
-      let right = 0;
-      let n = 0;
-      for (let k = 2; k <= 10; k += 2) {
-        left += tone[row + Math.max(0, x - k)];
-        right += tone[row + Math.min(w - 1, x + k)];
-        n++;
-      }
-      const l = left / n;
-      const r = right / n;
-      if (r - l > 14 && l < box.mode - 14 && r > box.mode - 18) {
-        lefts.push(x);
-        break;
-      }
-    }
-  }
-  const need = Math.max(8, Math.round((yB - yA) / 4 * 0.4));
-  const edgeOf = (xs: number[]) => {
-    const bins = new Int32Array(Math.max(1, Math.ceil(w / 8)));
-    for (const x of xs) bins[Math.min(bins.length - 1, Math.floor(x / 8))]++;
-    let best = 0;
-    let bestAt = 0;
-    for (let i = 0; i < bins.length; i++) {
-      if (bins[i] > best) {
-        best = bins[i];
-        bestAt = i;
-      }
-    }
-    return { edge: bestAt * 8 + 4, share: xs.length ? best / xs.length : 0 };
-  };
-  const leftEdge = edgeOf(lefts);
-  if (lefts.length >= need && leftEdge.share >= 0.22) {
-    const edge = leftEdge.edge;
-    const desk = median(box.x0, yA, edge - 8, yB);
-    const paper = median(edge + 8, yA, Math.min(box.x1, edge + 48), yB);
-    if (desk >= 0 && paper > desk + 10) box.x0 = Math.min(box.x1 - 40, edge + 3);
-  }
-  const rights: number[] = [];
-  const rightStart = Math.round(box.x1 - (box.x1 - box.x0) * 0.32);
-  for (let y = yA; y <= yB; y += 4) {
-    const row = y * w;
-    for (let x = box.x1 - 6; x > rightStart; x--) {
-      let left = 0;
-      let right = 0;
-      let n = 0;
-      for (let k = 2; k <= 10; k += 2) {
-        left += tone[row + Math.max(0, x - k)];
-        right += tone[row + Math.min(w - 1, x + k)];
-        n++;
-      }
-      const l = left / n;
-      const r = right / n;
-      if (l - r > 14 && r < box.mode - 14 && l > box.mode - 18) {
-        rights.push(x);
-        break;
-      }
-    }
-  }
-  const rightEdge = edgeOf(rights);
-  if (rights.length >= need && rightEdge.share >= 0.22) {
-    const edge = rightEdge.edge;
-    const desk = median(edge + 8, yA, box.x1, yB);
-    const paper = median(Math.max(box.x0, edge - 48), yA, edge - 8, yB);
-    if (desk >= 0 && paper > desk + 10) box.x1 = Math.max(box.x0 + 40, edge - 3);
-  }
+  const yB = Math.round(box.y0 + (box.y1 - box.y0) * 0.62);
+  const xCap = Math.max(8, Math.round((box.x1 - box.x0) * 0.26));
+  let x = box.x0;
+  const xStop = Math.min(box.x1 - 40, box.x0 + xCap);
+  while (x < xStop && deskBand(box, bandOf(x, yA, x, yB, 1, 3))) x++;
+  if (x > box.x0 && x < xStop) box.x0 = x;
+  x = box.x1;
+  const xStopR = Math.max(box.x0 + 40, box.x1 - xCap);
+  while (x > xStopR && deskBand(box, bandOf(x, yA, x, yB, 1, 3))) x--;
+  if (x < box.x1 && x > xStopR) box.x1 = x;
+
+  const span = box.x1 - box.x0;
+  const cx0 = box.x0 + Math.round(span * 0.2);
+  const cx1 = Math.max(cx0, box.x0 + Math.round(span * 0.8));
+  const yCap = Math.max(8, Math.round(h * 0.28));
+  let y = box.y0;
+  const yStop = Math.min(box.y1 - 40, box.y0 + yCap);
+  while (y < yStop && deskBand(box, bandOf(cx0, y, cx1, y, 3, 1))) y++;
+  if (y > box.y0 && y < yStop) box.y0 = y;
+  const fullWidth = box.x1 - box.x0 > w * 0.94 && box.y1 > h * 0.9;
+  if (fullWidth) return;
+  y = box.y1;
+  const yStopB = Math.max(box.y0 + 40, box.y1 - yCap);
+  while (y > yStopB && deskBand(box, bandOf(cx0, y, cx1, y, 3, 1))) y--;
+  if (y < box.y1 && y > yStopB) box.y1 = y;
 }
 
 /** Portrait pixels, grown a short way into the photo's own backdrop, not onto the card. */
@@ -448,7 +488,14 @@ function photoMask(
           }
         }
       }
-      if (n < 220 || maxX - minX < 44 || maxY - minY < 44) continue;
+      const bw = maxX - minX;
+      const bh = maxY - minY;
+      if (n < 220 || bw < 44 || bh < 44) continue;
+      const aspect = bw / bh;
+      if (aspect < 0.55 || aspect > 1.8) continue;
+      const area = (bw + 1) * (bh + 1);
+      const fill = (n * 4) / area;
+      if (fill < 0.34) continue;
       for (let k = 0; k < n; k++) seed[members[k]] = 1;
     }
   }
@@ -488,9 +535,9 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   const box = pageBox(tone, spread, std, w, h);
   if (!box) return out;
   extendSheet(tone, spread, std, w, h, box);
-  clipDesk(tone, w, box);
+  shrinkMargins(tone, spread, std, w, h, box);
   const photo = photoMask(tone, spread, std, w, h, box);
-  const sheet = boxBlur(tone, w, h, 8);
+  const sheet = paperIllumination(tone, w, h, box, photo);
   const mode: CleanMode = filter === 'gray' ? 'gray' : filter === 'light' ? 'light' : filter === 'whiteboard' ? 'whiteboard' : 'auto';
   cleanSheet(d, w, mode, box, tone, spread, sheet, photo);
   ctx.putImageData(img, 0, 0);
@@ -511,8 +558,36 @@ function localStd(src: Float32Array, w: number, h: number, radius: number) {
 }
 
 /**
- * Inside the page, paper close to the local sheet becomes white.
- * Writing is scaled darker, so the letter shape stays. A portrait stays.
+ * Slow paper illumination. Closing removes strokes thinner than the kernel,
+ * then a short blur keeps the field smooth. Outside the page, and inside the
+ * portrait, the field is the paper mode so a darker desk cannot leak in.
+ */
+function paperIllumination(
+  tone: Float32Array,
+  w: number,
+  h: number,
+  box: PageBox,
+  photo: Uint8Array,
+) {
+  const field = new Float32Array(tone.length);
+  const mode = box.mode;
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    const insideY = y >= box.y0 && y <= box.y1;
+    for (let x = 0; x < w; x++) {
+      const i = row + x;
+      field[i] = insideY && x >= box.x0 && x <= box.x1 && !photo[i] ? tone[i] : mode;
+    }
+  }
+  const radius = clamp(Math.round(Math.min(w, h) / 70), 10, 18);
+  const closed = minFilter(maxFilter(field, w, h, radius), w, h, radius);
+  return boxBlur(closed, w, h, 6);
+}
+
+/**
+ * Lift each page pixel by the paper's illumination. A letter keeps its ratio
+ * to that paper, so an anti-aliased rim stays gray instead of snapping white.
+ * Whiteboard then darkens ink cores only and leaves those rims alone.
  */
 function cleanSheet(
   d: Uint8ClampedArray,
@@ -524,36 +599,34 @@ function cleanSheet(
   sheet: Float32Array,
   photo: Uint8Array,
 ) {
-  const whiteRel = mode === 'light' ? 0.96 : mode === 'whiteboard' ? 0.9 : 0.93;
+  const target = mode === 'light' ? 236 : 252;
+  const maxGain = mode === 'light' ? 1.28 : 1.65;
   for (let y = box.y0; y <= box.y1; y++) {
     const row = y * w;
     for (let x = box.x0; x <= box.x1; x++) {
       const at = row + x;
       if (photo[at]) continue;
-      if (spread[at] > 22) continue;
+      if (spread[at] > 26) continue;
+      const bg = sheet[at];
+      if (bg < 90 || bg < box.mode - 55) continue;
       const t = tone[at];
-      const bg = Math.max(24, sheet[at]);
-      const rel = t / bg;
-      const i = at * 4;
-      if (rel >= whiteRel && t >= box.mode - 58 && t >= 145) {
-        d[i] = d[i + 1] = d[i + 2] = 255;
-        continue;
+      let g = clamp(target / Math.max(bg, 48), 1, maxGain);
+      if (mode === 'whiteboard') {
+        const rel = t / Math.max(bg, 48);
+        if (rel < 0.82) {
+          const u = clamp((rel - 0.58) / 0.24, 0, 1);
+          const s = u * u * (3 - 2 * u);
+          g *= 0.42 + 0.58 * s;
+        }
       }
-      if (rel > 0.9 || bg < box.mode - 34 || t > bg - 10) continue;
-      const gain = mode === 'whiteboard'
-        ? (rel < 0.72 ? 0.05 : 0.22)
-        : mode === 'light'
-          ? clamp(0.55 + rel * 0.4, 0.42, 0.88)
-          : mode === 'gray'
-            ? clamp(Math.pow(rel, 1.3), 0.12, 0.6)
-            : clamp(Math.pow(rel, 1.4), 0.15, 0.55);
+      const i = at * 4;
       if (mode === 'gray') {
-        const v = clamp(t * gain, 0, 255);
+        const v = clamp(Math.round(t * g), 0, 255);
         d[i] = d[i + 1] = d[i + 2] = v;
       } else {
-        d[i] = clamp(d[i] * gain, 0, 255);
-        d[i + 1] = clamp(d[i + 1] * gain, 0, 255);
-        d[i + 2] = clamp(d[i + 2] * gain, 0, 255);
+        d[i] = clamp(Math.round(d[i] * g), 0, 255);
+        d[i + 1] = clamp(Math.round(d[i + 1] * g), 0, 255);
+        d[i + 2] = clamp(Math.round(d[i + 2] * g), 0, 255);
       }
     }
   }
