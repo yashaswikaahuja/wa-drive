@@ -43,6 +43,7 @@ import {
   readPdfMediaBoxPts,
 } from './documentPrintLayout';
 import { pdfBytesToPages } from './pdfPaper';
+import { DOC_SCAN_FILTERS, applyDocFilter, type DocScanFilter } from './docScanFilters';
 
 const MARGIN_MM = 10;
 
@@ -137,6 +138,7 @@ export default function DocumentPrintPage() {
   const [driveOpen, setDriveOpen] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSource, setCropSource] = useState<HTMLCanvasElement | null>(null);
+  const [docFilter, setDocFilter] = useState<DocScanFilter>('original');
   const [activeTool, setActiveTool] = useState<PdfEditorMode | 'whiteout'>('none');
   /** Paper of the PDF currently open in the viewer. Empty while a new sheet is building. */
   const [openSheet, setOpenSheet] = useState('');
@@ -153,6 +155,8 @@ export default function DocumentPrintPage() {
   const cropIntent = useRef<
     { kind: 'stamp' } | { kind: 'parent'; pageIndex: number; cellId: string }
   >({ kind: 'stamp' });
+  const filterRef = useRef<DocScanFilter>('original');
+  filterRef.current = docFilter;
   pagesRef.current = pages;
   paperRef.current = paper;
   const touchSheet = () => setSheetRev((n) => n + 1);
@@ -450,7 +454,7 @@ export default function DocumentPrintPage() {
       const cell = list[i].cells[0];
       if (!cell) continue;
       cropIntent.current = { kind: 'parent', pageIndex: i, cellId: cell.id };
-      setCropSource(cell.canvas);
+      setCropSource(cell.baseCanvas || cell.canvas);
       setCropOpen(true);
       return;
     }
@@ -466,9 +470,11 @@ export default function DocumentPrintPage() {
           if (i !== intent.pageIndex) return pg;
           return {
             ...pg,
-            cells: pg.cells.map((c) =>
-              c.id === intent.cellId ? { ...c, canvas: framed, baseCanvas: cloneCanvas(framed) } : c,
-            ),
+            cells: pg.cells.map((c) => {
+              if (c.id !== intent.cellId) return c;
+              const base = cloneCanvas(framed);
+              return { ...c, baseCanvas: base, canvas: applyDocFilter(base, filterRef.current) };
+            }),
           };
         }),
       );
@@ -485,6 +491,30 @@ export default function DocumentPrintPage() {
     } catch (e: any) {
       toast.error(e?.message || 'Could not place the photo');
     }
+  };
+
+  const chooseFilter = (id: DocScanFilter) => {
+    if (id === docFilter) return;
+    if (!pagesRef.current.some((p) => p.cells.length > 0)) {
+      toast.error('Add a photo, then choose a filter');
+      return;
+    }
+    setDocFilter(id);
+    setPages((prev) =>
+      prev.map((pg) => ({
+        ...pg,
+        cells: pg.cells.map((c) => {
+          const base = c.baseCanvas || c.canvas;
+          return {
+            ...c,
+            baseCanvas: c.baseCanvas || cloneCanvas(base),
+            canvas: applyDocFilter(base, id),
+          };
+        }),
+      })),
+    );
+    layoutKeyRef.current = '';
+    touchSheet();
   };
 
   const addBlankPage = async () => {
@@ -624,6 +654,24 @@ export default function DocumentPrintPage() {
               onClick={() => changePaper(id)}
             >
               {id === 'a4' ? 'A4' : id === 'a4-landscape' ? 'A4 wide' : '4×6'}
+            </button>
+          ))}
+        </div>
+        <div
+          className="flex items-center gap-1 px-2 py-1 overflow-x-auto border-t"
+          style={{ borderColor: 'hsl(var(--pt-border))' }}
+          data-doc-print-filters="1"
+        >
+          {DOC_SCAN_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0"
+              style={chip(docFilter === f.id)}
+              data-doc-print-filter={f.id}
+              onClick={() => chooseFilter(f.id)}
+            >
+              {f.label}
             </button>
           ))}
         </div>

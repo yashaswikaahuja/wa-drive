@@ -116,6 +116,10 @@ test.describe('Document print layout (operator)', () => {
     await page.locator('[data-crop-apply="1"]').click();
     await expect(pdf).not.toHaveAttribute('data-doc-print-ready', readyBeforeCrop || '0', { timeout: 25000 });
     await expect(stamp).toBeVisible({ timeout: 20000 });
+    const readyBeforeFilter = await pdf.getAttribute('data-doc-print-ready');
+    await page.locator('[data-doc-print-filter="whiteboard"]').click();
+    await expect(pdf).not.toHaveAttribute('data-doc-print-ready', readyBeforeFilter || '0', { timeout: 25000 });
+    await expect(stamp).toBeVisible({ timeout: 20000 });
     const before = await stamp.boundingBox();
     expect(before).toBeTruthy();
     await stamp.click();
