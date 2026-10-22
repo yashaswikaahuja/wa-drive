@@ -22,13 +22,6 @@ function luma(r: number, g: number, b: number) {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
-function percentile(values: number[], p: number) {
-  if (!values.length) return 0;
-  const sorted = values.slice().sort((a, b) => a - b);
-  const i = clamp(Math.round((p / 100) * (sorted.length - 1)), 0, sorted.length - 1);
-  return sorted[i];
-}
-
 function readPixels(src: HTMLCanvasElement) {
   const out = cloneCanvas(src);
   const ctx = out.getContext('2d', { willReadFrequently: true });
@@ -39,46 +32,32 @@ function readPixels(src: HTMLCanvasElement) {
 
 type CleanMode = 'auto' | 'light' | 'gray' | 'whiteboard';
 
-/** Local paper brightness, spread so text and the QR do not set the background. */
-function localPaper(d: Uint8ClampedArray, w: number, h: number) {
-  const block = clamp(Math.round(Math.min(w, h) / 16), 12, 48);
-  const bw = Math.max(1, Math.ceil(w / block));
-  const bh = Math.max(1, Math.ceil(h / block));
-  const grid = new Float32Array(bw * bh);
-  for (let by = 0; by < bh; by++) {
-    for (let bx = 0; bx < bw; bx++) {
-      const vals: number[] = [];
-      const x0 = bx * block;
-      const y0 = by * block;
-      const x1 = Math.min(w, x0 + block);
-      const y1 = Math.min(h, y0 + block);
-      const step = Math.max(1, Math.floor(block / 6));
-      for (let y = y0; y < y1; y += step) {
-        const row = y * w;
-        for (let x = x0; x < x1; x += step) {
-          const i = (row + x) * 4;
-          vals.push(luma(d[i], d[i + 1], d[i + 2]));
-        }
+/** Sheet brightness around each pixel. Wide enough to see paper past a stroke, not the whole desk. */
+function blurLuma(d: Uint8ClampedArray, w: number, h: number, radius: number) {
+  const src = new Float32Array(w * h);
+  for (let i = 0, p = 0; i < src.length; i++, p += 4) src[i] = luma(d[p], d[p + 1], d[p + 2]);
+  const tmp = new Float32Array(w * h);
+  const out = new Float32Array(w * h);
+  const box = (from: Float32Array, to: Float32Array, horizontal: boolean) => {
+    const outer = horizontal ? h : w;
+    const inner = horizontal ? w : h;
+    for (let o = 0; o < outer; o++) {
+      const prefix = new Float32Array(inner + 1);
+      for (let i = 0; i < inner; i++) {
+        const idx = horizontal ? o * w + i : i * w + o;
+        prefix[i + 1] = prefix[i] + from[idx];
       }
-      grid[by * bw + bx] = percentile(vals, 88);
-    }
-  }
-  const spread = new Float32Array(grid.length);
-  const rad = 3;
-  for (let by = 0; by < bh; by++) {
-    for (let bx = 0; bx < bw; bx++) {
-      let m = 0;
-      for (let dy = -rad; dy <= rad; dy++) {
-        const ny = clamp(by + dy, 0, bh - 1);
-        for (let dx = -rad; dx <= rad; dx++) {
-          const nx = clamp(bx + dx, 0, bw - 1);
-          m = Math.max(m, grid[ny * bw + nx]);
-        }
+      for (let i = 0; i < inner; i++) {
+        const a = Math.max(0, i - radius);
+        const b = Math.min(inner - 1, i + radius);
+        const idx = horizontal ? o * w + i : i * w + o;
+        to[idx] = (prefix[b + 1] - prefix[a]) / (b - a + 1);
       }
-      spread[by * bw + bx] = m;
     }
-  }
-  return { paper: spread, block, bw, bh };
+  };
+  box(src, tmp, true);
+  box(tmp, out, false);
+  return out;
 }
 
 export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): HTMLCanvasElement {
@@ -98,43 +77,47 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
 }
 
 /**
- * The gray around a photographed page is paper too. Compare each pixel
- * with the local sheet, turn that sheet white, and darken the writing.
+ * Compare each pixel with the sheet around it. Gray desk and photo
+ * shadow match that sheet and turn white. Writing is darker than the
+ * sheet, so it stays and is darkened. An absolute cutoff erased light print.
  */
 function cleanSheet(d: Uint8ClampedArray, w: number, h: number, mode: CleanMode) {
-  const { paper, block, bw, bh } = localPaper(d, w, h);
-  const near = mode === 'light' ? 0.92 : mode === 'whiteboard' ? 0.58 : 0.72;
-  const pale = mode === 'light' ? 208 : mode === 'whiteboard' ? 96 : 118;
+  const radius = clamp(Math.round(Math.min(w, h) / 80), 6, 16);
+  const sheet = blurLuma(d, w, h, radius);
+  const near = blurLuma(d, w, h, 3);
+  const paperCut = mode === 'light' ? 0.94 : mode === 'whiteboard' ? 0.68 : 0.86;
   for (let y = 0; y < h; y++) {
-    const by = Math.min(bh - 1, Math.floor(y / block));
     const row = y * w;
     for (let x = 0; x < w; x++) {
-      const bx = Math.min(bw - 1, Math.floor(x / block));
-      const bg = Math.max(16, paper[by * bw + bx]);
       const i = (row + x) * 4;
       const r = d[i];
       const g = d[i + 1];
       const b = d[i + 2];
       const tone = luma(r, g, b);
       const spread = Math.max(r, g, b) - Math.min(r, g, b);
-      const isPaper = spread < 30 && (tone >= pale || tone >= bg * near);
-      if (isPaper) {
+      const bg = Math.max(24, sheet[row + x]);
+      const local = near[row + x];
+      const rel = tone / bg;
+      // A flat patch matches its own neighborhood: desk, tint, or photo shadow.
+      // A stroke is darker than the paper a few pixels away.
+      const flat = Math.abs(tone - local) < 12 && local >= 72 && spread < 96;
+      const photoEdge = y >= h - Math.max(10, Math.round(h * 0.022)) && spread < 130;
+      if (photoEdge || flat || (rel >= paperCut && spread < (rel > 0.93 ? 72 : 40))) {
         d[i] = d[i + 1] = d[i + 2] = 255;
         continue;
       }
-      if (mode === 'auto' && spread >= 30) {
-        const target = clamp(tone * 0.7, 0, 170);
-        const s = tone < 1 ? 0 : target / tone;
+      if ((mode === 'auto' || mode === 'light') && spread >= 40) {
+        const s = clamp(mode === 'light' ? Math.pow(rel, 0.85) : Math.pow(rel, 1.2), 0.2, 0.92);
         d[i] = clamp(r * s, 0, 255);
         d[i + 1] = clamp(g * s, 0, 255);
         d[i + 2] = clamp(b * s, 0, 255);
         continue;
       }
       const v = mode === 'whiteboard'
-        ? (tone < 80 ? 0 : 16)
+        ? (rel < 0.62 ? 0 : 18)
         : mode === 'light'
-          ? clamp(tone * 0.45, 0, 100)
-          : clamp((tone / 118) * 48, 0, 64);
+          ? clamp(rel * rel * 180, 0, 130)
+          : clamp(Math.pow(rel, 2.15) * 210, 0, 100);
       d[i] = d[i + 1] = d[i + 2] = v;
     }
   }
