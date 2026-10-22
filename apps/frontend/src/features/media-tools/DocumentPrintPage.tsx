@@ -25,7 +25,7 @@ import { toast } from '../../shared/toast';
 import { downloadBlob, loadImageFromFile } from './imageOps';
 import MozillaPdfEmbed, { type MozillaPdfHandle, type PdfEditorMode } from '../files/MozillaPdfEmbed';
 import DrivePicker from '../photo-tool/DrivePicker';
-import AspectCropModal from './AspectCropModal';
+import DotCropModal from './DotCropModal';
 import {
   DOC_PAPERS,
   blankPage,
@@ -85,16 +85,6 @@ function photoRect(cell: DocCell): { x: number; y: number; w: number; h: number 
   }
   const w = cell.h * sa;
   return { x: cell.x + (cell.w - w) / 2, y: cell.y, w, h: cell.h };
-}
-
-function cropSize(source: HTMLCanvasElement) {
-  const long = Math.max(source.width, source.height, 1);
-  const scale = long > 2400 ? 2400 / long : 1;
-  return {
-    aspect: source.width / Math.max(1, source.height),
-    targetW: Math.max(1, Math.round(source.width * scale)),
-    targetH: Math.max(1, Math.round(source.height * scale)),
-  };
 }
 
 function whiteoutFile(): Promise<File> {
@@ -678,19 +668,12 @@ export default function DocumentPrintPage() {
           if (file) void beginCrop(file);
         }}
       />
-      {cropSource && (
-        <AspectCropModal
-          open={cropOpen}
-          source={cropSource}
-          {...cropSize(cropSource)}
-          title="Crop the photo"
-          hint="Drag to move the photo. Zoom in to trim it."
-          applyLabel="Use this crop"
-          showFaceGuide={false}
-          onApply={(framed) => { void applyCrop(framed); }}
-          onClose={() => setCropOpen(false)}
-        />
-      )}
+      <DotCropModal
+        open={cropOpen}
+        source={cropSource}
+        onApply={(framed) => { void applyCrop(framed); }}
+        onClose={() => setCropOpen(false)}
+      />
     </div>
   );
 }
