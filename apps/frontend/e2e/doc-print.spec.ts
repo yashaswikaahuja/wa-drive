@@ -104,12 +104,13 @@ test.describe('Document print layout (operator)', () => {
     const readyBeforeCrop = await pdf.getAttribute('data-doc-print-ready');
     await page.locator('[data-doc-print-viewer-tool="crop"]').click();
     await expect(page.locator('[data-image-crop="1"]')).toBeVisible();
-    await expect(page.locator('[data-crop-handle]')).toHaveCount(6);
+    await expect(page.locator('[data-crop-handle]')).toHaveCount(4);
     const dot = page.locator('[data-crop-handle="br"]');
     const dotBox = await dot.boundingBox();
     expect(dotBox).toBeTruthy();
     await page.mouse.move(dotBox!.x + dotBox!.width / 2, dotBox!.y + dotBox!.height / 2);
     await page.mouse.down();
+    await expect(page.locator('[data-crop-loupe="1"]')).toBeVisible();
     await page.mouse.move(dotBox!.x + dotBox!.width / 2 - 48, dotBox!.y + dotBox!.height / 2 - 32, { steps: 8 });
     await page.mouse.up();
     await page.locator('[data-crop-apply="1"]').click();
@@ -305,7 +306,7 @@ test.describe('Document print layout (operator)', () => {
     await expect(dialog.locator('[data-drive-picker-list="1"] button')).toHaveCount(70);
     await dialog.getByRole('button', { name: /customer\.jpg/i }).click();
     await expect(page.locator('[data-image-crop="1"]')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('[data-crop-handle]')).toHaveCount(6);
+    await expect(page.locator('[data-crop-handle]')).toHaveCount(4);
     await page.locator('[data-crop-apply="1"]').click();
     await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 15000 });
 
