@@ -97,6 +97,32 @@ test.describe('Document print layout (operator)', () => {
     expect(sheet!.width).toBeGreaterThan((vp?.width ?? 1280) * 0.4);
     expect(sheet!.height).toBeGreaterThan(240);
 
+    // The photo is an object: click for handles, drag to move, pull a corner to resize.
+    const stamp = frame.locator('.stampEditor[data-cyber-placed="1"]').first();
+    await expect(stamp).toBeVisible({ timeout: 20000 });
+    const before = await stamp.boundingBox();
+    expect(before).toBeTruthy();
+    await stamp.click();
+    await expect(stamp.locator('.resizer').first()).toBeVisible({ timeout: 5000 });
+    const start = await stamp.boundingBox();
+    await page.mouse.move(start!.x + start!.width / 2, start!.y + start!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(start!.x + start!.width / 2 + 80, start!.y + start!.height / 2, { steps: 10 });
+    await page.mouse.up();
+    const moved = await stamp.boundingBox();
+    expect(moved!.x).toBeGreaterThan(before!.x + 24);
+
+    const sized = await stamp.boundingBox();
+    const handle = stamp.locator('.resizer.bottomRight');
+    const hb = await handle.boundingBox();
+    expect(hb).toBeTruthy();
+    await page.mouse.move(hb!.x + hb!.width / 2, hb!.y + hb!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(hb!.x + hb!.width / 2 + 48, hb!.y + hb!.height / 2 + 36, { steps: 8 });
+    await page.mouse.up();
+    const grown = await stamp.boundingBox();
+    expect(grown!.width).toBeGreaterThan(sized!.width + 12);
+
     // One toolbar edits the PDF itself.
     await expect(frame.locator('#editorFreeTextButton')).toBeEnabled({ timeout: 20000 });
     await page.locator('[data-doc-print-viewer-tool="text"]').click();

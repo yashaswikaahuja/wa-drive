@@ -338,6 +338,27 @@ export async function pagesToPdfBlob(pages: DocPage[], paper: DocPaperDef): Prom
   return new Blob([blob], { type: 'application/pdf' });
 }
 
+/** Empty sheets at the paper size. Photos are stamped on top so they can move. */
+export async function blankSheetsPdfBlob(count: number, paper: DocPaperDef): Promise<Blob> {
+  const n = Math.max(1, count);
+  const format: [number, number] = [paper.wMm, paper.hMm];
+  const pdf = new jsPDF({
+    orientation: paper.orient,
+    unit: 'mm',
+    format,
+    compress: true,
+  });
+  const pw = pdf.internal.pageSize.getWidth();
+  const ph = pdf.internal.pageSize.getHeight();
+  if (Math.abs(pw - paper.wMm) > 0.6 || Math.abs(ph - paper.hMm) > 0.6) {
+    throw new Error(
+      `PDF page size mismatch: got ${pw.toFixed(1)}×${ph.toFixed(1)} mm, expected ${paper.wMm}×${paper.hMm} mm`,
+    );
+  }
+  for (let i = 1; i < n; i++) pdf.addPage(format, paper.orient);
+  return new Blob([pdf.output('blob')], { type: 'application/pdf' });
+}
+
 /** Parse first MediaBox from a PDF blob (points). 1 pt = 1/72 in. */
 export async function readPdfMediaBoxPts(blob: Blob): Promise<{ w: number; h: number } | null> {
   const text = await blob.text();

@@ -9,10 +9,20 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 
 export type PdfEditorMode = 'none' | 'text' | 'draw' | 'highlight' | 'image';
 
+export type StampPlace = {
+  /** 1-based page number. */
+  page?: number;
+  /** Top-left and size, as fractions of the page (0–1). */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 export type MozillaPdfHandle = {
   setEditorMode: (mode: PdfEditorMode) => void;
-  /** Place a Drive/local image on the current PDF page. */
-  stampFile: (file: File) => void;
+  /** Place an image on the PDF. With `place`, it is sized and can be dragged. */
+  stampFile: (file: File, place?: StampPlace) => Promise<void>;
   /** Annotated PDF bytes currently shown in the viewer. */
   exportPdf: () => Promise<Blob>;
 };
@@ -28,6 +38,8 @@ export type MozillaPdfEmbedProps = {
   onNextFile?: () => void;
   /** Operator asked for a File Manager image from inside the viewer. */
   onPickDriveImage?: () => void;
+  /** The PDF is open and the editor can take an image. */
+  onReady?: () => void;
 };
 
 const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(function MozillaPdfEmbed({
@@ -39,6 +51,7 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
   onPrevFile,
   onNextFile,
   onPickDriveImage,
+  onReady,
 }, ref) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,16 +60,22 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
   const onPrevRef = useRef(onPrevFile);
   const onNextRef = useRef(onNextFile);
   const onPickRef = useRef(onPickDriveImage);
+  const onReadyRef = useRef(onReady);
   onBackRef.current = onBack;
   onDeleteRef.current = onDelete;
   onPrevRef.current = onPrevFile;
   onNextRef.current = onNextFile;
   onPickRef.current = onPickDriveImage;
+  onReadyRef.current = onReady;
 
   const pendingExport = useRef(
     new Map<string, { resolve: (blob: Blob) => void; reject: (err: Error) => void }>(),
   );
+  const pendingStamp = useRef(
+    new Map<string, { resolve: () => void; reject: (err: Error) => void }>(),
+  );
   const exportSeq = useRef(0);
+  const stampSeq = useRef(0);
 
   const postToViewer = (msg: Record<string, unknown>) => {
     iframeRef.current?.contentWindow?.postMessage(msg, window.location.origin);
@@ -66,8 +85,34 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
     setEditorMode(modeName) {
       postToViewer({ type: 'cyber-editor-mode', mode: modeName });
     },
-    stampFile(file) {
-      postToViewer({ type: 'cyber-stamp-file', file });
+    stampFile(file, place) {
+      const p = new Promise<void>((resolve, reject) => {
+        const win = iframeRef.current?.contentWindow;
+        if (!win) {
+          reject(new Error('PDF viewer is not open'));
+          return;
+        }
+        const id = `stamp-${++stampSeq.current}`;
+        const timer = window.setTimeout(() => {
+          if (!pendingStamp.current.has(id)) return;
+          pendingStamp.current.delete(id);
+          reject(new Error('Image was not placed'));
+        }, 15000);
+        pendingStamp.current.set(id, {
+          resolve: () => {
+            window.clearTimeout(timer);
+            resolve();
+          },
+          reject: (err) => {
+            window.clearTimeout(timer);
+            reject(err);
+          },
+        });
+        win.postMessage({ type: 'cyber-stamp-file', id, file, place: place ?? null }, window.location.origin);
+      });
+      // Callers that do not await still get a handled rejection.
+      p.catch(() => {});
+      return p;
     },
     exportPdf() {
       return new Promise((resolve, reject) => {
@@ -137,6 +182,18 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         onNextRef.current?.();
       } else if (type === 'cyber-pick-drive-image') {
         onPickRef.current?.();
+      } else if (type === 'cyber-pdf-opened') {
+        onReadyRef.current?.();
+      } else if (type === 'cyber-stamp-placed') {
+        const pending = pendingStamp.current.get(e.data?.id);
+        if (!pending) return;
+        pendingStamp.current.delete(e.data.id);
+        pending.resolve();
+      } else if (type === 'cyber-stamp-error') {
+        const pending = pendingStamp.current.get(e.data?.id);
+        if (!pending) return;
+        pendingStamp.current.delete(e.data.id);
+        pending.reject(new Error(e.data?.message || 'Could not place the image'));
       } else if (type === 'cyber-pdf-bytes') {
         const pending = pendingExport.current.get(e.data?.id);
         if (!pending || !e.data?.data) return;
@@ -168,6 +225,8 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
       iframe.removeEventListener('load', onLoad);
       pendingExport.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
       pendingExport.current.clear();
+      pendingStamp.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
+      pendingStamp.current.clear();
     };
   }, [fileUrl]);
 

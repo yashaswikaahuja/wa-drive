@@ -94,28 +94,80 @@
     }
   }
 
-  async function placeImageFile(raw) {
+  function newestStamp(layer, ui) {
+    const nodes = layer.div?.querySelectorAll(".stampEditor");
+    const el = nodes && nodes.length ? nodes[nodes.length - 1] : null;
+    if (!el || !ui?.getEditor) return null;
+    return ui.getEditor(el.id);
+  }
+
+  async function layoutStamp(editor, place) {
+    const w = Math.min(0.98, Math.max(0.05, Number(place.w) || 0.5));
+    const h = Math.min(0.98, Math.max(0.05, Number(place.h) || 0.5));
+    let x = Math.min(0.95, Math.max(0, Number(place.x) || 0));
+    let y = Math.min(0.95, Math.max(0, Number(place.y) || 0));
+    if (x + w > 1) x = Math.max(0, 1 - w);
+    if (y + h > 1) y = Math.max(0, 1 - h);
+    const apply = () => {
+      if (editor._initialOptions) editor._initialOptions.isCentered = false;
+      editor.width = w;
+      editor.height = h;
+      editor.x = x;
+      editor.y = y;
+      if (!editor.div) return false;
+      const canvas = editor.div.querySelector("canvas");
+      if (!canvas) return false;
+      const [parentWidth, parentHeight] = editor.parentDimensions;
+      editor.setDims(parentWidth * w, parentHeight * h);
+      editor.fixAndSetPosition();
+      return true;
+    };
+    // Size must be set before the bitmap finishes, and again after the canvas exists.
+    apply();
+    for (let i = 0; i < 50; i++) {
+      if (apply()) return;
+      await sleep(40);
+    }
+    throw new Error("Image did not appear");
+  }
+
+  async function placeImageFile(raw, place) {
     const file = asImageFile(raw);
     if (!file) throw new Error("No image");
     if (file.type && !file.type.startsWith("image/")) throw new Error("Choose a photo (JPG or PNG)");
     const app = await editorApp();
     const viewer = app?.pdfViewer;
     if (!viewer) throw new Error("PDF editor is not ready");
+    const pageNumber = Number(place?.page) || 0;
+    if (pageNumber) app.page = pageNumber;
     let layer = null;
+    let ui = null;
     for (let i = 0; i < 80; i++) {
-      const ui = viewer._layerProperties?.annotationEditorUIManager;
-      const page = (viewer.currentPageNumber || 1) - 1;
-      layer = ui?.getLayer(page) || ui?.currentLayer || null;
-      if (layer?.pasteEditor) {
-        ui.setPreference("enableNewAltTextWhenAddingImage", false);
-        await layer.pasteEditor({ mode: EDITOR_MODES.image }, { bitmapFile: file });
-        revealEditorButtons();
-        post("cyber-stamp-placed");
-        return;
-      }
+      ui = viewer._layerProperties?.annotationEditorUIManager;
+      const page = (pageNumber || viewer.currentPageNumber || 1) - 1;
+      layer = ui?.getLayer(page) || (!pageNumber ? ui?.currentLayer : null) || null;
+      if (layer?.pasteEditor && viewer.annotationEditorMode !== -1) break;
+      layer = null;
       await sleep(50);
     }
-    throw new Error("Page is not ready for an image");
+    if (!layer) throw new Error("Page is not ready for an image");
+    ui.setPreference("enableNewAltTextWhenAddingImage", false);
+    await layer.pasteEditor(
+      { mode: EDITOR_MODES.image },
+      { bitmapFile: file, isCentered: !place },
+    );
+    revealEditorButtons();
+    if (place && Number.isFinite(Number(place.w)) && Number.isFinite(Number(place.h))) {
+      const editor = newestStamp(layer, ui);
+      if (!editor) throw new Error("Image was not added");
+      await layoutStamp(editor, place);
+      // Back to Select after the stamp exists, so the next click shows resize handles.
+      try {
+        viewer.annotationEditorMode = { mode: EDITOR_MODES.none };
+      } catch {}
+      for (let i = 0; i < 40 && ui.getMode() !== EDITOR_MODES.none; i++) await sleep(25);
+      if (editor.div) editor.div.dataset.cyberPlaced = "1";
+    }
   }
 
   async function exportPdf(id) {
@@ -363,9 +415,12 @@
     }
     if (e.data.type === "cyber-stamp-file") {
       try {
-        await placeImageFile(e.data.file);
+        await placeImageFile(e.data.file, e.data.place || null);
+        post("cyber-stamp-placed", e.data.id ? { id: e.data.id } : undefined);
       } catch (err) {
-        post("cyber-pdf-error", { message: String(err.message || err) });
+        const message = String(err.message || err);
+        if (e.data.id) parent.postMessage({ type: "cyber-stamp-error", id: e.data.id, message }, ORIGIN);
+        else post("cyber-pdf-error", { message });
       }
       return;
     }
@@ -400,6 +455,7 @@
       try {
         app.pdfSidebar?.switchView(1, true);
       } catch {}
+      post("cyber-pdf-opened");
     } catch (err) {
       console.error("cyber-open-pdf failed", err);
       post("cyber-pdf-error", { message: String(err) });

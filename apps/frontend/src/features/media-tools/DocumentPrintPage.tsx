@@ -27,7 +27,9 @@ import DrivePicker from '../photo-tool/DrivePicker';
 import {
   DOC_PAPERS,
   blankPage,
+  blankSheetsPdfBlob,
   cellInMargin,
+  type DocCell,
   type DocMark,
   type DocPage,
   type DocPaperId,
@@ -53,6 +55,33 @@ async function loadDriveBlob(fileId: string): Promise<Blob> {
 function isPdfBlob(blob: Blob, head: Uint8Array): boolean {
   const sig = String.fromCharCode(head[0] || 0, head[1] || 0, head[2] || 0, head[3] || 0, head[4] || 0);
   return blob.type.includes('pdf') || sig === '%PDF-';
+}
+
+function canvasFile(canvas: HTMLCanvasElement): Promise<File> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Could not read the photo'));
+        return;
+      }
+      resolve(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
+    }, 'image/jpeg', 0.92);
+  });
+}
+
+/** Visible photo rectangle inside the cell. Cover fills the cell; contain letterboxes. */
+function photoRect(cell: DocCell): { x: number; y: number; w: number; h: number } {
+  if ((cell.fitMode || 'contain') === 'cover') {
+    return { x: cell.x, y: cell.y, w: cell.w, h: cell.h };
+  }
+  const sa = cell.canvas.width / Math.max(1, cell.canvas.height);
+  const da = cell.w / Math.max(1, cell.h);
+  if (sa > da) {
+    const h = cell.w / sa;
+    return { x: cell.x, y: cell.y + (cell.h - h) / 2, w: cell.w, h };
+  }
+  const w = cell.h * sa;
+  return { x: cell.x + (cell.w - w) / 2, y: cell.y, w, h: cell.h };
 }
 
 function whiteoutFile(): Promise<File> {
@@ -109,6 +138,12 @@ export default function DocumentPrintPage() {
   const originalUrlRef = useRef('');
   const layoutKeyRef = useRef('');
   const pdfRef = useRef<MozillaPdfHandle>(null);
+  const pagesRef = useRef(pages);
+  const paperRef = useRef(paper);
+  const stampOnOpenRef = useRef(false);
+  const placedForUrl = useRef('');
+  pagesRef.current = pages;
+  paperRef.current = paper;
   const touchSheet = () => setSheetRev((n) => n + 1);
 
   useEffect(() => {
@@ -235,13 +270,18 @@ export default function DocumentPrintPage() {
   // Any sheet change rebuilds the print PDF. Same sheet keeps the open PDF.
   useEffect(() => {
     if (!pages.length) return;
-    if (originalPdfUrl && sheetRev === 0) return;
+    if (originalPdfUrl && sheetRev === 0) {
+      stampOnOpenRef.current = false;
+      return;
+    }
     const key = `${paper.wMm}x${paper.hMm}@${sheetRev}`;
     if (layoutKeyRef.current === key) return;
+    // The sheet is blank. The photo is a stamp so Select can move and resize it.
+    stampOnOpenRef.current = pages.some((p) => p.cells.length > 0);
     let cancelled = false;
     (async () => {
       try {
-        const blob = await pagesToPdfBlob(pages, paper);
+        const blob = await blankSheetsPdfBlob(pages.length, paper);
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
         if (cancelled) {
@@ -264,6 +304,34 @@ export default function DocumentPrintPage() {
   }, [sheetRev, pages, paper, originalPdfUrl]);
 
   const viewerUrl = originalPdfUrl && sheetRev === 0 ? originalPdfUrl : layoutPdfUrl;
+  const viewerUrlRef = useRef(viewerUrl);
+  viewerUrlRef.current = viewerUrl;
+
+  const placeParentImages = async () => {
+    const url = viewerUrlRef.current;
+    if (!url || !stampOnOpenRef.current || placedForUrl.current === url) return;
+    placedForUrl.current = url;
+    const list = pagesRef.current;
+    const sheet = paperRef.current;
+    try {
+      for (let i = 0; i < list.length; i++) {
+        for (const cell of list[i].cells) {
+          const rect = photoRect(cell);
+          const file = await canvasFile(cell.canvas);
+          await pdfRef.current?.stampFile(file, {
+            page: i + 1,
+            x: rect.x / sheet.w,
+            y: rect.y / sheet.h,
+            w: rect.w / sheet.w,
+            h: rect.h / sheet.h,
+          });
+        }
+      }
+    } catch (e: any) {
+      placedForUrl.current = '';
+      toast.error(e?.message || 'Could not place the photo');
+    }
+  };
 
   useEffect(() => {
     if (originalPdfUrl && sheetRev === 0) setOpenSheet(`${paper.wMm}x${paper.hMm}`);
@@ -506,6 +574,7 @@ export default function DocumentPrintPage() {
             fileUrl={viewerUrl}
             mode="editor"
             onPickDriveImage={() => setDriveOpen(true)}
+            onReady={() => { void placeParentImages(); }}
           />
         ) : (
           <div className="h-full flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]">

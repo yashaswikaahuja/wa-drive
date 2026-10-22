@@ -82,6 +82,11 @@ html.cyber-editor #editorModeSeparator {
   display: none !important;
 }
 
+/* Select turns the editor layer off. The photo, text, and drawing still need clicks. */
+html.cyber-editor .annotationEditorLayer.disabled :is(.freeTextEditor, .inkEditor, .stampEditor, .signatureEditor) {
+  pointer-events: auto;
+}
+
 html.cyber-editor #cyberStampFromFiles {
   width: auto !important;
   padding-inline: 8px !important;
