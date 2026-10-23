@@ -1,5 +1,6 @@
 export * from './extraction.js';
 export * from './deriveProfile.js';
 export * from './doc-extract-maps.js';
+export * from './pageCorners.js';
 export * from './services/processor/faceDetect.js';
 export * from './services/processor/layout.js';

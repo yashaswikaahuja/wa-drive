@@ -292,4 +292,23 @@ router.post('/extract', async (req: any, res: Response) => {
   }
 });
 
+// POST /api/process/page-corners — AI finds the paper in a photo for auto-crop (#346).
+// Body: { fileId } JSON, or multipart `file`. Optional `model` (whitelisted) for A/B tests.
+router.post('/page-corners', upload.single('file'), async (req: any, res: Response) => {
+  const fileId = String(req.body?.fileId || '');
+  const model = req.body?.model ? String(req.body.model) : undefined;
+  if (!req.file && !fileId) { res.status(400).json({ error: 'fileId or file required' }); return; }
+  try {
+    const buffer: Buffer = req.file ? req.file.buffer : await downloadDriveFile(fileId, req);
+    // PDFs are already flat pages; nothing to crop.
+    if (buffer.slice(0, 4).toString('latin1') === '%PDF') { res.json({ ok: true, document: false, reason: 'pdf' }); return; }
+    const { detectPageCorners } = await import('@cybercontrol/backend-documents');
+    const result = await detectPageCorners(buffer, { model });
+    res.json({ ok: true, ...result });
+  } catch (e: any) {
+    console.error('[Process] page-corners error:', e?.message);
+    res.status(502).json({ error: e?.message ?? 'Corner detection failed' });
+  }
+});
+
 export default router;
