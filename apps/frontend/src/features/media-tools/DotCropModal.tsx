@@ -3,6 +3,7 @@
  * a corner is dragged, then the page is straightened.
  */
 import { useEffect, useRef, useState } from 'react';
+import { detectDocumentQuad } from './docEdgeDetect';
 
 type Point = { x: number; y: number };
 type Drag =
@@ -206,6 +207,8 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
   const [pts, setPts] = useState<Point[]>(insetQuad({ w: 320, h: 240 }));
   const [imgUrl, setImgUrl] = useState('');
   const [loupe, setLoupe] = useState(false);
+  /** True when the corners came from edge detection, not the default box. */
+  const [autoFound, setAutoFound] = useState(false);
   const drag = useRef<Drag | null>(null);
   const stageRef = useRef(stage);
   const ptsRef = useRef(pts);
@@ -215,17 +218,23 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
   ptsRef.current = pts;
   bitmapRef.current = bitmap;
 
-  const place = (bmp: HTMLCanvasElement, quad: 'inset' | 'full') => {
+  const place = (bmp: HTMLCanvasElement, quad: 'auto' | 'inset' | 'full') => {
     const next = fitStage(bmp);
     setBitmap(bmp);
     setStage(next);
-    setPts(quad === 'full' ? fullQuad(next) : insetQuad(next));
+    let found: Point[] | null = null;
+    if (quad === 'auto') {
+      const q = detectDocumentQuad(bmp);
+      if (q) found = q.map((p) => ({ x: p.x * next.w, y: p.y * next.h }));
+    }
+    setAutoFound(!!found);
+    setPts(found || (quad === 'full' ? fullQuad(next) : insetQuad(next)));
     setImgUrl(bmp.toDataURL('image/jpeg', 0.92));
   };
 
   useEffect(() => {
     if (!open || !source) return;
-    place(cloneCanvas(source), 'inset');
+    place(cloneCanvas(source), 'auto');
     setLoupe(false);
     // source identity is the photo handed to this open
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -335,7 +344,11 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
       >
         <div>
           <p className="text-sm font-semibold text-white">Crop the page</p>
-          <p className="text-[11px] text-white/70">Drag each corner onto the page. The magnifier follows the corner.</p>
+          <p className="text-[11px] text-white/70" data-crop-auto={autoFound ? 'found' : 'none'}>
+            {autoFound
+              ? 'Page edges found automatically. Drag a corner to adjust.'
+              : 'Drag each corner onto the page. The magnifier follows the corner.'}
+          </p>
         </div>
         <div className="flex justify-center">
           <div className="relative" style={{ width: stage.w, height: stage.h }}>
@@ -413,6 +426,15 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
           <button
             type="button"
             className="btn-secondary"
+            data-crop-detect="1"
+            onClick={() => bitmap && place(bitmap, 'auto')}
+            title="Find the page edges again"
+          >
+            Auto
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
             data-crop-full="1"
             onClick={() => bitmap && place(bitmap, 'full')}
           >
@@ -422,7 +444,7 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
             type="button"
             className="btn-secondary"
             data-crop-rotate="1"
-            onClick={() => bitmap && place(rotateCanvas(bitmap), 'inset')}
+            onClick={() => bitmap && place(rotateCanvas(bitmap), 'auto')}
           >
             Rotate
           </button>

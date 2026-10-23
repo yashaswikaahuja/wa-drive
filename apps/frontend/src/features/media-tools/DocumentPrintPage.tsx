@@ -44,6 +44,7 @@ import {
 } from './documentPrintLayout';
 import { pdfBytesToPages } from './pdfPaper';
 import { DOC_SCAN_FILTERS, applyDocFilter, type DocScanFilter } from './docScanFilters';
+import { detectDocumentQuad, warpQuad } from './docEdgeDetect';
 
 const MARGIN_MM = 10;
 
@@ -177,6 +178,7 @@ export default function DocumentPrintPage() {
         const ids = [fileId, ...extraIds.filter((id) => id !== fileId)];
         const built: DocPage[] = [];
         let firstPdfUrl = '';
+        let autoCropped = 0;
         for (let i = 0; i < ids.length; i++) {
           try {
             const blob = await loadDriveBlob(ids[i]);
@@ -195,7 +197,18 @@ export default function DocumentPrintPage() {
               }
             } else {
               const img = await loadImageFromFile(blob);
-              built.push(fitImageOnPage(imageToCanvas(img), p, MARGIN_MM, i === 0 ? name || undefined : undefined));
+              const photo = imageToCanvas(img);
+              // #346: find the page and straighten it, so the operator does not crop by hand.
+              const quad = detectDocumentQuad(photo);
+              const page = fitImageOnPage(
+                quad ? warpQuad(photo, quad) : photo,
+                p,
+                MARGIN_MM,
+                i === 0 ? name || undefined : undefined,
+              );
+              if (quad && page.cells[0]) page.cells[0].rawCanvas = photo;
+              if (quad) autoCropped++;
+              built.push(page);
             }
           } catch {
             /* skip missing */
@@ -219,6 +232,7 @@ export default function DocumentPrintPage() {
         })));
         setSheetRev(0);
         layoutKeyRef.current = '';
+        if (autoCropped) toast.success('Page edges found and straightened · Crop to adjust');
         if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
         originalUrlRef.current = firstPdfUrl;
         setOriginalPdfUrl(firstPdfUrl);
@@ -464,7 +478,7 @@ export default function DocumentPrintPage() {
       const cell = list[i].cells[0];
       if (!cell) continue;
       cropIntent.current = { kind: 'parent', pageIndex: i, cellId: cell.id };
-      setCropSource(cell.baseCanvas || cell.canvas);
+      setCropSource(cell.rawCanvas || cell.baseCanvas || cell.canvas);
       setCropOpen(true);
       return;
     }
