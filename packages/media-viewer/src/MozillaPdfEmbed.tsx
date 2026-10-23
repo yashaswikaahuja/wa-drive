@@ -25,6 +25,10 @@ export type MozillaPdfHandle = {
   stampFile: (file: File, place?: StampPlace) => Promise<void>;
   /** Annotated PDF bytes currently shown in the viewer. */
   exportPdf: () => Promise<Blob>;
+  /** 1-based page the operator is looking at. */
+  currentPage: () => Promise<number>;
+  /** Show a 1-based page. */
+  goToPage: (page: number) => void;
 };
 
 export type MozillaPdfEmbedProps = {
@@ -74,8 +78,12 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
   const pendingStamp = useRef(
     new Map<string, { resolve: () => void; reject: (err: Error) => void }>(),
   );
+  const pendingPage = useRef(
+    new Map<string, { resolve: (page: number) => void; reject: (err: Error) => void }>(),
+  );
   const exportSeq = useRef(0);
   const stampSeq = useRef(0);
+  const pageSeq = useRef(0);
 
   const postToViewer = (msg: Record<string, unknown>) => {
     iframeRef.current?.contentWindow?.postMessage(msg, window.location.origin);
@@ -139,6 +147,35 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         });
         win.postMessage({ type: 'cyber-export-pdf', id }, window.location.origin);
       });
+    },
+    currentPage() {
+      return new Promise((resolve, reject) => {
+        const win = iframeRef.current?.contentWindow;
+        if (!win) {
+          reject(new Error('PDF viewer is not open'));
+          return;
+        }
+        const id = `page-${++pageSeq.current}`;
+        const timer = window.setTimeout(() => {
+          if (!pendingPage.current.has(id)) return;
+          pendingPage.current.delete(id);
+          reject(new Error('PDF viewer did not answer'));
+        }, 4000);
+        pendingPage.current.set(id, {
+          resolve: (page) => {
+            window.clearTimeout(timer);
+            resolve(page);
+          },
+          reject: (err) => {
+            window.clearTimeout(timer);
+            reject(err);
+          },
+        });
+        win.postMessage({ type: 'cyber-current-page', id }, window.location.origin);
+      });
+    },
+    goToPage(page) {
+      postToViewer({ type: 'cyber-go-page', page });
     },
   }), []);
 
@@ -204,6 +241,16 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         if (!pending) return;
         pendingExport.current.delete(e.data.id);
         pending.reject(new Error(e.data?.message || 'Could not save the PDF'));
+      } else if (type === 'cyber-page-number') {
+        const pending = pendingPage.current.get(e.data?.id);
+        if (!pending) return;
+        pendingPage.current.delete(e.data.id);
+        pending.resolve(Number(e.data?.page) || 1);
+      } else if (type === 'cyber-page-number-error') {
+        const pending = pendingPage.current.get(e.data?.id);
+        if (!pending) return;
+        pendingPage.current.delete(e.data.id);
+        pending.reject(new Error(e.data?.message || 'Could not read the page'));
       } else if (type === 'cyber-pdf-error') {
         setError(e.data?.message || 'PDF viewer error');
       }
@@ -227,6 +274,8 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
       pendingExport.current.clear();
       pendingStamp.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
       pendingStamp.current.clear();
+      pendingPage.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
+      pendingPage.current.clear();
     };
   }, [fileUrl]);
 

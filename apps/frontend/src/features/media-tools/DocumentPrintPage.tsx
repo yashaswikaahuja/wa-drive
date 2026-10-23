@@ -156,6 +156,8 @@ export default function DocumentPrintPage() {
   const cropIntent = useRef<
     { kind: 'stamp' } | { kind: 'parent'; pageIndex: number; cellId: string }
   >({ kind: 'stamp' });
+  /** After a crop rebuild, reopen the page the operator was on. */
+  const resumePage = useRef(0);
   const filterRef = useRef<DocScanFilter>('auto');
   filterRef.current = docFilter;
   pagesRef.current = pages;
@@ -367,6 +369,9 @@ export default function DocumentPrintPage() {
           });
         }
       }
+      const resume = resumePage.current;
+      resumePage.current = 0;
+      if (resume > 1) pdfRef.current?.goToPage(resume);
     } catch (e: any) {
       placedForUrl.current = '';
       toast.error(e?.message || 'Could not place the photo');
@@ -472,17 +477,27 @@ export default function DocumentPrintPage() {
     }
   };
 
-  const openParentCrop = () => {
+  const openParentCrop = async () => {
     const list = pagesRef.current;
-    for (let i = 0; i < list.length; i++) {
-      const cell = list[i].cells[0];
-      if (!cell) continue;
-      cropIntent.current = { kind: 'parent', pageIndex: i, cellId: cell.id };
-      setCropSource(cell.rawCanvas || cell.baseCanvas || cell.canvas);
-      setCropOpen(true);
+    let pageNumber = 1;
+    try {
+      pageNumber = (await pdfRef.current?.currentPage()) || 1;
+    } catch {
+      const withPhoto = list.filter((p) => p.cells.length > 0).length;
+      if (withPhoto > 1) {
+        toast.error('Could not read the open page');
+        return;
+      }
+    }
+    const index = Math.min(Math.max(0, pageNumber - 1), Math.max(0, list.length - 1));
+    const cell = list[index]?.cells[0];
+    if (!cell) {
+      toast.error('This page has no photo to crop');
       return;
     }
-    imageInputRef.current?.click();
+    cropIntent.current = { kind: 'parent', pageIndex: index, cellId: cell.id };
+    setCropSource(cell.rawCanvas || cell.baseCanvas || cell.canvas);
+    setCropOpen(true);
   };
 
   const applyCrop = async (framed: HTMLCanvasElement) => {
@@ -503,6 +518,7 @@ export default function DocumentPrintPage() {
         }),
       );
       layoutKeyRef.current = '';
+      resumePage.current = intent.pageIndex + 1;
       touchSheet();
       toast.success('Photo cropped');
       return;
@@ -659,7 +675,7 @@ export default function DocumentPrintPage() {
           <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'image')} onClick={() => imageInputRef.current?.click()} data-doc-print-tool="image" data-doc-print-viewer-tool="image" title="Add an image from this computer">
             <ImageIcon size={18} /> Image
           </button>
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(cropOpen)} onClick={openParentCrop} data-doc-print-tool="crop" data-doc-print-viewer-tool="crop" title="Crop the photo">
+          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(cropOpen)} onClick={() => { void openParentCrop(); }} data-doc-print-tool="crop" data-doc-print-viewer-tool="crop" title="Crop the photo on this page">
             <Crop size={18} /> Crop
           </button>
           <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" onClick={() => setDriveOpen(true)} data-doc-print-tool="files" data-doc-print-viewer-tool="files" title="Choose an image from File Manager">

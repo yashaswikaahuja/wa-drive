@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'fs';
+import { crc32, deflateSync } from 'node:zlib';
 
 /**
  * Operator walkthrough: JPEG → paper layout → PDF at exact page size.
@@ -24,6 +25,39 @@ const AUTH = {
 };
 
 const PNG = readFileSync('C:/Users/yasha/AppData/Local/Temp/doc-print-fixture.png');
+
+function pngChunk(type: string, data: Buffer) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type), data]);
+  const sum = Buffer.alloc(4);
+  sum.writeUInt32BE(crc32(body) >>> 0);
+  return Buffer.concat([len, body, sum]);
+}
+
+/** 8×8 solid RGB PNG, so a crop can be told apart from another page. */
+function solidPng(r: number, g: number, b: number) {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(8, 0);
+  ihdr.writeUInt32BE(8, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  const raw = Buffer.alloc(8 * 25);
+  for (let y = 0; y < 8; y++) {
+    const o = y * 25;
+    for (let x = 0; x < 8; x++) {
+      raw[o + 1 + x * 3] = r;
+      raw[o + 2 + x * 3] = g;
+      raw[o + 3 + x * 3] = b;
+    }
+  }
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
 
 test.describe('Document print layout (operator)', () => {
   test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
@@ -260,6 +294,91 @@ test.describe('Document print layout (operator)', () => {
 
     await page.locator('[data-doc-print-blank="1"]').click();
     await expect(frame.locator('#numPages')).toContainText('2', { timeout: 30000 });
+  });
+
+  test('crop uses the open page, not the first photo', async ({ page }) => {
+    test.setTimeout(90_000);
+    const red = solidPng(220, 20, 20);
+    const blue = solidPng(20, 20, 220);
+    await page.route('**/drive/download/**', async (route) => {
+      const url = route.request().url();
+      const body = url.includes('drv-page2') ? blue : red;
+      await route.fulfill({ status: 200, contentType: 'image/png', body });
+    });
+    await page.goto(
+      '/app/photos/doc-print?fileId=drv-page1&fileIds=drv-page2&paper=a4&from=/app/whatsapp&name=Shubham',
+      { waitUntil: 'domcontentloaded' },
+    );
+    const later = page.getByRole('button', { name: /^Later$/i });
+    if (await later.isVisible().catch(() => false)) await later.click();
+
+    const frame = page.frameLocator('iframe[title="PDF document"]');
+    await expect(frame.locator('#numPages')).toContainText('2', { timeout: 30000 });
+    // Placing a photo switches the viewer onto that page. Wait until both are down.
+    const pageStamp = (n: number) =>
+      frame.locator(`.page[data-page-number="${n}"] .stampEditor[data-cyber-placed="1"]`);
+    await expect(pageStamp(2)).toBeVisible({ timeout: 30000 });
+
+    const show = async (n: number) => {
+      await expect.poll(async () => {
+        const pdf = page.frames().find((f) => f.url().includes('viewer.html'));
+        if (!pdf) return 0;
+        return pdf.evaluate((target) => {
+          const app = (window as unknown as {
+            PDFViewerApplication?: {
+              pagesCount?: number;
+              page: number;
+              pdfViewer?: { currentPageNumber?: number };
+            };
+          }).PDFViewerApplication;
+          if (!app?.pdfViewer || (app.pagesCount || 0) < target) return 0;
+          app.page = target;
+          return app.pdfViewer.currentPageNumber || 0;
+        }, n);
+      }, { timeout: 15000 }).toBe(n);
+    };
+
+    const sampleCrop = async () => {
+      const cropImg = page.locator('[data-image-crop="1"] img');
+      await expect(cropImg).toBeVisible({ timeout: 10000 });
+      return cropImg.evaluate(async (img: HTMLImageElement) => {
+        if (!img.complete) await img.decode();
+        const c = document.createElement('canvas');
+        c.width = 4;
+        c.height = 4;
+        const g = c.getContext('2d');
+        if (!g) return null;
+        g.drawImage(img, 0, 0, 4, 4);
+        const d = g.getImageData(2, 2, 1, 1).data;
+        return [d[0], d[1], d[2]];
+      });
+    };
+
+    await show(1);
+    await page.locator('[data-doc-print-viewer-tool="crop"]').click();
+    const onFirst = await sampleCrop();
+    expect(onFirst?.[0], `page 1 rgb ${onFirst}`).toBeGreaterThan(180);
+    expect(onFirst?.[2], `page 1 rgb ${onFirst}`).toBeLessThan(80);
+    await page.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('[data-image-crop="1"]')).toHaveCount(0);
+
+    await show(2);
+    await page.locator('[data-doc-print-viewer-tool="crop"]').click();
+    const onSecond = await sampleCrop();
+    expect(onSecond?.[2], `page 2 rgb ${onSecond}`).toBeGreaterThan(180);
+    expect(onSecond?.[0], `page 2 rgb ${onSecond}`).toBeLessThan(80);
+
+    await page.locator('[data-crop-apply="1"]').click();
+    await expect(page.locator('[data-image-crop="1"]')).toHaveCount(0);
+    await expect(pageStamp(2)).toBeVisible({ timeout: 30000 });
+
+    await page.locator('[data-doc-print-blank="1"]').click();
+    await expect(frame.locator('#numPages')).toContainText('3', { timeout: 30000 });
+    await expect(pageStamp(2)).toBeVisible({ timeout: 30000 });
+    await show(3);
+    await page.locator('[data-doc-print-viewer-tool="crop"]').click();
+    await expect(page.getByText('This page has no photo to crop')).toBeVisible({ timeout: 8000 });
+    await expect(page.locator('[data-image-crop="1"]')).toHaveCount(0);
   });
 
   test('PDF viewer accepts text and a File Manager image, print stays A4', async ({ page }) => {

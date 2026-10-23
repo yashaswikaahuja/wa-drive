@@ -405,6 +405,19 @@
       } catch {}
       return;
     }
+    if (e.data.type === "cyber-current-page") {
+      try {
+        const app = await appReady();
+        const page = Number(app?.pdfViewer?.currentPageNumber || app?.page || 1);
+        parent.postMessage({ type: "cyber-page-number", id: e.data.id, page }, ORIGIN);
+      } catch (err) {
+        parent.postMessage(
+          { type: "cyber-page-number-error", id: e.data.id, message: String(err.message || err) },
+          ORIGIN,
+        );
+      }
+      return;
+    }
     if (e.data.type === "cyber-editor-mode") {
       try {
         await setEditorMode(e.data.mode);
