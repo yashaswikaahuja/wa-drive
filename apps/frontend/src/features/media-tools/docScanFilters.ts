@@ -524,10 +524,18 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   const nPix = w * h;
   const tone = new Float32Array(nPix);
   const spread = new Float32Array(nPix);
+  const chan: [Float32Array, Float32Array, Float32Array] = [
+    new Float32Array(nPix),
+    new Float32Array(nPix),
+    new Float32Array(nPix),
+  ];
   for (let i = 0, p = 0; i < nPix; i++, p += 4) {
     const r = d[p];
     const g = d[p + 1];
     const b = d[p + 2];
+    chan[0][i] = r;
+    chan[1][i] = g;
+    chan[2][i] = b;
     tone[i] = luma(r, g, b);
     spread[i] = Math.max(r, g, b) - Math.min(r, g, b);
   }
@@ -537,9 +545,17 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   extendSheet(tone, spread, std, w, h, box);
   shrinkMargins(tone, spread, std, w, h, box);
   const photo = photoMask(tone, spread, std, w, h, box);
-  const sheet = paperIllumination(tone, w, h, box, photo);
+  // Per-channel slow paper color. Correcting each of R/G/B against its own
+  // field removes the paper's color cast (a cool-gray sheet lands on neutral
+  // white), not only its brightness. High-chroma ink is left out of the
+  // estimate so it cannot tint the paper and halo the print beside it.
+  const paper: [Float32Array, Float32Array, Float32Array] = [
+    paperIllumination(chan[0], spread, w, h, box, photo),
+    paperIllumination(chan[1], spread, w, h, box, photo),
+    paperIllumination(chan[2], spread, w, h, box, photo),
+  ];
   const mode: CleanMode = filter === 'gray' ? 'gray' : filter === 'light' ? 'light' : filter === 'whiteboard' ? 'whiteboard' : 'auto';
-  cleanSheet(d, w, mode, box, tone, spread, sheet, photo);
+  cleanSheet(d, w, mode, box, tone, paper, photo);
   ctx.putImageData(img, 0, 0);
   return out;
 }
@@ -558,25 +574,45 @@ function localStd(src: Float32Array, w: number, h: number, radius: number) {
 }
 
 /**
- * Slow paper illumination. Closing removes strokes thinner than the kernel,
- * then a short blur keeps the field smooth. Outside the page, and inside the
- * portrait, the field is the paper mode so a darker desk cannot leak in.
+ * Slow paper color for one channel. Closing removes strokes thinner than the
+ * kernel, then a short blur keeps the field smooth. Outside the page, inside
+ * the portrait, and over high-chroma ink the seed is the paper's own channel
+ * mode, so a darker desk or a colored stamp cannot pull the paper estimate
+ * toward it and halo the print beside it.
  */
 function paperIllumination(
-  tone: Float32Array,
+  ch: Float32Array,
+  spread: Float32Array,
   w: number,
   h: number,
   box: PageBox,
   photo: Uint8Array,
 ) {
-  const field = new Float32Array(tone.length);
-  const mode = box.mode;
+  const field = new Float32Array(ch.length);
+  // Channel value of the paper itself: the mode of smooth, low-chroma page
+  // pixels in this channel. Used as the fill wherever a pixel is not paper.
+  let sum = 0;
+  let cnt = 0;
+  for (let y = box.y0; y <= box.y1; y += 2) {
+    const row = y * w;
+    for (let x = box.x0; x <= box.x1; x += 2) {
+      const i = row + x;
+      if (photo[i] || spread[i] > 16) continue;
+      if (ch[i] < box.mode - 40) continue;
+      sum += ch[i];
+      cnt++;
+    }
+  }
+  const paperCh = cnt > 40 ? sum / cnt : box.mode;
   for (let y = 0; y < h; y++) {
     const row = y * w;
     const insideY = y >= box.y0 && y <= box.y1;
     for (let x = 0; x < w; x++) {
       const i = row + x;
-      field[i] = insideY && x >= box.x0 && x <= box.x1 && !photo[i] ? tone[i] : mode;
+      const onPage = insideY && x >= box.x0 && x <= box.x1 && !photo[i];
+      // Leave high-chroma ink out of the estimate: seed it with paper so the
+      // divide corrects it the same as the sheet and keeps only its residual.
+      field[i] = onPage && spread[i] <= 26 ? ch[i] : paperCh;
     }
   }
   const radius = clamp(Math.round(Math.min(w, h) / 70), 10, 18);
@@ -585,9 +621,13 @@ function paperIllumination(
 }
 
 /**
- * Lift each page pixel by the paper's illumination. A letter keeps its ratio
- * to that paper, so an anti-aliased rim stays gray instead of snapping white.
- * Whiteboard then darkens ink cores only and leaves those rims alone.
+ * Divide each page pixel by its own paper color, per channel. A cool-gray
+ * sheet lands on neutral white because each of R/G/B is lifted by its own
+ * gain, not one shared luma gain. A letter keeps its ratio to that paper, so
+ * an anti-aliased rim stays gray instead of snapping white, and nothing is
+ * forced to pure white. Colored ink takes the same paper correction and keeps
+ * only its residual, so a stamp or rule no longer looks dirty beside clean
+ * paper. Whiteboard then darkens ink cores only and leaves those rims alone.
  */
 function cleanSheet(
   d: Uint8ClampedArray,
@@ -595,38 +635,47 @@ function cleanSheet(
   mode: CleanMode,
   box: PageBox,
   tone: Float32Array,
-  spread: Float32Array,
-  sheet: Float32Array,
+  paper: [Float32Array, Float32Array, Float32Array],
   photo: Uint8Array,
 ) {
   const target = mode === 'light' ? 236 : 252;
   const maxGain = mode === 'light' ? 1.28 : 1.65;
+  const [pr, pg, pb] = paper;
   for (let y = box.y0; y <= box.y1; y++) {
     const row = y * w;
     for (let x = box.x0; x <= box.x1; x++) {
       const at = row + x;
       if (photo[at]) continue;
-      if (spread[at] > 26) continue;
-      const bg = sheet[at];
-      if (bg < 90 || bg < box.mode - 55) continue;
-      const t = tone[at];
-      let g = clamp(target / Math.max(bg, 48), 1, maxGain);
+      // Luma illumination gates where the correction runs (skip folds, the
+      // black frame, and paper the estimate found too dark to trust).
+      const bgL = 0.299 * pr[at] + 0.587 * pg[at] + 0.114 * pb[at];
+      if (bgL < 90 || bgL < box.mode - 55) continue;
+      // Per-channel gain: target / this channel's paper color, each capped so
+      // a dark divisor cannot explode. The ratio between the three gains is
+      // what removes the paper's color cast.
+      const gr = clamp(target / Math.max(pr[at], 48), 1, maxGain);
+      const gg = clamp(target / Math.max(pg[at], 48), 1, maxGain);
+      const gb = clamp(target / Math.max(pb[at], 48), 1, maxGain);
+      let scale = 1;
       if (mode === 'whiteboard') {
-        const rel = t / Math.max(bg, 48);
+        const rel = tone[at] / Math.max(bgL, 48);
         if (rel < 0.82) {
           const u = clamp((rel - 0.58) / 0.24, 0, 1);
           const s = u * u * (3 - 2 * u);
-          g *= 0.42 + 0.58 * s;
+          scale = 0.42 + 0.58 * s;
         }
       }
       const i = at * 4;
+      const nr = clamp(Math.round(d[i] * gr * scale), 0, 255);
+      const ng = clamp(Math.round(d[i + 1] * gg * scale), 0, 255);
+      const nb = clamp(Math.round(d[i + 2] * gb * scale), 0, 255);
       if (mode === 'gray') {
-        const v = clamp(Math.round(t * g), 0, 255);
+        const v = clamp(Math.round(0.299 * nr + 0.587 * ng + 0.114 * nb), 0, 255);
         d[i] = d[i + 1] = d[i + 2] = v;
       } else {
-        d[i] = clamp(Math.round(d[i] * g), 0, 255);
-        d[i + 1] = clamp(Math.round(d[i + 1] * g), 0, 255);
-        d[i + 2] = clamp(Math.round(d[i + 2] * g), 0, 255);
+        d[i] = nr;
+        d[i + 1] = ng;
+        d[i + 2] = nb;
       }
     }
   }
