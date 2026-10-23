@@ -560,15 +560,15 @@ export default function DocumentPrintPage() {
 
   const chip = (on: boolean) =>
     ({
-      borderColor: on ? 'hsl(27 95% 55%)' : 'var(--border)',
-      background: on ? 'hsl(27 95% 55% / 0.14)' : 'transparent',
-      color: on ? 'hsl(18 80% 32%)' : 'inherit',
+      borderColor: on ? 'hsl(var(--marigold))' : 'hsl(var(--pt-border))',
+      background: on ? 'hsl(var(--marigold) / 0.14)' : 'transparent',
+      color: on ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-ink))',
     }) as const;
 
   const toolBtn = (on: boolean) =>
     ({
-      color: on ? 'hsl(18 80% 32%)' : 'inherit',
-      background: on ? 'hsl(27 95% 55% / 0.16)' : 'transparent',
+      color: on ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-ink))',
+      background: on ? 'hsl(var(--marigold) / 0.16)' : 'transparent',
       borderRadius: 8,
     }) as const;
 
@@ -593,7 +593,7 @@ export default function DocumentPrintPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0" data-doc-print="1">
-      <header className="shrink-0 border-b" style={{ background: '#fff', borderColor: 'hsl(var(--pt-border))' }}>
+      <header className="shrink-0 border-b" style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}>
         <div className="h-12 px-2 flex items-center gap-1">
           <button type="button" className="btn-secondary text-xs py-1.5 px-2 shrink-0" onClick={() => navigate(backTo)}>
             <CaretLeft size={14} className="inline" /> Back
@@ -667,7 +667,7 @@ export default function DocumentPrintPage() {
               ))}
             </select>
           </label>
-          <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0" onClick={() => void addBlankPage()} data-doc-print-blank="1">
+          <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0" style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))' }} onClick={() => void addBlankPage()} data-doc-print-blank="1">
             + Page
           </button>
           {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
