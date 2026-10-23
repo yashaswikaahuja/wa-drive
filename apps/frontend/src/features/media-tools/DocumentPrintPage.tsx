@@ -5,20 +5,8 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Printer,
-  CaretLeft,
-  SpinnerGap,
-  DownloadSimple,
-  Cursor,
-  TextT,
-  Square,
-  Image as ImageIcon,
-  FolderOpen,
-  PencilSimple,
-  Highlighter,
-  Crop,
-} from '@phosphor-icons/react';
+import { SpinnerGap } from '@phosphor-icons/react';
+import PrintToolbar from './PrintToolbar';
 import api from '../../shared/api';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { toast } from '../../shared/toast';
@@ -43,7 +31,7 @@ import {
   readPdfMediaBoxPts,
 } from './documentPrintLayout';
 import { pdfBytesToPages } from './pdfPaper';
-import { DOC_SCAN_FILTERS, applyDocFilter, type DocScanFilter } from './docScanFilters';
+import { applyDocFilter, type DocScanFilter } from './docScanFilters';
 import { detectDocumentQuad, warpQuad } from './docEdgeDetect';
 
 const MARGIN_MM = 10;
@@ -588,19 +576,6 @@ export default function DocumentPrintPage() {
   }, [name, phone]);
   const paperSizeLabel = `${paper.label} · ${paper.wMm.toFixed(0)}×${paper.hMm.toFixed(0)} mm`;
 
-  const chip = (on: boolean) =>
-    ({
-      borderColor: on ? 'hsl(var(--marigold))' : 'hsl(var(--pt-border))',
-      background: on ? 'hsl(var(--marigold) / 0.14)' : 'transparent',
-      color: on ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-ink))',
-    }) as const;
-
-  const toolBtn = (on: boolean) =>
-    ({
-      color: on ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-ink))',
-      background: on ? 'hsl(var(--marigold) / 0.16)' : 'transparent',
-      borderRadius: 8,
-    }) as const;
 
   if (loading) {
     return (
@@ -623,96 +598,27 @@ export default function DocumentPrintPage() {
 
   return (
     <div className="flex flex-col h-full min-h-0" data-doc-print="1">
-      <header className="shrink-0 border-b" style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))' }}>
-        <div className="h-12 px-2 flex items-center gap-1">
-          <button type="button" className="btn-secondary text-xs py-1.5 px-2 shrink-0" onClick={() => navigate(backTo)}>
-            <CaretLeft size={14} className="inline" /> Back
-          </button>
-          <span className="text-sm font-semibold truncate min-w-0 flex-1 px-1" title={subtitle}>{subtitle}</span>
-          <span className="sr-only" data-doc-print-paper={paperId}>{paperSizeLabel}</span>
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              type="button"
-              className="btn-secondary text-xs py-1.5 px-2 shrink-0"
-              onClick={handleDownloadPdf}
-              disabled={busy || !pages.length}
-              data-doc-print-download="1"
-            >
-              <DownloadSimple size={14} /> PDF
-            </button>
-            <button
-              type="button"
-              className="btn-primary text-xs py-1.5 px-3 shrink-0 flex items-center gap-1"
-              onClick={handlePrint}
-              disabled={busy || !pages.length}
-              data-doc-print-submit="1"
-            >
-              {busy ? <SpinnerGap size={14} className="animate-spin" /> : <Printer size={14} />}
-              Print
-            </button>
-          </div>
-        </div>
-        <div
-          className="flex items-center gap-0.5 px-2 overflow-x-auto border-t"
-          style={{ borderColor: 'hsl(var(--pt-border))' }}
-          data-doc-print-pdf-tools="1"
-        >
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'none')} onClick={() => setViewerTool('none')} data-doc-print-tool="select" data-doc-print-viewer-tool="select">
-            <Cursor size={18} /> Select
-          </button>
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'text')} onClick={() => setViewerTool('text')} data-doc-print-tool="text" data-doc-print-viewer-tool="text">
-            <TextT size={18} /> Text
-          </button>
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'draw')} onClick={() => setViewerTool('draw')} data-doc-print-tool="draw" data-doc-print-viewer-tool="draw">
-            <PencilSimple size={18} /> Draw
-          </button>
-          <button type="button" className="flex flex-col items-center justify-center w-14 sm:w-16 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'highlight')} onClick={() => setViewerTool('highlight')} data-doc-print-tool="highlight" data-doc-print-viewer-tool="highlight">
-            <Highlighter size={18} /> Highlight
-          </button>
-          <button type="button" className="flex flex-col items-center justify-center w-14 sm:w-16 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'whiteout')} onClick={() => void placeWhiteout()} data-doc-print-tool="box" data-doc-print-viewer-tool="whiteout">
-            <Square size={18} /> Whiteout
-          </button>
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(activeTool === 'image')} onClick={() => imageInputRef.current?.click()} data-doc-print-tool="image" data-doc-print-viewer-tool="image" title="Add an image from this computer">
-            <ImageIcon size={18} /> Image
-          </button>
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" style={toolBtn(cropOpen)} onClick={() => { void openParentCrop(); }} data-doc-print-tool="crop" data-doc-print-viewer-tool="crop" title="Crop the photo on this page">
-            <Crop size={18} /> Crop
-          </button>
-          <button type="button" className="flex flex-col items-center justify-center w-12 sm:w-14 h-12 shrink-0 text-[10px] font-medium" onClick={() => setDriveOpen(true)} data-doc-print-tool="files" data-doc-print-viewer-tool="files" title="Choose an image from File Manager">
-            <FolderOpen size={18} /> Files
-          </button>
-          <span className="w-px h-6 mx-1 shrink-0" style={{ background: 'hsl(var(--pt-border))' }} />
-          <label className="flex items-center gap-1 shrink-0 text-[11px] font-medium">
-            Filter
-            <select
-              aria-label="Filter"
-              data-doc-print-filter={docFilter}
-              value={docFilter}
-              onChange={(e) => chooseFilter(e.target.value as DocScanFilter)}
-              className="text-[11px] rounded-md border px-1.5 py-1 font-medium bg-transparent"
-              style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))' }}
-            >
-              {DOC_SCAN_FILTERS.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0" style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))' }} onClick={() => void addBlankPage()} data-doc-print-blank="1">
-            + Page
-          </button>
-          {(Object.keys(DOC_PAPERS) as DocPaperId[]).map((id) => (
-            <button
-              key={id}
-              type="button"
-              className="text-[11px] rounded-md px-2 py-1 border font-medium shrink-0"
-              style={chip(paperId === id)}
-              onClick={() => changePaper(id)}
-            >
-              {id === 'a4' ? 'A4' : id === 'a4-landscape' ? 'A4 wide' : '4×6'}
-            </button>
-          ))}
-        </div>
-      </header>
+      <PrintToolbar
+        title={subtitle}
+        paperId={paperId}
+        paperSizeLabel={paperSizeLabel}
+        busy={busy}
+        canExport={pages.length > 0}
+        activeTool={activeTool}
+        cropOpen={cropOpen}
+        filter={docFilter}
+        onBack={() => navigate(backTo)}
+        onDownload={() => void handleDownloadPdf()}
+        onPrint={() => void handlePrint()}
+        onTool={setViewerTool}
+        onWhiteout={() => void placeWhiteout()}
+        onImage={() => imageInputRef.current?.click()}
+        onFiles={() => setDriveOpen(true)}
+        onCrop={() => void openParentCrop()}
+        onFilter={chooseFilter}
+        onAddPage={() => void addBlankPage()}
+        onPaper={changePaper}
+      />
 
       <div className="flex-1 min-h-0" data-doc-print-pdf="1" data-doc-print-sheet={openSheet} data-doc-print-ready={sheetReady}>
         {viewerUrl ? (

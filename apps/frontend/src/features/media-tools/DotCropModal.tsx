@@ -3,6 +3,7 @@
  * a corner is dragged, then the page is straightened.
  */
 import { useEffect, useRef, useState } from 'react';
+import { ArrowClockwise, Check, CornersOut, MagicWand } from '@phosphor-icons/react';
 import { detectDocumentQuad } from './docEdgeDetect';
 
 type Point = { x: number; y: number };
@@ -38,8 +39,9 @@ function rotateCanvas(src: HTMLCanvasElement) {
 }
 
 function fitStage(bmp: HTMLCanvasElement) {
-  const maxW = Math.min(window.innerWidth - 48, 920);
-  const maxH = Math.min(window.innerHeight * 0.68, 620);
+  const narrow = window.innerWidth < 640;
+  const maxW = Math.min(window.innerWidth - (narrow ? 40 : 80), 860);
+  const maxH = Math.min(window.innerHeight - (narrow ? 230 : 210), 760);
   const ratio = bmp.width / Math.max(1, bmp.height);
   let w = maxW;
   let h = w / ratio;
@@ -214,6 +216,10 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
   const ptsRef = useRef(pts);
   const bitmapRef = useRef(bitmap);
   const loupeRef = useRef<HTMLCanvasElement>(null);
+  const applyRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open && bitmap) applyRef.current?.focus();
+  }, [open, bitmap]);
   stageRef.current = stage;
   ptsRef.current = pts;
   bitmapRef.current = bitmap;
@@ -336,21 +342,40 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
   const loupeTop = corner.y > stage.h * 0.45 ? corner.y - 156 : corner.y + 28;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-3" data-image-crop="1">
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center p-2 sm:p-4"
+      style={{ background: 'hsl(220 30% 6% / 0.72)' }}
+      data-image-crop="1"
+    >
       <div
-        className="rounded-xl shadow-2xl border w-full max-w-5xl p-4 flex flex-col gap-3"
-        style={{ background: '#111', borderColor: '#2a2a2a' }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="crop-title"
+        className="rounded-xl border w-full max-w-4xl p-3 sm:p-4 flex flex-col gap-3 max-h-full"
+        style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))', boxShadow: 'var(--shadow-lift)' }}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+          if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'BUTTON') {
+            e.preventDefault();
+            onApply(straighten(bitmap, pts, stage));
+          }
+        }}
       >
         <div>
-          <p className="text-sm font-semibold text-white">Crop the page</p>
-          <p className="text-[11px] text-white/70" data-crop-auto={autoFound ? 'found' : 'none'}>
+          <h2 id="crop-title" className="text-base font-semibold" style={{ color: 'hsl(var(--pt-ink))' }}>Crop the page</h2>
+          <p className="text-xs mt-0.5 flex items-center gap-1.5" style={{ color: 'hsl(var(--pt-muted))' }} data-crop-auto={autoFound ? 'found' : 'none'} aria-live="polite">
+            <span
+              aria-hidden="true"
+              className="inline-block w-2 h-2 rounded-full"
+              style={{ background: autoFound ? 'hsl(var(--confidence))' : 'hsl(var(--pt-muted))' }}
+            />
             {autoFound
-              ? 'Page edges found automatically. Drag a corner to adjust.'
-              : 'Drag each corner onto the page. The magnifier follows the corner.'}
+              ? 'Page edges found. Drag a corner to adjust, or press Enter to use it.'
+              : 'Drag each corner onto the page edge. The magnifier follows the corner.'}
           </p>
         </div>
-        <div className="flex justify-center">
+        <div className="flex justify-center rounded-lg py-2" style={{ background: 'hsl(220 20% 12%)' }}>
           <div className="relative" style={{ width: stage.w, height: stage.h }}>
             {imgUrl && (
               <img src={imgUrl} alt="" draggable={false} className="absolute inset-0 w-full h-full select-none pointer-events-none" />
@@ -422,41 +447,48 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
             )}
           </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="btn-secondary"
-            data-crop-detect="1"
-            onClick={() => bitmap && place(bitmap, 'auto')}
-            title="Find the page edges again"
-          >
-            Auto
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            data-crop-full="1"
-            onClick={() => bitmap && place(bitmap, 'full')}
-          >
-            No crop
-          </button>
-          <button
-            type="button"
-            className="btn-secondary"
-            data-crop-rotate="1"
-            onClick={() => bitmap && place(rotateCanvas(bitmap), 'auto')}
-          >
-            Rotate
-          </button>
-          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button
-            type="button"
-            className="btn-primary flex-1"
-            data-crop-apply="1"
-            onClick={() => onApply(straighten(bitmap, pts, stage))}
-          >
-            Use this crop
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="grid grid-cols-3 sm:flex gap-2" role="group" aria-label="Crop options">
+            <button
+              type="button"
+              className="btn-secondary !px-3 !py-2 text-xs"
+              data-crop-detect="1"
+              onClick={() => bitmap && place(bitmap, 'auto')}
+              title="Find the page edges again"
+            >
+              <MagicWand size={15} /> Auto
+            </button>
+            <button
+              type="button"
+              className="btn-secondary !px-3 !py-2 text-xs"
+              data-crop-rotate="1"
+              onClick={() => bitmap && place(rotateCanvas(bitmap), 'auto')}
+              title="Turn the photo a quarter turn"
+            >
+              <ArrowClockwise size={15} /> Rotate
+            </button>
+            <button
+              type="button"
+              className="btn-secondary !px-3 !py-2 text-xs"
+              data-crop-full="1"
+              onClick={() => bitmap && place(bitmap, 'full')}
+              title="Use the whole photo"
+            >
+              <CornersOut size={15} /> No crop
+            </button>
+          </div>
+          <div className="flex gap-2 sm:ml-auto">
+            <button type="button" className="btn-secondary !px-4 !py-2 text-sm" onClick={onClose}>Cancel</button>
+            <button
+              ref={applyRef}
+              type="button"
+              className="btn-primary !py-2 text-sm flex-1 sm:flex-none sm:min-w-[160px]"
+              data-crop-apply="1"
+              onClick={() => onApply(straighten(bitmap, pts, stage))}
+            >
+              <Check size={16} weight="bold" /> Use this crop
+            </button>
+          </div>
         </div>
       </div>
     </div>

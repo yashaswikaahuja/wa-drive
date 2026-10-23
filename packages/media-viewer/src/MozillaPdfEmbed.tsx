@@ -286,7 +286,7 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         title="PDF document"
         src={
           mode === 'editor'
-            ? '/pdfjs/web/viewer.html?cyber=editor#zoom=page-width'
+            ? '/pdfjs/web/viewer.html?cyber=editor#zoom=page-width&pagemode=none'
             : '/pdfjs/web/viewer.html#zoom=page-width'
         }
         className="w-full h-full border-0 bg-[#525659]"

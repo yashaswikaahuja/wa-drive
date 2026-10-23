@@ -125,7 +125,8 @@ test.describe('Document print layout (operator)', () => {
     const frame = page.frameLocator('iframe[title="PDF document"]');
     const pdfPage = frame.locator('.page').first();
     await expect(pdfPage).toBeVisible({ timeout: 25000 });
-    await expect(frame.locator('#thumbnailView')).toBeVisible({ timeout: 15000 });
+    // Thumbnails stay closed so the page gets the full width (they covered it on phones).
+    await expect(frame.locator('#thumbnailView')).toBeHidden({ timeout: 15000 });
     const sheet = await pdfPage.boundingBox();
     const vp = page.viewportSize();
     expect(sheet).toBeTruthy();

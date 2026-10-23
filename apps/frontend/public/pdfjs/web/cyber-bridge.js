@@ -6,6 +6,31 @@
 
   const EDITOR_MODES = { none: 0, text: 3, highlight: 9, image: 13, draw: 15 };
 
+  // Follow the Hub theme (html[data-theme]) instead of the OS setting, so the
+  // viewer toolbar is dark when the app is dark. Same origin, so read the parent.
+  function syncTheme() {
+    let theme = "light";
+    try {
+      theme = window.parent.document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+    } catch {
+      return;
+    }
+    const root = document.documentElement;
+    root.style.colorScheme = theme;
+    // viewer.css fallback toggle: "initial" = light, empty = dark.
+    root.style.setProperty("--csstools-color-scheme--light", theme === "dark" ? " " : "initial");
+    root.dataset.cyberTheme = theme;
+  }
+  syncTheme();
+  try {
+    new MutationObserver(syncTheme).observe(window.parent.document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  } catch {
+    /* not embedded */
+  }
+
   function armChrome() {
     if (editorMode) {
       armEditor();
@@ -60,6 +85,23 @@
     const app = globalThis.PDFViewerApplication;
     if (app) patchClose(app);
     if (app?.pdfViewer && app.pdfViewer.annotationEditorMode !== -1) revealEditorButtons();
+    keepSidebarClosed(app);
+  }
+
+  // The editor is one page the operator prints. Thumbnails only cover it,
+  // and pdf.js reopens them from saved view history, so close on every load.
+  function keepSidebarClosed(app) {
+    try {
+      globalThis.PDFViewerApplicationOptions?.set("sidebarViewOnLoad", 0);
+    } catch {
+      /* older build */
+    }
+    if (!app || app.__cyberSidebarClosed) return;
+    app.__cyberSidebarClosed = true;
+    const close = () => setTimeout(() => app.pdfSidebar?.close?.(), 0);
+    close();
+    app.eventBus?.on?.("pagesinit", close);
+    app.eventBus?.on?.("pagesloaded", close);
   }
 
   function asImageFile(raw) {
@@ -464,9 +506,12 @@
         }
         await sleep(50);
       }
-      // One editor: page thumbnails on the left, tools on this PDF (iLovePDF-style).
+      // Editor: the page is the work surface, so thumbnails stay closed
+      // (they covered half the page on phones). The pdf.js sidebar button
+      // still opens them for multi-page jobs.
       try {
-        app.pdfSidebar?.switchView(1, true);
+        if (editorMode) app.pdfSidebar?.close?.();
+        else app.pdfSidebar?.switchView(1, true);
       } catch {}
       post("cyber-pdf-opened");
     } catch (err) {
