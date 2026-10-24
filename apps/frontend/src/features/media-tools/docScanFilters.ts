@@ -314,7 +314,7 @@ function extendSheet(
   while (box.x0 > 1 && continues(false, box.x0 - 1) && guard++ < w) box.x0--;
 }
 
-/** Center of one row: bright paper, writing, or the printed border — not the desk. */
+/** Center of one row: bright paper, writing, or the printed border ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â not the desk. */
 function pageRow(
   tone: Float32Array,
   spread: Float32Array,
@@ -440,11 +440,54 @@ function shrinkMargins(
   if (y < box.y1 && y > yStopB) box.y1 = y;
 }
 
-/** Portrait pixels, grown a short way into the photo's own backdrop, not onto the card. */
+/**
+ * The colorful seed can miss a dark, gray part of the photo (a shirt, hair
+ * at the edge). Push each side out while that edge line is still mostly
+ * photo, and stop at the first line that is mostly plain card.
+ */
+function growToPhotoEdge(
+  tone: Float32Array,
+  spread: Float32Array,
+  w: number,
+  box: PageBox,
+  r: [number, number, number, number],
+): [number, number, number, number] {
+  let [x0, y0, x1, y1] = r;
+  const isCard = (i: number) => spread[i] <= 16 && tone[i] >= box.mode - 45;
+  const rowIsPhoto = (y: number) => {
+    let n = 0;
+    let card = 0;
+    for (let x = x0; x <= x1; x += 2) {
+      n++;
+      if (isCard(y * w + x)) card++;
+    }
+    return n > 0 && card / n < 0.5;
+  };
+  const colIsPhoto = (x: number) => {
+    let n = 0;
+    let card = 0;
+    for (let y = y0; y <= y1; y += 2) {
+      n++;
+      if (isCard(y * w + x)) card++;
+    }
+    return n > 0 && card / n < 0.5;
+  };
+  const capY = Math.round((y1 - y0) * 0.3);
+  const capX = Math.round((x1 - x0) * 0.3);
+  for (let k = 0; k < capY && y1 < box.y1 && rowIsPhoto(y1 + 1); k++) y1++;
+  for (let k = 0; k < capY && y0 > box.y0 && rowIsPhoto(y0 - 1); k++) y0--;
+  for (let k = 0; k < capX && x1 < box.x1 && colIsPhoto(x1 + 1); k++) x1++;
+  for (let k = 0; k < capX && x0 > box.x0 && colIsPhoto(x0 - 1); k++) x0--;
+  return [x0, y0, x1, y1];
+}
+
+/** Margin kept around a detected photo's rectangle, in px. */
+const PHOTO_RIM_PX = 1;
+
+/** ID-photo rectangles on the card, each with a thin rim. */
 function photoMask(
   tone: Float32Array,
   spread: Float32Array,
-  std: Float32Array,
   w: number,
   h: number,
   box: PageBox,
@@ -452,7 +495,7 @@ function photoMask(
   const nPix = w * h;
   const seen = new Uint8Array(nPix);
   const members = new Int32Array(nPix);
-  const seed = new Float32Array(nPix);
+  const rects: [number, number, number, number][] = [];
   for (let y = box.y0; y <= box.y1; y += 2) {
     const row = y * w;
     for (let x = box.x0; x <= box.x1; x += 2) {
@@ -496,19 +539,37 @@ function photoMask(
       const area = (bw + 1) * (bh + 1);
       const fill = (n * 4) / area;
       if (fill < 0.34) continue;
-      for (let k = 0; k < n; k++) seed[members[k]] = 1;
+      // An ID photo is a small part of the page. A larger colorful region is a
+      // tinted sheet or a printed banner, and protecting it leaves a gray block.
+      if (bw > (box.x1 - box.x0) * 0.4 || bh > (box.y1 - box.y0) * 0.4) continue;
+      const r = growToPhotoEdge(tone, spread, w, box, [minX, minY, maxX, maxY]);
+      // A real photo covers its rectangle. Plain card inside it means this is
+      // a printed graphic on the sheet, which should be cleaned like the page.
+      let cells = 0;
+      let card = 0;
+      let white = 0;
+      for (let yy = r[1]; yy <= r[3]; yy += 2) {
+        for (let xx = r[0]; xx <= r[2]; xx += 2) {
+          const q = yy * w + xx;
+          cells++;
+          if (spread[q] <= 16 && tone[q] >= box.mode - 45) card++;
+          if (spread[q] <= 12 && tone[q] >= box.mode - 15) white++;
+        }
+      }
+      if (card > cells * 0.25 || white > cells * 0.05) continue;
+      rects.push(r);
     }
   }
-  const dilated = maxFilter(seed, w, h, 16);
+  // An ID photo is a rectangle. Protect the whole rectangle so its pale
+  // backdrop is not half whitened, plus a thin rim. A wider grown margin
+  // left a visible gray frame of uncleaned card around the photo.
   const photo = new Uint8Array(nPix);
-  for (let i = 0; i < nPix; i++) {
-    if (seed[i]) {
-      photo[i] = 1;
-      continue;
-    }
-    if (dilated[i] < 1) continue;
-    if (spread[i] <= 12 && std[i] <= 6 && tone[i] >= box.mode - 8) continue;
-    photo[i] = 1;
+  for (const [rx0, ry0, rx1, ry1] of rects) {
+    const ya = Math.max(0, ry0 - PHOTO_RIM_PX);
+    const yb = Math.min(h - 1, ry1 + PHOTO_RIM_PX);
+    const xa = Math.max(0, rx0 - PHOTO_RIM_PX);
+    const xb = Math.min(w - 1, rx1 + PHOTO_RIM_PX);
+    for (let y = ya; y <= yb; y++) photo.fill(1, y * w + xa, y * w + xb + 1);
   }
   return photo;
 }
@@ -544,7 +605,7 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   if (!box) return out;
   extendSheet(tone, spread, std, w, h, box);
   shrinkMargins(tone, spread, std, w, h, box);
-  const photo = photoMask(tone, spread, std, w, h, box);
+  const photo = photoMask(tone, spread, w, h, box);
   // Per-channel slow paper color. Correcting each of R/G/B against its own
   // field removes the paper's color cast (a cool-gray sheet lands on neutral
   // white), not only its brightness. High-chroma ink is left out of the
