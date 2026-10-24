@@ -76,6 +76,23 @@ html.cyber-editor #secondaryOpenFile {
   display: none !important;
 }
 
+/* The customer's photo is a stamp. While writing, drawing or highlighting,
+   a press on it must mark the page, not grab the photo and switch tools.
+   Select still moves and resizes photos. */
+html.cyber-editor .annotationEditorLayer:is(.freetextEditing, .inkEditing, .highlightEditing) .stampEditor {
+  pointer-events: none !important;
+}
+
+/* Ink and highlights lifted above the photo stamp (see cyber-bridge.js).
+   Multiply keeps highlights see-through over the print. */
+html.cyber-editor .page > .cyberDrawTop {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+
 /* The app toolbar is the only edit bar. These stay in the DOM so the bridge can drive them. */
 html.cyber-editor #editorModeButtons,
 html.cyber-editor #editorModeSeparator {

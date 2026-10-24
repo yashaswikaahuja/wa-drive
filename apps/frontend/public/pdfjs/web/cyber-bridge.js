@@ -87,6 +87,33 @@
     if (app?.pdfViewer && app.pdfViewer.annotationEditorMode !== -1) revealEditorButtons();
     keepSidebarClosed(app);
     bindTextClickCommit(app);
+    bindDrawOnTop(app);
+  }
+
+  // The customer's photo is a stamp in the editor layer, but pdf.js draws ink
+  // and highlights in .canvasWrapper underneath it, so marks on the photo were
+  // invisible while editing. Move each page's draw layer into an overlay on top.
+  function bindDrawOnTop(app) {
+    if (!app?.eventBus || app.__cyberDrawTop) return;
+    app.__cyberDrawTop = true;
+    const lift = (ev) => {
+      try {
+        const pv = ev?.source || app.pdfViewer?._pages?.[(ev?.pageNumber || 1) - 1];
+        const inner = pv?.drawLayer?.getDrawLayer?.();
+        if (!pv?.div || !inner) return;
+        let ov = pv.div.querySelector(":scope > .cyberDrawTop");
+        if (!ov) {
+          ov = document.createElement("div");
+          ov.className = "canvasWrapper cyberDrawTop";
+          pv.div.append(ov);
+        }
+        inner.setParent(ov);
+      } catch {
+        /* pdf.js internals changed: marks stay under the photo */
+      }
+    };
+    app.eventBus.on("pagerendered", lift);
+    app.eventBus.on("annotationeditorlayerrendered", lift);
   }
 
   // pdf.js 5: clicking blank page while a text box is in edit mode leaves the
