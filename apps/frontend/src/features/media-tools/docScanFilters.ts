@@ -9,6 +9,7 @@
  * it stays as photographed, and so does a portrait.
  */
 import { cloneCanvas } from './documentPrintLayout';
+import { paperMap } from './docPaperMap';
 
 export type DocScanFilter = 'original' | 'auto' | 'light' | 'gray' | 'whiteboard';
 
@@ -63,59 +64,6 @@ function boxBlur(src: Float32Array, w: number, h: number, radius: number) {
   pass(src, tmp, true);
   pass(tmp, out, false);
   return out;
-}
-
-/** Brightest nearby paper. A thin stroke sees the sheet beside it; a flat stain does not. */
-function maxFilter(src: Float32Array, w: number, h: number, radius: number) {
-  const tmp = new Float32Array(w * h);
-  const out = new Float32Array(w * h);
-  const line = new Float32Array(Math.max(w, h));
-  const dest = new Float32Array(Math.max(w, h));
-  const sweep = (n: number) => {
-    const k = radius * 2 + 1;
-    const dq = new Int32Array(n);
-    let head = 0;
-    let tail = 0;
-    for (let i = 0; i < n; i++) {
-      while (tail > head && line[dq[tail - 1]] <= line[i]) tail--;
-      dq[tail++] = i;
-      if (dq[head] <= i - k) head++;
-      if (i >= k - 1) dest[i - radius] = line[dq[head]];
-    }
-    for (let i = 0; i < radius && i < n; i++) {
-      let m = line[0];
-      const b = Math.min(n - 1, i + radius);
-      for (let j = 0; j <= b; j++) if (line[j] > m) m = line[j];
-      dest[i] = m;
-    }
-    const right = n - radius;
-    for (let i = right; i < n; i++) {
-      let m = line[Math.max(0, i - radius)];
-      for (let j = Math.max(0, i - radius); j < n; j++) if (line[j] > m) m = line[j];
-      dest[i] = m;
-    }
-  };
-  for (let y = 0; y < h; y++) {
-    const row = y * w;
-    for (let x = 0; x < w; x++) line[x] = src[row + x];
-    sweep(w);
-    for (let x = 0; x < w; x++) tmp[row + x] = dest[x];
-  }
-  for (let x = 0; x < w; x++) {
-    for (let y = 0; y < h; y++) line[y] = tmp[y * w + x];
-    sweep(h);
-    for (let y = 0; y < h; y++) out[y * w + x] = dest[y];
-  }
-  return out;
-}
-
-/** Darkest nearby value. With maxFilter this closes thin dark strokes into paper. */
-function minFilter(src: Float32Array, w: number, h: number, radius: number) {
-  const neg = new Float32Array(src.length);
-  for (let i = 0; i < src.length; i++) neg[i] = -src[i];
-  const low = maxFilter(neg, w, h, radius);
-  for (let i = 0; i < low.length; i++) low[i] = -low[i];
-  return low;
 }
 
 function percentile(values: number[], p: number) {
@@ -280,7 +228,7 @@ function extendSheet(
     if (vals.length < n * 0.42) return false;
     const med = percentile(vals, 0.55);
     const medStd = percentile(stds, 0.5);
-    if (med < 130 || med < box.mode - 70) return false;
+    if (med < 95 || med < box.mode - 90) return false;
     if (medStd > 30 && med < box.mode - 10) return false;
     return true;
   };
@@ -314,7 +262,7 @@ function extendSheet(
   while (box.x0 > 1 && continues(false, box.x0 - 1) && guard++ < w) box.x0--;
 }
 
-/** Center of one row: bright paper, writing, or the printed border ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â not the desk. */
+/** Center of one row: bright paper, writing, or the printed border ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â not the desk. */
 function pageRow(
   tone: Float32Array,
   spread: Float32Array,
@@ -605,20 +553,72 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   if (!box) return out;
   extendSheet(tone, spread, std, w, h, box);
   shrinkMargins(tone, spread, std, w, h, box);
+  const backdrop = growToBackdrop(tone, w, h, box);
   const photo = photoMask(tone, spread, w, h, box);
   // Per-channel slow paper color. Correcting each of R/G/B against its own
   // field removes the paper's color cast (a cool-gray sheet lands on neutral
   // white), not only its brightness. High-chroma ink is left out of the
   // estimate so it cannot tint the paper and halo the print beside it.
-  const paper: [Float32Array, Float32Array, Float32Array] = [
-    paperIllumination(chan[0], spread, w, h, box, photo),
-    paperIllumination(chan[1], spread, w, h, box, photo),
-    paperIllumination(chan[2], spread, w, h, box, photo),
-  ];
+  const paper = paperMap(chan, tone, spread, w, h, box, photo);
   const mode: CleanMode = filter === 'gray' ? 'gray' : filter === 'light' ? 'light' : filter === 'whiteboard' ? 'whiteboard' : 'auto';
-  cleanSheet(d, w, mode, box, tone, paper, photo);
+  cleanSheet(d, w, mode, box, tone, paper, photo, backdrop);
   ctx.putImageData(img, 0, 0);
   return out;
+}
+
+/**
+ * A sheet on a dark cloth or sofa: the shade walk stops at a shadowed half
+ * or a colored header, leaving a hard seam where correction ends. When the
+ * photo border is much darker than the paper, keep pushing each side out
+ * while most of the line is still brighter than that backdrop.
+ * Returns the luma that separates sheet from backdrop, or 0 when there is
+ * no clear dark backdrop (nothing is grown then).
+ */
+function growToBackdrop(tone: Float32Array, w: number, h: number, box: PageBox) {
+  const fx = Math.max(2, Math.round(w * 0.03));
+  const fy = Math.max(2, Math.round(h * 0.03));
+  const frame: number[] = [];
+  for (let y = 0; y < h; y += 3) {
+    for (let x = 0; x < w; x += 3) {
+      if (x >= fx && x < w - fx && y >= fy && y < h - fy) continue;
+      if (x >= box.x0 && x <= box.x1 && y >= box.y0 && y <= box.y1) continue;
+      frame.push(tone[y * w + x]);
+    }
+  }
+  if (frame.length < 40) return 0;
+  const back = percentile(frame, 0.5);
+  if (box.mode - back < 90) return 0;
+  const cut = back + (box.mode - back) * 0.35;
+  const sheet = (horizontal: boolean, at: number) => {
+    let n = 0;
+    let on = 0;
+    const a = horizontal ? box.x0 : box.y0;
+    const b = horizontal ? box.x1 : box.y1;
+    for (let p = a; p <= b; p += 3) {
+      n++;
+      if (tone[horizontal ? at * w + p : p * w + at] > cut) on++;
+    }
+    return n > 0 && on >= n * 0.55;
+  };
+  // A dark printed band (a blue header strip, a thick rule) fails one line
+  // but the sheet continues past it, so look a short way ahead.
+  const step = (horizontal: boolean, from: number, dir: number, end: number) => {
+    const gap = Math.round((horizontal ? h : w) * 0.06);
+    for (let k = 1; k <= gap; k++) {
+      const at = from + dir * k;
+      if (dir < 0 ? at < end : at > end) break;
+      if (sheet(horizontal, at)) return at;
+    }
+    return from;
+  };
+  // Twice: widening one side lengthens the lines the other sides test.
+  for (let pass = 0; pass < 2; pass++) {
+    for (let at = step(true, box.y0, -1, 0); at !== box.y0; at = step(true, box.y0, -1, 0)) box.y0 = at;
+    for (let at = step(true, box.y1, 1, h - 1); at !== box.y1; at = step(true, box.y1, 1, h - 1)) box.y1 = at;
+    for (let at = step(false, box.x0, -1, 0); at !== box.x0; at = step(false, box.x0, -1, 0)) box.x0 = at;
+    for (let at = step(false, box.x1, 1, w - 1); at !== box.x1; at = step(false, box.x1, 1, w - 1)) box.x1 = at;
+  }
+  return cut;
 }
 
 function localStd(src: Float32Array, w: number, h: number, radius: number) {
@@ -632,53 +632,6 @@ function localStd(src: Float32Array, w: number, h: number, radius: number) {
     out[i] = Math.sqrt(v > 0 ? v : 0);
   }
   return out;
-}
-
-/**
- * Slow paper color for one channel. Closing removes strokes thinner than the
- * kernel, then a short blur keeps the field smooth. Outside the page, inside
- * the portrait, and over high-chroma ink the seed is the paper's own channel
- * mode, so a darker desk or a colored stamp cannot pull the paper estimate
- * toward it and halo the print beside it.
- */
-function paperIllumination(
-  ch: Float32Array,
-  spread: Float32Array,
-  w: number,
-  h: number,
-  box: PageBox,
-  photo: Uint8Array,
-) {
-  const field = new Float32Array(ch.length);
-  // Channel value of the paper itself: the mode of smooth, low-chroma page
-  // pixels in this channel. Used as the fill wherever a pixel is not paper.
-  let sum = 0;
-  let cnt = 0;
-  for (let y = box.y0; y <= box.y1; y += 2) {
-    const row = y * w;
-    for (let x = box.x0; x <= box.x1; x += 2) {
-      const i = row + x;
-      if (photo[i] || spread[i] > 16) continue;
-      if (ch[i] < box.mode - 40) continue;
-      sum += ch[i];
-      cnt++;
-    }
-  }
-  const paperCh = cnt > 40 ? sum / cnt : box.mode;
-  for (let y = 0; y < h; y++) {
-    const row = y * w;
-    const insideY = y >= box.y0 && y <= box.y1;
-    for (let x = 0; x < w; x++) {
-      const i = row + x;
-      const onPage = insideY && x >= box.x0 && x <= box.x1 && !photo[i];
-      // Leave high-chroma ink out of the estimate: seed it with paper so the
-      // divide corrects it the same as the sheet and keeps only its residual.
-      field[i] = onPage && spread[i] <= 26 ? ch[i] : paperCh;
-    }
-  }
-  const radius = clamp(Math.round(Math.min(w, h) / 70), 10, 18);
-  const closed = minFilter(maxFilter(field, w, h, radius), w, h, radius);
-  return boxBlur(closed, w, h, 6);
 }
 
 /**
@@ -698,6 +651,7 @@ function cleanSheet(
   tone: Float32Array,
   paper: [Float32Array, Float32Array, Float32Array],
   photo: Uint8Array,
+  backdrop: number,
 ) {
   const target = mode === 'light' ? 236 : 252;
   const maxGain = mode === 'light' ? 1.28 : 1.65;
@@ -706,19 +660,29 @@ function cleanSheet(
     const row = y * w;
     for (let x = box.x0; x <= box.x1; x++) {
       const at = row + x;
-      if (photo[at]) continue;
-      // Luma illumination gates where the correction runs (skip folds, the
-      // black frame, and paper the estimate found too dark to trust).
+      const isPhoto = photo[at] === 1;
+      // A photo takes the same light correction as the paper around it (so a
+      // shaded picture does not stay a dark block) but no ink processing.
+      if (isPhoto && mode === 'gray') continue;
       const bgL = 0.299 * pr[at] + 0.587 * pg[at] + 0.114 * pb[at];
-      if (bgL < 90 || bgL < box.mode - 55) continue;
+      // No skip gate: the paper map is already filled in under dense text and
+      // logos, so every page pixel is corrected and no gray block is left.
+      if (bgL < 40) continue;
       // Per-channel gain: target / this channel's paper color, each capped so
       // a dark divisor cannot explode. The ratio between the three gains is
       // what removes the paper's color cast.
-      const gr = clamp(target / Math.max(pr[at], 48), 1, maxGain);
-      const gg = clamp(target / Math.max(pg[at], 48), 1, maxGain);
-      const gb = clamp(target / Math.max(pb[at], 48), 1, maxGain);
+      // On a dark backdrop the box corners hold some cloth; it and the darkest
+      // ink keep their level instead of being lifted with the paper.
+      let lift = 1;
+      if (backdrop > 0) {
+        const u = clamp((tone[at] - backdrop + 20) / 50, 0, 1);
+        lift = u * u * (3 - 2 * u);
+      }
+      const gr = 1 + (clamp(target / Math.max(pr[at], 48), 1, maxGain) - 1) * lift;
+      const gg = 1 + (clamp(target / Math.max(pg[at], 48), 1, maxGain) - 1) * lift;
+      const gb = 1 + (clamp(target / Math.max(pb[at], 48), 1, maxGain) - 1) * lift;
       let scale = 1;
-      if (mode === 'whiteboard') {
+      if (mode === 'whiteboard' && !isPhoto) {
         const rel = tone[at] / Math.max(bgL, 48);
         if (rel < 0.82) {
           const u = clamp((rel - 0.58) / 0.24, 0, 1);
