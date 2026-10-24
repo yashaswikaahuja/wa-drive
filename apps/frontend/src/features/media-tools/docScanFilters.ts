@@ -550,7 +550,13 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   }
   const std = localStd(tone, w, h, 3);
   const box = pageBox(tone, spread, std, w, h);
-  if (!box) return out;
+  if (!box) {
+    if (filter === 'gray') {
+      for (let p = 0; p < d.length; p += 4) d[p] = d[p + 1] = d[p + 2] = Math.round(luma(d[p], d[p + 1], d[p + 2]));
+      ctx.putImageData(img, 0, 0);
+    }
+    return out;
+  }
   extendSheet(tone, spread, std, w, h, box);
   shrinkMargins(tone, spread, std, w, h, box);
   const backdrop = growToBackdrop(tone, w, h, box);
@@ -818,6 +824,14 @@ function cleanSheet(
         d[i + 1] = ng;
         d[i + 2] = nb;
       }
+    }
+  }
+  // Photos, dark pixels and the area outside the page skip the loop above;
+  // Grayscale must still leave no colour anywhere on the sheet.
+  if (mode === 'gray') {
+    for (let i = 0; i < d.length; i += 4) {
+      const v = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+      d[i] = d[i + 1] = d[i + 2] = v;
     }
   }
 }
