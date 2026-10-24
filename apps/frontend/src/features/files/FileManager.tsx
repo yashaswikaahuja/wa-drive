@@ -544,9 +544,9 @@ export default function FileManager() {
     navigate(`/app/photos/portal?${q}`);
   };
 
-  /** JPEG and PDF → paper editor (Mozilla viewer + blank sheet). */
+  /** Photos → paper editor to fix them first; PDFs and anything else print directly. */
   const openDocumentPrint = (f: DriveFile) => {
-    if (isImage(f) || isPdf(f)) {
+    if (isImage(f)) {
       const q = new URLSearchParams();
       q.set('fileId', driveIdOf(f));
       if (f.customerId) q.set('phone', f.customerId);
@@ -1849,7 +1849,7 @@ export default function FileManager() {
         onPrint={preview ? () => openDocumentPrint(preview.file) : undefined}
         showDelete
         showPhotoEditor
-        showPrint={!!preview && isImage(preview.file)}
+        showPrint={!!preview && (isImage(preview.file) || isPdf(preview.file))}
         renderStripThumb={(item) => {
           const f = visibleFiles.find((x) => x.id === item.id);
           return f ? <Thumb f={f} /> : null;

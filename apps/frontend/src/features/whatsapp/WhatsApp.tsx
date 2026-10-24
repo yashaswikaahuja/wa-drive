@@ -241,8 +241,13 @@ const MessageCard = memo(({ msg, onClick, selected, selectUiActive, onToggleSele
     </div>
   );
 
+  // Photos need straightening and the paper filter first; PDFs print as-is.
   const doPrint = () => {
     if (!driveId) return;
+    if (kind === 'image') {
+      navigate(docPrintPath(driveId, msg));
+      return;
+    }
     getCachedBlob(driveId, async () => {
       const res = await api.get(`/drive/download/${driveId}`, { responseType: 'blob' });
       return new Blob([res.data], { type: String(res.headers['content-type'] ?? 'application/pdf') });
@@ -1597,8 +1602,8 @@ export default function WhatsApp() {
           const driveId = driveIdFromUrl(viewerFile?.fileUrl) || viewerFile?.id;
           if (!driveId || !viewerFile) return;
           const kind = mediaKindOf(viewerFile.fileName || '');
-          // JPEG and PDF: paper editor, then silent PDF print.
-          if (kind === 'image' || kind === 'pdf') {
+          // Photos go to the paper editor to be fixed first; PDFs print directly.
+          if (kind === 'image') {
             navigate(
               docPrintPath(driveId, {
                 phone: viewerFile.phone,

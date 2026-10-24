@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ArrowClockwise, Check, CornersOut, MagicWand } from '@phosphor-icons/react';
-import { detectDocumentQuad } from './docEdgeDetect';
+import { detectDocumentQuad, detectSheetBox } from './docEdgeDetect';
 
 type Point = { x: number; y: number };
 type Drag =
@@ -230,7 +230,7 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
     setStage(next);
     let found: Point[] | null = null;
     if (quad === 'auto') {
-      const q = detectDocumentQuad(bmp);
+      const q = detectDocumentQuad(bmp) || detectSheetBox(bmp);
       if (q) found = q.map((p) => ({ x: p.x * next.w, y: p.y * next.h }));
     }
     setAutoFound(!!found);
@@ -451,7 +451,7 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
           <div className="grid grid-cols-3 sm:flex gap-2" role="group" aria-label="Crop options">
             <button
               type="button"
-              className="btn-secondary !px-3 !py-2 text-xs"
+              className="btn-secondary !px-3 !py-2 min-h-[44px] text-xs"
               data-crop-detect="1"
               onClick={() => bitmap && place(bitmap, 'auto')}
               title="Find the page edges again"
@@ -460,7 +460,7 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
             </button>
             <button
               type="button"
-              className="btn-secondary !px-3 !py-2 text-xs"
+              className="btn-secondary !px-3 !py-2 min-h-[44px] text-xs"
               data-crop-rotate="1"
               onClick={() => bitmap && place(rotateCanvas(bitmap), 'auto')}
               title="Turn the photo a quarter turn"
@@ -469,7 +469,7 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
             </button>
             <button
               type="button"
-              className="btn-secondary !px-3 !py-2 text-xs"
+              className="btn-secondary !px-3 !py-2 min-h-[44px] text-xs"
               data-crop-full="1"
               onClick={() => bitmap && place(bitmap, 'full')}
               title="Use the whole photo"
@@ -478,11 +478,11 @@ export default function DotCropModal({ open, source, onApply, onClose }: Props) 
             </button>
           </div>
           <div className="flex gap-2 sm:ml-auto">
-            <button type="button" className="btn-secondary !px-4 !py-2 text-sm" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn-secondary !px-4 !py-2 min-h-[44px] text-sm" onClick={onClose}>Cancel</button>
             <button
               ref={applyRef}
               type="button"
-              className="btn-primary !py-2 text-sm flex-1 sm:flex-none sm:min-w-[160px]"
+              className="btn-primary !py-2 min-h-[44px] text-sm flex-1 sm:flex-none sm:min-w-[160px]"
               data-crop-apply="1"
               onClick={() => onApply(straighten(bitmap, pts, stage))}
             >

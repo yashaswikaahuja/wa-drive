@@ -114,12 +114,12 @@ export default function PrintToolbar(p: PrintToolbarProps) {
       className="shrink-0 border-b"
       style={{ background: 'hsl(var(--pt-card))', borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))' }}
     >
-      <div className="h-14 px-2 sm:px-3 flex items-center gap-2">
+      <div className="min-h-14 py-1 px-2 sm:px-3 flex items-center gap-2">
         <button
           type="button"
           onClick={p.onBack}
           aria-label="Back"
-          className={`btn-secondary !px-3 !py-2 text-xs shrink-0 ${focusRing}`}
+          className={`btn-secondary !px-3 !py-2 min-h-[44px] min-w-[44px] text-xs shrink-0 ${focusRing}`}
         >
           <CaretLeft size={14} weight="bold" />
           <span className="hidden sm:inline">Back</span>
@@ -135,7 +135,7 @@ export default function PrintToolbar(p: PrintToolbarProps) {
           disabled={p.busy || !p.canExport}
           data-doc-print-download="1"
           title="Save as PDF"
-          className={`btn-secondary !px-3 !py-2 text-xs shrink-0 ${focusRing}`}
+          className={`btn-secondary !px-3 !py-2 min-h-[44px] min-w-[44px] text-xs shrink-0 ${focusRing}`}
         >
           <DownloadSimple size={15} /> PDF
         </button>
@@ -144,7 +144,7 @@ export default function PrintToolbar(p: PrintToolbarProps) {
           onClick={p.onPrint}
           disabled={p.busy || !p.canExport}
           data-doc-print-submit="1"
-          className={`btn-primary !px-4 !py-2 text-xs shrink-0 ${focusRing}`}
+          className={`btn-primary !px-4 !py-2 min-h-[44px] text-xs shrink-0 ${focusRing}`}
         >
           {p.busy ? <SpinnerGap size={15} className="animate-spin" /> : <Printer size={15} weight="bold" />}
           <span>Print <span className="hidden sm:inline">{PAPER_LABEL[p.paperId]}</span></span>
@@ -171,7 +171,7 @@ export default function PrintToolbar(p: PrintToolbarProps) {
               data-doc-print-filter={p.filter}
               value={p.filter}
               onChange={(e) => p.onFilter(e.target.value as DocScanFilter)}
-              className={`text-xs rounded-md border pl-1.5 pr-6 py-1 font-medium ${focusRing}`}
+              className={`h-8 text-xs rounded-md border pl-1.5 pr-6 font-medium ${focusRing}`}
               style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))', background: 'hsl(var(--pt-card))' }}
             >
               {DOC_SCAN_FILTERS.map((f) => (
@@ -204,7 +204,7 @@ export default function PrintToolbar(p: PrintToolbarProps) {
                   type="button"
                   aria-pressed={on}
                   onClick={() => p.onPaper(id)}
-                  className={`h-9 px-2.5 rounded-md text-xs font-semibold transition-colors ${focusRing}`}
+                  className={`h-11 min-w-[44px] px-2.5 rounded-md text-xs font-semibold transition-colors ${focusRing}`}
                   style={{
                     background: on ? 'hsl(var(--pt-card))' : 'transparent',
                     color: on ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-muted))',

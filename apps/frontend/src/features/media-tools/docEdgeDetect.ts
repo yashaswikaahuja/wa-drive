@@ -63,6 +63,78 @@ function intersect(a: Line, b: Line): QuadPoint | null {
   return { x: (a.rho * sb - b.rho * sa) / det, y: (ca * b.rho - cb * a.rho) / det };
 }
 
+/**
+ * Fallback for a curled or folded sheet with no straight edges: the paper
+ * is much brighter than the cloth or table around it, so take the box of
+ * rows and columns that are mostly brighter than a cut between the two.
+ * Returns null when the frame border is not clearly darker than the paper.
+ */
+export function detectSheetBox(src: HTMLCanvasElement): QuadPoint[] | null {
+  if (!src.width || !src.height) return null;
+  const s = Math.min(1, 200 / Math.max(src.width, src.height));
+  const w = Math.max(16, Math.round(src.width * s));
+  const h = Math.max(16, Math.round(src.height * s));
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  if (!g) return null;
+  g.drawImage(src, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) lum[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+  const pick = (vals: number[], p: number) => {
+    vals.sort((a, b) => a - b);
+    return vals[Math.min(vals.length - 1, Math.floor(vals.length * p))];
+  };
+  const fx = Math.max(2, Math.round(w * 0.03));
+  const fy = Math.max(2, Math.round(h * 0.03));
+  const frame: number[] = [];
+  const centre: number[] = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const v = lum[y * w + x];
+      if (x < fx || x >= w - fx || y < fy || y >= h - fy) frame.push(v);
+      else if (x > w * 0.25 && x < w * 0.75 && y > h * 0.25 && y < h * 0.75) centre.push(v);
+    }
+  }
+  const back = pick(frame, 0.5);
+  const paper = pick(centre, 0.85);
+  if (paper - back < 60) return null;
+  const cut = back + (paper - back) * 0.35;
+  const colOn = (x: number) => {
+    let on = 0;
+    for (let y = 0; y < h; y++) if (lum[y * w + x] > cut) on++;
+    return on / h;
+  };
+  const rowOn = (y: number) => {
+    let on = 0;
+    for (let x = 0; x < w; x++) if (lum[y * w + x] > cut) on++;
+    return on / w;
+  };
+  let x0 = 0;
+  while (x0 < w - 1 && colOn(x0) < 0.3) x0++;
+  let x1 = w - 1;
+  while (x1 > x0 && colOn(x1) < 0.3) x1--;
+  let y0 = 0;
+  while (y0 < h - 1 && rowOn(y0) < 0.3) y0++;
+  let y1 = h - 1;
+  while (y1 > y0 && rowOn(y1) < 0.3) y1--;
+  const area = ((x1 - x0 + 1) * (y1 - y0 + 1)) / (w * h);
+  if (area < 0.2 || area > 0.95) return null;
+  // A little loose: cutting into the sheet loses content, a sliver of cloth does not.
+  const L = Math.max(0, x0 / w - 0.015);
+  const R = Math.min(1, (x1 + 1) / w + 0.015);
+  const T = Math.max(0, y0 / h - 0.015);
+  const B = Math.min(1, (y1 + 1) / h + 0.015);
+  return [
+    { x: L, y: T },
+    { x: R, y: T },
+    { x: R, y: B },
+    { x: L, y: B },
+  ];
+}
+
 export function detectDocumentQuad(src: HTMLCanvasElement): QuadPoint[] | null {
   if (!src.width || !src.height) return null;
   const s = Math.min(1, DETECT_MAX / Math.max(src.width, src.height));
