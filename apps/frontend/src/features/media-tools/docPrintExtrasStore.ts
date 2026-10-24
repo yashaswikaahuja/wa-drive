@@ -15,6 +15,8 @@ export type SavedExtra = {
   blob: Blob;
   /** Whiteout: never filtered. */
   plain?: boolean;
+  /** Scan filter chosen for this photo, so a refresh re-applies the same one. */
+  filter?: string;
 };
 
 const DB = 'cc-doc-print';
@@ -89,5 +91,25 @@ export async function saveMarks(docKey: string, marks: unknown[]): Promise<void>
     else await run('readwrite', (s) => s.delete(`marks:${docKey}`));
   } catch {
     /* storage blocked: edits just won't survive a refresh */
+  }
+}
+
+/** Filter chosen for the customer's own page(s), so a refresh re-applies it. */
+export async function loadPageFilter(docKey: string): Promise<string | null> {
+  if (!docKey) return null;
+  try {
+    const v = await run<unknown>('readonly', (s) => s.get(`filter:${docKey}`));
+    return typeof v === 'string' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function savePageFilter(docKey: string, filter: string): Promise<void> {
+  if (!docKey) return;
+  try {
+    await run('readwrite', (s) => s.put(filter, `filter:${docKey}`));
+  } catch {
+    /* storage blocked: filter choice just won't survive a refresh */
   }
 }

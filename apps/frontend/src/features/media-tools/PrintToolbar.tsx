@@ -96,6 +96,8 @@ export type PrintToolbarProps = {
   activeTool: PrintTool;
   cropOpen: boolean;
   filter: DocScanFilter;
+  filterScope: 'selected' | 'all';
+  onFilterScope: (scope: 'selected' | 'all') => void;
   onBack: () => void;
   onDownload: () => void;
   onPrint: () => void;
@@ -174,18 +176,49 @@ export default function PrintToolbar(p: PrintToolbarProps) {
             style={{ color: 'hsl(var(--pt-ink))' }}
           >
             <span>Filter</span>
-            <select
-              aria-label="Filter"
-              data-doc-print-filter={p.filter}
-              value={p.filter}
-              onChange={(e) => p.onFilter(e.target.value as DocScanFilter)}
-              className={`h-8 text-xs rounded-md border pl-1.5 pr-6 font-medium ${focusRing}`}
-              style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))', background: 'hsl(var(--pt-card))' }}
-            >
-              {DOC_SCAN_FILTERS.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
-              ))}
-            </select>
+            <div className="flex items-center gap-1">
+              <select
+                aria-label="Filter"
+                data-doc-print-filter={p.filter}
+                value={p.filter}
+                onChange={(e) => p.onFilter(e.target.value as DocScanFilter)}
+                className={`h-8 text-xs rounded-md border pl-1.5 pr-6 font-medium ${focusRing}`}
+                style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))', background: 'hsl(var(--pt-card))' }}
+              >
+                {DOC_SCAN_FILTERS.map((f) => (
+                  <option key={f.id} value={f.id}>{f.label}</option>
+                ))}
+              </select>
+              <div
+                role="radiogroup"
+                aria-label="Apply filter to"
+                className="flex items-center rounded-md p-0.5 shrink-0"
+                style={{ background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
+              >
+                {(['selected', 'all'] as const).map((scope) => {
+                  const on = p.filterScope === scope;
+                  return (
+                    <button
+                      key={scope}
+                      type="button"
+                      role="radio"
+                      aria-checked={on}
+                      data-doc-print-filter-scope={scope}
+                      onClick={() => p.onFilterScope(scope)}
+                      title={scope === 'selected' ? 'Apply to the selected photo only' : 'Apply to every page'}
+                      className={`h-7 min-h-[28px] px-2 text-[11px] font-semibold rounded-[5px] ${focusRing}`}
+                      style={
+                        on
+                          ? { background: 'hsl(var(--pt-marigold))', color: 'hsl(var(--pt-marigold-ink, 24 30% 16%))' }
+                          : { background: 'transparent', color: 'hsl(var(--pt-muted))' }
+                      }
+                    >
+                      {scope === 'selected' ? 'Selected' : 'All'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </label>
         </Group>
         <Divider />

@@ -55,6 +55,8 @@ export type DocCell = {
   baseCanvas?: HTMLCanvasElement;
   /** Whiteout and similar: filters leave it alone. */
   plain?: boolean;
+  /** Scan filter applied to this cell. When unset, the page default is used. */
+  filter?: string;
   /** Original photo before auto edge-crop, so Crop can re-adjust from it. */
   rawCanvas?: HTMLCanvasElement;
   fitMode?: DocFitMode;

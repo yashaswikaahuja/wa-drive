@@ -82,7 +82,34 @@ async function openEditor(page: Page): Promise<FrameLocator> {
   return frame;
 }
 
-/** Click the stamp whose tag starts with prefix, at a fractional point inside it. */
+/** Average colour painted inside the stamp whose tag starts with prefix, [r,g,b]. */
+async function stampColor(page: Page, prefix: string): Promise<[number, number, number]> {
+  const f = page.frames().find((fr) => fr.url().includes('viewer.html'))!;
+  return f.evaluate((pfx) => {
+    const ui = (window as any).PDFViewerApplication.pdfViewer._layerProperties.annotationEditorUIManager;
+    const ed = ui.getEditors(0).find((e: any) => (e.__cyberTag || '').startsWith(pfx));
+    const src: HTMLImageElement | HTMLCanvasElement | null = ed?.div?.querySelector('img') || ed?.div?.querySelector('canvas');
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(src as CanvasImageSource, 0, 0, 16, 16);
+    const d = ctx.getImageData(0, 0, 16, 16).data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) continue;
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+      n++;
+    }
+    n = n || 1;
+    return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+  }, prefix);
+}
 async function clickStamp(page: Page, prefix: string, fx = 0.5, fy = 0.5) {
   const f = page.frames().find((fr) => fr.url().includes('viewer.html'))!;
   const box = await f.evaluate((pfx) => {
@@ -190,11 +217,27 @@ test.describe('Print editor keeps work (operator)', () => {
     await expect.poll(async () => (await editors(page)).find((e) => e.tag === extra.tag)?.y).toBeCloseTo(movedExtra.y, 2);
 
     // Text on the empty top margin.
-    await page.locator('[data-doc-print-viewer-tool="text"]').click();
     const pageBox = await frame.locator('.page').first().boundingBox();
-    await page.mouse.click(pageBox!.x + pageBox!.width * 0.3, pageBox!.y + pageBox!.height * 0.03);
-    await page.keyboard.type('Self attested');
-    await page.locator('[data-doc-print-viewer-tool="select"]').click();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.locator('[data-doc-print-viewer-tool="text"]').click();
+      await expect(frame.locator('#editorFreeTextButton')).toHaveAttribute('aria-expanded', 'true', { timeout: 8000 });
+      await page.mouse.click(pageBox!.x + pageBox!.width * 0.3, pageBox!.y + pageBox!.height * 0.03);
+      await page.waitForTimeout(300);
+      await page.keyboard.type('Self attested');
+      await page.locator('[data-doc-print-viewer-tool="select"]').click();
+      const ok = await page
+        .waitForFunction(
+          () => {
+            const fr = [...document.querySelectorAll('iframe')].find((f) => f.src.includes('viewer.html')) as HTMLIFrameElement;
+            const ui = (fr?.contentWindow as any)?.PDFViewerApplication?.pdfViewer?._layerProperties?.annotationEditorUIManager;
+            return !!ui?.getEditors(0).some((e: any) => e.editorType === 'freetext' && (e.div?.innerText || '').replace(/\s+/g, ' ').trim() === 'Self attested');
+          },
+          { timeout: 4000 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      if (ok) break;
+    }
     await expect.poll(async () => (await editors(page)).some((e) => e.type === 'freetext' && e.text === 'Self attested'), { timeout: 10000 }).toBe(true);
 
     // Whiteout is kept as its own item.
@@ -254,5 +297,52 @@ test.describe('Print editor keeps work (operator)', () => {
     await page.waitForTimeout(400);
     [r, g, b] = await cropPreviewColor(page);
     expect(r, `expected red doc, got rgb(${r},${g},${b})`).toBeGreaterThan(b + 30);
+  });
+
+  test('Filter applies to the selected photo only, or to all pages', async ({ page }) => {
+    test.setTimeout(140_000);
+    await openEditor(page);
+
+    // Add the blue second document over the red customer page.
+    await page.locator('[data-doc-print-image-input]').setInputFiles({
+      name: 'second.png',
+      mimeType: 'image/png',
+      buffer: SECOND_DOC,
+    });
+    await page.locator('[data-crop-apply="1"]').click({ timeout: 15000 });
+    await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 15000 }).toBe(2);
+    await page.waitForTimeout(1000);
+
+    // Start from Original so colours are the source colours.
+    await page.locator('[data-doc-print-filter-scope="all"]').click();
+    await page.locator('select[aria-label="Filter"]').selectOption('original');
+    await page.waitForTimeout(2500);
+    let blue = await stampColor(page, 'x');
+    let red = await stampColor(page, 'c');
+    expect(blue[2], `blue doc b>r, got ${blue}`).toBeGreaterThan(blue[0] + 30);
+    expect(red[0], `red doc r>b, got ${red}`).toBeGreaterThan(red[2] + 30);
+
+    // Selected scope: grayscale the blue doc only. Red parent stays red.
+    await page.locator('[data-doc-print-filter-scope="selected"]').click();
+    await expect(page.locator('[data-doc-print-filter-scope="selected"]')).toHaveAttribute('aria-checked', 'true');
+    await clickStamp(page, 'x');
+    await expect.poll(async () => (await editors(page)).filter((e) => e.sel).map((e) => e.tag[0])).toEqual(['x']);
+    await page.locator('select[aria-label="Filter"]').selectOption('gray');
+    await page.waitForTimeout(3000);
+    blue = await stampColor(page, 'x');
+    red = await stampColor(page, 'c');
+    expect(Math.abs(blue[0] - blue[2]), `blue doc now gray, got ${blue}`).toBeLessThan(14);
+    expect(red[0], `red parent still red, got ${red}`).toBeGreaterThan(red[2] + 25);
+
+    // All scope: grayscale everything. Red parent turns gray too.
+    await page.locator('[data-doc-print-filter-scope="all"]').click();
+    await page.locator('select[aria-label="Filter"]').selectOption('original');
+    await page.waitForTimeout(2500);
+    await page.locator('select[aria-label="Filter"]').selectOption('gray');
+    await page.waitForTimeout(3000);
+    red = await stampColor(page, 'c');
+    blue = await stampColor(page, 'x');
+    expect(Math.abs(red[0] - red[2]), `red parent now gray, got ${red}`).toBeLessThan(14);
+    expect(Math.abs(blue[0] - blue[2]), `blue doc still gray, got ${blue}`).toBeLessThan(14);
   });
 });

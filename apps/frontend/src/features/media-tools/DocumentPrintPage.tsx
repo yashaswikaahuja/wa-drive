@@ -13,7 +13,7 @@ import { toast } from '../../shared/toast';
 import { downloadBlob, loadImageFromFile } from './imageOps';
 import MozillaPdfEmbed, { type MozillaPdfHandle, type PdfEditorMode } from '../files/MozillaPdfEmbed';
 import type { StampRect } from '@cybercontrol/media-viewer';
-import { loadExtras, loadMarks, saveExtras, saveMarks, type SavedExtra } from './docPrintExtrasStore';
+import { loadExtras, loadMarks, loadPageFilter, saveExtras, saveMarks, savePageFilter, type SavedExtra } from './docPrintExtrasStore';
 import DrivePicker from '../photo-tool/DrivePicker';
 import DotCropModal from './DotCropModal';
 import CleanupModal from './CleanupModal';
@@ -138,6 +138,8 @@ export default function DocumentPrintPage() {
   const [cropSource, setCropSource] = useState<HTMLCanvasElement | null>(null);
   const [cleanup, setCleanup] = useState<{ pageIndex: number; cellId: string; source: HTMLCanvasElement } | null>(null);
   const [docFilter, setDocFilter] = useState<DocScanFilter>('auto');
+  /** Whether the Filter control changes only the selected photo or every page. */
+  const [filterScope, setFilterScope] = useState<'selected' | 'all'>('all');
   const [activeTool, setActiveTool] = useState<PdfEditorMode | 'whiteout'>('none');
   /** Paper of the PDF currently open in the viewer. Empty while a new sheet is building. */
   const [openSheet, setOpenSheet] = useState('');
@@ -174,7 +176,7 @@ export default function DocumentPrintPage() {
         const blob = extraBlobs.current.get(c.id);
         if (!blob) return;
         const r = photoRect(c);
-        saved.push({ id: c.id, page, x: r.x / sheet.w, y: r.y / sheet.h, w: r.w / sheet.w, h: r.h / sheet.h, blob, plain: c.plain });
+        saved.push({ id: c.id, page, x: r.x / sheet.w, y: r.y / sheet.h, w: r.w / sheet.w, h: r.h / sheet.h, blob, plain: c.plain, filter: c.filter });
       }),
     );
     void saveExtras(fileId, saved);
@@ -347,6 +349,7 @@ export default function DocumentPrintPage() {
               canvas,
               baseCanvas: cloneCanvas(canvas),
               plain: ex.plain,
+              filter: (ex.filter as DocScanFilter | undefined) || undefined,
             });
             extraBlobs.current.set(ex.id, ex.blob);
           } catch {
@@ -357,15 +360,22 @@ export default function DocumentPrintPage() {
           if (firstPdfUrl) URL.revokeObjectURL(firstPdfUrl);
           return;
         }
+        const savedPageFilter = ((await loadPageFilter(fileId)) as DocScanFilter | null) || 'auto';
+        if (!cancelled) {
+          setDocFilter(savedPageFilter);
+          filterRef.current = savedPageFilter;
+        }
         setPages(built.map((pg) => ({
           ...pg,
           cells: pg.cells.map((c) => {
             if (c.plain) return c;
             const base = c.baseCanvas || c.canvas;
+            const f = (c.filter as DocScanFilter | undefined) || savedPageFilter;
             return {
               ...c,
+              filter: f,
               baseCanvas: c.baseCanvas || cloneCanvas(c.canvas),
-              canvas: applyDocFilter(base, 'auto'),
+              canvas: applyDocFilter(base, f),
             };
           }),
         })));
@@ -829,13 +839,65 @@ export default function DocumentPrintPage() {
   };
 
   const chooseFilter = async (id: DocScanFilter) => {
-    if (id === docFilter) return;
-    if (!pagesRef.current.some((p) => p.cells.length > 0)) {
+    if (!pagesRef.current.some((p) => p.cells.some((c) => !c.plain))) {
       toast.error('Add a photo, then choose a filter');
       return;
     }
     await syncStamps();
+
+    // "Selected": change only the photo the operator has picked in the viewer.
+    if (filterScope === 'selected') {
+      let selectedTag: string | undefined;
+      try {
+        selectedTag = (await pdfRef.current?.stampRects())?.find((r) => r.selected)?.tag;
+      } catch {
+        selectedTag = undefined;
+      }
+      // Find the matching cell; skip whiteout.
+      let target: { pageIndex: number; cell: DocCell } | null = null;
+      if (selectedTag) {
+        for (let i = 0; i < pagesRef.current.length; i++) {
+          const cell = pagesRef.current[i].cells.find((c) => c.id === selectedTag);
+          if (cell) {
+            target = { pageIndex: i, cell };
+            break;
+          }
+        }
+      }
+      if (!target) {
+        toast.error('Tap a photo first, then pick a filter — or switch to All pages');
+        return;
+      }
+      if (target.cell.plain) {
+        toast.error('Whiteout has no filter');
+        return;
+      }
+      setDocFilter(id);
+      const targetId = target.cell.id;
+      setPages((prev) =>
+        prev.map((pg, i) =>
+          i !== target!.pageIndex
+            ? pg
+            : {
+                ...pg,
+                cells: pg.cells.map((c) => {
+                  if (c.id !== targetId || c.plain) return c;
+                  const base = c.baseCanvas || c.canvas;
+                  return { ...c, filter: id, baseCanvas: c.baseCanvas || cloneCanvas(base), canvas: applyDocFilter(base, id) };
+                }),
+              },
+        ),
+      );
+      layoutKeyRef.current = '';
+      resumePage.current = target.pageIndex + 1;
+      touchSheet();
+      setTimeout(() => persistExtras(pagesRef.current), 0);
+      return;
+    }
+
+    // "All pages": apply to every photo and remember it as the page default.
     setDocFilter(id);
+    void savePageFilter(fileId, id);
     setPages((prev) =>
       prev.map((pg) => ({
         ...pg,
@@ -844,6 +906,7 @@ export default function DocumentPrintPage() {
           const base = c.baseCanvas || c.canvas;
           return {
             ...c,
+            filter: id,
             baseCanvas: c.baseCanvas || cloneCanvas(base),
             canvas: applyDocFilter(base, id),
           };
@@ -852,6 +915,7 @@ export default function DocumentPrintPage() {
     );
     layoutKeyRef.current = '';
     touchSheet();
+    setTimeout(() => persistExtras(pagesRef.current), 0);
   };
 
   const addBlankPage = async () => {
@@ -910,6 +974,8 @@ export default function DocumentPrintPage() {
         cleanupOpen={!!cleanup}
         onCleanup={() => void openCleanup()}
         filter={docFilter}
+        filterScope={filterScope}
+        onFilterScope={setFilterScope}
         onBack={() => navigate(backTo)}
         onDownload={() => void handleDownloadPdf()}
         onPrint={() => void handlePrint()}
