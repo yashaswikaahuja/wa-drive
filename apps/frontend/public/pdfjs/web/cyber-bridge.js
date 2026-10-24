@@ -86,6 +86,31 @@
     if (app) patchClose(app);
     if (app?.pdfViewer && app.pdfViewer.annotationEditorMode !== -1) revealEditorButtons();
     keepSidebarClosed(app);
+    bindTextClickCommit(app);
+  }
+
+  // pdf.js 5: clicking blank page while a text box is in edit mode leaves the
+  // next new box only "selected", so typed letters are dropped until Space.
+  // Commit the open box and clear selection first, so the click starts typing.
+  function bindTextClickCommit(app) {
+    if (window.__cyberTextClickBound) return;
+    window.__cyberTextClickBound = true;
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.button !== 0 || !e.target?.classList?.contains("annotationEditorLayer")) return;
+        const um = (app || globalThis.PDFViewerApplication)?.pdfViewer?._layerProperties?.annotationEditorUIManager;
+        if (!um) return;
+        try {
+          const act = um.getActive?.();
+          if (act && act.editorType === "freetext" && act.isInEditMode?.()) act.commitOrRemove();
+          um.unselectAll?.();
+        } catch {
+          /* pdf.js internals changed: fall back to default behaviour */
+        }
+      },
+      true,
+    );
   }
 
   // The editor is one page the operator prints. Thumbnails only cover it,
