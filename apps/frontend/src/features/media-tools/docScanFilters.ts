@@ -588,6 +588,16 @@ function growToBackdrop(tone: Float32Array, w: number, h: number, box: PageBox) 
   }
   if (frame.length < 40) return 0;
   const back = percentile(frame, 0.5);
+  // The border is paper too (a sheet shot edge to edge, or a scan): the
+  // box missed a dimmer strip, so take the whole image, or that strip stays
+  // gray behind a hard line. The paper map fills it like any other paper.
+  if (back >= box.mode - 45 && percentile(frame, 0.15) >= box.mode - 70) {
+    box.x0 = 0;
+    box.y0 = 0;
+    box.x1 = w - 1;
+    box.y1 = h - 1;
+    return 0;
+  }
   if (box.mode - back < 90) return 0;
   const cut = back + (box.mode - back) * 0.35;
   const sheet = (horizontal: boolean, at: number) => {
@@ -710,12 +720,22 @@ function cleanSheet(
         const lc = 0.299 * nr + 0.587 * ng + 0.114 * nb;
         const gl = 0.299 * gr + 0.587 * gg + 0.114 * gb;
         const ls = lc + sharpen * (tone[at] - blur[at]) * gl;
-        const u = clamp((ls / target - black) / (white - black), 0, 1);
+        // Levels against what this spot's paper actually became: in a deep
+        // shadow the gain cap leaves paper below target, and measuring
+        // against target would read that paper as ink and blotch it.
+        const ref = clamp(bgL * gl * scale, 40, target);
+        const u = clamp((ls / ref - black) / (white - black), 0, 1);
         const want = Math.pow(u, gamma) * target;
         let s = want / Math.max(lc, 1);
         // Strong color (a stamp, a red title) darkens less so it does not go muddy.
-        const sp = Math.max(nr, ng, nb) - Math.min(nr, ng, nb);
-        if (s < 1) s = 1 - (1 - s) * (1 - 0.85 * clamp(sp / 90, 0, 1));
+        // Color relative to this spot's own paper, so a warm shadow or a
+        // yellowed sheet is not mistaken for colored ink.
+        const qr = d[i] / Math.max(pr[at], 1);
+        const qg = d[i + 1] / Math.max(pg[at], 1);
+        const qb = d[i + 2] / Math.max(pb[at], 1);
+        const qm = Math.max(qr, qg, qb);
+        const sp = qm > 0 ? ((qm - Math.min(qr, qg, qb)) / qm) * Math.min(lc * 1.4, 255) : 0;
+        if (s < 1) s = 1 - (1 - s) * (1 - 0.6 * clamp(sp / 90, 0, 1));
         if (s < 1) {
           // Only thin strokes are ink. A wide dark area (a shirt in an
           // unmasked photo, a filled box) keeps its level instead of going black.
@@ -727,7 +747,7 @@ function cleanSheet(
         if (s >= 1) {
           // Brighten toward white, not by scaling: scaling would also scale
           // any leftover cast and turn warm paper yellow. Skip the backdrop.
-          const k = lift * clamp((want - lc) / Math.max(255 - lc, 1), 0, 1);
+          const k = lift * clamp((want - lc) / Math.max(255 - lc, 1), 0, 1) * (1 - clamp((sp - 45) / 50, 0, 1));
           nr = Math.round(nr + (255 - nr) * k);
           ng = Math.round(ng + (255 - ng) * k);
           nb = Math.round(nb + (255 - nb) * k);
@@ -736,6 +756,15 @@ function cleanSheet(
           nr = clamp(Math.round(nr * s), 0, 255);
           ng = clamp(Math.round(ng * s), 0, 255);
           nb = clamp(Math.round(nb * s), 0, 255);
+        }
+        if (sp >= 25 && s < 1) {
+          // Colored text, stamps, tricolor bands: a phone photo dulls them,
+          // so push chroma back out around the pixel's own luma.
+          const boost = 1 + (mode === 'light' ? 0.25 : 0.5) * clamp((sp - 25) / 50, 0, 1) * lift;
+          const l = 0.299 * nr + 0.587 * ng + 0.114 * nb;
+          nr = clamp(Math.round(l + (nr - l) * boost), 0, 255);
+          ng = clamp(Math.round(l + (ng - l) * boost), 0, 255);
+          nb = clamp(Math.round(l + (nb - l) * boost), 0, 255);
         }
       }
       if (mode === 'gray') {
