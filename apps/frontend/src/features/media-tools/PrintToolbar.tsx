@@ -6,6 +6,8 @@
  */
 import type { ReactNode } from 'react';
 import {
+  ArrowClockwise,
+  ArrowCounterClockwise,
   CaretLeft,
   Crop,
   Cursor,
@@ -41,18 +43,20 @@ type ToolProps = {
   title?: string;
   data: string;
   viewer: string;
+  disabled?: boolean;
 };
 
-function Tool({ label, icon, active, onClick, title, data, viewer }: ToolProps) {
+function Tool({ label, icon, active, onClick, title, data, viewer, disabled }: ToolProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       title={title || label}
-      aria-pressed={active}
+      aria-pressed={active === undefined ? undefined : active}
       data-doc-print-tool={data}
       data-doc-print-viewer-tool={viewer}
-      className={`relative flex flex-col items-center justify-center gap-0.5 min-w-[52px] h-12 px-1.5 shrink-0 rounded-lg text-[11px] font-medium transition-colors ${focusRing}`}
+      className={`relative flex flex-col items-center justify-center gap-0.5 min-w-[52px] h-12 px-1.5 shrink-0 rounded-lg text-[11px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${focusRing}`}
       style={{
         color: active ? 'hsl(var(--marigold-deep))' : 'hsl(var(--pt-ink))',
         background: active ? 'hsl(var(--marigold) / 0.16)' : 'transparent',
@@ -103,6 +107,10 @@ export type PrintToolbarProps = {
   cleanupOpen: boolean;
   onCleanup: () => void;
   onFilter: (id: DocScanFilter) => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: () => void;
+  onRedo: () => void;
   onAddPage: () => void;
   onPaper: (id: DocPaperId) => void;
 };
@@ -182,6 +190,8 @@ export default function PrintToolbar(p: PrintToolbarProps) {
         </Group>
         <Divider />
         <Group label="Edit">
+          <Tool label="Undo" data="undo" viewer="undo" icon={<ArrowCounterClockwise size={ico} />} disabled={!p.canUndo} onClick={p.onUndo} title="Undo (Ctrl+Z)" />
+          <Tool label="Redo" data="redo" viewer="redo" icon={<ArrowClockwise size={ico} />} disabled={!p.canRedo} onClick={p.onRedo} title="Redo (Ctrl+Y)" />
           <Tool label="Select" data="select" viewer="select" icon={<Cursor size={ico} />} active={p.activeTool === 'none'} onClick={() => p.onTool('none')} title="Select, move and resize" />
           <Tool label="Text" data="text" viewer="text" icon={<TextT size={ico} />} active={p.activeTool === 'text'} onClick={() => p.onTool('text')} />
           <Tool label="Draw" data="draw" viewer="draw" icon={<PencilSimple size={ico} />} active={p.activeTool === 'draw'} onClick={() => p.onTool('draw')} />

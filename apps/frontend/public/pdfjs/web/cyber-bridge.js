@@ -5,6 +5,8 @@
   const editorMode = new URLSearchParams(window.location.search).get("cyber") === "editor";
 
   const EDITOR_MODES = { none: 0, text: 3, highlight: 9, image: 13, draw: 15 };
+  /** The operator picked Select (runs in image mode, see setEditorMode). */
+  let selectIntent = false;
 
   // Follow the Hub theme (html[data-theme]) instead of the OS setting, so the
   // viewer toolbar is dark when the app is dark. Same origin, so read the parent.
@@ -88,6 +90,7 @@
     keepSidebarClosed(app);
     bindTextClickCommit(app);
     bindDrawOnTop(app);
+    bindHistory(app);
   }
 
   // The customer's photo is a stamp in the editor layer, but pdf.js draws ink
@@ -176,7 +179,10 @@
   }
 
   async function setEditorMode(name) {
-    const mode = EDITOR_MODES[name] ?? 0;
+    // "Select" uses the image mode: photos stay clickable and draggable. In mode 0
+    // pdf.js switches editing off, so clicks fell through and selected page text.
+    selectIntent = name === "none";
+    const mode = selectIntent ? EDITOR_MODES.image : EDITOR_MODES[name] ?? 0;
     const app = await editorApp();
     const viewer = app?.pdfViewer;
     if (!viewer || viewer.annotationEditorMode === -1) throw new Error("PDF editor is not ready");
@@ -226,6 +232,32 @@
   }
 
   async function placeImageFile(raw, place) {
+    if (!place?.quiet) return placeImageFileInner(raw, place);
+    // Photos the page puts back after a rebuild or refresh are not operator
+    // steps: keep them out of Undo, so Undo never removes the customer's page.
+    const ui = (await editorApp())?.pdfViewer?._layerProperties?.annotationEditorUIManager;
+    return quietly(ui, () => placeImageFileInner(raw, place));
+  }
+
+  async function quietly(ui, fn) {
+    if (!ui || typeof ui.addCommands !== "function") return fn();
+    const own = Object.prototype.hasOwnProperty.call(ui, "addCommands");
+    const orig = ui.addCommands;
+    ui.addCommands = function (params) {
+      // Do what a recorded step would do now, without recording it.
+      try {
+        if (params?.mustExec) params.cmd?.();
+      } catch {}
+    };
+    try {
+      return await fn();
+    } finally {
+      if (own) ui.addCommands = orig;
+      else delete ui.addCommands;
+    }
+  }
+
+  async function placeImageFileInner(raw, place) {
     const file = asImageFile(raw);
     if (!file) throw new Error("No image");
     if (file.type && !file.type.startsWith("image/")) throw new Error("Choose a photo (JPG or PNG)");
@@ -257,11 +289,15 @@
       if (!editor) throw new Error("Image was not added");
       if (tag) editor.__cyberTag = tag;
       await layoutStamp(editor, place);
-      // Back to Select after the stamp exists, so the next click shows resize handles.
+      // Back to Select (image mode, see setEditorMode) so photos stay clickable.
+      selectIntent = true;
       try {
-        viewer.annotationEditorMode = { mode: EDITOR_MODES.none };
+        if (ui.getMode() !== EDITOR_MODES.image) viewer.annotationEditorMode = { mode: EDITOR_MODES.image };
       } catch {}
-      for (let i = 0; i < 40 && ui.getMode() !== EDITOR_MODES.none; i++) await sleep(25);
+      for (let i = 0; i < 40 && ui.getMode() !== EDITOR_MODES.image; i++) await sleep(25);
+      try {
+        ui.unselectAll();
+      } catch {}
       if (editor.div) editor.div.dataset.cyberPlaced = "1";
     }
     rankStamps();
@@ -312,6 +348,88 @@
     document.addEventListener("keyup", ping, true);
   }
   bindStampChanges();
+
+  async function editorUi() {
+    const app = await appReady();
+    return { app, ui: app?.pdfViewer?._layerProperties?.annotationEditorUIManager };
+  }
+
+  // Text, drawings and highlights as plain data, so the page can put them back
+  // after a filter/crop rebuild or a refresh. Photos (tagged stamps) are kept by the page.
+  async function readMarks() {
+    const { app, ui } = await editorUi();
+    const count = app?.pdfDocument?.numPages || 0;
+    if (!ui?.getEditors) throw new Error("PDF editor is not ready");
+    const marks = [];
+    for (let i = 0; i < count; i++) {
+      for (const ed of ui.getEditors(i)) {
+        if (ed.__cyberTag || ed.editorType === "stamp" || ed.isEmpty?.()) continue;
+        try {
+          const data = ed.serialize(true);
+          if (data) marks.push({ ...data, pageIndex: i });
+        } catch {
+          /* editor still being drawn */
+        }
+      }
+    }
+    return marks;
+  }
+
+  async function layerFor(app, ui, pageIndex) {
+    for (let i = 0; i < 60; i++) {
+      const layer = ui.getLayer(pageIndex);
+      if (layer?.deserialize) return layer;
+      if (i === 0 && app.page !== pageIndex + 1) app.page = pageIndex + 1;
+      await sleep(50);
+    }
+    return null;
+  }
+
+  async function restoreMarks(marks) {
+    const { app, ui } = await editorUi();
+    if (!ui || !Array.isArray(marks) || !marks.length) return;
+    const back = app.page;
+    await quietly(ui, async () => {
+      for (const data of marks) {
+        try {
+          const layer = await layerFor(app, ui, Number(data.pageIndex) || 0);
+          const ed = layer && (await layer.deserialize(data));
+          if (ed) layer.addOrRebuild(ed);
+        } catch {
+          /* one bad mark should not stop the rest */
+        }
+      }
+    });
+    if (app.page !== back) app.page = back;
+    try {
+      ui.unselectAll();
+    } catch {}
+  }
+
+  function bindHistory(app) {
+    if (!app?.eventBus || app.__cyberHistory) return;
+    app.__cyberHistory = true;
+    const hist = { undo: false, redo: false };
+    app.eventBus.on("annotationeditorstateschanged", ({ details }) => {
+      if (!details) return;
+      let changed = false;
+      if ("hasSomethingToUndo" in details) {
+        changed ||= hist.undo !== !!details.hasSomethingToUndo;
+        hist.undo = !!details.hasSomethingToUndo;
+      }
+      if ("hasSomethingToRedo" in details) {
+        changed ||= hist.redo !== !!details.hasSomethingToRedo;
+        hist.redo = !!details.hasSomethingToRedo;
+      }
+      if (changed) post("cyber-history", { ...hist });
+    });
+    // A new document starts with no history.
+    app.eventBus.on("documentloaded", () => {
+      hist.undo = false;
+      hist.redo = false;
+      post("cyber-history", { ...hist });
+    });
+  }
 
   async function exportPdf(id) {
     const app = await appReady();
@@ -578,6 +696,32 @@
         if (e.data.id) parent.postMessage({ type: "cyber-stamp-error", id: e.data.id, message }, ORIGIN);
         else post("cyber-pdf-error", { message });
       }
+      return;
+    }
+    if (e.data.type === "cyber-read-marks") {
+      try {
+        const marks = await readMarks();
+        parent.postMessage({ type: "cyber-marks", id: e.data.id, marks }, ORIGIN);
+      } catch (err) {
+        parent.postMessage({ type: "cyber-marks-error", id: e.data.id, message: String(err.message || err) }, ORIGIN);
+      }
+      return;
+    }
+    if (e.data.type === "cyber-restore-marks") {
+      try {
+        await restoreMarks(e.data.marks);
+      } catch {}
+      parent.postMessage({ type: "cyber-marks-restored", id: e.data.id }, ORIGIN);
+      return;
+    }
+    if (e.data.type === "cyber-undo" || e.data.type === "cyber-redo") {
+      try {
+        const { ui } = await editorUi();
+        if (e.data.type === "cyber-undo") ui?.undo();
+        else ui?.redo();
+        rankStamps();
+      } catch {}
+      post("cyber-stamps-changed");
       return;
     }
     if (e.data.type === "cyber-stamp-rects") {

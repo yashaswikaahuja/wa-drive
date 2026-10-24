@@ -53,6 +53,8 @@ export type DocCell = {
   canvas: HTMLCanvasElement;
   /** Pre-tone bitmap so brightness/contrast can be re-applied. */
   baseCanvas?: HTMLCanvasElement;
+  /** Whiteout and similar: filters leave it alone. */
+  plain?: boolean;
   /** Original photo before auto edge-crop, so Crop can re-adjust from it. */
   rawCanvas?: HTMLCanvasElement;
   fitMode?: DocFitMode;

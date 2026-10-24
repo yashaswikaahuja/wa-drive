@@ -13,6 +13,8 @@ export type SavedExtra = {
   h: number;
   /** Unfiltered photo, so the current filter can be re-applied. */
   blob: Blob;
+  /** Whiteout: never filtered. */
+  plain?: boolean;
 };
 
 const DB = 'cc-doc-print';
@@ -65,5 +67,27 @@ export async function saveExtras(docKey: string, extras: SavedExtra[]): Promise<
     else await run('readwrite', (s) => s.delete(docKey));
   } catch {
     /* storage full or blocked: extras just won't survive a refresh */
+  }
+}
+
+
+/** Text, drawings and highlights (pdf.js editor data) for one document. */
+export async function loadMarks(docKey: string): Promise<unknown[]> {
+  if (!docKey) return [];
+  try {
+    const v = await run<unknown>('readonly', (s) => s.get(`marks:${docKey}`));
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveMarks(docKey: string, marks: unknown[]): Promise<void> {
+  if (!docKey) return;
+  try {
+    if (marks.length) await run('readwrite', (s) => s.put(marks, `marks:${docKey}`));
+    else await run('readwrite', (s) => s.delete(`marks:${docKey}`));
+  } catch {
+    /* storage blocked: edits just won't survive a refresh */
   }
 }

@@ -13,7 +13,7 @@ import { toast } from '../../shared/toast';
 import { downloadBlob, loadImageFromFile } from './imageOps';
 import MozillaPdfEmbed, { type MozillaPdfHandle, type PdfEditorMode } from '../files/MozillaPdfEmbed';
 import type { StampRect } from '@cybercontrol/media-viewer';
-import { loadExtras, saveExtras, type SavedExtra } from './docPrintExtrasStore';
+import { loadExtras, loadMarks, saveExtras, saveMarks, type SavedExtra } from './docPrintExtrasStore';
 import DrivePicker from '../photo-tool/DrivePicker';
 import DotCropModal from './DotCropModal';
 import CleanupModal from './CleanupModal';
@@ -81,7 +81,7 @@ function photoRect(cell: DocCell): { x: number; y: number; w: number; h: number 
   return { x: cell.x + (cell.w - w) / 2, y: cell.y, w, h: cell.h };
 }
 
-function whiteoutFile(): Promise<File> {
+function whiteCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = 480;
   canvas.height = 140;
@@ -90,6 +90,11 @@ function whiteoutFile(): Promise<File> {
     g.fillStyle = '#ffffff';
     g.fillRect(0, 0, canvas.width, canvas.height);
   }
+  return canvas;
+}
+
+/** Lossless, for whiteout (JPEG would leave grey edges). */
+function pngFile(canvas: HTMLCanvasElement): Promise<File> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -169,10 +174,27 @@ export default function DocumentPrintPage() {
         const blob = extraBlobs.current.get(c.id);
         if (!blob) return;
         const r = photoRect(c);
-        saved.push({ id: c.id, page, x: r.x / sheet.w, y: r.y / sheet.h, w: r.w / sheet.w, h: r.h / sheet.h, blob });
+        saved.push({ id: c.id, page, x: r.x / sheet.w, y: r.y / sheet.h, w: r.w / sheet.w, h: r.h / sheet.h, blob, plain: c.plain });
       }),
     );
     void saveExtras(fileId, saved);
+  };
+
+  /** Text, drawings and highlights, put back after every rebuild and refresh. */
+  const marksRef = useRef<unknown[]>([]);
+  /** Photos the operator deleted, so Redo/Undo can bring them back. */
+  const trashRef = useRef(new Map<string, DocCell>());
+  const [history, setHistory] = useState({ undo: false, redo: false });
+
+  const readMarks = async () => {
+    const url = viewerUrlRef.current;
+    if (!pdfRef.current || !url || stampsLive.current !== url) return;
+    try {
+      marksRef.current = await pdfRef.current.readMarks();
+      void saveMarks(fileId, marksRef.current);
+    } catch {
+      /* keep the last good copy */
+    }
   };
 
   /** Read where the operator moved, resized or deleted each photo, into the page state. */
@@ -180,6 +202,7 @@ export default function DocumentPrintPage() {
     const list = pagesRef.current;
     const url = viewerUrlRef.current;
     if (!pdfRef.current || !url || stampsLive.current !== url) return list;
+    await readMarks();
     let rects: StampRect[];
     try {
       rects = await pdfRef.current.stampRects();
@@ -190,23 +213,27 @@ export default function DocumentPrintPage() {
     const sheet = paperRef.current;
     const byTag = new Map(rects.map((r) => [r.tag, r]));
     const next: DocPage[] = list.map((pg) => ({ ...pg, cells: [] }));
+    const fromRect = (c: DocCell, r: StampRect): DocCell => ({
+      ...c,
+      x: Math.round(r.x * sheet.w),
+      y: Math.round(r.y * sheet.h),
+      w: Math.max(1, Math.round(r.w * sheet.w)),
+      h: Math.max(1, Math.round(r.h * sheet.h)),
+      fitMode: 'contain',
+    });
+    const pageOf = (r: StampRect) => Math.min(next.length - 1, Math.max(0, r.page - 1));
     let changed = false;
     list.forEach((pg, i) =>
       pg.cells.forEach((c) => {
         const r = byTag.get(c.id);
+        byTag.delete(c.id);
         if (!r) {
+          trashRef.current.set(c.id, c);
           changed = true;
           return;
         }
-        const pi = Math.min(next.length - 1, Math.max(0, r.page - 1));
-        const cell: DocCell = {
-          ...c,
-          x: Math.round(r.x * sheet.w),
-          y: Math.round(r.y * sheet.h),
-          w: Math.max(1, Math.round(r.w * sheet.w)),
-          h: Math.max(1, Math.round(r.h * sheet.h)),
-          fitMode: 'contain',
-        };
+        const pi = pageOf(r);
+        const cell = fromRect(c, r);
         const pr = photoRect(c);
         const moved =
           pi !== i ||
@@ -218,6 +245,14 @@ export default function DocumentPrintPage() {
         next[pi].cells.push(moved ? cell : c);
       }),
     );
+    // Undo of a delete brings the same photo back.
+    byTag.forEach((r, tag) => {
+      const c = trashRef.current.get(tag);
+      if (!c) return;
+      trashRef.current.delete(tag);
+      next[pageOf(r)].cells.push(fromRect(c, r));
+      changed = true;
+    });
     if (!changed) return list;
     pagesRef.current = next;
     setPages(next);
@@ -284,7 +319,17 @@ export default function DocumentPrintPage() {
         if (!built.length) throw new Error('Could not load document');
         // Photos added before a refresh go back where they were.
         extraBlobs.current.clear();
-        for (const ex of await loadExtras(fileId)) {
+        const savedExtras = await loadExtras(fileId);
+        marksRef.current = await loadMarks(fileId);
+        trashRef.current.clear();
+        // Pages added with + Page come back if anything is on them.
+        const lastPage = Math.max(
+          ...savedExtras.map((ex) => ex.page),
+          ...marksRef.current.map((m) => Number((m as { pageIndex?: number })?.pageIndex) || 0),
+          0,
+        );
+        while (built.length <= Math.min(lastPage, 30)) built.push(blankPage(p));
+        for (const ex of savedExtras) {
           try {
             const img = await createImageBitmap(ex.blob);
             const canvas = document.createElement('canvas');
@@ -301,6 +346,7 @@ export default function DocumentPrintPage() {
               h: Math.max(1, Math.round(ex.h * p.h)),
               canvas,
               baseCanvas: cloneCanvas(canvas),
+              plain: ex.plain,
             });
             extraBlobs.current.set(ex.id, ex.blob);
           } catch {
@@ -314,6 +360,7 @@ export default function DocumentPrintPage() {
         setPages(built.map((pg) => ({
           ...pg,
           cells: pg.cells.map((c) => {
+            if (c.plain) return c;
             const base = c.baseCanvas || c.canvas;
             return {
               ...c,
@@ -349,6 +396,25 @@ export default function DocumentPrintPage() {
     return () => {
       if (originalUrlRef.current) URL.revokeObjectURL(originalUrlRef.current);
     };
+  }, []);
+
+  // Ctrl+Z / Ctrl+Y while focus is on the toolbar (the viewer handles its own keys).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        pdfRef.current?.undo();
+      } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+        e.preventDefault();
+        pdfRef.current?.redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // Paper change, filter, crop: keep the saved added photos in step.
@@ -451,7 +517,12 @@ export default function DocumentPrintPage() {
     if (!url || placedForUrl.current === url) return;
     if (!stampOnOpenRef.current) {
       // Blank sheet: anything stamped from now on is tagged.
-      if (url !== originalUrlRef.current) stampsLive.current = url;
+      if (url !== originalUrlRef.current) {
+        placedForUrl.current = url;
+        await pdfRef.current?.restoreMarks(marksRef.current).catch(() => {});
+        pdfRef.current?.setEditorMode('none');
+        if (viewerUrlRef.current === url) stampsLive.current = url;
+      }
       return;
     }
     placedForUrl.current = url;
@@ -461,7 +532,7 @@ export default function DocumentPrintPage() {
       for (let i = 0; i < list.length; i++) {
         for (const cell of list[i].cells) {
           const rect = photoRect(cell);
-          const file = await canvasFile(cell.canvas);
+          const file = cell.plain ? await pngFile(cell.canvas) : await canvasFile(cell.canvas);
           await pdfRef.current?.stampFile(file, {
             page: i + 1,
             x: rect.x / sheet.w,
@@ -469,9 +540,13 @@ export default function DocumentPrintPage() {
             w: rect.w / sheet.w,
             h: rect.h / sheet.h,
             tag: cell.id,
+            quiet: true,
           });
         }
       }
+      // Text, drawings and highlights go back on top of the photos.
+      await pdfRef.current?.restoreMarks(marksRef.current).catch(() => {});
+      pdfRef.current?.setEditorMode('none');
       if (viewerUrlRef.current === url) stampsLive.current = url;
       const resume = resumePage.current;
       resumePage.current = 0;
@@ -555,11 +630,50 @@ export default function DocumentPrintPage() {
     pdfRef.current?.setEditorMode(mode);
   };
 
+  /** Put a new item on the open page as a tagged stamp and keep it in page state. */
+  const addExtraCell = async (base: HTMLCanvasElement, canvas: HTMLCanvasElement, size: number, plain: boolean) => {
+    const list = pagesRef.current;
+    const pageNumber = (await pdfRef.current?.currentPage().catch(() => 1)) || 1;
+    const index = Math.min(Math.max(0, pageNumber - 1), Math.max(0, list.length - 1));
+    const sheet = paperRef.current;
+    const aspect = canvas.width / Math.max(1, canvas.height);
+    let w = sheet.w * size;
+    let h = w / aspect;
+    if (h > sheet.h * size) {
+      h = sheet.h * size;
+      w = h * aspect;
+    }
+    const cell: DocCell = {
+      id: makeId('x'),
+      x: Math.round((sheet.w - w) / 2),
+      y: Math.round((sheet.h - h) / 2),
+      w: Math.round(w),
+      h: Math.round(h),
+      canvas,
+      baseCanvas: base,
+      plain: plain || undefined,
+    };
+    setActiveTool('none');
+    await pdfRef.current?.stampFile(plain ? await pngFile(canvas) : await canvasFile(canvas), {
+      page: index + 1,
+      x: cell.x / sheet.w,
+      y: cell.y / sheet.h,
+      w: cell.w / sheet.w,
+      h: cell.h / sheet.h,
+      tag: cell.id,
+    });
+    extraBlobs.current.set(cell.id, plain ? await pngFile(base) : await canvasFile(base));
+    const next = pagesRef.current.map((pg, i) => (i === index ? { ...pg, cells: [...pg.cells, cell] } : pg));
+    pagesRef.current = next;
+    setPages(next);
+    persistExtras(next);
+  };
+
   const placeWhiteout = async () => {
-    setActiveTool('whiteout');
     try {
-      const file = await whiteoutFile();
-      pdfRef.current?.stampFile(file);
+      const white = whiteCanvas();
+      await addExtraCell(white, white, 0.3, true);
+      toast.success('Whiteout added · drag it over what to hide');
     } catch {
       toast.error('Could not add whiteout');
     }
@@ -683,41 +797,7 @@ export default function DocumentPrintPage() {
     try {
       // The added photo becomes a page photo, so filters, rebuilds and refresh keep it.
       const base = cloneCanvas(framed);
-      const canvas = applyDocFilter(base, filterRef.current);
-      const list = pagesRef.current;
-      const pageNumber = (await pdfRef.current?.currentPage().catch(() => 1)) || 1;
-      const index = Math.min(Math.max(0, pageNumber - 1), Math.max(0, list.length - 1));
-      const sheet = paperRef.current;
-      const aspect = canvas.width / Math.max(1, canvas.height);
-      let w = sheet.w * 0.6;
-      let h = w / aspect;
-      if (h > sheet.h * 0.6) {
-        h = sheet.h * 0.6;
-        w = h * aspect;
-      }
-      const cell: DocCell = {
-        id: makeId('x'),
-        x: Math.round((sheet.w - w) / 2),
-        y: Math.round((sheet.h - h) / 2),
-        w: Math.round(w),
-        h: Math.round(h),
-        canvas,
-        baseCanvas: base,
-      };
-      setActiveTool('none');
-      await pdfRef.current?.stampFile(await canvasFile(canvas), {
-        page: index + 1,
-        x: cell.x / sheet.w,
-        y: cell.y / sheet.h,
-        w: cell.w / sheet.w,
-        h: cell.h / sheet.h,
-        tag: cell.id,
-      });
-      extraBlobs.current.set(cell.id, await canvasFile(base));
-      const next = pagesRef.current.map((pg, i) => (i === index ? { ...pg, cells: [...pg.cells, cell] } : pg));
-      pagesRef.current = next;
-      setPages(next);
-      persistExtras(next);
+      await addExtraCell(base, applyDocFilter(base, filterRef.current), 0.6, false);
       toast.success('Image placed on the page');
     } catch (e: any) {
       toast.error(e?.message || 'Could not place the photo');
@@ -736,6 +816,7 @@ export default function DocumentPrintPage() {
       prev.map((pg) => ({
         ...pg,
         cells: pg.cells.map((c) => {
+          if (c.plain) return c;
           const base = c.baseCanvas || c.canvas;
           return {
             ...c,
@@ -752,16 +833,8 @@ export default function DocumentPrintPage() {
   const addBlankPage = async () => {
     setBusy(true);
     try {
-      let base = pages;
-      if (pdfRef.current && viewerUrl) {
-        try {
-          const blob = await pdfRef.current.exportPdf();
-          const raster = await pdfBytesToPages(await blob.arrayBuffer(), paper);
-          if (raster.length) base = raster;
-        } catch {
-          /* keep the current sheets */
-        }
-      }
+      // Photos and edits are kept as data and put back on the rebuilt sheet.
+      const base = await syncStamps();
       layoutKeyRef.current = '';
       setPages([...base, blankPage(paper)]);
       touchSheet();
@@ -819,6 +892,10 @@ export default function DocumentPrintPage() {
         onTool={setViewerTool}
         onWhiteout={() => void placeWhiteout()}
         onImage={() => imageInputRef.current?.click()}
+        canUndo={history.undo}
+        canRedo={history.redo}
+        onUndo={() => pdfRef.current?.undo()}
+        onRedo={() => pdfRef.current?.redo()}
         onFiles={() => setDriveOpen(true)}
         onCrop={() => void openParentCrop()}
         onFilter={chooseFilter}
@@ -836,6 +913,7 @@ export default function DocumentPrintPage() {
             onPickDriveImage={() => setDriveOpen(true)}
             onReady={() => { void placeParentImages(); }}
         onStampsChanged={() => { void syncStamps(); }}
+        onHistory={setHistory}
           />
         ) : (
           <div className="h-full flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]">

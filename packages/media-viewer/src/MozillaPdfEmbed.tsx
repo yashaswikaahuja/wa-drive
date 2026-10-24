@@ -19,12 +19,20 @@ export type StampPlace = {
   h: number;
   /** Name for the stamp so `stampRects` can report where the operator moved it. */
   tag?: string;
+  /** Not an operator step (a photo put back after a rebuild): keep it out of Undo. */
+  quiet?: boolean;
 };
 
 /** Where a tagged stamp is now (fractions of its page). */
-export type StampRect = Required<StampPlace>;
+export type StampRect = Omit<Required<StampPlace>, 'quiet'>;
 
 export type MozillaPdfHandle = {
+  /** Text, drawings and highlights as data (photos excluded), for restoreMarks. */
+  readMarks: () => Promise<unknown[]>;
+  /** Put marks from readMarks back. Not added to Undo. */
+  restoreMarks: (marks: unknown[]) => Promise<void>;
+  undo: () => void;
+  redo: () => void;
   /** Current position of every tagged stamp. Stamps the operator deleted are absent. */
   stampRects: () => Promise<StampRect[]>;
   setEditorMode: (mode: PdfEditorMode) => void;
@@ -53,6 +61,8 @@ export type MozillaPdfEmbedProps = {
   onReady?: () => void;
   /** A stamp may have been moved, resized or deleted. */
   onStampsChanged?: () => void;
+  /** Whether Undo / Redo have something to do. */
+  onHistory?: (state: { undo: boolean; redo: boolean }) => void;
 };
 
 const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(function MozillaPdfEmbed({
@@ -66,9 +76,40 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
   onPickDriveImage,
   onReady,
   onStampsChanged,
+  onHistory,
 }, ref) {
   const onStampsRef = useRef(onStampsChanged);
   onStampsRef.current = onStampsChanged;
+  const onHistoryRef = useRef(onHistory);
+  onHistoryRef.current = onHistory;
+  /** Replies matched by id: cyber-marks, cyber-marks-restored. */
+  const pendingReply = useRef(
+    new Map<string, { resolve: (data: any) => void; reject: (err: Error) => void }>(),
+  );
+  const replySeq = useRef(0);
+  const ask = (type: string, extra: Record<string, unknown> = {}, ms = 8000) =>
+    new Promise<any>((resolve, reject) => {
+      const win = iframeRef.current?.contentWindow;
+      if (!win) {
+        reject(new Error('PDF viewer is not open'));
+        return;
+      }
+      const id = `${type}-${++replySeq.current}`;
+      const timer = window.setTimeout(() => {
+        if (pendingReply.current.delete(id)) reject(new Error('PDF viewer did not answer'));
+      }, ms);
+      pendingReply.current.set(id, {
+        resolve: (d) => {
+          window.clearTimeout(timer);
+          resolve(d);
+        },
+        reject: (err) => {
+          window.clearTimeout(timer);
+          reject(err);
+        },
+      });
+      win.postMessage({ type, id, ...extra }, window.location.origin);
+    });
   const pendingRects = useRef(
     new Map<string, { resolve: (rects: StampRect[]) => void; reject: (err: Error) => void }>(),
   );
@@ -193,6 +234,19 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
     goToPage(page) {
       postToViewer({ type: 'cyber-go-page', page });
     },
+    async readMarks() {
+      const d = await ask('cyber-read-marks');
+      return Array.isArray(d?.marks) ? d.marks : [];
+    },
+    async restoreMarks(marks) {
+      if (marks.length) await ask('cyber-restore-marks', { marks }, 20000);
+    },
+    undo() {
+      postToViewer({ type: 'cyber-undo' });
+    },
+    redo() {
+      postToViewer({ type: 'cyber-redo' });
+    },
     stampRects() {
       return new Promise((resolve, reject) => {
         const win = iframeRef.current?.contentWindow;
@@ -300,6 +354,14 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         else pending.resolve(Array.isArray(e.data?.rects) ? e.data.rects : []);
       } else if (type === 'cyber-stamps-changed') {
         onStampsRef.current?.();
+      } else if (type === 'cyber-history') {
+        onHistoryRef.current?.({ undo: !!e.data?.undo, redo: !!e.data?.redo });
+      } else if (type === 'cyber-marks' || type === 'cyber-marks-restored' || type === 'cyber-marks-error') {
+        const pending = pendingReply.current.get(e.data?.id);
+        if (!pending) return;
+        pendingReply.current.delete(e.data.id);
+        if (type === 'cyber-marks-error') pending.reject(new Error(e.data?.message || 'Could not read the edits'));
+        else pending.resolve(e.data);
       } else if (type === 'cyber-pdf-error') {
         setError(e.data?.message || 'PDF viewer error');
       }
@@ -327,6 +389,8 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
       pendingPage.current.clear();
       pendingRects.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
       pendingRects.current.clear();
+      pendingReply.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
+      pendingReply.current.clear();
     };
   }, [fileUrl]);
 
