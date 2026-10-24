@@ -83,6 +83,12 @@ html.cyber-editor .annotationEditorLayer:is(.freetextEditing, .inkEditing, .high
   pointer-events: none !important;
 }
 
+/* Smaller photos stay above bigger ones even while the big one is selected,
+   so a photo laid on the customer's page can still be grabbed (cyber-bridge rankStamps). */
+html.cyber-editor .annotationEditorLayer .stampEditor.cyberRanked {
+  z-index: var(--cyber-z) !important;
+}
+
 /* Ink and highlights lifted above the photo stamp (see cyber-bridge.js).
    Multiply keeps highlights see-through over the print. */
 html.cyber-editor .page > .cyberDrawTop {

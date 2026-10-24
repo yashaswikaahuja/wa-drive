@@ -17,9 +17,16 @@ export type StampPlace = {
   y: number;
   w: number;
   h: number;
+  /** Name for the stamp so `stampRects` can report where the operator moved it. */
+  tag?: string;
 };
 
+/** Where a tagged stamp is now (fractions of its page). */
+export type StampRect = Required<StampPlace>;
+
 export type MozillaPdfHandle = {
+  /** Current position of every tagged stamp. Stamps the operator deleted are absent. */
+  stampRects: () => Promise<StampRect[]>;
   setEditorMode: (mode: PdfEditorMode) => void;
   /** Place an image on the PDF. With `place`, it is sized and can be dragged. */
   stampFile: (file: File, place?: StampPlace) => Promise<void>;
@@ -44,6 +51,8 @@ export type MozillaPdfEmbedProps = {
   onPickDriveImage?: () => void;
   /** The PDF is open and the editor can take an image. */
   onReady?: () => void;
+  /** A stamp may have been moved, resized or deleted. */
+  onStampsChanged?: () => void;
 };
 
 const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(function MozillaPdfEmbed({
@@ -56,7 +65,14 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
   onNextFile,
   onPickDriveImage,
   onReady,
+  onStampsChanged,
 }, ref) {
+  const onStampsRef = useRef(onStampsChanged);
+  onStampsRef.current = onStampsChanged;
+  const pendingRects = useRef(
+    new Map<string, { resolve: (rects: StampRect[]) => void; reject: (err: Error) => void }>(),
+  );
+  const rectSeq = useRef(0);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [error, setError] = useState<string | null>(null);
   const onBackRef = useRef(onBack);
@@ -177,6 +193,31 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
     goToPage(page) {
       postToViewer({ type: 'cyber-go-page', page });
     },
+    stampRects() {
+      return new Promise((resolve, reject) => {
+        const win = iframeRef.current?.contentWindow;
+        if (!win) {
+          reject(new Error('PDF viewer is not open'));
+          return;
+        }
+        const id = `rects-${++rectSeq.current}`;
+        const timer = window.setTimeout(() => {
+          if (!pendingRects.current.delete(id)) return;
+          reject(new Error('PDF viewer did not answer'));
+        }, 4000);
+        pendingRects.current.set(id, {
+          resolve: (rects) => {
+            window.clearTimeout(timer);
+            resolve(rects);
+          },
+          reject: (err) => {
+            window.clearTimeout(timer);
+            reject(err);
+          },
+        });
+        win.postMessage({ type: 'cyber-stamp-rects', id }, window.location.origin);
+      });
+    },
   }), []);
 
   useEffect(() => {
@@ -251,6 +292,14 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         if (!pending) return;
         pendingPage.current.delete(e.data.id);
         pending.reject(new Error(e.data?.message || 'Could not read the page'));
+      } else if (type === 'cyber-stamp-rects-result' || type === 'cyber-stamp-rects-error') {
+        const pending = pendingRects.current.get(e.data?.id);
+        if (!pending) return;
+        pendingRects.current.delete(e.data.id);
+        if (type === 'cyber-stamp-rects-error') pending.reject(new Error(e.data?.message || 'Could not read images'));
+        else pending.resolve(Array.isArray(e.data?.rects) ? e.data.rects : []);
+      } else if (type === 'cyber-stamps-changed') {
+        onStampsRef.current?.();
       } else if (type === 'cyber-pdf-error') {
         setError(e.data?.message || 'PDF viewer error');
       }
@@ -276,6 +325,8 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
       pendingStamp.current.clear();
       pendingPage.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
       pendingPage.current.clear();
+      pendingRects.current.forEach((pending) => pending.reject(new Error('PDF viewer closed')));
+      pendingRects.current.clear();
     };
   }, [fileUrl]);
 

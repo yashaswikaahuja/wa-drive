@@ -6,7 +6,7 @@ export type {
 } from './MediaViewer';
 
 export { default as MozillaPdfEmbed } from './MozillaPdfEmbed';
-export type { MozillaPdfEmbedProps, MozillaPdfHandle, PdfEditorMode } from './MozillaPdfEmbed';
+export type { MozillaPdfEmbedProps, MozillaPdfHandle, PdfEditorMode, StampPlace, StampRect } from './MozillaPdfEmbed';
 
 export {
   displayName,

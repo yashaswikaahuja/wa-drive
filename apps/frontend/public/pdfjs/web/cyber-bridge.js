@@ -251,9 +251,11 @@
       { bitmapFile: file, isCentered: !place },
     );
     revealEditorButtons();
+    const tag = place && typeof place.tag === "string" ? place.tag : "";
     if (place && Number.isFinite(Number(place.w)) && Number.isFinite(Number(place.h))) {
       const editor = newestStamp(layer, ui);
       if (!editor) throw new Error("Image was not added");
+      if (tag) editor.__cyberTag = tag;
       await layoutStamp(editor, place);
       // Back to Select after the stamp exists, so the next click shows resize handles.
       try {
@@ -262,7 +264,54 @@
       for (let i = 0; i < 40 && ui.getMode() !== EDITOR_MODES.none; i++) await sleep(25);
       if (editor.div) editor.div.dataset.cyberPlaced = "1";
     }
+    rankStamps();
   }
+
+  async function stampRects() {
+    const app = await appReady();
+    const ui = app?.pdfViewer?._layerProperties?.annotationEditorUIManager;
+    const count = app?.pdfDocument?.numPages || 0;
+    if (!ui?.getEditors) throw new Error("PDF editor is not ready");
+    const rects = [];
+    for (let i = 0; i < count; i++) {
+      for (const ed of ui.getEditors(i)) {
+        if (!ed.__cyberTag || ed.isEmpty?.()) continue;
+        rects.push({ tag: ed.__cyberTag, page: i + 1, x: ed.x, y: ed.y, w: ed.width, h: ed.height });
+      }
+    }
+    return rects;
+  }
+
+  // Bigger photos go underneath, so none hides another one while selected.
+  function rankStamps() {
+    document.querySelectorAll(".annotationEditorLayer").forEach((layer) => {
+      const stamps = [...layer.querySelectorAll(":scope > .stampEditor")];
+      const area = (d) => (parseFloat(d.style.width) || 0) * (parseFloat(d.style.height) || 0);
+      stamps
+        .sort((a, b) => area(b) - area(a))
+        .forEach((d, i) => {
+          d.style.setProperty("--cyber-z", String(i + 1));
+          d.classList.add("cyberRanked");
+        });
+    });
+  }
+
+  // Tell the page a stamp may have moved, resized or been deleted.
+  function bindStampChanges() {
+    if (window.__cyberStampChanges) return;
+    window.__cyberStampChanges = true;
+    let timer = 0;
+    const ping = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        rankStamps();
+        post("cyber-stamps-changed");
+      }, 400);
+    };
+    document.addEventListener("pointerup", ping, true);
+    document.addEventListener("keyup", ping, true);
+  }
+  bindStampChanges();
 
   async function exportPdf(id) {
     const app = await appReady();
@@ -528,6 +577,18 @@
         const message = String(err.message || err);
         if (e.data.id) parent.postMessage({ type: "cyber-stamp-error", id: e.data.id, message }, ORIGIN);
         else post("cyber-pdf-error", { message });
+      }
+      return;
+    }
+    if (e.data.type === "cyber-stamp-rects") {
+      try {
+        const rects = await stampRects();
+        parent.postMessage({ type: "cyber-stamp-rects-result", id: e.data.id, rects }, ORIGIN);
+      } catch (err) {
+        parent.postMessage(
+          { type: "cyber-stamp-rects-error", id: e.data.id, message: String(err.message || err) },
+          ORIGIN,
+        );
       }
       return;
     }

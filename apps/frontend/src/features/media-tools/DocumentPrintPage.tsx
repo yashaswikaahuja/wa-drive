@@ -12,6 +12,8 @@ import { getCachedBlob, printBlob } from '../../shared/fileCache';
 import { toast } from '../../shared/toast';
 import { downloadBlob, loadImageFromFile } from './imageOps';
 import MozillaPdfEmbed, { type MozillaPdfHandle, type PdfEditorMode } from '../files/MozillaPdfEmbed';
+import type { StampRect } from '@cybercontrol/media-viewer';
+import { loadExtras, saveExtras, type SavedExtra } from './docPrintExtrasStore';
 import DrivePicker from '../photo-tool/DrivePicker';
 import DotCropModal from './DotCropModal';
 import CleanupModal from './CleanupModal';
@@ -27,6 +29,7 @@ import {
   type DocPaperId,
   fitImageOnPage,
   imageToCanvas,
+  makeId,
   pagesToPdfBlob,
   ptsToMm,
   readPdfMediaBoxPts,
@@ -153,6 +156,74 @@ export default function DocumentPrintPage() {
   pagesRef.current = pages;
   paperRef.current = paper;
   const touchSheet = () => setSheetRev((n) => n + 1);
+  /** Viewer URL whose photos are all tagged stamps, so their positions can be read back. */
+  const stampsLive = useRef('');
+  /** Photos the operator added (cell id → unfiltered JPEG), saved for refresh. */
+  const extraBlobs = useRef(new Map<string, Blob>());
+
+  const persistExtras = (list: DocPage[]) => {
+    const sheet = paperRef.current;
+    const saved: SavedExtra[] = [];
+    list.forEach((pg, page) =>
+      pg.cells.forEach((c) => {
+        const blob = extraBlobs.current.get(c.id);
+        if (!blob) return;
+        const r = photoRect(c);
+        saved.push({ id: c.id, page, x: r.x / sheet.w, y: r.y / sheet.h, w: r.w / sheet.w, h: r.h / sheet.h, blob });
+      }),
+    );
+    void saveExtras(fileId, saved);
+  };
+
+  /** Read where the operator moved, resized or deleted each photo, into the page state. */
+  const syncStamps = async (): Promise<DocPage[]> => {
+    const list = pagesRef.current;
+    const url = viewerUrlRef.current;
+    if (!pdfRef.current || !url || stampsLive.current !== url) return list;
+    let rects: StampRect[];
+    try {
+      rects = await pdfRef.current.stampRects();
+    } catch {
+      return list;
+    }
+    if (!rects.length && list.some((p) => p.cells.length > 0)) return list;
+    const sheet = paperRef.current;
+    const byTag = new Map(rects.map((r) => [r.tag, r]));
+    const next: DocPage[] = list.map((pg) => ({ ...pg, cells: [] }));
+    let changed = false;
+    list.forEach((pg, i) =>
+      pg.cells.forEach((c) => {
+        const r = byTag.get(c.id);
+        if (!r) {
+          changed = true;
+          return;
+        }
+        const pi = Math.min(next.length - 1, Math.max(0, r.page - 1));
+        const cell: DocCell = {
+          ...c,
+          x: Math.round(r.x * sheet.w),
+          y: Math.round(r.y * sheet.h),
+          w: Math.max(1, Math.round(r.w * sheet.w)),
+          h: Math.max(1, Math.round(r.h * sheet.h)),
+          fitMode: 'contain',
+        };
+        const pr = photoRect(c);
+        const moved =
+          pi !== i ||
+          Math.abs(pr.x - cell.x) > 2 ||
+          Math.abs(pr.y - cell.y) > 2 ||
+          Math.abs(pr.w - cell.w) > 2 ||
+          Math.abs(pr.h - cell.h) > 2;
+        if (moved) changed = true;
+        next[pi].cells.push(moved ? cell : c);
+      }),
+    );
+    if (!changed) return list;
+    pagesRef.current = next;
+    setPages(next);
+    persistExtras(next);
+    return next;
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -211,6 +282,35 @@ export default function DocumentPrintPage() {
           return;
         }
         if (!built.length) throw new Error('Could not load document');
+        // Photos added before a refresh go back where they were.
+        extraBlobs.current.clear();
+        for (const ex of await loadExtras(fileId)) {
+          try {
+            const img = await createImageBitmap(ex.blob);
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            canvas.getContext('2d')?.drawImage(img, 0, 0);
+            img.close();
+            const pg = built[Math.min(built.length - 1, Math.max(0, ex.page))];
+            pg.cells.push({
+              id: ex.id,
+              x: Math.round(ex.x * p.w),
+              y: Math.round(ex.y * p.h),
+              w: Math.max(1, Math.round(ex.w * p.w)),
+              h: Math.max(1, Math.round(ex.h * p.h)),
+              canvas,
+              baseCanvas: cloneCanvas(canvas),
+            });
+            extraBlobs.current.set(ex.id, ex.blob);
+          } catch {
+            /* unreadable saved photo */
+          }
+        }
+        if (cancelled) {
+          if (firstPdfUrl) URL.revokeObjectURL(firstPdfUrl);
+          return;
+        }
         setPages(built.map((pg) => ({
           ...pg,
           cells: pg.cells.map((c) => {
@@ -251,8 +351,15 @@ export default function DocumentPrintPage() {
     };
   }, []);
 
-  const changePaper = (next: DocPaperId) => {
+  // Paper change, filter, crop: keep the saved added photos in step.
+  useEffect(() => {
+    if (!loading && extraBlobs.current.size) persistExtras(pages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pages, paper, loading]);
+
+  const changePaper = async (next: DocPaperId) => {
     if (next === paperId) return;
+    await syncStamps();
     const prevPaper = DOC_PAPERS[paperId];
     setOpenSheet('');
     touchSheet();
@@ -341,7 +448,12 @@ export default function DocumentPrintPage() {
 
   const placeParentImages = async () => {
     const url = viewerUrlRef.current;
-    if (!url || !stampOnOpenRef.current || placedForUrl.current === url) return;
+    if (!url || placedForUrl.current === url) return;
+    if (!stampOnOpenRef.current) {
+      // Blank sheet: anything stamped from now on is tagged.
+      if (url !== originalUrlRef.current) stampsLive.current = url;
+      return;
+    }
     placedForUrl.current = url;
     const list = pagesRef.current;
     const sheet = paperRef.current;
@@ -356,9 +468,11 @@ export default function DocumentPrintPage() {
             y: rect.y / sheet.h,
             w: rect.w / sheet.w,
             h: rect.h / sheet.h,
+            tag: cell.id,
           });
         }
       }
+      if (viewerUrlRef.current === url) stampsLive.current = url;
       const resume = resumePage.current;
       resumePage.current = 0;
       if (resume > 1) pdfRef.current?.goToPage(resume);
@@ -494,10 +608,11 @@ export default function DocumentPrintPage() {
     setCleanup({ pageIndex: hit.index, cellId: hit.cell.id, source: hit.cell.baseCanvas || hit.cell.canvas });
   };
 
-  const applyCleanup = (cleaned: HTMLCanvasElement) => {
+  const applyCleanup = async (cleaned: HTMLCanvasElement) => {
     const target = cleanup;
     setCleanup(null);
     if (!target) return;
+    await syncStamps();
     setPages((prev) =>
       prev.map((pg, i) =>
         i !== target.pageIndex
@@ -542,6 +657,8 @@ export default function DocumentPrintPage() {
     setCropOpen(false);
     const intent = cropIntent.current;
     if (intent.kind === 'parent') {
+      await syncStamps();
+      const sheet = paperRef.current;
       setPages((prev) =>
         prev.map((pg, i) => {
           if (i !== intent.pageIndex) return pg;
@@ -550,7 +667,9 @@ export default function DocumentPrintPage() {
             cells: pg.cells.map((c) => {
               if (c.id !== intent.cellId) return c;
               const base = cloneCanvas(framed);
-              return { ...c, baseCanvas: base, canvas: applyDocFilter(base, filterRef.current) };
+              const filled = { ...c, baseCanvas: base, canvas: applyDocFilter(base, filterRef.current) };
+              // A new crop has a new shape: refill the page margin instead of the old photo box.
+              return c.id === pg.cells[0]?.id ? { ...filled, ...cellInMargin(filled, sheet, MARGIN_MM) } : filled;
             }),
           };
         }),
@@ -562,21 +681,56 @@ export default function DocumentPrintPage() {
       return;
     }
     try {
-      const stamped = await canvasFile(framed);
+      // The added photo becomes a page photo, so filters, rebuilds and refresh keep it.
+      const base = cloneCanvas(framed);
+      const canvas = applyDocFilter(base, filterRef.current);
+      const list = pagesRef.current;
+      const pageNumber = (await pdfRef.current?.currentPage().catch(() => 1)) || 1;
+      const index = Math.min(Math.max(0, pageNumber - 1), Math.max(0, list.length - 1));
+      const sheet = paperRef.current;
+      const aspect = canvas.width / Math.max(1, canvas.height);
+      let w = sheet.w * 0.6;
+      let h = w / aspect;
+      if (h > sheet.h * 0.6) {
+        h = sheet.h * 0.6;
+        w = h * aspect;
+      }
+      const cell: DocCell = {
+        id: makeId('x'),
+        x: Math.round((sheet.w - w) / 2),
+        y: Math.round((sheet.h - h) / 2),
+        w: Math.round(w),
+        h: Math.round(h),
+        canvas,
+        baseCanvas: base,
+      };
       setActiveTool('none');
-      await pdfRef.current?.stampFile(stamped);
+      await pdfRef.current?.stampFile(await canvasFile(canvas), {
+        page: index + 1,
+        x: cell.x / sheet.w,
+        y: cell.y / sheet.h,
+        w: cell.w / sheet.w,
+        h: cell.h / sheet.h,
+        tag: cell.id,
+      });
+      extraBlobs.current.set(cell.id, await canvasFile(base));
+      const next = pagesRef.current.map((pg, i) => (i === index ? { ...pg, cells: [...pg.cells, cell] } : pg));
+      pagesRef.current = next;
+      setPages(next);
+      persistExtras(next);
       toast.success('Image placed on the page');
     } catch (e: any) {
       toast.error(e?.message || 'Could not place the photo');
     }
   };
 
-  const chooseFilter = (id: DocScanFilter) => {
+  const chooseFilter = async (id: DocScanFilter) => {
     if (id === docFilter) return;
     if (!pagesRef.current.some((p) => p.cells.length > 0)) {
       toast.error('Add a photo, then choose a filter');
       return;
     }
+    await syncStamps();
     setDocFilter(id);
     setPages((prev) =>
       prev.map((pg) => ({
@@ -681,6 +835,7 @@ export default function DocumentPrintPage() {
             mode="editor"
             onPickDriveImage={() => setDriveOpen(true)}
             onReady={() => { void placeParentImages(); }}
+        onStampsChanged={() => { void syncStamps(); }}
           />
         ) : (
           <div className="h-full flex items-center justify-center gap-2 text-sm text-[var(--muted-foreground)]">
