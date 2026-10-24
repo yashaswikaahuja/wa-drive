@@ -746,18 +746,42 @@ export default function DocumentPrintPage() {
   };
   const openParentCrop = async () => {
     const list = pagesRef.current;
+    // Crop whatever the operator has selected. Fall back to the open page's first photo.
+    let rects: Awaited<ReturnType<NonNullable<typeof pdfRef.current>['stampRects']>> = [];
+    try {
+      rects = (await pdfRef.current?.stampRects()) || [];
+    } catch {
+      rects = [];
+    }
+    const selectedTag = rects.find((r) => r.selected)?.tag;
+    if (selectedTag) {
+      for (let i = 0; i < list.length; i++) {
+        const cell = list[i].cells.find((c) => c.id === selectedTag);
+        if (cell) {
+          if (cell.plain) {
+            toast.error('Whiteout cannot be cropped — select a photo');
+            return;
+          }
+          cropIntent.current = { kind: 'parent', pageIndex: i, cellId: cell.id };
+          setCropSource(cell.rawCanvas || cell.baseCanvas || cell.canvas);
+          setCropOpen(true);
+          return;
+        }
+      }
+    }
+    // Nothing selected: use the photo on the page the operator is looking at.
     let pageNumber = 1;
     try {
       pageNumber = (await pdfRef.current?.currentPage()) || 1;
     } catch {
       const withPhoto = list.filter((p) => p.cells.length > 0).length;
       if (withPhoto > 1) {
-        toast.error('Could not read the open page');
+        toast.error('Tap a photo first, then Crop');
         return;
       }
     }
     const index = Math.min(Math.max(0, pageNumber - 1), Math.max(0, list.length - 1));
-    const cell = list[index]?.cells[0];
+    const cell = list[index]?.cells.find((c) => !c.plain) || list[index]?.cells[0];
     if (!cell) {
       toast.error('This page has no photo to crop');
       return;

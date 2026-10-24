@@ -82,6 +82,45 @@ async function openEditor(page: Page): Promise<FrameLocator> {
   return frame;
 }
 
+/** Click the stamp whose tag starts with prefix, at a fractional point inside it. */
+async function clickStamp(page: Page, prefix: string, fx = 0.5, fy = 0.5) {
+  const f = page.frames().find((fr) => fr.url().includes('viewer.html'))!;
+  const box = await f.evaluate((pfx) => {
+    const ui = (window as any).PDFViewerApplication.pdfViewer._layerProperties.annotationEditorUIManager;
+    const ed = ui.getEditors(0).find((e: any) => (e.__cyberTag || '').startsWith(pfx));
+    const r = ed.div.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height };
+  }, prefix);
+  const ifr = (await page.locator('iframe[title="PDF document"]').boundingBox())!;
+  await page.mouse.click(ifr.x + box.x + box.w * fx, ifr.y + box.y + box.h * fy);
+}
+
+/** Average colour of the crop preview image, [r,g,b]. */
+async function cropPreviewColor(page: Page): Promise<[number, number, number]> {
+  return page.locator('[data-image-crop="1"] img').evaluate((el) => {
+    const img = el as HTMLImageElement;
+    const c = document.createElement('canvas');
+    c.width = 16;
+    c.height = 16;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, 16, 16);
+    const d = ctx.getImageData(0, 0, 16, 16).data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i] > 245 && d[i + 1] > 245 && d[i + 2] > 245) continue;
+      r += d[i];
+      g += d[i + 1];
+      b += d[i + 2];
+      n++;
+    }
+    n = n || 1;
+    return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+  });
+}
+
 test.describe('Print editor keeps work (operator)', () => {
   test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
 
@@ -181,5 +220,39 @@ test.describe('Print editor keeps work (operator)', () => {
     await page.waitForTimeout(2000);
     await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 25000 }).toBe(3);
     await expect.poll(async () => (await editors(page)).some((e) => e.type === 'freetext' && e.text === 'Self attested'), { timeout: 15000 }).toBe(true);
+  });
+
+  test('Crop targets the selected document, not the first one', async ({ page }) => {
+    test.setTimeout(120_000);
+    await openEditor(page);
+
+    // Add the blue second document on top of the red customer page.
+    await page.locator('[data-doc-print-image-input]').setInputFiles({
+      name: 'second.png',
+      mimeType: 'image/png',
+      buffer: SECOND_DOC,
+    });
+    await page.locator('[data-crop-apply="1"]').click({ timeout: 15000 });
+    await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 15000 }).toBe(2);
+
+    // Select the added (blue) document, then Crop → the cropper must show blue.
+    await clickStamp(page, 'x');
+    await expect.poll(async () => (await editors(page)).filter((e) => e.sel).map((e) => e.tag[0])).toEqual(['x']);
+    await page.locator('[data-doc-print-tool="crop"]').click();
+    await expect(page.locator('[data-image-crop="1"]')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(400);
+    let [r, g, b] = await cropPreviewColor(page);
+    expect(b, `expected blue doc, got rgb(${r},${g},${b})`).toBeGreaterThan(r + 30);
+    await page.locator('[data-image-crop="1"]').getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('[data-image-crop="1"]')).toBeHidden({ timeout: 10000 });
+
+    // Select the parent (red) document at its top edge (clear of the blue doc), then Crop.
+    await clickStamp(page, 'c', 0.5, 0.05);
+    await expect.poll(async () => (await editors(page)).filter((e) => e.sel).map((e) => e.tag[0])).toEqual(['c']);
+    await page.locator('[data-doc-print-tool="crop"]').click();
+    await expect(page.locator('[data-image-crop="1"]')).toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(400);
+    [r, g, b] = await cropPreviewColor(page);
+    expect(r, `expected red doc, got rgb(${r},${g},${b})`).toBeGreaterThan(b + 30);
   });
 });

@@ -24,7 +24,16 @@ export type StampPlace = {
 };
 
 /** Where a tagged stamp is now (fractions of its page). */
-export type StampRect = Omit<Required<StampPlace>, 'quiet'>;
+export type StampRect = {
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  tag: string;
+  /** True when this stamp is the one the operator currently has selected. */
+  selected: boolean;
+};
 
 export type MozillaPdfHandle = {
   /** Text, drawings and highlights as data (photos excluded), for restoreMarks. */

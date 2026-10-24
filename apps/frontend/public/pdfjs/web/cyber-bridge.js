@@ -312,7 +312,7 @@
     for (let i = 0; i < count; i++) {
       for (const ed of ui.getEditors(i)) {
         if (!ed.__cyberTag || ed.isEmpty?.()) continue;
-        rects.push({ tag: ed.__cyberTag, page: i + 1, x: ed.x, y: ed.y, w: ed.width, h: ed.height });
+        rects.push({ tag: ed.__cyberTag, page: i + 1, x: ed.x, y: ed.y, w: ed.width, h: ed.height, selected: !!ed.isSelected });
       }
     }
     return rects;
