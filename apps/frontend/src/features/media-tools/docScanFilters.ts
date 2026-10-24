@@ -561,7 +561,8 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   // estimate so it cannot tint the paper and halo the print beside it.
   const paper = paperMap(chan, tone, spread, w, h, box, photo);
   const mode: CleanMode = filter === 'gray' ? 'gray' : filter === 'light' ? 'light' : filter === 'whiteboard' ? 'whiteboard' : 'auto';
-  cleanSheet(d, w, mode, box, tone, paper, photo, backdrop);
+  const stroke = Math.max(4, Math.round(Math.min(box.x1 - box.x0, box.y1 - box.y0) / 110));
+  cleanSheet(d, w, mode, box, tone, paper, photo, backdrop, boxBlur(tone, w, h, 1), boxBlur(tone, w, h, stroke));
   ctx.putImageData(img, 0, 0);
   return out;
 }
@@ -652,10 +653,21 @@ function cleanSheet(
   paper: [Float32Array, Float32Array, Float32Array],
   photo: Uint8Array,
   backdrop: number,
+  blur: Float32Array,
+  wide: Float32Array,
 ) {
   const target = mode === 'light' ? 236 : 252;
   const maxGain = mode === 'light' ? 1.28 : 1.65;
   const [pr, pg, pb] = paper;
+  // Layer 2, the writing. After the paper is even, set levels against it:
+  // anything within a few percent of paper becomes paper (grain, faint
+  // shadow), ink is pulled down to a solid dark, and a light unsharp mask
+  // firms up soft letter edges. Whiteboard has its own ink step.
+  const ink = mode !== 'whiteboard';
+  const black = mode === 'light' ? 0.12 : 0.24;
+  const white = mode === 'light' ? 0.95 : 0.9;
+  const gamma = mode === 'light' ? 1 : 1.2;
+  const sharpen = mode === 'light' ? 0.5 : 0.9;
   for (let y = box.y0; y <= box.y1; y++) {
     const row = y * w;
     for (let x = box.x0; x <= box.x1; x++) {
@@ -691,9 +703,41 @@ function cleanSheet(
         }
       }
       const i = at * 4;
-      const nr = clamp(Math.round(d[i] * gr * scale), 0, 255);
-      const ng = clamp(Math.round(d[i + 1] * gg * scale), 0, 255);
-      const nb = clamp(Math.round(d[i + 2] * gb * scale), 0, 255);
+      let nr = clamp(Math.round(d[i] * gr * scale), 0, 255);
+      let ng = clamp(Math.round(d[i + 1] * gg * scale), 0, 255);
+      let nb = clamp(Math.round(d[i + 2] * gb * scale), 0, 255);
+      if (ink && !isPhoto) {
+        const lc = 0.299 * nr + 0.587 * ng + 0.114 * nb;
+        const gl = 0.299 * gr + 0.587 * gg + 0.114 * gb;
+        const ls = lc + sharpen * (tone[at] - blur[at]) * gl;
+        const u = clamp((ls / target - black) / (white - black), 0, 1);
+        const want = Math.pow(u, gamma) * target;
+        let s = want / Math.max(lc, 1);
+        // Strong color (a stamp, a red title) darkens less so it does not go muddy.
+        const sp = Math.max(nr, ng, nb) - Math.min(nr, ng, nb);
+        if (s < 1) s = 1 - (1 - s) * (1 - 0.85 * clamp(sp / 90, 0, 1));
+        if (s < 1) {
+          // Only thin strokes are ink. A wide dark area (a shirt in an
+          // unmasked photo, a filled box) keeps its level instead of going black.
+          const depth = bgL - tone[at];
+          const ratio = depth > 8 ? (bgL - wide[at]) / depth : 0;
+          const t = clamp((ratio - 0.55) / 0.35, 0, 1);
+          s = 1 - (1 - s) * (1 - t * t * (3 - 2 * t));
+        }
+        if (s >= 1) {
+          // Brighten toward white, not by scaling: scaling would also scale
+          // any leftover cast and turn warm paper yellow. Skip the backdrop.
+          const k = lift * clamp((want - lc) / Math.max(255 - lc, 1), 0, 1);
+          nr = Math.round(nr + (255 - nr) * k);
+          ng = Math.round(ng + (255 - ng) * k);
+          nb = Math.round(nb + (255 - nb) * k);
+        } else {
+          // Ink always darkens; dark cloth caught in a corner only gets darker.
+          nr = clamp(Math.round(nr * s), 0, 255);
+          ng = clamp(Math.round(ng * s), 0, 255);
+          nb = clamp(Math.round(nb * s), 0, 255);
+        }
+      }
       if (mode === 'gray') {
         const v = clamp(Math.round(0.299 * nr + 0.587 * ng + 0.114 * nb), 0, 255);
         d[i] = d[i + 1] = d[i + 2] = v;
