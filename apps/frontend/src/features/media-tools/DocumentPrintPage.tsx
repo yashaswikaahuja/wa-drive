@@ -14,6 +14,7 @@ import { downloadBlob, loadImageFromFile } from './imageOps';
 import MozillaPdfEmbed, { type MozillaPdfHandle, type PdfEditorMode } from '../files/MozillaPdfEmbed';
 import DrivePicker from '../photo-tool/DrivePicker';
 import DotCropModal from './DotCropModal';
+import CleanupModal from './CleanupModal';
 import {
   DOC_PAPERS,
   blankPage,
@@ -127,6 +128,7 @@ export default function DocumentPrintPage() {
   const [driveOpen, setDriveOpen] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSource, setCropSource] = useState<HTMLCanvasElement | null>(null);
+  const [cleanup, setCleanup] = useState<{ pageIndex: number; cellId: string; source: HTMLCanvasElement } | null>(null);
   const [docFilter, setDocFilter] = useState<DocScanFilter>('auto');
   const [activeTool, setActiveTool] = useState<PdfEditorMode | 'whiteout'>('none');
   /** Paper of the PDF currently open in the viewer. Empty while a new sheet is building. */
@@ -465,6 +467,54 @@ export default function DocumentPrintPage() {
     }
   };
 
+  /** Photo on the page the operator is looking at, or null (with a toast). */
+  const openPagePhoto = async () => {
+    const list = pagesRef.current;
+    let pageNumber = 1;
+    try {
+      pageNumber = (await pdfRef.current?.currentPage()) || 1;
+    } catch {
+      if (list.filter((p) => p.cells.length > 0).length > 1) {
+        toast.error('Could not read the open page');
+        return null;
+      }
+    }
+    const index = Math.min(Math.max(0, pageNumber - 1), Math.max(0, list.length - 1));
+    const cell = list[index]?.cells[0];
+    if (!cell) {
+      toast.error('This page has no photo to clean up');
+      return null;
+    }
+    return { index, cell };
+  };
+
+  const openCleanup = async () => {
+    const hit = await openPagePhoto();
+    if (!hit) return;
+    setCleanup({ pageIndex: hit.index, cellId: hit.cell.id, source: hit.cell.baseCanvas || hit.cell.canvas });
+  };
+
+  const applyCleanup = (cleaned: HTMLCanvasElement) => {
+    const target = cleanup;
+    setCleanup(null);
+    if (!target) return;
+    setPages((prev) =>
+      prev.map((pg, i) =>
+        i !== target.pageIndex
+          ? pg
+          : {
+              ...pg,
+              cells: pg.cells.map((c) =>
+                c.id !== target.cellId ? c : { ...c, baseCanvas: cleaned, canvas: applyDocFilter(cleaned, filterRef.current) },
+              ),
+            },
+      ),
+    );
+    layoutKeyRef.current = '';
+    resumePage.current = target.pageIndex + 1;
+    touchSheet();
+    toast.success('Photo cleaned');
+  };
   const openParentCrop = async () => {
     const list = pagesRef.current;
     let pageNumber = 1;
@@ -606,6 +656,8 @@ export default function DocumentPrintPage() {
         canExport={pages.length > 0}
         activeTool={activeTool}
         cropOpen={cropOpen}
+        cleanupOpen={!!cleanup}
+        onCleanup={() => void openCleanup()}
         filter={docFilter}
         onBack={() => navigate(backTo)}
         onDownload={() => void handleDownloadPdf()}
@@ -664,6 +716,12 @@ export default function DocumentPrintPage() {
         source={cropSource}
         onApply={(framed) => { void applyCrop(framed); }}
         onClose={() => setCropOpen(false)}
+      />
+      <CleanupModal
+        open={!!cleanup}
+        source={cleanup?.source ?? null}
+        onApply={applyCleanup}
+        onClose={() => setCleanup(null)}
       />
     </div>
   );

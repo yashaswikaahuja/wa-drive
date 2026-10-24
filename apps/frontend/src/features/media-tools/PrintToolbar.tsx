@@ -13,6 +13,7 @@ import {
   FilePlus,
   FolderOpen,
   Highlighter,
+  Eraser,
   Image as ImageIcon,
   PencilSimple,
   Printer,
@@ -99,6 +100,8 @@ export type PrintToolbarProps = {
   onImage: () => void;
   onFiles: () => void;
   onCrop: () => void;
+  cleanupOpen: boolean;
+  onCleanup: () => void;
   onFilter: (id: DocScanFilter) => void;
   onAddPage: () => void;
   onPaper: (id: DocPaperId) => void;
@@ -157,6 +160,7 @@ export default function PrintToolbar(p: PrintToolbarProps) {
       >
         <Group label="Photo">
           <Tool label="Crop" data="crop" viewer="crop" icon={<Crop size={ico} />} active={p.cropOpen} onClick={p.onCrop} title="Crop and straighten the photo" />
+          <Tool label="Clean" data="cleanup" viewer="cleanup" icon={<Eraser size={ico} />} active={p.cleanupOpen} onClick={p.onCleanup} title="Remove stains, marks and fingers by painting over them" />
           <label
             className="flex flex-col items-start justify-center h-12 px-1.5 shrink-0 text-[11px] font-medium gap-0.5"
             style={{ color: 'hsl(var(--pt-ink))' }}
