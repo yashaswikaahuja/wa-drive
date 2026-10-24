@@ -563,6 +563,7 @@ export function applyDocFilter(src: HTMLCanvasElement, filter: DocScanFilter): H
   const mode: CleanMode = filter === 'gray' ? 'gray' : filter === 'light' ? 'light' : filter === 'whiteboard' ? 'whiteboard' : 'auto';
   const stroke = Math.max(4, Math.round(Math.min(box.x1 - box.x0, box.y1 - box.y0) / 110));
   cleanSheet(d, w, mode, box, tone, paper, photo, backdrop, boxBlur(tone, w, h, 1), boxBlur(tone, w, h, stroke));
+  if (mode !== 'whiteboard') boldInk(d, w, box, photo, mode === 'light' ? 0.3 : 0.6);
   ctx.putImageData(img, 0, 0);
   return out;
 }
@@ -632,6 +633,48 @@ function growToBackdrop(tone: Float32Array, w: number, h: number, box: PageBox) 
   return cut;
 }
 
+/**
+ * Thin pen and faded print break up once the paper turns white. Pull each
+ * pixel part way toward its darkest 4-neighbour so strokes gain about one
+ * pixel and broken lines join; the neighbour's own color is used, so blue
+ * pen stays blue. Paper away from ink has no darker neighbour and is untouched.
+ */
+function boldInk(d: Uint8ClampedArray, w: number, box: PageBox, photo: Uint8Array, amount: number) {
+  const bw = box.x1 - box.x0 + 1;
+  const bh = box.y1 - box.y0 + 1;
+  const lum = new Float32Array(bw * bh);
+  const src = new Uint8ClampedArray(bw * bh * 3);
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      const i = ((box.y0 + y) * w + box.x0 + x) * 4;
+      const k = y * bw + x;
+      src[k * 3] = d[i];
+      src[k * 3 + 1] = d[i + 1];
+      src[k * 3 + 2] = d[i + 2];
+      lum[k] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    }
+  }
+  for (let y = 1; y < bh - 1; y++) {
+    for (let x = 1; x < bw - 1; x++) {
+      const k = y * bw + x;
+      const at = (box.y0 + y) * w + box.x0 + x;
+      if (photo[at]) continue;
+      let m = k;
+      if (lum[k - 1] < lum[m]) m = k - 1;
+      if (lum[k + 1] < lum[m]) m = k + 1;
+      if (lum[k - bw] < lum[m]) m = k - bw;
+      if (lum[k + bw] < lum[m]) m = k + bw;
+      const gap = lum[k] - lum[m];
+      if (m === k || gap < 30 || lum[m] > 170) continue;
+      const a = amount * Math.min(1, (gap - 30) / 60);
+      const i = at * 4;
+      d[i] = Math.round(src[k * 3] + (src[m * 3] - src[k * 3]) * a);
+      d[i + 1] = Math.round(src[k * 3 + 1] + (src[m * 3 + 1] - src[k * 3 + 1]) * a);
+      d[i + 2] = Math.round(src[k * 3 + 2] + (src[m * 3 + 2] - src[k * 3 + 2]) * a);
+    }
+  }
+}
+
 function localStd(src: Float32Array, w: number, h: number, radius: number) {
   const mean = boxBlur(src, w, h, radius);
   const sq = new Float32Array(src.length);
@@ -674,9 +717,9 @@ function cleanSheet(
   // shadow), ink is pulled down to a solid dark, and a light unsharp mask
   // firms up soft letter edges. Whiteboard has its own ink step.
   const ink = mode !== 'whiteboard';
-  const black = mode === 'light' ? 0.12 : 0.24;
+  const black = mode === 'light' ? 0.14 : 0.32;
   const white = mode === 'light' ? 0.95 : 0.9;
-  const gamma = mode === 'light' ? 1 : 1.2;
+  const gamma = mode === 'light' ? 1.05 : 1.45;
   const sharpen = mode === 'light' ? 0.5 : 0.9;
   for (let y = box.y0; y <= box.y1; y++) {
     const row = y * w;
@@ -735,7 +778,7 @@ function cleanSheet(
         const qb = d[i + 2] / Math.max(pb[at], 1);
         const qm = Math.max(qr, qg, qb);
         const sp = qm > 0 ? ((qm - Math.min(qr, qg, qb)) / qm) * Math.min(lc * 1.4, 255) : 0;
-        if (s < 1) s = 1 - (1 - s) * (1 - 0.6 * clamp(sp / 90, 0, 1));
+        if (s < 1) s = 1 - (1 - s) * (1 - 0.2 * clamp(sp / 90, 0, 1));
         if (s < 1) {
           // Only thin strokes are ink. A wide dark area (a shirt in an
           // unmasked photo, a filled box) keeps its level instead of going black.
