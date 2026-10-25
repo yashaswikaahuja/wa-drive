@@ -622,8 +622,9 @@ export default function DocumentPrintPage() {
       }
     }
     if (!base) base = await buildPdf();
-    // Always re-emit through one path so page geometry and tiling are exact.
-    return composePrintPdf(base, { copies, nUp, paper });
+    // Re-emit only when copies/N-up need it; a plain single print stays fast and sharp.
+    if (copies > 1 || nUp > 1) return composePrintPdf(base, { copies, nUp, paper });
+    return base;
   };
 
   const handlePrint = async () => {
@@ -861,6 +862,39 @@ export default function DocumentPrintPage() {
     }
   };
 
+  /**
+   * Push new bitmaps for the given cells into the live viewer without reloading
+   * the sheet. Returns true if it updated live; false if a full rebuild is needed
+   * (e.g. the original PDF is showing, so there are no stamps yet).
+   */
+  const liveUpdateCells = async (cells: DocCell[]): Promise<boolean> => {
+    const url = viewerUrlRef.current;
+    if (!pdfRef.current || !url || stampsLive.current !== url) return false;
+    const sheet = paperRef.current;
+    try {
+      const updates = await Promise.all(
+        cells
+          .filter((c) => !c.plain)
+          .map(async (c) => {
+            const r = photoRect(c);
+            return {
+              tag: c.id,
+              file: await canvasFile(c.canvas),
+              x: r.x / sheet.w,
+              y: r.y / sheet.h,
+              w: r.w / sheet.w,
+              h: r.h / sheet.h,
+            };
+          }),
+      );
+      if (!updates.length) return true;
+      await pdfRef.current.replaceStamps(updates);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const chooseFilter = async (id: DocScanFilter) => {
     if (!pagesRef.current.some((p) => p.cells.some((c) => !c.plain))) {
       toast.error('Add a photo, then choose a filter');
@@ -897,48 +931,54 @@ export default function DocumentPrintPage() {
       }
       setDocFilter(id);
       const targetId = target.cell.id;
-      setPages((prev) =>
-        prev.map((pg, i) =>
-          i !== target!.pageIndex
-            ? pg
-            : {
-                ...pg,
-                cells: pg.cells.map((c) => {
-                  if (c.id !== targetId || c.plain) return c;
-                  const base = c.baseCanvas || c.canvas;
-                  return { ...c, filter: id, baseCanvas: c.baseCanvas || cloneCanvas(base), canvas: renderCell(base, id, c.rgb) };
-                }),
-              },
-        ),
+      const changed: DocCell[] = [];
+      const nextPages = pagesRef.current.map((pg, i) =>
+        i !== target!.pageIndex
+          ? pg
+          : {
+              ...pg,
+              cells: pg.cells.map((c) => {
+                if (c.id !== targetId || c.plain) return c;
+                const base = c.baseCanvas || c.canvas;
+                const updated = { ...c, filter: id, baseCanvas: c.baseCanvas || cloneCanvas(base), canvas: renderCell(base, id, c.rgb) };
+                changed.push(updated);
+                return updated;
+              }),
+            },
       );
-      layoutKeyRef.current = '';
-      resumePage.current = target.pageIndex + 1;
-      touchSheet();
-      setTimeout(() => persistExtras(pagesRef.current), 0);
+      pagesRef.current = nextPages;
+      setPages(nextPages);
+      persistExtras(nextPages);
+      // Update the live viewer in place; rebuild only if stamps are not live yet.
+      if (!(await liveUpdateCells(changed))) {
+        layoutKeyRef.current = '';
+        resumePage.current = target.pageIndex + 1;
+        touchSheet();
+      }
       return;
     }
 
     // "All pages": apply to every photo and remember it as the page default.
     setDocFilter(id);
     void savePageFilter(fileId, id);
-    setPages((prev) =>
-      prev.map((pg) => ({
-        ...pg,
-        cells: pg.cells.map((c) => {
-          if (c.plain) return c;
-          const base = c.baseCanvas || c.canvas;
-          return {
-            ...c,
-            filter: id,
-            baseCanvas: c.baseCanvas || cloneCanvas(base),
-            canvas: renderCell(base, id, c.rgb),
-          };
-        }),
-      })),
-    );
-    layoutKeyRef.current = '';
-    touchSheet();
-    setTimeout(() => persistExtras(pagesRef.current), 0);
+    const changedAll: DocCell[] = [];
+    const nextAll = pagesRef.current.map((pg) => ({
+      ...pg,
+      cells: pg.cells.map((c) => {
+        if (c.plain) return c;
+        const base = c.baseCanvas || c.canvas;
+        const updated = { ...c, filter: id, baseCanvas: c.baseCanvas || cloneCanvas(base), canvas: renderCell(base, id, c.rgb) };
+        changedAll.push(updated);
+        return updated;
+      }),
+    }));
+    pagesRef.current = nextAll;
+    setPages(nextAll);
+    persistExtras(nextAll);
+    if (!(await liveUpdateCells(changedAll))) {
+      layoutKeyRef.current = '';
+      touchSheet();
+    }
   };
 
   /** Apply the R/G/B slider values, honouring the same Selected / All scope as Filter. */
@@ -965,36 +1005,49 @@ export default function DocumentPrintPage() {
         toast.error('Tap a photo first, then open Colour — or switch to All pages');
         return;
       }
-      setPages((prev) =>
-        prev.map((pg, i) =>
-          i !== target!.pageIndex
-            ? pg
-            : {
-                ...pg,
-                cells: pg.cells.map((c) => {
-                  if (c.id !== target!.id || c.plain) return c;
-                  const base = c.baseCanvas || c.canvas;
-                  return { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
-                }),
-              },
-        ),
+      const changed: DocCell[] = [];
+      const nextPages = pagesRef.current.map((pg, i) =>
+        i !== target!.pageIndex
+          ? pg
+          : {
+              ...pg,
+              cells: pg.cells.map((c) => {
+                if (c.id !== target!.id || c.plain) return c;
+                const base = c.baseCanvas || c.canvas;
+                const updated = { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
+                changed.push(updated);
+                return updated;
+              }),
+            },
       );
-      resumePage.current = target.pageIndex + 1;
-    } else {
-      setPages((prev) =>
-        prev.map((pg) => ({
-          ...pg,
-          cells: pg.cells.map((c) => {
-            if (c.plain) return c;
-            const base = c.baseCanvas || c.canvas;
-            return { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
-          }),
-        })),
-      );
+      pagesRef.current = nextPages;
+      setPages(nextPages);
+      persistExtras(nextPages);
+      if (!(await liveUpdateCells(changed))) {
+        layoutKeyRef.current = '';
+        resumePage.current = target.pageIndex + 1;
+        touchSheet();
+      }
+      return;
     }
-    layoutKeyRef.current = '';
-    touchSheet();
-    setTimeout(() => persistExtras(pagesRef.current), 0);
+    const changedAll: DocCell[] = [];
+    const nextAll = pagesRef.current.map((pg) => ({
+      ...pg,
+      cells: pg.cells.map((c) => {
+        if (c.plain) return c;
+        const base = c.baseCanvas || c.canvas;
+        const updated = { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
+        changedAll.push(updated);
+        return updated;
+      }),
+    }));
+    pagesRef.current = nextAll;
+    setPages(nextAll);
+    persistExtras(nextAll);
+    if (!(await liveUpdateCells(changedAll))) {
+      layoutKeyRef.current = '';
+      touchSheet();
+    }
   };
 
   /** Debounce slider drags so the sheet is not rebuilt on every pixel of movement. */

@@ -1,5 +1,6 @@
 import { test, expect, type Page, type FrameLocator } from '@playwright/test';
 import { crc32, deflateSync } from 'node:zlib';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 /**
  * Operator: adds a second document on top of the customer's page, moves it,
@@ -160,9 +161,9 @@ async function cropPreviewColor(page: Page): Promise<[number, number, number]> {
 
 /** Click Print and return the number of pages in the generated PDF blob. */
 async function printAndCountPages(page: Page): Promise<number> {
-  const result = await page.evaluate(async () => {
+  const b64 = await page.evaluate(async () => {
     const btn = document.querySelector('[data-doc-print-submit="1"]') as HTMLButtonElement | null;
-    if (!btn) return -1;
+    if (!btn) return '';
     const blobs: Blob[] = [];
     const orig = URL.createObjectURL.bind(URL);
     URL.createObjectURL = ((obj: Blob | MediaSource) => {
@@ -176,13 +177,19 @@ async function printAndCountPages(page: Page): Promise<number> {
       await new Promise((r) => setTimeout(r, 100));
     }
     URL.createObjectURL = orig;
-    if (!blobs.length) return -1;
-    const text = await blobs[blobs.length - 1].text();
-    // Each page carries exactly one /MediaBox; the /Pages tree node does not.
-    const matches = text.match(/\/MediaBox/g);
-    return matches ? matches.length : 0;
+    if (!blobs.length) return '';
+    const buf = new Uint8Array(await blobs[blobs.length - 1].arrayBuffer());
+    let s = '';
+    for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+    return btoa(s);
   });
-  return result;
+  if (!b64) return -1;
+  const bytes = Uint8Array.from(Buffer.from(b64, 'base64'));
+  const task = getDocument({ data: bytes });
+  const pdf = await task.promise;
+  const n = pdf.numPages;
+  await task.destroy();
+  return n;
 }
 
 test.describe('Print editor keeps work (operator)', () => {

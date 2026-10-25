@@ -318,6 +318,42 @@
     return rects;
   }
 
+  /** Swap the bitmap of tagged stamps in place (filter/RGB), without reloading the sheet. */
+  async function replaceStamps(updates) {
+    const app = await editorApp();
+    const ui = app?.pdfViewer?._layerProperties?.annotationEditorUIManager;
+    if (!ui?.getEditors) throw new Error("PDF editor is not ready");
+    const count = app?.pdfDocument?.numPages || 0;
+    const byTag = new Map();
+    for (let i = 0; i < count; i++) {
+      for (const ed of ui.getEditors(i)) {
+        if (ed.__cyberTag) byTag.set(ed.__cyberTag, { ed, page: i });
+      }
+    }
+    for (const u of updates || []) {
+      const hit = byTag.get(u.tag);
+      if (!hit) continue;
+      const { ed, page } = hit;
+      const place = {
+        page: page + 1,
+        x: Number.isFinite(u.x) ? u.x : ed.x,
+        y: Number.isFinite(u.y) ? u.y : ed.y,
+        w: Number.isFinite(u.w) ? u.w : ed.width,
+        h: Number.isFinite(u.h) ? u.h : ed.height,
+        tag: u.tag,
+        quiet: true,
+      };
+      // Remove the old editor and paste the new bitmap at the same box, all quietly.
+      await quietly(ui, async () => {
+        try {
+          ed.remove();
+        } catch {}
+        await placeImageFileInner(u.file, place);
+      });
+    }
+    rankStamps();
+  }
+
   // Bigger photos go underneath, so none hides another one while selected.
   function rankStamps() {
     document.querySelectorAll(".annotationEditorLayer").forEach((layer) => {
@@ -731,6 +767,18 @@
       } catch (err) {
         parent.postMessage(
           { type: "cyber-stamp-rects-error", id: e.data.id, message: String(err.message || err) },
+          ORIGIN,
+        );
+      }
+      return;
+    }
+    if (e.data.type === "cyber-replace-stamps") {
+      try {
+        await replaceStamps(e.data.updates || []);
+        parent.postMessage({ type: "cyber-stamps-replaced", id: e.data.id }, ORIGIN);
+      } catch (err) {
+        parent.postMessage(
+          { type: "cyber-stamps-replaced-error", id: e.data.id, message: String(err.message || err) },
           ORIGIN,
         );
       }

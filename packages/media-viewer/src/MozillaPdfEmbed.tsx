@@ -47,6 +47,8 @@ export type MozillaPdfHandle = {
   setEditorMode: (mode: PdfEditorMode) => void;
   /** Place an image on the PDF. With `place`, it is sized and can be dragged. */
   stampFile: (file: File, place?: StampPlace) => Promise<void>;
+  /** Swap the bitmap of tagged stamps in place (filter/RGB) without reloading the sheet. */
+  replaceStamps: (updates: { tag: string; file: File; x?: number; y?: number; w?: number; h?: number }[]) => Promise<void>;
   /** Annotated PDF bytes currently shown in the viewer. */
   exportPdf: () => Promise<Blob>;
   /** 1-based page the operator is looking at. */
@@ -281,6 +283,10 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         win.postMessage({ type: 'cyber-stamp-rects', id }, window.location.origin);
       });
     },
+    async replaceStamps(updates) {
+      if (!updates?.length) return;
+      await ask('cyber-replace-stamps', { updates }, 30000);
+    },
   }), []);
 
   useEffect(() => {
@@ -370,6 +376,12 @@ const MozillaPdfEmbed = forwardRef<MozillaPdfHandle, MozillaPdfEmbedProps>(funct
         if (!pending) return;
         pendingReply.current.delete(e.data.id);
         if (type === 'cyber-marks-error') pending.reject(new Error(e.data?.message || 'Could not read the edits'));
+        else pending.resolve(e.data);
+      } else if (type === 'cyber-stamps-replaced' || type === 'cyber-stamps-replaced-error') {
+        const pending = pendingReply.current.get(e.data?.id);
+        if (!pending) return;
+        pendingReply.current.delete(e.data.id);
+        if (type === 'cyber-stamps-replaced-error') pending.reject(new Error(e.data?.message || 'Could not update the image'));
         else pending.resolve(e.data);
       } else if (type === 'cyber-pdf-error') {
         setError(e.data?.message || 'PDF viewer error');
