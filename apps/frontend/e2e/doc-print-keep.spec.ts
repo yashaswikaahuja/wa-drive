@@ -85,6 +85,16 @@ async function openEditor(page: Page): Promise<FrameLocator> {
 /** Average colour painted inside the stamp whose tag starts with prefix, [r,g,b]. */
 async function stampColor(page: Page, prefix: string): Promise<[number, number, number]> {
   const f = page.frames().find((fr) => fr.url().includes('viewer.html'))!;
+  // The UI manager is briefly null while the sheet rebuilds; wait for it.
+  await f.waitForFunction(
+    (pfx) => {
+      const ui = (window as any).PDFViewerApplication?.pdfViewer?._layerProperties?.annotationEditorUIManager;
+      const ed = ui?.getEditors?.(0)?.find((e: any) => (e.__cyberTag || '').startsWith(pfx));
+      return !!(ed?.div?.querySelector('img') || ed?.div?.querySelector('canvas'));
+    },
+    prefix,
+    { timeout: 15000 },
+  );
   return f.evaluate((pfx) => {
     const ui = (window as any).PDFViewerApplication.pdfViewer._layerProperties.annotationEditorUIManager;
     const ed = ui.getEditors(0).find((e: any) => (e.__cyberTag || '').startsWith(pfx));
@@ -344,5 +354,63 @@ test.describe('Print editor keeps work (operator)', () => {
     blue = await stampColor(page, 'x');
     expect(Math.abs(red[0] - red[2]), `red parent now gray, got ${red}`).toBeLessThan(14);
     expect(Math.abs(blue[0] - blue[2]), `blue doc still gray, got ${blue}`).toBeLessThan(14);
+  });
+
+  test('RGB sliders shift the selected photo, respect scope and survive refresh', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openEditor(page);
+
+    // Add the blue second document, then make both photos Original so colours are pure.
+    await page.locator('[data-doc-print-image-input]').setInputFiles({
+      name: 'second.png',
+      mimeType: 'image/png',
+      buffer: SECOND_DOC,
+    });
+    await page.locator('[data-crop-apply="1"]').click({ timeout: 15000 });
+    await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 15000 }).toBe(2);
+    await page.locator('[data-doc-print-filter-scope="all"]').click();
+    await page.locator('select[aria-label="Filter"]').selectOption('original');
+    await page.waitForTimeout(2500);
+
+    const greenOf = ([r, g, b]: [number, number, number]) => g - (r + b) / 2;
+
+    // Selected scope: push Green on the red parent only.
+    await page.locator('[data-doc-print-filter-scope="selected"]').click();
+    await clickStamp(page, 'c', 0.5, 0.05);
+    await expect.poll(async () => (await editors(page)).filter((e) => e.sel).map((e) => e.tag[0])).toEqual(['c']);
+    const greenBefore = greenOf(await stampColor(page, 'c'));
+    const blueGreenBefore = greenOf(await stampColor(page, 'x'));
+    await page.locator('[data-doc-print-tool="color"]').click();
+    await expect(page.locator('[data-doc-print-color="1"]')).toBeVisible();
+    await page.locator('[data-doc-print-rgb="g"]').fill('100');
+    await page.locator('[data-doc-print-rgb="g"]').dispatchEvent('input');
+    await page.waitForTimeout(1500);
+    const greenAfter = greenOf(await stampColor(page, 'c'));
+    const blueGreenAfter = greenOf(await stampColor(page, 'x'));
+    expect(greenAfter, `red parent greener: ${greenBefore} -> ${greenAfter}`).toBeGreaterThan(greenBefore + 8);
+    expect(Math.abs(blueGreenAfter - blueGreenBefore), 'blue doc unchanged in Selected scope').toBeLessThan(6);
+
+    // Reset returns it.
+    await page.locator('[data-doc-print-rgb-reset="1"]').click();
+    await page.waitForTimeout(1500);
+    expect(Math.abs(greenOf(await stampColor(page, 'c')) - greenBefore), 'reset returns red parent').toBeLessThan(8);
+
+    // Push Green again, then refresh: the adjustment on the parent... note the
+    // customer page re-loads fresh, so verify persistence on the ADDED photo.
+    await page.locator('[data-doc-print-filter-scope="all"]').click();
+    const bgAllBefore = greenOf(await stampColor(page, 'x'));
+    await page.locator('[data-doc-print-rgb="g"]').fill('100');
+    await page.locator('[data-doc-print-rgb="g"]').dispatchEvent('input');
+    await page.waitForTimeout(1800);
+    const bgAllAfter = greenOf(await stampColor(page, 'x'));
+    expect(bgAllAfter, `added photo greener in All: ${bgAllBefore} -> ${bgAllAfter}`).toBeGreaterThan(bgAllBefore + 8);
+    await page.waitForTimeout(1500);
+
+    // Refresh: the added photo keeps its green shift.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.frameLocator('iframe[title="PDF document"]').locator('.stampEditor').first()).toBeVisible({ timeout: 30000 });
+    await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 20000 }).toBe(2);
+    await page.waitForTimeout(2500);
+    expect(greenOf(await stampColor(page, 'x')), 'added photo green shift survives refresh').toBeGreaterThan(bgAllBefore + 8);
   });
 });

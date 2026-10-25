@@ -57,6 +57,8 @@ export type DocCell = {
   plain?: boolean;
   /** Scan filter applied to this cell. When unset, the page default is used. */
   filter?: string;
+  /** Per-channel R/G/B midtone shift (-100..100 each), applied after the filter. */
+  rgb?: { r: number; g: number; b: number };
   /** Original photo before auto edge-crop, so Crop can re-adjust from it. */
   rawCanvas?: HTMLCanvasElement;
   fitMode?: DocFitMode;

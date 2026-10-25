@@ -17,6 +17,8 @@ export type SavedExtra = {
   plain?: boolean;
   /** Scan filter chosen for this photo, so a refresh re-applies the same one. */
   filter?: string;
+  /** Per-channel R/G/B midtone shift (-100..100 each), re-applied on refresh. */
+  rgb?: { r: number; g: number; b: number };
 };
 
 const DB = 'cc-doc-print';

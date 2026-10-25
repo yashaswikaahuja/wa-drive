@@ -36,6 +36,7 @@ import {
 } from './documentPrintLayout';
 import { pdfBytesToPages } from './pdfPaper';
 import { applyDocFilter, type DocScanFilter } from './docScanFilters';
+import { applyRgbAdjust, isRgbZero, RGB_ZERO, type RgbAdjust } from './docRgbAdjust';
 import { detectDocumentQuad, warpQuad } from './docEdgeDetect';
 
 const MARGIN_MM = 10;
@@ -80,6 +81,16 @@ function photoRect(cell: DocCell): { x: number; y: number; w: number; h: number 
   const w = cell.h * sa;
   return { x: cell.x + (cell.w - w) / 2, y: cell.y, w, h: cell.h };
 }
+
+/** Scan filter, then the per-channel R/G/B shift. The one place both run. */
+function renderCell(base: HTMLCanvasElement, filter: DocScanFilter, rgb?: RgbAdjust | null): HTMLCanvasElement {
+  const filtered = applyDocFilter(base, filter);
+  return isRgbZero(rgb) ? filtered : applyRgbAdjust(filtered, rgb);
+}
+
+const focusRingClass =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--marigold))] focus-visible:ring-offset-1 focus-visible:ring-offset-[hsl(var(--pt-card))]';
+
 
 function whiteCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -140,6 +151,9 @@ export default function DocumentPrintPage() {
   const [docFilter, setDocFilter] = useState<DocScanFilter>('auto');
   /** Whether the Filter control changes only the selected photo or every page. */
   const [filterScope, setFilterScope] = useState<'selected' | 'all'>('all');
+  /** Live R/G/B slider values shown in the Color popover. */
+  const [rgb, setRgb] = useState<RgbAdjust>(RGB_ZERO);
+  const [colorOpen, setColorOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<PdfEditorMode | 'whiteout'>('none');
   /** Paper of the PDF currently open in the viewer. Empty while a new sheet is building. */
   const [openSheet, setOpenSheet] = useState('');
@@ -176,7 +190,7 @@ export default function DocumentPrintPage() {
         const blob = extraBlobs.current.get(c.id);
         if (!blob) return;
         const r = photoRect(c);
-        saved.push({ id: c.id, page, x: r.x / sheet.w, y: r.y / sheet.h, w: r.w / sheet.w, h: r.h / sheet.h, blob, plain: c.plain, filter: c.filter });
+        saved.push({ id: c.id, page, x: r.x / sheet.w, y: r.y / sheet.h, w: r.w / sheet.w, h: r.h / sheet.h, blob, plain: c.plain, filter: c.filter, rgb: c.rgb });
       }),
     );
     void saveExtras(fileId, saved);
@@ -350,6 +364,7 @@ export default function DocumentPrintPage() {
               baseCanvas: cloneCanvas(canvas),
               plain: ex.plain,
               filter: (ex.filter as DocScanFilter | undefined) || undefined,
+              rgb: ex.rgb,
             });
             extraBlobs.current.set(ex.id, ex.blob);
           } catch {
@@ -375,7 +390,7 @@ export default function DocumentPrintPage() {
               ...c,
               filter: f,
               baseCanvas: c.baseCanvas || cloneCanvas(c.canvas),
-              canvas: applyDocFilter(base, f),
+              canvas: renderCell(base, f, c.rgb),
             };
           }),
         })));
@@ -744,7 +759,7 @@ export default function DocumentPrintPage() {
           : {
               ...pg,
               cells: pg.cells.map((c) =>
-                c.id !== target.cellId ? c : { ...c, baseCanvas: cleaned, canvas: applyDocFilter(cleaned, filterRef.current) },
+                c.id !== target.cellId ? c : { ...c, baseCanvas: cleaned, canvas: renderCell(cleaned, (c.filter as DocScanFilter) || filterRef.current, c.rgb) },
               ),
             },
       ),
@@ -815,7 +830,7 @@ export default function DocumentPrintPage() {
             cells: pg.cells.map((c) => {
               if (c.id !== intent.cellId) return c;
               const base = cloneCanvas(framed);
-              const filled = { ...c, baseCanvas: base, canvas: applyDocFilter(base, filterRef.current) };
+              const filled = { ...c, baseCanvas: base, canvas: renderCell(base, (c.filter as DocScanFilter) || filterRef.current, c.rgb) };
               // A new crop has a new shape: refill the page margin instead of the old photo box.
               return c.id === pg.cells[0]?.id ? { ...filled, ...cellInMargin(filled, sheet, MARGIN_MM) } : filled;
             }),
@@ -883,7 +898,7 @@ export default function DocumentPrintPage() {
                 cells: pg.cells.map((c) => {
                   if (c.id !== targetId || c.plain) return c;
                   const base = c.baseCanvas || c.canvas;
-                  return { ...c, filter: id, baseCanvas: c.baseCanvas || cloneCanvas(base), canvas: applyDocFilter(base, id) };
+                  return { ...c, filter: id, baseCanvas: c.baseCanvas || cloneCanvas(base), canvas: renderCell(base, id, c.rgb) };
                 }),
               },
         ),
@@ -908,7 +923,7 @@ export default function DocumentPrintPage() {
             ...c,
             filter: id,
             baseCanvas: c.baseCanvas || cloneCanvas(base),
-            canvas: applyDocFilter(base, id),
+            canvas: renderCell(base, id, c.rgb),
           };
         }),
       })),
@@ -916,6 +931,110 @@ export default function DocumentPrintPage() {
     layoutKeyRef.current = '';
     touchSheet();
     setTimeout(() => persistExtras(pagesRef.current), 0);
+  };
+
+  /** Apply the R/G/B slider values, honouring the same Selected / All scope as Filter. */
+  const applyRgbToCells = async (next: RgbAdjust) => {
+    if (!pagesRef.current.some((p) => p.cells.some((c) => !c.plain))) return;
+    await syncStamps();
+    const pageDefault = filterRef.current;
+
+    if (filterScope === 'selected') {
+      // Use the photo captured when the popover opened, so clicking a slider
+      // (which deselects the pdf.js stamp) does not lose the target mid-drag.
+      const wantId = rgbTargetRef.current;
+      let target: { pageIndex: number; id: string } | null = null;
+      if (wantId) {
+        for (let i = 0; i < pagesRef.current.length; i++) {
+          const cell = pagesRef.current[i].cells.find((c) => c.id === wantId && !c.plain);
+          if (cell) {
+            target = { pageIndex: i, id: cell.id };
+            break;
+          }
+        }
+      }
+      if (!target) {
+        toast.error('Tap a photo first, then open Colour — or switch to All pages');
+        return;
+      }
+      setPages((prev) =>
+        prev.map((pg, i) =>
+          i !== target!.pageIndex
+            ? pg
+            : {
+                ...pg,
+                cells: pg.cells.map((c) => {
+                  if (c.id !== target!.id || c.plain) return c;
+                  const base = c.baseCanvas || c.canvas;
+                  return { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
+                }),
+              },
+        ),
+      );
+      resumePage.current = target.pageIndex + 1;
+    } else {
+      setPages((prev) =>
+        prev.map((pg) => ({
+          ...pg,
+          cells: pg.cells.map((c) => {
+            if (c.plain) return c;
+            const base = c.baseCanvas || c.canvas;
+            return { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
+          }),
+        })),
+      );
+    }
+    layoutKeyRef.current = '';
+    touchSheet();
+    setTimeout(() => persistExtras(pagesRef.current), 0);
+  };
+
+  /** Debounce slider drags so the sheet is not rebuilt on every pixel of movement. */
+  const rgbTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Photo the Color popover is editing (captured on open so slider clicks keep it). */
+  const rgbTargetRef = useRef<string | null>(null);
+  const onRgbChange = (next: RgbAdjust) => {
+    setRgb(next);
+    if (rgbTimer.current) clearTimeout(rgbTimer.current);
+    rgbTimer.current = setTimeout(() => void applyRgbToCells(next), 180);
+  };
+
+  /** When the Color popover opens, show the selected photo's current R/G/B (or the first photo's). */
+  const openColor = async () => {
+    await syncStamps();
+    let found: RgbAdjust | undefined;
+    rgbTargetRef.current = null;
+    if (filterScope === 'selected') {
+      try {
+        const tag = (await pdfRef.current?.stampRects())?.find((r) => r.selected)?.tag;
+        if (tag) {
+          for (const pg of pagesRef.current) {
+            const c = pg.cells.find((x) => x.id === tag && !x.plain);
+            if (c) {
+              found = c.rgb;
+              rgbTargetRef.current = c.id;
+              break;
+            }
+          }
+        }
+      } catch {
+        /* fall through to default */
+      }
+      if (!rgbTargetRef.current) {
+        toast.error('Tap a photo first, then open Colour — or switch to All pages');
+        return;
+      }
+    } else {
+      for (const pg of pagesRef.current) {
+        const c = pg.cells.find((x) => !x.plain);
+        if (c) {
+          found = c.rgb;
+          break;
+        }
+      }
+    }
+    setRgb(found ? { ...found } : RGB_ZERO);
+    setColorOpen(true);
   };
 
   const addBlankPage = async () => {
@@ -973,6 +1092,8 @@ export default function DocumentPrintPage() {
         cropOpen={cropOpen}
         cleanupOpen={!!cleanup}
         onCleanup={() => void openCleanup()}
+        colorOpen={colorOpen}
+        onColor={() => void openColor()}
         filter={docFilter}
         filterScope={filterScope}
         onFilterScope={setFilterScope}
@@ -1034,6 +1155,69 @@ export default function DocumentPrintPage() {
           if (file) void beginCrop(file);
         }}
       />
+      {colorOpen && (
+        <div
+          role="dialog"
+          aria-label="Adjust colour channels"
+          data-doc-print-color="1"
+          className="fixed z-50 left-1/2 -translate-x-1/2 top-24 w-[min(92vw,340px)] rounded-xl p-4 shadow-xl"
+          style={{ background: 'hsl(var(--pt-card))', border: '1px solid hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))' }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setColorOpen(false); }}
+        >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-semibold">Colour</span>
+              <span className="text-[11px]" style={{ color: 'hsl(var(--pt-muted))' }}>
+                {filterScope === 'selected' ? 'Selected photo' : 'All pages'}
+              </span>
+            </div>
+            <p className="text-[11px] mb-3" style={{ color: 'hsl(var(--pt-muted))' }}>
+              Shift each channel. Uses the Selected / All choice next to Filter.
+            </p>
+            {([
+              ['r', 'Red', '#d64545'],
+              ['g', 'Green', '#3b9c56'],
+              ['b', 'Blue', '#3b6fd6'],
+            ] as const).map(([key, label, color]) => (
+              <label key={key} className="block mb-3">
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-medium" style={{ color }}>{label}</span>
+                  <span className="tabular-nums" style={{ color: 'hsl(var(--pt-muted))' }}>{rgb[key] > 0 ? `+${rgb[key]}` : rgb[key]}</span>
+                </div>
+                <input
+                  type="range"
+                  min={-100}
+                  max={100}
+                  step={1}
+                  value={rgb[key]}
+                  aria-label={label}
+                  data-doc-print-rgb={key}
+                  onChange={(e) => onRgbChange({ ...rgb, [key]: Number(e.target.value) })}
+                  className={`w-full h-11 ${focusRingClass}`}
+                  style={{ accentColor: color }}
+                />
+              </label>
+            ))}
+            <div className="flex gap-2 justify-end mt-1">
+              <button
+                type="button"
+                data-doc-print-rgb-reset="1"
+                onClick={() => onRgbChange(RGB_ZERO)}
+                className={`min-h-[44px] px-4 rounded-md text-sm font-semibold ${focusRingClass}`}
+                style={{ background: 'hsl(var(--pt-secondary))', color: 'hsl(var(--pt-ink))', border: '1px solid hsl(var(--pt-border))' }}
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setColorOpen(false)}
+                className={`min-h-[44px] px-4 rounded-md text-sm font-semibold ${focusRingClass}`}
+                style={{ background: 'hsl(var(--pt-marigold))', color: 'hsl(var(--pt-marigold-ink, 24 30% 16%))' }}
+              >
+                Done
+              </button>
+            </div>
+        </div>
+      )}
       <DotCropModal
         open={cropOpen}
         source={cropSource}

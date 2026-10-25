@@ -19,6 +19,7 @@ import {
   Image as ImageIcon,
   PencilSimple,
   Printer,
+  SlidersHorizontal,
   SpinnerGap,
   Square,
   TextT,
@@ -108,6 +109,8 @@ export type PrintToolbarProps = {
   onCrop: () => void;
   cleanupOpen: boolean;
   onCleanup: () => void;
+  colorOpen: boolean;
+  onColor: () => void;
   onFilter: (id: DocScanFilter) => void;
   canUndo: boolean;
   canRedo: boolean;
@@ -171,6 +174,7 @@ export default function PrintToolbar(p: PrintToolbarProps) {
         <Group label="Photo">
           <Tool label="Crop" data="crop" viewer="crop" icon={<Crop size={ico} />} active={p.cropOpen} onClick={p.onCrop} title="Crop and straighten the photo" />
           <Tool label="Clean" data="cleanup" viewer="cleanup" icon={<Eraser size={ico} />} active={p.cleanupOpen} onClick={p.onCleanup} title="Remove stains, marks and fingers by painting over them" />
+          <Tool label="Color" data="color" viewer="color" icon={<SlidersHorizontal size={ico} />} active={p.colorOpen} onClick={p.onColor} title="Adjust Red, Green and Blue" />
           <label
             className="flex flex-col items-start justify-center h-12 px-1.5 shrink-0 text-[11px] font-medium gap-0.5"
             style={{ color: 'hsl(var(--pt-ink))' }}
