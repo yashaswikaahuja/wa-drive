@@ -201,6 +201,26 @@ test.describe('Print editor keeps work (operator)', () => {
     page.on('dialog', (d) => d.accept().catch(() => {}));
   });
 
+  test('toolbar is decluttered: no Draw, Highlight, Color or A4 wide', async ({ page }) => {
+    test.setTimeout(60_000);
+    await openEditor(page);
+    // Removed tools are gone.
+    await expect(page.locator('[data-doc-print-tool="draw"]')).toHaveCount(0);
+    await expect(page.locator('[data-doc-print-tool="highlight"]')).toHaveCount(0);
+    await expect(page.locator('[data-doc-print-tool="color"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'A4 wide' })).toHaveCount(0);
+    // The useful tools remain.
+    for (const tool of ['crop', 'cleanup', 'select', 'text', 'box', 'image', 'files', 'undo', 'redo']) {
+      await expect(page.locator(`[data-doc-print-tool="${tool}"]`)).toHaveCount(1);
+    }
+    await expect(page.locator('select[aria-label="Filter"]')).toBeVisible();
+    await expect(page.locator('[data-doc-print-copies="1"]')).toBeVisible();
+    await expect(page.locator('[data-doc-print-nup="2"]')).toBeVisible();
+    // Both papers still offered.
+    await expect(page.getByRole('button', { name: 'A4', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '4×6' })).toBeVisible();
+  });
+
   test('second document moves alone, Undo/Redo work, refresh keeps everything', async ({ page }) => {
     test.setTimeout(150_000);
     const frame = await openEditor(page);
@@ -381,64 +401,6 @@ test.describe('Print editor keeps work (operator)', () => {
     blue = await stampColor(page, 'x');
     expect(Math.abs(red[0] - red[2]), `red parent now gray, got ${red}`).toBeLessThan(14);
     expect(Math.abs(blue[0] - blue[2]), `blue doc still gray, got ${blue}`).toBeLessThan(14);
-  });
-
-  test('RGB sliders shift the selected photo, respect scope and survive refresh', async ({ page }) => {
-    test.setTimeout(150_000);
-    await openEditor(page);
-
-    // Add the blue second document, then make both photos Original so colours are pure.
-    await page.locator('[data-doc-print-image-input]').setInputFiles({
-      name: 'second.png',
-      mimeType: 'image/png',
-      buffer: SECOND_DOC,
-    });
-    await page.locator('[data-crop-apply="1"]').click({ timeout: 15000 });
-    await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 15000 }).toBe(2);
-    await page.locator('[data-doc-print-filter-scope="all"]').click();
-    await page.locator('select[aria-label="Filter"]').selectOption('original');
-    await page.waitForTimeout(2500);
-
-    const greenOf = ([r, g, b]: [number, number, number]) => g - (r + b) / 2;
-
-    // Selected scope: push Green on the red parent only.
-    await page.locator('[data-doc-print-filter-scope="selected"]').click();
-    await clickStamp(page, 'c', 0.5, 0.05);
-    await expect.poll(async () => (await editors(page)).filter((e) => e.sel).map((e) => e.tag[0])).toEqual(['c']);
-    const greenBefore = greenOf(await stampColor(page, 'c'));
-    const blueGreenBefore = greenOf(await stampColor(page, 'x'));
-    await page.locator('[data-doc-print-tool="color"]').click();
-    await expect(page.locator('[data-doc-print-color="1"]')).toBeVisible();
-    await page.locator('[data-doc-print-rgb="g"]').fill('100');
-    await page.locator('[data-doc-print-rgb="g"]').dispatchEvent('input');
-    await page.waitForTimeout(1500);
-    const greenAfter = greenOf(await stampColor(page, 'c'));
-    const blueGreenAfter = greenOf(await stampColor(page, 'x'));
-    expect(greenAfter, `red parent greener: ${greenBefore} -> ${greenAfter}`).toBeGreaterThan(greenBefore + 8);
-    expect(Math.abs(blueGreenAfter - blueGreenBefore), 'blue doc unchanged in Selected scope').toBeLessThan(6);
-
-    // Reset returns it.
-    await page.locator('[data-doc-print-rgb-reset="1"]').click();
-    await page.waitForTimeout(1500);
-    expect(Math.abs(greenOf(await stampColor(page, 'c')) - greenBefore), 'reset returns red parent').toBeLessThan(8);
-
-    // Push Green again, then refresh: the adjustment on the parent... note the
-    // customer page re-loads fresh, so verify persistence on the ADDED photo.
-    await page.locator('[data-doc-print-filter-scope="all"]').click();
-    const bgAllBefore = greenOf(await stampColor(page, 'x'));
-    await page.locator('[data-doc-print-rgb="g"]').fill('100');
-    await page.locator('[data-doc-print-rgb="g"]').dispatchEvent('input');
-    await page.waitForTimeout(1800);
-    const bgAllAfter = greenOf(await stampColor(page, 'x'));
-    expect(bgAllAfter, `added photo greener in All: ${bgAllBefore} -> ${bgAllAfter}`).toBeGreaterThan(bgAllBefore + 8);
-    await page.waitForTimeout(1500);
-
-    // Refresh: the added photo keeps its green shift.
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.frameLocator('iframe[title="PDF document"]').locator('.stampEditor').first()).toBeVisible({ timeout: 30000 });
-    await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 20000 }).toBe(2);
-    await page.waitForTimeout(2500);
-    expect(greenOf(await stampColor(page, 'x')), 'added photo green shift survives refresh').toBeGreaterThan(bgAllBefore + 8);
   });
 
   test('Copies multiplies the job and N-up packs documents per sheet', async ({ page }) => {

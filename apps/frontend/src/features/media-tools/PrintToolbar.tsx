@@ -14,12 +14,9 @@ import {
   DownloadSimple,
   FilePlus,
   FolderOpen,
-  Highlighter,
   Eraser,
   Image as ImageIcon,
-  PencilSimple,
   Printer,
-  SlidersHorizontal,
   SpinnerGap,
   Square,
   TextT,
@@ -31,7 +28,8 @@ import { DOC_SCAN_FILTERS, type DocScanFilter } from './docScanFilters';
 export type PrintTool = PdfEditorMode | 'whiteout';
 
 const PAPER_LABEL: Record<DocPaperId, string> = { a4: 'A4', 'a4-landscape': 'A4 wide', '4x6': '4×6' };
-const PAPERS: DocPaperId[] = ['a4', 'a4-landscape', '4x6'];
+// A4 wide (landscape) is rare for documents; keep the code, hide it from the bar.
+const PAPERS: DocPaperId[] = ['a4', '4x6'];
 
 const focusRing =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--marigold))] focus-visible:ring-offset-1 focus-visible:ring-offset-[hsl(var(--pt-card))]';
@@ -178,7 +176,6 @@ export default function PrintToolbar(p: PrintToolbarProps) {
         <Group label="Photo">
           <Tool label="Crop" data="crop" viewer="crop" icon={<Crop size={ico} />} active={p.cropOpen} onClick={p.onCrop} title="Crop and straighten the photo" />
           <Tool label="Clean" data="cleanup" viewer="cleanup" icon={<Eraser size={ico} />} active={p.cleanupOpen} onClick={p.onCleanup} title="Remove stains, marks and fingers by painting over them" />
-          <Tool label="Color" data="color" viewer="color" icon={<SlidersHorizontal size={ico} />} active={p.colorOpen} onClick={p.onColor} title="Adjust Red, Green and Blue" />
           <label
             className="flex flex-col items-start justify-center h-12 px-1.5 shrink-0 text-[11px] font-medium gap-0.5"
             style={{ color: 'hsl(var(--pt-ink))' }}
@@ -234,9 +231,10 @@ export default function PrintToolbar(p: PrintToolbarProps) {
           <Tool label="Undo" data="undo" viewer="undo" icon={<ArrowCounterClockwise size={ico} />} disabled={!p.canUndo} onClick={p.onUndo} title="Undo (Ctrl+Z)" />
           <Tool label="Redo" data="redo" viewer="redo" icon={<ArrowClockwise size={ico} />} disabled={!p.canRedo} onClick={p.onRedo} title="Redo (Ctrl+Y)" />
           <Tool label="Select" data="select" viewer="select" icon={<Cursor size={ico} />} active={p.activeTool === 'none'} onClick={() => p.onTool('none')} title="Select, move and resize" />
+        </Group>
+        <Divider />
+        <Group label="Add">
           <Tool label="Text" data="text" viewer="text" icon={<TextT size={ico} />} active={p.activeTool === 'text'} onClick={() => p.onTool('text')} />
-          <Tool label="Draw" data="draw" viewer="draw" icon={<PencilSimple size={ico} />} active={p.activeTool === 'draw'} onClick={() => p.onTool('draw')} />
-          <Tool label="Highlight" data="highlight" viewer="highlight" icon={<Highlighter size={ico} />} active={p.activeTool === 'highlight'} onClick={() => p.onTool('highlight')} />
           <Tool label="Whiteout" data="box" viewer="whiteout" icon={<Square size={ico} />} active={p.activeTool === 'whiteout'} onClick={p.onWhiteout} title="Cover part of the page with white" />
           <Tool label="Image" data="image" viewer="image" icon={<ImageIcon size={ico} />} active={p.activeTool === 'image'} onClick={p.onImage} title="Add an image from this computer" />
           <Tool label="Files" data="files" viewer="files" icon={<FolderOpen size={ico} />} onClick={p.onFiles} title="Add an image from File Manager" />
