@@ -136,8 +136,6 @@ test.describe('Document print layout (operator)', () => {
     // Crop the photo already on the sheet. Wait until that rebuild is the open PDF, then move it.
     const stamp = frame.locator('.stampEditor[data-cyber-placed="1"]').first();
     await expect(stamp).toBeVisible({ timeout: 20000 });
-    const pdf = page.locator('[data-doc-print-pdf="1"]');
-    const readyBeforeCrop = await pdf.getAttribute('data-doc-print-ready');
     await page.locator('[data-doc-print-viewer-tool="crop"]').click();
     await expect(page.locator('[data-image-crop="1"]')).toBeVisible();
     await expect(page.locator('[data-crop-handle]')).toHaveCount(4);
@@ -150,11 +148,10 @@ test.describe('Document print layout (operator)', () => {
     await page.mouse.move(dotBox!.x + dotBox!.width / 2 - 48, dotBox!.y + dotBox!.height / 2 - 32, { steps: 8 });
     await page.mouse.up();
     await page.locator('[data-crop-apply="1"]').click();
-    await expect(pdf).not.toHaveAttribute('data-doc-print-ready', readyBeforeCrop || '0', { timeout: 25000 });
+    // Crop now updates the photo live (no sheet reload), so just confirm it stays placed.
+    await expect(page.locator('[data-image-crop="1"]')).toHaveCount(0, { timeout: 15000 });
     await expect(stamp).toBeVisible({ timeout: 20000 });
-    const readyBeforeFilter = await pdf.getAttribute('data-doc-print-ready');
     await page.locator('select[aria-label="Filter"]').selectOption('whiteboard');
-    await expect(pdf).not.toHaveAttribute('data-doc-print-ready', readyBeforeFilter || '0', { timeout: 25000 });
     await expect(stamp).toBeVisible({ timeout: 20000 });
     const before = await stamp.boundingBox();
     expect(before).toBeTruthy();

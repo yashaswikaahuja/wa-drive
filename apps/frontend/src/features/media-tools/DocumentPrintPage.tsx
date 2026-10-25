@@ -186,6 +186,21 @@ export default function DocumentPrintPage() {
   const stampsLive = useRef('');
   /** Photos the operator added (cell id → unfiltered JPEG), saved for refresh. */
   const extraBlobs = useRef(new Map<string, Blob>());
+  /** Cache of the filtered-but-pre-RGB canvas, so RGB slider drags skip the heavy filter. */
+  const filteredCache = useRef(new Map<string, { filter: string; src: HTMLCanvasElement; out: HTMLCanvasElement }>());
+
+  /** Filter (cached) then RGB. Reuses the last filtered result when only RGB changed. */
+  const renderCellCached = (cellId: string, base: HTMLCanvasElement, filter: DocScanFilter, rgb?: RgbAdjust | null): HTMLCanvasElement => {
+    const hit = filteredCache.current.get(cellId);
+    let filtered: HTMLCanvasElement;
+    if (hit && hit.filter === filter && hit.src === base) {
+      filtered = hit.out;
+    } else {
+      filtered = applyDocFilter(base, filter);
+      filteredCache.current.set(cellId, { filter, src: base, out: filtered });
+    }
+    return isRgbZero(rgb) ? cloneCanvas(filtered) : applyRgbAdjust(filtered, rgb);
+  };
 
   const persistExtras = (list: DocPage[]) => {
     const sheet = paperRef.current;
@@ -761,21 +776,29 @@ export default function DocumentPrintPage() {
     setCleanup(null);
     if (!target) return;
     await syncStamps();
-    setPages((prev) =>
-      prev.map((pg, i) =>
-        i !== target.pageIndex
-          ? pg
-          : {
-              ...pg,
-              cells: pg.cells.map((c) =>
-                c.id !== target.cellId ? c : { ...c, baseCanvas: cleaned, canvas: renderCell(cleaned, (c.filter as DocScanFilter) || filterRef.current, c.rgb) },
-              ),
-            },
-      ),
+    let changedCell: DocCell | null = null;
+    const nextPages = pagesRef.current.map((pg, i) =>
+      i !== target.pageIndex
+        ? pg
+        : {
+            ...pg,
+            cells: pg.cells.map((c) => {
+              if (c.id !== target.cellId) return c;
+              const updated = { ...c, baseCanvas: cleaned, canvas: renderCell(cleaned, (c.filter as DocScanFilter) || filterRef.current, c.rgb) };
+              changedCell = updated;
+              return updated;
+            }),
+          },
     );
-    layoutKeyRef.current = '';
-    resumePage.current = target.pageIndex + 1;
-    touchSheet();
+    pagesRef.current = nextPages;
+    setPages(nextPages);
+    persistExtras(nextPages);
+    // Clean keeps the same box, so swap the bitmap live; rebuild only if needed.
+    if (!changedCell || !(await liveUpdateCells([changedCell]))) {
+      layoutKeyRef.current = '';
+      resumePage.current = target.pageIndex + 1;
+      touchSheet();
+    }
     toast.success('Photo cleaned');
   };
   const openParentCrop = async () => {
@@ -831,24 +854,31 @@ export default function DocumentPrintPage() {
     if (intent.kind === 'parent') {
       await syncStamps();
       const sheet = paperRef.current;
-      setPages((prev) =>
-        prev.map((pg, i) => {
-          if (i !== intent.pageIndex) return pg;
-          return {
-            ...pg,
-            cells: pg.cells.map((c) => {
-              if (c.id !== intent.cellId) return c;
-              const base = cloneCanvas(framed);
-              const filled = { ...c, baseCanvas: base, canvas: renderCell(base, (c.filter as DocScanFilter) || filterRef.current, c.rgb) };
-              // A new crop has a new shape: refill the page margin instead of the old photo box.
-              return c.id === pg.cells[0]?.id ? { ...filled, ...cellInMargin(filled, sheet, MARGIN_MM) } : filled;
-            }),
-          };
-        }),
-      );
-      layoutKeyRef.current = '';
-      resumePage.current = intent.pageIndex + 1;
-      touchSheet();
+      let changedCell: DocCell | null = null;
+      const nextPages = pagesRef.current.map((pg, i) => {
+        if (i !== intent.pageIndex) return pg;
+        return {
+          ...pg,
+          cells: pg.cells.map((c) => {
+            if (c.id !== intent.cellId) return c;
+            const base = cloneCanvas(framed);
+            const filled = { ...c, baseCanvas: base, canvas: renderCell(base, (c.filter as DocScanFilter) || filterRef.current, c.rgb) };
+            // A new crop has a new shape: refill the page margin instead of the old photo box.
+            const updated = c.id === pg.cells[0]?.id ? { ...filled, ...cellInMargin(filled, sheet, MARGIN_MM) } : filled;
+            changedCell = updated;
+            return updated;
+          }),
+        };
+      });
+      pagesRef.current = nextPages;
+      setPages(nextPages);
+      persistExtras(nextPages);
+      // replaceStamps re-places at the new box, so a crop can update live too.
+      if (!changedCell || !(await liveUpdateCells([changedCell]))) {
+        layoutKeyRef.current = '';
+        resumePage.current = intent.pageIndex + 1;
+        touchSheet();
+      }
       toast.success('Photo cropped');
       return;
     }
@@ -1014,7 +1044,7 @@ export default function DocumentPrintPage() {
               cells: pg.cells.map((c) => {
                 if (c.id !== target!.id || c.plain) return c;
                 const base = c.baseCanvas || c.canvas;
-                const updated = { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
+                const updated = { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCellCached(c.id, base, (c.filter as DocScanFilter) || pageDefault, next) };
                 changed.push(updated);
                 return updated;
               }),
@@ -1036,7 +1066,7 @@ export default function DocumentPrintPage() {
       cells: pg.cells.map((c) => {
         if (c.plain) return c;
         const base = c.baseCanvas || c.canvas;
-        const updated = { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCell(base, (c.filter as DocScanFilter) || pageDefault, next) };
+        const updated = { ...c, rgb: isRgbZero(next) ? undefined : next, canvas: renderCellCached(c.id, base, (c.filter as DocScanFilter) || pageDefault, next) };
         changedAll.push(updated);
         return updated;
       }),
