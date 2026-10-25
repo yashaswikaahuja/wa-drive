@@ -158,6 +158,33 @@ async function cropPreviewColor(page: Page): Promise<[number, number, number]> {
   });
 }
 
+/** Click Print and return the number of pages in the generated PDF blob. */
+async function printAndCountPages(page: Page): Promise<number> {
+  const result = await page.evaluate(async () => {
+    const btn = document.querySelector('[data-doc-print-submit="1"]') as HTMLButtonElement | null;
+    if (!btn) return -1;
+    const blobs: Blob[] = [];
+    const orig = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = ((obj: Blob | MediaSource) => {
+      if (obj instanceof Blob && (obj.type === 'application/pdf' || obj.size > 500)) blobs.push(obj);
+      return orig(obj);
+    }) as typeof URL.createObjectURL;
+    btn.click();
+    const start = Date.now();
+    while (Date.now() - start < 25000) {
+      if (blobs.length) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    URL.createObjectURL = orig;
+    if (!blobs.length) return -1;
+    const text = await blobs[blobs.length - 1].text();
+    // Each page carries exactly one /MediaBox; the /Pages tree node does not.
+    const matches = text.match(/\/MediaBox/g);
+    return matches ? matches.length : 0;
+  });
+  return result;
+}
+
 test.describe('Print editor keeps work (operator)', () => {
   test.use({ viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false });
 
@@ -412,5 +439,54 @@ test.describe('Print editor keeps work (operator)', () => {
     await expect.poll(async () => (await editors(page)).filter((e) => e.type === 'stamp').length, { timeout: 20000 }).toBe(2);
     await page.waitForTimeout(2500);
     expect(greenOf(await stampColor(page, 'x')), 'added photo green shift survives refresh').toBeGreaterThan(bgAllBefore + 8);
+  });
+
+  test('Copies multiplies the job and N-up packs documents per sheet', async ({ page }) => {
+    test.setTimeout(140_000);
+    await openEditor(page);
+    page.on('dialog', (d) => d.dismiss().catch(() => {}));
+
+    // One document page. Copies = 3 → 3 printed pages.
+    await page.locator('[data-doc-print-copies="1"]').fill('3');
+    await page.locator('[data-doc-print-copies="1"]').dispatchEvent('input');
+    await page.waitForTimeout(400);
+    await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(3);
+
+    // Back to a single copy.
+    await page.locator('[data-doc-print-copies="1"]').fill('1');
+    await page.locator('[data-doc-print-copies="1"]').dispatchEvent('input');
+    await page.waitForTimeout(400);
+
+    // Add more document pages: a blank sheet plus an image.
+    await page.locator('[data-doc-print-blank="1"]').click();
+    await page.waitForTimeout(1500);
+    await page.locator('[data-doc-print-image-input]').setInputFiles({
+      name: 'second.png',
+      mimeType: 'image/png',
+      buffer: SECOND_DOC,
+    });
+    await page.locator('[data-crop-apply="1"]').click({ timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    // Baseline at 1-up (whatever the job's page count is).
+    const base1 = await printAndCountPages(page);
+    expect(base1, 'multi-page job prints >1 sheet at 1-up').toBeGreaterThan(1);
+
+    // 2-up packs two document pages per sheet → ceil(n/2) sheets.
+    await page.locator('[data-doc-print-nup="2"]').click();
+    await page.waitForTimeout(400);
+    await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 2));
+
+    // 4-up → ceil(n/4) sheets.
+    await page.locator('[data-doc-print-nup="4"]').click();
+    await page.waitForTimeout(400);
+    await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 4));
+
+    // 2-up, 2 copies → double the 2-up sheet count.
+    await page.locator('[data-doc-print-nup="2"]').click();
+    await page.locator('[data-doc-print-copies="1"]').fill('2');
+    await page.locator('[data-doc-print-copies="1"]').dispatchEvent('input');
+    await page.waitForTimeout(400);
+    await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 2) * 2);
   });
 });

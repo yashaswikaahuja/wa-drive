@@ -118,6 +118,10 @@ export type PrintToolbarProps = {
   onRedo: () => void;
   onAddPage: () => void;
   onPaper: (id: DocPaperId) => void;
+  copies: number;
+  onCopies: (n: number) => void;
+  nUp: 1 | 2 | 4;
+  onNUp: (n: 1 | 2 | 4) => void;
 };
 
 export default function PrintToolbar(p: PrintToolbarProps) {
@@ -274,6 +278,62 @@ export default function PrintToolbar(p: PrintToolbarProps) {
             <FilePlus size={ico} />
             <span>+ Page</span>
           </button>
+          <label
+            className="flex flex-col items-start justify-center h-12 px-1.5 shrink-0 text-[11px] font-medium gap-0.5"
+            style={{ color: 'hsl(var(--pt-ink))' }}
+          >
+            <span>Copies</span>
+            <input
+              type="number"
+              min={1}
+              max={99}
+              inputMode="numeric"
+              aria-label="Copies"
+              data-doc-print-copies="1"
+              value={p.copies}
+              onChange={(e) => {
+                const n = Math.max(1, Math.min(99, Math.floor(Number(e.target.value) || 1)));
+                p.onCopies(n);
+              }}
+              className={`h-8 w-14 text-xs rounded-md border px-2 font-medium tabular-nums ${focusRing}`}
+              style={{ borderColor: 'hsl(var(--pt-border))', color: 'hsl(var(--pt-ink))', background: 'hsl(var(--pt-card))' }}
+            />
+          </label>
+          <label
+            className="flex flex-col items-start justify-center h-12 px-1.5 shrink-0 text-[11px] font-medium gap-0.5"
+            style={{ color: 'hsl(var(--pt-ink))' }}
+          >
+            <span>Per sheet</span>
+            <div
+              role="radiogroup"
+              aria-label="Documents per sheet"
+              className="flex items-center rounded-md p-0.5 shrink-0"
+              style={{ background: 'hsl(var(--pt-secondary))', border: '1px solid hsl(var(--pt-border))' }}
+            >
+              {([1, 2, 4] as const).map((n) => {
+                const on = p.nUp === n;
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    data-doc-print-nup={n}
+                    onClick={() => p.onNUp(n)}
+                    title={n === 1 ? 'One document per sheet' : `${n} documents on one sheet`}
+                    className={`h-7 min-h-[28px] min-w-[26px] px-1.5 text-[11px] font-semibold rounded-[5px] ${focusRing}`}
+                    style={
+                      on
+                        ? { background: 'hsl(var(--pt-marigold))', color: 'hsl(var(--pt-marigold-ink, 24 30% 16%))' }
+                        : { background: 'transparent', color: 'hsl(var(--pt-muted))' }
+                    }
+                  >
+                    {n}
+                  </button>
+                );
+              })}
+            </div>
+          </label>
         </Group>
       </div>
     </header>

@@ -37,6 +37,7 @@ import {
 import { pdfBytesToPages } from './pdfPaper';
 import { applyDocFilter, type DocScanFilter } from './docScanFilters';
 import { applyRgbAdjust, isRgbZero, RGB_ZERO, type RgbAdjust } from './docRgbAdjust';
+import { composePrintPdf, type NUp } from './composePrintPdf';
 import { detectDocumentQuad, warpQuad } from './docEdgeDetect';
 
 const MARGIN_MM = 10;
@@ -141,6 +142,10 @@ export default function DocumentPrintPage() {
   const [pages, setPages] = useState<DocPage[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  /** How many printed copies of the whole job. */
+  const [copies, setCopies] = useState(1);
+  /** Document pages per physical sheet: 1, 2 or 4. */
+  const [nUp, setNUp] = useState<NUp>(1);
   const [sheetRev, setSheetRev] = useState(0);
   const [originalPdfUrl, setOriginalPdfUrl] = useState('');
   const [layoutPdfUrl, setLayoutPdfUrl] = useState('');
@@ -608,14 +613,17 @@ export default function DocumentPrintPage() {
   const buildPdf = async () => assertPaper(await pagesToPdfBlob(pages, paper));
 
   const outputPdf = async () => {
+    let base: Blob | null = null;
     if (pdfRef.current && viewerUrl) {
       try {
-        return await assertPaper(await pdfRef.current.exportPdf());
+        base = await assertPaper(await pdfRef.current.exportPdf());
       } catch {
         // Viewer is still opening, or it is a previous paper size. Use the sheet.
       }
     }
-    return buildPdf();
+    if (!base) base = await buildPdf();
+    // Always re-emit through one path so page geometry and tiling are exact.
+    return composePrintPdf(base, { copies, nUp, paper });
   };
 
   const handlePrint = async () => {
@@ -1112,6 +1120,10 @@ export default function DocumentPrintPage() {
         onFilter={chooseFilter}
         onAddPage={() => void addBlankPage()}
         onPaper={changePaper}
+        copies={copies}
+        onCopies={setCopies}
+        nUp={nUp}
+        onNUp={setNUp}
       />
 
       <div className="flex-1 min-h-0" data-doc-print-pdf="1" data-doc-print-sheet={openSheet} data-doc-print-ready={sheetReady}>
