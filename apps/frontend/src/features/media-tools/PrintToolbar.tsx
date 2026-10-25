@@ -14,8 +14,10 @@ import {
   DownloadSimple,
   FilePlus,
   FolderOpen,
+  Highlighter,
   Eraser,
   Image as ImageIcon,
+  PencilSimple,
   Printer,
   SpinnerGap,
   Square,
@@ -235,6 +237,8 @@ export default function PrintToolbar(p: PrintToolbarProps) {
         <Divider />
         <Group label="Add">
           <Tool label="Text" data="text" viewer="text" icon={<TextT size={ico} />} active={p.activeTool === 'text'} onClick={() => p.onTool('text')} />
+          <Tool label="Draw" data="draw" viewer="draw" icon={<PencilSimple size={ico} />} active={p.activeTool === 'draw'} onClick={() => p.onTool('draw')} title="Draw on the page" />
+          <Tool label="Highlight" data="highlight" viewer="highlight" icon={<Highlighter size={ico} />} active={p.activeTool === 'highlight'} onClick={() => p.onTool('highlight')} title="Highlight part of the page" />
           <Tool label="Whiteout" data="box" viewer="whiteout" icon={<Square size={ico} />} active={p.activeTool === 'whiteout'} onClick={p.onWhiteout} title="Cover part of the page with white" />
           <Tool label="Image" data="image" viewer="image" icon={<ImageIcon size={ico} />} active={p.activeTool === 'image'} onClick={p.onImage} title="Add an image from this computer" />
           <Tool label="Files" data="files" viewer="files" icon={<FolderOpen size={ico} />} onClick={p.onFiles} title="Add an image from File Manager" />

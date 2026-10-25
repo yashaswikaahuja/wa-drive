@@ -201,16 +201,14 @@ test.describe('Print editor keeps work (operator)', () => {
     page.on('dialog', (d) => d.accept().catch(() => {}));
   });
 
-  test('toolbar is decluttered: no Draw, Highlight, Color or A4 wide', async ({ page }) => {
+  test('toolbar is decluttered: no Color or A4 wide; Draw and Highlight kept', async ({ page }) => {
     test.setTimeout(60_000);
     await openEditor(page);
     // Removed tools are gone.
-    await expect(page.locator('[data-doc-print-tool="draw"]')).toHaveCount(0);
-    await expect(page.locator('[data-doc-print-tool="highlight"]')).toHaveCount(0);
     await expect(page.locator('[data-doc-print-tool="color"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'A4 wide' })).toHaveCount(0);
-    // The useful tools remain.
-    for (const tool of ['crop', 'cleanup', 'select', 'text', 'box', 'image', 'files', 'undo', 'redo']) {
+    // The useful tools remain (including Draw and Highlight).
+    for (const tool of ['crop', 'cleanup', 'select', 'text', 'draw', 'highlight', 'box', 'image', 'files', 'undo', 'redo']) {
       await expect(page.locator(`[data-doc-print-tool="${tool}"]`)).toHaveCount(1);
     }
     await expect(page.locator('select[aria-label="Filter"]')).toBeVisible();
