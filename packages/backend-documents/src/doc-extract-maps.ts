@@ -185,6 +185,79 @@ export function normalizeDocTypeKey(input: string): string | null {
   return null;
 }
 
+/**
+ * Classifier synonyms → seed type. The vision model often invents a descriptive
+ * name for a document that is really a standard ID (e.g. a PAN card described as
+ * "permanent_account_number_card"). For the primary CLASSIFY/tag path we map such
+ * synonyms back to the seed type so real IDs don't end up untyped/"Other". These
+ * are substring-matched (after snake_case normalisation), longest/most-specific
+ * first is not required because each maps to exactly one seed.
+ */
+export const SEED_TYPE_ALIASES: Record<string, DocType> = {
+  // PAN
+  permanent_account_number_card: 'pan', permanent_account_number: 'pan', pan_card: 'pan',
+  income_tax_pan: 'pan', e_pan: 'pan', epan: 'pan',
+  // Aadhaar
+  aadhaar_card: 'aadhaar', aadhar: 'aadhaar', aadhar_card: 'aadhaar', adhaar: 'aadhaar',
+  uidai: 'aadhaar', uid: 'aadhaar', e_aadhaar: 'aadhaar', eaadhaar: 'aadhaar',
+  nsp_profile: 'aadhaar', enrolment_aadhaar: 'aadhaar',
+  // Voter ID
+  epic: 'voter_id', voter_card: 'voter_id', election_card: 'voter_id',
+  electoral_photo_identity_card: 'voter_id', voter: 'voter_id',
+  // Driving licence
+  driving_licence: 'driving_license', dl: 'driving_license', drivers_license: 'driving_license',
+  learner_license: 'driving_license',
+  // Ration card
+  ration: 'ration_card', pds_card: 'ration_card', food_security_card: 'ration_card',
+  // Ayushman / health id
+  ayushman_bharat: 'ayushman', pmjay: 'ayushman', pm_jay: 'ayushman', abha: 'ayushman',
+  abha_card: 'ayushman', health_id: 'ayushman', golden_card: 'ayushman',
+  // Passport
+  indian_passport: 'passport',
+  // Bank
+  bank_passbook_page: 'bank_passbook', passbook: 'bank_passbook', bank_statement: 'bank_passbook',
+  consolidated_account_statement: 'bank_passbook', cheque: 'bank_passbook', cancelled_cheque: 'bank_passbook',
+  // Marksheets / results
+  class_10_marksheet: 'marksheet_10th', matric_marksheet: 'marksheet_10th', secondary_marksheet: 'marksheet_10th',
+  class_12_marksheet: 'marksheet_12th', intermediate_marksheet: 'marksheet_12th', senior_secondary_marksheet: 'marksheet_12th',
+  graduation_marksheet: 'marksheet_graduation', degree_marksheet: 'marksheet_graduation',
+  post_graduation_marksheet: 'marksheet_postgrad',
+  marksheet: 'marksheet_10th',
+  // Admit card / result
+  hall_ticket: 'admit_card', exam_admit_card: 'admit_card', call_letter: 'admit_card',
+  scorecard: 'result', score_card: 'result', rank_card: 'result', exam_result: 'result',
+  // Photo / signature
+  passport_photo: 'photo', selfie: 'photo', portrait: 'photo', profile_photo: 'photo',
+  photograph: 'photo', signature_image: 'signature', sign: 'signature',
+};
+
+/**
+ * Map a classifier's raw document_type STRICTLY to a seed DocType, or 'other'.
+ * Unlike normalizeDocTypeKey (which may return an invented learned type for the
+ * rule-maker), this never returns a freeform type — the primary tag must be a seed
+ * so standard IDs are always recognised. Order: exact seed → label → alias →
+ * substring alias (e.g. "..._pan_card_...") → 'other'.
+ */
+export function resolveSeedType(input: string): DocType {
+  const raw = String(input || '').trim();
+  if (!raw) return 'other';
+  const lower = raw.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  if (!lower) return 'other';
+  if ((DOC_TYPES as readonly string[]).includes(lower)) return lower as DocType;
+  const fromLabel = LABEL_TO_DOC_TYPE[raw.toLowerCase()];
+  if (fromLabel && (DOC_TYPES as readonly string[]).includes(fromLabel)) return fromLabel as DocType;
+  if (SEED_TYPE_ALIASES[lower]) return SEED_TYPE_ALIASES[lower];
+  // Substring match for compound descriptions (e.g. "permanent_account_number_card_front").
+  for (const [alias, seed] of Object.entries(SEED_TYPE_ALIASES)) {
+    if (lower.includes(alias)) return seed;
+  }
+  // Bare seed words embedded in a longer string.
+  for (const seed of DOC_TYPES) {
+    if (seed !== 'other' && lower.includes(seed)) return seed as DocType;
+  }
+  return 'other';
+}
+
 /** Profile keys the rule maker may propose (keep extract maps stable & mergeable). */
 export const PROFILE_KEY_ALLOWLIST = [
   'name', 'first_name', 'middle_name', 'last_name', 'name_devanagari',

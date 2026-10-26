@@ -6,17 +6,38 @@ import {
   hasExtractRule,
   resolveDocTypeDecision,
   normalizeDocTypeKey,
+  resolveSeedType,
   PROFILE_KEY_ALLOWLIST,
   sanitizeProposedFields,
   saveExtractRule,
 } from './doc-extract-maps.js';
 
 function buildClassifyPrompt(): string {
-  return `Identify this Indian document image. Return ONLY JSON (no markdown):
-{"document_type":"<one of: ${DOC_TYPES.join(', ')}>","document_label":"<short human title>","confidence":0.0}
-Rules: document_type must be EXACTLY one listed value (selfie/person photo → "photo").
-Ayushman Bharat / PM-JAY / ABHA health cards → "ayushman" (not "other" or "certificate").
-confidence is 0..1 how sure you are. Use "other" only when truly unclear.
+  return `You are classifying an Indian document image for a cyber-café. Choose the SINGLE best matching type.
+Return ONLY JSON (no markdown): {"document_type":"<key>","document_label":"<short human title>","confidence":0.0}
+
+You MUST pick document_type from EXACTLY this list (use these snake_case keys verbatim):
+${DOC_TYPES.join(', ')}
+
+Never invent a new type name. If a document is a standard ID, use the standard key even if the card
+calls itself something longer. Distinguishing cues:
+- aadhaar: 12-digit Aadhaar number (xxxx xxxx xxxx), UIDAI / "भारत सरकार" / "मेरा आधार". Address side is still aadhaar.
+- pan: 10-char code like ABCDE1234F, "Permanent Account Number" / Income Tax Dept. (a PAN card is "pan", not a new type).
+- voter_id: EPIC number, Election Commission / electoral photo identity card.
+- driving_license: "Driving Licence", DL number, Transport Dept, vehicle classes.
+- passport: passport booklet, passport number, Republic of India passport.
+- ration_card: ration/PDS card, food security, family member list with rations.
+- ayushman: Ayushman Bharat / PM-JAY / ABHA / health golden card, ayushman id.
+- marksheet_10th / marksheet_12th / marksheet_graduation / marksheet_postgrad: board/university marksheets by level (Xth=matric/secondary, XIIth=intermediate/senior secondary, graduation=degree, postgrad=masters).
+- admit_card: hall ticket / call letter / admit card for an exam.
+- result: scorecard / rank card / result sheet.
+- certificate: caste/income/residence/birth/other certificate.
+- bank_passbook: passbook, bank statement, cheque, account statement.
+- form: a blank or filled application form.
+- photo: a person's photo/selfie/passport photo (no document). signature: a signature image.
+- other: ONLY when it genuinely fits none of the above (random text, notices, greetings, invoices, messages).
+
+confidence is 0..1 (how sure). Prefer a specific type over "other" when ID cues are present.
 Return ONLY the JSON.`;
 }
 
@@ -277,11 +298,10 @@ export async function classifyDocumentType(
     if (parsed.document_type) break;
     if (attempt === 0) await new Promise((r) => setTimeout(r, 600));
   }
-  // Prefer seed/alias normalize; else keep AI snake_case as learned type key
+  // Primary tag MUST be a seed type (never an invented learned type) so standard
+  // IDs like PAN/Aadhaar are always recognised even if the model names them oddly.
   const rawType = String(parsed.document_type || '').trim();
-  const documentType = normalizeDocTypeKey(rawType)
-    || (normalizeDocTypeKey(rawType.replace(/\s+/g, '_')) )
-    || 'other';
+  const documentType = resolveSeedType(rawType);
   const confidenceRaw = Number(parsed.confidence);
   const confidence = Number.isFinite(confidenceRaw)
     ? Math.max(0, Math.min(1, confidenceRaw))
