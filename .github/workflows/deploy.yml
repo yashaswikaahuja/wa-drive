@@ -56,12 +56,15 @@ jobs:
     if: ${{ inputs.target == 'backend' }}
     uses: ./.github/workflows/_deploy.yml
     with:
-      host: cybercontrol-app
-      compose_path: /opt/cybercontrol-docker/docker-compose.app.yml
+      # AWS MVP box. The old tailnet `deploy` user and docker-compose.app.yml are not on this host.
+      host: 44.219.62.198
+      compose_path: /opt/cybercontrol-docker/docker-compose.yml
       services: backend
       health_url: http://localhost:3000/api/health
       image_tag: ${{ inputs.version }}
       environment: backend
+      auth: aws
+      preserve_env: true
     secrets: inherit
 
   extension-service:

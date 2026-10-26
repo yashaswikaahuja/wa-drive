@@ -14,10 +14,16 @@ on:
       image_tag:    { required: false, type: string, default: "latest" }  # version to deploy; a git SHA rolls back
       environment:  { required: true,  type: string }   # GitHub Environment: backend | extension-service | whatsapp-service
       wa_instance_name: { required: false, type: string, default: "" }  # overrides WA_INSTANCE_NAME (for generic WA shards)
+      # aws: Ubuntu host (AWS MVP) via AWS_MVP_SSH_KEY. deploy: legacy tailnet VM via DEPLOY_SSH_*.
+      auth:         { required: false, type: string,  default: "deploy" }
+      # Keep the host's existing .env (POSTGRES_PASSWORD and the rest). A partial env file
+      # would blank those interpolations and break the database URL.
+      preserve_env: { required: false, type: boolean, default: false }
     secrets:
       TS_AUTHKEY:      { required: true }
       DEPLOY_SSH_KEY:  { required: true }
       DEPLOY_SSH_USER: { required: true }
+      AWS_MVP_SSH_KEY: { required: false }
 
 jobs:
   deploy:
@@ -25,6 +31,7 @@ jobs:
     environment: ${{ inputs.environment }}
     steps:
       - name: Join tailnet (ephemeral, OAuth)
+        if: ${{ inputs.auth != 'aws' }}
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
@@ -32,15 +39,29 @@ jobs:
           tags: tag:cybercontrol
 
       - name: Setup SSH key
+        env:
+          AUTH: ${{ inputs.auth }}
+          AWS_KEY: ${{ secrets.AWS_MVP_SSH_KEY }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" | tr -d '\r' > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
+          if [ "$AUTH" = "aws" ]; then
+            if [ -z "$AWS_KEY" ]; then
+              echo "::error::AWS_MVP_SSH_KEY is empty"
+              exit 1
+            fi
+            printf '%s\n' "$AWS_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          else
+            printf '%s\n' "$DEPLOY_KEY" | tr -d '\r' > ~/.ssh/id_deploy
+          fi
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keygen -y -f ~/.ssh/id_deploy >/dev/null
 
       - name: Assemble + provision .env on VM
+        if: ${{ inputs.preserve_env != true }}
         env:
           HOST: ${{ inputs.host }}
-          USER: ${{ secrets.DEPLOY_SSH_USER }}
+          USER: ${{ inputs.auth == 'aws' && 'ubuntu' || secrets.DEPLOY_SSH_USER }}
           # shared secrets (repo-level, single source of truth) — inherited from the caller
           DATABASE_URL:         ${{ secrets.DATABASE_URL }}
           JWT_SECRET:           ${{ secrets.JWT_SECRET }}
@@ -92,7 +113,7 @@ jobs:
             if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v" >> /tmp/vm.env; fi
           done
           echo "provisioning $(grep -c '=' /tmp/vm.env) vars to $HOST (env: ${{ inputs.environment }})"
-          scp -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 /tmp/vm.env "$USER@$HOST:/opt/cybercontrol-docker/${{ inputs.environment }}.env"
+          scp -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/id_deploy /tmp/vm.env "$USER@$HOST:/opt/cybercontrol-docker/${{ inputs.environment }}.env"
           rm -f /tmp/vm.env
 
       - name: Validate image tag
@@ -108,31 +129,40 @@ jobs:
       - name: Deploy + health-check + rollback
         env:
           HOST: ${{ inputs.host }}
-          USER: ${{ secrets.DEPLOY_SSH_USER }}
+          USER: ${{ inputs.auth == 'aws' && 'ubuntu' || secrets.DEPLOY_SSH_USER }}
           COMPOSE: ${{ inputs.compose_path }}
           SERVICES: ${{ inputs.services }}
           HEALTH: ${{ inputs.health_url }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          ENVFILE: ${{ inputs.environment }}.env
+          ENVFILE: ${{ inputs.preserve_env && '.env' || format('{0}.env', inputs.environment) }}
+          AUTH: ${{ inputs.auth }}
         run: |
-          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/id_ed25519 "$USER@$HOST" \
-            "COMPOSE='$COMPOSE' SERVICES='$SERVICES' HEALTH='$HEALTH' IMAGE_TAG='$IMAGE_TAG' ENVFILE='$ENVFILE' bash -s" <<'REMOTE'
+          ssh -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes -i ~/.ssh/id_deploy "$USER@$HOST" \
+            "COMPOSE='$COMPOSE' SERVICES='$SERVICES' HEALTH='$HEALTH' IMAGE_TAG='$IMAGE_TAG' ENVFILE='$ENVFILE' AUTH='$AUTH' bash -s" <<'REMOTE'
           set -e
           cd "$(dirname "$COMPOSE")"
           FILE="$COMPOSE"
           # per-service env file (so co-located services don't clobber each other's .env)
           DC="docker compose --env-file $ENVFILE -f $FILE"
+          if [ "$AUTH" = "aws" ] && [ -f docker-compose.override.yml ]; then
+            DC="$DC -f docker-compose.override.yml"
+          fi
           PRIMARY=$(echo $SERVICES | awk '{print $1}')
           # record currently-running image of the primary service (for rollback)
           CID=$($DC ps -q "$PRIMARY" 2>/dev/null | head -1)
           PREV=$(docker inspect --format '{{.Image}}' "$CID" 2>/dev/null || echo "")
           echo "previous image: ${PREV:-none}"
-          # NOTE: this host's Compose CLI rejects `up -d`; recreate via stop/rm/create/start.
+          # Legacy Compose on the old VMs rejects `up -d`. The AWS host (Compose v5) accepts it.
           recreate() {
-            $DC stop $SERVICES || true
-            $DC rm -f $SERVICES || true
-            $DC create $SERVICES
-            $DC start $SERVICES
+            if [ "$AUTH" = "aws" ]; then
+              $DC up -d --no-deps --force-recreate $SERVICES
+              $DC exec -T nginx nginx -s reload || true
+            else
+              $DC stop $SERVICES || true
+              $DC rm -f $SERVICES || true
+              $DC create $SERVICES
+              $DC start $SERVICES
+            fi
           }
           $DC pull $SERVICES
           recreate
@@ -147,9 +177,13 @@ jobs:
           if [ "$ok" != "1" ]; then
             echo "::error::health check failed for $HEALTH — rolling back"
             if [ -n "$PREV" ]; then
-              IMG=$($DC config --images | head -1)
-              docker tag "$PREV" "$IMG" && recreate
-              echo "rolled back $PRIMARY to previous image"
+              IMG=$($DC config --images | grep -F "cybercontrol-${PRIMARY}" | head -1)
+              if [ -n "$IMG" ]; then
+                docker tag "$PREV" "$IMG" && recreate
+                echo "rolled back $PRIMARY to previous image"
+              else
+                echo "::error::could not resolve image for $PRIMARY; left the new container in place"
+              fi
             fi
             exit 1
           fi
