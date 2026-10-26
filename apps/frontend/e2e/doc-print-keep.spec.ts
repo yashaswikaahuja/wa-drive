@@ -53,7 +53,7 @@ function solidPng(w: number, h: number, r: number, g: number, b: number) {
 const PAGE_PHOTO = solidPng(300, 420, 200, 60, 60);
 const SECOND_DOC = solidPng(320, 200, 40, 90, 200);
 
-type Ed = { tag: string; type: string; x: number; y: number; sel: boolean; text: string };
+type Ed = { tag: string; type: string; x: number; y: number; w: number; h: number; sel: boolean; text: string };
 
 async function editors(page: Page): Promise<Ed[]> {
   const frame = page.frames().find((f) => f.url().includes('viewer.html'));
@@ -66,6 +66,8 @@ async function editors(page: Page): Promise<Ed[]> {
       type: e.editorType,
       x: e.x,
       y: e.y,
+      w: e.width,
+      h: e.height,
       sel: !!e.isSelected,
       text: (e.div?.innerText || '').replace(/\s+/g, ' ').trim(),
     }));
@@ -455,5 +457,47 @@ test.describe('Print editor keeps work (operator)', () => {
     await page.locator('[data-doc-print-copies="1"]').dispatchEvent('input');
     await page.waitForTimeout(400);
     await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 2) * 2);
+  });
+
+  test('Card-ID docs land small at the top; a second card stacks below', async ({ page }) => {
+    test.setTimeout(120_000);
+    // docType=aadhaar → card placement. The customer page itself is the card image.
+    await page.goto('/app/photos/doc-print?fileId=drv-page&docType=aadhaar&paper=a4&from=/app/files&name=Shubham&phone=cust-1', {
+      waitUntil: 'domcontentloaded',
+    });
+    const later = page.getByRole('button', { name: /^Later$/i });
+    if (await later.isVisible().catch(() => false)) await later.click();
+    const frame = page.frameLocator('iframe[title="PDF document"]');
+    await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 30000 });
+    await page.waitForTimeout(1500);
+
+    const cards = () => editors(page).then((es) => es.filter((e) => e.type === 'stamp'));
+    let cs = await cards();
+    expect(cs.length).toBe(1);
+    // A card box is small (well under half the page height) and near the top.
+    expect(cs[0].h, `card height fraction ${cs[0].h}`).toBeLessThan(0.3);
+    expect(cs[0].y, `card near top ${cs[0].y}`).toBeLessThan(0.1);
+
+    // Add a second image → it snaps to the next card box, stacked below the first.
+    await page.locator('[data-doc-print-image-input]').setInputFiles({
+      name: 'second.png',
+      mimeType: 'image/png',
+      buffer: SECOND_DOC,
+    });
+    await page.locator('[data-crop-apply="1"]').click({ timeout: 15000 });
+    await expect.poll(async () => (await cards()).length, { timeout: 15000 }).toBe(2);
+    cs = (await cards()).sort((a, b) => a.y - b.y);
+    expect(cs[1].h, `second card small ${cs[1].h}`).toBeLessThan(0.3);
+    expect(cs[1].y, `second card below first (${cs[0].y} < ${cs[1].y})`).toBeGreaterThan(cs[0].y + 0.1);
+  });
+
+  test('Non-card docs still fill the page', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openEditor(page); // no docType → normal fill-page layout
+    await page.waitForTimeout(1000);
+    const cs = (await editors(page)).filter((e) => e.type === 'stamp');
+    expect(cs.length).toBe(1);
+    // A filled page photo is tall (most of the sheet), unlike a card box.
+    expect(cs[0].h, `fill height fraction ${cs[0].h}`).toBeGreaterThan(0.6);
   });
 });

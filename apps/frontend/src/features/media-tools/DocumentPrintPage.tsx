@@ -23,6 +23,8 @@ import {
   blankSheetsPdfBlob,
   cellInMargin,
   cloneCanvas,
+  cardBox,
+  isCardType,
   type DocCell,
   type DocMark,
   type DocPage,
@@ -128,6 +130,9 @@ export default function DocumentPrintPage() {
     .filter(Boolean);
   const phone = params.get('phone') || '';
   const name = params.get('name') || '';
+  /** Identified document type (label or key); card IDs auto-place small at the top. */
+  const docType = (params.get('docType') || '').toLowerCase().trim();
+  const isCard = isCardType(docType);
   const fromRaw = params.get('from') || '';
   const from =
     fromRaw.startsWith('/app/') && !fromRaw.startsWith('//') && !fromRaw.includes('://')
@@ -313,6 +318,8 @@ export default function DocumentPrintPage() {
         const built: DocPage[] = [];
         let firstPdfUrl = '';
         let autoCropped = 0;
+        /** Card-ID images gathered to lay out together on one top-stacked page. */
+        const cardCanvases: { canvas: HTMLCanvasElement; raw?: HTMLCanvasElement }[] = [];
         for (let i = 0; i < ids.length; i++) {
           try {
             const blob = await loadDriveBlob(ids[i]);
@@ -334,19 +341,35 @@ export default function DocumentPrintPage() {
               const photo = imageToCanvas(img);
               // #346: find the page and straighten it, so the operator does not crop by hand.
               const quad = detectDocumentQuad(photo);
-              const page = fitImageOnPage(
-                quad ? warpQuad(photo, quad) : photo,
-                p,
-                MARGIN_MM,
-                i === 0 ? name || undefined : undefined,
-              );
-              if (quad && page.cells[0]) page.cells[0].rawCanvas = photo;
+              const cropped = quad ? warpQuad(photo, quad) : photo;
               if (quad) autoCropped++;
-              built.push(page);
+              if (isCard) {
+                // Card IDs: collect now, lay out together in one top-stacked card page.
+                cardCanvases.push({ canvas: cropped, raw: quad ? photo : undefined });
+              } else {
+                const page = fitImageOnPage(cropped, p, MARGIN_MM, i === 0 ? name || undefined : undefined);
+                if (quad && page.cells[0]) page.cells[0].rawCanvas = photo;
+                built.push(page);
+              }
             }
           } catch {
             /* skip missing */
           }
+        }
+        // Card IDs land small at the top of one sheet, stacked, cut-out ready.
+        if (cardCanvases.length) {
+          const cells: DocCell[] = cardCanvases.map((cc, idx) => ({
+            id: makeId('c'),
+            ...cardBox(p, idx, MARGIN_MM),
+            canvas: cc.canvas,
+            baseCanvas: cloneCanvas(cc.canvas),
+            rawCanvas: cc.raw,
+            fitMode: 'contain',
+            brightness: 0,
+            contrast: 0,
+            label: name || undefined,
+          }));
+          built.unshift({ id: makeId('p'), cells, marks: [] });
         }
         if (cancelled) {
           if (firstPdfUrl) URL.revokeObjectURL(firstPdfUrl);
@@ -686,20 +709,29 @@ export default function DocumentPrintPage() {
     const index = Math.min(Math.max(0, pageNumber - 1), Math.max(0, list.length - 1));
     const sheet = paperRef.current;
     const aspect = canvas.width / Math.max(1, canvas.height);
-    let w = sheet.w * size;
-    let h = w / aspect;
-    if (h > sheet.h * size) {
-      h = sheet.h * size;
-      w = h * aspect;
+    let box: { x: number; y: number; w: number; h: number };
+    if (isCard && !plain) {
+      // Card ID: snap the added photo to the next card box at the top, stacked.
+      const existingCards = (list[index]?.cells || []).filter((c) => !c.plain).length;
+      box = cardBox(sheet, existingCards, MARGIN_MM);
+    } else {
+      let w = sheet.w * size;
+      let h = w / aspect;
+      if (h > sheet.h * size) {
+        h = sheet.h * size;
+        w = h * aspect;
+      }
+      box = { x: Math.round((sheet.w - w) / 2), y: Math.round((sheet.h - h) / 2), w: Math.round(w), h: Math.round(h) };
     }
     const cell: DocCell = {
       id: makeId('x'),
-      x: Math.round((sheet.w - w) / 2),
-      y: Math.round((sheet.h - h) / 2),
-      w: Math.round(w),
-      h: Math.round(h),
+      x: box.x,
+      y: box.y,
+      w: box.w,
+      h: box.h,
       canvas,
       baseCanvas: base,
+      fitMode: isCard && !plain ? 'contain' : undefined,
       plain: plain || undefined,
     };
     setActiveTool('none');

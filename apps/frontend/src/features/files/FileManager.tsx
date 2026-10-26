@@ -553,6 +553,7 @@ export default function FileManager() {
       if (f.customerName) q.set('name', f.customerName);
       q.set('from', '/app/files');
       q.set('paper', 'a4');
+      if (f.tag) q.set('docType', f.tag);
       closePreview();
       navigate(`/app/photos/doc-print?${q}`);
       return;

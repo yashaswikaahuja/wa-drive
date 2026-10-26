@@ -34,13 +34,14 @@ function photoEditorPath(driveId: string, msg?: { phone?: string; name?: string 
   return `/app/photos/portal?${q}`;
 }
 
-function docPrintPath(driveId: string, msg?: { phone?: string; name?: string; fileName?: string }) {
+function docPrintPath(driveId: string, msg?: { phone?: string; name?: string; fileName?: string; tag?: string }) {
   const q = new URLSearchParams();
   q.set('fileId', driveId);
   if (msg?.phone) q.set('phone', msg.phone);
   if (msg?.name) q.set('name', msg.name);
   q.set('from', DOCS_RETURN);
   q.set('paper', 'a4');
+  if (msg?.tag) q.set('docType', msg.tag);
   return `/app/photos/doc-print?${q}`;
 }
 
@@ -1609,6 +1610,7 @@ export default function WhatsApp() {
                 phone: viewerFile.phone,
                 name: viewerFile.name,
                 fileName: viewerFile.fileName,
+                tag: viewerFile.tag,
               }),
             );
             handleCloseViewer();

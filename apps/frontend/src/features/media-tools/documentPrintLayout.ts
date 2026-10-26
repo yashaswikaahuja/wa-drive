@@ -220,6 +220,40 @@ export function cellInMargin(
   };
 }
 
+/**
+ * Document types that are plastic ID cards — printed small at the top of the
+ * sheet (not filling the page), so the operator can cut them out. The system
+ * knows the type but not which image is front/back, so cards just stack in the
+ * order they are placed.
+ */
+export const CARD_TYPES = new Set(['aadhaar', 'pan', 'voter_id', 'driving_license', 'ayushman']);
+
+export function isCardType(docType?: string | null): boolean {
+  if (!docType) return false;
+  const k = String(docType).toLowerCase().trim().replace(/\s+/g, '_');
+  return CARD_TYPES.has(k);
+}
+
+/** ID-1 card aspect (85.6 × 54 mm). */
+const CARD_ASPECT = 85.6 / 54;
+
+/**
+ * Box for the index-th card, stacked down the top area of the sheet. Width is a
+ * share of the usable width (capped), height from the card aspect; a phone photo
+ * is contain-fitted inside, so it reads as a card regardless of the photo size.
+ */
+export function cardBox(paper: DocPaperDef, index: number, marginMm = 12): Pick<DocCell, 'x' | 'y' | 'w' | 'h'> {
+  const margin = mm(marginMm);
+  const gap = mm(8);
+  const usable = paper.w - margin * 2;
+  // A real card is ~86mm wide; keep it near life-size but never wider than usable.
+  const w = Math.min(usable, mm(86));
+  const h = w / CARD_ASPECT;
+  const x = Math.round((paper.w - w) / 2);
+  const y = Math.round(margin + index * (h + gap));
+  return { x, y, w: Math.round(w), h: Math.round(h) };
+}
+
 function drawSelection(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   ctx.strokeStyle = 'hsl(27 95% 55%)';
   ctx.lineWidth = 6;
@@ -392,6 +426,8 @@ export function documentPrintPath(opts: {
   /** Extra drive file ids to load as additional pages. */
   fileIds?: string[];
   paper?: DocPaperId;
+  /** Identified document type (aadhaar/pan/...) so card IDs auto-place at the top. */
+  docType?: string | null;
 }): string {
   const q = new URLSearchParams();
   q.set('fileId', opts.fileId);
@@ -403,5 +439,6 @@ export function documentPrintPath(opts: {
   if (opts.name) q.set('name', opts.name);
   if (opts.from) q.set('from', opts.from);
   if (opts.paper && opts.paper !== 'a4') q.set('paper', opts.paper);
+  if (opts.docType) q.set('docType', String(opts.docType));
   return `/app/photos/doc-print?${q.toString()}`;
 }
