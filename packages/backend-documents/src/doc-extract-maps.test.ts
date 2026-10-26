@@ -57,3 +57,17 @@ test('token-aware matching avoids false substrings', () => {
   // Unrelated words that merely contain a seed as a substring stay 'other'.
   assert.equal(resolveSeedType('decoration_order'), 'other');
 });
+
+test('phrases that merely MENTION an ID are not that ID', () => {
+  // These must stay 'other' — they are job ads / notices / election results, not the ID itself.
+  assert.equal(resolveSeedType('job_advertisement_aadhaar_operator'), 'other');
+  assert.equal(resolveSeedType('aadhaar_enrollment_notice'), 'other');
+  assert.equal(resolveSeedType('student_union_election_result'), 'other');
+  assert.equal(resolveSeedType('municipal_election_voter_data'), 'other');
+  assert.equal(resolveSeedType('pm_ayushman_yojna_fraud_report'), 'other');
+  // But exact seeds and known card synonyms still resolve.
+  assert.equal(resolveSeedType('aadhaar'), 'aadhaar');
+  assert.equal(resolveSeedType('result'), 'result');
+  assert.equal(resolveSeedType('ayushman_card'), 'ayushman');
+  assert.equal(resolveSeedType('permanent_account_number_card_front'), 'pan');
+});

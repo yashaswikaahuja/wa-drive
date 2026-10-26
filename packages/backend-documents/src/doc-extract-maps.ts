@@ -211,7 +211,7 @@ export const SEED_TYPE_ALIASES: Record<string, DocType> = {
   ration: 'ration_card', pds_card: 'ration_card', food_security_card: 'ration_card',
   // Ayushman / health id
   ayushman_bharat: 'ayushman', pmjay: 'ayushman', pm_jay: 'ayushman', abha: 'ayushman',
-  abha_card: 'ayushman', health_id: 'ayushman', golden_card: 'ayushman',
+  abha_card: 'ayushman', health_id: 'ayushman', golden_card: 'ayushman', ayushman_card: 'ayushman',
   // Passport
   indian_passport: 'passport',
   // Bank
@@ -247,25 +247,17 @@ export function resolveSeedType(input: string): DocType {
   const fromLabel = LABEL_TO_DOC_TYPE[raw.toLowerCase()];
   if (fromLabel && (DOC_TYPES as readonly string[]).includes(fromLabel)) return fromLabel as DocType;
   if (SEED_TYPE_ALIASES[lower]) return SEED_TYPE_ALIASES[lower];
-  // Token-based match for compound descriptions (e.g. "permanent_account_number_card_front").
-  // Token-aware (not raw substring) so "declaration" never matches the "ration" alias.
+  // Compound descriptions (e.g. "permanent_account_number_card_front"): match a
+  // multi-token alias only as a CONTIGUOUS run of input tokens. We deliberately do
+  // NOT match bare single seed/alias words appearing anywhere, because phrases like
+  // "job_advertisement_aadhaar_operator" or "student_union_election_result" merely
+  // mention an ID/word and are not that document — they must stay 'other'.
   const tokens = lower.split('_').filter(Boolean);
-  const tokenSet = new Set(tokens);
   for (const [alias, seed] of Object.entries(SEED_TYPE_ALIASES)) {
     const at = alias.split('_').filter(Boolean);
-    // All alias tokens must appear (in order) as a contiguous run of input tokens.
-    if (at.length === 1) { if (tokenSet.has(at[0])) return seed; continue; }
+    if (at.length < 2) continue; // single-token aliases only match exactly (handled above)
     for (let i = 0; i + at.length <= tokens.length; i++) {
       if (at.every((t, j) => tokens[i + j] === t)) return seed;
-    }
-  }
-  // Bare seed words appearing as whole tokens (contiguous) in a longer string.
-  for (const seed of DOC_TYPES) {
-    if (seed === 'other') continue;
-    const st = seed.split('_').filter(Boolean);
-    if (st.length === 1) { if (tokenSet.has(st[0])) return seed as DocType; continue; }
-    for (let i = 0; i + st.length <= tokens.length; i++) {
-      if (st.every((t, j) => tokens[i + j] === t)) return seed as DocType;
     }
   }
   return 'other';
