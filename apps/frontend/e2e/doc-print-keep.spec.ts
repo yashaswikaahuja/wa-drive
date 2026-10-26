@@ -459,7 +459,7 @@ test.describe('Print editor keeps work (operator)', () => {
     await expect.poll(async () => printAndCountPages(page), { timeout: 40000 }).toBe(Math.ceil(base1 / 2) * 2);
   });
 
-  test('Card-ID docs land small at the top; a second card stacks below', async ({ page }) => {
+  test('Card-ID docs land small at the top; a second card sits beside it', async ({ page }) => {
     test.setTimeout(120_000);
     // docType=aadhaar → card placement. The customer page itself is the card image.
     await page.goto('/app/photos/doc-print?fileId=drv-page&docType=aadhaar&paper=a4&from=/app/files&name=Shubham&phone=cust-1', {
@@ -486,12 +486,14 @@ test.describe('Print editor keeps work (operator)', () => {
     });
     await page.locator('[data-crop-apply="1"]').click({ timeout: 15000 });
     await expect.poll(async () => (await cards()).length, { timeout: 15000 }).toBe(2);
-    cs = (await cards()).sort((a, b) => a.y - b.y);
+    cs = (await cards()).sort((a, b) => a.x - b.x);
     expect(cs[1].h, `second card small ${cs[1].h}`).toBeLessThan(0.3);
-    expect(cs[1].y, `second card below first (${cs[0].y} < ${cs[1].y})`).toBeGreaterThan(cs[0].y + 0.1);
+    // Side by side: same top row, second card to the right of the first.
+    expect(Math.abs(cs[0].y - cs[1].y), `same row (${cs[0].y} ≈ ${cs[1].y})`).toBeLessThan(0.05);
+    expect(cs[1].x, `second card right of first (${cs[0].x} < ${cs[1].x})`).toBeGreaterThan(cs[0].x + 0.1);
   });
 
-  test('A paired card (front+back via id-number) loads both cards stacked at the top', async ({ page }) => {
+  test('A paired card (front+back via id-number) loads both cards side by side at the top', async ({ page }) => {
     test.setTimeout(90_000);
     // Simulates what the launcher produces after /customers/card-siblings pairing:
     // the opened card plus its sibling passed as fileIds → two stacked cards on open.
@@ -504,13 +506,14 @@ test.describe('Print editor keeps work (operator)', () => {
     await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 30000 });
     await page.waitForTimeout(1800);
 
-    const cs = (await editors(page)).filter((e) => e.type === 'stamp').sort((a, b) => a.y - b.y);
+    const cs = (await editors(page)).filter((e) => e.type === 'stamp').sort((a, b) => a.x - b.x);
     expect(cs.length, `two cards loaded`).toBe(2);
-    // Both are small card boxes, stacked (second below the first), at the top.
+    // Both are small card boxes, side by side on the top row.
     expect(cs[0].h, `first card small ${cs[0].h}`).toBeLessThan(0.3);
     expect(cs[1].h, `second card small ${cs[1].h}`).toBeLessThan(0.3);
     expect(cs[0].y, `first near top ${cs[0].y}`).toBeLessThan(0.1);
-    expect(cs[1].y, `second below first (${cs[0].y} < ${cs[1].y})`).toBeGreaterThan(cs[0].y + 0.1);
+    expect(Math.abs(cs[0].y - cs[1].y), `same row (${cs[0].y} ≈ ${cs[1].y})`).toBeLessThan(0.05);
+    expect(cs[1].x, `second right of first (${cs[0].x} < ${cs[1].x})`).toBeGreaterThan(cs[0].x + 0.1);
   });
 
   test('Non-card docs still fill the page', async ({ page }) => {

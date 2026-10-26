@@ -238,19 +238,28 @@ export function isCardType(docType?: string | null): boolean {
 const CARD_ASPECT = 85.6 / 54;
 
 /**
- * Box for the index-th card, stacked down the top area of the sheet. Width is a
- * share of the usable width (capped), height from the card aspect; a phone photo
- * is contain-fitted inside, so it reads as a card regardless of the photo size.
+ * Box for the index-th card, laid out in rows of two (front & back side by side)
+ * across the top of the sheet, wrapping to a new row every two cards. Width is
+ * near life-size (~86mm) but shrinks to fit two-per-row inside the usable width;
+ * a phone photo is contain-fitted inside, so it reads as a card regardless of the
+ * photo size.
  */
 export function cardBox(paper: DocPaperDef, index: number, marginMm = 12): Pick<DocCell, 'x' | 'y' | 'w' | 'h'> {
   const margin = mm(marginMm);
   const gap = mm(8);
+  const perRow = 2;
   const usable = paper.w - margin * 2;
-  // A real card is ~86mm wide; keep it near life-size but never wider than usable.
-  const w = Math.min(usable, mm(86));
+  // Two cards + a gap must fit the usable width; otherwise fall back to life-size.
+  const maxW = (usable - gap * (perRow - 1)) / perRow;
+  const w = Math.min(mm(86), maxW);
   const h = w / CARD_ASPECT;
-  const x = Math.round((paper.w - w) / 2);
-  const y = Math.round(margin + index * (h + gap));
+  const col = index % perRow;
+  const row = Math.floor(index / perRow);
+  // Center the row of cards horizontally.
+  const rowW = perRow * w + (perRow - 1) * gap;
+  const x0 = (paper.w - rowW) / 2;
+  const x = Math.round(x0 + col * (w + gap));
+  const y = Math.round(margin + row * (h + gap));
   return { x, y, w: Math.round(w), h: Math.round(h) };
 }
 
