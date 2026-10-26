@@ -2,7 +2,7 @@ import { Router, type Router as ExpressRouter } from 'express';
 import multer from 'multer';
 import { pool, authMiddleware } from '@cybercontrol/backend-core';
 import { getDriveForWorkspace, uploadFileToDrive } from '@cybercontrol/backend-drive';
-import { autoExtractInBackground, deriveProfile } from '@cybercontrol/backend-documents';
+import { autoExtractInBackground, deriveProfile, normalizeDocTypeKey } from '@cybercontrol/backend-documents';
 
 const router: ExpressRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -312,6 +312,75 @@ router.get('/group-docs/:phone', authMiddleware, async (req: any, res) => {
     }
 
     res.json({ groups, ungrouped });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/customers/card-siblings/:phone/:fileId — pair the front & back of one ID card.
+// A plastic ID prints the SAME number on front and back, so two of a customer's card
+// images sharing that id-number are the same physical card. We return the opened file
+// plus its sibling(s) (opened first) so the print editor stacks both as cards. The
+// system knows the type but not which image is front/back — we make no such assumption.
+// Falls back to the extracted-name group when no id-number is present (e.g. OCR missed it).
+router.get('/card-siblings/:phone/:fileId', authMiddleware, async (req: any, res) => {
+  try {
+    const phone = decodeURIComponent(req.params.phone);
+    const fileId = decodeURIComponent(req.params.fileId);
+    const CARD_TYPES = new Set(['aadhaar', 'pan', 'voter_id', 'driving_license', 'ayushman']);
+    // The id-number field name per card type.
+    const ID_FIELD: Record<string, string> = {
+      aadhaar: 'aadhaar_number', pan: 'pan_number', voter_id: 'voter_id_number',
+      driving_license: 'driving_license_number', ayushman: 'ayushman_id',
+    };
+    const { rows } = await pool.query(
+      `SELECT d.id, d.tag, d.uploaded_at, e.suggested
+       FROM drive_files d
+       LEFT JOIN extraction_cache e ON e.file_id = d.id
+       WHERE d.workspace_id = $1 AND d.customer_id = $2
+       ORDER BY d.uploaded_at DESC`,
+      [req.user.workspaceId, phone],
+    );
+
+    const val = (s: any, k: string) => String(s?.[k]?.value ?? s?.[k] ?? '').trim();
+    const typeOf = (r: any): string => {
+      const fromSugg = val(r.suggested, 'document_type').toLowerCase();
+      if (fromSugg && fromSugg !== 'other') return fromSugg.replace(/\s+/g, '_');
+      const k = normalizeDocTypeKey(r.tag || '');
+      return k ? k.toLowerCase() : '';
+    };
+    const digits = (s: string) => s.replace(/[^a-z0-9]/gi, '').toLowerCase();
+
+    const opened = rows.find((r) => r.id === fileId);
+    const openedType = opened ? typeOf(opened) : '';
+    // Only pair for card types; otherwise just return the opened file.
+    if (!opened || !CARD_TYPES.has(openedType)) {
+      return res.json({ type: openedType || null, orderedFileIds: [fileId] });
+    }
+
+    const idKey = ID_FIELD[openedType];
+    const openedId = idKey ? digits(val(opened.suggested, idKey)) : '';
+
+    let siblings: any[] = [];
+    if (openedId && openedId.length >= 4) {
+      // Primary: same card type AND same id-number (front/back of one physical card).
+      siblings = rows.filter(
+        (r) => r.id !== fileId && typeOf(r) === openedType && digits(val(r.suggested, idKey)) === openedId,
+      );
+    }
+    if (!siblings.length) {
+      // Fallback: same type + same extracted name (back often has no id-number read).
+      const openedName = val(opened.suggested, 'name').toLowerCase().replace(/[^a-z\u0900-\u097f]/g, '');
+      if (openedName.length >= 4) {
+        siblings = rows.filter((r) => {
+          if (r.id === fileId || typeOf(r) !== openedType) return false;
+          const n = val(r.suggested, 'name').toLowerCase().replace(/[^a-z\u0900-\u097f]/g, '');
+          return n.length >= 4 && (n === openedName || n.includes(openedName) || openedName.includes(n));
+        });
+      }
+    }
+
+    // Opened first; cap total to 4 cards per sheet.
+    const orderedFileIds = [fileId, ...siblings.map((s) => s.id)].slice(0, 4);
+    res.json({ type: openedType, orderedFileIds });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

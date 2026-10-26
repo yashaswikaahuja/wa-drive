@@ -18,6 +18,7 @@ import {
 import api, { API_URL } from '../../shared/api';
 import { toast } from '../../shared/toast';
 import { getCachedBlob, printBlob } from '../../shared/fileCache';
+import { isCardType as isCardTag } from '../media-tools/documentPrintLayout';
 import { formatPhoneDisplay, phonesMatch } from '../../shared/phone';
 import { useReveal } from '../../shared/useReveal';
 import { useAuthStore } from '../auth/store';
@@ -547,15 +548,29 @@ export default function FileManager() {
   /** Photos → paper editor to fix them first; PDFs and anything else print directly. */
   const openDocumentPrint = (f: DriveFile) => {
     if (isImage(f)) {
-      const q = new URLSearchParams();
-      q.set('fileId', driveIdOf(f));
-      if (f.customerId) q.set('phone', f.customerId);
-      if (f.customerName) q.set('name', f.customerName);
-      q.set('from', '/app/files');
-      q.set('paper', 'a4');
-      if (f.tag) q.set('docType', f.tag);
-      closePreview();
-      navigate(`/app/photos/doc-print?${q}`);
+      void (async () => {
+        const q = new URLSearchParams();
+        q.set('fileId', driveIdOf(f));
+        if (f.customerId) q.set('phone', f.customerId);
+        if (f.customerName) q.set('name', f.customerName);
+        q.set('from', '/app/files');
+        q.set('paper', 'a4');
+        if (f.tag) q.set('docType', f.tag);
+        // Card IDs: auto-pull the other side of the same physical card (same id-number).
+        if (f.tag && f.customerId && isCardTag(f.tag)) {
+          try {
+            const r = await api.get(
+              `/customers/card-siblings/${encodeURIComponent(f.customerId)}/${encodeURIComponent(driveIdOf(f))}`,
+              { skipErrorToast: true } as any,
+            );
+            const ids: string[] = Array.isArray(r.data?.orderedFileIds) ? r.data.orderedFileIds : [];
+            const rest = ids.filter((id) => id && id !== driveIdOf(f));
+            if (rest.length) q.set('fileIds', rest.join(','));
+          } catch { /* fall back to the single card */ }
+        }
+        closePreview();
+        navigate(`/app/photos/doc-print?${q}`);
+      })();
       return;
     }
     void (async () => {

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, memo, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client'; // v2
 import api, { API_URL, SOCKET_URL } from '../../shared/api';
+import { isCardType as isCardTag } from '../media-tools/documentPrintLayout';
 import { DocTypePickerModal } from '../../shared/DocTypePicker';
 import { ExtractProfileTarget, type ExtractSaveTarget } from '../../shared/ExtractProfileTarget';
 import { toast } from '../../shared/toast';
@@ -43,6 +44,31 @@ function docPrintPath(driveId: string, msg?: { phone?: string; name?: string; fi
   q.set('paper', 'a4');
   if (msg?.tag) q.set('docType', msg.tag);
   return `/app/photos/doc-print?${q}`;
+}
+
+/**
+ * Card IDs print both sides of the same physical card together. Ask the backend
+ * for sibling file ids (same id-number) and append them as fileIds so the editor
+ * stacks them. Falls back to the plain single-card path on any error / non-card.
+ */
+async function resolveDocPrintPath(
+  driveId: string,
+  msg?: { phone?: string; name?: string; fileName?: string; tag?: string },
+): Promise<string> {
+  const base = docPrintPath(driveId, msg);
+  if (!msg?.tag || !msg.phone || !isCardTag(msg.tag)) return base;
+  try {
+    const r = await api.get(
+      `/customers/card-siblings/${encodeURIComponent(msg.phone)}/${encodeURIComponent(driveId)}`,
+      { skipErrorToast: true } as any,
+    );
+    const ids: string[] = Array.isArray(r.data?.orderedFileIds) ? r.data.orderedFileIds : [];
+    const rest = ids.filter((id) => id && id !== driveId);
+    if (!rest.length) return base;
+    return `${base}&fileIds=${encodeURIComponent(rest.join(','))}`;
+  } catch {
+    return base;
+  }
 }
 
 interface Message {
@@ -246,7 +272,7 @@ const MessageCard = memo(({ msg, onClick, selected, selectUiActive, onToggleSele
   const doPrint = () => {
     if (!driveId) return;
     if (kind === 'image') {
-      navigate(docPrintPath(driveId, msg));
+      void resolveDocPrintPath(driveId, msg).then((p) => navigate(p));
       return;
     }
     getCachedBlob(driveId, async () => {
@@ -1605,14 +1631,12 @@ export default function WhatsApp() {
           const kind = mediaKindOf(viewerFile.fileName || '');
           // Photos go to the paper editor to be fixed first; PDFs print directly.
           if (kind === 'image') {
-            navigate(
-              docPrintPath(driveId, {
-                phone: viewerFile.phone,
-                name: viewerFile.name,
-                fileName: viewerFile.fileName,
-                tag: viewerFile.tag,
-              }),
-            );
+            void resolveDocPrintPath(driveId, {
+              phone: viewerFile.phone,
+              name: viewerFile.name,
+              fileName: viewerFile.fileName,
+              tag: viewerFile.tag,
+            }).then((p) => navigate(p));
             handleCloseViewer();
             return;
           }

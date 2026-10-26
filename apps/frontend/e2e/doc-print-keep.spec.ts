@@ -491,6 +491,28 @@ test.describe('Print editor keeps work (operator)', () => {
     expect(cs[1].y, `second card below first (${cs[0].y} < ${cs[1].y})`).toBeGreaterThan(cs[0].y + 0.1);
   });
 
+  test('A paired card (front+back via id-number) loads both cards stacked at the top', async ({ page }) => {
+    test.setTimeout(90_000);
+    // Simulates what the launcher produces after /customers/card-siblings pairing:
+    // the opened card plus its sibling passed as fileIds → two stacked cards on open.
+    await page.goto('/app/photos/doc-print?fileId=drv-page&fileIds=drv-back&docType=aadhaar&paper=a4&from=/app/files&name=Shubham&phone=cust-1', {
+      waitUntil: 'domcontentloaded',
+    });
+    const later = page.getByRole('button', { name: /^Later$/i });
+    if (await later.isVisible().catch(() => false)) await later.click();
+    const frame = page.frameLocator('iframe[title="PDF document"]');
+    await expect(frame.locator('.stampEditor').first()).toBeVisible({ timeout: 30000 });
+    await page.waitForTimeout(1800);
+
+    const cs = (await editors(page)).filter((e) => e.type === 'stamp').sort((a, b) => a.y - b.y);
+    expect(cs.length, `two cards loaded`).toBe(2);
+    // Both are small card boxes, stacked (second below the first), at the top.
+    expect(cs[0].h, `first card small ${cs[0].h}`).toBeLessThan(0.3);
+    expect(cs[1].h, `second card small ${cs[1].h}`).toBeLessThan(0.3);
+    expect(cs[0].y, `first near top ${cs[0].y}`).toBeLessThan(0.1);
+    expect(cs[1].y, `second below first (${cs[0].y} < ${cs[1].y})`).toBeGreaterThan(cs[0].y + 0.1);
+  });
+
   test('Non-card docs still fill the page', async ({ page }) => {
     test.setTimeout(90_000);
     await openEditor(page); // no docType → normal fill-page layout
