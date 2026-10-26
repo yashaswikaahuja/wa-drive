@@ -48,3 +48,12 @@ test('marksheet levels map correctly', () => {
   assert.equal(resolveSeedType('intermediate_marksheet'), 'marksheet_12th');
   assert.equal(resolveSeedType('degree_marksheet'), 'marksheet_graduation');
 });
+
+test('token-aware matching avoids false substrings', () => {
+  // "declaration" contains "ration" but must NOT map to ration_card.
+  assert.equal(resolveSeedType('affidavit_declaration'), 'other');
+  // "signature" contains "sign" alias but the whole word is its own seed.
+  assert.equal(resolveSeedType('signature'), 'signature');
+  // Unrelated words that merely contain a seed as a substring stay 'other'.
+  assert.equal(resolveSeedType('decoration_order'), 'other');
+});

@@ -247,13 +247,26 @@ export function resolveSeedType(input: string): DocType {
   const fromLabel = LABEL_TO_DOC_TYPE[raw.toLowerCase()];
   if (fromLabel && (DOC_TYPES as readonly string[]).includes(fromLabel)) return fromLabel as DocType;
   if (SEED_TYPE_ALIASES[lower]) return SEED_TYPE_ALIASES[lower];
-  // Substring match for compound descriptions (e.g. "permanent_account_number_card_front").
+  // Token-based match for compound descriptions (e.g. "permanent_account_number_card_front").
+  // Token-aware (not raw substring) so "declaration" never matches the "ration" alias.
+  const tokens = lower.split('_').filter(Boolean);
+  const tokenSet = new Set(tokens);
   for (const [alias, seed] of Object.entries(SEED_TYPE_ALIASES)) {
-    if (lower.includes(alias)) return seed;
+    const at = alias.split('_').filter(Boolean);
+    // All alias tokens must appear (in order) as a contiguous run of input tokens.
+    if (at.length === 1) { if (tokenSet.has(at[0])) return seed; continue; }
+    for (let i = 0; i + at.length <= tokens.length; i++) {
+      if (at.every((t, j) => tokens[i + j] === t)) return seed;
+    }
   }
-  // Bare seed words embedded in a longer string.
+  // Bare seed words appearing as whole tokens (contiguous) in a longer string.
   for (const seed of DOC_TYPES) {
-    if (seed !== 'other' && lower.includes(seed)) return seed as DocType;
+    if (seed === 'other') continue;
+    const st = seed.split('_').filter(Boolean);
+    if (st.length === 1) { if (tokenSet.has(st[0])) return seed as DocType; continue; }
+    for (let i = 0; i + st.length <= tokens.length; i++) {
+      if (st.every((t, j) => tokens[i + j] === t)) return seed as DocType;
+    }
   }
   return 'other';
 }
