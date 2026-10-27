@@ -1,7 +1,6 @@
 {
   "name": "extension-legacy-best",
   "private": true,
-  "type": "module",
   "description": "Legacy Chrome extension product-path sources (.ts). Emit loadable .js via scripts/build-entries.ts.",
   "scripts": {
     "build:entries": "node --experimental-strip-types scripts/build-entries.ts",
