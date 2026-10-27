@@ -28,6 +28,7 @@
     "dayjs": "^1.11.20",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.14.0",
+    "pdf-lib": "1.17.1",
     "pdfjs-dist": "^6.3.289",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

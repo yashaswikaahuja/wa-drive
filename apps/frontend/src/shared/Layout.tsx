@@ -195,7 +195,7 @@ function readPinnedPreference(): boolean {
 export default function Layout() {
   const { user, logout } = useAuthStore();
   const { pathname } = useLocation();
-  const fullBleed = FULL_BLEED.has(pathname);
+  const fullBleed = FULL_BLEED.has(pathname) || pathname.startsWith('/app/photos/pdf');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pinned, setPinned] = useState(readPinnedPreference);
   const [hovered, setHovered] = useState(false);

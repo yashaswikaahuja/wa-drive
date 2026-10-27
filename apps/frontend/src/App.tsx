@@ -24,6 +24,12 @@ const PassportEditor = lazy(() => import('./features/media-tools/PassportEditor'
 const PrintSheet = lazy(() => import('./features/media-tools/PrintSheet'));
 const DocumentPrintPage = lazy(() => import('./features/media-tools/DocumentPrintPage'));
 const PdfScan = lazy(() => import('./features/media-tools/PdfScan'));
+const PdfToolsHome = lazy(() => import('./features/media-tools/PdfToolsHome'));
+const PdfOrganize = lazy(() => import('./features/media-tools/PdfOrganize'));
+const PdfMerge = lazy(() => import('./features/media-tools/PdfMerge'));
+const PdfSplit = lazy(() => import('./features/media-tools/PdfSplit'));
+const PdfCompress = lazy(() => import('./features/media-tools/PdfCompress'));
+const PdfResize = lazy(() => import('./features/media-tools/PdfResize'));
 const AadhaarLayout = lazy(() => import('./features/media-tools/AadhaarLayout'));
 const PlaygroundIndex = lazy(() => import('./features/playground/PlaygroundIndex'));
 const PlaygroundCounter = lazy(() => import('./features/playground/pages/Counter'));
@@ -126,6 +132,12 @@ export default function App() {
             <Route path="doc-print" element={<Suspense fallback={<PageLoader />}><DocumentPrintPage /></Suspense>} />
             <Route path="scan" element={<Suspense fallback={<PageLoader />}><PdfScan /></Suspense>} />
             <Route path="aadhaar" element={<Suspense fallback={<PageLoader />}><AadhaarLayout /></Suspense>} />
+            <Route path="pdf" element={<Suspense fallback={<PageLoader />}><PdfToolsHome /></Suspense>} />
+            <Route path="pdf/organize" element={<Suspense fallback={<PageLoader />}><PdfOrganize /></Suspense>} />
+            <Route path="pdf/merge" element={<Suspense fallback={<PageLoader />}><PdfMerge /></Suspense>} />
+            <Route path="pdf/split" element={<Suspense fallback={<PageLoader />}><PdfSplit /></Suspense>} />
+            <Route path="pdf/compress" element={<Suspense fallback={<PageLoader />}><PdfCompress /></Suspense>} />
+            <Route path="pdf/resize" element={<Suspense fallback={<PageLoader />}><PdfResize /></Suspense>} />
           </Route>
           {/* Back-compat redirects */}
           <Route path="/app/photo" element={<RedirectWithSearch to="/app/photos/portal" />} />

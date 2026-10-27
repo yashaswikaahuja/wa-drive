@@ -2,7 +2,7 @@
  * Photos home — exactly two tools (#317).
  */
 import { Link, useSearchParams } from 'react-router-dom';
-import { Images, FilePdf } from '@phosphor-icons/react';
+import { Images, FilePdf, Stack } from '@phosphor-icons/react';
 import PageHeader from '../../shared/PageHeader';
 import { useReveal } from '../../shared/useReveal';
 
@@ -22,6 +22,14 @@ const JOBS = [
     desc: 'Place a photo or PDF on A4 or 4×6, mark it up, and print',
     icon: FilePdf,
     accent: 'hsl(var(--confidence))',
+  },
+  {
+    to: 'pdf',
+    title: 'PDF Tools',
+    hindi: 'पीडीएफ',
+    desc: 'Organize, merge, split, compress, resize — Save to Drive or download',
+    icon: Stack,
+    accent: 'hsl(var(--marigold-deep))',
   },
 ] as const;
 
